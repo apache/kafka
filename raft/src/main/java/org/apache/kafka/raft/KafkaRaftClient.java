@@ -779,12 +779,32 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         VoteRequestData.PartitionData partitionRequest =
             request.topics().get(0).partitions().get(0);
 
-        int candidateId = partitionRequest.candidateId();
-        int candidateEpoch = partitionRequest.candidateEpoch();
+        int replicaId = partitionRequest.replicaId();
+        int replicaEpoch = partitionRequest.replicaEpoch();
+        boolean preVote = partitionRequest.preVote();
 
         int lastEpoch = partitionRequest.lastOffsetEpoch();
         long lastEpochEndOffset = partitionRequest.lastOffset();
-        if (lastEpochEndOffset < 0 || lastEpoch < 0 || lastEpoch >= candidateEpoch) {
+        /* Validate the replica epoch and the log's last epoch.
+         *
+         * For a standard vote, the candidate replica increases the epoch before sending a vote request.
+         * So we expect the replicaEpoch to be strictly greater than the log's last epoch. This is always true because
+         * the candidate has never seen a leader at replicaEpoch.
+         *
+         * For a PreVote, the prospective replica doesn't increase the epoch so it is possible for there to be a leader
+         * and a record in the log at the prospective replica's replicaEpoch.
+         */
+        boolean isIllegalEpoch = preVote ? lastEpoch > replicaEpoch : lastEpoch >= replicaEpoch;
+        if (isIllegalEpoch) {
+            logger.info(
+                "Received a vote request from replica {} with illegal epoch {}, last epoch {}, preVote={}",
+                replicaId,
+                replicaEpoch,
+                lastEpoch,
+                preVote
+            );
+        }
+        if (lastEpochEndOffset < 0 || lastEpoch < 0 || isIllegalEpoch) {
             return buildVoteResponse(
                 requestMetadata.listenerName(),
                 requestMetadata.apiVersion(),
@@ -793,7 +813,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        Optional<Errors> errorOpt = validateVoterOnlyRequest(candidateId, candidateEpoch);
+        Optional<Errors> errorOpt = validateVoterOnlyRequest(replicaId, replicaEpoch);
         if (errorOpt.isPresent()) {
             return buildVoteResponse(
                 requestMetadata.listenerName(),
@@ -803,15 +823,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        if (candidateEpoch > quorum.epoch()) {
-            transitionToUnattached(candidateEpoch);
+        if (replicaEpoch > quorum.epoch()) {
+            transitionToUnattached(replicaEpoch);
         }
 
         // Check that the request was intended for this replica
         Optional<ReplicaKey> voterKey = RaftUtil.voteRequestVoterKey(request, partitionRequest);
         if (!isValidVoterKey(voterKey)) {
             logger.info(
-                "Candidate sent a voter key ({}) in the VOTE request that doesn't match the " +
+                "A replica sent a voter key ({}) in the VOTE request that doesn't match the " +
                 "local key ({}, {}); rejecting the vote",
                 voterKey,
                 nodeId,
@@ -827,20 +847,26 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
-        ReplicaKey candidateKey = ReplicaKey.of(
-            candidateId,
-            partitionRequest.candidateDirectoryId()
+        ReplicaKey replicaKey = ReplicaKey.of(
+            replicaId,
+            partitionRequest.replicaDirectoryId()
         );
         boolean voteGranted = quorum.canGrantVote(
-            candidateKey,
-            lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0
+            replicaKey,
+            lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0,
+            preVote
         );
 
-        if (voteGranted && quorum.isUnattachedNotVoted()) {
-            transitionToUnattachedVoted(candidateKey, candidateEpoch);
+        if (!preVote && voteGranted && quorum.isUnattachedNotVoted()) {
+            transitionToUnattachedVoted(replicaKey, replicaEpoch);
         }
 
-        logger.info("Vote request {} with epoch {} is {}", request, candidateEpoch, voteGranted ? "granted" : "rejected");
+        logger.info(
+            "Vote request {} with epoch {} is {}",
+            request,
+            replicaEpoch,
+            voteGranted ? "granted" : "rejected"
+        );
         return buildVoteResponse(
             requestMetadata.listenerName(),
             requestMetadata.apiVersion(),
@@ -1684,7 +1710,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 updateFollowerHighWatermark(state, highWatermark);
             }
 
-            state.resetFetchTimeout(currentTimeMs);
+            state.resetFetchTimeoutForSuccessfulFetch(currentTimeMs);
             return true;
         } else {
             return handleUnexpectedError(error, responseMetadata);
@@ -1988,7 +2014,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 partitionSnapshot.snapshotId()
             );
             state.setFetchingSnapshot(Optional.empty());
-            state.resetFetchTimeout(currentTimeMs);
+            state.resetFetchTimeoutForSuccessfulFetch(currentTimeMs);
             return true;
         }
 
@@ -2066,7 +2092,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             }
         }
 
-        state.resetFetchTimeout(currentTimeMs);
+        state.resetFetchTimeoutForSuccessfulFetch(currentTimeMs);
         return true;
     }
 
@@ -2733,7 +2759,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             quorum.localReplicaKeyOrThrow(),
             remoteVoter,
             endOffset.epoch(),
-            endOffset.offset()
+            endOffset.offset(),
+            false
         );
     }
 

@@ -75,6 +75,8 @@ public class RaftUtilTest {
     private final ListenerName listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
     private final InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 9990);
     private final String clusterId = "I4ZmrWqfT2e-upky_4fdPA";
+    private static final Uuid TEST_DIRECTORY_ID1 = Uuid.randomUuid();
+    private static final Uuid TEST_DIRECTORY_ID2 = Uuid.randomUuid();
 
     @Test
     public void testErrorResponse() {
@@ -187,13 +189,26 @@ public class RaftUtilTest {
         return Stream.of(
                 Arguments.of((short) 0,
                         "{\"clusterId\":\"I4ZmrWqfT2e-upky_4fdPA\",\"topics\":[{\"topicName\":\"topic\"," +
-                            "\"partitions\":[{\"partitionIndex\":1,\"candidateEpoch\":1,\"candidateId\":1," +
+                            "\"partitions\":[{\"partitionIndex\":1,\"replicaEpoch\":1,\"replicaId\":1," +
                             "\"lastOffsetEpoch\":1000,\"lastOffset\":1000}]}]}"),
                 Arguments.of((short) 1,
                         "{\"clusterId\":\"I4ZmrWqfT2e-upky_4fdPA\",\"voterId\":2,\"topics\":[{" +
-                            "\"topicName\":\"topic\",\"partitions\":[{\"partitionIndex\":1,\"candidateEpoch\":1," +
-                            "\"candidateId\":1,\"candidateDirectoryId\":\"AAAAAAAAAAAAAAAAAAAAAQ\"," +
-                            "\"voterDirectoryId\":\"AAAAAAAAAAAAAAAAAAAAAQ\",\"lastOffsetEpoch\":1000,\"lastOffset\":1000}]}]}")
+                            "\"topicName\":\"topic\",\"partitions\":[{\"partitionIndex\":1,\"replicaEpoch\":1," +
+                            "\"replicaId\":1,\"replicaDirectoryId\":\"" + TEST_DIRECTORY_ID1 + "\"," +
+                            "\"voterDirectoryId\":\"" + TEST_DIRECTORY_ID2 + "\",\"lastOffsetEpoch\":1000," +
+                            "\"lastOffset\":1000}]}]}"),
+                Arguments.of((short) 2,
+                        "{\"clusterId\":\"I4ZmrWqfT2e-upky_4fdPA\",\"voterId\":2,\"topics\":[{" +
+                            "\"topicName\":\"topic\",\"partitions\":[{\"partitionIndex\":1,\"replicaEpoch\":1," +
+                            "\"replicaId\":1,\"replicaDirectoryId\":\"" + TEST_DIRECTORY_ID1 + "\"," +
+                            "\"voterDirectoryId\":\"" + TEST_DIRECTORY_ID2 + "\",\"lastOffsetEpoch\":1000," +
+                            "\"lastOffset\":1000,\"preVote\":true}]}]}"),
+                Arguments.of((short) 2,
+                        "{\"clusterId\":\"I4ZmrWqfT2e-upky_4fdPA\",\"voterId\":2,\"topics\":[{" +
+                            "\"topicName\":\"topic\",\"partitions\":[{\"partitionIndex\":1,\"replicaEpoch\":1," +
+                            "\"replicaId\":1,\"replicaDirectoryId\":\"" + TEST_DIRECTORY_ID1 + "\"," +
+                            "\"voterDirectoryId\":\"" + TEST_DIRECTORY_ID2 + "\",\"lastOffsetEpoch\":1000," +
+                            "\"lastOffset\":1000,\"preVote\":true}]}]}")
         );
     }
 
@@ -203,6 +218,10 @@ public class RaftUtilTest {
                         "{\"errorCode\":0,\"topics\":[{\"topicName\":\"topic\",\"partitions\":[{" +
                             "\"partitionIndex\":0,\"errorCode\":0,\"leaderId\":1,\"leaderEpoch\":1,\"voteGranted\":true}]}]}"),
                 Arguments.of((short) 1,
+                        "{\"errorCode\":0,\"topics\":[{\"topicName\":\"topic\",\"partitions\":[{" +
+                            "\"partitionIndex\":0,\"errorCode\":0,\"leaderId\":1,\"leaderEpoch\":1,\"voteGranted\":true}]}]," +
+                            "\"nodeEndpoints\":[{\"nodeId\":1,\"host\":\"localhost\",\"port\":9990}]}"),
+                Arguments.of((short) 2,
                         "{\"errorCode\":0,\"topics\":[{\"topicName\":\"topic\",\"partitions\":[{" +
                             "\"partitionIndex\":0,\"errorCode\":0,\"leaderId\":1,\"leaderEpoch\":1,\"voteGranted\":true}]}]," +
                             "\"nodeEndpoints\":[{\"nodeId\":1,\"host\":\"localhost\",\"port\":9990}]}")
@@ -377,18 +396,19 @@ public class RaftUtilTest {
     @ParameterizedTest
     @MethodSource("voteRequestTestCases")
     public void testSingletonVoteRequestForAllVersion(final short version, final String expectedJson) {
-        int candidateEpoch = 1;
+        int replicaEpoch = 1;
         int lastEpoch = 1000;
         long lastEpochOffset = 1000;
 
         VoteRequestData voteRequestData = RaftUtil.singletonVoteRequest(
-                topicPartition,
-                clusterId,
-                candidateEpoch,
-                ReplicaKey.of(1, Uuid.ONE_UUID),
-                ReplicaKey.of(2, Uuid.ONE_UUID),
-                lastEpoch,
-                lastEpochOffset
+            topicPartition,
+            clusterId,
+            replicaEpoch,
+            ReplicaKey.of(1, TEST_DIRECTORY_ID1),
+            ReplicaKey.of(2, TEST_DIRECTORY_ID2),
+            lastEpoch,
+            lastEpochOffset,
+            version >= 2
         );
         JsonNode json = VoteRequestDataJsonConverter.write(voteRequestData, version);
         assertEquals(expectedJson, json.toString());
