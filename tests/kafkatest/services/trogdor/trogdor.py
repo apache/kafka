@@ -170,7 +170,7 @@ class TrogdorService(KafkaPathResolverMixin, Service):
                 stdout_stderr_capture_path,
                 stdout_stderr_capture_path)
         node.account.ssh(cmd)
-        with node.account.monitor_log(log_path) as monitor:
+        with node.account.monitor_log(stdout_stderr_capture_path) as monitor:
             monitor.wait_until("Starting %s process." % daemon_name, timeout_sec=60, backoff_sec=.10,
                                err_msg=("%s on %s didn't finish startup" % (daemon_name, node.name)))
 
