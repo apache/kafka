@@ -51,6 +51,12 @@ public abstract class ApplicationEvent {
      */
     private final Uuid id;
 
+    /**
+     * The time in milliseconds when this event was enqueued.
+     * This field can be changed after the event is created, so it should not be used in hashCode or equals.
+     */
+    private long enqueuedMs;
+
     protected ApplicationEvent(Type type) {
         this.type = Objects.requireNonNull(type);
         this.id = Uuid.randomUuid();
@@ -62,6 +68,14 @@ public abstract class ApplicationEvent {
 
     public Uuid id() {
         return id;
+    }
+
+    public void setEnqueuedMs(long enqueuedMs) {
+        this.enqueuedMs = enqueuedMs;
+    }
+
+    public long enqueuedMs() {
+        return enqueuedMs;
     }
 
     @Override
@@ -78,7 +92,7 @@ public abstract class ApplicationEvent {
     }
 
     protected String toStringBase() {
-        return "type=" + type + ", id=" + id;
+        return "type=" + type + ", id=" + id + ", enqueuedMs=" + enqueuedMs;
     }
 
     @Override
