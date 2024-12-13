@@ -220,6 +220,7 @@ jackson-annotations-2.16.2
 jackson-core-2.16.2
 jackson-databind-2.16.2
 jackson-dataformat-csv-2.16.2
+jackson-dataformat-yaml-2.16.2
 jackson-datatype-jdk8-2.16.2
 jackson-jaxrs-base-2.16.2
 jackson-jaxrs-json-provider-2.16.2
@@ -239,6 +240,11 @@ jetty-servlets-9.4.56.v20240826
 jetty-util-9.4.56.v20240826
 jetty-util-ajax-9.4.56.v20240826
 jose4j-0.9.4
+log4j-api-2.24.1
+log4j-core-2.24.1
+log4j-core-test-2.24.1
+log4j-slf4j-impl-2.24.1
+log4j-1.2-api-2.24.1
 lz4-java-1.8.0
 maven-artifact-3.9.6
 metrics-core-4.1.12.1
@@ -254,7 +260,6 @@ netty-transport-native-epoll-4.1.115.Final
 netty-transport-native-unix-common-4.1.115.Final
 opentelemetry-proto-1.0.0-alpha
 plexus-utils-3.5.1
-reload4j-1.2.25
 rocksdbjni-7.9.2
 scala-library-2.13.15
 scala-logging_2.13-3.9.5
@@ -312,7 +317,6 @@ argparse4j-0.7.0, see: licenses/argparse-MIT
 classgraph-4.8.173, see: licenses/classgraph-MIT
 jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
 slf4j-api-1.7.36, see: licenses/slf4j-MIT
-slf4j-reload4j-1.7.36, see: licenses/slf4j-MIT
 pcollections-4.0.1, see: licenses/pcollections-MIT
 
 ---------------------------------------

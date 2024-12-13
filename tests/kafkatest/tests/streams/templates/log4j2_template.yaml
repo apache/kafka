@@ -1,4 +1,3 @@
-##
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,16 +12,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-##
-log4j.rootLogger=INFO, stdout
 
-log4j.appender.stdout=org.apache.log4j.ConsoleAppender
-log4j.appender.stdout.layout=org.apache.log4j.PatternLayout
-#
-# The `%X{connector.context}` parameter in the layout includes connector-specific and task-specific information
-# in the log message, where appropriate. This makes it easier to identify those log messages that apply to a
-# specific connector. Simply add this parameter to the log layout configuration below to include the contextual information.
-#
-log4j.appender.stdout.layout.ConversionPattern=[%d] %p %X{connector.context}%m (%c:%L)%n
+# Define the root logger with appender file
+Configuration:
+  Appenders:
+    File:
+      name: FILE
+      fileName: {{ log_file }}
+      append: true
+      immediateFlush: true
+      PatternLayout:
+        pattern: "[%d] %p %m (%c)%n"
 
-log4j.logger.kafka=WARN
+  Loggers:
+    Root:
+      level: {{ log_level|default("INFO") }}
+      AppenderRef:
+        - ref: FILE
+
+    Logger:
+        {% if loggers is defined %}
+        {% for logger, log_level in loggers.items() %}
+        - name: {{ logger }}
+          level: {{ log_level }}
+        {% endfor %}
+        {% endif %}

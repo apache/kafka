@@ -16,6 +16,7 @@
 from collections import namedtuple
 
 from kafkatest.utils.remote_account import java_version
+from kafkatest.version import LATEST_4_0, get_version
 
 TopicPartition = namedtuple('TopicPartition', ['topic', 'partition'])
 
@@ -30,4 +31,20 @@ def fix_opts_for_new_jvm(node):
 
     return ""
 
+def get_log4j_config_param(node):
+    return '-Dlog4j2.configurationFile=file:' if get_version(node) >= LATEST_4_0 else '-Dlog4j.configuration=file:'
 
+def get_log4j_config(node):
+    return 'log4j2.yaml' if get_version(node) >= LATEST_4_0 else 'log4j.properties'
+
+def get_log4j_config_for_connect(node):
+    return 'connect_log4j2.yaml' if get_version(node) >= LATEST_4_0 else 'connect_log4j.properties'
+
+def get_log4j_config_for_tools(node):
+    return 'tools_log4j2.yaml' if get_version(node) >= LATEST_4_0 else 'tools_log4j.properties'
+
+def get_log4j_config_for_trogdor_coordinator(node):
+    return 'trogdor-coordinator-log4j2.yaml' if get_version(node) >= LATEST_4_0 else 'trogdor-coordinator-log4j.properties'
+
+def get_log4j_config_for_trogdor_agent(node):
+    return 'trogdor-agent-log4j2.yaml' if get_version(node) >= LATEST_4_0 else 'trogdor-agent-log4j.properties'
