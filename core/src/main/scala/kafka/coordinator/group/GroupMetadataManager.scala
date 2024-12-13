@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.util.{Optional, OptionalInt, OptionalLong}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.function.Supplier
 import com.yammer.metrics.core.Gauge
 import kafka.coordinator.group.GroupMetadataManager.maybeConvertOffsetCommitError
@@ -931,9 +931,17 @@ class GroupMetadataManager(brokerId: Int,
    * more group metadata locks to handle transaction completion, this operation is scheduled on
    * the scheduler thread to avoid deadlocks.
    */
-  def scheduleHandleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean): Unit = {
-    scheduler.scheduleOnce(s"handleTxnCompletion-$producerId", () =>
-      handleTxnCompletion(producerId, completedPartitions, isCommit))
+  def scheduleHandleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean): CompletableFuture[Void] = {
+    val future = new CompletableFuture[Void]()
+    scheduler.scheduleOnce(s"handleTxnCompletion-$producerId", () => {
+      try {
+        handleTxnCompletion(producerId, completedPartitions, isCommit)
+        future.complete(null)
+      } catch {
+        case e: Throwable => future.completeExceptionally(e)
+      }
+    })
+    future
   }
 
   private[group] def handleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean): Unit = {

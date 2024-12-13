@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequ
 import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{OffsetFetchResponse, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{OffsetFetchResponse, RequestContext, RequestHeader, TransactionResult}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
@@ -37,6 +37,7 @@ import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
+import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
@@ -929,5 +930,27 @@ class GroupCoordinatorAdapterTest {
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
     assertFutureThrows(future, classOf[UnsupportedVersionException])
+  }
+
+  @Test
+  def testOnTransactionCompletedWithUnexpectedException(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+
+    when(groupCoordinator.scheduleHandleTxnCompletion(
+      any(),
+      any(),
+      any()
+    )).thenThrow(new IllegalStateException("Oh no!"))
+
+    val future = adapter.onTransactionCompleted(
+      10,
+      Seq.empty[TopicPartition].asJava,
+      TransactionResult.COMMIT
+    )
+
+    assertTrue(future.isDone)
+    assertTrue(future.isCompletedExceptionally)
+    assertFutureThrows(future, classOf[Exception])
   }
 }

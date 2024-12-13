@@ -3338,6 +3338,132 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testHandleWriteTxnMarkersRequestWithOldGroupCoordinator(): Unit = {
+    val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
+    val offset1 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)
+    val foo0 = new TopicPartition("foo", 0)
+    val foo1 = new TopicPartition("foo", 1)
+
+    val allPartitions = List(
+      offset0,
+      offset1,
+      foo0,
+      foo1
+    )
+
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+      List(
+        new TxnMarkerEntry(
+          1L,
+          1.toShort,
+          0,
+          TransactionResult.COMMIT,
+          List(offset0, foo0).asJava
+        ),
+        new TxnMarkerEntry(
+          2L,
+          1.toShort,
+          0,
+          TransactionResult.ABORT,
+          List(offset1, foo1).asJava
+        )
+      ).asJava
+    ).build()
+
+    val requestChannelRequest = buildRequest(writeTxnMarkersRequest)
+
+    allPartitions.foreach { tp =>
+      when(replicaManager.getMagic(tp))
+        .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+    }
+
+    when(groupCoordinator.onTransactionCompleted(
+      ArgumentMatchers.eq(1L),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.eq(TransactionResult.COMMIT)
+    )).thenReturn(CompletableFuture.completedFuture[Void](null))
+
+    when(groupCoordinator.onTransactionCompleted(
+      ArgumentMatchers.eq(2L),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.eq(TransactionResult.ABORT)
+    )).thenReturn(FutureUtils.failedFuture[Void](Errors.NOT_CONTROLLER.exception))
+
+    val entriesPerPartition: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
+    val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+
+    when(replicaManager.appendRecords(
+      ArgumentMatchers.eq(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT.toLong),
+      ArgumentMatchers.eq(-1),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      entriesPerPartition.capture(),
+      responseCallback.capture(),
+      any(),
+      any(),
+      ArgumentMatchers.eq(RequestLocal.noCaching()),
+      any(),
+      any()
+    )).thenAnswer { _ =>
+      responseCallback.getValue.apply(
+        entriesPerPartition.getValue.keySet.map { tp =>
+          tp -> new PartitionResponse(Errors.NONE)
+        }.toMap
+      )
+    }
+    kafkaApis = createKafkaApis(overrideProperties = Map(
+      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "false"
+    ))
+    kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.noCaching())
+
+    val expectedResponse = new WriteTxnMarkersResponseData()
+      .setMarkers(List(
+        new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
+          .setProducerId(1L)
+          .setTopics(List(
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName(Topic.GROUP_METADATA_TOPIC_NAME)
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(0)
+                  .setErrorCode(Errors.NONE.code)
+              ).asJava),
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName("foo")
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(0)
+                  .setErrorCode(Errors.NONE.code)
+              ).asJava)
+          ).asJava),
+        new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
+          .setProducerId(2L)
+          .setTopics(List(
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName(Topic.GROUP_METADATA_TOPIC_NAME)
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(1)
+                  .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
+              ).asJava),
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName("foo")
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(1)
+                  .setErrorCode(Errors.NONE.code)
+              ).asJava)
+          ).asJava)
+      ).asJava)
+
+    val response = verifyNoThrottling[WriteTxnMarkersResponse](requestChannelRequest)
+    assertEquals(normalize(expectedResponse), normalize(response.data))
+  }
+
+  @Test
   def testHandleWriteTxnMarkersRequestWithNewGroupCoordinator(): Unit = {
     val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
     val offset1 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)

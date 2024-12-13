@@ -2376,28 +2376,41 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"End transaction marker append for producer id $producerId completed with status: $currentErrors")
       updateErrors(producerId, currentErrors)
 
-      if (!groupCoordinator.isNewGroupCoordinator) {
-        val successfulOffsetsPartitions = currentErrors.asScala.filter { case (topicPartition, error) =>
-          topicPartition.topic == GROUP_METADATA_TOPIC_NAME && error == Errors.NONE
-        }.keys
-
-        if (successfulOffsetsPartitions.nonEmpty) {
-          // as soon as the end transaction marker has been written for a transactional offset commit,
-          // call to the group coordinator to materialize the offsets into the cache
-          try {
-            groupCoordinator.onTransactionCompleted(producerId, successfulOffsetsPartitions.asJava, result)
-          } catch {
-            case e: Exception =>
-              error(s"Received an exception while trying to update the offsets cache on transaction marker append", e)
-              val updatedErrors = new ConcurrentHashMap[TopicPartition, Errors]()
-              successfulOffsetsPartitions.foreach(updatedErrors.put(_, Errors.UNKNOWN_SERVER_ERROR))
-              updateErrors(producerId, updatedErrors)
-          }
+      def maybeSendResponse(): Unit = {
+        if (numAppends.decrementAndGet() == 0) {
+          requestHelper.sendResponseExemptThrottle(request, new WriteTxnMarkersResponse(errors))
         }
       }
 
-      if (numAppends.decrementAndGet() == 0)
-        requestHelper.sendResponseExemptThrottle(request, new WriteTxnMarkersResponse(errors))
+      // The new group coordinator uses GroupCoordinator#completeTransaction so we do
+      // not need to call GroupCoordinator#onTransactionCompleted here.
+      if (config.isNewGroupCoordinatorEnabled) {
+        maybeSendResponse()
+        return
+      }
+
+      val successfulOffsetsPartitions = currentErrors.asScala.filter { case (topicPartition, error) =>
+        topicPartition.topic == GROUP_METADATA_TOPIC_NAME && error == Errors.NONE
+      }.keys
+
+      // If no end transaction marker has been written to a __consumer_offsets partition, we do not
+      // need to call GroupCoordinator#onTransactionCompleted.
+      if (successfulOffsetsPartitions.isEmpty) {
+        maybeSendResponse()
+        return
+      }
+
+      // Otherwise, we call GroupCoordinator#onTransactionCompleted to materialize the offsets
+      // into the cache and we wait until the meterialization is completed.
+      groupCoordinator.onTransactionCompleted(producerId, successfulOffsetsPartitions.asJava, result).whenComplete { (_, exception) =>
+        if (exception != null) {
+          error(s"Received an exception while trying to update the offsets cache on transaction marker append", exception)
+          val updatedErrors = new ConcurrentHashMap[TopicPartition, Errors]()
+          successfulOffsetsPartitions.foreach(updatedErrors.put(_, Errors.UNKNOWN_SERVER_ERROR))
+          updateErrors(producerId, updatedErrors)
+        }
+        maybeSendResponse()
+      }
     }
 
     // TODO: The current append API makes doing separate writes per producerId a little easier, but it would
