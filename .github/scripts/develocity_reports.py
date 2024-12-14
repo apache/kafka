@@ -729,27 +729,31 @@ class TestAnalyzer:
 
 def print_summary(problematic_tests: Dict[str, Dict], flaky_regressions: Dict[str, Dict]):
     """Print a summary of the most problematic tests at the top of the report"""
-    print("\nSummary of Most Problematic Tests")
-    print("=" * 50)
+    print("\n## Summary of Most Problematic Tests")
 
     # Combine and sort all test cases by failure rate
     all_problem_cases = []
     
     # Process problematic quarantined tests
-    for class_name, details in problematic_tests.items():
+    if len(problematic_tests) > 0:
+        print(f"Found {len(problematic_tests)} tests that have been quarantined for a while and are still flaky.")
+    for full_class_name, details in problematic_tests.items():
         for test_case in details['test_cases']:
             total_runs = test_case.outcome_distribution.total
+            method_name = test_case.name.split('.')[-1]
             if total_runs > 0:
                 failure_rate = (test_case.outcome_distribution.failed + 
                               test_case.outcome_distribution.flaky) / total_runs
                 all_problem_cases.append({
-                    'class': class_name,
-                    'method': test_case.name.split('.')[-1],
+                    'class': full_class_name,
+                    'method': method_name,
                     'failure_rate': failure_rate,
                     'total_runs': total_runs
                 })
     
     # Process flaky regressions
+    if len(flaky_regressions) > 0:
+        print(f"Found {len(flaky_regressions)} tests that have started recently failing.")
     for test_name, details in flaky_regressions.items():
         all_problem_cases.append({
             'class': test_name,
@@ -757,7 +761,7 @@ def print_summary(problematic_tests: Dict[str, Dict], flaky_regressions: Dict[st
             'failure_rate': details['recent_flaky_rate'],
             'total_runs': len(details['recent_executions'])
         })
-    
+
     # Sort by failure rate descending
     sorted_cases = sorted(all_problem_cases, 
                          key=lambda x: x['failure_rate'], 
@@ -769,23 +773,32 @@ def print_summary(problematic_tests: Dict[str, Dict], flaky_regressions: Dict[st
         if case['class'] not in by_class:
             by_class[case['class']] = []
         by_class[case['class']].append(case)
-    
+
     # Print summary
-    for class_name, cases in by_class.items():
-        print(f"\n{class_name}")
+    print("<table><tr><td>Class</td><td>Test Case</td><td>Failure Rate</td><td>Build Scans</td></tr>")
+    for full_class_name, cases in by_class.items():
+        print(f"<tr><td colspan=\"4\">{full_class_name}</td></tr>")
         for case in cases:
             method = case['method']
             if method != 'N/A':
-                print(f"  → {method:<60} {case['failure_rate']:.2%}")
+                print(f"<tr><td></td><td>{method:<60}</td><td>{case['failure_rate']:.2%}</td><td>{case['total_runs']}</td></tr>")
             else:
-                print(f"  → Class-level flakiness rate: {case['failure_rate']:.2%}")
-    
-    print("\n" + "=" * 50)
+                print(f"<tr><td></td><td></td><td>{case['failure_rate']:.2%}</td><td>{case['total_runs']}</td></tr>")
+    print("</table>")
 
 def main():
+    token = None
+    if os.environ.get("DEVELOCITY_ACCESS_TOKEN"):
+        token = os.environ.get("DEVELOCITY_ACCESS_TOKEN")
+    elif os.environ.get("GE_ACCESS_TOKEN"):
+        # Special case for when we run in GHA
+        token = os.environ.get("GE_ACCESS_TOKEN").removeprefix("ge.apache.org=")
+    else:
+        print("No auth token was specified. You must set DEVELOCITY_ACCESS_TOKEN to your personal access token.")
+        exit(1)
+
     # Configuration
     BASE_URL = "https://ge.apache.org"
-    AUTH_TOKEN = os.environ.get("DEVELOCITY_ACCESS_TOKEN")
     PROJECT = "kafka"
     QUARANTINE_THRESHOLD_DAYS = 7
     MIN_FAILURE_RATE = 0.1
@@ -793,7 +806,7 @@ def main():
     SUCCESS_THRESHOLD = 0.7  # For cleared tests
     MIN_FLAKY_RATE = 0.2    # For flaky regressions
 
-    analyzer = TestAnalyzer(BASE_URL, AUTH_TOKEN)
+    analyzer = TestAnalyzer(BASE_URL, token)
     
     try:
         # Get quarantined test results
@@ -832,17 +845,13 @@ def main():
         )
         
         # Print summary first
-        print(f"\nTest Analysis Report ({datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC)")
-        print("=" * 100)
+        print(f"\n# Flaky Test Report for {datetime.now(pytz.UTC).strftime('%Y-%m-%d')}")
+        print(f"This report was run on {datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC")
+
         print_summary(problematic_tests, flaky_regressions)
-        
-        # Then print detailed reports
-        print("\nDetailed Test Reports")
-        print("=" * 100)
-        
+
         # Print Flaky Test Regressions
-        print("\nFlaky Test Regressions")
-        print("-" * 50)
+        print("\n## Flaky Test Regressions")
         if not flaky_regressions:
             print("No flaky test regressions found.")
         else:
@@ -855,11 +864,16 @@ def main():
                     print(f"  {entry.timestamp.strftime('%Y-%m-%d %H:%M')} - {entry.outcome}")
         
         # Print Cleared Tests
-        print("\nCleared Tests (Ready for Unquarantine)")
-        print("-" * 50)
+        print("\n## Cleared Tests (Ready for Unquarantine)")
         if not cleared_tests:
             print("No tests ready to be cleared from quarantine.")
         else:
+            # Print summary
+            print("<table><tr><td>Class</td><td>Test Case</td><td>Success Rate</td><td>Build Scans</td></tr>")
+            for test_name, details in cleared_tests.items():
+                print(f"<tr><td>{test_name}</td><td></td><td>{details['success_rate']:.2%}</td><td>{details['total_executions']}</td></tr>")
+            print("</table>")
+
             for test_name, details in cleared_tests.items():
                 print(f"\n{test_name}")
                 print(f"Success Rate: {details['success_rate']:.2%}")
@@ -869,11 +883,11 @@ def main():
                     print(f"  {entry.timestamp.strftime('%Y-%m-%d %H:%M')} - {entry.outcome}")
         
         # Print Defective Tests
-        print("\nHigh-Priority Quarantined Tests")
-        print("-" * 50)
+        print("\n## High-Priority Quarantined Tests")
         if not problematic_tests:
             print("No high-priority quarantined tests found.")
         else:
+            print("These are tests which have been quarantined for several days and need attention.")
             sorted_tests = sorted(
                 problematic_tests.items(), 
                 key=lambda x: (x[1]['failure_rate'], x[1]['days_quarantined']),
@@ -881,32 +895,21 @@ def main():
             )
             
             print(f"\nFound {len(sorted_tests)} high-priority quarantined test classes:")
-            for class_name, details in sorted_tests:
+            for full_class_name, details in sorted_tests:
                 class_result = details['container_result']
-                
-                print(f"\n{class_name}")
-                print("=" * len(class_name))
-                print(f"Quarantined for {details['days_quarantined']} days")
-                print(f"Class Failure Rate: {details['failure_rate']:.2%}")
-                print(f"Recent Failure Rate: {details['recent_failure_rate']:.2%}")
-                print("\nClass Statistics:")
+                class_name = full_class_name.split(".")[-1]
+                print(f"### {class_name}")
+                print(f"{full_class_name} has been quarantined for {details['days_quarantined']} days")
+                print(f"Overall class failure: {details['failure_rate']:.2%}")
+                print(f"Recent class failure: {details['recent_failure_rate']:.2%}")
+                print("\nOverall Build Outcomes:")
                 print(f"  Total Runs: {class_result.outcome_distribution.total}")
                 print(f"  Failed: {class_result.outcome_distribution.failed}")
                 print(f"  Flaky: {class_result.outcome_distribution.flaky}")
                 print(f"  Passed: {class_result.outcome_distribution.passed}")
-                
-                # Show class timeline
-                if class_result.timeline:
-                    print(f"\nClass Recent Executions (last {min(5, len(class_result.timeline))} of {len(class_result.timeline)} runs):")
-                    print("  Date/Time (UTC)      Outcome    Build ID")
-                    print("  " + "-" * 48)
-                    for entry in sorted(class_result.timeline, key=lambda x: x.timestamp)[-5:]:
-                        date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
-                        print(f"  {date_str:<17} {entry.outcome:<10} {entry.build_id}")
-                
-                print("\nTest Methods (Last 7 Days):")
-                print("  " + "-" * 48)
-                
+
+                print("\nQuarantined Methods (Last 7 Days):")
+
                 # Sort test methods by failure rate
                 sorted_methods = sorted(
                     details['test_cases'],
@@ -936,10 +939,6 @@ def main():
                             for entry in sorted(test_method.timeline, key=lambda x: x.timestamp)[-3:]:
                                 date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
                                 print(f"    {date_str:<17} {entry.outcome:<10} {entry.build_id}")
-                
-                print("\n" + "-" * 50)
-        
-        print("\n" + "=" * 100)
                 
     except Exception as e:
         logger.exception("Error occurred during report generation")
