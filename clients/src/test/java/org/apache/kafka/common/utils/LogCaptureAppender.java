@@ -138,7 +138,7 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
     }
 
     public List<String> getMessages() {
-        final LinkedList<String> result = new LinkedList<>();
+        final List<String> result = new LinkedList<>();
         synchronized (events) {
             for (final LogEvent event : events) {
                 result.add(event.getMessage().getFormattedMessage());
