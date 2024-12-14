@@ -79,7 +79,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         # Create and upload log properties
         log_config = self.render(get_log4j_config_for_tools(node),
                                  log_file=TransactionalMessageCopier.LOG_FILE)
-        node.account.create_file(get_log4j_config_for_tools(node).LOG4J_CONFIG, log_config)
+        node.account.create_file(get_log4j_config_for_tools(node), log_config)
         # Configure security
         self.security_config = self.kafka.security_config.client_config(node=node)
         self.security_config.setup_node(node)
