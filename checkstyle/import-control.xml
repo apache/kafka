@@ -290,6 +290,8 @@
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="kafka.admin" />
     <allow pkg="kafka.server" />
+    <allow pkg="org.apache.kafka.metadata.authorizer" />
+    <allow pkg="org.apache.kafka.security.authorizer" />
     <allow pkg="org.apache.kafka.storage.internals" />
     <allow pkg="org.apache.kafka.server.config" />
     <allow pkg="org.apache.kafka.server.common" />

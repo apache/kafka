@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.admin;
-
-import kafka.admin.AclCommand.AclCommandOptions;
+package org.apache.kafka.tools;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -44,15 +42,9 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintStream;
-import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -62,9 +54,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import javax.management.InstanceAlreadyExistsException;
-
-import scala.Console;
-import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.common.acl.AccessControlEntryFilter.ANY;
 import static org.apache.kafka.common.acl.AclOperation.ALTER;
@@ -120,102 +109,98 @@ public class AclCommandTest {
     private static final String TOPIC = "--topic";
     private static final String RESOURCE_PATTERN_TYPE = "--resource-pattern-type";
     private static final KafkaPrincipal PRINCIPAL = SecurityUtils.parseKafkaPrincipal("User:test2");
-    private static final Set<KafkaPrincipal> USERS = new HashSet<>(Arrays.asList(
-            SecurityUtils.parseKafkaPrincipal("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"),
-            PRINCIPAL,
-            SecurityUtils.parseKafkaPrincipal("User:CN=\\#User with special chars in CN : (\\, \\+ \" \\ \\< \\> \\; ')")
-    ));
-    private static final Set<String> HOSTS = new HashSet<>(Arrays.asList("host1", "host2"));
-    private static final List<String> ALLOW_HOST_COMMAND = Arrays.asList("--allow-host", "host1", "--allow-host", "host2");
-    private static final List<String> DENY_HOST_COMMAND = Arrays.asList("--deny-host", "host1", "--deny-host", "host2");
+    private static final Set<KafkaPrincipal> USERS = Set.of(
+        SecurityUtils.parseKafkaPrincipal("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"),
+        PRINCIPAL,
+        SecurityUtils.parseKafkaPrincipal("User:CN=\\#User with special chars in CN : (\\, \\+ \" \\ \\< \\> \\; ')")
+    );
+    private static final Set<String> HOSTS = Set.of("host1", "host2");
+    private static final List<String> ALLOW_HOST_COMMAND = List.of("--allow-host", "host1", "--allow-host", "host2");
+    private static final List<String> DENY_HOST_COMMAND = List.of("--deny-host", "host1", "--deny-host", "host2");
 
     private static final ResourcePattern CLUSTER_RESOURCE = new ResourcePattern(CLUSTER, Resource.CLUSTER_NAME, LITERAL);
-    private static final Set<ResourcePattern> TOPIC_RESOURCES = new HashSet<>(Arrays.asList(
-            new ResourcePattern(ResourceType.TOPIC, "test-1", LITERAL),
-            new ResourcePattern(ResourceType.TOPIC, "test-2", LITERAL)
-    ));
-    private static final Set<ResourcePattern> GROUP_RESOURCES = new HashSet<>(Arrays.asList(
-            new ResourcePattern(ResourceType.GROUP, "testGroup-1", LITERAL),
-            new ResourcePattern(ResourceType.GROUP, "testGroup-2", LITERAL)
-    ));
-    private static final Set<ResourcePattern> TRANSACTIONAL_ID_RESOURCES = new HashSet<>(Arrays.asList(
+    private static final Set<ResourcePattern> TOPIC_RESOURCES = Set.of(
+        new ResourcePattern(ResourceType.TOPIC, "test-1", LITERAL),
+        new ResourcePattern(ResourceType.TOPIC, "test-2", LITERAL)
+    );
+    private static final Set<ResourcePattern> GROUP_RESOURCES = Set.of(
+        new ResourcePattern(ResourceType.GROUP, "testGroup-1", LITERAL),
+        new ResourcePattern(ResourceType.GROUP, "testGroup-2", LITERAL)
+    );
+    private static final Set<ResourcePattern> TRANSACTIONAL_ID_RESOURCES = Set.of(
             new ResourcePattern(TRANSACTIONAL_ID, "t0", LITERAL),
             new ResourcePattern(TRANSACTIONAL_ID, "t1", LITERAL)
-    ));
-    private static final Set<ResourcePattern> TOKEN_RESOURCES = new HashSet<>(Arrays.asList(
-            new ResourcePattern(DELEGATION_TOKEN, "token1", LITERAL),
-            new ResourcePattern(DELEGATION_TOKEN, "token2", LITERAL)
-    ));
-    private static final Set<ResourcePattern> USER_RESOURCES = new HashSet<>(Arrays.asList(
-            new ResourcePattern(USER, "User:test-user1", LITERAL),
-            new ResourcePattern(USER, "User:test-user2", LITERAL)
-    ));
+    );
+    private static final Set<ResourcePattern> TOKEN_RESOURCES = Set.of(
+        new ResourcePattern(DELEGATION_TOKEN, "token1", LITERAL),
+        new ResourcePattern(DELEGATION_TOKEN, "token2", LITERAL)
+    );
+    private static final Set<ResourcePattern> USER_RESOURCES = Set.of(
+        new ResourcePattern(USER, "User:test-user1", LITERAL),
+        new ResourcePattern(USER, "User:test-user2", LITERAL)
+    );
 
-    private static final Map<Set<ResourcePattern>, List<String>> RESOURCE_TO_COMMAND = new HashMap<Set<ResourcePattern>, List<String>>() {{
-            put(TOPIC_RESOURCES, Arrays.asList(TOPIC, "test-1", TOPIC, "test-2"));
-            put(Collections.singleton(CLUSTER_RESOURCE), Collections.singletonList("--cluster"));
-            put(GROUP_RESOURCES, Arrays.asList(GROUP, "testGroup-1", GROUP, "testGroup-2"));
-            put(TRANSACTIONAL_ID_RESOURCES, Arrays.asList("--transactional-id", "t0", "--transactional-id", "t1"));
-            put(TOKEN_RESOURCES, Arrays.asList("--delegation-token", "token1", "--delegation-token", "token2"));
-            put(USER_RESOURCES, Arrays.asList("--user-principal", "User:test-user1", "--user-principal", "User:test-user2"));
-        }};
+    private static final Map<Set<ResourcePattern>, List<String>> RESOURCE_TO_COMMAND = Map.of(
+        TOPIC_RESOURCES, List.of(TOPIC, "test-1", TOPIC, "test-2"),
+        Set.of(CLUSTER_RESOURCE), List.of("--cluster"),
+        GROUP_RESOURCES, List.of(GROUP, "testGroup-1", GROUP, "testGroup-2"),
+        TRANSACTIONAL_ID_RESOURCES, List.of("--transactional-id", "t0", "--transactional-id", "t1"),
+        TOKEN_RESOURCES, List.of("--delegation-token", "token1", "--delegation-token", "token2"),
+        USER_RESOURCES, List.of("--user-principal", "User:test-user1", "--user-principal", "User:test-user2")
+    );
 
-    private static final Map<Set<ResourcePattern>, Map.Entry<Set<AclOperation>, List<String>>> RESOURCE_TO_OPERATIONS =
-            new HashMap<Set<ResourcePattern>, Map.Entry<Set<AclOperation>, List<String>>>() {{
-                put(TOPIC_RESOURCES, new SimpleImmutableEntry<>(
-                        new HashSet<>(Arrays.asList(READ, WRITE, CREATE, DESCRIBE, DELETE, DESCRIBE_CONFIGS, ALTER_CONFIGS, ALTER)),
-                        Arrays.asList(OPERATION, "Read", OPERATION, "Write", OPERATION, "Create",
-                                OPERATION, "Describe", OPERATION, "Delete", OPERATION, "DescribeConfigs",
-                                OPERATION, "AlterConfigs", OPERATION, "Alter"))
-                );
-                put(Collections.singleton(CLUSTER_RESOURCE), new SimpleImmutableEntry<>(
-                        new HashSet<>(Arrays.asList(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE)),
-                        Arrays.asList(OPERATION, "Create", OPERATION, "ClusterAction", OPERATION, "DescribeConfigs",
-                                OPERATION, "AlterConfigs", OPERATION, "IdempotentWrite", OPERATION, "Alter", OPERATION, "Describe"))
-                );
-                put(GROUP_RESOURCES, new SimpleImmutableEntry<>(
-                        new HashSet<>(Arrays.asList(READ, DESCRIBE, DELETE)),
-                        Arrays.asList(OPERATION, "Read", OPERATION, "Describe", OPERATION, "Delete"))
-                );
-                put(TRANSACTIONAL_ID_RESOURCES, new SimpleImmutableEntry<>(
-                        new HashSet<>(Arrays.asList(DESCRIBE, WRITE)),
-                        Arrays.asList(OPERATION, "Describe", OPERATION, "Write"))
-                );
-                put(TOKEN_RESOURCES, new SimpleImmutableEntry<>(Collections.singleton(DESCRIBE), Arrays.asList(OPERATION, "Describe")));
-                put(USER_RESOURCES, new SimpleImmutableEntry<>(
-                        new HashSet<>(Arrays.asList(CREATE_TOKENS, DESCRIBE_TOKENS)),
-                        Arrays.asList(OPERATION, "CreateTokens", OPERATION, "DescribeTokens"))
-                );
-            }};
+    private static final Map<Set<ResourcePattern>, Map.Entry<Set<AclOperation>, List<String>>> RESOURCE_TO_OPERATIONS = Map.of(
+        TOPIC_RESOURCES, Map.entry(
+            Set.of(READ, WRITE, CREATE, DESCRIBE, DELETE, DESCRIBE_CONFIGS, ALTER_CONFIGS, ALTER),
+            List.of(OPERATION, "Read", OPERATION, "Write", OPERATION, "Create",
+                    OPERATION, "Describe", OPERATION, "Delete", OPERATION, "DescribeConfigs",
+                    OPERATION, "AlterConfigs", OPERATION, "Alter")),
+        Set.of(CLUSTER_RESOURCE), Map.entry(
+            Set.of(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE),
+            List.of(OPERATION, "Create", OPERATION, "ClusterAction", OPERATION, "DescribeConfigs",
+                    OPERATION, "AlterConfigs", OPERATION, "IdempotentWrite", OPERATION, "Alter", OPERATION, "Describe")),
+        GROUP_RESOURCES, Map.entry(
+            Set.of(READ, DESCRIBE, DELETE),
+            List.of(OPERATION, "Read", OPERATION, "Describe", OPERATION, "Delete")),
+        TRANSACTIONAL_ID_RESOURCES, Map.entry(
+            Set.of(DESCRIBE, WRITE),
+            List.of(OPERATION, "Describe", OPERATION, "Write")),
+        TOKEN_RESOURCES, Map.entry(
+            Set.of(DESCRIBE),
+            List.of(OPERATION, "Describe")),
+        USER_RESOURCES, Map.entry(
+            Set.of(CREATE_TOKENS, DESCRIBE_TOKENS),
+            List.of(OPERATION, "CreateTokens", OPERATION, "DescribeTokens"))
+    );
 
-    private static final Map<Set<ResourcePattern>, Set<AccessControlEntry>> CONSUMER_RESOURCE_TO_ACLS =
-            new HashMap<Set<ResourcePattern>, Set<AccessControlEntry>>() {{
-                put(TOPIC_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW,
-                        asScalaSet(new HashSet<>(Arrays.asList(READ, DESCRIBE))), asScalaSet(HOSTS))));
-                put(GROUP_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW,
-                        asScalaSet(Collections.singleton(READ)), asScalaSet(HOSTS))));
-            }};
+    private static final Map<Set<ResourcePattern>, Set<AccessControlEntry>> CONSUMER_RESOURCE_TO_ACLS = Map.of(
+        TOPIC_RESOURCES, AclCommand.getAcls(USERS, ALLOW, Set.of(READ, DESCRIBE), HOSTS),
+        GROUP_RESOURCES, AclCommand.getAcls(USERS, ALLOW, Set.of(READ), HOSTS)
+    );
 
-    private static final Map<List<String>, Map<Set<ResourcePattern>, Set<AccessControlEntry>>> CMD_TO_RESOURCES_TO_ACL =
-            new HashMap<List<String>, Map<Set<ResourcePattern>, Set<AccessControlEntry>>>() {{
-                put(Collections.singletonList(PRODUCER), producerResourceToAcls(false));
-                put(Arrays.asList(PRODUCER, IDEMPOTENT), producerResourceToAcls(true));
-                put(Collections.singletonList(CONSUMER), CONSUMER_RESOURCE_TO_ACLS);
-                put(Arrays.asList(PRODUCER, CONSUMER),
-                        CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().map(entry -> {
-                            Set<AccessControlEntry> value = new HashSet<>(entry.getValue());
-                            value.addAll(producerResourceToAcls(false)
-                                    .getOrDefault(entry.getKey(), Collections.emptySet()));
-                            return new SimpleEntry<>(entry.getKey(), value);
-                        }).collect(Collectors.toMap(Entry::getKey, Entry::getValue)));
-                put(Arrays.asList(PRODUCER, IDEMPOTENT, CONSUMER),
-                        CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().map(entry -> {
-                            Set<AccessControlEntry> value = new HashSet<>(entry.getValue());
-                            value.addAll(producerResourceToAcls(true)
-                                    .getOrDefault(entry.getKey(), Collections.emptySet()));
-                            return new SimpleEntry<>(entry.getKey(), value);
-                        }).collect(Collectors.toMap(Entry::getKey, Entry::getValue)));
-            }};
+    private static final Map<List<String>, Map<Set<ResourcePattern>, Set<AccessControlEntry>>> CMD_TO_RESOURCES_TO_ACL = Map.of(
+        List.of(PRODUCER), producerResourceToAcls(false),
+        List.of(PRODUCER, IDEMPOTENT), producerResourceToAcls(true),
+        List.of(CONSUMER), CONSUMER_RESOURCE_TO_ACLS,
+        List.of(PRODUCER, CONSUMER),
+            CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> {
+                    Set<AccessControlEntry> value = new HashSet<>(entry.getValue());
+                    value.addAll(producerResourceToAcls(false).getOrDefault(entry.getKey(), Set.of()));
+                    return value;
+                }
+            )),
+        List.of(PRODUCER, IDEMPOTENT, CONSUMER),
+            CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> {
+                    Set<AccessControlEntry> value = new HashSet<>(entry.getValue());
+                    value.addAll(producerResourceToAcls(true).getOrDefault(entry.getKey(), Set.of()));
+                    return value;
+                }
+            ))
+    );
 
     @ClusterTest
     public void testAclCliWithAdminAPI(ClusterInstance cluster) throws InterruptedException {
@@ -295,7 +280,7 @@ public class AclCommandTest {
     @Test
     public void testUseBootstrapServerOptWithBootstrapControllerOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, BOOTSTRAP_CONTROLLER, LOCALHOST),
+                List.of(BOOTSTRAP_SERVER, LOCALHOST, BOOTSTRAP_CONTROLLER, LOCALHOST),
                 "Only one of --bootstrap-server or --bootstrap-controller must be specified"
         );
     }
@@ -303,7 +288,7 @@ public class AclCommandTest {
     @Test
     public void testUseWithoutBootstrapServerOptAndBootstrapControllerOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Collections.emptyList(),
+                List.of(ADD),
                 "One of --bootstrap-server or --bootstrap-controller must be specified"
         );
     }
@@ -311,14 +296,14 @@ public class AclCommandTest {
     @Test
     public void testExactlyOneAction() {
         String errMsg = "Command must include exactly one action: --list, --add, --remove. ";
-        assertInitializeInvalidOptionsExitCodeAndMsg(Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, LIST), errMsg);
-        assertInitializeInvalidOptionsExitCodeAndMsg(Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, LIST, REMOVE), errMsg);
+        assertInitializeInvalidOptionsExitCodeAndMsg(List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, LIST), errMsg);
+        assertInitializeInvalidOptionsExitCodeAndMsg(List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, LIST, REMOVE), errMsg);
     }
 
     @Test
     public void testUseListPrincipalsOptWithoutListOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, "--principal", "User:CN=client"),
+                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, "--principal", "User:CN=client"),
                 "The --principal option is only available if --list is set"
         );
     }
@@ -326,7 +311,7 @@ public class AclCommandTest {
     @Test
     public void testUseProducerOptWithoutTopicOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, PRODUCER),
+                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, PRODUCER),
                 "With --producer you must specify a --topic"
         );
     }
@@ -334,7 +319,7 @@ public class AclCommandTest {
     @Test
     public void testUseIdempotentOptWithoutProducerOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, IDEMPOTENT),
+                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, IDEMPOTENT),
                 "The --idempotent option is only available if --producer is set"
         );
     }
@@ -342,24 +327,24 @@ public class AclCommandTest {
     @Test
     public void testUseConsumerOptWithoutRequiredOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER),
+                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER),
                 "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified."
         );
-        checkNotThrow(Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, TOPIC, "test-topic", GROUP, "test-group"));
+        checkNotThrow(List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, TOPIC, "test-topic", GROUP, "test-group"));
     }
 
     @Test
     public void testInvalidArgs() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, LIST, PRODUCER),
+                List.of(BOOTSTRAP_SERVER, LOCALHOST, LIST, PRODUCER),
                 "Option \"[list]\" can't be used with option \"[producer]\""
         );
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, PRODUCER, OPERATION),
+                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, PRODUCER, OPERATION, "all"),
                 "Option \"[producer]\" can't be used with option \"[operation]\""
         );
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, OPERATION, TOPIC, "test-topic", GROUP, "test-group"),
+                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, OPERATION, TOPIC, "test-topic", GROUP, "test-group"),
                 "Option \"[consumer]\" can't be used with option \"[operation]\""
         );
     }
@@ -394,8 +379,7 @@ public class AclCommandTest {
     }
 
     private void testAclsOnPrefixedResources(ClusterInstance cluster, List<String> cmdArgs) throws InterruptedException {
-        List<String> cmd = Arrays.asList("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test-",
-                RESOURCE_PATTERN_TYPE, "Prefixed");
+        List<String> cmd = List.of("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test-", RESOURCE_PATTERN_TYPE, "Prefixed");
 
         List<String> args = new ArrayList<>(cmdArgs);
         args.addAll(cmd);
@@ -406,7 +390,7 @@ public class AclCommandTest {
         AccessControlEntry describeAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, DESCRIBE, ALLOW);
         AccessControlEntry createAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, CREATE, ALLOW);
         cluster.waitAcls(new AclBindingFilter(new ResourcePattern(ResourceType.TOPIC, "Test-", PREFIXED).toFilter(), ANY),
-                Arrays.asList(writeAcl, describeAcl, createAcl));
+                List.of(writeAcl, describeAcl, createAcl));
 
         args = new ArrayList<>(cmdArgs);
         args.addAll(cmd);
@@ -415,45 +399,42 @@ public class AclCommandTest {
         callMain(args);
 
         cluster.waitAcls(new AclBindingFilter(new ResourcePattern(ResourceType.CLUSTER, "kafka-cluster", PREFIXED).toFilter(), ANY),
-                Collections.emptySet());
+                Set.of());
         cluster.waitAcls(new AclBindingFilter(new ResourcePattern(ResourceType.TOPIC, "Test-", PREFIXED).toFilter(), ANY),
-                Collections.emptySet());
+                Set.of());
     }
 
     private static Map<Set<ResourcePattern>, Set<AccessControlEntry>> producerResourceToAcls(boolean enableIdempotence) {
-        Map<Set<ResourcePattern>, Set<AccessControlEntry>> result = new HashMap<>();
-        result.put(TOPIC_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW, asScalaSet(
-                new HashSet<>(Arrays.asList(WRITE, DESCRIBE, CREATE))), asScalaSet(HOSTS))));
-        result.put(TRANSACTIONAL_ID_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW, asScalaSet(
-                new HashSet<>(Arrays.asList(WRITE, DESCRIBE))), asScalaSet(HOSTS))));
-        result.put(Collections.singleton(CLUSTER_RESOURCE), asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW,
+        return Map.of(
+            TOPIC_RESOURCES, AclCommand.getAcls(USERS, ALLOW, Set.of(WRITE, DESCRIBE, CREATE), HOSTS),
+            TRANSACTIONAL_ID_RESOURCES, AclCommand.getAcls(USERS, ALLOW, Set.of(WRITE, DESCRIBE), HOSTS),
+            Set.of(CLUSTER_RESOURCE), AclCommand.getAcls(USERS, ALLOW,
                 enableIdempotence
-                        ? asScalaSet(Collections.singleton(IDEMPOTENT_WRITE))
-                        : asScalaSet(Collections.emptySet()), asScalaSet(HOSTS))));
-        return result;
+                        ? Set.of(IDEMPOTENT_WRITE)
+                        : Set.of(), HOSTS));
     }
 
     private List<String> adminArgs(String bootstrapServer, Optional<File> commandConfig) {
-        List<String> adminArgs = new ArrayList<>(Arrays.asList(BOOTSTRAP_SERVER, bootstrapServer));
-        commandConfig.ifPresent(file -> adminArgs.addAll(Arrays.asList(COMMAND_CONFIG, file.getAbsolutePath())));
+        List<String> adminArgs = new ArrayList<>(List.of(BOOTSTRAP_SERVER, bootstrapServer));
+        commandConfig.ifPresent(file -> adminArgs.addAll(List.of(COMMAND_CONFIG, file.getAbsolutePath())));
         return adminArgs;
     }
 
     private List<String> adminArgsWithBootstrapController(String bootstrapController, Optional<File> commandConfig) {
-        List<String> adminArgs = new ArrayList<>(Arrays.asList(BOOTSTRAP_CONTROLLER, bootstrapController));
-        commandConfig.ifPresent(file -> adminArgs.addAll(Arrays.asList(COMMAND_CONFIG, file.getAbsolutePath())));
+        List<String> adminArgs = new ArrayList<>(List.of(BOOTSTRAP_CONTROLLER, bootstrapController));
+        commandConfig.ifPresent(file -> adminArgs.addAll(List.of(COMMAND_CONFIG, file.getAbsolutePath())));
         return adminArgs;
     }
 
     private Map.Entry<String, String> callMain(List<String> args) {
-        return grabConsoleOutputAndError(() -> AclCommand.main(args.toArray(new String[0])));
+        return ToolsTestUtils.grabConsoleOutputAndError(() -> AclCommand.main(args.toArray(new String[0])));
     }
 
     private void testAclCli(ClusterInstance cluster, List<String> cmdArgs) throws InterruptedException {
         for (Map.Entry<Set<ResourcePattern>, List<String>> entry : RESOURCE_TO_COMMAND.entrySet()) {
             Set<ResourcePattern> resources = entry.getKey();
             List<String> resourceCmd = entry.getValue();
-            Set<AclPermissionType> permissionTypes = new HashSet<>(Arrays.asList(ALLOW, DENY));
+            Set<AclPermissionType> permissionTypes = Set.of(ALLOW, DENY);
             for (AclPermissionType permissionType : permissionTypes) {
                 Map.Entry<Set<AclOperation>, List<String>> operationToCmd = RESOURCE_TO_OPERATIONS.get(resources);
                 Map.Entry<Set<AccessControlEntry>, List<String>> aclToCommand = getAclToCommand(permissionType, operationToCmd.getKey());
@@ -494,8 +475,8 @@ public class AclCommandTest {
             String resourceType = resource.resourceType().toString();
 
             List<String> cmd = resource == CLUSTER_RESOURCE
-                    ? Collections.singletonList("kafka-cluster")
-                    : resourceCmd.stream().filter(s -> !s.startsWith("--")).collect(Collectors.toList());
+                    ? List.of("kafka-cluster")
+                    : resourceCmd.stream().filter(s -> !s.startsWith("--")).toList();
 
             cmd.forEach(name -> {
                 String expected = String.format(
@@ -509,36 +490,37 @@ public class AclCommandTest {
 
     private void testPatternTypes(List<String> cmdArgs) {
         Exit.setExitProcedure((status, message) -> {
-            if ((int) status == 1)
+            if (status == 1)
                 throw new RuntimeException("Exiting command");
             else
                 throw new AssertionError("Unexpected exit with status " + status);
         });
         try {
-            Arrays.stream(PatternType.values()).sequential().forEach(patternType -> {
+            for (PatternType patternType : PatternType.values()) {
                 List<String> addCmd = new ArrayList<>(cmdArgs);
-                addCmd.addAll(Arrays.asList("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test",
+                addCmd.addAll(List.of("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test",
                         ADD, RESOURCE_PATTERN_TYPE, patternType.toString()));
                 verifyPatternType(addCmd, patternType.isSpecific());
 
                 List<String> listCmd = new ArrayList<>(cmdArgs);
-                listCmd.addAll(Arrays.asList(TOPIC, "Test", LIST, RESOURCE_PATTERN_TYPE, patternType.toString()));
+                listCmd.addAll(List.of(TOPIC, "Test", LIST, RESOURCE_PATTERN_TYPE, patternType.toString()));
                 verifyPatternType(listCmd, patternType != PatternType.UNKNOWN);
 
                 List<String> removeCmd = new ArrayList<>(cmdArgs);
-                removeCmd.addAll(Arrays.asList(TOPIC, "Test", "--force", REMOVE, RESOURCE_PATTERN_TYPE, patternType.toString()));
+                removeCmd.addAll(List.of(TOPIC, "Test", "--force", REMOVE, RESOURCE_PATTERN_TYPE, patternType.toString()));
                 verifyPatternType(removeCmd, patternType != PatternType.UNKNOWN);
-            });
+            }
         } finally {
             Exit.resetExitProcedure();
         }
     }
 
     private void verifyPatternType(List<String> cmd, boolean isValid) {
-        if (isValid)
+        if (isValid) {
             callMain(cmd);
-        else
+        } else {
             assertThrows(RuntimeException.class, () -> callMain(cmd));
+        }
     }
 
     private void testRemove(
@@ -554,7 +536,7 @@ public class AclCommandTest {
         Map.Entry<String, String> out = callMain(args);
         assertEquals("", out.getValue());
         for (ResourcePattern resource : resources) {
-            cluster.waitAcls(new AclBindingFilter(resource.toFilter(), ANY), Collections.emptySet());
+            cluster.waitAcls(new AclBindingFilter(resource.toFilter(), ANY), Set.of());
         }
     }
 
@@ -562,8 +544,8 @@ public class AclCommandTest {
             AclPermissionType permissionType,
             Set<AclOperation> operations
     ) {
-        return new SimpleImmutableEntry<>(
-                asJavaSet(AclCommand.getAcls(asScalaSet(USERS), permissionType, asScalaSet(operations), asScalaSet(HOSTS))),
+        return Map.entry(
+                AclCommand.getAcls(USERS, permissionType, operations, HOSTS),
                 getCmd(permissionType)
         );
     }
@@ -575,42 +557,10 @@ public class AclCommandTest {
         List<String> fullCmd = new ArrayList<>();
         for (KafkaPrincipal user : USERS) {
             fullCmd.addAll(cmd);
-            fullCmd.addAll(Arrays.asList(principalCmd, user.toString()));
+            fullCmd.addAll(List.of(principalCmd, user.toString()));
         }
 
         return fullCmd;
-    }
-
-    /**
-     * Capture both the console output and console error during the execution of the provided function.
-     */
-    private static Map.Entry<String, String> grabConsoleOutputAndError(Runnable runnable) {
-        ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
-        ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
-        PrintStream out = new PrintStream(outBuf);
-        PrintStream err = new PrintStream(errBuf);
-        try {
-            Console.withOut(out, () -> {
-                Console.withErr(err, () -> {
-                    runnable.run();
-                    return null;
-                });
-                return null;
-            });
-        } finally {
-            out.flush();
-            err.flush();
-        }
-
-        return new SimpleImmutableEntry<>(outBuf.toString(), errBuf.toString());
-    }
-
-    private static <T> scala.collection.immutable.Set<T> asScalaSet(Set<T> javaSet) {
-        return CollectionConverters.asScala(javaSet).toSet();
-    }
-
-    private static <T> Set<T> asJavaSet(scala.collection.immutable.Set<T> scalaSet) {
-        return CollectionConverters.asJava(scalaSet);
     }
 
     private void assertInitializeInvalidOptionsExitCodeAndMsg(List<String> args, String expectedMsg) {
@@ -620,7 +570,7 @@ public class AclCommandTest {
             throw new RuntimeException();
         });
         try {
-            assertThrows(RuntimeException.class, () -> new AclCommandOptions(args.toArray(new String[0])).checkArgs());
+            assertThrows(RuntimeException.class, () -> new AclCommand.AclCommandOptions(args.toArray(new String[0])).checkArgs());
         } finally {
             Exit.resetExitProcedure();
         }
@@ -628,15 +578,15 @@ public class AclCommandTest {
 
     private void checkNotThrow(List<String> args) {
         AtomicReference<Integer> exitStatus = new AtomicReference<>();
-        org.apache.kafka.common.utils.Exit.setExitProcedure((status, __) -> {
+        Exit.setExitProcedure((status, __) -> {
             exitStatus.set(status);
             throw new RuntimeException();
         });
         try {
-            assertDoesNotThrow(() -> new AclCommandOptions(args.toArray(new String[0])).checkArgs());
+            assertDoesNotThrow(() -> new AclCommand.AclCommandOptions(args.toArray(new String[0])).checkArgs());
             assertNull(exitStatus.get());
         } finally {
-            org.apache.kafka.common.utils.Exit.resetExitProcedure();
+            Exit.resetExitProcedure();
         }
     }
 }
