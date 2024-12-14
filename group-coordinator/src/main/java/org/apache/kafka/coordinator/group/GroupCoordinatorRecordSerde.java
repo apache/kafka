@@ -52,6 +52,9 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
 
+/**
+ * Please ensure any new record added here stays in sync with DumpLogSegments.
+ */
 public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
     @Override
     protected ApiMessage apiMessageKeyFor(short recordVersion) {
