@@ -801,6 +801,11 @@ subprojects {
     scalaCompileOptions.additionalParameters += ["-Xfatal-warnings"]
     scalaCompileOptions.additionalParameters += ["--release", String.valueOf(releaseVersion)]
 
+    // Gradle does not support the `release` configuration when performing joint Java-Scala compilation.
+    // For more details, refer to https://github.com/gradle/gradle/issues/13762.
+    // As a result, we need to explicitly configure the Scala compiler with this setting.
+    options.compilerArgs += ["--release", String.valueOf(releaseVersion)]
+
     configureJavaCompiler(name, options, project.path)
 
     configure(scalaCompileOptions.forkOptions) {
