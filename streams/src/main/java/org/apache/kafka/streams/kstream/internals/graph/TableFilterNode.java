@@ -26,7 +26,7 @@ public class TableFilterNode<K, V> extends TableProcessorNode<K, V> implements V
     public TableFilterNode(final String nodeName,
                            final ProcessorParameters<K, V, ?, ?> processorParameters,
                            final StoreFactory storeFactory) {
-        super(nodeName, processorParameters, storeFactory);
+        super(nodeName, processorParameters, storeFactory, null);
     }
 
     @SuppressWarnings("unchecked")
