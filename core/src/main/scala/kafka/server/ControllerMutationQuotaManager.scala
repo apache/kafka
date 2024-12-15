@@ -194,7 +194,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
 
   /**
    * Records that a user/clientId accumulated or would like to accumulate the provided amount at the
-   * the specified time, returns throttle time in milliseconds. The quota is strict meaning that it
+   * specified time, returns throttle time in milliseconds. The quota is strict meaning that it
    * does not accept any mutations once the quota is exhausted until it gets back to the defined rate.
    *
    * @param session The session from which the user is extracted
@@ -264,7 +264,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
   /**
    * Returns a ControllerMutationQuota based on `strictSinceVersion`. It returns a strict
    * quota if the version is equal to or above of the `strictSinceVersion`, a permissive
-   * quota if the version is below, and a unbounded quota if the quota is disabled.
+   * quota if the version is below, and an unbounded quota if the quota is disabled.
    *
    * When the quota is strictly enforced. Any operation above the quota is not allowed
    * and rejected with a THROTTLING_QUOTA_EXCEEDED error.
