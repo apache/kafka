@@ -21,10 +21,10 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -71,10 +71,13 @@ public class ForeignTableJoinProcessorSupplierTests {
         context = new MockInternalNewProcessorContext<>(props, new TaskId(0, 0), stateDir);
 
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        processor = new ForeignTableJoinProcessorSupplier<String, String, String>(storeBuilder().name(), COMBINED_KEY_SCHEMA).get();
+        processor = new ForeignTableJoinProcessorSupplier<String, String, String>(
+            StoreBuilderWrapper.wrapStoreBuilder(storeBuilder()),
+            COMBINED_KEY_SCHEMA
+        ).get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
-        stateStore.init((StateStoreContext) context, stateStore);
+        stateStore.init(context, stateStore);
         processor.init(context);
     }
 

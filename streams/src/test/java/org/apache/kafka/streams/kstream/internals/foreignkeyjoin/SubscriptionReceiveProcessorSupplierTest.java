@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForward;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -507,7 +508,10 @@ public class SubscriptionReceiveProcessorSupplierTest {
     private SubscriptionReceiveProcessorSupplier<String, String> supplier(
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder) {
 
-        return new SubscriptionReceiveProcessorSupplier<>(storeBuilder.name(), COMBINED_KEY_SCHEMA);
+        return new SubscriptionReceiveProcessorSupplier<>(
+            StoreBuilderWrapper.wrapStoreBuilder(storeBuilder),
+            COMBINED_KEY_SCHEMA
+        );
     }
 
     private StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder() {

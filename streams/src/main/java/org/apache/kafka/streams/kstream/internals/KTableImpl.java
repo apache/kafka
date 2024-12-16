@@ -1247,8 +1247,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String subscriptionStoreName = renamed
             .suffixWithOrElseGet("-subscription-store", builder, FK_JOIN_STATE_STORE_NAME);
-        builder.addStateStore(
-            new SubscriptionStoreFactory<>(subscriptionStoreName, subscriptionWrapperSerde));
+        final StoreFactory subscriptionStoreFactory =
+            new SubscriptionStoreFactory<>(subscriptionStoreName, subscriptionWrapperSerde);
 
         final String subscriptionReceiveName = renamed.suffixWithOrElseGet(
             "-subscription-receive", builder, SUBSCRIPTION_PROCESSOR);
@@ -1256,7 +1256,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             new StatefulProcessorNode<>(
                 subscriptionReceiveName,
                 new ProcessorParameters<>(
-                    new SubscriptionReceiveProcessorSupplier<>(subscriptionStoreName, combinedKeySchema),
+                    new SubscriptionReceiveProcessorSupplier<>(subscriptionStoreFactory, combinedKeySchema),
                     subscriptionReceiveName),
                 new String[]{subscriptionStoreName}
             );
@@ -1278,12 +1278,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String foreignTableJoinName = renamed
             .suffixWithOrElseGet("-foreign-join-subscription", builder, SUBSCRIPTION_PROCESSOR);
-        final StatefulProcessorNode<KO, Change<VO>> foreignTableJoinNode = new ForeignTableJoinNode<>(
+        final ProcessorGraphNode<KO, Change<VO>> foreignTableJoinNode = new ForeignTableJoinNode<>(
             new ProcessorParameters<>(
-                new ForeignTableJoinProcessorSupplier<>(subscriptionStoreName, combinedKeySchema),
+                new ForeignTableJoinProcessorSupplier<>(subscriptionStoreFactory, combinedKeySchema),
                 foreignTableJoinName
-            ),
-            new String[]{subscriptionStoreName}
+            )
         );
         builder.addGraphNode(((KTableImpl<KO, VO, ?>) foreignKeyTable).graphNode, foreignTableJoinNode);
 
