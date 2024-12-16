@@ -33,3 +33,7 @@ Configuration:
       level: {{ log_level|default("INFO") }}
       AppenderRef:
         - ref: FILE
+
+    Logger:
+      - name: org.apache.kafka.clients.consumer.ConsumerConfig
+        level: ERROR
