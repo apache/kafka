@@ -78,7 +78,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
     deleteTopic(topic, listenerName)
 
     // Verify that the topic is deleted when no metadata request comes in
-    TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 2, brokers)
+    TestUtils.verifyTopicDeletion(topic, 2, brokers)
 
     // Producer should be able to send messages even after topic gets deleted and auto-created
     assertEquals(topic, producer.send(new ProducerRecord(topic, null, "value".getBytes(StandardCharsets.UTF_8))).get.topic())

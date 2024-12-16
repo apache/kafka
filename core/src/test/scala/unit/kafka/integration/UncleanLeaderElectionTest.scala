@@ -71,8 +71,8 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
 
-    configProps1 = createBrokerConfig(brokerId1, zkConnectOrNull)
-    configProps2 = createBrokerConfig(brokerId2, zkConnectOrNull)
+    configProps1 = createBrokerConfig(brokerId1, null)
+    configProps2 = createBrokerConfig(brokerId2, null)
 
     for (configProps <- List(configProps1, configProps2)) {
       configProps.put("controlled.shutdown.enable", enableControlledShutdown.toString)

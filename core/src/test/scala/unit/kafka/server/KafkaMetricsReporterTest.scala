@@ -71,7 +71,7 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    val props = TestUtils.createBrokerConfig(1, zkConnectOrNull)
+    val props = TestUtils.createBrokerConfig(1, null)
     props.setProperty(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, "kafka.server.KafkaMetricsReporterTest$MockMetricsReporter")
     props.setProperty(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG, "true")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
