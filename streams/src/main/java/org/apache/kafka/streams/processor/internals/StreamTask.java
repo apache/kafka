@@ -946,7 +946,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 recordContext.sourceRawValue()
             );
 
-            final ProcessingExceptionHandler.ProcessingExceptionResponse processingExceptionResponse;
+            final ProcessingExceptionHandler.Response processingExceptionResponse;
             try {
                 processingExceptionResponse = Objects.requireNonNull(
                     processingExceptionHandler.handleError(errorHandlerContext, null, processingException),
@@ -977,7 +977,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 }
             }
 
-            if (processingExceptionResponse.response() == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
+            if (processingExceptionResponse.result() == ProcessingExceptionHandler.Result.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
                         " a processing error. If you would rather have the streaming pipeline" +
                         " continue after a processing error, please set the " +

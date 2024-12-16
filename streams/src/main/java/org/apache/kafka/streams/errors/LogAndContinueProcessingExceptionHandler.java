@@ -53,9 +53,9 @@ public class LogAndContinueProcessingExceptionHandler implements ProcessingExcep
     }
 
     @Override
-    public ProcessingExceptionResponse handleError(final ErrorHandlerContext context,
-                                                   final Record<?, ?> record,
-                                                   final Exception exception) {
+    public Response handleError(final ErrorHandlerContext context,
+                                final Record<?, ?> record,
+                                final Exception exception) {
         log.warn(
             "Exception caught during message processing, processor node: {}, taskId: {}, source topic: {}, source partition: {}, source offset: {}",
             context.processorNodeId(),
@@ -65,9 +65,8 @@ public class LogAndContinueProcessingExceptionHandler implements ProcessingExcep
             context.offset(),
             exception
         );
-        return ProcessingExceptionResponse.continueProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+        return Response.resume(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
-
 
     @Override
     public void configure(final Map<String, ?> configs) {

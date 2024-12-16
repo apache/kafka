@@ -52,9 +52,9 @@ public class LogAndFailProcessingExceptionHandler implements ProcessingException
     }
 
     @Override
-    public ProcessingExceptionResponse handleError(final ErrorHandlerContext context,
-                                                   final Record<?, ?> record,
-                                                   final Exception exception) {
+    public Response handleError(final ErrorHandlerContext context,
+                                final Record<?, ?> record,
+                                final Exception exception) {
         log.warn(
             "Exception caught during message processing, processor node: {}, taskId: {}, source topic: {}, source partition: {}, source offset: {}",
             context.processorNodeId(),
@@ -65,7 +65,7 @@ public class LogAndFailProcessingExceptionHandler implements ProcessingException
             exception
         );
 
-        return ProcessingExceptionResponse.failProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+        return Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
     @Override

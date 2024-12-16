@@ -57,12 +57,12 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
     }
 
     @Override
-    public ProductionExceptionResponse handleError(final ErrorHandlerContext context,
-                                                   final ProducerRecord<byte[], byte[]> record,
-                                                   final Exception exception) {
+    public Response handleError(final ErrorHandlerContext context,
+                                final ProducerRecord<byte[], byte[]> record,
+                                final Exception exception) {
         return exception instanceof RetriableException ?
-            ProductionExceptionResponse.retryProcessing() :
-            ProductionExceptionResponse.failProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+            Response.retry() :
+            Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
 
@@ -77,11 +77,11 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
     }
 
     @Override
-    public ProductionExceptionResponse handleSerializationError(final ErrorHandlerContext context,
-                                                                final ProducerRecord record,
-                                                                final Exception exception,
-                                                                final SerializationExceptionOrigin origin) {
-        return ProductionExceptionResponse.failProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+    public Response handleSerializationError(final ErrorHandlerContext context,
+                                             final ProducerRecord record,
+                                             final Exception exception,
+                                             final SerializationExceptionOrigin origin) {
+        return Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
 

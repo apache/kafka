@@ -22,7 +22,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
-import org.apache.kafka.streams.errors.DeserializationExceptionHandler.DeserializationHandlerResponse;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -52,7 +51,7 @@ public class RecordDeserializer {
 
     /**
      * @throws StreamsException if a deserialization error occurs and the deserialization callback returns
-     *                          {@link DeserializationHandlerResponse#FAIL FAIL}
+     *                          {@link DeserializationExceptionHandler.Result#FAIL FAIL}
      *                          or throws an exception itself
      */
     ConsumerRecord<Object, Object> deserialize(final ProcessorContext<?, ?> processorContext,
@@ -102,7 +101,7 @@ public class RecordDeserializer {
             rawRecord.value()
         );
 
-        final DeserializationExceptionHandler.DeserializationExceptionResponse response;
+        final DeserializationExceptionHandler.Response response;
         try {
             response = Objects.requireNonNull(
                 deserializationExceptionHandler.handleError(errorHandlerContext, rawRecord, deserializationException),
@@ -134,7 +133,7 @@ public class RecordDeserializer {
             }
         }
 
-        if (response.response() == DeserializationHandlerResponse.FAIL) {
+        if (response.result() == DeserializationExceptionHandler.Result.FAIL) {
             throw new StreamsException("Deserialization exception handler is set to fail upon" +
                 " a deserialization error. If you would rather have the streaming pipeline" +
                 " continue after a deserialization error, please set the " +

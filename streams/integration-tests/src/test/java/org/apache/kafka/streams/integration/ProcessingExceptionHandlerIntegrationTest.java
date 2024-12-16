@@ -524,7 +524,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
 
     public static class ContinueProcessingExceptionHandlerMockTest implements ProcessingExceptionHandler {
         @Override
-        public ProcessingExceptionResponse handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+        public Response handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
             if (((String) record.key()).contains("FATAL")) {
                 throw new RuntimeException("KABOOM!");
             }
@@ -532,7 +532,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
                 return null;
             }
             assertProcessingExceptionHandlerInputs(context, record, exception);
-            return ProcessingExceptionResponse.continueProcessing();
+            return Response.resume();
         }
 
         @Override
@@ -543,9 +543,9 @@ public class ProcessingExceptionHandlerIntegrationTest {
 
     public static class FailProcessingExceptionHandlerMockTest implements ProcessingExceptionHandler {
          @Override
-        public ProcessingExceptionResponse handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+        public Response handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
             assertProcessingExceptionHandlerInputs(context, record, exception);
-            return ProcessingExceptionResponse.failProcessing();
+            return Response.fail();
         }
 
         @Override

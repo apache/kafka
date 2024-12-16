@@ -77,9 +77,9 @@ public class LogAndContinueExceptionHandler implements DeserializationExceptionH
     }
 
     @Override
-    public DeserializationExceptionResponse handleError(final ErrorHandlerContext context,
-                                                        final ConsumerRecord<byte[], byte[]> record,
-                                                        final Exception exception) {
+    public Response handleError(final ErrorHandlerContext context,
+                                final ConsumerRecord<byte[], byte[]> record,
+                                final Exception exception) {
         log.warn(
             "Exception caught during Deserialization, taskId: {}, topic: {}, partition: {}, offset: {}",
             context.taskId(),
@@ -89,7 +89,7 @@ public class LogAndContinueExceptionHandler implements DeserializationExceptionH
             exception
         );
 
-        return DeserializationExceptionResponse.continueProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+        return Response.resume(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
     @Override

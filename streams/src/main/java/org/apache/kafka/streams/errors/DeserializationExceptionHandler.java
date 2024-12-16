@@ -87,14 +87,15 @@ public interface DeserializationExceptionHandler extends Configurable {
      * @param exception
      *     The actual exception.
      *
-     * @return a {@link DeserializationExceptionResponse} object
+     * @return a {@link Response} object
      */
-    default DeserializationExceptionResponse handleError(final ErrorHandlerContext context, final ConsumerRecord<byte[], byte[]> record, final Exception exception) {
-        return new DeserializationExceptionResponse(handle(context, record, exception), Collections.emptyList());
+    default Response handleError(final ErrorHandlerContext context, final ConsumerRecord<byte[], byte[]> record, final Exception exception) {
+        return new Response(Result.from(handle(context, record, exception)), Collections.emptyList());
     }
     /**
      * Enumeration that describes the response from the exception handler.
      */
+    @Deprecated
     enum DeserializationHandlerResponse {
         /** Continue processing. */
         CONTINUE(0, "CONTINUE"),
@@ -118,77 +119,121 @@ public interface DeserializationExceptionHandler extends Configurable {
     }
 
     /**
+     * Enumeration that describes the response from the exception handler.
+     */
+    enum Result {
+        /** Continue processing. */
+        RESUME(0, "RESUME"),
+        /** Fail processing. */
+        FAIL(1, "FAIL");
+
+        /**
+         * An english description for the used option. This is for debugging only and may change.
+         */
+        public final String name;
+
+        /**
+         * The permanent and immutable id for the used option. This can't change ever.
+         */
+        public final int id;
+
+        Result(final int id, final String name) {
+            this.id = id;
+            this.name = name;
+        }
+
+        /**
+         * Converts the deprecated enum DeserializationHandlerResponse into the new Result enum.
+         *
+         * @param value the old DeserializationHandlerResponse enum value
+         * @return a {@link Result} enum value
+         * @throws IllegalArgumentException if the provided value does not map to a valid {@link Result}
+         */
+        @Deprecated
+        public static DeserializationExceptionHandler.Result from(final DeserializationHandlerResponse value) {
+            switch (value) {
+                case FAIL:
+                    return Result.FAIL;
+                case CONTINUE:
+                    return Result.RESUME;
+                default:
+                    throw new IllegalArgumentException("No Result enum found for old value: " + value);
+            }
+        }
+    }
+
+    /**
      * Represents the result of handling a deserialization exception.
      * <p>
-     * The {@code Response} class encapsulates a {@link ProcessingExceptionHandler.ProcessingHandlerResponse},
+     * The {@code Response} class encapsulates a {@link ProcessingExceptionHandler.Result},
      * indicating whether processing should continue or fail, along with an optional list of
      * {@link ProducerRecord} instances to be sent to a dead letter queue.
      * </p>
      */
-    class DeserializationExceptionResponse {
+    class Response {
 
-        private DeserializationHandlerResponse deserializationHandlerResponse;
+        private Result result;
 
         private List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
 
         /**
          * Constructs a new {@code DeserializationExceptionResponse} object.
          *
-         * @param deserializationHandlerResponse the response indicating whether processing should continue or fail;
+         * @param result the result indicating whether processing should continue or fail;
          *                                  must not be {@code null}.
          * @param deadLetterQueueRecords    the list of records to be sent to the dead letter queue; may be {@code null}.
          */
-        private DeserializationExceptionResponse(final DeserializationHandlerResponse deserializationHandlerResponse,
-                                                 final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
-            this.deserializationHandlerResponse = deserializationHandlerResponse;
+        private Response(final Result result,
+                         final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            this.result = result;
             this.deadLetterQueueRecords = deadLetterQueueRecords;
         }
 
         /**
-         * Creates a {@code DeserializationExceptionResponse} indicating that processing should fail.
+         * Creates a {@code Response} indicating that processing should fail.
          *
          * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
-         * @return a {@code DeserializationExceptionResponse} with a {@link DeserializationHandlerResponse#FAIL} status.
+         * @return a {@code Response} with a {@link DeserializationExceptionHandler.Result#FAIL} status.
          */
-        public static DeserializationExceptionResponse failProcessing(final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
-            return new DeserializationExceptionResponse(DeserializationHandlerResponse.FAIL, deadLetterQueueRecords);
+        public static Response fail(final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            return new Response(Result.FAIL, deadLetterQueueRecords);
         }
 
         /**
-         * Creates a {@code DeserializationExceptionResponse} indicating that processing should fail.
+         * Creates a {@code Response} indicating that processing should fail.
          *
-         * @return a {@code DeserializationExceptionResponse} with a {@link DeserializationHandlerResponse#FAIL} status.
+         * @return a {@code Response} with a {@link DeserializationExceptionHandler.Result#FAIL} status.
          */
-        public static DeserializationExceptionResponse failProcessing() {
-            return failProcessing(Collections.emptyList());
+        public static Response fail() {
+            return fail(Collections.emptyList());
         }
 
         /**
-         * Creates a {@code DeserializationExceptionResponse} indicating that processing should continue.
+         * Creates a {@code Response} indicating that processing should continue.
          *
          * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
-         * @return a {@code DeserializationExceptionResponse} with a {@link DeserializationHandlerResponse#CONTINUE} status.
+         * @return a {@code Response} with a {@link DeserializationExceptionHandler.Result#RESUME} status.
          */
-        public static DeserializationExceptionResponse continueProcessing(final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
-            return new DeserializationExceptionResponse(DeserializationHandlerResponse.CONTINUE, deadLetterQueueRecords);
+        public static Response resume(final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            return new Response(Result.RESUME, deadLetterQueueRecords);
         }
 
         /**
-         * Creates a {@code DeserializationExceptionResponse} indicating that processing should continue.
+         * Creates a {@code Response} indicating that processing should continue.
          *
-         * @return a {@code DeserializationExceptionResponse} with a {@link DeserializationHandlerResponse#CONTINUE} status.
+         * @return a {@code Response} with a {@link DeserializationHandlerResponse#CONTINUE} status.
          */
-        public static DeserializationExceptionResponse continueProcessing() {
-            return continueProcessing(Collections.emptyList());
+        public static Response resume() {
+            return resume(Collections.emptyList());
         }
 
         /**
-         * Retrieves the deserialization handler response.
+         * Retrieves the deserialization handler result.
          *
-         * @return the {@link DeserializationHandlerResponse} indicating whether processing should continue or fail.
+         * @return the {@link Result} indicating whether processing should continue or fail.
          */
-        public DeserializationHandlerResponse response() {
-            return deserializationHandlerResponse;
+        public Result result() {
+            return result;
         }
 
         /**

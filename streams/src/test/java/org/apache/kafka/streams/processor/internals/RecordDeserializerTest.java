@@ -115,7 +115,7 @@ public class RecordDeserializerTest {
                             "value"
                     ),
                     new DeserializationExceptionHandlerMock(
-                            Optional.of(DeserializationExceptionHandler.DeserializationExceptionResponse.failProcessing()),
+                            Optional.of(DeserializationExceptionHandler.Response.fail()),
                             rawRecord,
                             sourceNodeName,
                             taskId
@@ -154,7 +154,7 @@ public class RecordDeserializerTest {
                             "value"
                     ),
                     new DeserializationExceptionHandlerMock(
-                            Optional.of(DeserializationExceptionHandler.DeserializationExceptionResponse.continueProcessing()),
+                            Optional.of(DeserializationExceptionHandler.Response.resume()),
                             rawRecord,
                             sourceNodeName,
                             taskId
@@ -341,12 +341,12 @@ public class RecordDeserializerTest {
     }
 
     public static class DeserializationExceptionHandlerMock implements DeserializationExceptionHandler {
-        private final Optional<DeserializationExceptionResponse> response;
+        private final Optional<Response> response;
         private final ConsumerRecord<byte[], byte[]> expectedRecord;
         private final String expectedProcessorNodeId;
         private final TaskId expectedTaskId;
 
-        public DeserializationExceptionHandlerMock(final Optional<DeserializationExceptionResponse> response,
+        public DeserializationExceptionHandlerMock(final Optional<Response> response,
                                                    final ConsumerRecord<byte[], byte[]> record,
                                                    final String processorNodeId,
                                                    final TaskId taskId) {
@@ -357,9 +357,9 @@ public class RecordDeserializerTest {
         }
 
         @Override
-        public DeserializationExceptionResponse handleError(final ErrorHandlerContext context,
-                                                     final ConsumerRecord<byte[], byte[]> record,
-                                                     final Exception exception) {
+        public Response handleError(final ErrorHandlerContext context,
+                                    final ConsumerRecord<byte[], byte[]> record,
+                                    final Exception exception) {
             assertEquals(expectedRecord.topic(), context.topic());
             assertEquals(expectedRecord.partition(), context.partition());
             assertEquals(expectedRecord.offset(), context.offset());
