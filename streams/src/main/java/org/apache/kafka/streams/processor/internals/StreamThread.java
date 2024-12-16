@@ -1299,8 +1299,10 @@ public class StreamThread extends Thread implements ProcessingThread {
         for (final TopicPartition partition : partitions) {
             final Optional<AutoOffsetResetStrategy> offsetResetStrategy = topologyMetadata.offsetResetStrategy(partition.topic());
 
-            // This may be null if the task we are currently processing was apart of a named topology that was just removed.
-            // TODO KAFKA-13713: keep the StreamThreads and TopologyMetadata view of named topologies in sync until final thread has acked
+            // TODO
+            // This may be null if the task we are currently processing was part of a named topology that was just removed.
+            // After named topologies are removed, we can update `topologyMetadata.offsetResetStrateg()` so it
+            // will not return null any longer, and we can remove this check
             if (offsetResetStrategy != null) {
                 if (offsetResetStrategy.isPresent()) {
                     final AutoOffsetResetStrategy resetPolicy = offsetResetStrategy.get();
@@ -1407,11 +1409,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                         }
                     }
                 } catch (final TimeoutException timeoutException) {
-                    for (final TopicPartition partition : seekByDuration.keySet()) {
-                        final Task task = taskManager.getActiveTask(partition);
-                        task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
-                        stateUpdater.add(task);
-                    }
+                    taskManager.maybeInitTaskTimeoutsOrThrow(seekByDuration.keySet(), timeoutException, now);
                     log.debug(
                         String.format(
                             "Could not reset offset for %s due to the following exception; will retry.",
