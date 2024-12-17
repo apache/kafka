@@ -790,9 +790,6 @@ def main():
     token = None
     if os.environ.get("DEVELOCITY_ACCESS_TOKEN"):
         token = os.environ.get("DEVELOCITY_ACCESS_TOKEN")
-    elif os.environ.get("GE_ACCESS_TOKEN"):
-        # Special case for when we run in GHA
-        token = os.environ.get("GE_ACCESS_TOKEN").removeprefix("ge.apache.org=")
     else:
         print("No auth token was specified. You must set DEVELOCITY_ACCESS_TOKEN to your personal access token.")
         exit(1)
