@@ -768,6 +768,17 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private void flushCurrentBatch() {
             if (currentBatch != null) {
                 try {
+                    if (currentBatch.builder.numRecords() == 0) {
+                        // The only way we can get here is if append() has failed in an unexpected
+                        // way and left an empty batch. Try to clean it up.
+                        log.debug("Tried to flush an empty batch for {}.", tp);
+                        // There should not be any deferred events attached to the batch. We fail
+                        // the batch just in case. As a side effect, coordinator state is also
+                        // reverted, but there should be no changes since the batch was empty.
+                        failCurrentBatch(new IllegalStateException("Record batch was empty"));
+                        return;
+                    }
+
                     long flushStartMs = time.milliseconds();
                     // Write the records to the log and update the last written offset.
                     long offset = partitionWriter.append(
@@ -926,7 +937,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 // If the records are empty, it was a read operation after all. In this case,
                 // the response can be returned directly iff there are no pending write operations;
                 // otherwise, the read needs to wait on the last write operation to be completed.
-                if (currentBatch != null) {
+                if (currentBatch != null && currentBatch.builder.numRecords() > 0) {
                     currentBatch.deferredEvents.add(event);
                 } else {
                     if (coordinator.lastCommittedOffset() < coordinator.lastWrittenOffset()) {
