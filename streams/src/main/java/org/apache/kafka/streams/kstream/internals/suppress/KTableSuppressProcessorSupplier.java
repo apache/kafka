@@ -33,23 +33,26 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Maybe;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+
+import java.util.Set;
 
 import static java.util.Objects.requireNonNull;
 
 public class KTableSuppressProcessorSupplier<K, V> implements
     KTableProcessorSupplier<K, V, K, V> {
     private final SuppressedInternal<K> suppress;
-    private final String storeName;
+    private final StoreBuilder<?> storeBuilder;
     private final KTableImpl<K, ?, V> parentKTable;
 
     public KTableSuppressProcessorSupplier(final SuppressedInternal<K> suppress,
-                                           final String storeName,
+                                           final StoreBuilder<?> storeBuilder,
                                            final KTableImpl<K, ?, V> parentKTable) {
         this.suppress = suppress;
-        this.storeName = storeName;
+        this.storeBuilder = storeBuilder;
         this.parentKTable = parentKTable;
         // The suppress buffer requires seeing the old values, to support the prior value view.
         parentKTable.enableSendingOldValues(true);
@@ -57,7 +60,12 @@ public class KTableSuppressProcessorSupplier<K, V> implements
 
     @Override
     public Processor<K, Change<V>, K, Change<V>> get() {
-        return new KTableSuppressProcessor<>(suppress, storeName);
+        return new KTableSuppressProcessor<>(suppress, storeBuilder.name());
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return Set.of(storeBuilder);
     }
 
     @Override
@@ -75,7 +83,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements
                     public void init(final ProcessorContext<?, ?> context) {
                         parentGetter.init(context);
                         // the main processor is responsible for the buffer's lifecycle
-                        buffer = requireNonNull(context.getStateStore(storeName));
+                        buffer = requireNonNull(context.getStateStore(storeBuilder.name()));
                     }
 
                     @Override
@@ -107,7 +115,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements
                 final String[] parentStores = parentValueGetterSupplier.storeNames();
                 final String[] stores = new String[1 + parentStores.length];
                 System.arraycopy(parentStores, 0, stores, 1, parentStores.length);
-                stores[0] = storeName;
+                stores[0] = storeBuilder.name();
                 return stores;
             }
         };
