@@ -175,6 +175,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatRequestDataJsonConvert
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseDataJsonConverter;
 import org.apache.kafka.common.message.StopReplicaRequestDataJsonConverter;
 import org.apache.kafka.common.message.StopReplicaResponseDataJsonConverter;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestDataJsonConverter;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseDataJsonConverter;
 import org.apache.kafka.common.message.SyncGroupRequestDataJsonConverter;
 import org.apache.kafka.common.message.SyncGroupResponseDataJsonConverter;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestDataJsonConverter;
@@ -356,6 +358,8 @@ import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.StopReplicaRequest;
 import org.apache.kafka.common.requests.StopReplicaResponse;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
@@ -541,6 +545,8 @@ public class RequestConvertToJson {
                 return ShareGroupDescribeRequestDataJsonConverter.write(((ShareGroupDescribeRequest) request).data(), request.version());
             case SHARE_GROUP_HEARTBEAT:
                 return ShareGroupHeartbeatRequestDataJsonConverter.write(((ShareGroupHeartbeatRequest) request).data(), request.version());
+            case STREAMS_GROUP_HEARTBEAT:
+                return StreamsGroupHeartbeatRequestDataJsonConverter.write(((StreamsGroupHeartbeatRequest) request).data(), request.version());
             case STOP_REPLICA:
                 return StopReplicaRequestDataJsonConverter.write(((StopReplicaRequest) request).data(), request.version());
             case SYNC_GROUP:
@@ -725,6 +731,8 @@ public class RequestConvertToJson {
                 return ShareGroupDescribeResponseDataJsonConverter.write(((ShareGroupDescribeResponse) response).data(), version);
             case SHARE_GROUP_HEARTBEAT:
                 return ShareGroupHeartbeatResponseDataJsonConverter.write(((ShareGroupHeartbeatResponse) response).data(), version);
+            case STREAMS_GROUP_HEARTBEAT:
+                return StreamsGroupHeartbeatResponseDataJsonConverter.write(((StreamsGroupHeartbeatResponse) response).data(), version);
             case STOP_REPLICA:
                 return StopReplicaResponseDataJsonConverter.write(((StopReplicaResponse) response).data(), version);
             case SYNC_GROUP:

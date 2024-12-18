@@ -234,6 +234,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -1124,6 +1126,7 @@ public class RequestResponseTest {
             case WRITE_SHARE_GROUP_STATE: return createWriteShareGroupStateRequest(version);
             case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateRequest(version);
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryRequest(version);
+            case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1218,6 +1221,7 @@ public class RequestResponseTest {
             case WRITE_SHARE_GROUP_STATE: return createWriteShareGroupStateResponse();
             case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateResponse();
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryResponse();
+            case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -4033,6 +4037,14 @@ public class RequestResponseTest {
                                 .setStartOffset(0)
                                 .setStateEpoch(0)))));
         return new ReadShareGroupStateSummaryResponse(data);
+    }
+
+    private AbstractRequest createStreamsGroupHeartbeatRequest(final short version) {
+        return new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData()).build(version);
+    }
+
+    private AbstractResponse createStreamsGroupHeartbeatResponse() {
+        return new StreamsGroupHeartbeatResponse(new StreamsGroupHeartbeatResponseData());
     }
 
     @Test
