@@ -196,6 +196,9 @@
                             <code>DEAD</code> if the group ID was not found. In Apache Kafka 4.0, the <code>GroupIdNotFoundException</code>
                             is thrown instead as part of the support for new types of group.
                         </li>
+                        <li>The <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, boolean)</code> method were removed.
+                            Please use <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, Uuid, boolean)</code> instead.
+                        </li>
                     </ul>
                 </li>
             </ul>
