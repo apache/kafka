@@ -1938,8 +1938,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           // Test that we can get information about the test consumer group.
           assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
           var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
-          assertEquals(groupType == GroupType.CLASSIC, testGroupDescription.groupEpoch.isEmpty)
-          assertEquals(groupType == GroupType.CLASSIC, testGroupDescription.targetAssignmentEpoch.isEmpty)
+          if (groupType == GroupType.CLASSIC) {
+            assertTrue(testGroupDescription.groupEpoch.isEmpty)
+            assertTrue(testGroupDescription.targetAssignmentEpoch.isEmpty)
+          } else {
+            assertEquals(Optional.of(3), testGroupDescription.groupEpoch)
+            assertEquals(Optional.of(3), testGroupDescription.targetAssignmentEpoch)
+          }
 
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup)
