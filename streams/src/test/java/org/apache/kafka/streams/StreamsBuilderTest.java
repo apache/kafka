@@ -1643,6 +1643,26 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldWrapProcessorAndStoreForFilterTable() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        builder.table("input", Consumed.as("source-table"))
+            .filter((k, v) -> true, Named.as("filter"), Materialized.as("filter"))
+            .toStream(Named.as("to-stream"))
+            .to("output-topic", Produced.as("sink"));
+        builder.build();
+
+        assertThat(counter.wrappedProcessorNames(),
+            Matchers.containsInAnyOrder("source-table", "filter", "to-stream"));
+        assertThat(counter.numUniqueStateStores(), is(1));
+        assertThat(counter.numConnectedStateStores(), is(1));
+    }
+
+    @Test
     public void shouldWrapProcessorsForTableAggregate() {
         final Map<Object, Object> props = dummyStreamsConfigMap();
         props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
@@ -1744,8 +1764,8 @@ public class StreamsBuilderTest {
             "to-table", "map-values", "map-values-stateful",
             "filter-table", "filter-table-stateful", "to-stream"
         ));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(1));
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
     }
 
     @Test

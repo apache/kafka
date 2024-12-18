@@ -209,17 +209,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FILTER_NAME);
 
         final KTableProcessorSupplier<K, V, K, V> processorSupplier =
-            new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
+            new KTableFilter<>(this, predicate, filterNot, queryableStoreName, storeFactory);
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(processorSupplier, name)
         );
 
-        final GraphNode tableNode = new TableFilterNode<>(
-            name,
-            processorParameters,
-            storeFactory
-        );
+        final GraphNode tableNode = new TableFilterNode<>(name, processorParameters);
         maybeSetOutputVersioned(tableNode, materializedInternal);
 
         builder.addGraphNode(this.graphNode, tableNode);
