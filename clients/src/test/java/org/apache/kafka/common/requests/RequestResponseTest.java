@@ -234,6 +234,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeRequestData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -1127,6 +1129,7 @@ public class RequestResponseTest {
             case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateRequest(version);
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryRequest(version);
             case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatRequest(version);
+            case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1222,6 +1225,7 @@ public class RequestResponseTest {
             case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateResponse();
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryResponse();
             case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse();
+            case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -4039,8 +4043,31 @@ public class RequestResponseTest {
         return new ReadShareGroupStateSummaryResponse(data);
     }
 
+    private AbstractRequest createStreamsGroupDescribeRequest(final short version) {
+        return new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData()
+            .setGroupIds(Collections.singletonList("group"))
+            .setIncludeAuthorizedOperations(false)).build(version);
+    }
+
     private AbstractRequest createStreamsGroupHeartbeatRequest(final short version) {
         return new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData()).build(version);
+    }
+
+    private AbstractResponse createStreamsGroupDescribeResponse() {
+        StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
+            .setGroups(Collections.singletonList(
+                new StreamsGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId("group")
+                    .setErrorCode((short) 0)
+                    .setErrorMessage(Errors.forCode((short) 0).message())
+                    .setGroupState("EMPTY")
+                    .setGroupEpoch(0)
+                    .setAssignmentEpoch(0)
+                    .setMembers(new ArrayList<>(0))
+                    .setTopology(null)
+            ))
+            .setThrottleTimeMs(1000);
+        return new StreamsGroupDescribeResponse(data);
     }
 
     private AbstractResponse createStreamsGroupHeartbeatResponse() {
