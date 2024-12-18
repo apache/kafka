@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -59,10 +60,11 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     public Sensor sensor;
     public long offset;
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @BeforeEach
     public void setUp() {
-        when(serdeGetter.keySerde()).thenReturn(new Serdes.StringSerde());
-        when(serdeGetter.valueSerde()).thenReturn(new Serdes.StringSerde());
+        when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
+        when(serdeGetter.valueSerde()).thenReturn((Serde) new Serdes.StringSerde());
         final Metrics metrics = new Metrics();
         offset = 0;
         streamsMetrics = new StreamsMetricsImpl(metrics, "test-client", "processId", new MockTime());

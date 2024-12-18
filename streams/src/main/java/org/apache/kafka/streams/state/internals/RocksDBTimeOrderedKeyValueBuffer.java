@@ -58,7 +58,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     private final boolean loggingEnabled;
     private int partition;
     private String changelogTopic;
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
     private boolean minValid;
 
     public static class Builder<K, V> implements StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> {
@@ -156,7 +156,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     @Override
     public void setSerdesIfNull(final SerdeGetter getter) {
         keySerde = keySerde == null ? (Serde<K>) getter.keySerde() : keySerde;
-        valueSerde = valueSerde == null ? getter.valueSerde() : valueSerde;
+        valueSerde = valueSerde == null ? (Serde<V>) getter.valueSerde() : valueSerde;
     }
 
     private long observedStreamTime() {

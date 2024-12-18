@@ -21,8 +21,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockInternalNewProcessorContext;
 
@@ -62,7 +60,7 @@ public class StoreSerdeInitializerTest {
         utilsMock.when(() -> WrappingNullableUtils.prepareValueSerde(any(), any())).thenReturn(valueSerde);
 
         final StateSerdes<String, String> result = StoreSerdeInitializer.prepareStoreSerde(
-            (ProcessorContext) context, "myStore", "topic", keySerde, valueSerde, WrappingNullableUtils::prepareValueSerde);
+            context, "myStore", "topic", keySerde, valueSerde, WrappingNullableUtils::prepareValueSerde);
 
         assertThat(result.keySerde(), equalTo(keySerde));
         assertThat(result.valueSerde(), equalTo(valueSerde));
@@ -77,7 +75,7 @@ public class StoreSerdeInitializerTest {
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(StreamsException.class,
-            () -> StoreSerdeInitializer.prepareStoreSerde((ProcessorContext) context, "myStore", "topic",
+            () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
         assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for store myStore"));
@@ -92,7 +90,7 @@ public class StoreSerdeInitializerTest {
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(StreamsException.class,
-            () -> StoreSerdeInitializer.prepareStoreSerde((ProcessorContext) context, "myStore", "topic",
+            () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
         assertThat(exception.getMessage(), equalTo("Failed to initialize value serdes for store myStore"));
@@ -107,7 +105,7 @@ public class StoreSerdeInitializerTest {
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(StreamsException.class,
-            () -> StoreSerdeInitializer.prepareStoreSerde((StateStoreContext) context, "myStore", "topic",
+            () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
         assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for store myStore"));
@@ -122,7 +120,7 @@ public class StoreSerdeInitializerTest {
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(StreamsException.class,
-            () -> StoreSerdeInitializer.prepareStoreSerde((StateStoreContext) context, "myStore", "topic",
+            () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
         assertThat(exception.getMessage(), equalTo("Failed to initialize value serdes for store myStore"));
@@ -136,7 +134,7 @@ public class StoreSerdeInitializerTest {
         utilsMock.when(() -> WrappingNullableUtils.prepareKeySerde(any(), any())).thenThrow(new StreamsException(""));
 
         final Throwable exception = assertThrows(StreamsException.class,
-            () -> StoreSerdeInitializer.prepareStoreSerde((ProcessorContext) context, "myStore", "topic",
+            () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
         assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for store myStore"));
@@ -149,7 +147,7 @@ public class StoreSerdeInitializerTest {
         utilsMock.when(() -> WrappingNullableUtils.prepareValueSerde(any(), any())).thenThrow(new StreamsException(""));
 
         final Throwable exception = assertThrows(StreamsException.class,
-            () -> StoreSerdeInitializer.prepareStoreSerde((StateStoreContext) context, "myStore", "topic",
+            () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
         assertThat(exception.getMessage(), equalTo("Failed to initialize value serdes for store myStore"));
