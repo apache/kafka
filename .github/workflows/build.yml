@@ -117,7 +117,7 @@ jobs:
         # --scan:         Publish the build scan. This will only work on PRs from apache/kafka and trunk
         # --no-scan:      For public fork PRs, we won't attempt to publish the scan
         run: |
-          ./gradlew --build-cache --info $SCAN_ARG check -x test
+          ./gradlew --build-cache --info $SCAN_ARG check siteDocTar -x test
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -137,6 +137,16 @@ jobs:
         run: python .github/scripts/rat.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
+      - name: Check generated documentation
+        # Check if there are any empty files under ./site-docs/generated, If any empty files are found, print an error 
+        # message and list the empty files
+        run: |
+          tar zxvf core/build/distributions/kafka_2.13-$(./gradlew properties | grep version: | awk '{print $NF}' | head -n 1)-site-docs.tgz
+          if find ./site-docs/generated -type f -exec grep -L "." {} \; | grep -q "."; then
+            echo "One or more documentation files are empty!" >&2
+            find ./site-docs/generated -type f -exec grep -L "." {} \; >&2
+            exit 1
+          fi
 
   test:
     needs: [validate, load-catalog]
