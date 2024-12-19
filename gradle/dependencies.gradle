@@ -119,7 +119,7 @@ versions += [
   protobuf: "3.25.5", // a dependency of opentelemetryProto
   pcollections: "4.0.1",
   re2j: "1.7",
-  rocksDB: "7.9.2",
+  rocksDB: "9.7.3",
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
