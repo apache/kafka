@@ -137,6 +137,7 @@ public class SmokeTestDriverIntegrationTest {
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         props.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
+        props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:7777");
         // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
         if (streamsProtocolEnabled) {

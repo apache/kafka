@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -178,7 +176,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -2278,31 +2275,14 @@ public class GroupMetadataManager {
                 final String memberIdForAssignment = entry.getKey();
                 // Don't need to provide host info to partitions for itself
                 if (!memberIdForAssignment.equals(memberId)) {
-                    final org.apache.kafka.coordinator.group.streams.Assignment assignment = assignmentMap.get(memberIdForAssignment);
                     final StreamsGroupMemberMetadataValue.Endpoint endpoint = members.get(memberIdForAssignment).userEndpoint();
-                    final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
-                    responseEndpoint.setHost(endpoint.host());
-                    responseEndpoint.setPort(endpoint.port());
-
-                    for (Map.Entry<String, Set<Integer>> activeTaskEntry : assignment.activeTasks().entrySet()) {
-                        String subtopologyId = activeTaskEntry.getKey();
-                        List<Integer> partitions = new ArrayList<>(activeTaskEntry.getValue());
-                        ConfiguredSubtopology configuredSubtopology = group.configuredTopology().subtopologies().get(subtopologyId);
-                        if (configuredSubtopology != null) {
-                            List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions = Stream.concat(
-                                    configuredSubtopology.sourceTopics().stream(),
-                                    configuredSubtopology.repartitionSourceTopics().keySet().stream()
-                            ).map(topic -> {
-                                StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
-                                tp.setTopic(topic);
-                                tp.setPartitions(partitions);
-                                return tp;
-                            }).toList();
-                            StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
-                            endpointToPartitions.setUserEndpoint(responseEndpoint);
-                            endpointToPartitions.setPartitions(topicPartitions);
-                            endpointToPartitionsList.add(endpointToPartitions);
-                        }
+                    if (endpoint != null) {
+                        final org.apache.kafka.coordinator.group.streams.Assignment assignment = assignmentMap.get(memberIdForAssignment);
+                        final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
+                        responseEndpoint.setHost(endpoint.host());
+                        responseEndpoint.setPort(endpoint.port());
+                        addToEndpointToPartitions(assignment.activeTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
+                        addToEndpointToPartitions(assignment.standbyTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
                     }
                 }
             }
@@ -2417,6 +2397,32 @@ public class GroupMetadataManager {
             response.setStatus(returnedStatus);
         }
         return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated));
+    }
+
+    private void addToEndpointToPartitions(Set<Map.Entry<String, Set<Integer>>> taskEntrySet,
+                                           StreamsGroup group,
+                                           StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint,
+                                           List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList) {
+        for (Map.Entry<String, Set<Integer>> taskEntry : taskEntrySet) {
+            String subtopologyId = taskEntry.getKey();
+            List<Integer> partitions = new ArrayList<>(taskEntry.getValue());
+            ConfiguredSubtopology configuredSubtopology = group.configuredTopology().subtopologies().get(subtopologyId);
+            if (configuredSubtopology != null) {
+                List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions = Stream.concat(
+                        configuredSubtopology.sourceTopics().stream(),
+                        configuredSubtopology.repartitionSourceTopics().keySet().stream()
+                ).map(topic -> {
+                    StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
+                    tp.setTopic(topic);
+                    tp.setPartitions(partitions);
+                    return tp;
+                }).toList();
+                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
+                endpointToPartitions.setUserEndpoint(responseEndpoint);
+                endpointToPartitions.setPartitions(topicPartitions);
+                endpointToPartitionsList.add(endpointToPartitions);
+            }
+        }
     }
 
     private List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {

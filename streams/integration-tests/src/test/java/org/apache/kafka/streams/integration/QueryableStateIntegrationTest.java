@@ -27,6 +27,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -103,6 +105,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.StoreQueryParameters.fromNameAndType;
+import static org.apache.kafka.streams.StreamsConfig.APPLICATION_SERVER_CONFIG;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getRunningStreams;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
@@ -127,20 +130,24 @@ public class QueryableStateIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static EmbeddedKafkaCluster cluster;
 
     @BeforeAll
     public static void startCluster() throws IOException {
-        CLUSTER.start();
+        final Properties props = new Properties();
+        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
+        props.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
+        cluster = new EmbeddedKafkaCluster(NUM_BROKERS, props);
+        cluster.start();
     }
 
     @AfterAll
     public static void closeCluster() {
-        CLUSTER.stop();
+        cluster.stop();
     }
 
     private static final int STREAM_THREE_PARTITIONS = 4;
-    private final MockTime mockTime = CLUSTER.time;
+    private final MockTime mockTime = cluster.time;
     private String streamOne = "stream-one";
     private String streamTwo = "stream-two";
     private String streamThree = "stream-three";
@@ -159,6 +166,7 @@ public class QueryableStateIntegrationTest {
     private KafkaStreams kafkaStreams;
     private Comparator<KeyValue<String, String>> stringComparator;
     private Comparator<KeyValue<String, Long>> stringLongComparator;
+    private int port = 0;
 
     private void createTopics(final String safeTestName) throws Exception {
         streamOne = streamOne + "-" + safeTestName;
@@ -169,10 +177,10 @@ public class QueryableStateIntegrationTest {
         outputTopicConcurrentWindowed = outputTopicConcurrentWindowed + "-" + safeTestName;
         outputTopicThree = outputTopicThree + "-" + safeTestName;
         streamTwo = streamTwo + "-" + safeTestName;
-        CLUSTER.createTopics(streamOne, streamConcurrent);
-        CLUSTER.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
-        CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
-        CLUSTER.createTopics(outputTopic, outputTopicConcurrent, outputTopicConcurrentWindowed, outputTopicThree);
+        cluster.createTopics(streamOne, streamConcurrent);
+        cluster.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
+        cluster.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
+        cluster.createTopics(outputTopic, outputTopicConcurrent, outputTopicConcurrentWindowed, outputTopicThree);
     }
 
     /**
@@ -218,7 +226,8 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration = new Properties();
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -242,7 +251,7 @@ public class QueryableStateIntegrationTest {
             kafkaStreams.close(ofSeconds(30));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        CLUSTER.deleteAllTopics();
+        cluster.deleteAllTopics();
     }
 
     /**
@@ -458,10 +467,10 @@ public class QueryableStateIntegrationTest {
 
         final Properties properties = mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
         ));
 
-        CLUSTER.createTopic(input);
+        cluster.createTopic(input);
 
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
             final ReadOnlyKeyValueStore<String, String> store =
@@ -494,11 +503,11 @@ public class QueryableStateIntegrationTest {
                 .withValueSerde(Serdes.String())
         );
 
-        CLUSTER.createTopic(input);
+        cluster.createTopic(input);
 
         final Properties properties = mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
         ));
 
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
@@ -542,7 +551,7 @@ public class QueryableStateIntegrationTest {
         for (int i = 0; i < numThreads; i++) {
             final Properties props = (Properties) streamsConfiguration.clone();
             props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("shouldBeAbleToQueryDuringRebalance-" + i).getPath());
-            props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
+            props.put(APPLICATION_SERVER_CONFIG, "localhost:" + i);
             props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
             final KafkaStreams streams =
                 createCountStream(streamThree, outputTopicThree, outputTopicConcurrentWindowed, storeName, windowStoreName, props);
@@ -643,7 +652,7 @@ public class QueryableStateIntegrationTest {
         final Set<String> stores = Set.of(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
         for (int i = 0; i < numThreads; i++) {
             final Properties props = (Properties) streamsConfiguration.clone();
-            props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
+            props.put(APPLICATION_SERVER_CONFIG, "localhost:" + i);
             props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
             props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
             props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("shouldBeAbleQueryStandbyStateDuringRebalance-" + i).getPath());
@@ -753,7 +762,7 @@ public class QueryableStateIntegrationTest {
             streamOne,
             batch1,
             TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
+                cluster.bootstrapServers(),
                 StringSerializer.class,
                 LongSerializer.class,
                 new Properties()),
@@ -817,7 +826,7 @@ public class QueryableStateIntegrationTest {
             streamOne,
             batch1,
             TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
+                cluster.bootstrapServers(),
                 StringSerializer.class,
                 StringSerializer.class,
                 new Properties()),
@@ -874,7 +883,7 @@ public class QueryableStateIntegrationTest {
             streamOne,
             batch1,
             TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
+                cluster.bootstrapServers(),
                 StringSerializer.class,
                 StringSerializer.class,
                 new Properties()),
@@ -925,7 +934,7 @@ public class QueryableStateIntegrationTest {
             streamOne,
             batch1,
             TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
+                cluster.bootstrapServers(),
                 StringSerializer.class,
                 StringSerializer.class,
                 new Properties()),
@@ -982,7 +991,7 @@ public class QueryableStateIntegrationTest {
                 streamOne,
                 batch1,
                 TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
+                        cluster.bootstrapServers(),
                         StringSerializer.class,
                         StringSerializer.class,
                         new Properties()
@@ -1037,7 +1046,7 @@ public class QueryableStateIntegrationTest {
             streamThree,
             Arrays.asList(hello, hello, hello, hello, hello, hello, hello, hello),
             TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
+                cluster.bootstrapServers(),
                 StringSerializer.class,
                 StringSerializer.class,
                 new Properties()),
@@ -1114,7 +1123,7 @@ public class QueryableStateIntegrationTest {
                 KeyValue.pair("b", "3"),
                 KeyValue.pair("b", "4")),
             TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
+                cluster.bootstrapServers(),
                 StringSerializer.class,
                 StringSerializer.class,
                 new Properties()),
@@ -1134,7 +1143,7 @@ public class QueryableStateIntegrationTest {
             streamOne,
             Collections.singleton(KeyValue.pair("a", "5")),
             TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
+                cluster.bootstrapServers(),
                 StringSerializer.class,
                 StringSerializer.class,
                 new Properties()),
@@ -1222,7 +1231,7 @@ public class QueryableStateIntegrationTest {
                                                     final int numRecs) throws Exception {
         final long timeout = DEFAULT_TIMEOUT_MS;
         final Properties config = new Properties();
-        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "queryable-state-consumer");
         config.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         config.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
@@ -1275,7 +1284,7 @@ public class QueryableStateIntegrationTest {
         @Override
         public void run() {
             final Properties producerConfig = new Properties();
-            producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+            producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
             producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
             producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
             producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);

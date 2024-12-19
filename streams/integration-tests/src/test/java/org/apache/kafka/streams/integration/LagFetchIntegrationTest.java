@@ -23,6 +23,8 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -66,6 +68,7 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.streams.StreamsConfig.APPLICATION_SERVER_CONFIG;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -75,23 +78,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class LagFetchIntegrationTest {
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    public static EmbeddedKafkaCluster cluster;
 
     @BeforeAll
     public static void startCluster() throws IOException {
-        CLUSTER.start();
+        final Properties props = new Properties();
+        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
+        props.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
+        cluster = new EmbeddedKafkaCluster(3, props);
+        cluster.start();
     }
 
     @AfterAll
     public static void closeCluster() {
-        CLUSTER.stop();
+        cluster.stop();
     }
 
 
     private static final long WAIT_TIMEOUT_MS = 120000;
     private static final Logger LOG = LoggerFactory.getLogger(LagFetchIntegrationTest.class);
 
-    private final MockTime mockTime = CLUSTER.time;
+    private final MockTime mockTime = cluster.time;
     private Properties streamsConfiguration;
     private Properties consumerConfiguration;
     private String inputTopicName;
@@ -107,14 +114,15 @@ public class LagFetchIntegrationTest {
 
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(APPLICATION_SERVER_CONFIG, "localhost:7777");
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
 
         consumerConfiguration = new Properties();
-        consumerConfiguration.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        consumerConfiguration.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         consumerConfiguration.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
         consumerConfiguration.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfiguration.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
@@ -149,7 +157,7 @@ public class LagFetchIntegrationTest {
             inputTopicName,
             Set.of(new KeyValue<>("k1", 1L), new KeyValue<>("k2", 2L), new KeyValue<>("k3", 3L), new KeyValue<>("k4", 4L), new KeyValue<>("k5", 5L)),
             TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
+                cluster.bootstrapServers(),
                 StringSerializer.class,
                 LongSerializer.class,
                 new Properties()),
@@ -161,7 +169,7 @@ public class LagFetchIntegrationTest {
             // this test relies on the second instance getting the standby, so we specify
             // an assignor with this contract.
             props.put(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, FallbackPriorTaskAssignor.class.getName());
-            props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
+            props.put(APPLICATION_SERVER_CONFIG, "localhost:" + i);
             props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
             props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimization);
             props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
@@ -258,7 +266,7 @@ public class LagFetchIntegrationTest {
             inputTopicName,
             Set.of(new KeyValue<>("k1", 1L), new KeyValue<>("k2", 2L), new KeyValue<>("k3", 3L), new KeyValue<>("k4", 4L), new KeyValue<>("k5", 5L)),
             TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
+                cluster.bootstrapServers(),
                 StringSerializer.class,
                 LongSerializer.class,
                 new Properties()),
@@ -267,7 +275,7 @@ public class LagFetchIntegrationTest {
         // create stream threads
         final Properties props = (Properties) streamsConfiguration.clone();
         final File stateDir = TestUtils.tempDirectory(stateStoreName + "0");
-        props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:0");
+        props.put(APPLICATION_SERVER_CONFIG, "localhost:0");
         props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-0");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getAbsolutePath());
 

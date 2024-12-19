@@ -22,6 +22,8 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -74,15 +76,20 @@ public class ConsistencyVectorIntegrationTest {
     private static final int KEY = 1;
     private static final int NUMBER_OF_MESSAGES = 100;
 
-    public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
+    public EmbeddedKafkaCluster cluster;
 
     private final List<KafkaStreams> streamsToCleanup = new ArrayList<>();
-    private final MockTime mockTime = cluster.time;
+    private MockTime mockTime;
 
     @BeforeEach
     public void before() throws InterruptedException, IOException {
+        final Properties props = new Properties();
+        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
+        props.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
+        cluster = new EmbeddedKafkaCluster(NUM_BROKERS, props);
         cluster.start();
         cluster.createTopic(INPUT_TOPIC_NAME, 1, 1);
+        mockTime = cluster.time;
     }
 
     @AfterEach

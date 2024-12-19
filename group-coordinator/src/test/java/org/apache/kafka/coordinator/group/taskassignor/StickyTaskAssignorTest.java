@@ -18,6 +18,7 @@
 package org.apache.kafka.coordinator.group.taskassignor;
 
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
