@@ -542,7 +542,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
     }
 
     public static class FailProcessingExceptionHandlerMockTest implements ProcessingExceptionHandler {
-         @Override
+        @Override
         public Response handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
             assertProcessingExceptionHandlerInputs(context, record, exception);
             return Response.fail();

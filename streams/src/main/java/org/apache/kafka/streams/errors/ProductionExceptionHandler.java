@@ -248,8 +248,7 @@ public interface ProductionExceptionHandler extends Configurable {
          * @return a {@link ProductionExceptionHandler.Result} enum value
          * @throws IllegalArgumentException if the provided value does not map to a valid {@link ProductionExceptionHandler.Result}
          */
-        @Deprecated
-        public static ProductionExceptionHandler.Result from(final ProductionExceptionHandlerResponse value) {
+        private static ProductionExceptionHandler.Result from(final ProductionExceptionHandlerResponse value) {
             switch (value) {
                 case FAIL:
                     return Result.FAIL;

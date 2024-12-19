@@ -116,8 +116,7 @@ public interface ProcessingExceptionHandler extends Configurable {
          * @return a {@link ProcessingExceptionHandler.Result} enum value
          * @throws IllegalArgumentException if the provided value does not map to a valid {@link ProcessingExceptionHandler.Result}
          */
-        @Deprecated
-        public static ProcessingExceptionHandler.Result from(final ProcessingHandlerResponse value) {
+        private static ProcessingExceptionHandler.Result from(final ProcessingHandlerResponse value) {
             switch (value) {
                 case FAIL:
                     return Result.FAIL;

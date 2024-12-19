@@ -149,8 +149,7 @@ public interface DeserializationExceptionHandler extends Configurable {
          * @return a {@link Result} enum value
          * @throws IllegalArgumentException if the provided value does not map to a valid {@link Result}
          */
-        @Deprecated
-        public static DeserializationExceptionHandler.Result from(final DeserializationHandlerResponse value) {
+        private static DeserializationExceptionHandler.Result from(final DeserializationHandlerResponse value) {
             switch (value) {
                 case FAIL:
                     return Result.FAIL;
