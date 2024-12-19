@@ -19,7 +19,7 @@ package kafka.coordinator.transaction
 import java.nio.ByteBuffer
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
-import org.apache.kafka.common.record.{Record, RecordBatch}
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion
@@ -143,33 +143,6 @@ object TransactionLog {
       } else throw new IllegalStateException(s"Unknown version $version from the transaction log message value")
     }
   }
-
-  /**
-   * Exposed for printing records using [[kafka.tools.DumpLogSegments]]
-   */
-  def formatRecordKeyAndValue(record: Record): (Option[String], Option[String]) = {
-    TransactionLog.readTxnRecordKey(record.key) match {
-      case txnKey: TxnKey =>
-        val keyString = s"transaction_metadata::transactionalId=${txnKey.transactionalId}"
-
-        val valueString = TransactionLog.readTxnRecordValue(txnKey.transactionalId, record.value) match {
-          case None => "<DELETE>"
-
-          case Some(txnMetadata) => s"producerId:${txnMetadata.producerId}," +
-            s"producerEpoch:${txnMetadata.producerEpoch}," +
-            s"state=${txnMetadata.state}," +
-            s"partitions=${txnMetadata.topicPartitions.mkString("[", ",", "]")}," +
-            s"txnLastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}," +
-            s"txnTimeoutMs=${txnMetadata.txnTimeoutMs}"
-        }
-
-        (Some(keyString), Some(valueString))
-
-      case unknownKey: UnknownKey =>
-        (Some(s"unknown::version=${unknownKey.version}"), None)
-    }
-  }
-
 }
 
 sealed trait BaseKey{

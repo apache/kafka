@@ -21,7 +21,6 @@ import com.fasterxml.jackson.databind.JsonNode
 
 import java.io._
 import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
-import kafka.coordinator.transaction.TransactionLog
 import kafka.log._
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
@@ -42,6 +41,8 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.UnknownReco
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
 import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde
 import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotKeyJsonConverter, ShareSnapshotValue, ShareSnapshotValueJsonConverter, ShareUpdateKey, ShareUpdateKeyJsonConverter, ShareUpdateValue, ShareUpdateValueJsonConverter}
+import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde
+import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogKeyJsonConverter, TransactionLogValue, TransactionLogValueJsonConverter}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
@@ -588,9 +589,61 @@ object DumpLogSegments {
     }
   }
 
-  private class TransactionLogMessageParser extends MessageParser[String, String] {
+  // Package private for testing.
+  class TransactionLogMessageParser extends MessageParser[String, String] {
+    private val serde = new TransactionCoordinatorRecordSerde()
+
+    private def prepareKey(message: Message, version: Short): String = {
+      val messageAsJson = message match {
+        case m: TransactionLogKey =>
+          TransactionLogKeyJsonConverter.write(m, version)
+        case _ => throw new UnknownRecordTypeException(version)
+      }
+
+      val json = new ObjectNode(JsonNodeFactory.instance)
+      json.set("type", new TextNode(version.toString))
+      json.set("data", messageAsJson)
+      json.toString
+    }
+
+    private def prepareValue(message: Message, version: Short): String = {
+      val messageAsJson = message match {
+        case m: TransactionLogValue =>
+          TransactionLogValueJsonConverter.write(m, version)
+        case _ => throw new UnknownRecordTypeException(version)
+      }
+
+      val json = new ObjectNode(JsonNodeFactory.instance)
+      json.set("type", new TextNode(version.toString))
+      json.set("data", messageAsJson)
+      json.toString
+    }
+
     override def parse(record: Record): (Option[String], Option[String]) = {
-      TransactionLog.formatRecordKeyAndValue(record)
+      if (!record.hasKey)
+        throw new RuntimeException(s"Failed to decode message at offset ${record.offset} using offset " +
+          "transaction-log decoder (message had a missing key)")
+
+      try {
+        val r = serde.deserialize(record.key, record.value)
+        (
+          Some(prepareKey(r.key.message, r.key.version)),
+          Option(r.value).map(v => prepareValue(v.message, v.version)).orElse(Some("<DELETE>"))
+        )
+      } catch {
+        case e: UnknownRecordTypeException =>
+          (
+            Some(s"Unknown record type ${e.unknownType} at offset ${record.offset}, skipping."),
+            None
+          )
+
+        case e: Throwable =>
+          e.printStackTrace()
+          (
+            Some(s"Error at offset ${record.offset}, skipping. ${e.getMessage}"),
+            None
+          )
+      }
     }
   }
 
