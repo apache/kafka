@@ -1407,6 +1407,23 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testControllerListenerNamesValidForKRaftControllerOnly(): Unit = {
+    val props = new Properties()
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "SASL_SSL://:9092,CONTROLLER://:9093")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "SASL_SSL:SASL_SSL,CONTROLLER:SASL_SSL")
+    props.put(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "SASL_SSL")
+    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER,SASL_SSL")
+
+    val expectedExceptionContainsText =
+      """controller.listener.names must not contain an explicitly set inter.broker.listener.name configuration value
+        |when process.roles=controller""".stripMargin.replaceAll("\n", " ")
+    assertBadConfigContainingMessage(props, expectedExceptionContainsText)
+  }
+
+  @Test
   def testControllerQuorumVoterStringsToNodes(): Unit = {
     assertThrows(classOf[ConfigException], () => QuorumConfig.quorumVoterStringsToNodes(Collections.singletonList("")))
     assertEquals(Seq(new Node(3000, "example.com", 9093)),

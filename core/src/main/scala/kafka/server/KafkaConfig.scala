@@ -892,6 +892,13 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         effectiveAdvertisedControllerListeners.size == listeners.size,
         s"The ${SocketServerConfigs.LISTENERS_CONFIG} config must only contain KRaft controller listeners from ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfigs.PROCESS_ROLES_CONFIG}=controller"
       )
+      // controller.listener.names must not contain inter.broker.listener.name when inter.broker.listener.name is explicitly set
+      if (Option(getString(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG)).isDefined) {
+        require(
+          !controllerListenerNames.contains(interBrokerListenerName.value()),
+          s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must not contain an explicitly set ${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} configuration value when ${KRaftConfigs.PROCESS_ROLES_CONFIG}=controller'"
+        )
+      }
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateAdvertisedControllerListenersNonEmptyForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
