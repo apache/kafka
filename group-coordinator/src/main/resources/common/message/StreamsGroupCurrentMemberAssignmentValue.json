@@ -1,0 +1,50 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// The streams rebalance protocol is in development. This schema is subject to non-backwards-compatible changes.
+{
+  "type": "data",
+  "name": "StreamsGroupCurrentMemberAssignmentValue",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "MemberEpoch", "versions": "0+", "type": "int32",
+      "about": "The current member epoch that is expected from the member in the heartbeat request." },
+    { "name": "PreviousMemberEpoch", "versions": "0+", "type": "int32",
+      "about": "If the last epoch bump is lost before reaching the member, the member will retry with the previous epoch." },
+    { "name": "State", "versions": "0+", "type": "int8",
+      "about": "The member state. See StreamsGroupMember.MemberState for the possible values." },
+    { "name": "ActiveTasks", "versions": "0+", "type": "[]TaskIds",
+      "about": "Currently assigned active tasks for this streams client." },
+    { "name": "StandbyTasks", "versions": "0+", "type": "[]TaskIds",
+      "about": "Currently assigned standby tasks for this streams client." },
+    { "name": "WarmupTasks", "versions": "0+", "type": "[]TaskIds",
+      "about": "Currently assigned warm-up tasks for this streams client." },
+    { "name": "ActiveTasksPendingRevocation", "versions": "0+", "type": "[]TaskIds",
+      "about": "The active tasks that must be revoked by this member." },
+    { "name": "StandbyTasksPendingRevocation", "versions": "0+", "type": "[]TaskIds",
+      "about": "The standby tasks that must be revoked by this member." },
+    { "name": "WarmupTasksPendingRevocation", "versions": "0+", "type": "[]TaskIds",
+      "about": "The warmup tasks that must be revoked by this member." }
+  ],
+  "commonStructs": [
+    { "name": "TaskIds", "versions": "0+", "fields": [
+      { "name": "SubtopologyId", "type": "string", "versions": "0+",
+        "about": "The subtopology ID." },
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
+        "about": "The partitions of the input topics processed by this member." }
+    ]}
+  ]
+}
