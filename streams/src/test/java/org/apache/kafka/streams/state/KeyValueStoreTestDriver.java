@@ -215,7 +215,7 @@ public class KeyValueStoreTestDriver<K, V> {
             logContext,
             new TaskId(0, 0),
             new StreamsProducer(
-                new MockProducer<>(null, true, null, null),
+                new MockProducer<>(null, true, null, null, null),
                 AT_LEAST_ONCE,
                 Time.SYSTEM,
                 logContext
