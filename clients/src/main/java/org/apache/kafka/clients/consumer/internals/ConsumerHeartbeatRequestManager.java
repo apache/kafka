@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -93,7 +94,28 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
      * {@inheritDoc}
      */
     @Override
-    public boolean handleSpecificError(final ConsumerGroupHeartbeatResponse response, final long currentTimeMs) {
+    public boolean handleSpecificFailure(Throwable exception) {
+        boolean errorHandled = false;
+        String errorMessage = exception.getMessage();
+        if (exception instanceof UnsupportedVersionException) {
+            String message = CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
+            if (errorMessage.equals(REGEX_RESOLUTION_NOT_SUPPORTED_MSG)) {
+                message = REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
+                logger.error("{} failed due to regex resolution not support: {}", heartbeatRequestName(), message);
+            } else {
+                logger.error("{} failed due to unsupported version while sending request: {}", heartbeatRequestName(), errorMessage);
+            }
+            handleFatalFailure(new UnsupportedVersionException(message, exception));
+            errorHandled = true;
+        }
+        return errorHandled;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean handleSpecificExceptionInResponse(final ConsumerGroupHeartbeatResponse response, final long currentTimeMs) {
         Errors error = errorForResponse(response);
         String errorMessage = errorMessageForResponse(response);
         boolean errorHandled;
@@ -103,14 +125,9 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             // custom message for it. Note that the case where the protocol is not supported at all should fail
             // on the client side when building the request and checking supporting APIs (handled on onFailure).
             case UNSUPPORTED_VERSION:
-                // Handle consumer-specific unsupported version error
-                String message = CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
-                if (errorMessage.contains(REGEX_RESOLUTION_NOT_SUPPORTED_MSG)) {
-                    // If the error is about regex subscription, use the original error message
-                    message = errorMessage;
-                }
-                logger.error("{} failed due to {}: {}", heartbeatRequestName(), error, message);
-                handleFatalFailure(error.exception(message));
+                logger.error("{} failed due to unsupported version response on broker side: {}",
+                    heartbeatRequestName(), CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG);
+                handleFatalFailure(error.exception(CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG));
                 errorHandled = true;
                 break;
 

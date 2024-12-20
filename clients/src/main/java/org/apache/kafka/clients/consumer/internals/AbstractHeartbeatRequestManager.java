@@ -25,8 +25,6 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -317,29 +315,12 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 heartbeatRequestState.remainingBackoffMs(responseTimeMs),
                 exception.getMessage());
             logger.debug(message);
-        } else {
+        } else if (!handleSpecificFailure(exception)) {
             logger.error("{} failed due to fatal error: {}", heartbeatRequestName(), exception.getMessage());
-            if (isHBApiUnsupportedErrorMsg(exception)) {
-                // This is expected to be the case where building the request fails because the node does not support
-                // the API. Propagate custom message.
-                handleFatalFailure(new UnsupportedVersionException(CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG, exception));
-            } else {
-                // This is the case where building the request fails even though the node supports the API (ex.
-                // required version 1 not available when regex in use).
-                handleFatalFailure(exception);
-            }
+            handleFatalFailure(exception);
         }
         // Notify the group manager about the failure after all errors have been handled and propagated.
         membershipManager().onHeartbeatFailure(exception instanceof RetriableException);
-    }
-
-    /***
-     * @return True if the exception is the UnsupportedVersion generated on the client, before sending the request,
-     * when checking if the API is available on the broker.
-     */
-    private boolean isHBApiUnsupportedErrorMsg(Throwable exception) {
-        return exception instanceof UnsupportedVersionException &&
-            exception.getMessage().equals("The node does not support " + ApiKeys.CONSUMER_GROUP_HEARTBEAT);
     }
 
     private void onResponse(final R response, final long currentTimeMs) {
@@ -429,7 +410,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 break;
 
             default:
-                if (!handleSpecificError(response, currentTimeMs)) {
+                if (!handleSpecificExceptionInResponse(response, currentTimeMs)) {
                     // If the manager receives an unknown error - there could be a bug in the code or a new error code
                     logger.error("{} failed due to unexpected error {}: {}", heartbeatRequestName(), error, errorMessage);
                     handleFatalFailure(error.exception(errorMessage));
@@ -453,15 +434,24 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         membershipManager().transitionToFatal();
     }
 
+    /**
+     * Error handling specific failure to a group type when sending the request.
+     *
+     * @param exception The exception thrown building the request
+     * @return true if the error was handled, else false
+     */
+    public boolean handleSpecificFailure(Throwable exception) {
+        return false;
+    }
 
     /**
-     * Error handling specific to a group type.
+     * Error handling specific response exception to a group type.
      *
      * @param response The heartbeat response
      * @param currentTimeMs Current time
      * @return true if the error was handled, else false
      */
-    public boolean handleSpecificError(final R response, final long currentTimeMs) {
+    public boolean handleSpecificExceptionInResponse(final R response, final long currentTimeMs) {
         return false;
     }
 
