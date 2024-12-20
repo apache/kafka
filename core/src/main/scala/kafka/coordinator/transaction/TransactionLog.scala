@@ -121,7 +121,7 @@ object TransactionLog {
         val transactionMetadata = new TransactionMetadata(
           transactionalId = transactionalId,
           producerId = value.producerId,
-          previousProducerId = value.previousProducerId,
+          prevProducerId = value.previousProducerId,
           nextProducerId = value.nextProducerId,
           producerEpoch = value.producerEpoch,
           lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,

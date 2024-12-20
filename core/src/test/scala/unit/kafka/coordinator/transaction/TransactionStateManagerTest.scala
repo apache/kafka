@@ -1322,7 +1322,7 @@ class TransactionStateManagerTest {
     val txnMetadata = txnMetadataPool.get(transactionalId1)
     assertEquals(txnMetadata1.transactionalId, txnMetadata.transactionalId)
     assertEquals(txnMetadata1.producerId, txnMetadata.producerId)
-    assertEquals(txnMetadata1.previousProducerId, txnMetadata.previousProducerId)
+    assertEquals(txnMetadata1.prevProducerId, txnMetadata.prevProducerId)
     assertEquals(txnMetadata1.producerEpoch, txnMetadata.producerEpoch)
     assertEquals(txnMetadata1.lastProducerEpoch, txnMetadata.lastProducerEpoch)
     assertEquals(txnMetadata1.txnTimeoutMs, txnMetadata.txnTimeoutMs)
