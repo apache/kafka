@@ -272,7 +272,7 @@ public class StreamsGroupMember {
             return this;
         }
 
-        static private Map<String, Set<Integer>> assignmentFromTaskIds(
+        private static Map<String, Set<Integer>> assignmentFromTaskIds(
             List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> topicPartitionsList
         ) {
             return topicPartitionsList.stream().collect(Collectors.toMap(
