@@ -21,13 +21,9 @@ name: Check and Test
 on:
   workflow_call:
     inputs:
-      gradle-cache-read-only:
-        description: "Should the Gradle cache be read-only?"
+      is-trunk:
+        description: "Is this a trunk build?"
         default: true
-        type: boolean
-      gradle-cache-write-only:
-        description: "Should the Gradle cache be write-only?"
-        default: false
         type: boolean
       is-public-fork:
         description: "Is this CI run from a public fork?"
@@ -105,8 +101,8 @@ jobs:
         uses: ./.github/actions/setup-gradle
         with:
           java-version: 23
-          gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
-          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
+          gradle-cache-read-only: ${{ !inputs.is-trunk }}
+          gradle-cache-write-only: ${{ inputs.is-trunk }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Compile and validate
         env:
@@ -156,6 +152,8 @@ jobs:
       fail-fast: false
       matrix:
         java: [ 23, 17 ]  # If we change these, make sure to adjust ci-complete.yml
+    outputs:
+      timed-out: ${{ (steps.junit-test.outputs.gradle-exitcode == '124' || steps.junit-quarantined-test.outputs.gradle-exitcode == '124') }}
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
@@ -168,8 +166,8 @@ jobs:
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ matrix.java }}
-          gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
-          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
+          gradle-cache-read-only: ${{ !inputs.is-trunk }}
+          gradle-cache-write-only: ${{ inputs.is-trunk }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
 
       # If the load-catalog job failed, we won't be able to download the artifact. Since we don't want this to fail
@@ -186,7 +184,7 @@ jobs:
         uses: ./.github/actions/run-gradle
         with:
           test-task: quarantinedTest
-          timeout-minutes: 30
+          timeout-minutes: 180
           test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
           build-scan-artifact-name: build-scan-quarantined-test-${{ matrix.java }}
 
@@ -235,7 +233,8 @@ jobs:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           JUNIT_REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
           THREAD_DUMP_URL: ${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}
-          GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.gradle-exitcode }}
+          GRADLE_TEST_EXIT_CODE: ${{ steps.junit-test.outputs.gradle-exitcode }}
+          GRADLE_QUARANTINED_TEST_EXIT_CODE: ${{ steps.junit-quarantined-test.outputs.gradle-exitcode }}
 
       - name: Archive Test Catalog
         if: ${{ always() && matrix.java == '23' }}
@@ -249,7 +248,7 @@ jobs:
   update-test-catalog:
     name: Update Test Catalog
     needs: test
-    if: ${{ always() && !inputs.is-public-fork }}
+    if: ${{ always() && inputs.is-trunk && !needs.test.outputs.timed-out }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
