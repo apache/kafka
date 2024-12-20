@@ -32,7 +32,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -151,8 +151,8 @@ public class KTableSuppressProcessorMetricsTest {
             ).get();
 
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
-        final MockInternalNewProcessorContext<String, Change<Long>> context =
-            new MockInternalNewProcessorContext<>(streamsConfig, TASK_ID, TestUtils.tempDirectory());
+        final MockInternalProcessorContext<String, Change<Long>> context =
+            new MockInternalProcessorContext<>(streamsConfig, TASK_ID, TestUtils.tempDirectory());
         final Time time = Time.SYSTEM;
         context.setCurrentNode(new ProcessorNode("testNode"));
         context.setSystemTimeMs(time.milliseconds());

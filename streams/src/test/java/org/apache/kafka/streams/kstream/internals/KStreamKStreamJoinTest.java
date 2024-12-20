@@ -57,7 +57,7 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
@@ -480,7 +480,7 @@ public class KStreamKStreamJoinTest {
             Optional.of(StoreBuilderWrapper.wrapStoreBuilder(outerStoreBuilder)));
 
         final Processor<String, String, String, String> joinProcessor = join.get();
-        final MockInternalNewProcessorContext<String, String> procCtx = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> procCtx = new MockInternalProcessorContext<>();
         final WindowStore<String, String> otherStore = otherStoreBuilder.build();
 
         final KeyValueStore<TimestampedKeyAndJoinSide<String>, LeftOrRightValue<String, String>> outerStore =

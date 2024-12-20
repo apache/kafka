@@ -57,7 +57,7 @@ import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -646,7 +646,7 @@ public class KStreamWindowAggregateTest {
         try {
             // Always process
             props.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
-            final MockInternalNewProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
+            final MockInternalProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
             final KStreamWindowAggregate<String, String, String, TimeWindow> processorSupplier = new KStreamWindowAggregate<>(
                 windows,
                 storeFactory,
@@ -736,7 +736,7 @@ public class KStreamWindowAggregateTest {
         try {
             // Always process
             props.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
-            final MockInternalNewProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
+            final MockInternalProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
             final KStreamWindowAggregate<String, String, String, TimeWindow> processorSupplier = new KStreamWindowAggregate<>(
                 windows,
                 storeFactory,
@@ -805,7 +805,7 @@ public class KStreamWindowAggregateTest {
         try {
             // Emit final every second
             props.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 1000L);
-            final MockInternalNewProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
+            final MockInternalProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
             final KStreamWindowAggregate<String, String, String, TimeWindow> processorSupplier = new KStreamWindowAggregate<>(
                 windows,
                 storeFactory,
@@ -906,7 +906,7 @@ public class KStreamWindowAggregateTest {
         try {
             // Always process
             props.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
-            final MockInternalNewProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
+            final MockInternalProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
             final KStreamWindowAggregate<String, String, String, TimeWindow> processorSupplier = new KStreamWindowAggregate<>(
                 windows,
                 storeFactory,
@@ -1028,8 +1028,8 @@ public class KStreamWindowAggregateTest {
             .build();
     }
 
-    private MockInternalNewProcessorContext<Windowed<String>, Change<String>> makeContext(final File stateDir, final long windowSize) {
-        final MockInternalNewProcessorContext<Windowed<String>, Change<String>> context = new MockInternalNewProcessorContext<>(
+    private MockInternalProcessorContext<Windowed<String>, Change<String>> makeContext(final File stateDir, final long windowSize) {
+        final MockInternalProcessorContext<Windowed<String>, Change<String>> context = new MockInternalProcessorContext<>(
             props,
             new TaskId(0, 0),
             stateDir

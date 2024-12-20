@@ -33,7 +33,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -54,7 +54,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private File stateDir;
-    private MockInternalNewProcessorContext<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> context;
+    private MockInternalProcessorContext<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> context;
     private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = null;
 
     private static final String FK = "fk1";
@@ -72,7 +72,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
     @BeforeEach
     public void before() {
         stateDir = TestUtils.tempDirectory();
-        context = new MockInternalNewProcessorContext<>(props, new TaskId(0, 0), stateDir);
+        context = new MockInternalProcessorContext<>(props, new TaskId(0, 0), stateDir);
     }
 
     @AfterEach
