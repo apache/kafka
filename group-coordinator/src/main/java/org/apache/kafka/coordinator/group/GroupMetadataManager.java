@@ -2270,20 +2270,19 @@ public class GroupMetadataManager {
         }
 
         // Build the endpoint to topic partition information
-        final Map<String, org.apache.kafka.coordinator.group.streams.Assignment> assignmentMap = group.targetAssignment();
         final Map<String, StreamsGroupMember> members = group.members();
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
             final String memberIdForAssignment = entry.getKey();
             // Don't need to provide host info to partitions for itself
             if (!memberIdForAssignment.equals(memberId)) {
                 final StreamsGroupMemberMetadataValue.Endpoint endpoint = members.get(memberIdForAssignment).userEndpoint();
+                StreamsGroupMember groupMember = entry.getValue();
                 if (endpoint != null) {
-                    final org.apache.kafka.coordinator.group.streams.Assignment assignment = assignmentMap.get(memberIdForAssignment);
                     final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
                     responseEndpoint.setHost(endpoint.host());
                     responseEndpoint.setPort(endpoint.port());
-                    addToEndpointToPartitions(assignment.activeTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
-                    addToEndpointToPartitions(assignment.standbyTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
+                    addToEndpointToPartitions(groupMember.assignedActiveTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
+                    addToEndpointToPartitions(groupMember.assignedStandbyTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
                 }
             }
         }
