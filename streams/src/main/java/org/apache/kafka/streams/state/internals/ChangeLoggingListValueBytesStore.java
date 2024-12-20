@@ -32,9 +32,9 @@ public class ChangeLoggingListValueBytesStore extends ChangeLoggingKeyValueBytes
         // we need to log the full new list and thus call get() on the inner store below
         // if the value is a tombstone, we delete the whole list and thus can save the get call
         if (value == null) {
-            log(key, null, context.timestamp());
+            log(key, null, internalContext.timestamp());
         } else {
-            log(key, wrapped().get(key), context.timestamp());
+            log(key, wrapped().get(key), internalContext.timestamp());
         }
     }
 

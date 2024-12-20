@@ -452,7 +452,7 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void shouldThrottleEmitNonJoinedOuterRecordsEvenWhenClockDrift() {
-        /**
+        /*
          * This test is testing something internal to [[KStreamKStreamJoin]], so we had to setup low-level api manually.
          */
         final KStreamImplJoin.TimeTrackerSupplier tracker = new KStreamImplJoin.TimeTrackerSupplier();

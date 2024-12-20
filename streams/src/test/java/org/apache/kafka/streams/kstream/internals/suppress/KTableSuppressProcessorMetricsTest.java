@@ -25,7 +25,6 @@ import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
@@ -154,10 +153,10 @@ public class KTableSuppressProcessorMetricsTest {
         final MockInternalProcessorContext<String, Change<Long>> context =
             new MockInternalProcessorContext<>(streamsConfig, TASK_ID, TestUtils.tempDirectory());
         final Time time = Time.SYSTEM;
-        context.setCurrentNode(new ProcessorNode("testNode"));
+        context.setCurrentNode(new ProcessorNode<>("testNode"));
         context.setSystemTimeMs(time.milliseconds());
 
-        buffer.init((StateStoreContext) context, buffer);
+        buffer.init(context, buffer);
         processor.init(context);
 
         final long timestamp = 100L;
