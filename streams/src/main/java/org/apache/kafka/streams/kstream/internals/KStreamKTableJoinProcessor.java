@@ -38,6 +38,7 @@ import java.time.Duration;
 import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -77,7 +78,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
         droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
         valueGetter.init(context);
-        internalProcessorContext = (InternalProcessorContext<K1, VOut>) context;
+        internalProcessorContext = asInternalProcessorContext(context);
         if (useBuffer) {
             if (!valueGetter.isVersioned() && gracePeriod.isPresent()) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
