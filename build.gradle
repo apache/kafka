@@ -1560,7 +1560,8 @@ project(':group-coordinator') {
     args = [ "-p", "org.apache.kafka.coordinator.group.generated",
              "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/group/generated",
              "-i", "src/main/resources/common/message",
-             "-m", "MessageDataGenerator", "JsonConverterGenerator"
+             "-m", "MessageDataGenerator", "JsonConverterGenerator",
+             "-t", "CoordinatorRecordTypeGenerator"
     ]
     inputs.dir("src/main/resources/common/message")
         .withPropertyName("messages")

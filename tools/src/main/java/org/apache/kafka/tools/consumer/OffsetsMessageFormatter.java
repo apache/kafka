@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.tools.consumer;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKeyJsonConverter;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
@@ -34,11 +36,22 @@ import java.nio.ByteBuffer;
 public class OffsetsMessageFormatter extends ApiMessageFormatter {
     @Override
     protected JsonNode readToKeyJson(ByteBuffer byteBuffer) {
-        short version = byteBuffer.getShort();
-        if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
-            return OffsetCommitKeyJsonConverter.write(new OffsetCommitKey(new ByteBufferAccessor(byteBuffer), version), version);
+        try {
+            switch (CoordinatorRecordType.fromId(byteBuffer.getShort())) {
+                // We can read both record types with the offset commit one.
+                case LEGACY_OFFSET_COMMIT:
+                case OFFSET_COMMIT:
+                    return OffsetCommitKeyJsonConverter.write(
+                        new OffsetCommitKey(new ByteBufferAccessor(byteBuffer), (short) 0),
+                        (short) 0
+                    );
+
+                default:
+                    return NullNode.getInstance();
+            }
+        } catch (UnsupportedVersionException ex) {
+            return NullNode.getInstance();
         }
-        return NullNode.getInstance();
     }
 
     @Override

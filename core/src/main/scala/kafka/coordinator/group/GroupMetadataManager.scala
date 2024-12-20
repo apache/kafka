@@ -29,6 +29,7 @@ import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
 import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.{Metrics, Sensor}
 import org.apache.kafka.common.metrics.stats.{Avg, Max, Meter}
@@ -40,7 +41,7 @@ import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchRespons
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.coordinator.group.{OffsetAndMetadata, OffsetConfig}
-import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
+import org.apache.kafka.coordinator.group.generated.{CoordinatorRecordType, GroupMetadataValue, LegacyOffsetCommitKey, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
 import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -1069,7 +1070,7 @@ object GroupMetadataManager {
    * @return key for offset commit message
    */
   def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] = {
-    MessageUtil.toVersionPrefixedBytes(OffsetCommitKey.HIGHEST_SUPPORTED_VERSION,
+    MessageUtil.toCoordinatorTypePrefixedBytes(CoordinatorRecordType.OFFSET_COMMIT.id(),
       new OffsetCommitKey()
         .setGroup(groupId)
         .setTopic(topicPartition.topic)
@@ -1083,7 +1084,7 @@ object GroupMetadataManager {
    * @return key bytes for group metadata message
    */
   def groupMetadataKey(groupId: String): Array[Byte] = {
-    MessageUtil.toVersionPrefixedBytes(GroupMetadataKeyData.HIGHEST_SUPPORTED_VERSION,
+    MessageUtil.toCoordinatorTypePrefixedBytes(CoordinatorRecordType.GROUP_METADATA.id(),
       new GroupMetadataKeyData()
         .setGroup(groupId))
   }
@@ -1164,16 +1165,28 @@ object GroupMetadataManager {
    */
   def readMessageKey(buffer: ByteBuffer): BaseKey = {
     val version = buffer.getShort
-    if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
-      // version 0 and 1 refer to offset
-      val key = new OffsetCommitKey(new ByteBufferAccessor(buffer), version)
-      OffsetKey(version, GroupTopicPartition(key.group, new TopicPartition(key.topic, key.partition)))
-    } else if (version >= GroupMetadataKeyData.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataKeyData.HIGHEST_SUPPORTED_VERSION) {
-      // version 2 refers to group metadata
-      val key = new GroupMetadataKeyData(new ByteBufferAccessor(buffer), version)
-      GroupMetadataKey(version, key.group)
-    } else {
-      UnknownKey(version)
+    try {
+      CoordinatorRecordType.fromId(version) match {
+        case CoordinatorRecordType.LEGACY_OFFSET_COMMIT =>
+          // version 0 refers to the legacy offset commit.
+          val key = new LegacyOffsetCommitKey(new ByteBufferAccessor(buffer), 0.toShort)
+          OffsetKey(version, GroupTopicPartition(key.group, new TopicPartition(key.topic, key.partition)))
+
+        case CoordinatorRecordType.OFFSET_COMMIT =>
+          // version 1 refers to offset commit.
+          val key = new OffsetCommitKey(new ByteBufferAccessor(buffer), 0.toShort)
+          OffsetKey(version, GroupTopicPartition(key.group, new TopicPartition(key.topic, key.partition)))
+
+        case CoordinatorRecordType.GROUP_METADATA =>
+          // version 2 refers to group metadata.
+          val key = new GroupMetadataKeyData(new ByteBufferAccessor(buffer), 0.toShort)
+          GroupMetadataKey(version, key.group)
+
+        case _ =>
+          UnknownKey(version)
+      }
+    } catch {
+      case _: UnsupportedVersionException => UnknownKey(version)
     }
   }
 

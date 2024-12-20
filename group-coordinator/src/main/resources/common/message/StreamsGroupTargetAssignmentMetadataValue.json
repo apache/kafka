@@ -15,7 +15,8 @@
 
 // The streams rebalance protocol is in development. This schema is subject to non-backwards-compatible changes.
 {
-  "type": "data",
+  "apiKey": 20,
+  "type": "coordinator-value",
   "name": "StreamsGroupTargetAssignmentMetadataValue",
   "validVersions": "0",
   "flexibleVersions": "0+",

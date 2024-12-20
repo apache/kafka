@@ -13,15 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// KIP-932 is in development. This schema is subject to non-backwards-compatible changes.
 {
-  "apiKey": 12,
-  "type": "coordinator-value",
-  "name": "ShareGroupTargetAssignmentMetadataValue",
+  "apiKey": 0,
+  "type": "coordinator-key",
+  "name": "LegacyOffsetCommitKey",
   "validVersions": "0",
-  "flexibleVersions": "0+",
+  "flexibleVersions": "none",
   "fields": [
-    { "name": "AssignmentEpoch", "versions": "0+", "type": "int32",
-      "about": "The assignment epoch." }
+    { "name": "group", "type": "string", "versions": "0",
+      "about": "The consumer group id."},
+    { "name": "topic", "type": "string", "versions": "0",
+      "about": "The topic name."},
+    { "name": "partition", "type": "int32", "versions": "0",
+      "about": "The topic partition index."}
   ]
 }

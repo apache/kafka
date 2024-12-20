@@ -55,6 +55,7 @@ import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
@@ -496,8 +497,8 @@ public class OffsetMetadataManagerTest {
                 throw new IllegalStateException("Received a null key in " + record);
             }
 
-            switch (key.version()) {
-                case OffsetCommitKey.HIGHEST_SUPPORTED_VERSION:
+            switch (CoordinatorRecordType.fromId(key.version())) {
+                case OFFSET_COMMIT:
                     offsetMetadataManager.replay(
                         lastWrittenOffset,
                         producerId,
