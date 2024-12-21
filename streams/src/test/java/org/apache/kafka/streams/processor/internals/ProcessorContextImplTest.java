@@ -787,7 +787,7 @@ public class ProcessorContextImplTest {
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
-            () -> context.timestamp()
+            () -> context.recordContext.timestamp()
         );
     }
 
