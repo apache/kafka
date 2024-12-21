@@ -78,7 +78,6 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Collections, Optional, Properties}
-import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, mutable}
 import scala.concurrent.duration.FiniteDuration
@@ -356,12 +355,8 @@ object TestUtils extends Logging {
     props
   }
 
-  @nowarn("cat=deprecation")
-  def setIbpAndMessageFormatVersions(config: Properties, version: MetadataVersion): Unit = {
+  def setIbpVersion(config: Properties, version: MetadataVersion): Unit = {
     config.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, version.version)
-    // for clarity, only set the log message format version if it's not ignored
-    if (!LogConfig.shouldIgnoreMessageFormatVersion(version))
-      config.setProperty(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG, version.version)
   }
 
   def createAdminClient[B <: KafkaBroker](

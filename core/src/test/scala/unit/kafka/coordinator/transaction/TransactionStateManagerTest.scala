@@ -1256,8 +1256,6 @@ class TransactionStateManagerTest {
       Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
         new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
     )
-    when(replicaManager.getMagic(any()))
-      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
   }
 
   @Test

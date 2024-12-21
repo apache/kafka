@@ -2251,12 +2251,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       val currentErrors = new ConcurrentHashMap[TopicPartition, Errors]()
       marker.partitions.forEach { partition =>
-        replicaManager.getMagic(partition) match {
-          case Some(magic) =>
-            if (magic < RecordBatch.MAGIC_VALUE_V2)
-              currentErrors.put(partition, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT)
-            else
-              partitionsWithCompatibleMessageFormat += partition
+        replicaManager.onlinePartition(partition) match {
+          case Some(_)  =>
+            partitionsWithCompatibleMessageFormat += partition
           case None =>
             currentErrors.put(partition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         }
