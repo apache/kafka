@@ -266,6 +266,13 @@
                     See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218">KIP-751</a> for more details
                 </li>
                 <li>
+                    Logging framework has been migrated from Log4j to Log4j2.
+                    Users can use the log4j-transform-cli tool to automatically convert their existing Log4j configuration files to Log4j2 format.
+                    See <a href="https://logging.staged.apache.org/log4j/transform/cli.html#log4j-transform-cli">log4j-transform-cli</a> for more details.
+                    Log4j2 provides limited compatibility for Log4j configurations.
+                    See <a href="https://logging.apache.org/log4j/2.x/migrate-from-log4j1.html#ConfigurationCompatibility">Use Log4j 1 to Log4j 2 bridge</a> for more information,
+                </li>
+                <li>
                     KafkaLog4jAppender has been removed, users should migrate to the log4j2 appender
                     See <a href="https://logging.apache.org/log4j/2.x/manual/appenders.html#KafkaAppender">KafkaAppender</a> for more details
                 </li>
