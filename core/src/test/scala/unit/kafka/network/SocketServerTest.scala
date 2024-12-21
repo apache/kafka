@@ -346,7 +346,7 @@ class SocketServerTest {
     assertTrue(requestsPerSec(requestVersion).getOrElse(0L) > 0, "RequestsPerSec should be higher than 0")
     assertEquals(None, deprecatedRequestsPerSec(requestVersion))
 
-    requestVersion = 3
+    requestVersion = 2
     sendRequest(plainSocket, producerRequestBytes(requestVersion))
     receivedReq = receiveRequest(server.dataPlaneRequestChannel)
     server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
