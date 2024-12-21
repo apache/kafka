@@ -460,6 +460,7 @@ public class TransactionManager {
         Short transactionVersion = info.finalizedFeatures.get("transaction.version");
         boolean wasTransactionV2Enabled = isTransactionV2Enabled;
         isTransactionV2Enabled = transactionVersion != null && transactionVersion >= 2;
+        log.debug("Updating isTV2 enabled to {} with FinalizedFeaturesEpoch {}", isTransactionV2Enabled, latestFinalizedFeaturesEpoch);
         if (!onInitiatialization && !wasTransactionV2Enabled && isTransactionV2Enabled)
             clientSideEpochBumpRequired = true;
     }
