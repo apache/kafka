@@ -22,6 +22,12 @@
 <h4><a id="upgrade_4_0_0" href="#upgrade_4_0_0">Upgrading to 4.0.0 from any version 0.8.x through 3.9.x</a></h4>
     <h5><a id="upgrade_400_notable" href="#upgrade_400_notable">Notable changes in 4.0.0</a></h5>
     <ul>
+        <li>
+            Old protocol API versions have been removed. Users should ensure brokers are version 2.1 or higher before upgrading the Java clients to 4.0.
+            Similarly, users should ensure their Java clients version 2.1 or higher before upgrading the brokers to 4.0. Finally, care also needs to be
+            taken when it comes to kafka clients that are not part of Apache Kafka, please see
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896%3A+Remove+old+client+protocol+API+versions+in+Kafka+4.0">KIP-896</a> for the details.
+        </li>
         <li>A number of deprecated classes, methods, configurations and tools have been removed.
             <ul>
                 <li><b>Common</b>

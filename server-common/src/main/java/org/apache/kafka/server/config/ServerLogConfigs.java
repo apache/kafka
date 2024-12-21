@@ -165,13 +165,6 @@ public class ServerLogConfigs {
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG = "alter.config.policy.class.name";
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_DOC = "The alter configs policy class that should be used for validation. The class should " +
             "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface.";
-    public static final String LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
-    public static final boolean LOG_MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT = true;
-    public static final String LOG_MESSAGE_DOWNCONVERSION_ENABLE_DOC = "This configuration controls whether " +
-            "down-conversion of message formats is enabled to satisfy consume requests. When set to <code>false</code>, " +
-            "broker will not perform down-conversion for consumers expecting an older message format. The broker responds " +
-            "with <code>UNSUPPORTED_VERSION</code> error for consume requests from such older clients. This configuration" +
-            "does not apply to any message format conversion that might be required for replication to followers.";
 
     public static final String LOG_INITIAL_TASK_DELAY_MS_CONFIG = LOG_PREFIX + "initial.task.delay.ms";
     public static final long LOG_INITIAL_TASK_DELAY_MS_DEFAULT = 30 * 1000L;

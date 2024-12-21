@@ -27,7 +27,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -344,8 +343,8 @@ public class RecordAccumulator {
                 }
 
                 if (buffer == null) {
-                    byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
-                    int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression.type(), key, value, headers));
+                    int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(
+                            RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers));
                     log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", size, topic, effectivePartition, maxTimeToBlock);
                     // This call may block if we exhausted buffer space.
                     buffer = free.allocate(size, maxTimeToBlock);
@@ -408,7 +407,7 @@ public class RecordAccumulator {
             return appendResult;
         }
 
-        MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, apiVersions.maxUsableProduceMagic());
+        MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer);
         ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
@@ -419,12 +418,8 @@ public class RecordAccumulator {
         return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, false, batch.estimatedSizeInBytes());
     }
 
-    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer, byte maxUsableMagic) {
-        if (transactionManager != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
-            throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
-                "support the required message format (v2). The broker must be version 0.11 or later.");
-        }
-        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
+    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer) {
+        return MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, 0L);
     }
 
     /**

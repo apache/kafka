@@ -206,91 +206,6 @@ public class SenderTest {
         assertEquals(offset, future.get().offset());
     }
 
-    @Test
-    public void testMessageFormatDownConversion() throws Exception {
-        // this test case verifies the behavior when the version of the produce request supported by the
-        // broker changes after the record set is created
-
-        long offset = 0;
-
-        // start off support produce request v3
-        apiVersions.update("0", NodeApiVersions.create());
-
-        Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
-
-        // now the partition leader supports only v2
-        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
-
-        client.prepareResponse(body -> {
-            ProduceRequest request = (ProduceRequest) body;
-            if (request.version() != 2)
-                return false;
-
-            MemoryRecords records = partitionRecords(request).get(tp0);
-            return records != null &&
-                    records.sizeInBytes() > 0 &&
-                    records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1);
-        }, produceResponse(tp0, offset, Errors.NONE, 0));
-
-        sender.runOnce(); // connect
-        sender.runOnce(); // send produce request
-
-        assertTrue(future.isDone(), "Request should be completed");
-        assertEquals(offset, future.get().offset());
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testDownConversionForMismatchedMagicValues() throws Exception {
-        // it can happen that we construct a record set with mismatching magic values (perhaps
-        // because the partition leader changed after the record set was initially constructed)
-        // in this case, we down-convert record sets with newer magic values to match the oldest
-        // created record set
-
-        long offset = 0;
-
-        // start off support produce request v3
-        apiVersions.update("0", NodeApiVersions.create());
-
-        Future<RecordMetadata> future1 = appendToAccumulator(tp0, 0L, "key", "value");
-
-        // now the partition leader supports only v2
-        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
-
-        Future<RecordMetadata> future2 = appendToAccumulator(tp1, 0L, "key", "value");
-
-        // start off support produce request v3
-        apiVersions.update("0", NodeApiVersions.create());
-
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(Errors.NONE, offset, RecordBatch.NO_TIMESTAMP, 100);
-        Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = new HashMap<>();
-        partResp.put(tp0, resp);
-        partResp.put(tp1, resp);
-        ProduceResponse produceResponse = new ProduceResponse(partResp, 0);
-
-        client.prepareResponse(body -> {
-            ProduceRequest request = (ProduceRequest) body;
-            if (request.version() != 2)
-                return false;
-
-            Map<TopicPartition, MemoryRecords> recordsMap = partitionRecords(request);
-            if (recordsMap.size() != 2)
-                return false;
-
-            for (MemoryRecords records : recordsMap.values()) {
-                if (records == null || records.sizeInBytes() == 0 || !records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1))
-                    return false;
-            }
-            return true;
-        }, produceResponse);
-
-        sender.runOnce(); // connect
-        sender.runOnce(); // send produce request
-
-        assertTrue(future1.isDone(), "Request should be completed");
-        assertTrue(future2.isDone(), "Request should be completed");
-    }
-
     /*
      * Send multiple requests. Verify that the client side quota metrics have the right values
      */
@@ -319,7 +234,7 @@ public class SenderTest {
 
         for (int i = 1; i <= 3; i++) {
             int throttleTimeMs = 100 * i;
-            ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+            ProduceRequest.Builder builder = ProduceRequest.builder(new ProduceRequestData()
                     .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                     .setAcks((short) 1)
                     .setTimeoutMs(1000));

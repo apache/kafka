@@ -28,7 +28,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -79,7 +78,6 @@ import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -967,26 +965,6 @@ public class RecordAccumulatorTest {
         accum.unmutePartition(tp1);
         drained = accum.drain(metadataCache, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertFalse(drained.get(node1.id()).isEmpty(), "The batch should have been drained.");
-    }
-
-    @Test
-    public void testIdempotenceWithOldMagic() {
-        // Simulate talking to an older broker, ie. one which supports a lower magic.
-        ApiVersions apiVersions = new ApiVersions();
-        int batchSize = 1025;
-        int deliveryTimeoutMs = 3200;
-        int lingerMs = 10;
-        long retryBackoffMs = 100L;
-        long totalSize = 10 * batchSize;
-        String metricGrpName = "producer-metrics";
-
-        apiVersions.update("foobar", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
-        TransactionManager transactionManager = new TransactionManager(new LogContext(), null, 0, retryBackoffMs, apiVersions);
-        RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
-            Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
-            new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
-        assertThrows(UnsupportedVersionException.class,
-            () -> accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds(), cluster));
     }
 
     @Test

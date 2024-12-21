@@ -2651,7 +2651,7 @@ class KafkaApisTest extends Logging {
 
       val tp = new TopicPartition("topic", 0)
 
-      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(tp.topic).setPartitionData(Collections.singletonList(
@@ -2713,7 +2713,7 @@ class KafkaApisTest extends Logging {
       val newLeaderId = 2
       val newLeaderEpoch = 5
 
-      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(tp.topic).setPartitionData(Collections.singletonList(
@@ -2778,7 +2778,7 @@ class KafkaApisTest extends Logging {
 
       val tp = new TopicPartition(topic, 0)
 
-      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(tp.topic).setPartitionData(Collections.singletonList(
@@ -2842,7 +2842,7 @@ class KafkaApisTest extends Logging {
 
       val tp = new TopicPartition(topic, 0)
 
-      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(tp.topic).setPartitionData(Collections.singletonList(
@@ -2899,13 +2899,13 @@ class KafkaApisTest extends Logging {
 
     addTopicToMetadataCache(topic, numPartitions = 2)
 
-    for (version <- 3 to ApiKeys.PRODUCE.latestVersion) {
+    for (version <- ApiKeys.PRODUCE.oldestVersion to ApiKeys.PRODUCE.latestVersion) {
 
       reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
       val tp = new TopicPartition("topic", 0)
 
-      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(tp.topic).setPartitionData(Collections.singletonList(
@@ -4377,11 +4377,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testListOffsetNegativeTimestampWithZeroVersion(): Unit = {
-    testConsumerListOffsetWithUnsupportedVersion(-3, 0)
-  }
-
-  @Test
   def testListOffsetNegativeTimestampWithOneOrAboveVersion(): Unit = {
     testConsumerListOffsetWithUnsupportedVersion(-6, 1)
   }
@@ -4758,9 +4753,9 @@ class KafkaApisTest extends Logging {
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, partitionData.errorCode)
     assertEquals(newLeaderId, partitionData.currentLeader.leaderId())
     assertEquals(newLeaderEpoch, partitionData.currentLeader.leaderEpoch())
-    val node = response.data.nodeEndpoints.asScala.head
-    assertEquals(2, node.nodeId)
-    assertEquals("broker2", node.host)
+    val node = response.data.nodeEndpoints.asScala
+    assertEquals(Seq(2), node.map(_.nodeId))
+    assertEquals(Seq("broker2"), node.map(_.host))
   }
 
   @Test

@@ -246,7 +246,6 @@ public class LogConfig extends AbstractConfig {
             .define(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, LONG, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT, atLeast(0), MEDIUM, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC)
             .define(ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
-            .define(ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT, LOW, ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_DOC)
             .define(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG, LONG, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT, atLeast(1), LOW, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DOC)
             .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC);
 
@@ -310,8 +309,6 @@ public class LogConfig extends AbstractConfig {
                         ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_DOC)
                 .define(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DEFAULT,
                         ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC)
-                .define(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT, LOW,
-                        TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_STORAGE_ENABLE, null,
                         MEDIUM, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_DOC)
                 .define(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
@@ -360,7 +357,6 @@ public class LogConfig extends AbstractConfig {
     public final long messageTimestampAfterMaxMs;
     public final List<String> leaderReplicationThrottledReplicas;
     public final List<String> followerReplicationThrottledReplicas;
-    public final boolean messageDownConversionEnable;
 
     private final RemoteLogConfig remoteLogConfig;
     private final int maxMessageSize;
@@ -410,7 +406,6 @@ public class LogConfig extends AbstractConfig {
         this.messageTimestampAfterMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
         this.leaderReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
-        this.messageDownConversionEnable = getBoolean(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
 
         remoteLogConfig = new RemoteLogConfig(this);
     }
@@ -748,7 +743,6 @@ public class LogConfig extends AbstractConfig {
                 ", messageTimestampType=" + messageTimestampType +
                 ", leaderReplicationThrottledReplicas=" + leaderReplicationThrottledReplicas +
                 ", followerReplicationThrottledReplicas=" + followerReplicationThrottledReplicas +
-                ", messageDownConversionEnable=" + messageDownConversionEnable +
                 ", remoteLogConfig=" + remoteLogConfig +
                 ", maxMessageSize=" + maxMessageSize +
                 '}';

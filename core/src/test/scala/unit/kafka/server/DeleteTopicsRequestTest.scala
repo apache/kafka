@@ -22,7 +22,7 @@ import kafka.network.SocketServer
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.DeleteTopicsRequest
 import org.apache.kafka.common.requests.DeleteTopicsResponse
 import org.apache.kafka.common.requests.MetadataRequest
@@ -141,26 +141,22 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testDeleteTopicsVersions(quorum: String): Unit = {
-    // This test assumes that the current valid versions are 0-6 please adjust the test if there are changes.
-    assertEquals(0, DeleteTopicsRequestData.LOWEST_SUPPORTED_VERSION)
-    assertEquals(6, DeleteTopicsRequestData.HIGHEST_SUPPORTED_VERSION)
-
     val timeout = 10000
-    DeleteTopicsRequestData.SCHEMAS.indices.foreach { version =>
+    for (version <- ApiKeys.DELETE_TOPICS.oldestVersion to ApiKeys.DELETE_TOPICS.latestVersion) {
       info(s"Creating and deleting tests for version $version")
 
       val topicName = s"topic-$version"
 
-      createTopic(topicName)
-      val data = new DeleteTopicsRequestData().setTimeoutMs(timeout)
+        createTopic(topicName)
+        val data = new DeleteTopicsRequestData().setTimeoutMs(timeout)
 
-      if (version < 6) {
-        data.setTopicNames(util.Arrays.asList(topicName))
-      } else {
-        data.setTopics(util.Arrays.asList(new DeleteTopicState().setName(topicName)))
-      }
+        if (version < 6) {
+          data.setTopicNames(util.Arrays.asList(topicName))
+        } else {
+          data.setTopics(util.Arrays.asList(new DeleteTopicState().setName(topicName)))
+        }
 
-      validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(data).build(version.toShort))
+        validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(data).build(version.toShort))
     }
   }
 }
