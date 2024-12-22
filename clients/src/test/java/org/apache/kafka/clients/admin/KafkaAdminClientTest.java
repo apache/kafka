@@ -79,6 +79,8 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
@@ -134,6 +136,8 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
@@ -853,7 +857,7 @@ public class KafkaAdminClientTest {
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
                     new CreateTopicsOptions().timeoutMs(1000)).all();
-            TestUtils.assertFutureError(future, TimeoutException.class);
+            TestUtils.assertFutureThrows(future, TimeoutException.class);
         }
     }
 
@@ -936,7 +940,7 @@ public class KafkaAdminClientTest {
             KafkaFuture<Void> future = env.adminClient().createTopics(
                 singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
                 new CreateTopicsOptions().timeoutMs(1000)).all();
-            TestUtils.assertFutureError(future, SaslAuthenticationException.class);
+            TestUtils.assertFutureThrows(future, SaslAuthenticationException.class);
         }
     }
 
@@ -1180,14 +1184,14 @@ public class KafkaAdminClientTest {
                 prepareDeleteTopicsResponse("myTopic", Errors.TOPIC_DELETION_DISABLED));
             future = env.adminClient().deleteTopics(singletonList("myTopic"),
                 new DeleteTopicsOptions()).all();
-            TestUtils.assertFutureError(future, TopicDeletionDisabledException.class);
+            TestUtils.assertFutureThrows(future, TopicDeletionDisabledException.class);
 
             env.kafkaClient().prepareResponse(
                 expectDeleteTopicsRequestWithTopics("myTopic"),
                 prepareDeleteTopicsResponse("myTopic", Errors.UNKNOWN_TOPIC_OR_PARTITION));
             future = env.adminClient().deleteTopics(singletonList("myTopic"),
                 new DeleteTopicsOptions()).all();
-            TestUtils.assertFutureError(future, UnknownTopicOrPartitionException.class);
+            TestUtils.assertFutureThrows(future, UnknownTopicOrPartitionException.class);
 
             // With topic IDs
             Uuid topicId = Uuid.randomUuid();
@@ -1204,14 +1208,14 @@ public class KafkaAdminClientTest {
                     prepareDeleteTopicsResponseWithTopicId(topicId, Errors.TOPIC_DELETION_DISABLED));
             future = env.adminClient().deleteTopics(TopicCollection.ofTopicIds(singletonList(topicId)),
                     new DeleteTopicsOptions()).all();
-            TestUtils.assertFutureError(future, TopicDeletionDisabledException.class);
+            TestUtils.assertFutureThrows(future, TopicDeletionDisabledException.class);
 
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId),
                     prepareDeleteTopicsResponseWithTopicId(topicId, Errors.UNKNOWN_TOPIC_ID));
             future = env.adminClient().deleteTopics(TopicCollection.ofTopicIds(singletonList(topicId)),
                     new DeleteTopicsOptions()).all();
-            TestUtils.assertFutureError(future, UnknownTopicIdException.class);
+            TestUtils.assertFutureThrows(future, UnknownTopicIdException.class);
         }
     }
 
@@ -1412,7 +1416,7 @@ public class KafkaAdminClientTest {
             ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.topicNameValues().get("topic2"),
                 ThrottlingQuotaExceededException.class);
             assertEquals(1000, e.throttleTimeMs());
-            TestUtils.assertFutureError(result.topicNameValues().get("topic3"), TopicExistsException.class);
+            TestUtils.assertFutureThrows(result.topicNameValues().get("topic3"), TopicExistsException.class);
 
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
@@ -1433,7 +1437,7 @@ public class KafkaAdminClientTest {
             e = TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId2),
                     ThrottlingQuotaExceededException.class);
             assertEquals(1000, e.throttleTimeMs());
-            TestUtils.assertFutureError(resultIds.topicIdValues().get(topicId3), UnknownTopicIdException.class);
+            TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -1465,14 +1469,14 @@ public class KafkaAdminClientTest {
             List<String> sillyTopicNames = asList("", null);
             Map<String, KafkaFuture<Void>> deleteFutures = env.adminClient().deleteTopics(sillyTopicNames).topicNameValues();
             for (String sillyTopicName : sillyTopicNames) {
-                TestUtils.assertFutureError(deleteFutures.get(sillyTopicName), InvalidTopicException.class);
+                TestUtils.assertFutureThrows(deleteFutures.get(sillyTopicName), InvalidTopicException.class);
             }
             assertEquals(0, env.kafkaClient().inFlightRequestCount());
 
             Map<String, KafkaFuture<TopicDescription>> describeFutures =
                     env.adminClient().describeTopics(sillyTopicNames).topicNameValues();
             for (String sillyTopicName : sillyTopicNames) {
-                TestUtils.assertFutureError(describeFutures.get(sillyTopicName), InvalidTopicException.class);
+                TestUtils.assertFutureThrows(describeFutures.get(sillyTopicName), InvalidTopicException.class);
             }
             assertEquals(0, env.kafkaClient().inFlightRequestCount());
 
@@ -1483,7 +1487,7 @@ public class KafkaAdminClientTest {
 
             Map<String, KafkaFuture<Void>> createFutures = env.adminClient().createTopics(newTopics).values();
             for (String sillyTopicName : sillyTopicNames) {
-                TestUtils.assertFutureError(createFutures .get(sillyTopicName), InvalidTopicException.class);
+                TestUtils.assertFutureThrows(createFutures .get(sillyTopicName), InvalidTopicException.class);
             }
             assertEquals(0, env.kafkaClient().inFlightRequestCount());
         }
@@ -1774,7 +1778,7 @@ public class KafkaAdminClientTest {
                 asList(topicName1, topicName0), new DescribeTopicsOptions()
             );
 
-            TestUtils.assertFutureError(result.allTopicNames(), TopicAuthorizationException.class);
+            TestUtils.assertFutureThrows(result.allTopicNames(), TopicAuthorizationException.class);
 
         }
     }
@@ -1870,10 +1874,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(new DescribeAclsResponseData()
                 .setErrorCode(Errors.SECURITY_DISABLED.code())
                 .setErrorMessage("Security is disabled"), ApiKeys.DESCRIBE_ACLS.latestVersion()));
-            TestUtils.assertFutureError(env.adminClient().describeAcls(FILTER2).values(), SecurityDisabledException.class);
+            TestUtils.assertFutureThrows(env.adminClient().describeAcls(FILTER2).values(), SecurityDisabledException.class);
 
             // Test a call where we supply an invalid filter.
-            TestUtils.assertFutureError(env.adminClient().describeAcls(UNKNOWN_FILTER).values(),
+            TestUtils.assertFutureThrows(env.adminClient().describeAcls(UNKNOWN_FILTER).values(),
                 InvalidRequestException.class);
         }
     }
@@ -1901,9 +1905,9 @@ public class KafkaAdminClientTest {
                 new CreateAclsResponseData.AclCreationResult()))));
             results = env.adminClient().createAcls(asList(ACL1, ACL2));
             assertCollectionIs(results.values().keySet(), ACL1, ACL2);
-            TestUtils.assertFutureError(results.values().get(ACL1), SecurityDisabledException.class);
+            TestUtils.assertFutureThrows(results.values().get(ACL1), SecurityDisabledException.class);
             results.values().get(ACL2).get();
-            TestUtils.assertFutureError(results.all(), SecurityDisabledException.class);
+            TestUtils.assertFutureThrows(results.all(), SecurityDisabledException.class);
         }
     }
 
@@ -1931,8 +1935,8 @@ public class KafkaAdminClientTest {
             assertEquals(ACL1, filter1Results.values().get(0).binding());
             assertNull(filter1Results.values().get(1).exception());
             assertEquals(ACL2, filter1Results.values().get(1).binding());
-            TestUtils.assertFutureError(filterResults.get(FILTER2), SecurityDisabledException.class);
-            TestUtils.assertFutureError(results.all(), SecurityDisabledException.class);
+            TestUtils.assertFutureThrows(filterResults.get(FILTER2), SecurityDisabledException.class);
+            TestUtils.assertFutureThrows(results.all(), SecurityDisabledException.class);
 
             // Test a call where one deletion result has an error.
             env.kafkaClient().prepareResponse(new DeleteAclsResponse(new DeleteAclsResponseData()
@@ -1952,7 +1956,7 @@ public class KafkaAdminClientTest {
                     ApiKeys.DELETE_ACLS.latestVersion()));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             assertTrue(results.values().get(FILTER2).get().values().isEmpty());
-            TestUtils.assertFutureError(results.all(), SecurityDisabledException.class);
+            TestUtils.assertFutureThrows(results.all(), SecurityDisabledException.class);
 
             // Test a call where there are no errors.
             env.kafkaClient().prepareResponse(new DeleteAclsResponse(new DeleteAclsResponseData()
@@ -2023,7 +2027,7 @@ public class KafkaAdminClientTest {
                         electionType,
                         new HashSet<>(asList(topic1, topic2)),
                         new ElectLeadersOptions().timeoutMs(100));
-                TestUtils.assertFutureError(results.partitions(), TimeoutException.class);
+                TestUtils.assertFutureThrows(results.partitions(), TimeoutException.class);
             }
         }
     }
@@ -2776,13 +2780,13 @@ public class KafkaAdminClientTest {
 
             DescribeTopicsResult result1 = env.adminClient().describeTopics(
                     TopicCollection.ofTopicIds(singletonList(nonExistID)));
-            TestUtils.assertFutureError(result1.allTopicIds(), UnknownTopicIdException.class);
+            TestUtils.assertFutureThrows(result1.allTopicIds(), UnknownTopicIdException.class);
             Exception e = assertThrows(Exception.class, () -> result1.allTopicIds().get(), "describe with non-exist topic ID should throw exception");
             assertEquals(String.format("org.apache.kafka.common.errors.UnknownTopicIdException: TopicId %s not found.", nonExistID), e.getMessage());
 
             DescribeTopicsResult result2 = env.adminClient().describeTopics(
                     TopicCollection.ofTopicIds(singletonList(Uuid.ZERO_UUID)));
-            TestUtils.assertFutureError(result2.allTopicIds(), InvalidTopicException.class);
+            TestUtils.assertFutureThrows(result2.allTopicIds(), InvalidTopicException.class);
             e = assertThrows(Exception.class, () -> result2.allTopicIds().get(), "describe with non-exist topic ID should throw exception");
             assertEquals("The given topic id 'AAAAAAAAAAAAAAAAAAAAAA' cannot be represented in a request.", e.getCause().getMessage());
 
@@ -3005,7 +3009,7 @@ public class KafkaAdminClientTest {
                 env.cluster().nodeById(3));
 
             final ListGroupsResult result = env.adminClient().listGroups();
-            TestUtils.assertFutureError(result.all(), UnknownServerException.class);
+            TestUtils.assertFutureThrows(result.all(), UnknownServerException.class);
 
             Collection<GroupListing> listings = result.valid().get();
             assertEquals(6, listings.size());
@@ -3039,7 +3043,7 @@ public class KafkaAdminClientTest {
                     Collections.emptyList()));
 
             final ListGroupsResult result = env.adminClient().listGroups();
-            TestUtils.assertFutureError(result.all(), KafkaException.class);
+            TestUtils.assertFutureThrows(result.all(), KafkaException.class);
         }
     }
 
@@ -3276,7 +3280,7 @@ public class KafkaAdminClientTest {
                     env.cluster().nodeById(3));
 
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
-            TestUtils.assertFutureError(result.all(), UnknownServerException.class);
+            TestUtils.assertFutureThrows(result.all(), UnknownServerException.class);
 
             Collection<ConsumerGroupListing> listings = result.valid().get();
             assertEquals(3, listings.size());
@@ -3311,7 +3315,7 @@ public class KafkaAdminClientTest {
                             Collections.emptyList()));
 
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
-            TestUtils.assertFutureError(result.all(), KafkaException.class);
+            TestUtils.assertFutureThrows(result.all(), KafkaException.class);
         }
     }
 
@@ -3526,7 +3530,7 @@ public class KafkaAdminClientTest {
             offsets.put(tp1, new OffsetAndMetadata(123L));
             final AlterConsumerGroupOffsetsResult result = env.adminClient().alterConsumerGroupOffsets(GROUP_ID, offsets);
 
-            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.all(), TimeoutException.class);
         }
     }
 
@@ -3557,9 +3561,9 @@ public class KafkaAdminClientTest {
                 .alterConsumerGroupOffsets(GROUP_ID, offsets);
 
             assertNull(result.partitionResult(foo0).get());
-            TestUtils.assertFutureError(result.partitionResult(foo1), UnknownTopicOrPartitionException.class);
+            TestUtils.assertFutureThrows(result.partitionResult(foo1), UnknownTopicOrPartitionException.class);
 
-            TestUtils.assertFutureError(result.all(), UnknownTopicOrPartitionException.class);
+            TestUtils.assertFutureThrows(result.all(), UnknownTopicOrPartitionException.class);
         }
     }
 
@@ -3638,7 +3642,7 @@ public class KafkaAdminClientTest {
 
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList(GROUP_ID));
 
-            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.all(), TimeoutException.class);
         }
     }
 
@@ -4002,7 +4006,7 @@ public class KafkaAdminClientTest {
 
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList(GROUP_ID));
 
-            TestUtils.assertFutureError(result.describedGroups().get(GROUP_ID), IllegalArgumentException.class);
+            TestUtils.assertFutureThrows(result.describedGroups().get(GROUP_ID), IllegalArgumentException.class);
         }
     }
 
@@ -4023,7 +4027,7 @@ public class KafkaAdminClientTest {
                 request -> request instanceof DescribeGroupsRequest);
 
             DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList(GROUP_ID));
-            TestUtils.assertFutureError(result.describedGroups().get(GROUP_ID), UnsupportedVersionException.class);
+            TestUtils.assertFutureThrows(result.describedGroups().get(GROUP_ID), UnsupportedVersionException.class);
         }
     }
 
@@ -4227,7 +4231,7 @@ public class KafkaAdminClientTest {
 
             final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(GROUP_ID);
 
-            TestUtils.assertFutureError(result.partitionsToOffsetAndMetadata(), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.partitionsToOffsetAndMetadata(), TimeoutException.class);
         }
     }
 
@@ -4334,7 +4338,7 @@ public class KafkaAdminClientTest {
 
                 ListConsumerGroupOffsetsResult errorResult = env.adminClient().listConsumerGroupOffsets(GROUP_ID);
 
-                TestUtils.assertFutureError(errorResult.partitionsToOffsetAndMetadata(), error.exception().getClass());
+                TestUtils.assertFutureThrows(errorResult.partitionsToOffsetAndMetadata(), error.exception().getClass());
             }
         }
     }
@@ -4554,7 +4558,7 @@ public class KafkaAdminClientTest {
 
             final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
 
-            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.all(), TimeoutException.class);
         }
     }
 
@@ -4655,7 +4659,7 @@ public class KafkaAdminClientTest {
                 prepareOldFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode()));
 
             DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
-            TestUtils.assertFutureError(errorResult.deletedGroups().get("groupId"), GroupAuthorizationException.class);
+            TestUtils.assertFutureThrows(errorResult.deletedGroups().get("groupId"), GroupAuthorizationException.class);
 
             // Retriable errors should be retried
             env.kafkaClient().prepareResponse(
@@ -4777,7 +4781,7 @@ public class KafkaAdminClientTest {
             final DeleteConsumerGroupOffsetsResult result = env.adminClient()
                 .deleteConsumerGroupOffsets(GROUP_ID, Stream.of(tp1).collect(Collectors.toSet()));
 
-            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.all(), TimeoutException.class);
         }
     }
 
@@ -4868,8 +4872,8 @@ public class KafkaAdminClientTest {
                 GROUP_ID, Stream.of(tp1, tp2).collect(Collectors.toSet()));
 
             assertNull(errorResult.partitionResult(tp1).get());
-            TestUtils.assertFutureError(errorResult.all(), GroupSubscribedToTopicException.class);
-            TestUtils.assertFutureError(errorResult.partitionResult(tp2), GroupSubscribedToTopicException.class);
+            TestUtils.assertFutureThrows(errorResult.all(), GroupSubscribedToTopicException.class);
+            TestUtils.assertFutureThrows(errorResult.partitionResult(tp2), GroupSubscribedToTopicException.class);
             assertThrows(IllegalArgumentException.class, () -> errorResult.partitionResult(tp3));
         }
     }
@@ -4940,8 +4944,8 @@ public class KafkaAdminClientTest {
                 DeleteConsumerGroupOffsetsResult errorResult = env.adminClient()
                     .deleteConsumerGroupOffsets(GROUP_ID, Stream.of(tp1).collect(Collectors.toSet()));
 
-                TestUtils.assertFutureError(errorResult.all(), error.exception().getClass());
-                TestUtils.assertFutureError(errorResult.partitionResult(tp1), error.exception().getClass());
+                TestUtils.assertFutureThrows(errorResult.all(), error.exception().getClass());
+                TestUtils.assertFutureThrows(errorResult.partitionResult(tp1), error.exception().getClass());
             }
         }
     }
@@ -4989,8 +4993,8 @@ public class KafkaAdminClientTest {
             final DeleteConsumerGroupOffsetsResult errorResult = env.adminClient()
                 .deleteConsumerGroupOffsets(GROUP_ID, Stream.of(tp1).collect(Collectors.toSet()));
 
-            TestUtils.assertFutureError(errorResult.all(), GroupAuthorizationException.class);
-            TestUtils.assertFutureError(errorResult.partitionResult(tp1), GroupAuthorizationException.class);
+            TestUtils.assertFutureThrows(errorResult.all(), GroupAuthorizationException.class);
+            TestUtils.assertFutureThrows(errorResult.partitionResult(tp1), GroupAuthorizationException.class);
         }
     }
 
@@ -5306,7 +5310,7 @@ public class KafkaAdminClientTest {
                 env.cluster().nodeById(3));
 
             final ListGroupsResult result = env.adminClient().listGroups(new ListGroupsOptions().withTypes(Set.of(GroupType.SHARE)));
-            TestUtils.assertFutureError(result.all(), UnknownServerException.class);
+            TestUtils.assertFutureThrows(result.all(), UnknownServerException.class);
 
             Collection<GroupListing> listings = result.valid().get();
             assertEquals(4, listings.size());
@@ -5341,7 +5345,7 @@ public class KafkaAdminClientTest {
                     Collections.emptyList()));
 
             final ListGroupsResult result = env.adminClient().listGroups(new ListGroupsOptions().withTypes(Set.of(GroupType.SHARE)));
-            TestUtils.assertFutureError(result.all(), KafkaException.class);
+            TestUtils.assertFutureThrows(result.all(), KafkaException.class);
         }
     }
 
@@ -5636,10 +5640,10 @@ public class KafkaAdminClientTest {
             configs.put(groupResource, singletonList(alterConfigOp4));
 
             AlterConfigsResult result = env.adminClient().incrementalAlterConfigs(configs);
-            TestUtils.assertFutureError(result.values().get(brokerResource), ClusterAuthorizationException.class);
-            TestUtils.assertFutureError(result.values().get(topicResource), InvalidRequestException.class);
-            TestUtils.assertFutureError(result.values().get(metricResource), InvalidRequestException.class);
-            TestUtils.assertFutureError(result.values().get(groupResource), InvalidConfigurationException.class);
+            TestUtils.assertFutureThrows(result.values().get(brokerResource), ClusterAuthorizationException.class);
+            TestUtils.assertFutureThrows(result.values().get(topicResource), InvalidRequestException.class);
+            TestUtils.assertFutureThrows(result.values().get(metricResource), InvalidRequestException.class);
+            TestUtils.assertFutureThrows(result.values().get(groupResource), InvalidConfigurationException.class);
 
             // Test a call where there are no errors.
             responseData =  new IncrementalAlterConfigsResponseData();
@@ -5688,7 +5692,7 @@ public class KafkaAdminClientTest {
             final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
                 GROUP_ID, new RemoveMembersFromConsumerGroupOptions(membersToRemove));
 
-            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.all(), TimeoutException.class);
         }
     }
 
@@ -5824,8 +5828,8 @@ public class KafkaAdminClientTest {
                 final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
                     GROUP_ID, new RemoveMembersFromConsumerGroupOptions(membersToRemove));
 
-                TestUtils.assertFutureError(result.all(), error.exception().getClass());
-                TestUtils.assertFutureError(result.memberResult(memberToRemove), error.exception().getClass());
+                TestUtils.assertFutureThrows(result.all(), error.exception().getClass());
+                TestUtils.assertFutureThrows(result.memberResult(memberToRemove), error.exception().getClass());
             }
         }
     }
@@ -5860,8 +5864,8 @@ public class KafkaAdminClientTest {
             MemberToRemove memberOne = new MemberToRemove(instanceOne);
             MemberToRemove memberTwo = new MemberToRemove(instanceTwo);
 
-            TestUtils.assertFutureError(unknownErrorResult.memberResult(memberOne), UnknownServerException.class);
-            TestUtils.assertFutureError(unknownErrorResult.memberResult(memberTwo), UnknownServerException.class);
+            TestUtils.assertFutureThrows(unknownErrorResult.memberResult(memberOne), UnknownServerException.class);
+            TestUtils.assertFutureThrows(unknownErrorResult.memberResult(memberTwo), UnknownServerException.class);
 
             MemberResponse responseOne = new MemberResponse()
                                              .setGroupInstanceId(instanceOne)
@@ -5882,8 +5886,8 @@ public class KafkaAdminClientTest {
                 new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
 
-            TestUtils.assertFutureError(memberLevelErrorResult.all(), UnknownMemberIdException.class);
-            TestUtils.assertFutureError(memberLevelErrorResult.memberResult(memberOne), UnknownMemberIdException.class);
+            TestUtils.assertFutureThrows(memberLevelErrorResult.all(), UnknownMemberIdException.class);
+            TestUtils.assertFutureThrows(memberLevelErrorResult.memberResult(memberOne), UnknownMemberIdException.class);
             assertNull(memberLevelErrorResult.memberResult(memberTwo).get());
 
             // Return with missing member.
@@ -5897,9 +5901,9 @@ public class KafkaAdminClientTest {
                 new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
 
-            TestUtils.assertFutureError(missingMemberResult.all(), IllegalArgumentException.class);
+            TestUtils.assertFutureThrows(missingMemberResult.all(), IllegalArgumentException.class);
             // The memberOne was not included in the response.
-            TestUtils.assertFutureError(missingMemberResult.memberResult(memberOne), IllegalArgumentException.class);
+            TestUtils.assertFutureThrows(missingMemberResult.memberResult(memberOne), IllegalArgumentException.class);
             assertNull(missingMemberResult.memberResult(memberTwo).get());
 
 
@@ -6051,8 +6055,8 @@ public class KafkaAdminClientTest {
             AlterPartitionReassignmentsResult result1 = env.adminClient().alterPartitionReassignments(reassignments);
             Future<Void> future1 = result1.all();
             Future<Void> future2 = result1.values().get(tp1);
-            TestUtils.assertFutureError(future1, UnknownServerException.class);
-            TestUtils.assertFutureError(future2, UnknownServerException.class);
+            TestUtils.assertFutureThrows(future1, UnknownServerException.class);
+            TestUtils.assertFutureThrows(future2, UnknownServerException.class);
 
             // 2. NOT_CONTROLLER error handling
             AlterPartitionReassignmentsResponseData controllerErrResponseData =
@@ -6103,7 +6107,7 @@ public class KafkaAdminClientTest {
                             );
             env.kafkaClient().prepareResponse(new AlterPartitionReassignmentsResponse(partitionLevelErrData));
             AlterPartitionReassignmentsResult partitionLevelErrResult = env.adminClient().alterPartitionReassignments(reassignments);
-            TestUtils.assertFutureError(partitionLevelErrResult.values().get(tp1), Errors.INVALID_REPLICA_ASSIGNMENT.exception().getClass());
+            TestUtils.assertFutureThrows(partitionLevelErrResult.values().get(tp1), Errors.INVALID_REPLICA_ASSIGNMENT.exception().getClass());
             partitionLevelErrResult.values().get(tp2).get();
 
             // 4. top-level error
@@ -6143,8 +6147,8 @@ public class KafkaAdminClientTest {
                             );
             env.kafkaClient().prepareResponse(new AlterPartitionReassignmentsResponse(singlePartResponseData));
             AlterPartitionReassignmentsResult unrepresentableTopicResult = env.adminClient().alterPartitionReassignments(invalidTopicReassignments);
-            TestUtils.assertFutureError(unrepresentableTopicResult.values().get(invalidTopicTP), InvalidTopicException.class);
-            TestUtils.assertFutureError(unrepresentableTopicResult.values().get(invalidPartitionTP), InvalidTopicException.class);
+            TestUtils.assertFutureThrows(unrepresentableTopicResult.values().get(invalidTopicTP), InvalidTopicException.class);
+            TestUtils.assertFutureThrows(unrepresentableTopicResult.values().get(invalidPartitionTP), InvalidTopicException.class);
             unrepresentableTopicResult.values().get(tp1).get();
 
             // Test success scenario
@@ -6213,7 +6217,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new ListPartitionReassignmentsResponse(unknownTpData));
 
             ListPartitionReassignmentsResult unknownTpResult = env.adminClient().listPartitionReassignments(new HashSet<>(asList(tp1, tp2)));
-            TestUtils.assertFutureError(unknownTpResult.reassignments(), UnknownTopicOrPartitionException.class);
+            TestUtils.assertFutureThrows(unknownTpResult.reassignments(), UnknownTopicOrPartitionException.class);
 
             // 3. Success
             ListPartitionReassignmentsResponseData responseData = new ListPartitionReassignmentsResponseData()
@@ -6264,7 +6268,7 @@ public class KafkaAdminClientTest {
             assertNull(result.all().get());
             assertNull(result.partitionResult(tp1).get());
             assertNull(result.partitionResult(tp2).get());
-            TestUtils.assertFutureError(result.partitionResult(tp3), IllegalArgumentException.class);
+            TestUtils.assertFutureThrows(result.partitionResult(tp3), IllegalArgumentException.class);
         }
     }
 
@@ -6333,8 +6337,8 @@ public class KafkaAdminClientTest {
                 AlterConsumerGroupOffsetsResult errorResult = env.adminClient()
                     .alterConsumerGroupOffsets(GROUP_ID, offsets);
 
-                TestUtils.assertFutureError(errorResult.all(), error.exception().getClass());
-                TestUtils.assertFutureError(errorResult.partitionResult(tp1), error.exception().getClass());
+                TestUtils.assertFutureThrows(errorResult.all(), error.exception().getClass());
+                TestUtils.assertFutureThrows(errorResult.partitionResult(tp1), error.exception().getClass());
             }
         }
     }
@@ -6386,8 +6390,8 @@ public class KafkaAdminClientTest {
             final AlterConsumerGroupOffsetsResult errorResult = env.adminClient()
                 .alterConsumerGroupOffsets(GROUP_ID, offsets);
 
-            TestUtils.assertFutureError(errorResult.all(), GroupAuthorizationException.class);
-            TestUtils.assertFutureError(errorResult.partitionResult(tp1), GroupAuthorizationException.class);
+            TestUtils.assertFutureThrows(errorResult.all(), GroupAuthorizationException.class);
+            TestUtils.assertFutureThrows(errorResult.partitionResult(tp1), GroupAuthorizationException.class);
         }
     }
 
@@ -6561,7 +6565,7 @@ public class KafkaAdminClientTest {
             partitions.put(tp0, OffsetSpec.latest());
             ListOffsetsResult result = env.adminClient().listOffsets(partitions);
 
-            TestUtils.assertFutureError(result.all(), TopicAuthorizationException.class);
+            TestUtils.assertFutureThrows(result.all(), TopicAuthorizationException.class);
         }
     }
 
@@ -7325,7 +7329,7 @@ public class KafkaAdminClientTest {
             partitions.put(tp1, OffsetSpec.latest());
             ListOffsetsResult result = env.adminClient().listOffsets(partitions);
 
-            TestUtils.assertFutureError(result.all(), expectedFailure);
+            TestUtils.assertFutureThrows(result.all(), expectedFailure);
         }
     }
 
@@ -7643,8 +7647,8 @@ public class KafkaAdminClientTest {
 
             AlterClientQuotasResult result = env.adminClient().alterClientQuotas(entries);
             result.values().get(goodEntity);
-            TestUtils.assertFutureError(result.values().get(unauthorizedEntity), ClusterAuthorizationException.class);
-            TestUtils.assertFutureError(result.values().get(invalidEntity), InvalidRequestException.class);
+            TestUtils.assertFutureThrows(result.values().get(unauthorizedEntity), ClusterAuthorizationException.class);
+            TestUtils.assertFutureThrows(result.values().get(invalidEntity), InvalidRequestException.class);
 
             // ensure immutable
             assertThrows(UnsupportedOperationException.class, () -> result.values().put(newClientQuotaEntity(ClientQuotaEntity.USER, "user-3"), null));
@@ -7683,7 +7687,7 @@ public class KafkaAdminClientTest {
             logDirs.put(tpr1, "/data1");
             AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
             assertNull(result.values().get(tpr0).get());
-            TestUtils.assertFutureError(result.values().get(tpr1), LogDirNotFoundException.class);
+            TestUtils.assertFutureThrows(result.values().get(tpr1), LogDirNotFoundException.class);
         }
     }
 

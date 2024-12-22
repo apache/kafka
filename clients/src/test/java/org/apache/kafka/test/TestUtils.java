@@ -583,19 +583,6 @@ public class TestUtils {
         assertEquals(expectedMessage, receivedException.getMessage());
     }
 
-    public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
-        throws InterruptedException {
-        try {
-            future.get();
-            fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
-        } catch (ExecutionException ee) {
-            Throwable cause = ee.getCause();
-            assertEquals(exceptionClass, cause.getClass(),
-                "Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
-                    cause.getClass().getSimpleName());
-        }
-    }
-
     public static ApiKeys apiKeyFrom(NetworkReceive networkReceive) {
         return RequestHeader.parse(networkReceive.payload().duplicate()).apiKey();
     }
