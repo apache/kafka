@@ -1749,49 +1749,58 @@
             <td>compatible</td>
             <td>compatible</td>
             <td>compatible</td>
-            <td></td>
+            <td>incompatible</td>
           </tr>
           <tr>
             <td>0.10.1.x and 0.10.2.x</td>
-            <td></td>
             <td>compatible</td>
             <td>compatible</td>
             <td>compatible</td>
-            <td></td>
+            <td>compatible</td>
+            <td>incompatible</td>
           </tr>
           <tr>
             <td>0.11.0.x</td>
-            <td></td>
+            <td>compatible</td>
             <td>compatible with exactly-once turned off<br>(requires broker version 0.11.0.x or higher)</td>
             <td>compatible</td>
-            <td></td>
+            <td>compatible</td>
+            <td>incompatible</td>
           </tr>
           <tr>
             <td>1.0.x and<br>1.1.x and<br>2.0.x and<br>2.1.x and<br>2.2.0 and<br>2.2.0</td>
-            <td></td>
+            <td>compatible</td>
             <td>compatible with exactly-once turned off<br>(requires broker version 0.11.0.x or higher);<br>requires message format 0.10 or higher;<br>message headers are not supported<br>(requires broker version 0.11.0.x or higher<br>with message format 0.11 or higher)</td>
             <td>compatible; requires message format 0.10 or higher;<br>if message headers are used, message format 0.11<br>or higher required</td>
             <td>compatible</td>
-            <td></td>
+            <td>incompatible</td>
           </tr>
           <tr>
-            <td>2.2.1 and<br>2.3.x and<br>2.4.x and<br>2.5.x and<br>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x and<br>3.6.x and<br>3.7.x and<br>3.8.x and<br>3.9.x</td>
-            <td></td>
-            <td></td>
-            <td>compatible; requires message format 0.11 or higher;<br>enabling exactly-once v2 requires 2.5.x or higher</td>
+            <td>2.2.1 and<br>2.3.x and<br>2.4.x and<br>2.5.x</td>
             <td>compatible</td>
-            <td></td>
+            <td>compatible</td>
+            <td>compatible; requires message format 0.11 or higher</td>
+            <td>compatible with exactly-once v2 turned off</td>
+            <td>compatible</td>
           </tr>
           <tr>
-            <td>4.0.x</td>
-            <td></td>
-            <td></td>
-            <td></td>
+            <td>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x and<br>3.6.x and<br>3.7.x and<br>3.8.x and<br>3.9.x</td>
+            <td>compatible</td>
+            <td>compatible</td>
+            <td>compatible; requires message format 0.11 or higher</td>
             <td>compatible; enabling exactly-once v2 requires broker version 2.5.x or higher</td>
             <td>compatible</td>
           </tr>
+          <tr>
+            <td>4.0.x</td>
+            <td>incompatible</td>
+            <td>incompatible</td>
+            <td>incompatible</td>
+            <td>compatible</td>
+            <td>compatible</td>
+          </tr>
         </tbody>
-        </table>
+    </table>
 
     <div class="pagination">
         <a href="/{{version}}/documentation/streams/developer-guide/app-reset-tool" class="pagination__btn pagination__btn__prev">Previous</a>
