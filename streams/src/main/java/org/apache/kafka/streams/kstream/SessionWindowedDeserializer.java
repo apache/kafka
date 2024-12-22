@@ -23,9 +23,19 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.internals.SessionKeySchema;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Map;
 
 public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
+
+    /**
+     * Configuration key for the windowed inner deserializer class.
+     */
+    public static final String WINDOWED_INNER_DESERIALIZER_CLASS = "windowed.inner.deserializer.class";
+
+    private final Logger log = LoggerFactory.getLogger(SessionWindowedDeserializer.class);
 
     private Deserializer<T> inner;
 
@@ -36,34 +46,43 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
         this.inner = inner;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"deprecation", "unchecked"})
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
-        final String windowedInnerClassSerdeConfig = (String) configs.get(StreamsConfig.WINDOWED_INNER_CLASS_SERDE);
-
-        Serde<T> windowInnerClassSerde = null;
-
-        if (windowedInnerClassSerdeConfig != null) {
-            try {
-                windowInnerClassSerde = Utils.newInstance(windowedInnerClassSerdeConfig, Serde.class);
-            } catch (final ClassNotFoundException e) {
-                throw new ConfigException(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, windowedInnerClassSerdeConfig,
-                    "Serde class " + windowedInnerClassSerdeConfig + " could not be found.");
+        String deserializerConfigFrom = WINDOWED_INNER_DESERIALIZER_CLASS;
+        String windowedInnerDeserializerClassConfig = (String) configs.get(WINDOWED_INNER_DESERIALIZER_CLASS);
+        if (windowedInnerDeserializerClassConfig == null) {
+            final String windowedInnerClassSerdeConfig = (String) configs.get(StreamsConfig.WINDOWED_INNER_CLASS_SERDE);
+            if (windowedInnerClassSerdeConfig != null) {
+                deserializerConfigFrom = StreamsConfig.WINDOWED_INNER_CLASS_SERDE;
+                windowedInnerDeserializerClassConfig = windowedInnerClassSerdeConfig;
+                log.warn("Config {} is deprecated. Please use {} instead.",
+                    StreamsConfig.WINDOWED_INNER_CLASS_SERDE, WINDOWED_INNER_DESERIALIZER_CLASS);
             }
         }
 
-        if (inner != null && windowedInnerClassSerdeConfig != null) {
-            if (!inner.getClass().getName().equals(windowInnerClassSerde.deserializer().getClass().getName())) {
+        Serde<T> windowedInnerDeserializerClass = null;
+        if (windowedInnerDeserializerClassConfig != null) {
+            try {
+                windowedInnerDeserializerClass = Utils.newInstance(windowedInnerDeserializerClassConfig, Serde.class);
+            } catch (final ClassNotFoundException e) {
+                throw new ConfigException(deserializerConfigFrom, windowedInnerDeserializerClassConfig,
+                    "Serde class " + windowedInnerDeserializerClassConfig + " could not be found.");
+            }
+        }
+
+        if (inner != null && windowedInnerDeserializerClassConfig != null) {
+            if (!inner.getClass().getName().equals(windowedInnerDeserializerClass.deserializer().getClass().getName())) {
                 throw new IllegalArgumentException("Inner class deserializer set using constructor "
                     + "(" + inner.getClass().getName() + ")" +
-                    " is different from the one set in windowed.inner.class.serde config " +
-                    "(" + windowInnerClassSerde.deserializer().getClass().getName() + ").");
+                    " is different from the one set in " + deserializerConfigFrom + " config " +
+                    "(" + windowedInnerDeserializerClass.deserializer().getClass().getName() + ").");
             }
-        } else if (inner == null && windowedInnerClassSerdeConfig == null) {
+        } else if (inner == null && windowedInnerDeserializerClassConfig == null) {
             throw new IllegalArgumentException("Inner class deserializer should be set either via constructor " +
-                "or via the windowed.inner.class.serde config");
+                "or via the " + WINDOWED_INNER_DESERIALIZER_CLASS + " config");
         } else if (inner == null)
-            inner = windowInnerClassSerde.deserializer();
+            inner = windowedInnerDeserializerClass.deserializer();
     }
 
     @Override
