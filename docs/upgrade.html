@@ -211,8 +211,11 @@
                             <code>DEAD</code> if the group ID was not found. In Apache Kafka 4.0, the <code>GroupIdNotFoundException</code>
                             is thrown instead as part of the support for new types of group.
                         </li>
-                        <li>The <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, boolean)</code> method were removed.
+                        <li>The <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, boolean)</code> method was removed.
                             Please use <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, Uuid, boolean)</code> instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions.topicPartitions(List&lt;TopicPartition&gt;)</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.Admin.listConsumerGroupOffsets(Map&lt;String, ListConsumerGroupOffsetsSpec&gt;, ListConsumerGroupOffsetsOptions)</code> instead.
                         </li>
                         <li>
                             The deprecated <code>dryRun</code> methods were removed from the <code>org.apache.kafka.clients.admin.UpdateFeaturesOptions</code>.

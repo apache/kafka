@@ -903,9 +903,7 @@ public interface Admin extends AutoCloseable {
      * @return The ListConsumerGroupOffsetsResult
      */
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
-        @SuppressWarnings("deprecation")
-        ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
-            .topicPartitions(options.topicPartitions());
+        ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec();
 
         // We can use the provided options with the batched API, which uses topic partitions from
         // the group spec and ignores any topic partitions set in the options.
