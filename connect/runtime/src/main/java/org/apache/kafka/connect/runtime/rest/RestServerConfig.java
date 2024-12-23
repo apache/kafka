@@ -102,9 +102,7 @@ public abstract class RestServerConfig extends AbstractConfig {
     static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
     // Visible for testing
     static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
-    private static final Collection<String> HEADER_ACTIONS = Collections.unmodifiableList(
-            Arrays.asList("set", "add", "setDate", "addDate")
-    );
+    private static final Collection<String> HEADER_ACTIONS = List.of("set", "add", "setDate", "addDate");
 
 
     /**

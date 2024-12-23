@@ -570,7 +570,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
     @Override
     public Map<TopicPartition, Long> offsets() {
-        return Collections.unmodifiableMap(new HashMap<>(offsets));
+        return Map.copyOf(offsets);
     }
 
     private void checkForException() {

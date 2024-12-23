@@ -18,8 +18,6 @@ package org.apache.kafka.streams.query;
 
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
@@ -102,7 +100,7 @@ public class StateQueryRequest<R> {
         return new StateQueryRequest<>(
             storeName,
             position,
-            Optional.of(Collections.unmodifiableSet(new HashSet<>(partitions))),
+            Optional.of(Set.copyOf(partitions)),
             query,
             executionInfoEnabled,
             requireActive
