@@ -164,7 +164,7 @@ public class StateQueryRequest<R> {
      * Whether this request should fetch from all locally available partitions.
      */
     public boolean isAllPartitions() {
-        return !partitions.isPresent();
+        return partitions.isEmpty();
     }
 
     /**
@@ -173,7 +173,7 @@ public class StateQueryRequest<R> {
      * @throws IllegalStateException if this is a request for all partitions
      */
     public Set<Integer> getPartitions() {
-        if (!partitions.isPresent()) {
+        if (partitions.isEmpty()) {
             throw new IllegalStateException(
                 "Cannot list partitions of an 'all partitions' request");
         } else {

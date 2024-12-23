@@ -115,7 +115,7 @@ public class AclEntry extends AccessControlEntry {
             return Collections.emptySet();
 
         Optional<JsonValue> jsonValue = Json.parseBytes(bytes);
-        if (!jsonValue.isPresent())
+        if (jsonValue.isEmpty())
             return Collections.emptySet();
 
         JsonObject js = jsonValue.get().asJsonObject();

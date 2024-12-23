@@ -191,7 +191,7 @@ public final class LsCommandHandler implements Commands.Handler {
 
     static ColumnSchema calculateColumnSchema(OptionalInt screenWidth,
                                               List<String> entries) {
-        if (!screenWidth.isPresent()) {
+        if (screenWidth.isEmpty()) {
             return new ColumnSchema(1, entries.size());
         }
         int maxColumns = screenWidth.getAsInt() / 4;

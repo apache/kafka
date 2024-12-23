@@ -100,7 +100,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
                 .filter(record -> record.offset() >= fetchOffset)
                 .findFirst();
 
-        if (!firstExpectedRecordOpt.isPresent()) {
+        if (firstExpectedRecordOpt.isEmpty()) {
             // If no records could be found in the second-tier storage, no record would be consumed from that storage.
             if (expectedFromSecondTierCount > 0) {
                 fail("Could not find any record with offset >= " + fetchOffset + " from tier storage.");

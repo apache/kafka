@@ -181,7 +181,7 @@ public final class BrokerLocalStorage {
                 .filter(filename -> filename.endsWith(LogFileUtils.LOG_FILE_SUFFIX))
                 .sorted()
                 .findFirst();
-        if (!firstLogFile.isPresent()) {
+        if (firstLogFile.isEmpty()) {
             throw new IllegalArgumentException(String.format(
                     "[BrokerId=%d] No log file found for the topic-partition %s", brokerId, topicPartition));
         }
