@@ -2766,7 +2766,7 @@ project(':streams') {
   task testAll(
     dependsOn: [
             ':streams:test',
-            ':streams:integration-tests',
+            ':streams:integration-tests:test',
             ':streams:test-utils:test',
             ':streams:streams-scala:test',
             ':streams:upgrade-system-tests-0110:test',
