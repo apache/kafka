@@ -225,15 +225,17 @@
         <li>Other changes:
             <ul>
                 <li>
+                    The minimum Java version required by clients and streams applications has been increased from Java 8 to Java 11
+                    while brokers, connect and tools now require Java 17.
+                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> and
+                    <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510">KIP-1013</a> for more details.
+                </li>
+                <li>
                     Java 23 support has been added in Apache Kafka 4.0
                 </li>
                 <li>
                     Scala 2.12 support has been removed in Apache Kafka 4.0
                     See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218">KIP-751</a> for more details
-                </li>
-                <li>
-                    Java 8 support has been removed in Apache Kafka 4.0
-                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> for more details
                 </li>
                 <li>
                     KafkaLog4jAppender has been removed, users should migrate to the log4j2 appender

@@ -49,7 +49,6 @@ ext {
   gradleVersion = versions.gradle
   minClientJavaVersion = 11
   minNonClientJavaVersion = 17
-  // The connect:api module also belongs to the clients module, but it has already been bumped to JDK 17 as part of KIP-1032.
   modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams-scala", ":test-common:test-common-runtime"]
 
   buildVersionFileName = "kafka-version.properties"
