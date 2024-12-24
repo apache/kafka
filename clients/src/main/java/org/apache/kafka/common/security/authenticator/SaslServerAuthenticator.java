@@ -505,33 +505,44 @@ public class SaslServerAuthenticator implements Authenticator {
      * packet such clients send is a GSSAPI token starting with 0x60.
      */
     private void handleKafkaRequest(byte[] requestBytes) throws IOException, AuthenticationException {
-        ByteBuffer requestBuffer = ByteBuffer.wrap(requestBytes);
-        RequestHeader header = RequestHeader.parse(requestBuffer);
-        ApiKeys apiKey = header.apiKey();
+        try {
+            ByteBuffer requestBuffer = ByteBuffer.wrap(requestBytes);
+            RequestHeader header = RequestHeader.parse(requestBuffer);
+            ApiKeys apiKey = header.apiKey();
 
-        // A valid Kafka request header was received. SASL authentication tokens are now expected only
-        // following a SaslHandshakeRequest since this is not a GSSAPI client token from a Kafka 0.9.0.x client.
-        if (saslState == SaslState.INITIAL_REQUEST)
-            setSaslState(SaslState.HANDSHAKE_OR_VERSIONS_REQUEST);
+            // Raise an error prior to parsing if the api cannot be handled at this layer. This avoids
+            // unnecessary exposure to some of the more complex schema types.
+            if (apiKey != ApiKeys.API_VERSIONS && apiKey != ApiKeys.SASL_HANDSHAKE)
+                throw new InvalidRequestException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
 
-        // Raise an error prior to parsing if the api cannot be handled at this layer. This avoids
-        // unnecessary exposure to some of the more complex schema types.
-        if (apiKey != ApiKeys.API_VERSIONS && apiKey != ApiKeys.SASL_HANDSHAKE)
-            throw new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
+            LOG.debug("Handling Kafka request {} during {}", apiKey, reauthInfo.authenticationOrReauthenticationText());
 
-        LOG.debug("Handling Kafka request {} during {}", apiKey, reauthInfo.authenticationOrReauthenticationText());
+            RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(), Optional.of(clientPort()),
+                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
+            RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
 
-        RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(), Optional.of(clientPort()),
-                KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
-        RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
-        if (apiKey == ApiKeys.API_VERSIONS)
-            handleApiVersionsRequest(requestContext, (ApiVersionsRequest) requestAndSize.request);
-        else {
-            String clientMechanism = handleHandshakeRequest(requestContext, (SaslHandshakeRequest) requestAndSize.request);
-            if (!reauthInfo.reauthenticating() || reauthInfo.saslMechanismUnchanged(clientMechanism)) {
-                createSaslServer(clientMechanism);
-                setSaslState(SaslState.AUTHENTICATE);
+            // A valid Kafka request was received, we can now update the sasl state
+            if (saslState == SaslState.INITIAL_REQUEST)
+                setSaslState(SaslState.HANDSHAKE_OR_VERSIONS_REQUEST);
+
+            if (apiKey == ApiKeys.API_VERSIONS)
+                handleApiVersionsRequest(requestContext, (ApiVersionsRequest) requestAndSize.request);
+            else {
+                String clientMechanism = handleHandshakeRequest(requestContext, (SaslHandshakeRequest) requestAndSize.request);
+                if (!reauthInfo.reauthenticating() || reauthInfo.saslMechanismUnchanged(clientMechanism)) {
+                    createSaslServer(clientMechanism);
+                    setSaslState(SaslState.AUTHENTICATE);
+                }
             }
+        } catch (InvalidRequestException e) {
+            if (saslState == SaslState.INITIAL_REQUEST) {
+                // InvalidRequestException is thrown if the request is not in Kafka format or if the API key is invalid.
+                // If it's the initial request, this could be an ancient client (see method documentation for more details),
+                // a client configured with the wrong security protocol or a non kafka-client altogether (eg http client).
+                throw new InvalidRequestException("Invalid request, potential reasons: kafka client configured with the " +
+                    "wrong security protocol, it does not support KIP-43 or it is not a kafka client.", e);
+            }
+            throw e;
         }
     }
 
