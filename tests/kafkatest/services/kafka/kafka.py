@@ -951,9 +951,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
-            cmd = "ps ax | grep -i %s | grep -v grep | awk '{print $1}'" % self.java_class_name()
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
+            return node.account.java_pids(self.java_class_name())
         except (RemoteCommandError, ValueError) as e:
             return []
 
@@ -1935,4 +1933,4 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return output
 
     def java_class_name(self):
-        return "kafka.Kafka"
+        return "kafka\.Kafka"
