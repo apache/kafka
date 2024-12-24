@@ -221,6 +221,12 @@
                             The deprecated <code>dryRun</code> methods were removed from the <code>org.apache.kafka.clients.admin.UpdateFeaturesOptions</code>.
                             Please use <code>validateOnly</code> instead.
                         </li>
+                        <li>The constructor <code>org.apache.kafka.clients.admin.FeatureUpdate</code> with short and boolean arguments was removed.
+                            Please use the constructor that accepts short and the specified UpgradeType enum instead.
+                        </li>
+                        <li>
+                            The <code>allowDowngrade</code> method was removed from the <code>org.apache.kafka.clients.admin.FeatureUpdate</code>.
+                        </li>
                         <li>The <code>org.apache.kafka.clients.admin.DescribeTopicsResult.DescribeTopicsResult(Map&lt;String, KafkaFuture&lt;TopicDescription&gt;&gt;)</code> method was removed.
                             Please use <code>org.apache.kafka.clients.admin.DescribeTopicsResult.DescribeTopicsResult(Map&lt;Uuid, KafkaFuture&lt;TopicDescription&gt;&gt;, Map&lt;String, KafkaFuture&lt;TopicDescription&gt;&gt;)</code> instead.
                         </li>
