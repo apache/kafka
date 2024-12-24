@@ -365,16 +365,13 @@ subprojects {
             from components.java
           } else {
             apply plugin: 'com.gradleup.shadow'
-            project.shadow.component(mavenJava)
+            from components.shadow
 
             // Fix for avoiding inclusion of runtime dependencies marked as 'shadow' in MANIFEST Class-Path.
             // https://github.com/GradleUp/shadow/issues/324
             afterEvaluate {
               pom.withXml { xml ->
-                if (xml.asNode().get('dependencies') == null) {
-                  xml.asNode().appendNode('dependencies')
-                }
-                def dependenciesNode = xml.asNode().get('dependencies').get(0)
+                def dependenciesNode = xml.asNode().get('dependencies') ?: xml.asNode().appendNode('dependencies')
                 project.configurations.shadowed.allDependencies.each {
                   def dependencyNode = dependenciesNode.appendNode('dependency')
                   dependencyNode.appendNode('groupId', it.group)
@@ -1858,7 +1855,7 @@ project(':clients') {
     // dependencies excluded from the final jar, since they are declared as runtime dependencies
     dependencies {
       project.configurations.shadowed.allDependencies.each {
-        exclude(dependency(it.group + ':' + it.name))
+        exclude(dependency(it))
       }
       // exclude proto files from the jar
       exclude "**/opentelemetry/proto/**/*.proto"
