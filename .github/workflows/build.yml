@@ -168,7 +168,7 @@ jobs:
           fi
       - name: Check missing lib license
         run: |
-          ./gradlew libLicenseCheck
+          ./gradlew releaseTarGz
 
   test:
     needs: [configure, validate, load-catalog]

@@ -1220,16 +1220,15 @@ project(':core') {
     from(project(':tools:tools-api').jar) { into("libs/") }
     from(project(':tools:tools-api').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy 'exclude'
-  }
-
-  task libLicenseCheck(dependsOn: 'releaseTarGz', type: Copy) {
-    def prefixPath = "$rootDir/core/build/distributions/"
-    def bathPath = prefixPath + "kafka_${versions.baseScala}-${project.properties['version']}"
-    def tgzPath = bathPath  + '.tgz'
-    from tarTree(file(tgzPath))
-    into prefixPath
 
     doLast {
+      def prefixPath = "$rootDir/core/build/distributions/"
+      def bathPath = prefixPath + "kafka_${versions.baseScala}-${project.properties['version']}"
+      def tgzPath = bathPath  + '.tgz'
+      exec {
+        commandLine 'tar', 'xzf', tgzPath, '-C', prefixPath
+      }
+
       def licenseFile = file(bathPath + '/LICENSE')
       def libsDir = file(bathPath + '/libs')
       def result = true
