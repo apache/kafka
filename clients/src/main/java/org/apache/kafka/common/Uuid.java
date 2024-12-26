@@ -49,7 +49,7 @@ public class Uuid implements Comparable<Uuid> {
     /**
      * The set of reserved UUIDs that will never be returned by the randomUuid method.
      */
-    public static final Set<Uuid> RESERVED = Set.of(METADATA_TOPIC_ID, ZERO_UUID, ONE_UUID);
+    public static final Set<Uuid> RESERVED = Set.of(ZERO_UUID, ONE_UUID);
 
     private final long mostSignificantBits;
     private final long leastSignificantBits;
