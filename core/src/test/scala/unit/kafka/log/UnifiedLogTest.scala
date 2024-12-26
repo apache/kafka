@@ -820,7 +820,7 @@ class UnifiedLogTest {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
-    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
+    }, filtered, Int.MaxValue, TimestampType.CREATE_TIME, BufferSupplier.NO_CACHING)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
@@ -862,7 +862,7 @@ class UnifiedLogTest {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.RETAIN_EMPTY, true)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = false
-    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
+    }, filtered, Int.MaxValue, TimestampType.CREATE_TIME, BufferSupplier.NO_CACHING)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
@@ -906,7 +906,7 @@ class UnifiedLogTest {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
-    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
+    }, filtered, Int.MaxValue, TimestampType.CREATE_TIME, BufferSupplier.NO_CACHING)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 

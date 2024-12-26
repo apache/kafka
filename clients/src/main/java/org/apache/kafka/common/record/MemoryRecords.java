@@ -151,8 +151,9 @@ public class MemoryRecords extends AbstractRecords {
      * @return A FilterResult with a summary of the output (for metrics) and potentially an overflow buffer
      */
     public FilterResult filterTo(TopicPartition partition, RecordFilter filter, ByteBuffer destinationBuffer,
-                                 int maxRecordBatchSize, BufferSupplier decompressionBufferSupplier) {
-        return filterTo(partition, batches(), filter, destinationBuffer, maxRecordBatchSize, decompressionBufferSupplier);
+                                 int maxRecordBatchSize, TimestampType timestampTypeConfig,
+                                 BufferSupplier decompressionBufferSupplier) {
+        return filterTo(partition, batches(), filter, destinationBuffer, maxRecordBatchSize, timestampTypeConfig, decompressionBufferSupplier);
     }
 
     /**
@@ -161,7 +162,7 @@ public class MemoryRecords extends AbstractRecords {
      */
     private static FilterResult filterTo(TopicPartition partition, Iterable<MutableRecordBatch> batches,
                                          RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize,
-                                         BufferSupplier decompressionBufferSupplier) {
+                                         TimestampType timestampTypeConfig, BufferSupplier decompressionBufferSupplier) {
         FilterResult filterResult = new FilterResult(destinationBuffer);
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
         for (MutableRecordBatch batch : batches) {
@@ -174,15 +175,9 @@ public class MemoryRecords extends AbstractRecords {
             if (batchRetention == BatchRetention.DELETE)
                 continue;
 
-            // We use the absolute offset to decide whether to retain the message or not. Due to KAFKA-4298, we have to
-            // allow for the possibility that a previous version corrupted the log by writing a compressed record batch
-            // with a magic value not matching the magic of the records (magic < 2). This will be fixed as we
-            // recopy the messages to the destination buffer.
-            byte batchMagic = batch.magic();
-            List<Record> retainedRecords = new ArrayList<>();
-
-            final BatchFilterResult iterationResult = filterBatch(batch, decompressionBufferSupplier, filterResult, filter,
-                    batchMagic, true, retainedRecords);
+            final BatchFilterResult iterationResult = filterBatch(batch, decompressionBufferSupplier, filterResult,
+                filter);
+            List<Record> retainedRecords = iterationResult.retainedRecords;
             boolean containsTombstones = iterationResult.containsTombstones;
             boolean writeOriginalBatch = iterationResult.writeOriginalBatch;
             long maxOffset = iterationResult.maxOffset;
@@ -202,7 +197,8 @@ public class MemoryRecords extends AbstractRecords {
                         deleteHorizonMs = filter.currentTime + filter.deleteRetentionMs;
                     else
                         deleteHorizonMs = batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP);
-                    try (final MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs)) {
+                    try (final MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords,
+                            timestampTypeConfig, bufferOutputStream, deleteHorizonMs)) {
                         MemoryRecords records = builder.build();
                         int filteredBatchSize = records.sizeInBytes();
                         if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
@@ -217,11 +213,11 @@ public class MemoryRecords extends AbstractRecords {
                     }
                 }
             } else if (batchRetention == BatchRetention.RETAIN_EMPTY) {
-                if (batchMagic < RecordBatch.MAGIC_VALUE_V2)
+                if (batch.magic() < RecordBatch.MAGIC_VALUE_V2) // should never happen
                     throw new IllegalStateException("Empty batches are only supported for magic v2 and above");
 
                 bufferOutputStream.ensureRemaining(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
-                DefaultRecordBatch.writeEmptyHeader(bufferOutputStream.buffer(), batchMagic, batch.producerId(),
+                DefaultRecordBatch.writeEmptyHeader(bufferOutputStream.buffer(), RecordBatch.CURRENT_MAGIC_VALUE, batch.producerId(),
                         batch.producerEpoch(), batch.baseSequence(), batch.baseOffset(), batch.lastOffset(),
                         batch.partitionLeaderEpoch(), batch.timestampType(), batch.maxTimestamp(),
                         batch.isTransactional(), batch.isControlBatch());
@@ -243,23 +239,18 @@ public class MemoryRecords extends AbstractRecords {
     private static BatchFilterResult filterBatch(RecordBatch batch,
                                                  BufferSupplier decompressionBufferSupplier,
                                                  FilterResult filterResult,
-                                                 RecordFilter filter,
-                                                 byte batchMagic,
-                                                 boolean writeOriginalBatch,
-                                                 List<Record> retainedRecords) {
-        long maxOffset = -1;
-        boolean containsTombstones = false;
+                                                 RecordFilter filter) {
         try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
+            long maxOffset = -1;
+            boolean containsTombstones = false;
+            // Convert records with old record versions
+            boolean writeOriginalBatch = batch.magic() >= RecordBatch.CURRENT_MAGIC_VALUE;
+            List<Record> retainedRecords = new ArrayList<>();
             while (iterator.hasNext()) {
                 Record record = iterator.next();
                 filterResult.messagesRead += 1;
 
                 if (filter.shouldRetainRecord(batch, record)) {
-                    // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
-                    // the corrupted batch with correct data.
-                    if (!record.hasMagic(batchMagic))
-                        writeOriginalBatch = false;
-
                     if (record.offset() > maxOffset)
                         maxOffset = record.offset();
 
@@ -272,17 +263,20 @@ public class MemoryRecords extends AbstractRecords {
                     writeOriginalBatch = false;
                 }
             }
-            return new BatchFilterResult(writeOriginalBatch, containsTombstones, maxOffset);
+            return new BatchFilterResult(retainedRecords, writeOriginalBatch, containsTombstones, maxOffset);
         }
     }
 
     private static class BatchFilterResult {
+        private final List<Record> retainedRecords;
         private final boolean writeOriginalBatch;
         private final boolean containsTombstones;
         private final long maxOffset;
-        private BatchFilterResult(final boolean writeOriginalBatch,
-                                 final boolean containsTombstones,
-                                 final long maxOffset) {
+        private BatchFilterResult(List<Record> retainedRecords,
+                                  final boolean writeOriginalBatch,
+                                  final boolean containsTombstones,
+                                  final long maxOffset) {
+            this.retainedRecords = retainedRecords;
             this.writeOriginalBatch = writeOriginalBatch;
             this.containsTombstones = containsTombstones;
             this.maxOffset = maxOffset;
@@ -291,17 +285,20 @@ public class MemoryRecords extends AbstractRecords {
 
     private static MemoryRecordsBuilder buildRetainedRecordsInto(RecordBatch originalBatch,
                                                                  List<Record> retainedRecords,
+                                                                 TimestampType timestampTypeConfig,
                                                                  ByteBufferOutputStream bufferOutputStream,
                                                                  final long deleteHorizonMs) {
-        byte magic = originalBatch.magic();
         Compression compression = Compression.of(originalBatch.compressionType()).build();
-        TimestampType timestampType = originalBatch.timestampType();
+        // v0 has no timestamp type, use the topic config in that case (like we do when we up-convert produce requests)
+        TimestampType timestampType = originalBatch.timestampType() == TimestampType.NO_TIMESTAMP_TYPE ?
+                timestampTypeConfig : originalBatch.timestampType();
         long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ?
                 originalBatch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
-        long baseOffset = magic >= RecordBatch.MAGIC_VALUE_V2 ?
+        long baseOffset = originalBatch.magic() >= RecordBatch.MAGIC_VALUE_V2 ?
                 originalBatch.baseOffset() : retainedRecords.get(0).offset();
 
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferOutputStream, magic,
+        // Convert records with older record versions to the current one
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferOutputStream, RecordBatch.CURRENT_MAGIC_VALUE,
                 compression, timestampType, baseOffset, logAppendTime, originalBatch.producerId(),
                 originalBatch.producerEpoch(), originalBatch.baseSequence(), originalBatch.isTransactional(),
                 originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(), bufferOutputStream.limit(), deleteHorizonMs);
@@ -309,7 +306,7 @@ public class MemoryRecords extends AbstractRecords {
         for (Record record : retainedRecords)
             builder.append(record);
 
-        if (magic >= RecordBatch.MAGIC_VALUE_V2)
+        if (originalBatch.magic() >= RecordBatch.MAGIC_VALUE_V2)
             // we must preserve the last offset from the initial batch in order to ensure that the
             // last sequence number from the batch remains even after compaction. Otherwise, the producer
             // could incorrectly see an out of sequence error.
