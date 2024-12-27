@@ -841,11 +841,14 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         }
 
         try {
-            fencableProducer.beginTransaction();
-            keyValues.forEach(
-                    keyValue -> fencableProducer.send(new ProducerRecord<>(topic, keyValue.key, keyValue.value))
-            );
-            fencableProducer.commitTransaction();
+            // in TV_2, commit transaction without sending any records will get error.
+            if (!keyValues.isEmpty()) {
+                fencableProducer.beginTransaction();
+                keyValues.forEach(
+                        keyValue -> fencableProducer.send(new ProducerRecord<>(topic, keyValue.key, keyValue.value))
+                );
+                fencableProducer.commitTransaction();
+            }
             timer.update();
         } catch (Exception e) {
             log.warn("Failed to perform fencable send to config topic", e);
