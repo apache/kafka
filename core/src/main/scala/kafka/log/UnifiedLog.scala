@@ -714,6 +714,18 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
+   * Even though we always write to disk with record version v2 since Apache Kafka 4.0, older record versions may have
+   * been persisted to disk before that. In order to test such scenarios, we need the ability to append with older
+   * record versions. This method exists for that purpose and hence it should only be used from test code.
+   *
+   * Also see #appendAsLeader.
+   */
+  private[log] def appendAsLeaderWithRecordVersion(records: MemoryRecords, leaderEpoch: Int, recordVersion: RecordVersion): Unit = {
+    append(records, AppendOrigin.CLIENT, MetadataVersion.latestProduction, true, leaderEpoch, Some(RequestLocal.noCaching),
+      VerificationGuard.SENTINEL, ignoreRecordSize = false, recordVersion.value)
+  }
+
+  /**
    * Append this message set to the active segment of the local log without assigning offsets or Partition Leader Epochs
    *
    * @param records The records to append
@@ -757,7 +769,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      leaderEpoch: Int,
                      requestLocal: Option[RequestLocal],
                      verificationGuard: VerificationGuard,
-                     ignoreRecordSize: Boolean): LogAppendInfo = {
+                     ignoreRecordSize: Boolean,
+                     toMagic: Byte = RecordBatch.CURRENT_MAGIC_VALUE): LogAppendInfo = {
     // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
     // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
     maybeFlushMetadataFile()
@@ -787,7 +800,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                 appendInfo.sourceCompression,
                 targetCompression,
                 config.compact,
-                RecordBatch.CURRENT_MAGIC_VALUE,
+                toMagic,
                 config.messageTimestampType,
                 config.messageTimestampBeforeMaxMs,
                 config.messageTimestampAfterMaxMs,

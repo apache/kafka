@@ -2581,6 +2581,23 @@ class UnifiedLogTest {
   }
 
   @Test
+  def testLeaderEpochCacheCreatedAfterMessageFormatUpgrade(): Unit = {
+    val logProps = new Properties()
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
+    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
+    val logConfig = new LogConfig(logProps)
+    val log = createLog(logDir, logConfig)
+    log.appendAsLeaderWithRecordVersion(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
+      magicValue = RecordVersion.V1.value), leaderEpoch = 5, RecordVersion.V1)
+    assertEquals(None, log.latestEpoch)
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes())),
+      magicValue = RecordVersion.V2.value), leaderEpoch = 5)
+    assertEquals(Some(5), log.latestEpoch)
+  }
+
+  @Test
   def testSplitOnOffsetOverflow(): Unit = {
     // create a log such that one log segment has offsets that overflow, and call the split API on that segment
     val logConfig = LogTestUtils.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
