@@ -188,6 +188,10 @@
                         <li>The <code>committed(TopicPartition)</code> and <code>committed(TopicPartition, Duration)</code> methods were removed from the consumer.
                             Please use <code>committed(Set&ltTopicPartition&gt)</code> and <code>committed(Set&ltTopicPartition&gt, Duration)</code> instead.
                         </li>
+                        <li>
+                            The <code>setException(KafkaException)</code> method was removed from the <code>org.apache.kafka.clients.consumer.MockConsumer</code>.
+                            Please use <code>setPollException(KafkaException)</code> instead.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Producer</b>
