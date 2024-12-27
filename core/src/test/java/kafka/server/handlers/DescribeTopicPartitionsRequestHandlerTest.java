@@ -559,7 +559,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         int voterId = brokerId + 1;
         properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, voterId + "@localhost:9093");
         properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL");
-        TestUtils.setIbpAndMessageFormatVersions(properties, MetadataVersion.latestProduction());
+        TestUtils.setIbpVersion(properties, MetadataVersion.latestProduction());
         return new KafkaConfig(properties);
     }
 }

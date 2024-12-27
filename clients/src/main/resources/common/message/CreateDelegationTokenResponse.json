@@ -17,12 +17,14 @@
   "apiKey": 38,
   "type": "response",
   "name": "CreateDelegationTokenResponse",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
+  //
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   //
   // Version 2 is the first flexible version.
   //
   // Version 3 adds token requester details
-  "validVersions": "0-3",
+  "validVersions": "1-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
