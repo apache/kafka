@@ -82,6 +82,14 @@
             Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
     </ol>
 
+    <h5><a id="upgrade_391_notable" href="#upgrade_391_notable">Notable changes in 3.9.1</a></h5>
+    <ul>
+        <li>Request logging for deprecated protocol api versions was changed from <code>DEBUG</code> to <code>INFO</code> level. This makes it possible to enable request
+            logging for deprecated requests without enabling it for regular requests (which are still logged at <code>DEBUG</code> level). The relevant logger is
+            <code>log4j.logger.kafka.request.logger</code> and it can be adjusted statically via the <code>log4j.properties</code> file or dynamically via <code>kafka-configs.sh</code>.
+        </li>
+    </ul>
+
     <h5><a id="upgrade_390_notable" href="#upgrade_390_notable">Notable changes in 3.9.0</a></h5>
     <ul>
         <li>In case you run your Kafka clusters with no execution permission for the <code>/tmp</code> partition, Kafka will not work properly. It might either refuse to start or fail
