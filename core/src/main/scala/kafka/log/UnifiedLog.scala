@@ -509,8 +509,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
-    leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      dir, topicPartition, logDirFailureChannel, logIdent, leaderEpochCache, scheduler)
+    leaderEpochCache = Some(UnifiedLog.createLeaderEpochCache(
+      dir, topicPartition, logDirFailureChannel, leaderEpochCache, scheduler))
   }
 
   private def updateHighWatermarkWithLogEndOffset(): Unit = {
@@ -2015,11 +2015,10 @@ object UnifiedLog extends Logging {
     // The created leaderEpochCache will be truncated by LogLoader if necessary
     // so it is guaranteed that the epoch entries will be correct even when on-disk
     // checkpoint was stale (due to async nature of LeaderEpochFileCache#truncateFromStart/End).
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
       dir,
       topicPartition,
       logDirFailureChannel,
-      s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ",
       None,
       scheduler)
     val producerStateManager = new ProducerStateManager(topicPartition, dir,
@@ -2036,7 +2035,7 @@ object UnifiedLog extends Logging {
       segments,
       logStartOffset,
       recoveryPoint,
-      leaderEpochCache.toJava,
+      leaderEpochCache,
       producerStateManager,
       numRemainingSegments,
       isRemoteLogEnabled,
@@ -2047,7 +2046,7 @@ object UnifiedLog extends Logging {
       localLog,
       brokerTopicStats,
       producerIdExpirationCheckIntervalMs,
-      leaderEpochCache,
+      Some(leaderEpochCache),
       producerStateManager,
       topicId,
       keepPartitionMetadataFile,
@@ -2072,29 +2071,24 @@ object UnifiedLog extends Logging {
   def parseTopicPartitionName(dir: File): TopicPartition = LocalLog.parseTopicPartitionName(dir)
 
   /**
-   * If the recordVersion is >= RecordVersion.V2, create a new LeaderEpochFileCache instance.
-   * Loading the epoch entries from the backing checkpoint file or the provided currentCache if not empty.
-   * Otherwise, the message format is considered incompatible and the existing LeaderEpoch file
-   * is deleted.
+   * Create a new LeaderEpochFileCache instance and load the epoch entries from the backing checkpoint file or
+   * the provided currentCache (if not empty).
    *
    * @param dir                  The directory in which the log will reside
    * @param topicPartition       The topic partition
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
-   * @param logPrefix            The logging prefix
    * @param currentCache         The current LeaderEpochFileCache instance (if any)
    * @param scheduler            The scheduler for executing asynchronous tasks
    * @return The new LeaderEpochFileCache instance (if created), none otherwise
    */
-  def maybeCreateLeaderEpochCache(dir: File,
-                                  topicPartition: TopicPartition,
-                                  logDirFailureChannel: LogDirFailureChannel,
-                                  logPrefix: String,
-                                  currentCache: Option[LeaderEpochFileCache],
-                                  scheduler: Scheduler): Option[LeaderEpochFileCache] = {
+  def createLeaderEpochCache(dir: File,
+                             topicPartition: TopicPartition,
+                             logDirFailureChannel: LogDirFailureChannel,
+                             currentCache: Option[LeaderEpochFileCache],
+                             scheduler: Scheduler): LeaderEpochFileCache = {
     val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
     val checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
-    currentCache.map(_.withCheckpoint(checkpointFile))
-      .orElse(Some(new LeaderEpochFileCache(topicPartition, checkpointFile, scheduler)))
+    currentCache.map(_.withCheckpoint(checkpointFile)).getOrElse(new LeaderEpochFileCache(topicPartition, checkpointFile, scheduler))
   }
 
   private[log] def replaceSegments(existingSegments: LogSegments,

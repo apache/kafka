@@ -52,7 +52,7 @@ import java.util.{Optional, OptionalLong, Properties}
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Iterable, Map, mutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.{RichOption, RichOptional}
+import scala.jdk.OptionConverters.RichOptional
 
 class LogLoaderTest {
   var config: KafkaConfig = _
@@ -155,19 +155,19 @@ class LogLoaderTest {
           val logStartOffset = logStartOffsets.getOrDefault(topicPartition, 0L)
           val logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(1)
           val segments = new LogSegments(topicPartition)
-          val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-            logDir, topicPartition, logDirFailureChannel, "", None, time.scheduler)
+          val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+            logDir, topicPartition, logDirFailureChannel, None, time.scheduler)
           val producerStateManager = new ProducerStateManager(topicPartition, logDir,
             this.maxTransactionTimeoutMs, this.producerStateManagerConfig, time)
           val logLoader = new LogLoader(logDir, topicPartition, config, time.scheduler, time,
             logDirFailureChannel, hadCleanShutdown, segments, logStartOffset, logRecoveryPoint,
-            leaderEpochCache.toJava, producerStateManager, new ConcurrentHashMap[String, Integer], false)
+            leaderEpochCache, producerStateManager, new ConcurrentHashMap[String, Integer], false)
           val offsets = logLoader.load()
           val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
             offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
             logDirFailureChannel)
           new UnifiedLog(offsets.logStartOffset, localLog, brokerTopicStats,
-            this.producerIdExpirationCheckIntervalMs, leaderEpochCache,
+            this.producerIdExpirationCheckIntervalMs, Some(leaderEpochCache),
             producerStateManager, None, true)
         }
       }
@@ -357,13 +357,13 @@ class LogLoaderTest {
           }.when(wrapper).read(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any())
           Mockito.doAnswer { in =>
             recoveredSegments += wrapper
-            segment.recover(in.getArgument(0, classOf[ProducerStateManager]), in.getArgument(1, classOf[Optional[LeaderEpochFileCache]]))
+            segment.recover(in.getArgument(0, classOf[ProducerStateManager]), in.getArgument(1, classOf[LeaderEpochFileCache]))
           }.when(wrapper).recover(ArgumentMatchers.any(), ArgumentMatchers.any())
           super.add(wrapper)
         }
       }
-      val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-        logDir, topicPartition, logDirFailureChannel, "", None, mockTime.scheduler)
+      val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+        logDir, topicPartition, logDirFailureChannel, None, mockTime.scheduler)
       val producerStateManager = new ProducerStateManager(topicPartition, logDir,
         maxTransactionTimeoutMs, producerStateManagerConfig, mockTime)
       val logLoader = new LogLoader(
@@ -377,7 +377,7 @@ class LogLoaderTest {
         interceptedLogSegments,
         0L,
         recoveryPoint,
-        leaderEpochCache.toJava,
+        leaderEpochCache,
         producerStateManager,
         new ConcurrentHashMap[String, Integer],
         false
@@ -387,7 +387,7 @@ class LogLoaderTest {
         offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
         logDirFailureChannel)
       new UnifiedLog(offsets.logStartOffset, localLog, brokerTopicStats,
-        producerIdExpirationCheckIntervalMs, leaderEpochCache, producerStateManager,
+        producerIdExpirationCheckIntervalMs, Some(leaderEpochCache), producerStateManager,
         None, keepPartitionMetadataFile = true)
     }
 
@@ -430,8 +430,8 @@ class LogLoaderTest {
     val logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(1)
     val config = new LogConfig(new Properties())
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      logDir, topicPartition, logDirFailureChannel, "", None, mockTime.scheduler)
+    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+      logDir, topicPartition, logDirFailureChannel, None, mockTime.scheduler)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -443,7 +443,7 @@ class LogLoaderTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.toJava,
+      leaderEpochCache,
       stateManager,
       new ConcurrentHashMap[String, Integer],
       false
@@ -455,7 +455,7 @@ class LogLoaderTest {
       localLog,
       brokerTopicStats = brokerTopicStats,
       producerIdExpirationCheckIntervalMs = 30000,
-      leaderEpochCache = leaderEpochCache,
+      leaderEpochCache = Some(leaderEpochCache),
       producerStateManager = stateManager,
       _topicId = None,
       keepPartitionMetadataFile = true)
@@ -540,8 +540,8 @@ class LogLoaderTest {
     val config = new LogConfig(new Properties())
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      logDir, topicPartition, logDirFailureChannel, "", None, mockTime.scheduler)
+    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+      logDir, topicPartition, logDirFailureChannel, None, mockTime.scheduler)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -553,7 +553,7 @@ class LogLoaderTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.toJava,
+      leaderEpochCache,
       stateManager,
       new ConcurrentHashMap[String, Integer],
       false
@@ -565,7 +565,7 @@ class LogLoaderTest {
       localLog,
       brokerTopicStats = brokerTopicStats,
       producerIdExpirationCheckIntervalMs = 30000,
-      leaderEpochCache = leaderEpochCache,
+      leaderEpochCache = Some(leaderEpochCache),
       producerStateManager = stateManager,
       _topicId = None,
       keepPartitionMetadataFile = true)
@@ -1633,8 +1633,8 @@ class LogLoaderTest {
     log.logSegments.forEach(segment => segments.add(segment))
     assertEquals(5, segments.firstSegment.get.baseOffset)
 
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      logDir, topicPartition, logDirFailureChannel, "", None, mockTime.scheduler)
+    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+      logDir, topicPartition, logDirFailureChannel, None, mockTime.scheduler)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -1646,7 +1646,7 @@ class LogLoaderTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.toJava,
+      leaderEpochCache,
       stateManager,
       new ConcurrentHashMap[String, Integer],
       isRemoteLogEnabled

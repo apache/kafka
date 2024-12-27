@@ -447,8 +447,8 @@ class PartitionTest extends AbstractPartitionTest {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-          log.dir, log.topicPartition, logDirFailureChannel, "", None, time.scheduler)
+        val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+          log.dir, log.topicPartition, logDirFailureChannel, None, time.scheduler)
         val maxTransactionTimeoutMs = 5 * 60 * 1000
         val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, true)
         val producerStateManager = new ProducerStateManager(
@@ -469,7 +469,7 @@ class PartitionTest extends AbstractPartitionTest {
           segments,
           0L,
           0L,
-          leaderEpochCache.asJava,
+          leaderEpochCache,
           producerStateManager,
           new ConcurrentHashMap[String, Integer],
           false
@@ -477,7 +477,7 @@ class PartitionTest extends AbstractPartitionTest {
         val localLog = new LocalLog(log.dir, log.config, segments, offsets.recoveryPoint,
           offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, log.topicPartition,
           logDirFailureChannel)
-        new SlowLog(log, offsets.logStartOffset, localLog, leaderEpochCache, producerStateManager, appendSemaphore)
+        new SlowLog(log, offsets.logStartOffset, localLog, Some(leaderEpochCache), producerStateManager, appendSemaphore)
       }
     }
 
