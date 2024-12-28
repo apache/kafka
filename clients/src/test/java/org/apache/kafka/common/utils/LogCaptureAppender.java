@@ -20,11 +20,8 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
-import org.apache.logging.log4j.core.config.Configuration;
 import org.apache.logging.log4j.core.config.Configurator;
-import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.apache.logging.log4j.core.config.Property;
 
 import java.io.PrintWriter;
@@ -100,21 +97,12 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
     }
 
     public void setClassLogger(final Class<?> clazz, Level level) {
-        LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
-        Configuration config = ctx.getConfiguration();
-        String loggerName = clazz.getName();
-        LoggerConfig loggerConfig = config.getLoggerConfig(loggerName);
-
-        Level originalLevel = loggerConfig.getLevel();
-        logLevelChanges.put(clazz, originalLevel);
-
-        if (!loggerConfig.getName().equals(loggerName)) {
-            LoggerConfig newLoggerConfig = new LoggerConfig(loggerName, level, true);
-            config.addLogger(loggerName, newLoggerConfig);
-        } else {
-            Configurator.setLevel(clazz.getName(), level);
+        if (!logLevelChanges.containsKey(clazz)) {
+            Level currentLevel = LogManager.getLogger(clazz).getLevel();
+            logLevelChanges.put(clazz, currentLevel);
         }
-        ctx.updateLoggers();
+
+        Configurator.setLevel(clazz.getName(), level);
     }
 
     @Override
@@ -171,22 +159,12 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
 
     @Override
     public void close() {
-        LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
-        Configuration config = ctx.getConfiguration();
-
-        logLevelChanges.forEach((clazz, level) -> {
-            String loggerName = clazz.getName();
-            LoggerConfig loggerConfig = config.getLoggerConfig(loggerName);
-            if (!loggerConfig.getName().equals(loggerName)) {
-                LoggerConfig newLoggerConfig = new LoggerConfig(loggerName, level, true);
-                config.addLogger(loggerName, newLoggerConfig);
-            } else {
-                Configurator.setLevel(clazz.getName(), level);
-            }
-        });
-        
+        for (Map.Entry<Class<?>, Level> entry : logLevelChanges.entrySet()) {
+            Class<?> clazz = entry.getKey();
+            Level originalLevel = entry.getValue();
+            Configurator.setLevel(clazz.getName(), originalLevel);
+        }
         logLevelChanges.clear();
-        ctx.updateLoggers();
 
         unregister();
     }
