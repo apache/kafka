@@ -49,7 +49,16 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
             ServerSocketChannel socketChannel = getSocketForListenerAndMarkAsUsed(
                 nodeId,
                 listenerName);
-            if (socketChannel != null) {
+            if (socketChannel != null && socketChannel.isOpen()) {
+                return socketChannel;
+            } else if (socketChannel != null) {
+                // bind the server socket with same port
+                socketAddress = new InetSocketAddress(socketAddress.getHostString(), socketChannel.socket().getLocalPort());
+                socketChannel = ServerSocketFactory.INSTANCE.openServerSocket(
+                        listenerName,
+                        socketAddress,
+                        listenBacklogSize,
+                        recvBufferSize);
                 return socketChannel;
             }
             return ServerSocketFactory.INSTANCE.openServerSocket(
