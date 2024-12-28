@@ -350,6 +350,20 @@ public class ClusterTestExtensionsTest {
     }
 
     @ClusterTest(types = {Type.KRAFT})
+    public void testKRaftIsolatedControllerRestart(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+        try (Admin admin = cluster.admin()) {
+
+            ControllerServer controller = cluster.controllers().values().iterator().next();
+            controller.shutdown();
+            controller.awaitShutdown();
+
+            controller.startup();
+
+            assertEquals(1, admin.describeMetadataQuorum().quorumInfo().get().nodes().size());
+        }
+    }
+
+    @ClusterTest(types = {Type.KRAFT})
     public void testControllerRestart(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         try (Admin admin = cluster.admin()) {
 
