@@ -427,18 +427,6 @@ public class ConnectorConfig extends AbstractConfig {
         return transformations;
     }
 
-    public boolean isKeyConverterVersionPresent() {
-        return get(ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG) != null;
-    }
-
-    public boolean isValueConverterVersionPresent() {
-        return get(ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG) != null;
-    }
-
-    public boolean isHeaderConverterVersionPresent() {
-        return get(ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG) != null;
-    }
-
     @SuppressWarnings("unchecked")
     private <T> T getTransformationOrPredicate(Plugins plugins, String classConfig, String versionConfig) {
         try {

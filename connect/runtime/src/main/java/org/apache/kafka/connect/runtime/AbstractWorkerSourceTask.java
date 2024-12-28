@@ -43,7 +43,6 @@ import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTaskContext;
@@ -492,12 +491,14 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
         byte[] key = retryWithToleranceOperator.execute(context, () -> {
             try (LoaderSwap swap = pluginLoaderSwapper.apply(keyConverter.getClass().getClassLoader())) {
                 return keyConverter.fromConnectData(record.topic(), headers, record.keySchema(), record.key());
-            }}, Stage.KEY_CONVERTER, keyConverter.getClass());
+            }
+        }, Stage.KEY_CONVERTER, keyConverter.getClass());
 
         byte[] value = retryWithToleranceOperator.execute(context, () -> {
             try (LoaderSwap swap = pluginLoaderSwapper.apply(valueConverter.getClass().getClassLoader())) {
                 return valueConverter.fromConnectData(record.topic(), headers, record.valueSchema(), record.value());
-            }}, Stage.VALUE_CONVERTER, valueConverter.getClass());
+            }
+        }, Stage.VALUE_CONVERTER, valueConverter.getClass());
 
         if (context.failed()) {
             return null;

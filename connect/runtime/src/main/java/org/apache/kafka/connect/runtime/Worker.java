@@ -66,6 +66,7 @@ import org.apache.kafka.connect.runtime.errors.LogReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.runtime.isolation.VersionedPluginLoadingException;
@@ -90,7 +91,14 @@ import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.OffsetUtils;
-import org.apache.kafka.connect.util.*;
+import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
+import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.FutureCallback;
+import org.apache.kafka.connect.util.LoggingContext;
+import org.apache.kafka.connect.util.SinkUtils;
+import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.slf4j.Logger;
@@ -658,7 +666,6 @@ public final class Worker {
 
             connectorStatusMetricsGroup.recordTaskAdded(id);
 
-            final Connector connector;
             final ClassLoader connectorLoader;
             try {
                 connectorLoader = instantiateConnectorClassLoader(connProps);
@@ -686,17 +693,9 @@ public final class Worker {
                 // search for converters within the connector dependencies.
                 // If any of these aren't found, that means the connector didn't configure specific converters,
                 // so we should instantiate based upon the worker configuration
-                Converter keyConverter = connConfig.isKeyConverterVersionPresent() ?
-                        plugins.newConverter(connConfig, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG):
-                        plugins.newConverter(connConfig, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.CURRENT_CLASSLOADER);
-
-                Converter valueConverter = connConfig.isValueConverterVersionPresent() ?
-                        plugins.newConverter(connConfig, ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG):
-                        plugins.newConverter(connConfig, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.CURRENT_CLASSLOADER);
-
-                HeaderConverter headerConverter = connConfig.isHeaderConverterVersionPresent() ?
-                        plugins.newHeaderConverter(connConfig, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG):
-                        plugins.newHeaderConverter(connConfig, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.CURRENT_CLASSLOADER);
+                Converter keyConverter = plugins.newConverter(connConfig, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG);
+                Converter valueConverter = plugins.newConverter(connConfig, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG);
+                HeaderConverter headerConverter = plugins.newHeaderConverter(connConfig, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG);
 
                 if (keyConverter == null) {
                     keyConverter = plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, WorkerConfig.KEY_CONVERTER_VERSION);
@@ -1234,7 +1233,7 @@ public final class Worker {
         final String version = connProps.get(ConnectorConfig.CONNECTOR_VERSION);
 
         try {
-            return plugins.newConnector(klass, PluginVersionUtils.connectorVersionRequirement(version));
+            return plugins.newConnector(klass, PluginUtils.connectorVersionRequirement(version));
         } catch (InvalidVersionSpecificationException | VersionedPluginLoadingException e) {
             throw new ConnectException(
                     String.format("Failed to instantiate class for connector %s, class %s", klass, connProps.get(ConnectorConfig.NAME_CONFIG)), e);
@@ -1246,8 +1245,8 @@ public final class Worker {
         final String version = connProps.get(ConnectorConfig.CONNECTOR_VERSION);
 
         try {
-            return plugins.pluginLoader(klass, PluginVersionUtils.connectorVersionRequirement(version));
-        } catch (InvalidVersionSpecificationException | ClassNotFoundException | VersionedPluginLoadingException e) {
+            return plugins.pluginLoader(klass, PluginUtils.connectorVersionRequirement(version));
+        } catch (InvalidVersionSpecificationException  | VersionedPluginLoadingException e) {
             throw new ConnectException(
                     String.format("Failed to instantiate class loader for connector %s, class %s", klass, connProps.get(ConnectorConfig.NAME_CONFIG)), e);
         }
@@ -1352,7 +1351,7 @@ public final class Worker {
                                       Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb) {
 
         final Connector connector = instantiateConnector(connectorConfig);
-        ClassLoader connectorLoader = connector.getClass().getClassLoader();
+        ClassLoader connectorLoader = instantiateConnectorClassLoader(connectorConfig);
         try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
             if (ConnectUtils.isSinkConnector(connector)) {
                 log.debug("Modifying offsets for sink connector: {}", connName);

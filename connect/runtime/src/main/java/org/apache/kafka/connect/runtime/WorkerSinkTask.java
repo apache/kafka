@@ -47,7 +47,6 @@ import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.ClusterConfigState;
@@ -542,12 +541,14 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(context, () -> {
             try (LoaderSwap swap = pluginLoaderSwapper.apply(keyConverter.getClass().getClassLoader())) {
                 return keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key());
-            }}, Stage.KEY_CONVERTER, keyConverter.getClass());
+            }
+        }, Stage.KEY_CONVERTER, keyConverter.getClass());
 
         SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(context, () -> {
-            try(LoaderSwap swap = pluginLoaderSwapper.apply(valueConverter.getClass().getClassLoader())) {
-                    return valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value());
-            }}, Stage.VALUE_CONVERTER, valueConverter.getClass());
+            try (LoaderSwap swap = pluginLoaderSwapper.apply(valueConverter.getClass().getClassLoader())) {
+                return valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value());
+            }
+        }, Stage.VALUE_CONVERTER, valueConverter.getClass());
 
         Headers headers = retryWithToleranceOperator.execute(context, () -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
