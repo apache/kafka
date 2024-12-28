@@ -3444,6 +3444,12 @@ project(':jmh-benchmarks') {
     archiveBaseName = 'kafka-jmh-benchmarks'
   }
 
+  configurations {
+    mockitoAgent {
+      transitive = false
+    }
+  }
+
   dependencies {
     implementation(project(':core')) {
       // jmh requires jopt 4.x while `core` depends on 5.0, they are not binary compatible
@@ -3474,6 +3480,7 @@ project(':jmh-benchmarks') {
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.mockitoCore
+    mockitoAgent libs.mockitoCore
     implementation libs.slf4jLog4j2
     implementation libs.scalaLibrary
   }
