@@ -379,7 +379,7 @@ public class Plugins {
 
     public Object newPlugin(String classOrAlias, VersionRange range, ClassLoader sourceLoader) throws ClassNotFoundException {
         if (range == null && sourceLoader instanceof PluginClassLoader) {
-            sourceLoader.loadClass(classOrAlias);
+            return newPlugin(sourceLoader.loadClass(classOrAlias));
         }
         return newPlugin(classOrAlias, range);
     }
