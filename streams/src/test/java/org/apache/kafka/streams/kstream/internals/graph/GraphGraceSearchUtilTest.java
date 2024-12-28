@@ -50,6 +50,18 @@ public class GraphGraceSearchUtilTest {
         // doesn't matter if this ancestor is stateless or stateful. The important thing it that there is
         // no grace period defined on any ancestor of the node
         final ProcessorGraphNode<String, Long> gracelessAncestor = new ProcessorGraphNode<>(
+            "graceless",
+            new ProcessorParameters<>(
+                () -> new Processor<String, Long, String, Long>() {
+                    @Override
+                    public void process(final Record<String, Long> record) {}
+
+                },
+                "graceless"
+            )
+        );
+
+        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>(
             "stateless",
             new ProcessorParameters<>(
                 () -> new Processor<String, Long, String, Long>() {
@@ -58,18 +70,17 @@ public class GraphGraceSearchUtilTest {
                     public void process(final Record<String, Long> record) {}
 
                 },
-                "dummy"
+                "stateless"
             )
         );
 
-        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);
         gracelessAncestor.addChild(node);
 
         try {
             GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
             fail("should have thrown.");
         } catch (final TopologyException e) {
-            assertThat(e.getMessage(), is("Invalid topology: Window close time is only defined for windowed computations. Got [stateful->stateless]."));
+            assertThat(e.getMessage(), is("Invalid topology: Window close time is only defined for windowed computations. Got [graceless->stateless]."));
         }
     }
 
@@ -141,7 +152,18 @@ public class GraphGraceSearchUtilTest {
         );
         graceGrandparent.addChild(statefulParent);
 
-        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);
+        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>(
+            "stateless",
+            new ProcessorParameters<>(
+                () -> new Processor<String, Long, String, Long>() {
+
+                    @Override
+                    public void process(final Record<String, Long> record) {}
+
+                },
+                "dummyChild-graceless"
+            )
+        );
         statefulParent.addChild(node);
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
@@ -166,10 +188,32 @@ public class GraphGraceSearchUtilTest {
             )
         );
 
-        final ProcessorGraphNode<String, Long> statelessParent = new ProcessorGraphNode<>("stateless", null);
+        final ProcessorGraphNode<String, Long> statelessParent = new ProcessorGraphNode<>(
+            "statelessParent",
+            new ProcessorParameters<>(
+                () -> new Processor<String, Long, String, Long>() {
+
+                    @Override
+                    public void process(final Record<String, Long> record) {}
+
+                },
+                "statelessParent"
+            )
+        );
         graceGrandparent.addChild(statelessParent);
 
-        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);
+        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>(
+            "stateless",
+            new ProcessorParameters<>(
+                () -> new Processor<String, Long, String, Long>() {
+
+                    @Override
+                    public void process(final Record<String, Long> record) {}
+
+                },
+                "stateless"
+            )
+        );
         statelessParent.addChild(node);
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
@@ -207,7 +251,18 @@ public class GraphGraceSearchUtilTest {
             )
         );
 
-        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);
+        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>(
+            "stateless",
+            new ProcessorParameters<>(
+                () -> new Processor<String, Long, String, Long>() {
+
+                    @Override
+                    public void process(final Record<String, Long> record) {}
+
+                },
+                "stateless"
+            )
+        );
         leftParent.addChild(node);
         rightParent.addChild(node);
 
