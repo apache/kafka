@@ -477,6 +477,27 @@ subprojects {
     }
   }
 
+  afterEvaluate { subproject ->
+    def hasMockitoCore = subproject.configurations.findAll {
+      it.canBeResolved
+    }.any { config ->
+      config.incoming.dependencies.any { dependency ->
+        "${dependency.group}:${dependency.name}" == "org.mockito:mockito-core"
+      }
+    }
+
+    if (hasMockitoCore) {
+      subproject.configurations {
+        mockitoAgent {
+          transitive = false
+        }
+      }
+      subproject.dependencies {
+        mockitoAgent libs.mockitoCore
+      }
+    }
+  }
+
   // The suites are for running sets of tests in IDEs.
   // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
   def testsToExclude = ['**/*Suite.class']
@@ -486,7 +507,7 @@ subprojects {
       isGithubActions = System.getenv('GITHUB_ACTIONS') != null
       hadFailure = false  // Used to track if any tests failed, see afterSuite below
     }
-
+    
     doFirst {
       jvmArgs("-javaagent:${configurations.mockitoAgent.asPath}")
     }
@@ -960,12 +981,6 @@ project(':server') {
     archivesName = "kafka-server"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     implementation project(':clients')
     implementation project(':metadata')
@@ -986,7 +1001,6 @@ project(':server') {
     testImplementation project(':clients').sourceSets.test.output
 
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jLog4j2
 
@@ -1037,12 +1051,6 @@ project(':share') {
     archivesName = "kafka-share"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     implementation project(':server-common')
 
@@ -1053,7 +1061,6 @@ project(':share') {
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.slf4jLog4j2
 
     testRuntimeOnly runtimeTestLibs
@@ -1077,12 +1084,6 @@ project(':core') {
   // files since the `core` module doesn't include public APIs.
   scaladoc {
     enabled = false
-  }
-  
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
   }
   
   if (userEnableTestCoverage)
@@ -1157,7 +1158,6 @@ project(':core') {
     testImplementation project(':test-common:test-common-api')
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
@@ -1202,10 +1202,6 @@ project(':core') {
     // To prevent a UniqueResourceException due the same resource existing in both
     // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
     testImplementation.exclude module: 'api-ldap-schema-data'
-
-    mockitoAgent {
-      transitive = false
-    }
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -1412,10 +1408,6 @@ project(':metadata') {
 
   configurations {
     generator
-
-    mockitoAgent {
-      transitive = false
-    }
   }
 
   dependencies {
@@ -1432,7 +1424,6 @@ project(':metadata') {
     testImplementation libs.junitJupiter
     testImplementation libs.jqwik
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.slf4jLog4j2
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
@@ -1539,10 +1530,6 @@ project(':group-coordinator') {
 
   configurations {
     generator
-    
-    mockitoAgent {
-      transitive = false
-    }
   }
 
   dependencies {
@@ -1565,7 +1552,6 @@ project(':group-coordinator') {
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
 
@@ -1619,12 +1605,6 @@ project(':test-common') {
     archivesName = "kafka-test-common"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     implementation project(':core')
     implementation project(':metadata')
@@ -1636,7 +1616,6 @@ project(':test-common') {
     implementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1655,13 +1634,7 @@ project(':test-common:test-common-api') {
   base {
     archivesName = "kafka-test-common-api"
   }
-
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
+  
   dependencies {
     implementation project(':clients')
     implementation project(':core')
@@ -1676,7 +1649,6 @@ project(':test-common:test-common-api') {
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1719,10 +1691,6 @@ project(':transaction-coordinator') {
 
   configurations {
     generator
-    
-    mockitoAgent {
-      transitive = false
-    }
   }
 
   dependencies {
@@ -1734,7 +1702,6 @@ project(':transaction-coordinator') {
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':test-common')
     testImplementation project(':test-common:test-common-api')
@@ -1788,12 +1755,6 @@ project(':coordinator-common') {
     archivesName = "kafka-coordinator-common"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
@@ -1807,7 +1768,6 @@ project(':coordinator-common') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1828,10 +1788,6 @@ project(':share-coordinator') {
 
   configurations {
     generator
-    
-    mockitoAgent {
-      transitive = false
-    }
   }
 
   dependencies {
@@ -1850,7 +1806,6 @@ project(':share-coordinator') {
     testImplementation project(':coordinator-common').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
 
@@ -1946,10 +1901,6 @@ project(':clients') {
   configurations {
     generator
     shadowed
-
-    mockitoAgent {
-      transitive = false
-    }
   }
 
   dependencies {
@@ -1980,7 +1931,6 @@ project(':clients') {
     testImplementation libs.log4j1Bridge2Api
     testImplementation libs.spotbugs
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
 
     testCompileOnly libs.bndlib
@@ -2135,10 +2085,6 @@ project(':raft') {
 
   configurations {
     generator
-
-    mockitoAgent {
-      transitive = false
-    }
   }
 
   dependencies {
@@ -2155,7 +2101,6 @@ project(':raft') {
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.jqwik
 
     testRuntimeOnly runtimeTestLibs
@@ -2239,12 +2184,6 @@ project(':server-common') {
     archivesName = "kafka-server-common"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     api project(':clients')
     implementation libs.slf4jApi
@@ -2258,7 +2197,6 @@ project(':server-common') {
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -2307,12 +2245,6 @@ project(':storage:storage-api') {
     archivesName = "kafka-storage-api"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
@@ -2323,7 +2255,6 @@ project(':storage:storage-api') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -2374,10 +2305,6 @@ project(':storage') {
 
   configurations {
     generator
-
-    mockitoAgent {
-      transitive = false
-    }
   }
 
   dependencies {
@@ -2403,7 +2330,6 @@ project(':storage') {
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.bcpkix
 
     testRuntimeOnly runtimeTestLibs
@@ -2546,12 +2472,6 @@ project(':tools') {
     archivesName = "kafka-tools"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     implementation project(':clients')
     implementation project(':metadata')
@@ -2602,7 +2522,6 @@ project(':tools') {
     testImplementation project(':test-common')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.bcpkix // required by the clients test module, but we have to specify it explicitly as gradle does not include the transitive test dependency automatically
     testImplementation(libs.jfreechart) {
@@ -2641,12 +2560,6 @@ project(':trogdor') {
     archivesName = "trogdor"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     implementation project(':clients')
     implementation libs.argparse4j
@@ -2680,7 +2593,6 @@ project(':trogdor') {
     testImplementation project(':group-coordinator')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
     testRuntimeOnly libs.log4j2Api
@@ -2763,10 +2675,6 @@ project(':streams') {
 
   configurations {
     generator
-
-    mockitoAgent {
-      transitive = false
-    }
   }
 
   dependencies {
@@ -2791,7 +2699,6 @@ project(':streams') {
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.junitPlatformSuiteEngine // supports suite test
 
@@ -2973,12 +2880,6 @@ project(':streams:integration-tests') {
     archivesName = "kafka-streams-integration-tests"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':group-coordinator')
@@ -2997,7 +2898,6 @@ project(':streams:integration-tests') {
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine // supports suite test
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.log4j2Api
     testImplementation libs.log4j2Core
     testImplementation libs.log4j1Bridge2Api
@@ -3033,12 +2933,6 @@ project(':streams:test-utils') {
     archivesName = "kafka-streams-test-utils"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     api project(':streams')
     api project(':clients')
@@ -3049,7 +2943,6 @@ project(':streams:test-utils') {
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.hamcrest
 
     testRuntimeOnly runtimeTestLibs
@@ -3444,12 +3337,6 @@ project(':jmh-benchmarks') {
     archiveBaseName = 'kafka-jmh-benchmarks'
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     implementation(project(':core')) {
       // jmh requires jopt 4.x while `core` depends on 5.0, they are not binary compatible
@@ -3480,7 +3367,6 @@ project(':jmh-benchmarks') {
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     implementation libs.slf4jLog4j2
     implementation libs.scalaLibrary
   }
@@ -3637,10 +3523,6 @@ project(':connect:json') {
 project(':connect:runtime') {
   configurations {
     swagger
-
-    mockitoAgent {
-      transitive = false
-    }
   }
 
   base {
@@ -3708,7 +3590,6 @@ project(':connect:runtime') {
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
 
@@ -3805,12 +3686,6 @@ project(':connect:file') {
     archivesName = "connect-file"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     implementation project(':connect:api')
     implementation libs.slf4jApi
@@ -3821,7 +3696,6 @@ project(':connect:file') {
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime')
@@ -3856,12 +3730,6 @@ project(':connect:basic-auth-extension') {
     archivesName = "connect-basic-auth-extension"
   }
 
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
-  }
-
   dependencies {
     implementation project(':connect:api')
     implementation libs.slf4jApi
@@ -3873,7 +3741,6 @@ project(':connect:basic-auth-extension') {
 
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
 
@@ -3902,12 +3769,6 @@ project(':connect:basic-auth-extension') {
 project(':connect:mirror') {
   base {
     archivesName = "connect-mirror"
-  }
-
-  configurations {
-    mockitoAgent {
-      transitive = false
-    }
   }
 
   dependencies {
@@ -3949,7 +3810,6 @@ project(':connect:mirror') {
     testImplementation libs.bndlib
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.mockitoCore
-    mockitoAgent libs.mockitoCore
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
