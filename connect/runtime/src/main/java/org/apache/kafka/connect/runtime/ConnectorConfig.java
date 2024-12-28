@@ -533,16 +533,6 @@ public class ConnectorConfig extends AbstractConfig {
         return new ConverterDefaults(type, version);
     }
 
-    private static void updateKeyDefault(ConfigDef configDef, String versionConfigKey, String versionDefault) {
-        ConfigDef.ConfigKey key = configDef.configKeys().get(versionConfigKey);
-        if (key == null) {
-            return;
-        }
-        configDef.configKeys().put(versionConfigKey, new ConfigDef.ConfigKey(
-                versionConfigKey, key.type, versionDefault, key.validator, key.importance, key.documentation, key.group, key.orderInGroup, key.width, key.displayName, key.dependents, key.recommender, false
-        ));
-    }
-
     private static <T> String fetchPluginVersion(Plugins plugins, String connectorClass, String connectorVersion, String pluginName, PluginType pluginType) {
         if (pluginName == null || connectorClass == null) {
             return null;
