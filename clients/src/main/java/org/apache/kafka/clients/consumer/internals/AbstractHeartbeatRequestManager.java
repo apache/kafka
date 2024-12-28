@@ -435,7 +435,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     }
 
     /**
-     * Error handling specific failure to a group type when sending the request.
+     * Error handling specific failure to a group type when sending the request
+     * and no response has been received.
      *
      * @param exception The exception thrown building the request
      * @return true if the error was handled, else false

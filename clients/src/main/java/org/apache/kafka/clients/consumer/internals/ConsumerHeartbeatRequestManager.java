@@ -101,7 +101,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             String message = CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
             if (errorMessage.equals(REGEX_RESOLUTION_NOT_SUPPORTED_MSG)) {
                 message = REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
-                logger.error("{} failed due to regex resolution not support: {}", heartbeatRequestName(), message);
+                logger.error("{} regex resolution not supported: {}", heartbeatRequestName(), message);
             } else {
                 logger.error("{} failed due to unsupported version while sending request: {}", heartbeatRequestName(), errorMessage);
             }
