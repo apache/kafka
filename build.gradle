@@ -1085,7 +1085,6 @@ project(':core') {
   scaladoc {
     enabled = false
   }
-  
   if (userEnableTestCoverage)
     apply plugin: "org.scoverage"
 
@@ -1634,7 +1633,7 @@ project(':test-common:test-common-api') {
   base {
     archivesName = "kafka-test-common-api"
   }
-  
+
   dependencies {
     implementation project(':clients')
     implementation project(':core')
