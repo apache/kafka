@@ -132,7 +132,7 @@ class NetworkDegradeTest(Test):
             continue
 
         rate_limit.stop()
-        rate_limit.wait_for_done()
+        # rate_limit.wait_for_done()
 
         self.logger.info("Measured rates: %s" % measured_rates)
 

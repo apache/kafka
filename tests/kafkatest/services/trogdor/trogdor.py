@@ -114,6 +114,7 @@ class TrogdorService(KafkaPathResolverMixin, Service):
         """
         dict_nodes = {}
         for node in self.nodes:
+            node.account.ssh_hostname = node.name
             dict_nodes[node.name] = {
                 "hostname": node.account.ssh_hostname,
             }
