@@ -28,7 +28,6 @@ import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, Me
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV0
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, EpochEntry, LocalLog, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetMetadata, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile}
@@ -50,7 +49,6 @@ import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import java.util.{Optional, OptionalLong, Properties}
-import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Iterable, Map, mutable}
 import scala.jdk.CollectionConverters._
@@ -158,7 +156,7 @@ class LogLoaderTest {
           val logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(1)
           val segments = new LogSegments(topicPartition)
           val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-            logDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, time.scheduler)
+            logDir, topicPartition, logDirFailureChannel, "", None, time.scheduler)
           val producerStateManager = new ProducerStateManager(topicPartition, logDir,
             this.maxTransactionTimeoutMs, this.producerStateManagerConfig, time)
           val logLoader = new LogLoader(logDir, topicPartition, config, time.scheduler, time,
@@ -311,11 +309,9 @@ class LogLoaderTest {
     builder.build()
   }
 
-  @nowarn("cat=deprecation")
   private def testProducerSnapshotsRecoveryAfterUncleanShutdown(messageFormatVersion: String): Unit = {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "640")
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, messageFormatVersion)
     val logConfig = new LogConfig(logProps)
     var log = createLog(logDir, logConfig)
     assertEquals(OptionalLong.empty(), log.oldestProducerSnapshotOffset)
@@ -343,13 +339,8 @@ class LogLoaderTest {
     val expectedSegmentsWithReads = mutable.Set[Long]()
     val expectedSnapshotOffsets = mutable.Set[Long]()
 
-    if (logConfig.messageFormatVersion.isLessThan(IBP_0_11_0_IV0)) {
-      expectedSegmentsWithReads += activeSegmentOffset
-      expectedSnapshotOffsets ++= log.logSegments.asScala.map(_.baseOffset).toVector.takeRight(2) :+ log.logEndOffset
-    } else {
-      expectedSegmentsWithReads ++= segOffsetsBeforeRecovery ++ Set(activeSegmentOffset)
-      expectedSnapshotOffsets ++= log.logSegments.asScala.map(_.baseOffset).toVector.takeRight(4) :+ log.logEndOffset
-    }
+    expectedSegmentsWithReads ++= segOffsetsBeforeRecovery ++ Set(activeSegmentOffset)
+    expectedSnapshotOffsets ++= log.logSegments.asScala.map(_.baseOffset).toVector.takeRight(4) :+ log.logEndOffset
 
     def createLogWithInterceptedReads(recoveryPoint: Long): UnifiedLog = {
       val maxTransactionTimeoutMs = 5 * 60 * 1000
@@ -372,7 +363,7 @@ class LogLoaderTest {
         }
       }
       val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-        logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "", None, mockTime.scheduler)
+        logDir, topicPartition, logDirFailureChannel, "", None, mockTime.scheduler)
       val producerStateManager = new ProducerStateManager(topicPartition, logDir,
         maxTransactionTimeoutMs, producerStateManagerConfig, mockTime)
       val logLoader = new LogLoader(
@@ -440,7 +431,7 @@ class LogLoaderTest {
     val config = new LogConfig(new Properties())
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      logDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, mockTime.scheduler)
+      logDir, topicPartition, logDirFailureChannel, "", None, mockTime.scheduler)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -533,119 +524,6 @@ class LogLoaderTest {
     log.close()
   }
 
-  @nowarn("cat=deprecation")
-  @Test
-  def testSkipTruncateAndReloadIfOldMessageFormatAndNoCleanShutdown(): Unit = {
-    val maxTransactionTimeoutMs = 60000
-    val producerStateManagerConfig = new ProducerStateManagerConfig(300000, false)
-
-    val stateManager: ProducerStateManager = mock(classOf[ProducerStateManager])
-    when(stateManager.isEmpty).thenReturn(true)
-    when(stateManager.firstUnstableOffset).thenReturn(Optional.empty[LogOffsetMetadata]())
-    when(stateManager.producerStateManagerConfig).thenReturn(producerStateManagerConfig)
-    when(stateManager.maxTransactionTimeoutMs).thenReturn(maxTransactionTimeoutMs)
-
-    val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
-    val logProps = new Properties()
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
-    val config = new LogConfig(logProps)
-    val logDirFailureChannel = null
-    val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      logDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, mockTime.scheduler)
-    val offsets = new LogLoader(
-      logDir,
-      topicPartition,
-      config,
-      mockTime.scheduler,
-      mockTime,
-      logDirFailureChannel,
-      false,
-      segments,
-      0L,
-      0L,
-      leaderEpochCache.toJava,
-      stateManager,
-      new ConcurrentHashMap[String, Integer],
-      false
-    ).load()
-    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
-      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
-      logDirFailureChannel)
-    new UnifiedLog(offsets.logStartOffset,
-      localLog,
-      brokerTopicStats = brokerTopicStats,
-      producerIdExpirationCheckIntervalMs = 30000,
-      leaderEpochCache = leaderEpochCache,
-      producerStateManager = stateManager,
-      _topicId = None,
-      keepPartitionMetadataFile = true)
-
-    verify(stateManager).removeStraySnapshots(any[java.util.List[java.lang.Long]])
-    verify(stateManager, times(2)).updateMapEndOffset(0L)
-    verify(stateManager, times(2)).takeSnapshot()
-    verify(stateManager).isEmpty
-    verify(stateManager).firstUnstableOffset
-    verify(stateManager, times(2)).takeSnapshot()
-    verify(stateManager, times(2)).updateMapEndOffset(0L)
-  }
-
-  @nowarn("cat=deprecation")
-  @Test
-  def testSkipTruncateAndReloadIfOldMessageFormatAndCleanShutdown(): Unit = {
-    val maxTransactionTimeoutMs = 60000
-    val producerStateManagerConfig = new ProducerStateManagerConfig(300000, false)
-
-    val stateManager: ProducerStateManager = mock(classOf[ProducerStateManager])
-    when(stateManager.isEmpty).thenReturn(true)
-    when(stateManager.firstUnstableOffset).thenReturn(Optional.empty[LogOffsetMetadata]())
-    when(stateManager.producerStateManagerConfig).thenReturn(producerStateManagerConfig)
-    when(stateManager.maxTransactionTimeoutMs).thenReturn(maxTransactionTimeoutMs)
-
-    val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
-    val logProps = new Properties()
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
-    val config = new LogConfig(logProps)
-    val logDirFailureChannel = null
-    val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      logDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, mockTime.scheduler)
-    val offsets = new LogLoader(
-      logDir,
-      topicPartition,
-      config,
-      mockTime.scheduler,
-      mockTime,
-      logDirFailureChannel,
-      true,
-      segments,
-      0L,
-      0L,
-      leaderEpochCache.toJava,
-      stateManager,
-      new ConcurrentHashMap[String, Integer],
-      false
-    ).load()
-    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
-      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
-      logDirFailureChannel)
-    new UnifiedLog(offsets.logStartOffset,
-      localLog,
-      brokerTopicStats = brokerTopicStats,
-      producerIdExpirationCheckIntervalMs = 30000,
-      leaderEpochCache = leaderEpochCache,
-      producerStateManager = stateManager,
-      _topicId = None,
-      keepPartitionMetadataFile = true)
-
-    verify(stateManager).removeStraySnapshots(any[java.util.List[java.lang.Long]])
-    verify(stateManager, times(2)).updateMapEndOffset(0L)
-    verify(stateManager, times(2)).takeSnapshot()
-    verify(stateManager).isEmpty
-    verify(stateManager).firstUnstableOffset
-  }
-
-  @nowarn("cat=deprecation")
   @Test
   def testSkipTruncateAndReloadIfNewMessageFormatAndCleanShutdown(): Unit = {
     val maxTransactionTimeoutMs = 60000
@@ -659,13 +537,11 @@ class LogLoaderTest {
     when(stateManager.maxTransactionTimeoutMs).thenReturn(maxTransactionTimeoutMs)
 
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
-    val logProps = new Properties()
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
-    val config = new LogConfig(logProps)
+    val config = new LogConfig(new Properties())
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      logDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, mockTime.scheduler)
+      logDir, topicPartition, logDirFailureChannel, "", None, mockTime.scheduler)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -889,38 +765,6 @@ class LogLoaderTest {
   }
 
   /**
-   * Test that if messages format version of the messages in a segment is before 0.10.0, the time index should be empty.
-   */
-  @nowarn("cat=deprecation")
-  @Test
-  def testRebuildTimeIndexForOldMessages(): Unit = {
-    val numMessages = 200
-    val segmentSize = 200
-    val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentSize.toString)
-    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")
-    val logConfig = new LogConfig(logProps)
-    var log = createLog(logDir, logConfig)
-    for (i <- 0 until numMessages)
-      log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10),
-        timestamp = mockTime.milliseconds + i * 10, magicValue = RecordBatch.MAGIC_VALUE_V1), leaderEpoch = 0)
-    val timeIndexFiles = log.logSegments.asScala.map(_.timeIndexFile())
-    log.close()
-
-    // Delete the time index.
-    timeIndexFiles.foreach(file => Files.delete(file.toPath))
-
-    // The rebuilt time index should be empty
-    log = createLog(logDir, logConfig, recoveryPoint = numMessages + 1, lastShutdownClean = false)
-    for (segment <- log.logSegments.asScala.init) {
-      assertEquals(0, segment.timeIndex.entries, "The time index should be empty")
-      assertEquals(0, segment.timeIndexFile().length, "The time index file size should be 0")
-    }
-  }
-
-
-  /**
    * Test that if we have corrupted an index segment it is rebuilt when the log is re-opened
    */
   @Test
@@ -1114,30 +958,6 @@ class LogLoaderTest {
       offsetIndex.close()
     }
     Utils.delete(logDir)
-  }
-
-  @nowarn("cat=deprecation")
-  @Test
-  def testLeaderEpochCacheClearedAfterStaticMessageFormatDowngrade(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 65536)
-    val log = createLog(logDir, logConfig)
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
-    assertEquals(Some(5), log.latestEpoch)
-    log.close()
-
-    // reopen the log with an older message format version and check the cache
-    val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
-    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
-    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
-    val downgradedLogConfig = new LogConfig(logProps)
-    val reopened = createLog(logDir, downgradedLogConfig, lastShutdownClean = false)
-    LogTestUtils.assertLeaderEpochCacheEmpty(reopened)
-
-    reopened.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
-      magicValue = RecordVersion.V1.value), leaderEpoch = 5)
-    LogTestUtils.assertLeaderEpochCacheEmpty(reopened)
   }
 
   @Test
@@ -1814,7 +1634,7 @@ class LogLoaderTest {
     assertEquals(5, segments.firstSegment.get.baseOffset)
 
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "", None, mockTime.scheduler)
+      logDir, topicPartition, logDirFailureChannel, "", None, mockTime.scheduler)
     val offsets = new LogLoader(
       logDir,
       topicPartition,

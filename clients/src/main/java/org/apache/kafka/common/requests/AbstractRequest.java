@@ -352,6 +352,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return ReadShareGroupStateSummaryRequest.parse(buffer, apiVersion);
             case STREAMS_GROUP_HEARTBEAT:
                 return StreamsGroupHeartbeatRequest.parse(buffer, apiVersion);
+            case STREAMS_GROUP_DESCRIBE:
+                return StreamsGroupDescribeRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

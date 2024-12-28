@@ -184,7 +184,7 @@ class KafkaApisTest extends Logging {
       TestUtils.createBrokerConfig(brokerId, "zk")
     }
     overrideProperties.foreach( p => properties.put(p._1, p._2))
-    TestUtils.setIbpAndMessageFormatVersions(properties, interBrokerProtocolVersion)
+    TestUtils.setIbpVersion(properties, interBrokerProtocolVersion)
     val config = new KafkaConfig(properties)
 
     val forwardingManagerOpt = if (enableForwarding)
@@ -2651,7 +2651,7 @@ class KafkaApisTest extends Logging {
 
       val tp = new TopicPartition("topic", 0)
 
-      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(tp.topic).setPartitionData(Collections.singletonList(
@@ -2713,7 +2713,7 @@ class KafkaApisTest extends Logging {
       val newLeaderId = 2
       val newLeaderEpoch = 5
 
-      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(tp.topic).setPartitionData(Collections.singletonList(
@@ -2778,7 +2778,7 @@ class KafkaApisTest extends Logging {
 
       val tp = new TopicPartition(topic, 0)
 
-      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(tp.topic).setPartitionData(Collections.singletonList(
@@ -2842,7 +2842,7 @@ class KafkaApisTest extends Logging {
 
       val tp = new TopicPartition(topic, 0)
 
-      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(tp.topic).setPartitionData(Collections.singletonList(
@@ -2899,13 +2899,13 @@ class KafkaApisTest extends Logging {
 
     addTopicToMetadataCache(topic, numPartitions = 2)
 
-    for (version <- 3 to ApiKeys.PRODUCE.latestVersion) {
+    for (version <- ApiKeys.PRODUCE.oldestVersion to ApiKeys.PRODUCE.latestVersion) {
 
       reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
       val tp = new TopicPartition("topic", 0)
 
-      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(tp.topic).setPartitionData(Collections.singletonList(
@@ -3040,34 +3040,13 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def shouldRespondWithUnsupportedForMessageFormatOnHandleWriteTxnMarkersWhenMagicLowerThanRequired(): Unit = {
-    val topicPartition = new TopicPartition("t", 0)
-    val (_, request) = createWriteTxnMarkersRequest(asList(topicPartition))
-    val expectedErrors = Map(topicPartition -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT).asJava
-    val capturedResponse: ArgumentCaptor[WriteTxnMarkersResponse] = ArgumentCaptor.forClass(classOf[WriteTxnMarkersResponse])
-
-    when(replicaManager.getMagic(topicPartition))
-      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
-    kafkaApis = createKafkaApis()
-    kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
-
-    verify(requestChannel).sendResponse(
-      ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
-    )
-    val markersResponse = capturedResponse.getValue
-    assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
-  }
-
-  @Test
   def shouldRespondWithUnknownTopicWhenPartitionIsNotHosted(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
     val (_, request) = createWriteTxnMarkersRequest(asList(topicPartition))
     val expectedErrors = Map(topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION).asJava
     val capturedResponse: ArgumentCaptor[WriteTxnMarkersResponse] = ArgumentCaptor.forClass(classOf[WriteTxnMarkersResponse])
 
-    when(replicaManager.getMagic(topicPartition))
+    when(replicaManager.onlinePartition(topicPartition))
       .thenReturn(None)
     kafkaApis = createKafkaApis()
     kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
@@ -3094,8 +3073,8 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(writeTxnMarkersRequest)
     val capturedResponse: ArgumentCaptor[WriteTxnMarkersResponse] = ArgumentCaptor.forClass(classOf[WriteTxnMarkersResponse])
 
-    when(replicaManager.getMagic(any()))
-      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+    when(replicaManager.onlinePartition(any()))
+      .thenReturn(Some(mock(classOf[Partition])))
     when(groupCoordinator.isNewGroupCoordinator)
       .thenReturn(true)
     when(groupCoordinator.completeTransaction(
@@ -3117,46 +3096,6 @@ class KafkaApisTest extends Logging {
     )
     val markersResponse = capturedResponse.getValue
     assertEquals(2, markersResponse.errorsByProducerId.size())
-  }
-
-  @Test
-  def shouldRespondWithUnsupportedMessageFormatForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
-    val tp1 = new TopicPartition("t", 0)
-    val tp2 = new TopicPartition("t1", 0)
-    val (_, request) = createWriteTxnMarkersRequest(asList(tp1, tp2))
-    val expectedErrors = Map(tp1 -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, tp2 -> Errors.NONE).asJava
-
-    val capturedResponse: ArgumentCaptor[WriteTxnMarkersResponse] = ArgumentCaptor.forClass(classOf[WriteTxnMarkersResponse])
-    val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-
-    when(replicaManager.getMagic(tp1))
-      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
-    when(replicaManager.getMagic(tp2))
-      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
-
-    val requestLocal = RequestLocal.withThreadConfinedCaching
-    when(replicaManager.appendRecords(anyLong,
-      anyShort,
-      ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
-      any(),
-      responseCallback.capture(),
-      any(),
-      any(),
-      ArgumentMatchers.eq(requestLocal),
-      any(),
-      any()
-    )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
-    kafkaApis = createKafkaApis()
-    kafkaApis.handleWriteTxnMarkersRequest(request, requestLocal)
-
-    verify(requestChannel).sendResponse(
-      ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
-    )
-    val markersResponse = capturedResponse.getValue
-    assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
   }
 
   @Test
@@ -3261,10 +3200,10 @@ class KafkaApisTest extends Logging {
     val capturedResponse: ArgumentCaptor[WriteTxnMarkersResponse] = ArgumentCaptor.forClass(classOf[WriteTxnMarkersResponse])
     val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.getMagic(tp1))
+    when(replicaManager.onlinePartition(tp1))
       .thenReturn(None)
-    when(replicaManager.getMagic(tp2))
-      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+    when(replicaManager.onlinePartition(tp2))
+      .thenReturn(Some(mock(classOf[Partition])))
 
     val requestLocal = RequestLocal.withThreadConfinedCaching
     when(replicaManager.appendRecords(anyLong,
@@ -3296,8 +3235,8 @@ class KafkaApisTest extends Logging {
   def shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion(allowedAclOperation: String): Unit = {
     val topicPartition = new TopicPartition("t", 0)
     val request = createWriteTxnMarkersRequest(asList(topicPartition))._2
-    when(replicaManager.getMagic(topicPartition))
-      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+    when(replicaManager.onlinePartition(topicPartition))
+      .thenReturn(Some(mock(classOf[Partition])))
 
     val requestLocal = RequestLocal.withThreadConfinedCaching
 
@@ -3374,8 +3313,8 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(writeTxnMarkersRequest)
 
     allPartitions.foreach { tp =>
-      when(replicaManager.getMagic(tp))
-        .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+      when(replicaManager.onlinePartition(tp))
+        .thenReturn(Some(mock(classOf[Partition])))
     }
 
     when(groupCoordinator.onTransactionCompleted(
@@ -3500,8 +3439,8 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(writeTxnMarkersRequest)
 
     allPartitions.foreach { tp =>
-      when(replicaManager.getMagic(tp))
-        .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+      when(replicaManager.onlinePartition(tp))
+        .thenReturn(Some(mock(classOf[Partition])))
     }
 
     when(groupCoordinator.completeTransaction(
@@ -3618,8 +3557,8 @@ class KafkaApisTest extends Logging {
 
     val requestChannelRequest = buildRequest(writeTxnMarkersRequest)
 
-    when(replicaManager.getMagic(offset0))
-      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+    when(replicaManager.onlinePartition(offset0))
+      .thenReturn(Some(mock(classOf[Partition])))
 
     when(groupCoordinator.completeTransaction(
       ArgumentMatchers.eq(offset0),
@@ -4377,11 +4316,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testListOffsetNegativeTimestampWithZeroVersion(): Unit = {
-    testConsumerListOffsetWithUnsupportedVersion(-3, 0)
-  }
-
-  @Test
   def testListOffsetNegativeTimestampWithOneOrAboveVersion(): Unit = {
     testConsumerListOffsetWithUnsupportedVersion(-6, 1)
   }
@@ -4758,9 +4692,9 @@ class KafkaApisTest extends Logging {
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, partitionData.errorCode)
     assertEquals(newLeaderId, partitionData.currentLeader.leaderId())
     assertEquals(newLeaderEpoch, partitionData.currentLeader.leaderEpoch())
-    val node = response.data.nodeEndpoints.asScala.head
-    assertEquals(2, node.nodeId)
-    assertEquals("broker2", node.host)
+    val node = response.data.nodeEndpoints.asScala
+    assertEquals(Seq(2), node.map(_.nodeId))
+    assertEquals(Seq("broker2"), node.map(_.host))
   }
 
   @Test

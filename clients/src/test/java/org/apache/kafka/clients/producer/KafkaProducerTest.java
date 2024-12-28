@@ -2315,40 +2315,6 @@ public class KafkaProducerTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testPartitionAddedToTransactionAfterFullBatchRetry() throws Exception {
-        StringSerializer serializer = new StringSerializer();
-        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
-
-        String topic = "foo";
-        TopicPartition topicPartition0 = new TopicPartition(topic, 0);
-        TopicPartition topicPartition1 = new TopicPartition(topic, 1);
-        Cluster cluster = TestUtils.singletonCluster(topic, 2);
-
-        when(ctx.sender.isRunning()).thenReturn(true);
-        when(ctx.metadata.fetch()).thenReturn(cluster);
-
-        long timestamp = ctx.time.milliseconds();
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, null, timestamp, "key", "value");
-
-        FutureRecordMetadata future = expectAppendWithAbortForNewBatch(
-            ctx,
-            record,
-            topicPartition0,
-            topicPartition1,
-            cluster
-        );
-
-        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
-            assertEquals(future, producer.send(record));
-            assertFalse(future.isDone());
-            verify(ctx.partitioner).onNewBatch(topic, cluster, 0);
-            verify(ctx.transactionManager, never()).maybeAddPartition(topicPartition0);
-            verify(ctx.transactionManager).maybeAddPartition(topicPartition1);
-        }
-    }
-
     private <T> FutureRecordMetadata expectAppend(
         KafkaProducerTestContext<T> ctx,
         ProducerRecord<T, T> record,
@@ -2387,7 +2353,6 @@ public class KafkaProducerTest {
             eq(Record.EMPTY_HEADERS),                        // 5
             any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),
-            eq(true),
             anyLong(),
             any()
         )).thenAnswer(invocation -> {
@@ -2398,95 +2363,11 @@ public class KafkaProducerTest {
                 futureRecordMetadata,
                 false,
                 false,
-                false,
                 0);
         });
 
         return futureRecordMetadata;
     }
-
-    private <T> FutureRecordMetadata expectAppendWithAbortForNewBatch(
-        KafkaProducerTestContext<T> ctx,
-        ProducerRecord<T, T> record,
-        TopicPartition initialSelectedPartition,
-        TopicPartition retrySelectedPartition,
-        Cluster cluster
-    ) throws InterruptedException {
-        byte[] serializedKey = ctx.serializer.serialize(topic, record.key());
-        byte[] serializedValue = ctx.serializer.serialize(topic, record.value());
-        long timestamp = record.timestamp() == null ? ctx.time.milliseconds() : record.timestamp();
-
-        ProduceRequestResult requestResult = new ProduceRequestResult(retrySelectedPartition);
-        FutureRecordMetadata futureRecordMetadata = new FutureRecordMetadata(
-            requestResult,
-            0,
-            timestamp,
-            serializedKey.length,
-            serializedValue.length,
-            ctx.time
-        );
-
-        when(ctx.partitioner.partition(
-            initialSelectedPartition.topic(),
-            record.key(),
-            serializedKey,
-            record.value(),
-            serializedValue,
-            cluster
-        )).thenReturn(initialSelectedPartition.partition())
-          .thenReturn(retrySelectedPartition.partition());
-
-        when(ctx.accumulator.append(
-            eq(initialSelectedPartition.topic()),            // 0
-            eq(initialSelectedPartition.partition()),        // 1
-            eq(timestamp),                                   // 2
-            eq(serializedKey),                               // 3
-            eq(serializedValue),                             // 4
-            eq(Record.EMPTY_HEADERS),                        // 5
-            any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
-            anyLong(),
-            eq(true), // abortOnNewBatch
-            anyLong(),
-            any()
-        )).thenAnswer(invocation -> {
-            RecordAccumulator.AppendCallbacks callbacks =
-                (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
-            callbacks.setPartition(initialSelectedPartition.partition());
-            return new RecordAccumulator.RecordAppendResult(
-                null,
-                false,
-                false,
-                true,
-                0);
-        });
-
-        when(ctx.accumulator.append(
-            eq(retrySelectedPartition.topic()),              // 0
-            eq(retrySelectedPartition.partition()),          // 1
-            eq(timestamp),                                   // 2
-            eq(serializedKey),                               // 3
-            eq(serializedValue),                             // 4
-            eq(Record.EMPTY_HEADERS),                        // 5
-            any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
-            anyLong(),
-            eq(false), // abortOnNewBatch
-            anyLong(),
-            any()
-        )).thenAnswer(invocation -> {
-            RecordAccumulator.AppendCallbacks callbacks =
-                (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
-            callbacks.setPartition(retrySelectedPartition.partition());
-            return new RecordAccumulator.RecordAppendResult(
-                futureRecordMetadata,
-                false,
-                true,
-                false,
-                0);
-        });
-
-        return futureRecordMetadata;
-    }
-
 
     private static final List<String> CLIENT_IDS = new ArrayList<>();
 

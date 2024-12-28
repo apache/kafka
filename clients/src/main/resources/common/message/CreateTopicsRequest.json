@@ -18,6 +18,8 @@
   "type": "request",
   "listeners": ["zkBroker", "broker", "controller"],
   "name": "CreateTopicsRequest",
+  // Versions 0-1 were removed in Apache Kafka 4.0, Version 2 is the new baseline.
+  //
   // Version 1 adds validateOnly.
   //
   // Version 4 makes partitions/replicationFactor optional even when assignments are not present (KIP-464)
@@ -29,8 +31,7 @@
   // in the response if the topics creation is throttled (KIP-599).
   //
   // Version 7 is the same as version 6.
-  "validVersions": "0-7",
-  "deprecatedVersions": "0-1",
+  "validVersions": "2-7",
   "flexibleVersions": "5+",
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",

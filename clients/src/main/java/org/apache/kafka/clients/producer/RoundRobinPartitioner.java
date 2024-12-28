@@ -78,11 +78,5 @@ public class RoundRobinPartitioner implements Partitioner {
         return counter.getAndIncrement();
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
-        previousPartition.set(new TopicPartition(topic, prevPartition));
-    }
-
     public void close() {}
 }

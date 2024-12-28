@@ -215,7 +215,7 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
 
-        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        ProduceRequest.Builder builder = ProduceRequest.builder(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
                 .setTimeoutMs(1000));
@@ -632,7 +632,7 @@ public class NetworkClientTest {
 
     private ClientResponse produce(NetworkClient client, int requestTimeoutMs, boolean shouldEmulateTimeout) {
         awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
-        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        ProduceRequest.Builder builder = ProduceRequest.builder(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
                 .setTimeoutMs(1000));
@@ -766,33 +766,12 @@ public class NetworkClientTest {
             .setApiKeys(versionList));
     }
 
-    @Test
-    public void testThrottlingNotEnabledForConnectionToOlderBroker() {
-        // Instrument the test so that the max protocol version for PRODUCE returned from the node is 5 and thus
-        // client-side throttling is not enabled. Also, return a response with a 100ms throttle delay.
-        setExpectedApiVersionsResponse(createExpectedApiVersionsResponse(PRODUCE, (short) 5));
-        while (!client.ready(node, time.milliseconds()))
-            client.poll(1, time.milliseconds());
-        selector.clear();
-
-        int correlationId = sendEmptyProduceRequest();
-        client.poll(1, time.milliseconds());
-
-        sendThrottledProduceResponse(correlationId, 100, (short) 5);
-        client.poll(1, time.milliseconds());
-
-        // Since client-side throttling is disabled, the connection is ready even though the response indicated a
-        // throttle delay.
-        assertTrue(client.ready(node, time.milliseconds()));
-        assertEquals(0, client.throttleDelayMs(node, time.milliseconds()));
-    }
-
     private int sendEmptyProduceRequest() {
         return sendEmptyProduceRequest(client, node.idString());
     }
 
     private int sendEmptyProduceRequest(NetworkClient client, String nodeId) {
-        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        ProduceRequest.Builder builder = ProduceRequest.builder(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
                 .setTimeoutMs(1000));

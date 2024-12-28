@@ -29,7 +29,7 @@ import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs, TopicConfig}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
@@ -663,23 +663,12 @@ trait BrokerReconfigurable {
 
 object DynamicLogConfig {
   /**
-   * The log configurations that are non-reconfigurable. This set contains the names you
-   * would use when setting a dynamic configuration on a topic, which are different than the
-   * corresponding broker configuration names.
-   *
-   * For now, message.format.version is not reconfigurable, since we need to check that
-   * the version is supported on all brokers in the cluster.
-   */
-  val NonReconfigrableLogConfigs: Set[String] = Set(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-
-  /**
    * The broker configurations pertaining to logs that are reconfigurable. This set contains
    * the names you would use when setting a static or dynamic broker configuration (not topic
    * configuration).
    */
   val ReconfigurableConfigs: Set[String] =
-    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.
-      filterNot(s => NonReconfigrableLogConfigs.contains(s._1)).values.toSet
+    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.values.toSet
 }
 
 class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends BrokerReconfigurable with Logging {
@@ -745,13 +734,6 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
     val originalLogConfig = logManager.currentDefaultConfig
     val originalUncleanLeaderElectionEnable = originalLogConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
-    val originalLogConfigMap = originalLogConfig.originals()
-    DynamicLogConfig.NonReconfigrableLogConfigs.foreach(k => {
-      Option(originalLogConfigMap.get(k)) match {
-        case None => newBrokerDefaults.remove(k)
-        case Some(v) => newBrokerDefaults.put(k, v)
-      }
-    })
 
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
 
