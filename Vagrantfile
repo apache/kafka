@@ -80,7 +80,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.hostmanager.enabled = enable_hostmanager
   config.hostmanager.manage_host = enable_dns
   config.hostmanager.include_offline = false
-  config.ssh.key_type = :ed25519
 
   ## Provider-specific global configs
   config.vm.provider :virtualbox do |vb,override|
@@ -159,7 +158,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   def name_node(node, name, ec2_instance_name_prefix)
     node.vm.hostname = name
-#     print "KKK #{node.vm.hostname}"
     node.vm.provider :aws do |aws|
       aws.tags = {
         'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name,
