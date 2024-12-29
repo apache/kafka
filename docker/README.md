@@ -7,21 +7,21 @@ Introduction
 This directory contains:
 - Scripts to build, test, push and promote docker images for apache kafka - both `jvm` based and graalvm based `native` kafka
 - Scripts to build, test the JVM-based Docker Official Image, and generate a PR template for the same to be raised under the Docker official images repo.
-  All of the steps can be either performed locally or by using Github Actions.
+  All of the steps can be either performed locally or by using GitHub Actions.
 
-Github Actions
+GitHub Actions
 --------------
 
-- Github Actions can be accessed in Actions tab of the repository.
-- Please ensure that whichever Github Action Workflow you are triggering, you are doing it for the correct `branch`.
-- For all Github Actions Workflows for docker images, you'll get the option to select the branch as a dropdown box.
+- GitHub Actions can be accessed in Actions tab of the repository.
+- Please ensure that whichever GitHub Action Workflow you are triggering, you are doing it for the correct `branch`.
+- For all GitHub Actions Workflows for docker images, you'll get the option to select the branch as a dropdown box.
 
 Repository Setup
 ----------------
 
-Make sure the `DOCKERHUB_USER` and `DOCKERHUB_TOKEN` secrets are added and made available to Github Actions in Github Repository settings. This is required for pushing the docker image.
+Make sure the `DOCKERHUB_USER` and `DOCKERHUB_TOKEN` secrets are added and made available to GitHub Actions in GitHub Repository settings. This is required for pushing the docker image.
 
-Building image and running tests using github actions
+Building image and running tests using GitHub actions
 ----------------------------------------------------
 
 - This is the recommended way to build, test and get a CVE report for the docker image.
@@ -34,43 +34,43 @@ Building image and running tests using github actions
   - `native` image type is for graalvm based `native` kafka docker image (to be hosted on apache/kafka-native) as described in [KIP-974](https://cwiki.apache.org/confluence/display/KAFKA/KIP-974%3A+Docker+Image+for+GraalVM+based+Native+Kafka+Broker#KIP974:DockerImageforGraalVMbasedNativeKafkaBroker-ImageNaming)
 
 - Example(jvm):-
-To build and test a jvm image type ensuring kafka to be containerised should be https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz (it is recommended to use scala 2.13 binary tarball), following inputs in github actions workflow are recommended.
+To build and test a jvm image type ensuring kafka to be containerised should be https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz (it is recommended to use scala 2.13 binary tarball), following inputs in GitHub actions workflow are recommended.
 ```
 image_type: jvm
 kafka_url: https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
 ```
 - Example(native):-
-  To build and test a native image type ensuring kafka to be containerised should be https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz (it is recommended to use scala 2.13 binary tarball), following inputs in github actions workflow are recommended.
+  To build and test a native image type ensuring kafka to be containerised should be https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz (it is recommended to use scala 2.13 binary tarball), following inputs in GitHub actions workflow are recommended.
 ```
 image_type: native
 kafka_url: https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
 ```
-Creating a Release Candidate using github actions
+Creating a Release Candidate using GitHub actions
 -------------------------------------------------
 
 - This is the recommended way to push an RC docker image.
-- Go to `Build and Push Release Candidate Docker Image` Github Actions Workflow.
-- Choose the `image_type` and provide `kafka_url` that needs to be containerised in the `rc_docker_image` that will be pushed to github.
+- Go to `Build and Push Release Candidate Docker Image` GitHub Actions Workflow.
+- Choose the `image_type` and provide `kafka_url` that needs to be containerised in the `rc_docker_image` that will be pushed to GitHub.
 - Example(jvm):-
-If you want to push a jvm image which contains kafka from https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz to dockerhub under the namespace apache, repo name as kafka and image tag as 3.6.0-rc1 then following values need to be added in Github Actions Workflow:-
+If you want to push a jvm image which contains kafka from https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz to dockerhub under the namespace apache, repo name as kafka and image tag as 3.6.0-rc1 then following values need to be added in GitHub Actions Workflow:-
 ```
 image_type: jvm
 kafka_url: https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
 rc_docker_image: apache/kafka:3.6.0-rc0
 ```
 - Example(native):-
-  If you want to push a native image which contains kafka from https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz to dockerhub under the namespace apache, repo name as kafka-native and image tag as 3.8.0-rc0 then following values need to be added in Github Actions Workflow:-
+  If you want to push a native image which contains kafka from https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz to dockerhub under the namespace apache, repo name as kafka-native and image tag as 3.8.0-rc0 then following values need to be added in GitHub Actions Workflow:-
 ```
 image_type: native
 kafka_url: https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
 rc_docker_image: apache/kafka-native:3.8.0-rc0
 ```
 
-Promoting a Release Candidate using github actions
+Promoting a Release Candidate using GitHub actions
 --------------------------------------------------
 
 - This is the recommended way to promote an RC docker image.
-- Go to `Promote Release Candidate Docker Image` Github Actions Workflow.
+- Go to `Promote Release Candidate Docker Image` GitHub Actions Workflow.
 - Choose the RC docker image (`rc_docker_image`) that you want to promote and where it needs to be pushed to (`promoted_docker_image`), i.e. the final docker image release.
 - Example(jvm):-
 If you want to promote apache/kafka:3.6.0-rc0 RC docker image to apache/kafka:3.6.0 then following parameters can be provided to the workflow.
@@ -88,7 +88,7 @@ promoted_docker_image: apache/kafka-native:3.8.0
 Cron job for checking CVEs in supported docker images
 -----------------------------------------------------
 
-- `Docker Image CVE Scanner` Github Action Workflow (present in `.github/workflows/docker_scan.yml`) will run nightly CVE scans and generate reports for docker image tags mentioned in the `supported_image_tag` array.
+- `Docker Image CVE Scanner` GitHub Action Workflow (present in `.github/workflows/docker_scan.yml`) will run nightly CVE scans and generate reports for docker image tags mentioned in the `supported_image_tag` array.
 - This workflow is branch independent. Only the workflow in trunk, i.e. the default branch will be considered.
 - In case a Critical or High CVE is detected, the workflow will fail.
 - It will generate the scan reports that can be checked by the community.
@@ -121,7 +121,7 @@ Building image and running tests locally
 - kafka binary tarball url along with image name, tag and type is needed to build the image. For detailed usage description check `python docker_build_test.py --help`.
 - Sanity tests for the docker image are present in test/docker_sanity_test.py.
 - By default image will be built and tested, but if you only want to build the image, pass `--build` (or `-b`) flag and if you only want to test the given image pass `--test` (or `-t`) flag.
-- An html test report will be generated after the tests are executed containing the results.
+- A html test report will be generated after the tests are executed containing the results.
 - Example(jvm) :- To build and test an image named test under kafka namespace with 3.6.0 tag and jvm image type ensuring kafka to be containerised should be https://downloads.apache.org/kafka/3.6.0/kafka_2.13-3.6.0.tgz (it is recommended to use scala 2.13 binary tarball), following command can be used
 ```
 python docker_build_test.py kafka/test --image-tag=3.6.0 --image-type=jvm --kafka-url=https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
@@ -155,7 +155,7 @@ python docker_release.py kafka-native/test:3.8.0 --kafka-url --image-type=native
 Promoting a Release Candidate
 -----------------------------
 
-- It's not recommended to promote the docker image locally, as we have github actions doing it in a convenient way, but if needed following command can be used to promote a Release Candidate image.
+- It's not recommended to promote the docker image locally, as we have GitHub actions doing it in a convenient way, but if needed following command can be used to promote a Release Candidate image.
 - Example(jvm):- If you want to promote RC image apache/kafka:3.6.0-rc0 to apache/kafka:3.6.0, following command can be used
 
 ```
