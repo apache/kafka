@@ -109,11 +109,11 @@ class KafkaConfigTest {
 
   @Test
   def testLogRetentionUnlimited(): Unit = {
-    val props1 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
-    val props2 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
-    val props3 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
-    val props4 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
-    val props5 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
+    val props1 = TestUtils.createBrokerConfig(0, null, port = 8181)
+    val props2 = TestUtils.createBrokerConfig(0, null, port = 8181)
+    val props3 = TestUtils.createBrokerConfig(0, null, port = 8181)
+    val props4 = TestUtils.createBrokerConfig(0, null, port = 8181)
+    val props5 = TestUtils.createBrokerConfig(0, null, port = 8181)
 
     props1.setProperty("log.retention.ms", "-1")
     props2.setProperty("log.retention.minutes", "-1")
