@@ -180,7 +180,7 @@ Releasing the Docker Official Image
 - This is the recommended way to release docker official image.
 - Ensure these steps are being run for a particular version, only once the AK release process for that version has been completed.
 
-- Provide the image type and kafka version to `Docker Prepare Docker Official Image Source` workflow. It will generate a artifact containing the static Dockerfile and assets for that specific version. Download the same from the workflow.
+- Provide the image type and kafka version to `Docker Prepare Docker Official Image Source` workflow. It will generate an artifact containing the static Dockerfile and assets for that specific version. Download the same from the workflow.
 
 ```
 image_type: jvm
@@ -193,7 +193,7 @@ kafka_version: 3.7.0
 python extract_docker_official_image_artifact.py --path_to_downloaded_artifact=path/to/downloaded/artifact
 ```
 
-- If there any versions for which Docker Official Images should not be supported, remove the corresponding directories under `docker/docker_official_images`.
+- If there are any versions for which Docker Official Images should not be supported, remove the corresponding directories under `docker/docker_official_images`.
 - Commit these changes to AK trunk.
 
 - Provide the image type and kafka version to `Docker Official Image Build Test` workflow. It will generate a test report and CVE report that can be shared with the community.
