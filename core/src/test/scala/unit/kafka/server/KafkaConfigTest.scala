@@ -787,33 +787,6 @@ class KafkaConfigTest {
     assertBadConfigContainingMessage(props, "advertised.listeners listener names must be equal to or a subset of the ones defined in listeners")
   }
 
-  @nowarn("cat=deprecation")
-  @Test
-  def testInterBrokerVersionMessageFormatCompatibility(): Unit = {
-    def buildConfig(interBrokerProtocol: MetadataVersion, messageFormat: MetadataVersion): KafkaConfig = {
-      val props = TestUtils.createBrokerConfig(0, null, port = 8181)
-      props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, interBrokerProtocol.version)
-      props.setProperty(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG, messageFormat.version)
-      KafkaConfig.fromProps(props)
-    }
-
-    MetadataVersion.VERSIONS.foreach { interBrokerVersion =>
-      MetadataVersion.VERSIONS.foreach { messageFormatVersion =>
-        if (interBrokerVersion.isKRaftSupported) {
-          if (interBrokerVersion.highestSupportedRecordVersion.value >= messageFormatVersion.highestSupportedRecordVersion.value) {
-            val config = buildConfig(interBrokerVersion, messageFormatVersion)
-            if (interBrokerVersion.isAtLeast(IBP_3_0_IV1))
-              assertEquals(IBP_3_0_IV1, config.logMessageFormatVersion)
-            else
-              assertEquals(messageFormatVersion, config.logMessageFormatVersion)
-          } else {
-            assertThrows(classOf[IllegalArgumentException], () => buildConfig(interBrokerVersion, messageFormatVersion))
-          }
-        }
-      }
-    }
-  }
-
   @Test
   def testFromPropsInvalid(): Unit = {
     def baseProperties: Properties = {
