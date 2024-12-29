@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
@@ -31,7 +32,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -54,7 +54,6 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.event.Level;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -74,10 +73,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
-import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
+import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
 import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.DELETE_RETENTION_MS_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.SEGMENT_MS_CONFIG;
@@ -105,8 +105,6 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.REB
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -568,35 +566,6 @@ public class ConnectWorkerIntegrationTest {
         );
     }
 
-    /**
-     * The <strong><em>GET /connectors/{connector}/tasks-config</em></strong> endpoint was deprecated in
-     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-970%3A+Deprecate+and+remove+Connect%27s+redundant+task+configurations+endpoint">KIP-970</a>
-     * and is slated for removal in the next major release. This test verifies that the deprecation warning log is emitted on trying to use the
-     * deprecated endpoint.
-     */
-    @Test
-    public void testTasksConfigDeprecation() throws Exception {
-        connect = connectBuilder.build();
-        // start the clusters
-        connect.start();
-
-        connect.configureConnector(CONNECTOR_NAME, defaultSourceConnectorProps(TOPIC_NAME));
-        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
-            CONNECTOR_NAME,
-            NUM_TASKS,
-            "Connector tasks did not start in time"
-        );
-
-        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(ConnectorsResource.class)) {
-            connect.requestGet(connect.endpointForResource("connectors/" + CONNECTOR_NAME + "/tasks-config"));
-            List<LogCaptureAppender.Event> logEvents = logCaptureAppender.getEvents();
-            assertEquals(1, logEvents.size());
-            assertEquals(Level.WARN.toString(), logEvents.get(0).getLevel());
-            assertThat(logEvents.get(0).getMessage(), containsString("deprecated"));
-        }
-
-    }
-
     @Test
     public void testCreateConnectorWithPausedInitialState() throws Exception {
         connect = connectBuilder.build();
@@ -842,6 +811,7 @@ public class ConnectWorkerIntegrationTest {
         // Workaround for KAFKA-15676, which can cause the scheduled rebalance delay to
         // be spuriously triggered after the group coordinator for a Connect cluster is bounced
         workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "0");
+        workerProps.put(METADATA_RECOVERY_STRATEGY_CONFIG, MetadataRecoveryStrategy.NONE.name);
 
         useFixedBrokerPort();
 
@@ -1042,7 +1012,7 @@ public class ConnectWorkerIntegrationTest {
                 maxTasks
         );
         String errorMessage = connect.connectorStatus(CONNECTOR_NAME).connector().trace();
-        assertThat(errorMessage, containsString(expectedErrorSnippet));
+        assertTrue(errorMessage.contains(expectedErrorSnippet));
 
         // Stop all workers in the cluster
         connect.workers().forEach(connect::removeWorker);

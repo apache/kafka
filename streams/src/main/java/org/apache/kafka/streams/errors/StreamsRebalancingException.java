@@ -21,6 +21,7 @@ package org.apache.kafka.streams.errors;
  * cannot be queried by default. You can retry to query after the rebalance finished. As an alternative, you can also query
  * (potentially stale) state stores during a rebalance via {@link org.apache.kafka.streams.StoreQueryParameters#enableStaleStores()}.
  */
+@SuppressWarnings("unused")
 public class StreamsRebalancingException extends InvalidStateStoreException {
 
     private static final long serialVersionUID = 1L;

@@ -47,5 +47,6 @@ public class MockShareConsumerTest {
         assertEquals(rec1, iter.next());
         assertEquals(rec2, iter.next());
         assertFalse(iter.hasNext());
+        assertEquals(0, recs.nextOffsets().size());
     }
 }

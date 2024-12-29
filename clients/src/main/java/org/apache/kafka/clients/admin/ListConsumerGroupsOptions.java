@@ -18,12 +18,14 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Options for {@link Admin#listConsumerGroups()}.
@@ -33,17 +35,30 @@ import java.util.Set;
 @InterfaceStability.Evolving
 public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroupsOptions> {
 
-    private Set<ConsumerGroupState> states = Collections.emptySet();
-
+    private Set<GroupState> groupStates = Collections.emptySet();
     private Set<GroupType> types = Collections.emptySet();
+
+    /**
+     * If groupStates is set, only groups in these states will be returned by listGroups().
+     * Otherwise, all groups are returned.
+     * This operation is supported by brokers with version 2.6.0 or later.
+     */
+    public ListConsumerGroupsOptions inGroupStates(Set<GroupState> groupStates) {
+        this.groupStates = (groupStates == null || groupStates.isEmpty()) ? Collections.emptySet() : Set.copyOf(groupStates);
+        return this;
+    }
 
     /**
      * If states is set, only groups in these states will be returned by listConsumerGroups().
      * Otherwise, all groups are returned.
      * This operation is supported by brokers with version 2.6.0 or later.
+     * @deprecated Since 4.0. Use {@link #inGroupStates(Set)}.
      */
+    @Deprecated
     public ListConsumerGroupsOptions inStates(Set<ConsumerGroupState> states) {
-        this.states = (states == null || states.isEmpty()) ? Collections.emptySet() : new HashSet<>(states);
+        this.groupStates = (states == null || states.isEmpty())
+            ? Collections.emptySet()
+            : states.stream().map(state -> GroupState.parse(state.name())).collect(Collectors.toSet());
         return this;
     }
 
@@ -57,10 +72,19 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
     }
 
     /**
-     * Returns the list of States that are requested or empty if no states have been specified.
+     * Returns the list of group states that are requested or empty if no states have been specified.
      */
+    public Set<GroupState> groupStates() {
+        return groupStates;
+    }
+
+    /**
+     * Returns the list of States that are requested or empty if no states have been specified.
+     * @deprecated Since 4.0. Use {@link #inGroupStates(Set)}.
+     */
+    @Deprecated
     public Set<ConsumerGroupState> states() {
-        return states;
+        return groupStates.stream().map(groupState -> ConsumerGroupState.parse(groupState.name())).collect(Collectors.toSet());
     }
 
     /**

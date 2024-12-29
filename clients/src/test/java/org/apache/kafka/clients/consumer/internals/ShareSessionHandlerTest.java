@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicIdPartition;
@@ -41,6 +42,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.requests.ShareRequestMetadata.INITIAL_EPOCH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -413,6 +415,39 @@ public class ShareSessionHandlerTest {
         // Should have the same session ID and epoch 2.
         assertEquals(memberId.toString(), requestData3.memberId(), "Did not use same session");
         assertEquals(2, requestData3.shareSessionEpoch(), "Did not have the correct session epoch");
+    }
+
+    @Test
+    public void testNextAcknowledgementsClearedOnInvalidRequest() {
+        String groupId = "G1";
+        Uuid memberId = Uuid.randomUuid();
+        ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
+
+        Map<String, Uuid> topicIds = new HashMap<>();
+        Map<Uuid, String> topicNames = new HashMap<>();
+        Uuid fooId = addTopicId(topicIds, topicNames, "foo");
+        TopicIdPartition foo0 = new TopicIdPartition(fooId, 0, "foo");
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(0L, AcknowledgeType.ACCEPT);
+
+        handler.addPartitionToFetch(foo0, acknowledgements);
+
+        // As we start with a ShareAcknowledge on epoch 0, we expect a null response.
+        assertNull(handler.newShareAcknowledgeBuilder(groupId, fetchConfig));
+
+        // Attempt a new ShareFetch
+        TopicIdPartition foo1 = new TopicIdPartition(fooId, 1, "foo");
+        handler.addPartitionToFetch(foo1, null);
+        ShareFetchRequestData requestData = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+
+        // We should have cleared the unsent acknowledgements before this ShareFetch.
+        assertEquals(0, requestData.topics().get(0).partitions().get(0).acknowledgementBatches().size());
+
+        ArrayList<TopicIdPartition> expectedToSend1 = new ArrayList<>();
+        expectedToSend1.add(new TopicIdPartition(fooId, 1, "foo"));
+        assertListEquals(expectedToSend1, reqFetchList(requestData, topicNames));
+        assertEquals(memberId.toString(), requestData.memberId());
     }
 
     private Uuid addTopicId(Map<String, Uuid> topicIds, Map<Uuid, String> topicNames, String name) {

@@ -34,7 +34,7 @@ import java.util.TreeSet;
  * The specification for a task which connects and disconnects many times a
  * second to stress the broker.
  */
-public class ConnectionStressSpec extends TaskSpec {
+public final class ConnectionStressSpec extends TaskSpec {
     private final List<String> clientNodes;
     private final String bootstrapServers;
     private final Map<String, String> commonClientConf;
@@ -47,7 +47,6 @@ public class ConnectionStressSpec extends TaskSpec {
         FETCH_METADATA
     }
 
-    @SuppressWarnings("this-escape")
     @JsonCreator
     public ConnectionStressSpec(@JsonProperty("startMs") long startMs,
             @JsonProperty("durationMs") long durationMs,

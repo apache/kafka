@@ -27,8 +27,8 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
-import scala.compat.java8.OptionConverters
 import scala.concurrent.ExecutionException
+import scala.jdk.javaapi.OptionConverters
 
 class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
@@ -56,7 +56,7 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)
 

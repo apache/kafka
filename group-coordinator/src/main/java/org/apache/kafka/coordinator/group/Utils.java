@@ -103,6 +103,22 @@ public class Utils {
     }
 
     /**
+     * Decrements value by 1; returns null when reaching zero. This helper is
+     * meant to be used with Map#compute.
+     */
+    public static Long decValue(Object key, Long value) {
+        if (value == null) return null;
+        return value == 1 ? null : value - 1;
+    }
+
+    /**
+     * Increments value by 1; This helper is meant to be used with Map#compute.
+     */
+    public static Long incValue(Object key, Long value) {
+        return value == null ? 1 : value + 1;
+    }
+
+    /**
      * @return An Optional containing the provided string if it is not null and not empty,
      *         otherwise an empty Optional.
      */

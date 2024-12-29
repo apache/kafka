@@ -22,11 +22,11 @@ import kafka.raft.KafkaMetadataLog.RetentionMsBreach
 import kafka.raft.KafkaMetadataLog.RetentionSizeBreach
 import kafka.raft.KafkaMetadataLog.SnapshotDeletionReason
 import kafka.raft.KafkaMetadataLog.UnknownReason
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
 import org.apache.kafka.server.common.RequestLocal
@@ -49,7 +49,7 @@ import java.nio.file.{Files, NoSuchFileException, Path}
 import java.util.{Optional, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
 final class KafkaMetadataLog private (
   val log: UnifiedLog,
@@ -134,7 +134,7 @@ final class KafkaMetadataLog private (
   }
 
   override def endOffsetForEpoch(epoch: Int): OffsetAndEpoch = {
-    (log.endOffsetForEpoch(epoch), earliestSnapshotId().asScala) match {
+    (log.endOffsetForEpoch(epoch), earliestSnapshotId().toScala) match {
       case (Some(offsetAndEpoch), Some(snapshotId)) if (
         offsetAndEpoch.offset == snapshotId.offset &&
         offsetAndEpoch.leaderEpoch == epoch) =>
@@ -176,7 +176,7 @@ final class KafkaMetadataLog private (
 
   override def truncateToLatestSnapshot(): Boolean = {
     val latestEpoch = log.latestEpoch.getOrElse(0)
-    val (truncated, forgottenSnapshots) = latestSnapshotId().asScala match {
+    val (truncated, forgottenSnapshots) = latestSnapshotId().toScala match {
       case Some(snapshotId) if (
           snapshotId.epoch > latestEpoch ||
           (snapshotId.epoch == latestEpoch && snapshotId.offset > endOffset().offset)
@@ -202,7 +202,7 @@ final class KafkaMetadataLog private (
 
   override def updateHighWatermark(offsetMetadata: LogOffsetMetadata): Unit = {
     // This API returns the new high watermark, which may be different from the passed offset
-    val logHighWatermark = offsetMetadata.metadata.asScala match {
+    val logHighWatermark = offsetMetadata.metadata.toScala match {
       case Some(segmentPosition: SegmentPosition) =>
         log.updateHighWatermark(
           new internals.log.LogOffsetMetadata(
@@ -272,6 +272,25 @@ final class KafkaMetadataLog private (
       )
     }
 
+    /*
+      Perform a check that the requested snapshot offset is batch aligned via a log read, which
+      returns the base offset of the batch that contains the requested offset. A snapshot offset
+      is one greater than the last offset contained in the snapshot, and cannot go past the high
+      watermark.
+
+      This check is necessary because Raft replication code assumes the snapshot offset is the
+      start of a batch. If a follower applies a non-batch aligned snapshot at offset (X) and
+      fetches from this offset, the returned batch will start at offset (X - M), and the
+      follower will be unable to append it since (X - M) < (X).
+     */
+    val baseOffset = read(snapshotId.offset, Isolation.COMMITTED).startOffsetMetadata.offset
+    if (snapshotId.offset != baseOffset) {
+      throw new IllegalArgumentException(
+        s"Cannot create snapshot at offset (${snapshotId.offset}) because it is not batch aligned. " +
+        s"The batch containing the requested offset has a base offset of ($baseOffset)"
+      )
+    }
+
     createNewSnapshotUnchecked(snapshotId)
   }
 
@@ -317,7 +336,7 @@ final class KafkaMetadataLog private (
           value
       }
 
-      reader.asJava.asInstanceOf[Optional[RawSnapshotReader]]
+      reader.toJava.asInstanceOf[Optional[RawSnapshotReader]]
     }
   }
 
@@ -329,13 +348,13 @@ final class KafkaMetadataLog private (
 
   override def latestSnapshotId(): Optional[OffsetAndEpoch] = {
     snapshots synchronized {
-      snapshots.lastOption.map { case (snapshotId, _) => snapshotId }.asJava
+      snapshots.lastOption.map { case (snapshotId, _) => snapshotId }.toJava
     }
   }
 
   override def earliestSnapshotId(): Optional[OffsetAndEpoch] = {
     snapshots synchronized {
-      snapshots.headOption.map { case (snapshotId, _) => snapshotId }.asJava
+      snapshots.headOption.map { case (snapshotId, _) => snapshotId }.toJava
     }
   }
 
@@ -363,7 +382,7 @@ final class KafkaMetadataLog private (
 
   private def deleteBeforeSnapshot(snapshotId: OffsetAndEpoch, reason: SnapshotDeletionReason): Boolean = {
     val (deleted, forgottenSnapshots) = snapshots synchronized {
-      latestSnapshotId().asScala match {
+      latestSnapshotId().toScala match {
         case Some(latestSnapshotId) if
           snapshots.contains(snapshotId) &&
           startOffset < snapshotId.offset &&
@@ -387,7 +406,7 @@ final class KafkaMetadataLog private (
    */
   private def loadSnapshotSizes(): Seq[(OffsetAndEpoch, Long)] = {
     snapshots.keys.toSeq.flatMap {
-      snapshotId => readSnapshot(snapshotId).asScala.map { reader => (snapshotId, reader.sizeInBytes())}
+      snapshotId => readSnapshot(snapshotId).toScala.map { reader => (snapshotId, reader.sizeInBytes())}
     }
   }
 
@@ -395,7 +414,7 @@ final class KafkaMetadataLog private (
    * Return the max timestamp of the first batch in a snapshot, if the snapshot exists and has records
    */
   private def readSnapshotTimestamp(snapshotId: OffsetAndEpoch): Option[Long] = {
-    readSnapshot(snapshotId).asScala.map { reader =>
+    readSnapshot(snapshotId).toScala.map { reader =>
       Snapshots.lastContainedLogTimestamp(reader)
     }
   }
@@ -683,7 +702,7 @@ object KafkaMetadataLog extends Logging {
   ): Unit = {
     expiredSnapshots.foreach { case (snapshotId, snapshotReader) =>
       snapshotReader.foreach { reader =>
-        CoreUtils.swallow(reader.close(), logging)
+        Utils.closeQuietly(reader, "reader")
       }
       Snapshots.deleteIfExists(logDir, snapshotId)
     }

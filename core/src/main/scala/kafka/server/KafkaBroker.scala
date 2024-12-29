@@ -30,10 +30,11 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.common.NodeToControllerChannelManager
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.time.Duration
@@ -83,6 +84,7 @@ trait KafkaBroker extends Logging {
   def dataPlaneRequestProcessor: KafkaApis
   def kafkaScheduler: Scheduler
   def kafkaYammerMetrics: KafkaYammerMetrics
+  def logDirFailureChannel: LogDirFailureChannel
   def logManager: LogManager
   def remoteLogManagerOpt: Option[RemoteLogManager]
   def metrics: Metrics

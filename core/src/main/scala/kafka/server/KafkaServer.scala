@@ -21,20 +21,18 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.common.GenerateBrokerIdException
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinatorAdapter
-import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
+import kafka.coordinator.transaction.{TransactionCoordinator, ZkProducerIdManager}
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsReporter
 import kafka.network.{ControlPlaneAcceptor, DataPlaneAcceptor, RequestChannel, SocketServer}
-import kafka.raft.KafkaRaftManager
-import kafka.server.metadata.{OffsetTrackingListener, ZkConfigRepository, ZkMetadataCache}
+import kafka.server.metadata.{ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
@@ -46,20 +44,17 @@ import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, Node, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
-import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.REQUIRE_V0
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
-import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
-import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.raft.Endpoints
+import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.NodeToControllerChannelManager
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.NodeToControllerChannelManager
 import org.apache.kafka.server.config.{ConfigType, ZkConfigs}
-import org.apache.kafka.server.fault.LoggingFaultHandler
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
@@ -74,10 +69,10 @@ import java.time.Duration
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import java.util.{Optional, OptionalInt, OptionalLong}
+import java.util.{Optional, OptionalInt}
 import scala.collection.{Map, Seq}
-import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 object KafkaServer {
   def zkClientConfigFromKafkaConfig(config: KafkaConfig, forceZkSslClientEnable: Boolean = false): ZKClientConfig = {
@@ -113,8 +108,7 @@ object KafkaServer {
 class KafkaServer(
   val config: KafkaConfig,
   time: Time = Time.SYSTEM,
-  threadNamePrefix: Option[String] = None,
-  enableForwarding: Boolean = false
+  threadNamePrefix: Option[String] = None
 ) extends KafkaBroker with Server {
 
   private val startupComplete = new AtomicBoolean(false)
@@ -204,7 +198,6 @@ class KafkaServer(
   @volatile def kafkaController: KafkaController = _kafkaController
 
   var lifecycleManager: BrokerLifecycleManager = _
-  private var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
 
   @volatile var brokerEpochManager: ZkBrokerEpochManager = _
 
@@ -240,9 +233,6 @@ class KafkaServer(
         val initialMetaPropsEnsemble = {
           val loader = new MetaPropertiesEnsemble.Loader()
           loader.addLogDirs(config.logDirs.asJava)
-          if (config.migrationEnabled) {
-            loader.addMetadataLogDir(config.metadataLogDir)
-          }
           loader.load()
         }
 
@@ -251,16 +241,11 @@ class KafkaServer(
         } else {
           OptionalInt.of(config.brokerId)
         }
-        val verificationFlags = if (config.migrationEnabled) {
-          util.EnumSet.noneOf(classOf[VerificationFlag])
-        } else {
-          util.EnumSet.of(REQUIRE_V0)
-        }
+        val verificationFlags = util.EnumSet.of(REQUIRE_V0)
         initialMetaPropsEnsemble.verify(Optional.of(_clusterId), verificationId, verificationFlags)
 
         /* generate brokerId */
-        config._brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
-        config._nodeId = config.brokerId
+        config.brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
 
@@ -294,11 +279,6 @@ class KafkaServer(
             val builder = new MetaProperties.Builder(e.getValue).
               setClusterId(_clusterId).
               setNodeId(config.brokerId)
-            if (!builder.directoryId().isPresent) {
-              if (config.migrationEnabled) {
-                builder.setDirectoryId(copier.generateValidDirectoryId())
-              }
-            }
             copier.setLogDirProps(logDir, builder.build())
           })
           copier.emptyLogDirs().clear()
@@ -332,8 +312,7 @@ class KafkaServer(
         metadataCache = MetadataCache.zkMetadataCache(
           config.brokerId,
           config.interBrokerProtocolVersion,
-          brokerFeatures,
-          config.migrationEnabled)
+          brokerFeatures)
         val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config,
           () => Option(quorumControllerNodeProvider).map(_.getControllerInfo()))
 
@@ -360,11 +339,7 @@ class KafkaServer(
         clientToControllerChannelManager.start()
 
         /* start forwarding manager */
-        var autoTopicCreationChannel = Option.empty[NodeToControllerChannelManager]
-        if (enableForwarding) {
-          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager, metrics))
-          autoTopicCreationChannel = Some(clientToControllerChannelManager)
-        }
+        val autoTopicCreationChannel = Option.empty[NodeToControllerChannelManager]
 
         val apiVersionManager = ApiVersionManager(
           ListenerType.ZK_BROKER,
@@ -415,81 +390,6 @@ class KafkaServer(
         _kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, metadataCache, threadNamePrefix)
         kafkaController.startup()
 
-        if (config.migrationEnabled) {
-          logger.info("Starting up additional components for ZooKeeper migration")
-          lifecycleManager = new BrokerLifecycleManager(config,
-            time,
-            s"zk-broker-${config.nodeId}-",
-            isZkBroker = true,
-            logManager.directoryIdsSet)
-
-          // For ZK brokers in migration mode, always delete the metadata partition on startup.
-          logger.info(s"Deleting local metadata log from ${config.metadataLogDir} since this is a ZK broker in migration mode.")
-          KafkaRaftManager.maybeDeleteMetadataLogDir(config)
-          logger.info("Successfully deleted local metadata log. It will be re-created.")
-
-          // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
-          val quorumVoters = QuorumConfig.parseVoterConnections(config.quorumConfig.voters)
-          raftManager = new KafkaRaftManager[ApiMessageAndVersion](
-            metaPropsEnsemble.clusterId().get(),
-            config,
-            // metadata log dir and directory.id must exist because migration is enabled
-            metaPropsEnsemble.logDirProps.get(metaPropsEnsemble.metadataLogDir.get).directoryId.get,
-            new MetadataRecordSerde,
-            KafkaRaftServer.MetadataPartition,
-            KafkaRaftServer.MetadataTopicId,
-            time,
-            metrics,
-            threadNamePrefix,
-            CompletableFuture.completedFuture(quorumVoters),
-            QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
-            // Endpoint information is only needed for KRaft controllers (voters). ZK brokers
-            // (observers) can never be KRaft controllers
-            Endpoints.empty(),
-            fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
-          )
-          quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
-          val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
-            controllerNodeProvider = quorumControllerNodeProvider,
-            time = time,
-            metrics = metrics,
-            config = config,
-            channelName = "quorum",
-            s"zk-broker-${config.nodeId}-",
-            retryTimeoutMs = config.requestTimeoutMs.longValue
-          )
-
-          val listener = new OffsetTrackingListener()
-          raftManager.register(listener)
-          raftManager.startup()
-
-          val networkListeners = new ListenerCollection()
-          config.effectiveAdvertisedBrokerListeners.foreach { ep =>
-            networkListeners.add(new Listener().
-              setHost(if (Utils.isBlank(ep.host)) InetAddress.getLocalHost.getCanonicalHostName else ep.host).
-              setName(ep.listenerName.value()).
-              setPort(if (ep.port == 0) socketServer.boundPort(ep.listenerName) else ep.port).
-              setSecurityProtocol(ep.securityProtocol.id))
-          }
-
-          val features = BrokerFeatures.createDefaultFeatureMap(BrokerFeatures.createDefault(config.unstableFeatureVersionsEnabled))
-
-          // Even though ZK brokers don't use "metadata.version" feature, we need to overwrite it with our IBP as part of registration
-          // so the KRaft controller can verify that all brokers are on the same IBP before starting the migration.
-          val featuresRemapped = features + (MetadataVersion.FEATURE_NAME ->
-            VersionRange.of(config.interBrokerProtocolVersion.featureLevel(), config.interBrokerProtocolVersion.featureLevel()))
-
-          lifecycleManager.start(
-            () => listener.highestOffset,
-            brokerToQuorumChannelManager,
-            clusterId,
-            networkListeners,
-            featuresRemapped.asJava,
-            OptionalLong.empty()
-          )
-          logger.debug("Start RaftManager")
-        }
-
         // Used by ZK brokers during a KRaft migration. When talking to a KRaft controller, we need to use the epoch
         // from BrokerLifecycleManager rather than ZK (via KafkaController)
         brokerEpochManager = new ZkBrokerEpochManager(metadataCache, kafkaController, Option(lifecycleManager))
@@ -511,11 +411,11 @@ class KafkaServer(
           ProducerIdManager.rpc(
             config.brokerId,
             time,
-            brokerEpochSupplier = brokerEpochSupplier,
+            () => brokerEpochSupplier(),
             clientToControllerChannelManager
           )
         } else {
-          ProducerIdManager.zk(config.brokerId, zkClient)
+          new ZkProducerIdManager(config.brokerId, zkClient)
         }
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
@@ -570,7 +470,7 @@ class KafkaServer(
               .orElse(throw new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
                 listenerName, "Should be set as a listener name within valid broker listener name list: "
                   + brokerInfo.broker.endPoints.map(_.listenerName).mkString(",")))
-              .foreach(e => rlm.onEndPointCreated(e))
+              .foreach(e => rlm.onEndPointCreated(e.toJava))
           }
           rlm.startup()
         }
@@ -629,18 +529,6 @@ class KafkaServer(
         // Create the config manager. start listening to notifications
         dynamicConfigManager = new ZkConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
-
-        if (config.migrationEnabled && lifecycleManager != null) {
-          lifecycleManager.initialCatchUpFuture.whenComplete { case (_, t) =>
-            if (t != null) {
-              fatal("Encountered an exception when waiting to catch up with KRaft metadata log", t)
-              shutdown()
-            } else {
-              info("Finished catching up on KRaft metadata log, requesting that the KRaft controller unfence this broker")
-              lifecycleManager.setReadyToUnfence()
-            }
-          }
-        }
 
         val enableRequestProcessingFuture = socketServer.enableRequestProcessing(authorizerFutures)
         // Block here until all the authorizer futures are complete
@@ -702,7 +590,7 @@ class KafkaServer(
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled()) {
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
-        (tp: TopicPartition) => logManager.getLog(tp).asJava,
+        (tp: TopicPartition) => logManager.getLog(tp).toJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).foreach { log =>
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
@@ -946,21 +834,6 @@ class KafkaServer(
 
       _brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
 
-      if (config.migrationEnabled && lifecycleManager != null && metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])) {
-        // For now we'll send the heartbeat with WantShutDown set so the KRaft controller can see a broker
-        // shutting down without waiting for the heartbeat to time out.
-        info("Notifying KRaft of controlled shutdown")
-        lifecycleManager.beginControlledShutdown()
-        try {
-          lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)
-        } catch {
-          case _: TimeoutException =>
-            error("Timed out waiting for the controller to approve controlled shutdown")
-          case e: Throwable =>
-            error("Got unexpected exception waiting for controlled shutdown future", e)
-        }
-      }
-
       val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
 
       if (!shutdownSucceeded)
@@ -1015,7 +888,7 @@ class KafkaServer(
           CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
         if (controlPlaneRequestProcessor != null)
           CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
-        CoreUtils.swallow(authorizer.foreach(_.close()), this)
+        authorizer.foreach(Utils.closeQuietly(_, "authorizer"))
         if (adminManager != null)
           CoreUtils.swallow(adminManager.shutdown(), this)
 
@@ -1048,13 +921,12 @@ class KafkaServer(
         // Close remote log manager before stopping processing requests, to give a chance to any
         // of its underlying clients (especially in RemoteStorageManager and RemoteLogMetadataManager)
         // to close gracefully.
-        CoreUtils.swallow(remoteLogManagerOpt.foreach(_.close()), this)
+        remoteLogManagerOpt.foreach(Utils.closeQuietly(_, "remote log manager"))
 
         if (featureChangeListener != null)
           CoreUtils.swallow(featureChangeListener.close(), this)
 
-        if (zkClient != null)
-          CoreUtils.swallow(zkClient.close(), this)
+        Utils.closeQuietly(zkClient, "zk client")
 
         if (quotaManagers != null)
           CoreUtils.swallow(quotaManagers.shutdown(), this)
@@ -1065,16 +937,11 @@ class KafkaServer(
         if (socketServer != null)
           CoreUtils.swallow(socketServer.shutdown(), this)
         unregisterCurrentControllerIdMetric()
-        if (metrics != null)
-          CoreUtils.swallow(metrics.close(), this)
-        if (brokerTopicStats != null)
-          CoreUtils.swallow(brokerTopicStats.close(), this)
+        Utils.closeQuietly(metrics, "metrics")
+        Utils.closeQuietly(brokerTopicStats, "broker topic stats")
 
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()
-
-        if (raftManager != null)
-          CoreUtils.swallow(raftManager.shutdown(), this)
 
         if (lifecycleManager != null) {
           lifecycleManager.close()

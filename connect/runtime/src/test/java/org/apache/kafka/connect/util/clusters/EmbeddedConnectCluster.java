@@ -42,7 +42,7 @@ import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_C
 
 /**
  * Start an embedded Connect cluster that can be used for integration tests. Internally, this class also spins up a
- * backing Kafka KRaft cluster for the Connect cluster leveraging {@link kafka.testkit.KafkaClusterTestKit}. Methods
+ * backing Kafka KRaft cluster for the Connect cluster leveraging {@link org.apache.kafka.common.test.KafkaClusterTestKit}. Methods
  * on the same {@code EmbeddedConnectCluster} are not guaranteed to be thread-safe. This class also provides various
  * utility methods to perform actions on the Connect cluster such as connector creation, config validation, connector
  * restarts, pause / resume, connector deletion etc.
@@ -200,14 +200,6 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
         public Builder numWorkers(int numWorkers) {
             this.numWorkers = numWorkers;
             return this;
-        }
-
-        /**
-         * @deprecated Use {@link #clientProps(Map)} instead.
-         */
-        @Deprecated
-        public Builder clientConfigs(Map<String, String> clientProps) {
-            return clientProps(clientProps);
         }
 
         @Override

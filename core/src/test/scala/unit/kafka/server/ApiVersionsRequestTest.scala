@@ -17,12 +17,12 @@
 
 package kafka.server
 
-import kafka.test.ClusterInstance
+import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.ApiVersionsRequest
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
@@ -71,8 +71,8 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
 
   // Use the latest production MV for this test
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_8_IV0, serverProperties = Array(
-      new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
-      new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "false"),
+    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
+    new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "false"),
   ))
   def testApiVersionsRequestValidationV0(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])

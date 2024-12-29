@@ -60,6 +60,12 @@ public final class LogFileUtils {
     /** Suffix of a directory that is scheduled to be deleted */
     public static final String DELETE_DIR_SUFFIX = "-delete";
 
+    /** Suffix of a directory that is used for future partition */
+    public static final String FUTURE_DIR_SUFFIX = "-future";
+
+    /** Suffix of a directory that is used for stray partition */
+    public static final String STRAY_DIR_SUFFIX = "-stray";
+
     private LogFileUtils() {
     }
 

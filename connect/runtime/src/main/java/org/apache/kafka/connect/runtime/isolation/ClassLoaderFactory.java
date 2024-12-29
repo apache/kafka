@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.internals.SecurityManagerCompatibility;
+
 import java.net.URL;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 
 /**
  * Factory for {@link DelegatingClassLoader} and {@link PluginClassLoader} instances.
@@ -27,14 +27,14 @@ import java.security.PrivilegedAction;
 public class ClassLoaderFactory implements PluginClassLoaderFactory {
 
     public DelegatingClassLoader newDelegatingClassLoader(ClassLoader parent) {
-        return AccessController.doPrivileged(
-                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(parent)
+        return SecurityManagerCompatibility.get().doPrivileged(
+                () -> new DelegatingClassLoader(parent)
         );
     }
 
     public PluginClassLoader newPluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent) {
-        return AccessController.doPrivileged(
-                (PrivilegedAction<PluginClassLoader>) () -> new PluginClassLoader(pluginLocation, urls, parent)
+        return SecurityManagerCompatibility.get().doPrivileged(
+                () -> new PluginClassLoader(pluginLocation, urls, parent)
         );
     }
 

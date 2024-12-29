@@ -19,6 +19,7 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -54,9 +55,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
-import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
+import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -68,8 +69,6 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.KEY_CONVERTER_CLASS_
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -191,6 +190,7 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
+    @Flaky("KAFKA-14956")
     @Test
     public void testGetSinkConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
         EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
@@ -331,6 +331,7 @@ public class OffsetsApiIntegrationTest {
         alterAndVerifySinkConnectorOffsets(baseSinkConnectorConfigs(), connect.kafka());
     }
 
+    @Flaky("KAFKA-15914")
     @Test
     public void testAlterSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
         Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
@@ -348,6 +349,7 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
+    @Flaky("KAFKA-16492")
     @Test
     public void testAlterSinkConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
         EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
@@ -406,7 +408,7 @@ public class OffsetsApiIntegrationTest {
         // Alter the sink connector's offsets, with retry logic (since we just stopped the connector)
         String response = modifySinkConnectorOffsetsWithRetry(new ConnectorOffsets(offsetsToAlter));
 
-        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been altered successfully. " +
+        assertTrue(response.contains("The Connect framework-managed offsets for this connector have been altered successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually altered in the system that the connector uses."));
 
         verifyExpectedSinkConnectorOffsets(connectorName, topic, numPartitions - 1, 5,
@@ -426,7 +428,7 @@ public class OffsetsApiIntegrationTest {
         }
 
         response = connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter));
-        assertThat(response, containsString("The offsets for this connector have been altered successfully"));
+        assertTrue(response.contains("The offsets for this connector have been altered successfully"));
 
         verifyExpectedSinkConnectorOffsets(connectorName, topic, numPartitions - 1, 3,
                 "Sink connector consumer group offsets should reflect the altered offsets");
@@ -476,7 +478,7 @@ public class OffsetsApiIntegrationTest {
 
         ConnectRestException e = assertThrows(ConnectRestException.class,
                 () -> connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter)));
-        assertThat(e.getMessage(), containsString("zombie sink task"));
+        assertTrue(e.getMessage().contains("zombie sink task"));
 
         // clean up blocked threads created while testing zombie task scenarios
         BlockingConnectorTest.Block.reset();
@@ -498,49 +500,49 @@ public class OffsetsApiIntegrationTest {
         String content = "{}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(400, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Partitions / offsets need to be provided for an alter offsets request"));
+            assertTrue(response.getEntity().toString().contains("Partitions / offsets need to be provided for an alter offsets request"));
         }
 
         content = "{\"offsets\": []}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(400, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Partitions / offsets need to be provided for an alter offsets request"));
+            assertTrue(response.getEntity().toString().contains("Partitions / offsets need to be provided for an alter offsets request"));
         }
 
         content = "{\"offsets\": [{}]}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(400, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("The partition for a sink connector offset cannot be null or missing"));
+            assertTrue(response.getEntity().toString().contains("The partition for a sink connector offset cannot be null or missing"));
         }
 
         content = "{\"offsets\": [{\"partition\": null, \"offset\": null}]}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(400, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("The partition for a sink connector offset cannot be null or missing"));
+            assertTrue(response.getEntity().toString().contains("The partition for a sink connector offset cannot be null or missing"));
         }
 
         content = "{\"offsets\": [{\"partition\": {}, \"offset\": null}]}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(400, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("The partition for a sink connector offset must contain the keys 'kafka_topic' and 'kafka_partition'"));
+            assertTrue(response.getEntity().toString().contains("The partition for a sink connector offset must contain the keys 'kafka_topic' and 'kafka_partition'"));
         }
 
         content = "{\"offsets\": [{\"partition\": {\"kafka_topic\": \"test\", \"kafka_partition\": \"not a number\"}, \"offset\": null}]}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(400, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Partition values for sink connectors need to be integers"));
+            assertTrue(response.getEntity().toString().contains("Partition values for sink connectors need to be integers"));
         }
 
         content = "{\"offsets\": [{\"partition\": {\"kafka_topic\": \"test\", \"kafka_partition\": 1}, \"offset\": {}}]}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(400, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("The offset for a sink connector should either be null or contain the key 'kafka_offset'"));
+            assertTrue(response.getEntity().toString().contains("The offset for a sink connector should either be null or contain the key 'kafka_offset'"));
         }
 
         content = "{\"offsets\": [{\"partition\": {\"kafka_topic\": \"test\", \"kafka_partition\": 1}, \"offset\": {\"kafka_offset\": \"not a number\"}}]}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(400, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Offset values for sink connectors need to be integers"));
+            assertTrue(response.getEntity().toString().contains("Offset values for sink connectors need to be integers"));
         }
     }
 
@@ -605,7 +607,7 @@ public class OffsetsApiIntegrationTest {
         }
 
         String response = connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter));
-        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been altered successfully. " +
+        assertTrue(response.contains("The Connect framework-managed offsets for this connector have been altered successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually altered in the system that the connector uses."));
 
         verifyExpectedSourceConnectorOffsets(connectorName, NUM_TASKS, 5,
@@ -626,7 +628,7 @@ public class OffsetsApiIntegrationTest {
         }
 
         response = connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter));
-        assertThat(response, containsString("The offsets for this connector have been altered successfully"));
+        assertTrue(response.contains("The offsets for this connector have been altered successfully"));
 
         verifyExpectedSourceConnectorOffsets(connectorName, NUM_TASKS, 7,
                 "Source connector offsets should reflect the altered offsets");
@@ -658,57 +660,59 @@ public class OffsetsApiIntegrationTest {
         String content = "[]";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(500, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Cannot deserialize value"));
+            assertTrue(response.getEntity().toString().contains("Cannot deserialize value"));
         }
 
         content = "{}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(400, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Partitions / offsets need to be provided for an alter offsets request"));
+            assertTrue(response.getEntity().toString().contains("Partitions / offsets need to be provided for an alter offsets request"));
         }
 
         content = "{\"key\": []}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(500, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Unrecognized field"));
+            assertTrue(response.getEntity().toString().contains("Unrecognized field"));
         }
 
         content = "{\"offsets\": []}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(400, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Partitions / offsets need to be provided for an alter offsets request"));
+            assertTrue(response.getEntity().toString().contains("Partitions / offsets need to be provided for an alter offsets request"));
         }
 
         content = "{\"offsets\": {}}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(500, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Cannot deserialize value"));
+            assertTrue(response.getEntity().toString().contains("Cannot deserialize value"));
         }
 
         content = "{\"offsets\": [123]}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(500, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Cannot construct instance"));
+            assertTrue(response.getEntity().toString().contains("Cannot construct instance"));
         }
 
         content = "{\"offsets\": [{\"key\": \"val\"}]}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(500, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Unrecognized field"));
+            assertTrue(response.getEntity().toString().contains("Unrecognized field"));
         }
 
         content = "{\"offsets\": [{\"partition\": []]}]}";
         try (Response response = connect.requestPatch(url, content)) {
             assertEquals(500, response.getStatus());
-            assertThat(response.getEntity().toString(), containsString("Cannot deserialize value"));
+            assertTrue(response.getEntity().toString().contains("Cannot deserialize value"));
         }
     }
 
+    @Flaky("KAFKA-15918")
     @Test
     public void testResetSinkConnectorOffsets() throws Exception {
         resetAndVerifySinkConnectorOffsets(baseSinkConnectorConfigs(), connect.kafka());
     }
 
+    @Flaky("KAFKA-15891")
     @Test
     public void testResetSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
         Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
@@ -769,14 +773,14 @@ public class OffsetsApiIntegrationTest {
 
         // Reset the sink connector's offsets, with retry logic (since we just stopped the connector)
         String response = modifySinkConnectorOffsetsWithRetry(null);
-        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been reset successfully. " +
+        assertTrue(response.contains("The Connect framework-managed offsets for this connector have been reset successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually reset in the system that the connector uses."));
 
         verifyEmptyConnectorOffsets(connectorName);
 
         // Reset the sink connector's offsets again while it is still in a STOPPED state and ensure that there is no error
         response = connect.resetConnectorOffsets(connectorName);
-        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been reset successfully. " +
+        assertTrue(response.contains("The Connect framework-managed offsets for this connector have been reset successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually reset in the system that the connector uses."));
 
         verifyEmptyConnectorOffsets(connectorName);
@@ -820,7 +824,7 @@ public class OffsetsApiIntegrationTest {
 
         // Try to reset the offsets
         ConnectRestException e = assertThrows(ConnectRestException.class, () -> connect.resetConnectorOffsets(connectorName));
-        assertThat(e.getMessage(), containsString("zombie sink task"));
+        assertTrue(e.getMessage().contains("zombie sink task"));
 
         // clean up blocked threads created while testing zombie task scenarios
         BlockingConnectorTest.Block.reset();
@@ -879,14 +883,14 @@ public class OffsetsApiIntegrationTest {
 
         // Reset the source connector's offsets
         String response = connect.resetConnectorOffsets(connectorName);
-        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been reset successfully. " +
+        assertTrue(response.contains("The Connect framework-managed offsets for this connector have been reset successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually reset in the system that the connector uses."));
 
         verifyEmptyConnectorOffsets(connectorName);
 
         // Reset the source connector's offsets again while it is still in a STOPPED state and ensure that there is no error
         response = connect.resetConnectorOffsets(connectorName);
-        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been reset successfully. " +
+        assertTrue(response.contains("The Connect framework-managed offsets for this connector have been reset successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually reset in the system that the connector uses."));
 
         verifyEmptyConnectorOffsets(connectorName);

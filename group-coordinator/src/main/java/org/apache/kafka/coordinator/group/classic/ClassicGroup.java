@@ -38,8 +38,8 @@ import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -182,24 +182,17 @@ public class ClassicGroup implements Group {
      */
     private boolean newMemberAdded = false;
 
-    /**
-     * Coordinator metrics.
-     */
-    private final GroupCoordinatorMetricsShard metrics;
-
     public ClassicGroup(
         LogContext logContext,
         String groupId,
         ClassicGroupState initialState,
-        Time time,
-        GroupCoordinatorMetricsShard metrics
+        Time time
     ) {
         this(
             logContext,
             groupId,
             initialState,
             time,
-            metrics,
             0,
             Optional.empty(),
             Optional.empty(),
@@ -213,7 +206,6 @@ public class ClassicGroup implements Group {
         String groupId,
         ClassicGroupState initialState,
         Time time,
-        GroupCoordinatorMetricsShard metrics,
         int generationId,
         Optional<String> protocolType,
         Optional<String> protocolName,
@@ -226,7 +218,6 @@ public class ClassicGroup implements Group {
         this.state = Objects.requireNonNull(initialState);
         this.previousState = DEAD;
         this.time = Objects.requireNonNull(time);
-        this.metrics = Objects.requireNonNull(metrics);
         this.generationId = generationId;
         this.protocolType = protocolType;
         this.protocolName = protocolName;
@@ -296,7 +287,7 @@ public class ClassicGroup implements Group {
      * @return True if the group is a simple group.
      */
     public boolean isSimpleGroup() {
-        return !protocolType.isPresent() && isEmpty() && pendingJoinMembers.isEmpty();
+        return protocolType.isEmpty() && isEmpty() && pendingJoinMembers.isEmpty();
     }
 
     /**
@@ -457,7 +448,7 @@ public class ClassicGroup implements Group {
             throw new IllegalStateException("None of the member's protocols can be supported.");
         }
 
-        if (!leaderId.isPresent()) {
+        if (leaderId.isEmpty()) {
             leaderId = Optional.of(member.memberId());
         }
 
@@ -981,23 +972,6 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Verify the member id is up to date for static members. Return true if both conditions met:
-     *   1. given member is a known static member to group
-     *   2. group stored member id doesn't match with given member id
-     *
-     * @param groupInstanceId  the group instance id.
-     * @param memberId         the member id.
-     * @return whether the static member is fenced based on the condition above.
-     */
-    public boolean isStaticMemberFenced(
-        String groupInstanceId,
-        String memberId
-    ) {
-        String existingMemberId = staticMemberId(groupInstanceId);
-        return existingMemberId != null && !existingMemberId.equals(memberId);
-    }
-
-    /**
      * @return whether the group can rebalance.
      */
     public boolean canRebalance() {
@@ -1013,7 +987,6 @@ public class ClassicGroup implements Group {
         previousState = state;
         state = groupState;
         currentStateTimestamp = Optional.of(time.milliseconds());
-        metrics.onClassicGroupStateTransition(previousState, state);
     }
 
     /**
@@ -1170,7 +1143,7 @@ public class ClassicGroup implements Group {
      * @return the subscribed topics or Empty based on the condition above.
      */
     public Optional<Set<String>> computeSubscribedTopics() {
-        if (!protocolType.isPresent()) {
+        if (protocolType.isEmpty()) {
             return Optional.empty();
         }
         String type = protocolType.get();
@@ -1368,6 +1341,7 @@ public class ClassicGroup implements Group {
      *
      * @param consumerGroup                 The converted ConsumerGroup.
      * @param leavingMemberId               The member that will not be converted in the ClassicGroup.
+     * @param joiningMember                 The member that needs to be converted and added to the ClassicGroup.
      * @param logContext                    The logContext to create the ClassicGroup.
      * @param time                          The time to create the ClassicGroup.
      * @param metadataImage                 The MetadataImage.
@@ -1376,9 +1350,9 @@ public class ClassicGroup implements Group {
     public static ClassicGroup fromConsumerGroup(
         ConsumerGroup consumerGroup,
         String leavingMemberId,
+        ConsumerGroupMember joiningMember,
         LogContext logContext,
         Time time,
-        GroupCoordinatorMetricsShard metrics,
         MetadataImage metadataImage
     ) {
         ClassicGroup classicGroup = new ClassicGroup(
@@ -1386,9 +1360,8 @@ public class ClassicGroup implements Group {
             consumerGroup.groupId(),
             ClassicGroupState.STABLE,
             time,
-            metrics,
             consumerGroup.groupEpoch(),
-            Optional.ofNullable(ConsumerProtocol.PROTOCOL_TYPE),
+            Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.empty(),
             Optional.empty(),
             Optional.of(time.milliseconds())
@@ -1412,15 +1385,38 @@ public class ClassicGroup implements Group {
             }
         });
 
+        if (joiningMember != null) {
+            classicGroup.add(
+                new ClassicGroupMember(
+                    joiningMember.memberId(),
+                    Optional.ofNullable(joiningMember.instanceId()),
+                    joiningMember.clientId(),
+                    joiningMember.clientHost(),
+                    joiningMember.rebalanceTimeoutMs(),
+                    joiningMember.classicProtocolSessionTimeout().get(),
+                    ConsumerProtocol.PROTOCOL_TYPE,
+                    joiningMember.supportedJoinGroupRequestProtocols(),
+                    null
+                )
+            );
+        }
+
         classicGroup.setProtocolName(Optional.of(classicGroup.selectProtocol()));
         classicGroup.setSubscribedTopics(classicGroup.computeSubscribedTopics());
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
             // Set the assignment with serializing the ConsumerGroup's targetAssignment.
             // The serializing version should align with that of the member's JoinGroupRequestProtocol.
+            String memberId = classicGroupMember.memberId();
+            if (joiningMember != null && memberId.equals(joiningMember.memberId())) {
+                // If the downgraded is triggered by the joining static member replacing
+                // the leaving static member, the joining member should take the assignment
+                // of the leaving one.
+                memberId = leavingMemberId;
+            }
             byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(
                 toConsumerProtocolAssignment(
-                    consumerGroup.targetAssignment().get(classicGroupMember.memberId()).partitions(),
+                    consumerGroup.targetAssignment().get(memberId).partitions(),
                     metadataImage.topics()
                 ),
                 ConsumerProtocol.deserializeVersion(
@@ -1463,6 +1459,13 @@ public class ClassicGroup implements Group {
                 targetState.validPreviousStates() + " states before moving to " + targetState +
                 " state. Instead it is in " + state + " state.");
         }
+    }
+
+    /**
+     * For testing only.
+     */
+    public void setLeaderId(Optional<String> leaderId) {
+        this.leaderId = leaderId;
     }
 
     @Override

@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
@@ -54,24 +53,21 @@ public class SslVersionsTransportLayerTest {
         List<Arguments> parameters = new ArrayList<>();
 
         parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.2")));
-
-        if (Java.IS_JAVA11_COMPATIBLE) {
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.3")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.2")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.3")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.3")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.2")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.3")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.2")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")));
-        }
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.3")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.2")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.3")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.3")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.2")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.3")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.2")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")));
 
         return parameters.stream();
     }
@@ -80,7 +76,7 @@ public class SslVersionsTransportLayerTest {
      * Tests that connection success with the default TLS version.
      * Note that debug mode for javax.net.ssl can be enabled via {@code System.setProperty("javax.net.debug", "ssl:handshake");}
      */
-    @ParameterizedTest(name = "tlsServerProtocol = {0}, tlsClientProtocol = {1}")
+    @ParameterizedTest(name = "testTlsDefaults(tlsServerProtocol = {0}, tlsClientProtocol = {1})")
     @MethodSource("parameters")
     public void testTlsDefaults(List<String> serverProtocols, List<String> clientProtocols) throws Exception {
         // Create certificates for use by client and server. Add server cert to client truststore and vice versa.

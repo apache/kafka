@@ -17,8 +17,6 @@
 
 package org.apache.kafka.controller.metrics;
 
-import org.apache.kafka.common.utils.MockTime;
-
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
@@ -183,7 +181,6 @@ public class ControllerMetadataMetricsTest {
     @Test
     public void testUpdateUncleanLeaderElection() {
         MetricsRegistry registry = new MetricsRegistry();
-        MockTime time = new MockTime();
         try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             Meter UncleanLeaderElectionsPerSec = (Meter) registry
                     .allMetrics()

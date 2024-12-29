@@ -34,11 +34,11 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import scala.collection.{Map, Seq, Set, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 trait AutoTopicCreationManager {
 
@@ -195,7 +195,7 @@ class DefaultAutoTopicCreationManager(
 
     val request = metadataRequestContext.map { context =>
       val requestVersion =
-        channelManager.controllerApiVersions.asScala match {
+        channelManager.controllerApiVersions.toScala match {
           case None =>
             // We will rely on the Metadata request to be retried in the case
             // that the latest version is not usable by the controller.

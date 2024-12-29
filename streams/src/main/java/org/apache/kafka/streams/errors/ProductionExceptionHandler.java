@@ -26,10 +26,15 @@ import org.apache.kafka.common.Configurable;
 public interface ProductionExceptionHandler extends Configurable {
     /**
      * Inspect a record that we attempted to produce, and the exception that resulted
-     * from attempting to produce it and determine whether or not to continue processing.
+     * from attempting to produce it and determine to continue or stop processing.
      *
-     * @param record The record that failed to produce
-     * @param exception The exception that occurred during production
+     * @param record
+     *     The record that failed to produce.
+     * @param exception
+     *     The exception that occurred during production.
+     *
+     * @return Whether to continue or stop processing, or retry the failed operation.
+     *
      * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ProducerRecord, Exception)} instead.
      */
     @Deprecated
@@ -40,11 +45,16 @@ public interface ProductionExceptionHandler extends Configurable {
 
     /**
      * Inspect a record that we attempted to produce, and the exception that resulted
-     * from attempting to produce it and determine whether or not to continue processing.
+     * from attempting to produce it and determine to continue or stop processing.
      *
-     * @param context The error handler context metadata
-     * @param record The record that failed to produce
-     * @param exception The exception that occurred during production
+     * @param context
+     *     The error handler context metadata.
+     * @param record
+     *     The record that failed to produce.
+     * @param exception
+     *     The exception that occurred during production.
+     *
+     * @return Whether to continue or stop processing, or retry the failed operation.
      */
     default ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
                                                       final ProducerRecord<byte[], byte[]> record,
@@ -56,10 +66,16 @@ public interface ProductionExceptionHandler extends Configurable {
      * Handles serialization exception and determine if the process should continue. The default implementation is to
      * fail the process.
      *
-     * @param record        the record that failed to serialize
-     * @param exception     the exception that occurred during serialization
+     * @param record
+     *     The record that failed to serialize.
+     * @param exception
+     *     The exception that occurred during serialization.
+     *
+     * @return Whether to continue or stop processing, or retry the failed operation.
+     *
      * @deprecated Since 3.9. Use {@link #handleSerializationException(ErrorHandlerContext, ProducerRecord, Exception, SerializationExceptionOrigin)} instead.
      */
+    @SuppressWarnings({"rawtypes", "unused"})
     @Deprecated
     default ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
                                                                             final Exception exception) {
@@ -70,11 +86,18 @@ public interface ProductionExceptionHandler extends Configurable {
      * Handles serialization exception and determine if the process should continue. The default implementation is to
      * fail the process.
      *
-     * @param context   the error handler context metadata
-     * @param record    the record that failed to serialize
-     * @param exception the exception that occurred during serialization
-     * @param origin    the origin of the serialization exception
+     * @param context
+     *     The error handler context metadata.
+     * @param record
+     *     The record that failed to serialize.
+     * @param exception
+     *     The exception that occurred during serialization.
+     * @param origin
+     *     The origin of the serialization exception.
+     *
+     * @return Whether to continue or stop processing, or retry the failed operation.
      */
+    @SuppressWarnings("rawtypes")
     default ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
                                                                             final ProducerRecord record,
                                                                             final Exception exception,

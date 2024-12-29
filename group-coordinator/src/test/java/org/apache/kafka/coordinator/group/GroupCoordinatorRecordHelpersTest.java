@@ -34,6 +34,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -43,10 +45,10 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -89,7 +91,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.mock;
 
 public class GroupCoordinatorRecordHelpersTest {
 
@@ -514,8 +515,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         Map<String, byte[]> assignment = new HashMap<>();
@@ -585,8 +585,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         expectedMembers.forEach(member -> {
@@ -637,8 +636,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         expectedMembers.forEach(member -> {
@@ -697,8 +695,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         group.initNextGeneration();
@@ -810,6 +807,57 @@ public class GroupCoordinatorRecordHelpersTest {
             null);
 
         CoordinatorRecord record = GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 1);
+        assertEquals(expectedRecord, record);
+    }
+
+    @Test
+    public void testNewConsumerGroupRegularExpressionRecord() {
+        CoordinatorRecord expectedRecord = new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegularExpressionKey()
+                    .setGroupId("group-id")
+                    .setRegularExpression("ab*"),
+                (short) 16
+            ),
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegularExpressionValue()
+                    .setTopics(Arrays.asList("abc", "abcd"))
+                    .setVersion(10L)
+                    .setTimestamp(12345L),
+                (short) 0
+            )
+        );
+
+        CoordinatorRecord record = GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
+            "group-id",
+            "ab*",
+            new ResolvedRegularExpression(
+                Set.of("abc", "abcd"),
+                10L,
+                12345L
+            )
+        );
+
+        assertEquals(expectedRecord, record);
+    }
+
+    @Test
+    public void testNewConsumerGroupRegularExpressionTombstone() {
+        CoordinatorRecord expectedRecord = new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegularExpressionKey()
+                    .setGroupId("group-id")
+                    .setRegularExpression("ab*"),
+                (short) 16
+            ),
+            null
+        );
+
+        CoordinatorRecord record = GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(
+            "group-id",
+            "ab*"
+        );
+
         assertEquals(expectedRecord, record);
     }
 

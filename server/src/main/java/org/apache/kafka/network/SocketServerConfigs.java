@@ -78,8 +78,10 @@ public class SocketServerConfigs {
             " <code>PLAINTEXT://127.0.0.1:9092,SSL://[::1]:9092</code>%n";
 
     public static final String ADVERTISED_LISTENERS_CONFIG = "advertised.listeners";
-    public static final String ADVERTISED_LISTENERS_DOC = String.format(
-            "Listeners to publish to ZooKeeper for clients to use, if different than the <code>%s</code> config property." +
+    public static final String ADVERTISED_LISTENERS_DOC = String.format("Specifies the listener addresses that the Kafka brokers will advertise to clients and other brokers." +
+                    " The config is useful where the actual listener configuration <code>%s</code> does not represent the addresses that clients should" +
+                    " use to connect, such as in cloud environments. In environments using ZooKeeper, these addresses are published to ZooKeeper." +
+                    " In Kraft mode, the address would be published to and managed by kraft controller, the brokers would pull these data from controller as needed." +
                     " In IaaS environments, this may need to be different from the interface to which the broker binds." +
                     " If this is not set, the value for <code>%1$1s</code> will be used." +
                     " Unlike <code>%1$1s</code>, it is not valid to advertise the 0.0.0.0 meta-address.%n" +
@@ -93,17 +95,17 @@ public class SocketServerConfigs {
             "Name of listener used for communication between controller and brokers. " +
                     "A broker will use the <code>%s</code> to locate the endpoint in %s list, to listen for connections from the controller. " +
                     "For example, if a broker's config is:%n" +
-                    "<code>listeners = INTERNAL://192.1.1.8:9092, EXTERNAL://10.1.1.5:9093, CONTROLLER://192.1.1.8:9094" +
-                    "listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-                    "control.plane.listener.name = CONTROLLER</code>%n" +
+                    "<code>listeners=INTERNAL://192.1.1.8:9092,EXTERNAL://10.1.1.5:9093,CONTROLLER://192.1.1.8:9094</code>%n" +
+                    "<code>listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:SSL,CONTROLLER:SSL</code>%n" +
+                    "<code>control.plane.listener.name = CONTROLLER</code>%n" +
                     "On startup, the broker will start listening on \"192.1.1.8:9094\" with security protocol \"SSL\".%n" +
                     "On the controller side, when it discovers a broker's published endpoints through ZooKeeper, it will use the <code>%1$1s</code> " +
                     "to find the endpoint, which it will use to establish connection to the broker.%n" +
                     "For example, if the broker's published endpoints on ZooKeeper are:%n" +
-                    " <code>\"endpoints\" : [\"INTERNAL://broker1.example.com:9092\",\"EXTERNAL://broker1.example.com:9093\",\"CONTROLLER://broker1.example.com:9094\"]</code>%n" +
+                    " <code>\"endpoints\":[\"INTERNAL://broker1.example.com:9092\",\"EXTERNAL://broker1.example.com:9093\",\"CONTROLLER://broker1.example.com:9094\"]</code>%n" +
                     " and the controller's config is:%n" +
-                    "<code>listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-                    "control.plane.listener.name = CONTROLLER</code>%n" +
+                    "<code>listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL</code>%n" +
+                    "<code>control.plane.listener.name = CONTROLLER</code>%n" +
                     "then the controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.%n" +
                     "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections.%n" +
                     "If explicitly configured, the value cannot be the same as the value of <code>%s</code>.",

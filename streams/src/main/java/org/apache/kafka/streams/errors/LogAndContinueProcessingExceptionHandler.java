@@ -32,10 +32,15 @@ public class LogAndContinueProcessingExceptionHandler implements ProcessingExcep
 
     @Override
     public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
-        log.warn("Exception caught during message processing, " +
-                "processor node: {}, taskId: {}, source topic: {}, source partition: {}, source offset: {}",
-            context.processorNodeId(), context.taskId(), context.topic(), context.partition(), context.offset(),
-            exception);
+        log.warn(
+            "Exception caught during message processing, processor node: {}, taskId: {}, source topic: {}, source partition: {}, source offset: {}",
+            context.processorNodeId(),
+            context.taskId(),
+            context.topic(),
+            context.partition(),
+            context.offset(),
+            exception
+        );
 
         return ProcessingHandlerResponse.CONTINUE;
     }

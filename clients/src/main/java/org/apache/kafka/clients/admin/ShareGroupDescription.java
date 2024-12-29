@@ -17,14 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.ShareGroupState;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,27 +35,26 @@ import java.util.stream.Collectors;
 @InterfaceStability.Evolving
 public class ShareGroupDescription {
     private final String groupId;
-    private final Collection<MemberDescription> members;
-    private final ShareGroupState state;
+    private final Collection<ShareMemberDescription> members;
+    private final GroupState groupState;
     private final Node coordinator;
     private final Set<AclOperation> authorizedOperations;
 
     public ShareGroupDescription(String groupId,
-                                 Collection<MemberDescription> members,
-                                 ShareGroupState state,
+                                 Collection<ShareMemberDescription> members,
+                                 GroupState groupState,
                                  Node coordinator) {
-        this(groupId, members, state, coordinator, Collections.emptySet());
+        this(groupId, members, groupState, coordinator, Collections.emptySet());
     }
 
     public ShareGroupDescription(String groupId,
-                                 Collection<MemberDescription> members,
-                                 ShareGroupState state,
+                                 Collection<ShareMemberDescription> members,
+                                 GroupState groupState,
                                  Node coordinator,
                                  Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
-        this.members = members == null ? Collections.emptyList() :
-            Collections.unmodifiableList(new ArrayList<>(members));
-        this.state = state;
+        this.members = members == null ? Collections.emptyList() : List.copyOf(members);
+        this.groupState = groupState;
         this.coordinator = coordinator;
         this.authorizedOperations = authorizedOperations;
     }
@@ -67,14 +66,14 @@ public class ShareGroupDescription {
         final ShareGroupDescription that = (ShareGroupDescription) o;
         return Objects.equals(groupId, that.groupId) &&
             Objects.equals(members, that.members) &&
-            state == that.state &&
+            groupState == that.groupState &&
             Objects.equals(coordinator, that.coordinator) &&
             Objects.equals(authorizedOperations, that.authorizedOperations);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, members, state, coordinator, authorizedOperations);
+        return Objects.hash(groupId, members, groupState, coordinator, authorizedOperations);
     }
 
     /**
@@ -87,15 +86,15 @@ public class ShareGroupDescription {
     /**
      * A list of the members of the share group.
      */
-    public Collection<MemberDescription> members() {
+    public Collection<ShareMemberDescription> members() {
         return members;
     }
 
     /**
-     * The share group state, or UNKNOWN if the state is too new for us to parse.
+     * The group state, or UNKNOWN if the state is too new for us to parse.
      */
-    public ShareGroupState state() {
-        return state;
+    public GroupState groupState() {
+        return groupState;
     }
 
     /**
@@ -115,8 +114,8 @@ public class ShareGroupDescription {
     @Override
     public String toString() {
         return "(groupId=" + groupId +
-            ", members=" + members.stream().map(MemberDescription::toString).collect(Collectors.joining(",")) +
-            ", state=" + state +
+            ", members=" + members.stream().map(ShareMemberDescription::toString).collect(Collectors.joining(",")) +
+            ", groupState=" + groupState +
             ", coordinator=" + coordinator +
             ", authorizedOperations=" + authorizedOperations +
             ")";

@@ -69,7 +69,7 @@ public class RemoteLogMetadataCacheTest {
         }
     }
 
-    @ParameterizedTest(name = "isInitialized={0}")
+    @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testCacheUpdateMetadataOnInvalidArgs(boolean isInitialized) {
         if (isInitialized) {

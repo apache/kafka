@@ -316,10 +316,10 @@ public class ConfigurationControlManagerTest {
         assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
                     setName("foo.bar").setValue("123"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("quux").setValue("456"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("broker.config.to.remove").setValue(null), CONFIG_RECORD.highestSupportedVersion())
+                                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                                        setName("quux").setValue("456"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
+                                            new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                                                    setName("broker.config.to.remove").setValue(null), CONFIG_RECORD.highestSupportedVersion())
                 ),
                 toMap(entry(MYTOPIC, new ApiError(Errors.POLICY_VIOLATION,
                     "Expected: AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +

@@ -49,12 +49,13 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
-import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
@@ -100,13 +101,14 @@ public class OffsetMetadataManagerTest {
         public static class Builder {
             private final MockTime time = new MockTime();
             private final MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
+            private final MockCoordinatorExecutor<CoordinatorRecord> executor = new MockCoordinatorExecutor<>();
             private final LogContext logContext = new LogContext();
             private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+            private final GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
+            private final GroupConfigManager configManager = mock(GroupConfigManager.class);
             private GroupMetadataManager groupMetadataManager = null;
             private MetadataImage metadataImage = null;
             private GroupCoordinatorConfig config = null;
-            private GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
-            private GroupConfigManager configManager = mock(GroupConfigManager.class);
 
             Builder withOffsetMetadataMaxSize(int offsetMetadataMaxSize) {
                 config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(offsetMetadataMaxSize, 60000L, 24 * 60);
@@ -133,12 +135,13 @@ public class OffsetMetadataManagerTest {
                     groupMetadataManager = new GroupMetadataManager.Builder()
                         .withTime(time)
                         .withTimer(timer)
+                        .withExecutor(executor)
                         .withSnapshotRegistry(snapshotRegistry)
                         .withLogContext(logContext)
                         .withMetadataImage(metadataImage)
-                        .withConsumerGroupAssignors(Collections.singletonList(new RangeAssignor()))
                         .withGroupCoordinatorMetricsShard(metrics)
                         .withGroupConfigManager(configManager)
+                        .withConfig(GroupCoordinatorConfig.fromProps(Collections.emptyMap()))
                         .build();
                 }
 
@@ -494,8 +497,8 @@ public class OffsetMetadataManagerTest {
                 throw new IllegalStateException("Received a null key in " + record);
             }
 
-            switch (key.version()) {
-                case OffsetCommitKey.HIGHEST_SUPPORTED_VERSION:
+            switch (CoordinatorRecordType.fromId(key.version())) {
+                case OFFSET_COMMIT:
                     offsetMetadataManager.replay(
                         lastWrittenOffset,
                         producerId,
@@ -1275,7 +1278,6 @@ public class OffsetMetadataManagerTest {
                                 .setCommittedOffset(100L)
                                 .setCommittedLeaderEpoch(10)
                                 .setCommittedMetadata("metadata")
-                                .setCommitTimestamp(context.time.milliseconds())
                         ))
                 ))
         );
@@ -1344,14 +1346,12 @@ public class OffsetMetadataManagerTest {
                                 .setPartitionIndex(0)
                                 .setCommittedOffset(100L)
                                 .setCommittedLeaderEpoch(10)
-                                .setCommittedMetadata("toolarge")
-                                .setCommitTimestamp(context.time.milliseconds()),
+                                .setCommittedMetadata("toolarge"),
                             new OffsetCommitRequestData.OffsetCommitRequestPartition()
                                 .setPartitionIndex(1)
                                 .setCommittedOffset(100L)
                                 .setCommittedLeaderEpoch(10)
                                 .setCommittedMetadata("small")
-                                .setCommitTimestamp(context.time.milliseconds())
                         ))
                 ))
         );

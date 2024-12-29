@@ -33,7 +33,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -261,14 +260,14 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
             ByteArrayOutputStream os = new ByteArrayOutputStream();
             log.debug("handleOutput - preparing to read response body from {}", con.getURL());
             copy(is, os);
-            responseBody = os.toString(StandardCharsets.UTF_8.name());
+            responseBody = os.toString(StandardCharsets.UTF_8);
         } catch (Exception e) {
             // there still can be useful error response from the servers, lets get it
             try (InputStream is = con.getErrorStream()) {
                 ByteArrayOutputStream os = new ByteArrayOutputStream();
                 log.debug("handleOutput - preparing to read error response body from {}", con.getURL());
                 copy(is, os);
-                errorResponseBody = os.toString(StandardCharsets.UTF_8.name());
+                errorResponseBody = os.toString(StandardCharsets.UTF_8);
             } catch (Exception e2) {
                 log.warn("handleOutput - error retrieving error information", e2);
             }
@@ -354,15 +353,14 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         return sanitizeString("the token endpoint response's access_token JSON attribute", accessTokenNode.textValue());
     }
 
-    static String formatAuthorizationHeader(String clientId, String clientSecret, boolean urlencode) throws
-        UnsupportedEncodingException {
+    static String formatAuthorizationHeader(String clientId, String clientSecret, boolean urlencode) {
         clientId = sanitizeString("the token endpoint request client ID parameter", clientId);
         clientSecret = sanitizeString("the token endpoint request client secret parameter", clientSecret);
 
         // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
         if (urlencode) {
-            clientId = URLEncoder.encode(clientId, StandardCharsets.UTF_8.name());
-            clientSecret = URLEncoder.encode(clientSecret, StandardCharsets.UTF_8.name());
+            clientId = URLEncoder.encode(clientId, StandardCharsets.UTF_8);
+            clientSecret = URLEncoder.encode(clientSecret, StandardCharsets.UTF_8);
         }
 
         String s = String.format("%s:%s", clientId, clientSecret);
@@ -371,22 +369,17 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         return String.format("Basic %s", encoded);
     }
 
-    static String formatRequestBody(String scope) throws IOException {
-        try {
-            StringBuilder requestParameters = new StringBuilder();
-            requestParameters.append("grant_type=client_credentials");
+    static String formatRequestBody(String scope) {
+        StringBuilder requestParameters = new StringBuilder();
+        requestParameters.append("grant_type=client_credentials");
 
-            if (scope != null && !scope.trim().isEmpty()) {
-                scope = scope.trim();
-                String encodedScope = URLEncoder.encode(scope, StandardCharsets.UTF_8.name());
-                requestParameters.append("&scope=").append(encodedScope);
-            }
-
-            return requestParameters.toString();
-        } catch (UnsupportedEncodingException e) {
-            // The world has gone crazy!
-            throw new IOException(String.format("Encoding %s not supported", StandardCharsets.UTF_8.name()));
+        if (scope != null && !scope.trim().isEmpty()) {
+            scope = scope.trim();
+            String encodedScope = URLEncoder.encode(scope, StandardCharsets.UTF_8);
+            requestParameters.append("&scope=").append(encodedScope);
         }
+
+        return requestParameters.toString();
     }
 
     private static String sanitizeString(String name, String value) {

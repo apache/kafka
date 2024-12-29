@@ -16,14 +16,11 @@
  */
 package kafka.coordinator.transaction
 
-import java.io.PrintStream
 import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
-import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
-import org.apache.kafka.common.record.{Record, RecordBatch}
-import org.apache.kafka.common.{MessageFormatter, TopicPartition}
+import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion
 
@@ -124,7 +121,7 @@ object TransactionLog {
         val transactionMetadata = new TransactionMetadata(
           transactionalId = transactionalId,
           producerId = value.producerId,
-          previousProducerId = value.previousProducerId,
+          prevProducerId = value.previousProducerId,
           nextProducerId = value.nextProducerId,
           producerEpoch = value.producerEpoch,
           lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
@@ -146,56 +143,6 @@ object TransactionLog {
       } else throw new IllegalStateException(s"Unknown version $version from the transaction log message value")
     }
   }
-
-  // Formatter for use with tools to read transaction log messages
-  @Deprecated
-  class TransactionLogMessageFormatter extends MessageFormatter {
-    def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
-      Option(consumerRecord.key).map(key => readTxnRecordKey(ByteBuffer.wrap(key))).foreach {
-        case txnKey: TxnKey =>
-          val transactionalId = txnKey.transactionalId
-          val value = consumerRecord.value
-          val producerIdMetadata = if (value == null)
-            None
-          else
-            readTxnRecordValue(transactionalId, ByteBuffer.wrap(value))
-          output.write(transactionalId.getBytes(StandardCharsets.UTF_8))
-          output.write("::".getBytes(StandardCharsets.UTF_8))
-          output.write(producerIdMetadata.getOrElse("NULL").toString.getBytes(StandardCharsets.UTF_8))
-          output.write("\n".getBytes(StandardCharsets.UTF_8))
-
-        case unknownKey: UnknownKey =>
-          output.write(s"unknown::version=${unknownKey.version}\n".getBytes(StandardCharsets.UTF_8))
-      }
-    }
-  }
-
-  /**
-   * Exposed for printing records using [[kafka.tools.DumpLogSegments]]
-   */
-  def formatRecordKeyAndValue(record: Record): (Option[String], Option[String]) = {
-    TransactionLog.readTxnRecordKey(record.key) match {
-      case txnKey: TxnKey =>
-        val keyString = s"transaction_metadata::transactionalId=${txnKey.transactionalId}"
-
-        val valueString = TransactionLog.readTxnRecordValue(txnKey.transactionalId, record.value) match {
-          case None => "<DELETE>"
-
-          case Some(txnMetadata) => s"producerId:${txnMetadata.producerId}," +
-            s"producerEpoch:${txnMetadata.producerEpoch}," +
-            s"state=${txnMetadata.state}," +
-            s"partitions=${txnMetadata.topicPartitions.mkString("[", ",", "]")}," +
-            s"txnLastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}," +
-            s"txnTimeoutMs=${txnMetadata.txnTimeoutMs}"
-        }
-
-        (Some(keyString), Some(valueString))
-
-      case unknownKey: UnknownKey =>
-        (Some(s"unknown::version=${unknownKey.version}"), None)
-    }
-  }
-
 }
 
 sealed trait BaseKey{

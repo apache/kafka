@@ -21,7 +21,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
@@ -29,7 +29,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -54,7 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SubscriptionStateTest {
 
-    private SubscriptionState state = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+    private SubscriptionState state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
     private final String topic = "test";
     private final String topic1 = "test1";
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
@@ -123,15 +122,15 @@ public class SubscriptionStateTest {
         assertFalse(state.groupSubscribe(singleton(topic1)));
         assertEquals(singleton(topic1), state.metadataTopics());
 
-        assertTrue(state.groupSubscribe(Utils.mkSet(topic, topic1)));
-        assertEquals(Utils.mkSet(topic, topic1), state.metadataTopics());
+        assertTrue(state.groupSubscribe(Set.of(topic, topic1)));
+        assertEquals(Set.of(topic, topic1), state.metadataTopics());
 
         // `groupSubscribe` does not accumulate
         assertFalse(state.groupSubscribe(singleton(topic1)));
         assertEquals(singleton(topic1), state.metadataTopics());
 
         state.subscribe(singleton("anotherTopic"), Optional.of(rebalanceListener));
-        assertEquals(Utils.mkSet(topic1, "anotherTopic"), state.metadataTopics());
+        assertEquals(Set.of(topic1, "anotherTopic"), state.metadataTopics());
 
         assertFalse(state.groupSubscribe(singleton("anotherTopic")));
         assertEquals(singleton("anotherTopic"), state.metadataTopics());
@@ -192,7 +191,7 @@ public class SubscriptionStateTest {
     @Test
     public void verifyAssignmentId() {
         assertEquals(0, state.assignmentId());
-        Set<TopicPartition> userAssignment = Utils.mkSet(tp0, tp1);
+        Set<TopicPartition> userAssignment = Set.of(tp0, tp1);
         state.assignFromUser(userAssignment);
         assertEquals(1, state.assignmentId());
         assertEquals(userAssignment, state.assignedPartitions());
@@ -201,7 +200,7 @@ public class SubscriptionStateTest {
         assertEquals(2, state.assignmentId());
         assertEquals(Collections.emptySet(), state.assignedPartitions());
 
-        Set<TopicPartition> autoAssignment = Utils.mkSet(t1p0);
+        Set<TopicPartition> autoAssignment = Set.of(t1p0);
         state.subscribe(singleton(topic1), Optional.of(rebalanceListener));
         assertTrue(state.checkAssignmentMatchedSubscription(autoAssignment));
         state.assignFromSubscribed(autoAssignment);
@@ -316,7 +315,7 @@ public class SubscriptionStateTest {
 
         // New partition added to the assignment. Owned partitions should continue to be
         // fetchable, while the newly added should not be fetchable until callback completes.
-        state.assignFromSubscribedAwaitingCallback(Utils.mkSet(tp0, tp1), singleton(tp1));
+        state.assignFromSubscribedAwaitingCallback(Set.of(tp0, tp1), singleton(tp1));
         assertTrue(state.isFetchable(tp0));
         assertFalse(state.isFetchable(tp1));
         assertEquals(1, state.initializingPartitions().size());
@@ -398,6 +397,40 @@ public class SubscriptionStateTest {
         state.subscribeFromPattern(new HashSet<>(Arrays.asList(topic, topic1)));
         assertEquals(2, state.subscription().size(), "Expected subscribed topics count is incorrect");
     }
+
+    @Test
+    public void testSubscribeToRe2JPattern() {
+        String pattern = "t.*";
+        state.subscribe(new SubscriptionPattern(pattern), Optional.of(rebalanceListener));
+        assertTrue(state.toString().contains("type=AUTO_PATTERN_RE2J"));
+        assertTrue(state.toString().contains("subscribedPattern=" + pattern));
+    }
+
+    @Test
+    public void testMixedPatternSubscriptionNotAllowed() {
+        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(new SubscriptionPattern("t.*"),
+            Optional.of(rebalanceListener)));
+
+        state.unsubscribe();
+
+        state.subscribe(new SubscriptionPattern("t.*"), Optional.of(rebalanceListener));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener)));
+    }
+
+    @Test
+    public void testSubscriptionPattern() {
+        SubscriptionPattern pattern = new SubscriptionPattern("t.*");
+        state.subscribe(pattern, Optional.of(rebalanceListener));
+        assertTrue(state.hasRe2JPatternSubscription());
+        assertEquals(pattern, state.subscriptionPattern());
+        assertTrue(state.hasAutoAssignedPartitions());
+
+        state.unsubscribe();
+        assertFalse(state.hasRe2JPatternSubscription());
+        assertNull(state.subscriptionPattern());
+    }
+
 
     @Test
     public void unsubscribeUserAssignment() {
@@ -588,7 +621,7 @@ public class SubscriptionStateTest {
                 new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(10))));
         assertTrue(state.awaitingValidation(tp0));
 
-        state.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        state.requestOffsetReset(tp0, AutoOffsetResetStrategy.EARLIEST);
         assertFalse(state.awaitingValidation(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
     }
@@ -735,7 +768,7 @@ public class SubscriptionStateTest {
     @Test
     public void testTruncationDetectionWithoutResetPolicy() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         state.assignFromUser(Collections.singleton(tp0));
 
         int currentEpoch = 10;
@@ -765,7 +798,7 @@ public class SubscriptionStateTest {
     @Test
     public void testTruncationDetectionUnknownDivergentOffsetWithResetPolicy() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         state.assignFromUser(Collections.singleton(tp0));
 
         int currentEpoch = 10;
@@ -784,13 +817,13 @@ public class SubscriptionStateTest {
         assertEquals(Optional.empty(), truncationOpt);
         assertFalse(state.awaitingValidation(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
-        assertEquals(OffsetResetStrategy.EARLIEST, state.resetStrategy(tp0));
+        assertEquals(AutoOffsetResetStrategy.EARLIEST, state.resetStrategy(tp0));
     }
 
     @Test
     public void testTruncationDetectionUnknownDivergentOffsetWithoutResetPolicy() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         state.assignFromUser(Collections.singleton(tp0));
 
         int currentEpoch = 10;
@@ -842,7 +875,7 @@ public class SubscriptionStateTest {
         state.assignFromUser(Collections.singleton(tp0));
 
         // Reset offsets
-        state.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        state.requestOffsetReset(tp0, AutoOffsetResetStrategy.EARLIEST);
 
         // Attempt to validate with older API version, should do nothing
         ApiVersions oldApis = new ApiVersions();
@@ -867,7 +900,7 @@ public class SubscriptionStateTest {
         assertFalse(state.isOffsetResetNeeded(tp0));
 
         // Reset again, and complete it with a seek that would normally require validation
-        state.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        state.requestOffsetReset(tp0, AutoOffsetResetStrategy.EARLIEST);
         state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(10), new Metadata.LeaderAndEpoch(
                 Optional.of(broker1), Optional.of(2))));
         // We are now in AWAIT_VALIDATION

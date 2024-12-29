@@ -18,7 +18,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.server.util.TopicPartitionFilter;
+import org.apache.kafka.tools.filter.TopicPartitionFilter;
 
 import org.junit.jupiter.api.Test;
 

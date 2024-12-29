@@ -189,4 +189,23 @@ public class ConcurrentMapBenchmark {
             }
         }
     }
+
+    @Benchmark
+    @OperationsPerInvocation(TIMES)
+    public void testConcurrentHashMapComputeIfAbsentReadOnly(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            blackhole.consume(concurrentHashMap.computeIfAbsent(
+                    ThreadLocalRandom.current().nextInt(0, mapSize),
+                    newValue -> Integer.MAX_VALUE
+            ));
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(TIMES)
+    public void testConcurrentHashMapGetReadOnly(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            blackhole.consume(concurrentHashMap.get(ThreadLocalRandom.current().nextInt(0, mapSize)));
+        }
+    }
 }

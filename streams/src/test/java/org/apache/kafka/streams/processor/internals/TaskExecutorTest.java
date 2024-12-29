@@ -51,7 +51,7 @@ public class TaskExecutorTest {
         final TaskExecutionMetadata metadata = mock(TaskExecutionMetadata.class);
         final StreamsProducer producer = mock(StreamsProducer.class);
         when(metadata.processingMode()).thenReturn(EXACTLY_ONCE_V2);
-        when(taskManager.threadProducer()).thenReturn(producer);
+        when(taskManager.streamsProducer()).thenReturn(producer);
         when(producer.transactionInFlight()).thenReturn(true);
 
         final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());

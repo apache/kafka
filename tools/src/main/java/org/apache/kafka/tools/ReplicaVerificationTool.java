@@ -55,7 +55,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.ShutdownableThread;
-import org.apache.kafka.server.util.TopicFilter;
+import org.apache.kafka.tools.filter.TopicFilter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -264,7 +264,6 @@ public class ReplicaVerificationTool {
         private final OptionSpec<String> brokerListOpt;
         private final OptionSpec<Integer> fetchSizeOpt;
         private final OptionSpec<Integer> maxWaitMsOpt;
-        private final OptionSpec<String> topicWhiteListOpt;
         private final OptionSpec<String> topicsIncludeOpt;
         private final OptionSpec<Long> initialOffsetTimeOpt;
         private final OptionSpec<Long> reportIntervalOpt;
@@ -285,12 +284,6 @@ public class ReplicaVerificationTool {
                 .describedAs("ms")
                 .ofType(Integer.class)
                 .defaultsTo(1_000);
-            topicWhiteListOpt = parser.accepts("topic-white-list", "DEPRECATED use --topics-include instead; " +
-                    "ignored if --topics-include specified. List of topics to verify replica consistency.")
-                .withRequiredArg()
-                .describedAs("Java regex (String)")
-                .ofType(String.class)
-                .defaultsTo(".*");
             topicsIncludeOpt = parser.accepts("topics-include", "List of topics to verify replica consistency.")
                 .withRequiredArg()
                 .describedAs("Java regex (String)")
@@ -314,8 +307,6 @@ public class ReplicaVerificationTool {
                 CommandLineUtils.printVersionAndExit();
             }
             CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt);
-            CommandLineUtils.checkInvalidArgs(parser, options, topicsIncludeOpt, topicWhiteListOpt);
-
         }
 
         String brokerHostsAndPorts() {
@@ -331,7 +322,7 @@ public class ReplicaVerificationTool {
         }
 
         TopicFilter.IncludeList topicsIncludeFilter() {
-            String regex = options.valueOf(options.has(topicsIncludeOpt) ? topicsIncludeOpt : topicWhiteListOpt);
+            String regex = options.valueOf(topicsIncludeOpt);
             try {
                 Pattern.compile(regex);
             } catch (PatternSyntaxException e) {

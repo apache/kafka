@@ -18,6 +18,7 @@ package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 
 import org.junit.jupiter.api.Test;
 
@@ -98,6 +99,29 @@ public class NullableStructMessageTest {
         message.toString();
     }
 
+    /**
+     * Regression test for KAFKA-18199. Tests that the size of the varint encoding a tagged nullable
+     * struct's size is calculated correctly.
+     */
+    @Test
+    public void testTaggedStructSize() {
+        NullableStructMessageData message = new NullableStructMessageData()
+            .setNullableStruct(null)
+            .setNullableStruct2(null)
+            .setNullableStruct3(null)
+            .setNullableStruct4(new NullableStructMessageData.MyStruct4()
+                .setMyInt(4)
+                .setMyString(new String(new char[121])));
+
+        // We want the struct to be 127 bytes long, so that the varint encoding of its size is one
+        // short of overflowing into a two-byte representation. An extra byte is added to the
+        // nullable struct size to account for the is-not-null flag.
+        assertEquals(127, message.nullableStruct4().size(new ObjectSerializationCache(), (short) 2));
+
+        NullableStructMessageData newMessage = roundTrip(message, (short) 2);
+        assertEquals(message, newMessage);
+    }
+
     private NullableStructMessageData deserialize(ByteBuffer buf, short version) {
         NullableStructMessageData message = new NullableStructMessageData();
         message.read(new ByteBufferAccessor(buf.duplicate()), version);
@@ -110,6 +134,8 @@ public class NullableStructMessageTest {
 
     private NullableStructMessageData roundTrip(NullableStructMessageData message, short version) {
         ByteBuffer buffer = serialize(message, version);
+        // Check size calculation
+        assertEquals(buffer.remaining(), message.size(new ObjectSerializationCache(), version));
         return deserialize(buffer.duplicate(), version);
     }
 }

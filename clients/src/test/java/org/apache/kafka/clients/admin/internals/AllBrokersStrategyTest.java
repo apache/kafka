@@ -29,7 +29,6 @@ import java.util.HashSet;
 import java.util.OptionalInt;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -48,9 +47,9 @@ class AllBrokersStrategyTest {
         AllBrokersStrategy strategy = new AllBrokersStrategy(logContext);
         AllBrokersStrategy.BrokerKey key1 = new AllBrokersStrategy.BrokerKey(OptionalInt.empty());
         AllBrokersStrategy.BrokerKey key2 = new AllBrokersStrategy.BrokerKey(OptionalInt.of(1));
-        assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(mkSet(key1)));
-        assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(mkSet(key2)));
-        assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(mkSet(key1, key2)));
+        assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(Set.of(key1)));
+        assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(Set.of(key2)));
+        assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(Set.of(key1, key2)));
 
         Set<AllBrokersStrategy.BrokerKey> keys = new HashSet<>(AllBrokersStrategy.LOOKUP_KEYS);
         keys.add(key2);
@@ -80,7 +79,7 @@ class AllBrokersStrategyTest {
 
         assertEquals(Collections.emptyMap(), lookupResult.failedKeys);
 
-        Set<AllBrokersStrategy.BrokerKey> expectedMappedKeys = mkSet(
+        Set<AllBrokersStrategy.BrokerKey> expectedMappedKeys = Set.of(
             new AllBrokersStrategy.BrokerKey(OptionalInt.of(1)),
             new AllBrokersStrategy.BrokerKey(OptionalInt.of(2))
         );
@@ -113,9 +112,9 @@ class AllBrokersStrategyTest {
         AllBrokersStrategy.BrokerKey key2 = new AllBrokersStrategy.BrokerKey(OptionalInt.of(1));
         MetadataResponse response = new MetadataResponse(new MetadataResponseData(), ApiKeys.METADATA.latestVersion());
 
-        assertThrows(IllegalArgumentException.class, () -> strategy.handleResponse(mkSet(key1), response));
-        assertThrows(IllegalArgumentException.class, () -> strategy.handleResponse(mkSet(key2), response));
-        assertThrows(IllegalArgumentException.class, () -> strategy.handleResponse(mkSet(key1, key2), response));
+        assertThrows(IllegalArgumentException.class, () -> strategy.handleResponse(Set.of(key1), response));
+        assertThrows(IllegalArgumentException.class, () -> strategy.handleResponse(Set.of(key2), response));
+        assertThrows(IllegalArgumentException.class, () -> strategy.handleResponse(Set.of(key1, key2), response));
 
         Set<AllBrokersStrategy.BrokerKey> keys = new HashSet<>(AllBrokersStrategy.LOOKUP_KEYS);
         keys.add(key2);

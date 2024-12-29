@@ -46,7 +46,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
@@ -55,14 +54,13 @@ import org.apache.kafka.streams.errors.ProductionExceptionHandler.SerializationE
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.MockClientSupplier;
 
-import org.apache.log4j.Level;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.filter.ThresholdFilter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -90,6 +88,8 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -114,15 +114,6 @@ public class RecordCollectorTest {
     private final TaskId taskId = new TaskId(0, 0);
     private final ProductionExceptionHandler productionExceptionHandler = new DefaultProductionExceptionHandler();
     private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(new Metrics());
-    private final StreamsConfig config = new StreamsConfig(mkMap(
-        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
-    ));
-    private final StreamsConfig eosConfig = new StreamsConfig(mkMap(
-        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2)
-    ));
 
     private final String topic = "topic";
     private final String sinkNodeName = "output-node";
@@ -144,7 +135,9 @@ public class RecordCollectorTest {
     private final StreamPartitioner<String, Object> streamPartitioner =
         (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Integer.parseInt(key) % numPartitions));
 
-    private MockProducer<byte[], byte[]> mockProducer;
+    private final MockProducer<byte[], byte[]> mockProducer
+        = new MockProducer<>(cluster, true, new org.apache.kafka.clients.producer.RoundRobinPartitioner(), new ByteArraySerializer(), new ByteArraySerializer());
+
     private StreamsProducer streamsProducer;
     private ProcessorTopology topology;
     private final InternalProcessorContext<Void, Void> context = new InternalMockProcessorContext<>();
@@ -153,14 +146,11 @@ public class RecordCollectorTest {
 
     @BeforeEach
     public void setup() {
-        final MockClientSupplier clientSupplier = new MockClientSupplier();
-        clientSupplier.setCluster(cluster);
-        mockProducer = (MockProducer<byte[], byte[]>) clientSupplier.getProducer(config.originals());
         streamsProducer = new StreamsProducer(
-            StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
             mockProducer,
-            logContext,
-            Time.SYSTEM
+            AT_LEAST_ONCE,
+            Time.SYSTEM,
+            logContext
         );
         final SinkNode<?, ?> sinkNode = new SinkNode<>(
             sinkNodeName,
@@ -557,10 +547,10 @@ public class RecordCollectorTest {
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
-        // with mock producer without specific partition, we would use default producer partitioner with murmur hash
-        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
+        // with mock producer without specific partition, we would use roundrobin producer partitioner
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 0)));
         assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
-        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 2)));
         assertEquals(9, mockProducer.history().size());
     }
 
@@ -611,10 +601,10 @@ public class RecordCollectorTest {
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
-        // with mock producer without specific partition, we would use default producer partitioner with murmur hash
-        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
+        // with mock producer without specific partition, we would use roundrobin producer partitioner
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 0)));
         assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
-        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 2)));
         assertEquals(9, mockProducer.history().size());
     }
 
@@ -662,10 +652,10 @@ public class RecordCollectorTest {
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
-        // with mock producer without specific partition, we would use default producer partitioner with murmur hash
-        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
+        // with mock producer without specific partition, we would use roundrobin producer partitioner
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 0)));
         assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
-        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 2)));
         assertEquals(9, mockProducer.history().size());
     }
 
@@ -685,10 +675,10 @@ public class RecordCollectorTest {
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
-        // with mock producer without specific partition, we would use default producer partitioner with murmur hash
-        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
+        // with mock producer without specific partition, we would use roundrobin producer partitioner
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 0)));
         assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
-        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 2)));
         assertEquals(9, mockProducer.history().size());
     }
 
@@ -1294,7 +1284,7 @@ public class RecordCollectorTest {
 
         try (final LogCaptureAppender logCaptureAppender =
                  LogCaptureAppender.createAndRegister(RecordCollectorImpl.class)) {
-            logCaptureAppender.setThreshold(Level.INFO);
+            logCaptureAppender.addFilter(ThresholdFilter.createFilter(Level.INFO, null, null));
 
             collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, sinkNodeName, context, streamPartitioner);
             collector.flush();
@@ -1441,15 +1431,15 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
-                new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
+                new MockProducer<>(cluster, true, null, byteArraySerializer, byteArraySerializer) {
                     @Override
                     public void abortTransaction() {
                         functionCalled.set(true);
                     }
                 },
-                logContext,
-                Time.SYSTEM
+                EXACTLY_ONCE_V2,
+                Time.SYSTEM,
+                logContext
             ),
             productionExceptionHandler,
             streamsMetrics,
@@ -1466,15 +1456,15 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
-                new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
+                new MockProducer<>(cluster, true, null, byteArraySerializer, byteArraySerializer) {
                     @Override
                     public List<PartitionInfo> partitionsFor(final String topic) {
                         return Collections.emptyList();
                     }
                 },
-                logContext,
-                Time.SYSTEM
+                AT_LEAST_ONCE,
+                Time.SYSTEM,
+                logContext
             ),
             productionExceptionHandler,
             streamsMetrics,
@@ -1499,10 +1489,10 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
                 mockProducer,
-                logContext,
-                Time.SYSTEM
+                EXACTLY_ONCE_V2,
+                Time.SYSTEM,
+                logContext
             ),
             productionExceptionHandler,
             streamsMetrics,
@@ -1895,30 +1885,30 @@ public class RecordCollectorTest {
 
     private StreamsProducer getExceptionalStreamsProducerOnSend(final Exception exception) {
         return new StreamsProducer(
-            StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
-            new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
+            new MockProducer<>(cluster, true, null, byteArraySerializer, byteArraySerializer) {
                 @Override
                 public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
                     callback.onCompletion(null, exception);
                     return null;
                 }
             },
-            logContext,
-            Time.SYSTEM
+            AT_LEAST_ONCE,
+            Time.SYSTEM,
+            logContext
         );
     }
 
     private StreamsProducer getExceptionalStreamProducerOnPartitionsFor(final RuntimeException exception) {
         return new StreamsProducer(
-            StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
-            new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
+            new MockProducer<>(cluster, true, null, byteArraySerializer, byteArraySerializer) {
                 @Override
                 public synchronized List<PartitionInfo> partitionsFor(final String topic) {
                     throw exception;
                 }
             },
-            logContext,
-            Time.SYSTEM
+            AT_LEAST_ONCE,
+            Time.SYSTEM,
+            logContext
         );
     }
 

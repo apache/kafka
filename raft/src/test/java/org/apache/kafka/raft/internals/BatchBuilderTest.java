@@ -112,7 +112,7 @@ class BatchBuilderTest {
 
         String record = "i am a record";
 
-        while (!builder.bytesNeeded(Collections.singletonList(record), null).isPresent()) {
+        while (builder.bytesNeeded(Collections.singletonList(record), null).isEmpty()) {
             builder.appendRecord(record, null);
         }
 

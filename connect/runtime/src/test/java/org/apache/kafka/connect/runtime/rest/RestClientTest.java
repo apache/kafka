@@ -25,9 +25,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.HttpClient;
-import org.eclipse.jetty.client.api.ContentResponse;
-import org.eclipse.jetty.client.api.Request;
+import org.eclipse.jetty.client.Request;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -45,7 +45,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import javax.crypto.SecretKey;
-import javax.ws.rs.core.Response;
+
+import jakarta.ws.rs.core.Response;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,7 +70,7 @@ public class RestClientTest {
     private static final String MOCK_URL = "http://localhost:1234/api/endpoint";
     private static final String TEST_METHOD = "GET";
     private static final TestDTO TEST_DTO = new TestDTO("requestBodyData");
-    private static final TypeReference<TestDTO> TEST_TYPE = new TypeReference<TestDTO>() { };
+    private static final TypeReference<TestDTO> TEST_TYPE = new TypeReference<>() { };
     private static final SecretKey MOCK_SECRET_KEY = getMockSecretKey();
     private static final String TEST_SIGNATURE_ALGORITHM = "HmacSHA1";
 
@@ -118,7 +119,7 @@ public class RestClientTest {
 
     private static Request buildThrowingMockRequest(Throwable t) throws ExecutionException, InterruptedException, TimeoutException {
         Request req = mock(Request.class);
-        when(req.header(anyString(), anyString())).thenReturn(req);
+        when(req.headers(any())).thenReturn(req);
         when(req.send()).thenThrow(t);
         return req;
     }
@@ -138,17 +139,15 @@ public class RestClientTest {
     @Test
     public void testNullUrl() {
         RestClient client = spy(new RestClient(null));
-        assertThrows(NullPointerException.class, () -> {
-            client.httpRequest(
-                    null,
-                    TEST_METHOD,
-                    null,
-                    TEST_DTO,
-                    TEST_TYPE,
-                    MOCK_SECRET_KEY,
-                    TEST_SIGNATURE_ALGORITHM
-            );
-        });
+        assertThrows(NullPointerException.class, () -> client.httpRequest(
+                null,
+                TEST_METHOD,
+                null,
+                TEST_DTO,
+                TEST_TYPE,
+                MOCK_SECRET_KEY,
+                TEST_SIGNATURE_ALGORITHM
+        ));
     }
 
     @Test
@@ -233,7 +232,7 @@ public class RestClientTest {
         when(resp.getContentAsString()).thenReturn(toJsonString(TEST_DTO));
         setupHttpClient(statusCode, req, resp);
 
-        TypeReference<Void> voidResponse = new TypeReference<Void>() { };
+        TypeReference<Void> voidResponse = new TypeReference<>() { };
         RestClient.HttpResponse<Void> httpResp = httpRequest(
                 httpClient, MOCK_URL, TEST_METHOD, voidResponse, TEST_SIGNATURE_ALGORITHM
         );
@@ -312,7 +311,7 @@ public class RestClientTest {
     public void testHttpRequestInterrupted() throws ExecutionException, InterruptedException, TimeoutException {
         Request req = mock(Request.class);
         doThrow(new InterruptedException()).when(req).send();
-        doReturn(req).when(req).header(anyString(), anyString());
+        doReturn(req).when(req).headers(any());
         doReturn(req).when(httpClient).newRequest(anyString());
         ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(
                 httpClient, MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
@@ -325,7 +324,7 @@ public class RestClientTest {
     private void setupHttpClient(int responseCode, Request req, ContentResponse resp) throws Exception {
         when(resp.getStatus()).thenReturn(responseCode);
         when(req.send()).thenReturn(resp);
-        when(req.header(anyString(), anyString())).thenReturn(req);
+        when(req.headers(any())).thenReturn(req);
         when(httpClient.newRequest(anyString())).thenReturn(req);
     }
 

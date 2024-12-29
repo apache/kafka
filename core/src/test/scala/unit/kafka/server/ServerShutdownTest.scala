@@ -16,34 +16,24 @@
  */
 package kafka.server
 
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 
-import java.io.{DataInputStream, File}
-import java.net.ServerSocket
-import java.util.Collections
-import java.util.concurrent.{CancellationException, Executors, TimeUnit}
-import kafka.cluster.Broker
-import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
+import java.io.File
+import java.util.concurrent.CancellationException
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogManager
-import kafka.zookeeper.ZooKeeperClientTimeoutException
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
-import org.apache.kafka.common.utils.{Exit, Time}
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.metadata.BrokerState
-import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
 import java.time.Duration
 import java.util.Properties
@@ -71,7 +61,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
         propsToChangeUponRestart.put(ServerLogConfigs.LOG_DIR_CONFIG, originals.get(ServerLogConfigs.LOG_DIR_CONFIG))
       }
     }
-    priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnectOrNull).head, propsToChangeUponRestart))
+    priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, null).head, propsToChangeUponRestart))
     Seq(priorConfig.get)
   }
 
@@ -84,9 +74,9 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testCleanShutdown(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testCleanShutdown(quorum: String, groupProtocol: String): Unit = {
 
     def createProducer(): KafkaProducer[Integer, String] =
       TestUtils.createProducer(
@@ -98,6 +88,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     def createConsumer(): Consumer[Integer, String] =
       TestUtils.createConsumer(
         bootstrapServers(),
+        groupProtocolFromTestParameters(),
         securityProtocol = SecurityProtocol.PLAINTEXT,
         keyDeserializer = new IntegerDeserializer,
         valueDeserializer = new StringDeserializer
@@ -144,22 +135,16 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
-    if (isKRaftTest()) {
-      propsToChangeUponRestart.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "1000")
-      shutdownBroker()
-      shutdownKRaftController()
-      verifyCleanShutdownAfterFailedStartup[CancellationException]
-    } else {
-      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "50")
-      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "some.invalid.hostname.foo.bar.local:65535")
-      verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
-    }
+    propsToChangeUponRestart.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "1000")
+    shutdownBroker()
+    shutdownKRaftController()
+    verifyCleanShutdownAfterFailedStartup[CancellationException]
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
     createTopic(topic)
     shutdownBroker()
@@ -190,15 +175,6 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testCleanShutdownWithZkUnavailable(quorum: String): Unit = {
-    shutdownZooKeeper()
-    shutdownBroker()
-    CoreUtils.delete(broker.config.logDirs)
-    verifyNonDaemonThreadsStatus()
-  }
-
-  @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
     shutdownKRaftController()
@@ -217,7 +193,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
         assertCause(exceptionClassTag.runtimeClass, e)
-        assertEquals(if (isKRaftTest()) BrokerState.SHUTTING_DOWN else BrokerState.NOT_RUNNING, brokers.head.brokerState)
+        assertEquals(BrokerState.SHUTTING_DOWN, brokers.head.brokerState)
     } finally {
       shutdownBroker()
     }
@@ -245,73 +221,10 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testConsecutiveShutdown(quorum: String): Unit = {
     shutdownBroker()
     brokers.head.shutdown()
-  }
-
-  // Verify that if controller is in the midst of processing a request, shutdown completes
-  // without waiting for request timeout. Since this involves LeaderAndIsr request, it is
-  // ZK-only for now.
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testControllerShutdownDuringSend(quorum: String): Unit = {
-    val securityProtocol = SecurityProtocol.PLAINTEXT
-    val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
-
-    val controllerId = 2
-    val metrics = new Metrics
-    val executor = Executors.newSingleThreadExecutor
-    var serverSocket: ServerSocket = null
-    var controllerChannelManager: ControllerChannelManager = null
-
-    try {
-      // Set up a server to accept a connection and receive one byte from the first request. No response is sent.
-      serverSocket = new ServerSocket(0)
-      val receiveFuture = executor.submit(new Runnable {
-        override def run(): Unit = {
-          val socket = serverSocket.accept()
-          val inputStream = new DataInputStream(socket.getInputStream)
-          inputStream.readByte()
-          inputStream.close()
-        }
-      })
-
-      // Start a ControllerChannelManager
-      val brokerAndEpochs = Map((new Broker(1, "localhost", serverSocket.getLocalPort, listenerName, securityProtocol), 0L))
-      val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
-      val controllerContext = new ControllerContext
-      controllerContext.setLiveBrokers(brokerAndEpochs)
-      controllerChannelManager = new ControllerChannelManager(
-        () => controllerContext.epoch,
-        controllerConfig,
-        Time.SYSTEM,
-        metrics,
-        new StateChangeLogger(controllerId, inControllerContext = true, None))
-      controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
-
-      // Initiate a sendRequest and wait until connection is established and one byte is received by the peer
-      val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
-        controllerId, 1, 0L, Seq.empty.asJava, Collections.singletonMap(topic, Uuid.randomUuid()),
-        brokerAndEpochs.keys.map(_.node(listenerName)).toSet.asJava)
-      controllerChannelManager.sendRequest(1, requestBuilder)
-      receiveFuture.get(10, TimeUnit.SECONDS)
-
-      // Shutdown controller. Request timeout is 30s, verify that shutdown completed well before that
-      val shutdownFuture = executor.submit(new Runnable {
-        override def run(): Unit = controllerChannelManager.shutdown()
-      })
-      shutdownFuture.get(10, TimeUnit.SECONDS)
-
-    } finally {
-      if (serverSocket != null)
-        serverSocket.close()
-      if (controllerChannelManager != null)
-        controllerChannelManager.shutdown()
-      executor.shutdownNow()
-      metrics.close()
-    }
   }
 
   private def config: KafkaConfig = configs.head

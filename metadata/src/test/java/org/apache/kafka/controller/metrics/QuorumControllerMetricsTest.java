@@ -25,8 +25,6 @@ import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,16 +34,14 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class QuorumControllerMetricsTest {
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testMetricNames(boolean inMigration) {
+    @Test
+    public void testMetricNames() {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
         try {
             try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(
                     Optional.of(registry),
-                    time,
-                    inMigration)) {
+                    time)) {
                 HashSet<String> expected = new HashSet<>(Arrays.asList(
                     "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
                     "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
@@ -59,11 +55,6 @@ public class QuorumControllerMetricsTest {
                     "kafka.controller:type=KafkaController,name=NewActiveControllersCount",
                     "kafka.controller:type=KafkaController,name=TimedOutBrokerHeartbeatCount"
                 ));
-                if (inMigration) {
-                    expected.add("kafka.controller:type=KafkaController,name=ZkWriteBehindLag");
-                    expected.add("kafka.controller:type=KafkaController,name=ZkWriteSnapshotTimeMs");
-                    expected.add("kafka.controller:type=KafkaController,name=ZkWriteDeltaTimeMs");
-                }
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller", expected);
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller",
@@ -77,7 +68,7 @@ public class QuorumControllerMetricsTest {
     public void testUpdateEventQueueTime() {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
-        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, false)) {
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time)) {
             metrics.updateEventQueueTime(1000);
             assertMetricHistogram(registry, metricName("ControllerEventManager", "EventQueueTimeMs"), 1, 1000);
         } finally {
@@ -89,7 +80,7 @@ public class QuorumControllerMetricsTest {
     public void testUpdateEventQueueProcessingTime() {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
-        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, false)) {
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time)) {
             metrics.updateEventQueueProcessingTime(1000);
             assertMetricHistogram(registry, metricName("ControllerEventManager", "EventQueueProcessingTimeMs"), 1, 1000);
         } finally {
@@ -102,11 +93,10 @@ public class QuorumControllerMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
         time.sleep(1000);
-        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, true)) {
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time)) {
             metrics.setLastAppliedRecordOffset(100);
             metrics.setLastAppliedRecordTimestamp(500);
             metrics.setLastCommittedRecordOffset(50);
-            metrics.updateDualWriteOffset(40L);
             metrics.setActive(true);
             for (int i = 0; i < 2; i++) {
                 metrics.incrementTimedOutHeartbeats();
@@ -146,12 +136,6 @@ public class QuorumControllerMetricsTest {
             assertEquals(50, lastCommittedRecordOffset.value());
 
             @SuppressWarnings("unchecked")
-            Gauge<Long> zkWriteBehindLag = (Gauge<Long>) registry
-                    .allMetrics()
-                    .get(metricName("KafkaController", "ZkWriteBehindLag"));
-            assertEquals(10L, zkWriteBehindLag.value());
-
-            @SuppressWarnings("unchecked")
             Gauge<Long> timedOutBrokerHeartbeats = (Gauge<Long>) registry
                     .allMetrics()
                     .get(metricName("KafkaController", "TimedOutBrokerHeartbeatCount"));
@@ -174,51 +158,6 @@ public class QuorumControllerMetricsTest {
                     .allMetrics()
                     .get(metricName("KafkaController", "NewActiveControllersCount"));
             assertEquals(5L, newActiveControllers.value());
-        } finally {
-            registry.shutdown();
-        }
-    }
-
-    @Test
-    public void testUpdateZKWriteBehindLag() {
-        MetricsRegistry registry = new MetricsRegistry();
-        MockTime time = new MockTime();
-        // test zkWriteBehindLag metric when NOT in dual-write mode
-        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, true)) {
-            metrics.updateDualWriteOffset(0);
-            @SuppressWarnings("unchecked")
-            Gauge<Long> zkWriteBehindLag = (Gauge<Long>) registry
-                .allMetrics()
-                .get(metricName("KafkaController", "ZkWriteBehindLag"));
-            assertEquals(0, zkWriteBehindLag.value());
-        } finally {
-            registry.shutdown();
-        }
-
-        // test zkWriteBehindLag metric when in dual-write mode
-        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, true)) {
-            metrics.updateDualWriteOffset(90);
-            metrics.setLastCommittedRecordOffset(100);
-            metrics.setActive(true);
-            @SuppressWarnings("unchecked")
-            Gauge<Long> zkWriteBehindLag = (Gauge<Long>) registry
-                .allMetrics()
-                .get(metricName("KafkaController", "ZkWriteBehindLag"));
-            assertEquals(10, zkWriteBehindLag.value());
-        } finally {
-            registry.shutdown();
-        }
-
-        // test zkWriteBehindLag metric when in dual-write mode and not active
-        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, true)) {
-            metrics.updateDualWriteOffset(90);
-            metrics.setLastCommittedRecordOffset(100);
-            metrics.setActive(false);
-            @SuppressWarnings("unchecked")
-            Gauge<Long> zkWriteBehindLag = (Gauge<Long>) registry
-                    .allMetrics()
-                    .get(metricName("KafkaController", "ZkWriteBehindLag"));
-            assertEquals(0, zkWriteBehindLag.value());
         } finally {
             registry.shutdown();
         }

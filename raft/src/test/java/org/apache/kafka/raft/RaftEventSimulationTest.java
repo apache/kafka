@@ -32,11 +32,10 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -260,21 +259,21 @@ public class RaftEventSimulationTest {
         // to make progress even if an election is needed in the larger set.
         router.filter(
             0,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(2, 3, 4)))
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4)))
         );
         router.filter(
             1,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(2, 3, 4)))
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4)))
         );
-        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
-        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
-        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
+        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
 
         long partitionLogEndOffset = cluster.maxLogEndOffset();
         scheduler.runUntil(() -> cluster.anyReachedHighWatermark(2 * partitionLogEndOffset));
 
-        long minorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(0, 1));
-        long majorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(2, 3, 4));
+        long minorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(0, 1));
+        long majorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(2, 3, 4));
 
         assertTrue(
             majorityHighWatermark > minorityHighWatermark,
@@ -794,7 +793,7 @@ public class RaftEventSimulationTest {
                 clusterId,
                 Collections.emptyList(),
                 endpointsFromId(nodeId, channel.listenerName()),
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
                 quorumConfig
@@ -991,7 +990,7 @@ public class RaftEventSimulationTest {
                 Integer oldEpoch = nodeEpochs.get(nodeId);
 
                 Optional<ElectionState> electionState = state.store.readElectionState();
-                if (!electionState.isPresent()) {
+                if (electionState.isEmpty()) {
                     continue;
                 }
 
@@ -1172,7 +1171,7 @@ public class RaftEventSimulationTest {
             final MockLog log = node.log;
 
             OptionalLong highWatermark = manager.highWatermark();
-            if (!highWatermark.isPresent()) {
+            if (highWatermark.isEmpty()) {
                 // We cannot do validation if the current high watermark is unknown
                 return;
             }

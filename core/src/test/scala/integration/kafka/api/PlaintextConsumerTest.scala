@@ -12,6 +12,8 @@
   */
 package kafka.api
 
+import kafka.api.BaseConsumerTest.{DeserializerImpl, SerializerImpl}
+
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
@@ -22,10 +24,10 @@ import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException, TimeoutException, WakeupException}
-import org.apache.kafka.common.header.Headers
+import org.apache.kafka.common.errors.{InterruptException, InvalidGroupIdException, InvalidTopicException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.server.quota.QuotaType
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
@@ -34,7 +36,7 @@ import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 @Timeout(600)
@@ -68,43 +70,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  trait SerializerImpl extends Serializer[Array[Byte]]{
-    var serializer = new ByteArraySerializer()
-
-    override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-      headers.add("content-type", "application/octet-stream".getBytes)
-      serializer.serialize(topic, data)
-    }
-
-    override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
-
-    override def close(): Unit = serializer.close()
-
-    override def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
-      fail("method should not be invoked")
-      null
-    }
-  }
-
-  trait DeserializerImpl extends Deserializer[Array[Byte]]{
-    var deserializer = new ByteArrayDeserializer()
-
-    override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-      val header = headers.lastHeader("content-type")
-      assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
-      deserializer.deserialize(topic, data)
-    }
-
-    override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
-
-    override def close(): Unit = deserializer.close()
-
-    override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = {
-      fail("method should not be invoked")
-      null
-    }
-  }
-
   private def testHeadersSerializeDeserialize(serializer: Serializer[Array[Byte]], deserializer: Deserializer[Array[Byte]]): Unit = {
     val numRecords = 1
     val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
@@ -130,9 +95,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testHeadersSerializerDeserializer(quorum: String, groupProtocol: String): Unit = {
-    val extendedSerializer = new Serializer[Array[Byte]] with SerializerImpl
+    val extendedSerializer = new SerializerImpl
 
-    val extendedDeserializer = new Deserializer[Array[Byte]] with DeserializerImpl
+    val extendedDeserializer = new DeserializerImpl
 
     testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
   }
@@ -423,8 +388,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPauseStateNotPreservedByRebalance(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
-    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
+    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+      this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
+      this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
+    }
     val consumer = createConsumer()
 
     val producer = createProducer()
@@ -775,6 +742,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSeekThrowsIllegalStateIfPartitionsNotAssigned(quorum: String, groupProtocol: String): Unit = {
+    val tp = new TopicPartition(topic, 0)
+    val consumer = createConsumer(configOverrides = consumerConfig)
+    val e: Exception = assertThrows(classOf[IllegalStateException], () => consumer.seekToEnd(Collections.singletonList(tp)))
+    assertEquals("No current assignment for partition " + tp, e.getMessage)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFetchOffsetsForTime(quorum: String, groupProtocol: String): Unit = {
     val numPartitions = 2
     val producer = createProducer()
@@ -850,5 +826,51 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
 
     assertThrows(classOf[WakeupException], () => consumer.position(topicPartition, Duration.ofSeconds(100)))
+  }
+
+  @Flaky("KAFKA-18031")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testCloseLeavesGroupOnInterrupt(quorum: String, groupProtocol: String): Unit = {
+    val adminClient = createAdminClient()
+    val consumer = createConsumer()
+    val listener = new TestConsumerReassignmentListener()
+    consumer.subscribe(List(topic).asJava, listener)
+    awaitRebalance(consumer, listener)
+
+    assertEquals(1, listener.callsToAssigned)
+    assertEquals(0, listener.callsToRevoked)
+
+    try {
+      Thread.currentThread().interrupt()
+      assertThrows(classOf[InterruptException], () => consumer.close())
+    } finally {
+      // Clear the interrupted flag so we don't create problems for subsequent tests.
+      Thread.interrupted()
+    }
+
+    assertEquals(1, listener.callsToAssigned)
+    assertEquals(1, listener.callsToRevoked)
+
+    val config = new ConsumerConfig(consumerConfig)
+
+    // Set the wait timeout to be only *half* the configured session timeout. This way we can make sure that the
+    // consumer explicitly left the group as opposed to being kicked out by the broker.
+    val leaveGroupTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG) / 2
+
+    TestUtils.waitUntilTrue(
+      () => {
+        try {
+          val groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG)
+          val groupDescription = adminClient.describeConsumerGroups (Collections.singletonList (groupId) ).describedGroups.get (groupId).get
+          groupDescription.members.isEmpty
+        } catch {
+          case _: ExecutionException | _: InterruptedException =>
+            false
+        }
+      },
+      msg=s"Consumer did not leave the consumer group within $leaveGroupTimeoutMs ms of close",
+      waitTimeMs=leaveGroupTimeoutMs
+    )
   }
 }

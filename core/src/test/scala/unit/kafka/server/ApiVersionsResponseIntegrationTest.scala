@@ -39,7 +39,7 @@ class ApiVersionsResponseIntegrationTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testSendV3ApiVersionsRequest(quorum: String): Unit = {
     val response = sendApiVersionsRequest(3)
     if (quorum.equals("kraft")) {
@@ -51,7 +51,7 @@ class ApiVersionsResponseIntegrationTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testSendV4ApiVersionsRequest(quorum: String): Unit = {
     val response = sendApiVersionsRequest(4)
     if (quorum.equals("kraft")) {

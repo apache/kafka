@@ -33,7 +33,7 @@ import java.util.stream.IntStream;
  * A multithreaded {{@link CoordinatorEvent}} processor which uses a {{@link EventAccumulator}}
  * which guarantees that events sharing a partition key are not processed concurrently.
  */
-public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
+public final class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
 
     /**
      * The poll timeout to wait for an event by the EventProcessorThread.

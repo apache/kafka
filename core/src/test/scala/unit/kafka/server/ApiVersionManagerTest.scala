@@ -20,6 +20,7 @@ import kafka.server.metadata.ZkMetadataCache
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.{Disabled, Test}
 import org.junit.jupiter.api.Assertions._
@@ -72,7 +73,7 @@ class ApiVersionManagerTest {
 
   @Test
   def testControllerApiIntersection(): Unit = {
-    val controllerMinVersion: Short = 1
+    val controllerMinVersion: Short = 3
     val controllerMaxVersion: Short = 5
 
     val forwardingManager = Mockito.mock(classOf[ForwardingManager])

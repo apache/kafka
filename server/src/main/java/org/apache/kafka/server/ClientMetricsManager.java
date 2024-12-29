@@ -50,6 +50,7 @@ import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;
 import org.apache.kafka.server.metrics.ClientMetricsInstanceMetadata;
 import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin;
+import org.apache.kafka.server.network.ConnectionDisconnectListener;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
@@ -58,6 +59,7 @@ import org.apache.kafka.server.util.timer.TimerTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -91,6 +93,7 @@ public class ClientMetricsManager implements AutoCloseable {
 
     private final ClientMetricsReceiverPlugin receiverPlugin;
     private final Cache<Uuid, ClientMetricsInstance> clientInstanceCache;
+    private final Map<String, Uuid> clientConnectionIdMap;
     private final Timer expirationTimer;
     private final Map<String, SubscriptionInfo> subscriptionMap;
     private final int clientTelemetryMaxBytes;
@@ -99,6 +102,7 @@ public class ClientMetricsManager implements AutoCloseable {
     private final AtomicLong lastCacheErrorLogMs;
     private final Metrics metrics;
     private final ClientMetricsStats clientMetricsStats;
+    private final ConnectionDisconnectListener connectionDisconnectListener;
 
     // The latest subscription version is used to determine if subscription has changed and needs
     // to re-evaluate the client instance subscription id as per changed subscriptions.
@@ -114,6 +118,7 @@ public class ClientMetricsManager implements AutoCloseable {
         this.subscriptionMap = new ConcurrentHashMap<>();
         this.subscriptionUpdateVersion = new AtomicInteger(0);
         this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CACHE_MAX_SIZE));
+        this.clientConnectionIdMap = new ConcurrentHashMap<>();
         this.expirationTimer = new SystemTimerReaper(CLIENT_METRICS_REAPER_THREAD_NAME, new SystemTimer("client-metrics"));
         this.clientTelemetryMaxBytes = clientTelemetryMaxBytes;
         this.time = time;
@@ -121,6 +126,7 @@ public class ClientMetricsManager implements AutoCloseable {
         this.lastCacheErrorLogMs = new AtomicLong(0);
         this.metrics = metrics;
         this.clientMetricsStats = new ClientMetricsStats();
+        this.connectionDisconnectListener = new ClientConnectionDisconnectListener();
     }
 
     public Set<String> listClientMetricsResources() {
@@ -205,8 +211,8 @@ public class ClientMetricsManager implements AutoCloseable {
         }
 
         // Push the metrics to the external client receiver plugin.
-        byte[] metrics = request.data().metrics();
-        if (metrics != null && metrics.length > 0) {
+        ByteBuffer metrics = request.data().metrics();
+        if (metrics != null && metrics.limit() > 0) {
             try {
                 long exportTimeStartMs = time.hiResClockMs();
                 receiverPlugin.exportMetrics(requestContext, request);
@@ -225,6 +231,10 @@ public class ClientMetricsManager implements AutoCloseable {
 
     public boolean isTelemetryReceiverConfigured() {
         return !receiverPlugin.isEmpty();
+    }
+
+    public ConnectionDisconnectListener connectionDisconnectListener() {
+        return connectionDisconnectListener;
     }
 
     @Override
@@ -274,7 +284,7 @@ public class ClientMetricsManager implements AutoCloseable {
 
                 ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(
                     clientInstanceId, requestContext);
-                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, instanceMetadata);
+                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, instanceMetadata, requestContext.connectionId());
             }
         } else if (clientInstance.subscriptionVersion() < subscriptionUpdateVersion.get()) {
             /*
@@ -293,13 +303,13 @@ public class ClientMetricsManager implements AutoCloseable {
                 }
                 // Cancel the existing expiration timer task for the old client instance.
                 clientInstance.cancelExpirationTimerTask();
-                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, clientInstance.instanceMetadata());
+                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, clientInstance.instanceMetadata(), requestContext.connectionId());
             }
         }
 
         // Update the expiration timer task for the client instance.
         long expirationTimeMs = Math.max(cacheExpiryMs, clientInstance.pushIntervalMs() * 3);
-        TimerTask timerTask = new ExpirationTimerTask(clientInstanceId, expirationTimeMs);
+        TimerTask timerTask = new ExpirationTimerTask(clientInstanceId, requestContext.connectionId(), expirationTimeMs);
         clientInstance.updateExpirationTimerTask(timerTask);
         expirationTimer.add(timerTask);
 
@@ -307,13 +317,14 @@ public class ClientMetricsManager implements AutoCloseable {
     }
 
     private ClientMetricsInstance createClientInstanceAndUpdateCache(Uuid clientInstanceId,
-        ClientMetricsInstanceMetadata instanceMetadata) {
+        ClientMetricsInstanceMetadata instanceMetadata, String connectionId) {
 
         ClientMetricsInstance clientInstance = createClientInstance(clientInstanceId, instanceMetadata);
         // Maybe add client metrics, if metrics not already added. Metrics might be already added
         // if the client instance was evicted from the cache because of size limit.
         clientMetricsStats.maybeAddClientInstanceMetrics(clientInstanceId);
         clientInstanceCache.put(clientInstanceId, clientInstance);
+        clientConnectionIdMap.put(connectionId, clientInstanceId);
         return clientInstance;
     }
 
@@ -418,7 +429,7 @@ public class ClientMetricsManager implements AutoCloseable {
             throw new UnsupportedCompressionTypeException(msg);
         }
 
-        if (request.data().metrics() != null && request.data().metrics().length > clientTelemetryMaxBytes) {
+        if (request.data().metrics() != null && request.data().metrics().limit() > clientTelemetryMaxBytes) {
             String msg = String.format("Telemetry request from [%s] is larger than the maximum allowed size [%s]",
                 request.data().clientInstanceId(), clientTelemetryMaxBytes);
             throw new TelemetryTooLargeException(msg);
@@ -459,6 +470,34 @@ public class ClientMetricsManager implements AutoCloseable {
         return expirationTimer;
     }
 
+    // Visible for testing
+    Map<String, Uuid> clientConnectionIdMap() {
+        return clientConnectionIdMap;
+    }
+
+    private final class ClientConnectionDisconnectListener implements ConnectionDisconnectListener {
+
+        @Override
+        public void onDisconnect(String connectionId) {
+            log.trace("Removing client connection id [{}] from the client instance cache", connectionId);
+
+            Uuid clientInstanceId = clientConnectionIdMap.remove(connectionId);
+            if (clientInstanceId == null) {
+                log.trace("Client connection id [{}] is not found in the client instance cache", connectionId);
+                return;
+            }
+
+            // Unregister the client instance metrics from the broker metrics.
+            clientMetricsStats.unregisterClientInstanceMetrics(clientInstanceId);
+
+            ClientMetricsInstance clientInstance = clientInstanceCache.get(clientInstanceId);
+            if (clientInstance != null) {
+                clientInstance.cancelExpirationTimerTask();
+                clientInstanceCache.remove(clientInstanceId);
+            }
+        }
+    }
+
     public static class SubscriptionInfo {
 
         private final String name;
@@ -496,16 +535,19 @@ public class ClientMetricsManager implements AutoCloseable {
         private static final long CACHE_ERROR_LOG_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
         private final Uuid clientInstanceId;
+        private final String connectionId;
 
-        private ExpirationTimerTask(Uuid clientInstanceId, long delayMs) {
+        private ExpirationTimerTask(Uuid clientInstanceId, String connectionId, long delayMs) {
             super(delayMs);
             this.clientInstanceId = clientInstanceId;
+            this.connectionId = connectionId;
         }
 
         @Override
         public void run() {
             log.trace("Expiration timer task run for client instance id: {}, after delay ms: {}", clientInstanceId, delayMs);
             clientMetricsStats.unregisterClientInstanceMetrics(clientInstanceId);
+            clientConnectionIdMap.remove(connectionId);
             if (!clientInstanceCache.remove(clientInstanceId)) {
                 /*
                  This can only happen if the client instance is removed from the cache by the LRU
@@ -517,7 +559,8 @@ public class ClientMetricsManager implements AutoCloseable {
                 if (time.milliseconds() - lastErrorMs > CACHE_ERROR_LOG_INTERVAL_MS &&
                     lastCacheErrorLogMs.compareAndSet(lastErrorMs, time.milliseconds())) {
                     log.warn("Client metrics instance cache cannot find the client instance id: {}. The cache"
-                        + " must be at capacity, size: {} ", clientInstanceId, clientInstanceCache.size());
+                            + " must be at capacity, size: {}. Connection map size: {}",
+                            clientInstanceId, clientInstanceCache.size(), clientConnectionIdMap.size());
                 }
             }
         }

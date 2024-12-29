@@ -327,7 +327,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     private MessageFormatter buildFormatter() {
         MessageFormatter formatter = null;
         try {
-            Class<?> messageFormatterClass = Class.forName(convertDeprecatedClass(options.valueOf(messageFormatterOpt)));
+            Class<?> messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt));
             formatter = (MessageFormatter) messageFormatterClass.getDeclaredConstructor().newInstance();
 
             Properties formatterArgs = formatterArgs();
@@ -342,25 +342,6 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             CommandLineUtils.printUsageAndExit(parser, e.getMessage());
         }
         return formatter;
-    }
-
-    private static String convertDeprecatedClass(String className) {
-        switch (className) {
-            case "kafka.coordinator.transaction.TransactionLog$TransactionLogMessageFormatter":
-                System.err.println("WARNING: kafka.coordinator.transaction.TransactionLog$TransactionLogMessageFormatter is deprecated and will be removed in the next major release. " +
-                        "Please use org.apache.kafka.tools.consumer.TransactionLogMessageFormatter instead");
-                return className;
-            case "kafka.coordinator.group.GroupMetadataManager$OffsetsMessageFormatter":
-                System.err.println("WARNING: kafka.coordinator.group.GroupMetadataManager$OffsetsMessageFormatter is deprecated and will be removed in the next major release. " +
-                        "Please use org.apache.kafka.tools.consumer.OffsetsMessageFormatter instead");
-                return className;
-            case "kafka.coordinator.group.GroupMetadataManager$GroupMetadataMessageFormatter":
-                System.err.println("WARNING: kafka.coordinator.group.GroupMetadataManager$GroupMetadataMessageFormatter is deprecated and will be removed in the next major release. " +
-                        "Please use org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter instead");
-                return className;
-            default:
-                return className;
-        }
     }
 
     Properties consumerProps() {

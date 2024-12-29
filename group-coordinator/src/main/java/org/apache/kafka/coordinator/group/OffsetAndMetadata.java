@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
-import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 
 import java.util.Objects;
@@ -31,7 +30,7 @@ import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
  * Represents a committed offset with its metadata.
  */
 public class OffsetAndMetadata {
-    private static final String NO_METADATA = "";
+    public static final String NO_METADATA = "";
 
     /**
      * The committed offset.
@@ -166,8 +165,7 @@ public class OffsetAndMetadata {
             ofSentinel(partition.committedLeaderEpoch()),
             partition.committedMetadata() == null ?
                 OffsetAndMetadata.NO_METADATA : partition.committedMetadata(),
-            partition.commitTimestamp() == OffsetCommitRequest.DEFAULT_TIMESTAMP ?
-                currentTimeMs : partition.commitTimestamp(),
+            currentTimeMs,
             expireTimestampMs
         );
     }

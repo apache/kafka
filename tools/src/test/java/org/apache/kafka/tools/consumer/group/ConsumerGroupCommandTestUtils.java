@@ -17,12 +17,12 @@
 
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.test.ClusterConfig;
-
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.Feature;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static kafka.test.annotation.Type.CO_KRAFT;
+import static org.apache.kafka.common.test.api.Type.CO_KRAFT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
@@ -48,7 +48,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_
 /**
  * The old test framework {@link kafka.api.BaseConsumerTest#getTestQuorumAndGroupProtocolParametersAll} test for the following cases:
  * <ul>
- *     <li>(KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 1 cases</li>
  *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (classic group protocol) = 1 case</li>
  *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (consumer group protocol) = 1 case</li>
  * </ul>
@@ -65,7 +64,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_
  *     <li>(CO_KRAFT servers) with (group.coordinator.new.enable=true) with (classic / consumer group protocols) = 2 cases</li>
  * </ul>
  * <ul>
- *     <li>(KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 1 cases</li>
+ *     <li>(KRAFT server) with (group.coordinator.new.enable=false) with (classic group protocol) = 1 case</li>
  * </ul>
  */
 class ConsumerGroupCommandTestUtils {
@@ -85,6 +84,9 @@ class ConsumerGroupCommandTestUtils {
                 .setTypes(Collections.singleton(CO_KRAFT))
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("kraftGroupCoordinator"))
+                .setFeatures(Utils.mkMap(
+                    Utils.mkEntry(Feature.TRANSACTION_VERSION, (short) 2),
+                    Utils.mkEntry(Feature.GROUP_VERSION, (short) 1)))
                 .build());
     }
 
@@ -103,10 +105,12 @@ class ConsumerGroupCommandTestUtils {
                 consumer -> consumer.subscribe(Collections.singleton(topic)));
     }
 
-    private static <T> AutoCloseable buildConsumers(int numberOfConsumers,
-                                                    boolean syncCommit,
-                                                    Supplier<KafkaConsumer<T, T>> consumerSupplier,
-                                                    Consumer<KafkaConsumer<T, T>> setPartitions) {
+    static <T> AutoCloseable buildConsumers(
+        int numberOfConsumers,
+        boolean syncCommit,
+        Supplier<KafkaConsumer<T, T>> consumerSupplier,
+        Consumer<KafkaConsumer<T, T>> setPartitions
+    ) {
         List<KafkaConsumer<T, T>> consumers = new ArrayList<>(numberOfConsumers);
         ExecutorService executor = Executors.newFixedThreadPool(numberOfConsumers);
         AtomicBoolean closed = new AtomicBoolean(false);
@@ -139,7 +143,7 @@ class ConsumerGroupCommandTestUtils {
                                          AtomicBoolean closed) {
         try (KafkaConsumer<T, T> kafkaConsumer = consumerSupplier.get()) {
             while (!closed.get()) {
-                kafkaConsumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                kafkaConsumer.poll(Duration.ofMillis(1000));
                 if (syncCommit)
                     kafkaConsumer.commitSync();
             }

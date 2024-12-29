@@ -116,7 +116,7 @@ public class KRaftMetadataRequestBenchmark {
     private final ReplicationQuotaManager replicaQuotaManager = Mockito.mock(ReplicationQuotaManager.class);
     private final QuotaFactory.QuotaManagers quotaManagers = new QuotaFactory.QuotaManagers(clientQuotaManager,
             clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
-            replicaQuotaManager, replicaQuotaManager, Option.empty());
+            replicaQuotaManager, replicaQuotaManager, Optional.empty());
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
     private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
@@ -207,7 +207,6 @@ public class KRaftMetadataRequestBenchmark {
                 setTokenManager(null).
                 setApiVersionManager(new SimpleApiVersionManager(
                         ApiMessageType.ListenerType.BROKER,
-                        false,
                         false,
                         () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
                 build();

@@ -45,7 +45,6 @@ import java.util.TreeSet;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
@@ -307,11 +306,11 @@ public class LegacyStickyTaskAssignorTest {
     public void shouldAssignTasksToClientWithPreviousStandbyTasks(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
         final ClientState client1 = createClient(PID_1, 1);
-        client1.addPreviousStandbyTasks(mkSet(TASK_0_2));
+        client1.addPreviousStandbyTasks(Set.of(TASK_0_2));
         final ClientState client2 = createClient(PID_2, 1);
-        client2.addPreviousStandbyTasks(mkSet(TASK_0_1));
+        client2.addPreviousStandbyTasks(Set.of(TASK_0_1));
         final ClientState client3 = createClient(PID_3, 1);
-        client3.addPreviousStandbyTasks(mkSet(TASK_0_0));
+        client3.addPreviousStandbyTasks(Set.of(TASK_0_0));
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
 
@@ -331,16 +330,16 @@ public class LegacyStickyTaskAssignorTest {
     public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
-        c1.addPreviousStandbyTasks(mkSet(TASK_0_1));
+        c1.addPreviousStandbyTasks(Set.of(TASK_0_1));
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 2, TASK_0_2);
-        c2.addPreviousStandbyTasks(mkSet(TASK_0_1));
+        c2.addPreviousStandbyTasks(Set.of(TASK_0_1));
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
 
         assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(PID_1).activeTasks(), equalTo(singleton(TASK_0_0)));
-        assertThat(clients.get(PID_2).activeTasks(), equalTo(mkSet(TASK_0_2, TASK_0_1)));
+        assertThat(clients.get(PID_2).activeTasks(), equalTo(Set.of(TASK_0_2, TASK_0_1)));
     }
 
     @ParameterizedTest
@@ -393,9 +392,9 @@ public class LegacyStickyTaskAssignorTest {
         final boolean probingRebalanceNeeded = assign(2, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
 
-        assertThat(clients.get(PID_1).standbyTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
-        assertThat(clients.get(PID_2).standbyTasks(), equalTo(mkSet(TASK_0_2, TASK_0_0)));
-        assertThat(clients.get(PID_3).standbyTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+        assertThat(clients.get(PID_1).standbyTasks(), equalTo(Set.of(TASK_0_1, TASK_0_2)));
+        assertThat(clients.get(PID_2).standbyTasks(), equalTo(Set.of(TASK_0_2, TASK_0_0)));
+        assertThat(clients.get(PID_3).standbyTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1)));
     }
 
     @ParameterizedTest
@@ -667,9 +666,9 @@ public class LegacyStickyTaskAssignorTest {
         final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3, PID_4);
 
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
-        c1.addPreviousStandbyTasks(mkSet(TASK_0_3, TASK_0_0));
+        c1.addPreviousStandbyTasks(Set.of(TASK_0_3, TASK_0_0));
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_3, TASK_0_0);
-        c2.addPreviousStandbyTasks(mkSet(TASK_0_1, TASK_0_2));
+        c2.addPreviousStandbyTasks(Set.of(TASK_0_1, TASK_0_2));
 
         createClient(PID_3, 1);
         createClient(PID_4, 1);
@@ -754,8 +753,8 @@ public class LegacyStickyTaskAssignorTest {
     })
     public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
-        final Set<TaskId> p1PrevTasks = mkSet(TASK_0_0, TASK_0_2);
-        final Set<TaskId> p2PrevTasks = mkSet(TASK_0_1, TASK_0_3);
+        final Set<TaskId> p1PrevTasks = new HashSet<>(List.of(TASK_0_0, TASK_0_2));
+        final Set<TaskId> p2PrevTasks = new HashSet<>(List.of(TASK_0_1, TASK_0_3));
 
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1, TASK_0_3);
@@ -821,28 +820,28 @@ public class LegacyStickyTaskAssignorTest {
     public void shouldAssignTasksNotPreviouslyActiveToNewClient(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_1_2, TASK_1_3);
-        c1.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3));
+        c1.addPreviousStandbyTasks(Set.of(TASK_0_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3));
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_1_1, TASK_2_2);
-        c2.addPreviousStandbyTasks(mkSet(TASK_0_1, TASK_1_0, TASK_0_2, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_3));
+        c2.addPreviousStandbyTasks(Set.of(TASK_0_1, TASK_1_0, TASK_0_2, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_3));
         final ClientState c3 = createClientWithPreviousActiveTasks(PID_3, 1, TASK_2_0, TASK_2_1, TASK_2_3);
-        c3.addPreviousStandbyTasks(mkSet(TASK_0_2, TASK_1_2));
+        c3.addPreviousStandbyTasks(Set.of(TASK_0_2, TASK_1_2));
 
         final ClientState newClient = createClient(PID_4, 1);
-        newClient.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3));
+        newClient.addPreviousStandbyTasks(Set.of(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3));
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
         assertThat(probingRebalanceNeeded, is(false));
 
         if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
-            assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_2, TASK_2_3)));
-            assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_1, TASK_2_2)));
-            assertThat(c3.activeTasks(), equalTo(mkSet(TASK_0_2, TASK_1_3, TASK_2_1)));
-            assertThat(newClient.activeTasks(), equalTo(mkSet(TASK_0_3, TASK_1_0, TASK_2_0)));
+            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_1_2, TASK_2_3)));
+            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_1_1, TASK_2_2)));
+            assertThat(c3.activeTasks(), equalTo(Set.of(TASK_0_2, TASK_1_3, TASK_2_1)));
+            assertThat(newClient.activeTasks(), equalTo(Set.of(TASK_0_3, TASK_1_0, TASK_2_0)));
         } else {
-            assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_2, TASK_1_3)));
-            assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_1, TASK_2_2)));
-            assertThat(c3.activeTasks(), equalTo(mkSet(TASK_2_0, TASK_2_1, TASK_2_3)));
-            assertThat(newClient.activeTasks(), equalTo(mkSet(TASK_0_2, TASK_0_3, TASK_1_0)));
+            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_1_2, TASK_1_3)));
+            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_1_1, TASK_2_2)));
+            assertThat(c3.activeTasks(), equalTo(Set.of(TASK_2_0, TASK_2_1, TASK_2_3)));
+            assertThat(newClient.activeTasks(), equalTo(Set.of(TASK_0_2, TASK_0_3, TASK_1_0)));
         }
     }
 
@@ -855,29 +854,29 @@ public class LegacyStickyTaskAssignorTest {
     public void shouldAssignTasksNotPreviouslyActiveToMultipleNewClients(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_1_2, TASK_1_3);
-        c1.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3));
+        c1.addPreviousStandbyTasks(Set.of(TASK_0_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3));
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_1_1, TASK_2_2);
-        c2.addPreviousStandbyTasks(mkSet(TASK_0_1, TASK_1_0, TASK_0_2, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_3));
+        c2.addPreviousStandbyTasks(Set.of(TASK_0_1, TASK_1_0, TASK_0_2, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_3));
 
         final ClientState bounce1 = createClient(PID_3, 1);
-        bounce1.addPreviousStandbyTasks(mkSet(TASK_2_0, TASK_2_1, TASK_2_3));
+        bounce1.addPreviousStandbyTasks(Set.of(TASK_2_0, TASK_2_1, TASK_2_3));
 
         final ClientState bounce2 = createClient(PID_4, 1);
-        bounce2.addPreviousStandbyTasks(mkSet(TASK_0_2, TASK_0_3, TASK_1_0));
+        bounce2.addPreviousStandbyTasks(Set.of(TASK_0_2, TASK_0_3, TASK_1_0));
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
         assertThat(probingRebalanceNeeded, is(false));
 
         if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
-            assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_2, TASK_2_3)));
-            assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_1, TASK_2_2)));
-            assertThat(bounce1.activeTasks(), equalTo(mkSet(TASK_0_2, TASK_1_3, TASK_2_1)));
-            assertThat(bounce2.activeTasks(), equalTo(mkSet(TASK_0_3, TASK_1_0, TASK_2_0)));
+            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_1_2, TASK_2_3)));
+            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_1_1, TASK_2_2)));
+            assertThat(bounce1.activeTasks(), equalTo(Set.of(TASK_0_2, TASK_1_3, TASK_2_1)));
+            assertThat(bounce2.activeTasks(), equalTo(Set.of(TASK_0_3, TASK_1_0, TASK_2_0)));
         } else {
-            assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_2, TASK_1_3)));
-            assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_1, TASK_2_2)));
-            assertThat(bounce1.activeTasks(), equalTo(mkSet(TASK_2_0, TASK_2_1, TASK_2_3)));
-            assertThat(bounce2.activeTasks(), equalTo(mkSet(TASK_0_2, TASK_0_3, TASK_1_0)));
+            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_1_2, TASK_1_3)));
+            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_1_1, TASK_2_2)));
+            assertThat(bounce1.activeTasks(), equalTo(Set.of(TASK_2_0, TASK_2_1, TASK_2_3)));
+            assertThat(bounce2.activeTasks(), equalTo(Set.of(TASK_0_2, TASK_0_3, TASK_1_0)));
         }
     }
 
@@ -930,7 +929,7 @@ public class LegacyStickyTaskAssignorTest {
         setUp(rackAwareStrategy);
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_6);
         final ClientState c2 = createClient(PID_2, 1);
-        c2.addPreviousStandbyTasks(mkSet(TASK_0_3, TASK_0_4, TASK_0_5));
+        c2.addPreviousStandbyTasks(Set.of(TASK_0_3, TASK_0_4, TASK_0_5));
         final ClientState newClient = createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6);
@@ -1003,7 +1002,7 @@ public class LegacyStickyTaskAssignorTest {
         );
         assertThat(probingRebalanceNeeded, is(false));
 
-        assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
         assertThat(c2.activeTasks(), empty());
     }
 
@@ -1063,29 +1062,29 @@ public class LegacyStickyTaskAssignorTest {
             // Total cost for active stateful: 3
             // Total cost for active stateless: 0
             // Total cost for standby: 20
-            assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_3, TASK_1_0, TASK_1_2)));
-            assertThat(c1.standbyTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
-            assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_2, TASK_1_1)));
+            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_3, TASK_1_0, TASK_1_2)));
+            assertThat(c1.standbyTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1)));
+            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_2, TASK_1_1)));
             assertThat(c2.standbyTasks(), empty());
-            assertThat(c3.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_3)));
-            assertThat(c3.standbyTasks(), equalTo(mkSet(TASK_1_0, TASK_1_1)));
+            assertThat(c3.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_1_3)));
+            assertThat(c3.standbyTasks(), equalTo(Set.of(TASK_1_0, TASK_1_1)));
         } else if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
-            assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_3, TASK_1_2)));
-            assertThat(c1.standbyTasks(), equalTo(mkSet(TASK_1_0)));
-            assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2, TASK_1_1)));
-            assertThat(c2.standbyTasks(), equalTo(mkSet(TASK_0_0)));
-            assertThat(c3.activeTasks(), equalTo(mkSet(TASK_1_0, TASK_1_3)));
-            assertThat(c3.standbyTasks(), equalTo(mkSet(TASK_0_1, TASK_1_1)));
+            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_3, TASK_1_2)));
+            assertThat(c1.standbyTasks(), equalTo(Set.of(TASK_1_0)));
+            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_0_2, TASK_1_1)));
+            assertThat(c2.standbyTasks(), equalTo(Set.of(TASK_0_0)));
+            assertThat(c3.activeTasks(), equalTo(Set.of(TASK_1_0, TASK_1_3)));
+            assertThat(c3.standbyTasks(), equalTo(Set.of(TASK_0_1, TASK_1_1)));
         } else {
             // Total cost for active stateful: 30
             // Total cost for active stateless: 40
             // Total cost for standby: 10
-            assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2, TASK_1_3)));
-            assertThat(c1.standbyTasks(), equalTo(mkSet(TASK_0_0)));
-            assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_3, TASK_1_0, TASK_1_1)));
-            assertThat(c2.standbyTasks(), equalTo(mkSet(TASK_0_1)));
-            assertThat(c3.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_2)));
-            assertThat(c3.standbyTasks(), equalTo(mkSet(TASK_1_0, TASK_1_1)));
+            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_0_2, TASK_1_3)));
+            assertThat(c1.standbyTasks(), equalTo(Set.of(TASK_0_0)));
+            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_3, TASK_1_0, TASK_1_1)));
+            assertThat(c2.standbyTasks(), equalTo(Set.of(TASK_0_1)));
+            assertThat(c3.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_1_2)));
+            assertThat(c3.standbyTasks(), equalTo(Set.of(TASK_1_0, TASK_1_1)));
         }
 
     }
@@ -1323,7 +1322,7 @@ public class LegacyStickyTaskAssignorTest {
 
     private ClientState createClientWithPreviousActiveTasks(final ProcessId processId, final int capacity, final TaskId... taskIds) {
         final ClientState clientState = new ClientState(processId, capacity);
-        clientState.addPreviousActiveTasks(mkSet(taskIds));
+        clientState.addPreviousActiveTasks(Set.of(taskIds));
         clients.put(processId, clientState);
         return clientState;
     }

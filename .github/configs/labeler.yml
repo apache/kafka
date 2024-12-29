@@ -19,6 +19,8 @@ build:
       - '.github/**'
       - 'gradle/**'
       - '*gradlew*'
+      - 'build.gradle'
+      - 'settings.gradle'
 
 clients:
 - changed-files:
@@ -71,7 +73,6 @@ tools:
     - 'trogdor/**'
     - 'vagrant/**'
     - 'committer-tools/**'
-    - 'log4j-appender/**'
     - 'shell/**'
 
 docs:
@@ -91,11 +92,12 @@ transactions:
       - any-glob-to-any-file:
           - 'transaction-coordinator/**'
 
-KIP-932:
+kip-932:
   - changed-files:
       - any-glob-to-any-file:
           - 'share/**'
           - 'share-coordinator/**'
+          - 'core/src/*/java/kafka/server/share/**'
 
 docker:
 - changed-files:
@@ -110,15 +112,27 @@ performance:
 consumer:
   - changed-files:
     - any-glob-to-any-file:
-      - 'clients/src/main/java/org/apache/kafka/clients/consumer/**'
+      - 'clients/src/*/java/org/apache/kafka/clients/consumer/**'
 
 producer:
   - changed-files:
     - any-glob-to-any-file:
-      - 'clients/src/main/java/org/apache/kafka/clients/producer/**'
+      - 'clients/src/*/java/org/apache/kafka/clients/producer/**'
 
 kraft:
   - changed-files:
     - any-glob-to-any-file:
       - 'metadata/**'
       - 'raft/**'
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "grade/dependencies.gradle"
+      - "LICENSE-binary"
+
+tiered-storage:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '*/src/*/java/org/apache/kafka/server/log/remote/**'
+      - '*/src/*/java/kafka/log/remote/**'

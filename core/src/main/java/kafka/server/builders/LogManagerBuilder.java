@@ -34,7 +34,7 @@ import java.io.File;
 import java.util.Collections;
 import java.util.List;
 
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 
 public class LogManagerBuilder {
@@ -168,9 +168,8 @@ public class LogManagerBuilder {
         if (scheduler == null) throw new RuntimeException("you must set scheduler");
         if (brokerTopicStats == null) throw new RuntimeException("you must set brokerTopicStats");
         if (logDirFailureChannel == null) throw new RuntimeException("you must set logDirFailureChannel");
-
-        return new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
-                              JavaConverters.asScalaIteratorConverter(initialOfflineDirs.iterator()).asScala().toSeq(),
+        return new LogManager(CollectionConverters.asScala(logDirs).toSeq(),
+                              CollectionConverters.asScala(initialOfflineDirs).toSeq(),
                               configRepository,
                               initialDefaultConfig,
                               cleanerConfig,

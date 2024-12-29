@@ -19,7 +19,6 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,6 +27,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -107,7 +107,7 @@ public class CandidateStateTest {
         );
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
-        assertEquals(Utils.mkSet(node1, node2), state.unrecordedVoters());
+        assertEquals(Set.of(node1, node2), state.unrecordedVoters());
         assertTrue(state.recordGrantedVote(node1.id()));
         assertEquals(Collections.singleton(node2), state.unrecordedVoters());
         assertTrue(state.isVoteGranted());
@@ -128,7 +128,7 @@ public class CandidateStateTest {
         );
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
-        assertEquals(Utils.mkSet(node1, node2), state.unrecordedVoters());
+        assertEquals(Set.of(node1, node2), state.unrecordedVoters());
         assertTrue(state.recordRejectedVote(node1.id()));
         assertEquals(Collections.singleton(node2), state.unrecordedVoters());
         assertFalse(state.isVoteGranted());
@@ -219,10 +219,15 @@ public class CandidateStateTest {
             voterSetWithLocal(Stream.of(node1, node2, node3), withDirectoryId)
         );
 
-        assertFalse(state.canGrantVote(node0, isLogUpToDate));
-        assertFalse(state.canGrantVote(node1, isLogUpToDate));
-        assertFalse(state.canGrantVote(node2, isLogUpToDate));
-        assertFalse(state.canGrantVote(node3, isLogUpToDate));
+        assertEquals(isLogUpToDate, state.canGrantVote(node0, isLogUpToDate, true));
+        assertEquals(isLogUpToDate, state.canGrantVote(node1, isLogUpToDate, true));
+        assertEquals(isLogUpToDate, state.canGrantVote(node2, isLogUpToDate, true));
+        assertEquals(isLogUpToDate, state.canGrantVote(node3, isLogUpToDate, true));
+
+        assertFalse(state.canGrantVote(node0, isLogUpToDate, false));
+        assertFalse(state.canGrantVote(node1, isLogUpToDate, false));
+        assertFalse(state.canGrantVote(node2, isLogUpToDate, false));
+        assertFalse(state.canGrantVote(node3, isLogUpToDate, false));
     }
 
     @ParameterizedTest

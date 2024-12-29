@@ -135,7 +135,7 @@ public class RocksDBMetricsRecorder {
     public void init(final StreamsMetricsImpl streamsMetrics,
                      final TaskId taskId) {
         Objects.requireNonNull(streamsMetrics, "Streams metrics must not be null");
-        Objects.requireNonNull(streamsMetrics, "task ID must not be null");
+        Objects.requireNonNull(taskId, "task ID must not be null");
         if (this.taskId != null && !this.taskId.equals(taskId)) {
             throw new IllegalStateException("Metrics recorder is re-initialised with different task: previous task is " +
                 this.taskId + " whereas current task is " + taskId + ". This is a bug in Kafka Streams. " +

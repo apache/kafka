@@ -26,6 +26,7 @@ import java.util.Map;
  * happens while attempting to produce result records.
  */
 public class DefaultProductionExceptionHandler implements ProductionExceptionHandler {
+    @SuppressWarnings("deprecation")
     @Deprecated
     @Override
     public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,

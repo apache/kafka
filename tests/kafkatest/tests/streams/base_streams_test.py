@@ -27,8 +27,8 @@ class BaseStreamsTest(KafkaTest):
     Extends KafkaTest which manages setting up Kafka Cluster and Zookeeper
     see tests/kafkatest/tests/kafka_test.py for more info
     """
-    def __init__(self, test_context,  topics, num_zk=1, num_brokers=3):
-        super(BaseStreamsTest, self).__init__(test_context, num_zk, num_brokers, topics)
+    def __init__(self, test_context,  topics, num_controllers=1, num_brokers=3):
+        super(BaseStreamsTest, self).__init__(test_context, num_controllers, num_brokers, topics)
 
     def get_consumer(self, client_id, topic, num_messages):
         return VerifiableConsumer(self.test_context,

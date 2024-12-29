@@ -457,11 +457,10 @@ public class ConfigurationControlManager {
      * @return the config value for the provided config key in the topic
      */
     ConfigEntry getTopicConfig(String topicName, String configKey) throws NoSuchElementException {
-        ConfigEntry result = configSchema.resolveEffectiveTopicConfig(configKey,
+        return configSchema.resolveEffectiveTopicConfig(configKey,
             staticConfig,
             clusterConfig(),
             currentControllerConfig(), currentTopicConfig(topicName));
-        return result;
     }
 
     public Map<ConfigResource, ResultOrError<Map<String, String>>> describeConfigs(

@@ -33,6 +33,7 @@ public class FetchParams {
     public final int maxBytes;
     public final FetchIsolation isolation;
     public final Optional<ClientMetadata> clientMetadata;
+    public final boolean shareFetchRequest;
 
     public FetchParams(short requestVersion,
                        int replicaId,
@@ -42,6 +43,18 @@ public class FetchParams {
                        int maxBytes,
                        FetchIsolation isolation,
                        Optional<ClientMetadata> clientMetadata) {
+        this(requestVersion, replicaId, replicaEpoch, maxWaitMs, minBytes, maxBytes, isolation, clientMetadata, false);
+    }
+
+    public FetchParams(short requestVersion,
+                       int replicaId,
+                       long replicaEpoch,
+                       long maxWaitMs,
+                       int minBytes,
+                       int maxBytes,
+                       FetchIsolation isolation,
+                       Optional<ClientMetadata> clientMetadata,
+                       boolean shareFetchRequest) {
         Objects.requireNonNull(isolation);
         Objects.requireNonNull(clientMetadata);
         this.requestVersion = requestVersion;
@@ -52,6 +65,7 @@ public class FetchParams {
         this.maxBytes = maxBytes;
         this.isolation = isolation;
         this.clientMetadata = clientMetadata;
+        this.shareFetchRequest = shareFetchRequest;
     }
 
     public boolean isFromFollower() {
@@ -67,7 +81,7 @@ public class FetchParams {
     }
 
     public boolean fetchOnlyLeader() {
-        return isFromFollower() || (isFromConsumer() && !clientMetadata.isPresent());
+        return isFromFollower() || (isFromConsumer() && !clientMetadata.isPresent()) || shareFetchRequest;
     }
 
     public boolean hardMaxBytesLimit() {
@@ -86,7 +100,8 @@ public class FetchParams {
                 && minBytes == that.minBytes
                 && maxBytes == that.maxBytes
                 && isolation.equals(that.isolation)
-                && clientMetadata.equals(that.clientMetadata);
+                && clientMetadata.equals(that.clientMetadata)
+                && shareFetchRequest == that.shareFetchRequest;
     }
 
     @Override
@@ -99,6 +114,7 @@ public class FetchParams {
         result = 31 * result + maxBytes;
         result = 31 * result + isolation.hashCode();
         result = 31 * result + clientMetadata.hashCode();
+        result = 31 * result + Boolean.hashCode(shareFetchRequest);
         return result;
     }
 
@@ -113,6 +129,7 @@ public class FetchParams {
                 ", maxBytes=" + maxBytes +
                 ", isolation=" + isolation +
                 ", clientMetadata=" + clientMetadata +
+                ", shareFetchRequest=" + shareFetchRequest +
                 ')';
     }
 }

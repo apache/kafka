@@ -19,8 +19,6 @@ package kafka.utils
 
 import java.util
 import java.util.{Base64, UUID}
-import java.util.concurrent.{ConcurrentHashMap, Executors, TimeUnit}
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
@@ -31,9 +29,6 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
-import scala.jdk.CollectionConverters._
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorService, Future}
 
 class CoreUtilsTest extends Logging {
 
@@ -123,29 +118,5 @@ class CoreUtilsTest extends Logging {
     val clusterId = CoreUtils.generateUuidAsBase64()
     assertEquals(clusterId.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId).matches())
-  }
-
-  @Test
-  def testAtomicGetOrUpdate(): Unit = {
-    val count = 1000
-    val nThreads = 5
-    val createdCount = new AtomicInteger
-    val map = new ConcurrentHashMap[Int, AtomicInteger]().asScala
-    implicit val executionContext: ExecutionContextExecutorService = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(nThreads))
-    try {
-      Await.result(Future.traverse(1 to count) { _ =>
-        Future {
-          CoreUtils.atomicGetOrUpdate(map, 0, {
-            createdCount.incrementAndGet
-            new AtomicInteger
-          }).incrementAndGet()
-        }
-      }, Duration(1, TimeUnit.MINUTES))
-      assertEquals(count, map(0).get)
-      val created = createdCount.get
-      assertTrue(created > 0 && created <= nThreads, s"Too many creations $created")
-    } finally {
-      executionContext.shutdownNow()
-    }
   }
 }

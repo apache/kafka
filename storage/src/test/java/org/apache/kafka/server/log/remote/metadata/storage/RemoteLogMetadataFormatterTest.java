@@ -53,7 +53,7 @@ public class RemoteLogMetadataFormatterTest {
         Optional<CustomMetadata> customMetadata = Optional.of(new CustomMetadata(new byte[10]));
         RemoteLogSegmentMetadata remoteLogMetadata = new RemoteLogSegmentMetadata(
                 remoteLogSegmentId, 0L, 100L, -1L, 1, 123L, 1024, customMetadata, COPY_SEGMENT_STARTED,
-                segLeaderEpochs);
+                segLeaderEpochs, true);
 
         byte[] metadataBytes = new RemoteLogMetadataSerde().serialize(remoteLogMetadata);
         ConsumerRecord<byte[], byte[]> metadataRecord = new ConsumerRecord<>(
@@ -65,7 +65,7 @@ public class RemoteLogMetadataFormatterTest {
                         "startOffset=0, endOffset=100, brokerId=1, maxTimestampMs=-1, " +
                         "eventTimestampMs=123, segmentLeaderEpochs={0=0, 1=20, 2=80}, segmentSizeInBytes=1024, " +
                         "customMetadata=Optional[CustomMetadata{10 bytes}], " +
-                        "state=COPY_SEGMENT_STARTED}\n",
+                        "state=COPY_SEGMENT_STARTED, txnIdxEmpty=true}\n",
                 TOPIC_ID, SEGMENT_ID);
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              PrintStream ps = new PrintStream(baos)) {

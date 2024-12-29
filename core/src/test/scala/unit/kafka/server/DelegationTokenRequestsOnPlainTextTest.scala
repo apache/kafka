@@ -26,8 +26,8 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import scala.compat.java8.OptionConverters
 import scala.concurrent.ExecutionException
+import scala.jdk.javaapi.OptionConverters
 
 class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
   var adminClient: Admin = _
@@ -49,7 +49,7 @@ class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)
 

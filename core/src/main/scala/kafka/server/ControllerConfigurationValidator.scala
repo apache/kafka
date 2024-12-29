@@ -139,7 +139,7 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
           throw new InvalidConfigurationException("Null value not supported for group configs: " +
             nullGroupConfigs.mkString(","))
         }
-        GroupConfigManager.validate(properties, kafkaConfig.groupCoordinatorConfig)
+        GroupConfigManager.validate(properties, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

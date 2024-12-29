@@ -25,10 +25,10 @@ import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import java.util.concurrent.TimeUnit
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 trait ForwardingManager {
   def close(): Unit
@@ -98,7 +98,7 @@ object ForwardingManager {
 
   private[server] def buildEnvelopeRequest(context: RequestContext,
                                            forwardRequestBuffer: ByteBuffer): EnvelopeRequest.Builder = {
-    val principalSerde = context.principalSerde.asScala.getOrElse(
+    val principalSerde = context.principalSerde.toScala.getOrElse(
       throw new IllegalArgumentException(s"Cannot deserialize principal from request context $context " +
         "since there is no serde defined")
     )
@@ -188,7 +188,7 @@ class ForwardingManagerImpl(
     forwardingManagerMetrics.close()
 
   override def controllerApiVersions: Option[NodeApiVersions] =
-    channelManager.controllerApiVersions.asScala
+    channelManager.controllerApiVersions.toScala
 
   private def parseResponse(
     buffer: ByteBuffer,

@@ -23,7 +23,7 @@ import java.util.Map;
 
 public class ShareAcknowledgeSyncEvent extends CompletableApplicationEvent<Map<TopicIdPartition, Acknowledgements>> {
 
-    private Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
+    private final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
 
     public ShareAcknowledgeSyncEvent(final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap, final long deadlineMs) {
         super(Type.SHARE_ACKNOWLEDGE_SYNC, deadlineMs);

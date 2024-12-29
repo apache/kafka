@@ -333,7 +333,7 @@ public final class WorkerManager {
                 return worker.doneFuture;
             }
             KafkaFutureImpl<String> haltFuture = new KafkaFutureImpl<>();
-            haltFuture.thenApply((KafkaFuture.BaseFunction<String, Void>) errorString -> {
+            haltFuture.thenApply(errorString -> {
                 if (errorString == null)
                     errorString = "";
                 if (errorString.isEmpty()) {

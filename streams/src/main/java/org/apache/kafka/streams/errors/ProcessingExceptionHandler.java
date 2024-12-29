@@ -26,25 +26,30 @@ public interface ProcessingExceptionHandler extends Configurable {
     /**
      * Inspect a record and the exception received
      *
-     * @param context processing context metadata
-     * @param record record where the exception occurred
-     * @param exception the actual exception
+     * @param context
+     *     Processing context metadata.
+     * @param record
+     *     Record where the exception occurred.
+     * @param exception
+     *     The actual exception.
+     *
+     * @return Whether to continue or stop processing.
      */
     ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception);
 
     enum ProcessingHandlerResponse {
-        /* continue with processing */
+        /** Continue processing. */
         CONTINUE(1, "CONTINUE"),
-        /* fail the processing and stop */
+        /** Fail processing. */
         FAIL(2, "FAIL");
 
         /**
-         * the permanent and immutable name of processing exception response
+         * An english description for the used option. This is for debugging only and may change.
          */
         public final String name;
 
         /**
-         * the permanent and immutable id of processing exception response
+         * The permanent and immutable id for the used option. This can't change ever.
          */
         public final int id;
 

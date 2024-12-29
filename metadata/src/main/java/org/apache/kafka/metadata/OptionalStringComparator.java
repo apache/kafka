@@ -26,13 +26,13 @@ public class OptionalStringComparator implements Comparator<Optional<String>> {
 
     @Override
     public int compare(Optional<String> a, Optional<String> b) {
-        if (!a.isPresent()) {
-            if (!b.isPresent()) {
+        if (a.isEmpty()) {
+            if (b.isEmpty()) {
                 return 0;
             } else {
                 return -1;
             }
-        } else if (!b.isPresent()) {
+        } else if (b.isEmpty()) {
             return 1;
         }
         return a.get().compareTo(b.get());

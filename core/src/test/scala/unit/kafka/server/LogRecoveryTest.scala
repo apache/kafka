@@ -82,7 +82,7 @@ class LogRecoveryTest extends QuorumTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
 
-    configs = TestUtils.createBrokerConfigs(2, zkConnectOrNull, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
+    configs = TestUtils.createBrokerConfigs(2, null, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
 
     // start both servers
     server1 = createBroker(configProps1)
@@ -105,7 +105,7 @@ class LogRecoveryTest extends QuorumTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointNoFailuresSingleLogSegment(quorum: String): Unit = {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
@@ -123,7 +123,7 @@ class LogRecoveryTest extends QuorumTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointWithFailuresSingleLogSegment(quorum: String): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 
@@ -184,7 +184,7 @@ class LogRecoveryTest extends QuorumTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointNoFailuresMultipleLogSegments(quorum: String): Unit = {
     sendMessages(20)
     val hw = 20L
@@ -201,7 +201,7 @@ class LogRecoveryTest extends QuorumTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointWithFailuresMultipleLogSegments(quorum: String): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 

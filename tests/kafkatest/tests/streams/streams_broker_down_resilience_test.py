@@ -45,7 +45,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             self.zk.start()
 
     @cluster(num_nodes=7)
-    @matrix(metadata_quorum=[quorum.isolated_kraft], use_new_coordinator=[True, False])
+    @matrix(metadata_quorum=[quorum.combined_kraft], use_new_coordinator=[True, False])
     def test_streams_resilient_to_broker_down(self, metadata_quorum, use_new_coordinator=False):
         self.kafka.start()
 
@@ -82,7 +82,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=7)
-    @matrix(metadata_quorum=[quorum.isolated_kraft], use_new_coordinator=[True, False])
+    @matrix(metadata_quorum=[quorum.combined_kraft], use_new_coordinator=[True, False])
     def test_streams_runs_with_broker_down_initially(self, metadata_quorum, use_new_coordinator=False):
         self.kafka.start()
         node = self.kafka.leader(self.inputTopic)
@@ -150,7 +150,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.isolated_kraft], use_new_coordinator=[True, False])
+    @matrix(metadata_quorum=[quorum.combined_kraft], use_new_coordinator=[True, False])
     def test_streams_should_scale_in_while_brokers_down(self, metadata_quorum, use_new_coordinator=False):
         self.kafka.start()
 
@@ -229,7 +229,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.isolated_kraft], use_new_coordinator=[True, False])
+    @matrix(metadata_quorum=[quorum.combined_kraft], use_new_coordinator=[True, False])
     def test_streams_should_failover_while_brokers_down(self, metadata_quorum, use_new_coordinator=False):
         self.kafka.start()
 

@@ -17,9 +17,8 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
-import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.FetchResponseData
@@ -29,13 +28,14 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
+import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 
 import java.util
 import java.util.Optional
 import scala.collection.{Map, Seq, Set, mutable}
-import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 /**
  * Facilitates fetches from a local replica leader.
@@ -105,7 +105,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     replicaManager.fetchMessages(
       params = fetchParams,
       fetchInfos = fetchData.asScala.toSeq,
-      quota = UnboundedQuota,
+      quota = UNBOUNDED_QUOTA,
       responseCallback = processResponseCallback
     )
 
@@ -206,7 +206,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     try {
       val logStartOffset = replicaManager.futureLocalLogOrException(topicPartition).logStartOffset
       val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-        fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
+        fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
       else
         Optional.empty[Integer]
       val topicId = fetchState.topicId.getOrElse(Uuid.ZERO_UUID)

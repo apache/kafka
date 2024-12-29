@@ -182,7 +182,8 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
     }
 
     private Properties buildConsumerProps(Properties consumerPropsFromFile, Properties extraConsumerProps, Set<String> groupIdsProvided) {
-        Properties consumerProps = new Properties(consumerPropsFromFile);
+        Properties consumerProps = new Properties();
+        consumerProps.putAll(consumerPropsFromFile);
         consumerProps.putAll(extraConsumerProps);
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer());
         if (consumerProps.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) == null) {

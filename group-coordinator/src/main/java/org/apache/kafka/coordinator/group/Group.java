@@ -67,6 +67,13 @@ public interface Group {
 
             return type == null ? UNKNOWN : type;
         }
+        
+        static String[] documentValidValues() {
+            return Arrays.stream(GroupType.values())
+                .filter(type -> type != UNKNOWN)
+                .map(GroupType::toString)
+                .toArray(String[]::new);
+        }
     }
 
     /**

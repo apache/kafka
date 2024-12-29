@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.KafkaFuture;
@@ -30,6 +24,11 @@ import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.server.config.ServerConfigs;
 
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(ClusterTestExtensions.class)
 @ClusterTestDefaults(serverProperties = {
-        @ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true"),
+    @ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true"),
 })
 public class BrokerApiVersionsCommandTest {
     @ClusterTest
@@ -55,10 +54,9 @@ public class BrokerApiVersionsCommandTest {
                 BrokerApiVersionsCommand.mainNoExit("--bootstrap-server", clusterInstance.bootstrapServers()));
         Iterator<String> lineIter = Arrays.stream(output.split("\n")).iterator();
         assertTrue(lineIter.hasNext());
-        assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null) -> (", lineIter.next());
+        assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null isFenced: false) -> (", lineIter.next());
 
-        ApiMessageType.ListenerType listenerType = clusterInstance.isKRaftTest() ?
-                ApiMessageType.ListenerType.BROKER : ApiMessageType.ListenerType.ZK_BROKER;
+        ApiMessageType.ListenerType listenerType = ApiMessageType.ListenerType.BROKER;
 
         NodeApiVersions nodeApiVersions = new NodeApiVersions(
                 ApiVersionsResponse.collectApis(ApiKeys.clientApis(), true),

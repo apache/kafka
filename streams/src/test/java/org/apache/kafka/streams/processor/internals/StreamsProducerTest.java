@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -35,13 +34,11 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.internals.StreamsConfigUtils;
-import org.apache.kafka.test.MockClientSupplier;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,10 +51,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.equalTo;
@@ -94,41 +92,31 @@ public class StreamsProducerTest {
         Collections.emptySet()
     );
 
-    private final StreamsConfig nonEosConfig = new StreamsConfig(mkMap(
-        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"))
-    );
-
-    private final StreamsConfig eosConfig = new StreamsConfig(mkMap(
-        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2))
-    );
-
     private final Time mockTime = mock(Time.class);
 
     @SuppressWarnings("unchecked")
     final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
-    final StreamsProducer streamsProducerWithMock = new StreamsProducer(
-        StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+    private final StreamsProducer streamsProducerWithMock = new StreamsProducer(
         mockedProducer,
-        logContext,
-        mockTime
+        AT_LEAST_ONCE,
+        mockTime,
+        logContext
     );
-    final StreamsProducer eosStreamsProducerWithMock = new StreamsProducer(
-        StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
+    private final StreamsProducer eosStreamsProducerWithMock = new StreamsProducer(
         mockedProducer,
-        logContext,
-        mockTime
+        EXACTLY_ONCE_V2,
+        mockTime,
+        logContext
     );
 
-    private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
+    private final MockProducer<byte[], byte[]> nonEosMockProducer
+        = new MockProducer<>(cluster, true, new org.apache.kafka.clients.producer.RoundRobinPartitioner(), new ByteArraySerializer(), new ByteArraySerializer());
+    private final MockProducer<byte[], byte[]> eosMockProducer
+        = new MockProducer<>(cluster, true, new org.apache.kafka.clients.producer.RoundRobinPartitioner(), new ByteArraySerializer(), new ByteArraySerializer());
+
     private StreamsProducer nonEosStreamsProducer;
-    private MockProducer<byte[], byte[]> nonEosMockProducer;
-
-    private final MockClientSupplier eosMockClientSupplier = new MockClientSupplier();
     private StreamsProducer eosStreamsProducer;
-    private MockProducer<byte[], byte[]> eosMockProducer;
+
 
     private final ProducerRecord<byte[], byte[]> record =
         new ProducerRecord<>(topic, 0, 0L, new byte[0], new byte[0], new RecordHeaders());
@@ -139,28 +127,20 @@ public class StreamsProducerTest {
 
     @BeforeEach
     public void before() {
-        mockClientSupplier.setCluster(cluster);
-        nonEosMockProducer = (MockProducer<byte[], byte[]>) mockClientSupplier.getProducer(nonEosConfig.originals());
         nonEosStreamsProducer =
             new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
                 nonEosMockProducer,
-                logContext,
-                mockTime
+                AT_LEAST_ONCE,
+                mockTime,
+                logContext
             );
 
-        eosMockClientSupplier.setCluster(cluster);
-        eosMockClientSupplier.setApplicationIdForProducer("appId");
-        final String clientId = "threadId-StreamThread-0";
-        final Map<String, Object> producerConfig = eosConfig.getProducerConfigs(clientId);
-        producerConfig.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "appId-" + UUID.randomUUID() + "-0");
-        eosMockProducer = (MockProducer<byte[], byte[]>) eosMockClientSupplier.getProducer(producerConfig);
         eosStreamsProducer =
             new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
                 eosMockProducer,
-                logContext,
-                mockTime
+                EXACTLY_ONCE_V2,
+                mockTime,
+                logContext
             );
         eosStreamsProducer.initTransaction();
         when(mockTime.nanoseconds()).thenReturn(Time.SYSTEM.nanoseconds());
@@ -197,11 +177,6 @@ public class StreamsProducerTest {
 
         // then:
         assertThat(eosStreamsProducer.transactionInFlight(), is(false));
-    }
-
-    @Test
-    public void shouldCreateProducer() {
-        assertThat(mockClientSupplier.producers.size(), is(1));
     }
 
     @Test
@@ -242,10 +217,11 @@ public class StreamsProducerTest {
         final NullPointerException thrown = assertThrows(
             NullPointerException.class,
             () -> new StreamsProducer(
-                null,
                 mockedProducer,
-                logContext,
-                mockTime)
+                null,
+                mockTime,
+                logContext
+            )
         );
 
         assertThat(thrown.getMessage(), is("processingMode cannot be null"));
@@ -256,27 +232,14 @@ public class StreamsProducerTest {
         final NullPointerException thrown = assertThrows(
             NullPointerException.class,
             () -> new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
                 null,
-                logContext,
-                mockTime)
+                AT_LEAST_ONCE,
+                mockTime,
+                logContext
+            )
         );
 
         assertThat(thrown.getMessage(), is("producer cannot be null"));
-    }
-
-    @Test
-    public void shouldFailIfLogContextIsNull() {
-        final NullPointerException thrown = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
-                mockedProducer,
-                null,
-                mockTime)
-        );
-
-        assertThat(thrown.getMessage(), is("logContext cannot be null"));
     }
 
     @Test
@@ -284,13 +247,29 @@ public class StreamsProducerTest {
         final NullPointerException thrown = assertThrows(
             NullPointerException.class,
             () -> new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
                 mockedProducer,
-                logContext,
-                null)
+                AT_LEAST_ONCE,
+                null,
+                logContext
+            )
         );
 
         assertThat(thrown.getMessage(), is("time cannot be null"));
+    }
+
+    @Test
+    public void shouldFailIfLogContextIsNull() {
+        final NullPointerException thrown = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsProducer(
+                mockedProducer,
+                AT_LEAST_ONCE,
+                mockTime,
+                null
+            )
+        );
+
+        assertThat(thrown.getMessage(), is("logContext cannot be null"));
     }
 
     @Test
@@ -300,18 +279,13 @@ public class StreamsProducerTest {
             () -> nonEosStreamsProducer.resetProducer(null)
         );
 
-        assertThat(thrown.getMessage(), is("Expected eos-v2 to be enabled, but the processing mode was AT_LEAST_ONCE"));
+        assertThat(thrown.getMessage(), is("Expected EOS to be enabled, but processing mode is at_least_once"));
     }
 
 
     // non-EOS tests
 
     // functional tests
-
-    @Test
-    public void shouldNotHaveEosEnabledIfEosDisabled() {
-        assertThat(nonEosStreamsProducer.eosEnabled(), is(false));
-    }
 
     @Test
     public void shouldNotInitTxIfEosDisable() {
@@ -394,16 +368,6 @@ public class StreamsProducerTest {
     // functional tests
 
     @Test
-    public void shouldEnableEosIfEosEnabled() {
-        assertThat(eosStreamsProducer.eosEnabled(), is(true));
-    }
-
-    @Test
-    public void shouldHaveEosEnabledIfEosEnabled() {
-        assertThat(eosStreamsProducer.eosEnabled(), is(true));
-    }
-
-    @Test
     public void shouldInitTxOnEos() {
         assertThat(eosMockProducer.transactionInitialized(), is(true));
     }
@@ -469,10 +433,10 @@ public class StreamsProducerTest {
         when(mockedProducer.send(record, null)).thenReturn(null);
 
         final StreamsProducer streamsProducer = new StreamsProducer(
-            StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
             mockedProducer,
-            logContext,
-            mockTime
+            EXACTLY_ONCE_V2,
+            mockTime,
+            logContext
         );
         streamsProducer.initTransaction();
         // call `send()` to start a transaction
@@ -518,10 +482,10 @@ public class StreamsProducerTest {
         nonEosMockProducer.initTransactionException = new TimeoutException("KABOOM!");
 
         final StreamsProducer streamsProducer = new StreamsProducer(
-            StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
             nonEosMockProducer,
-            logContext,
-            mockTime
+            EXACTLY_ONCE_V2,
+            mockTime,
+            logContext
         );
 
         final TimeoutException thrown = assertThrows(
@@ -537,10 +501,10 @@ public class StreamsProducerTest {
         // use `nonEosMockProducer` instead of `eosMockProducer` to avoid auto-init Tx
         final StreamsProducer streamsProducer =
             new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
                 nonEosMockProducer,
-                logContext,
-                mockTime
+                EXACTLY_ONCE_V2,
+                mockTime,
+                logContext
             );
 
         final IllegalStateException thrown = assertThrows(
@@ -557,10 +521,10 @@ public class StreamsProducerTest {
         nonEosMockProducer.initTransactionException = new KafkaException("KABOOM!");
 
         final StreamsProducer streamsProducer = new StreamsProducer(
-            StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
             nonEosMockProducer,
-            logContext,
-            mockTime
+            EXACTLY_ONCE_V2,
+            mockTime,
+            logContext
         );
 
         final StreamsException thrown = assertThrows(
@@ -578,10 +542,10 @@ public class StreamsProducerTest {
         nonEosMockProducer.initTransactionException = new RuntimeException("KABOOM!");
 
         final StreamsProducer streamsProducer = new StreamsProducer(
-            StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
             nonEosMockProducer,
-            logContext,
-            mockTime
+            EXACTLY_ONCE_V2,
+            mockTime,
+            logContext
         );
 
         final RuntimeException thrown = assertThrows(
@@ -898,10 +862,10 @@ public class StreamsProducerTest {
     @Test
     public void shouldResetTransactionInitializedOnResetProducer() {
         final StreamsProducer streamsProducer = new StreamsProducer(
-            StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
             mockedProducer,
-            logContext,
-            mockTime
+            EXACTLY_ONCE_V2,
+            mockTime,
+            logContext
         );
         streamsProducer.initTransaction();
 

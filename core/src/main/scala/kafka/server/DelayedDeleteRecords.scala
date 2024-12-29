@@ -18,14 +18,15 @@
 package kafka.server
 
 
-import java.util.concurrent.TimeUnit
+import kafka.utils.Logging
 
-import kafka.utils.Implicits._
+import java.util.concurrent.TimeUnit
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteRecordsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.DeleteRecordsResponse
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.purgatory.DelayedOperation
 
 import scala.collection._
 
@@ -46,10 +47,10 @@ class DelayedDeleteRecords(delayMs: Long,
                            deleteRecordsStatus:  Map[TopicPartition, DeleteRecordsPartitionStatus],
                            replicaManager: ReplicaManager,
                            responseCallback: Map[TopicPartition, DeleteRecordsResponseData.DeleteRecordsPartitionResult] => Unit)
-  extends DelayedOperation(delayMs) {
+  extends DelayedOperation(delayMs) with Logging {
 
   // first update the acks pending variable according to the error code
-  deleteRecordsStatus.forKeyValue { (topicPartition, status) =>
+  deleteRecordsStatus.foreachEntry { (topicPartition, status) =>
     if (status.responseStatus.errorCode == Errors.NONE.code) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
@@ -70,7 +71,7 @@ class DelayedDeleteRecords(delayMs: Long,
    */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    deleteRecordsStatus.forKeyValue { (topicPartition, status) =>
+    deleteRecordsStatus.foreachEntry { (topicPartition, status) =>
       trace(s"Checking delete records satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
@@ -106,7 +107,7 @@ class DelayedDeleteRecords(delayMs: Long,
   }
 
   override def onExpiration(): Unit = {
-    deleteRecordsStatus.forKeyValue { (topicPartition, status) =>
+    deleteRecordsStatus.foreachEntry { (topicPartition, status) =>
       if (status.acksPending) {
         DelayedDeleteRecordsMetrics.recordExpiration(topicPartition)
       }

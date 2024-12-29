@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.directory_layout.kafka_path import TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 import importlib
@@ -72,7 +70,7 @@ Command line arguments:
  * `--group-id <group-id>`
  * `--topic <topic>`
  * `--broker-list <brokers>`
- * `--session-timeout <n>`
+ * `--session-timeout <n>` - note that this configuration is not supported when group protocol is consumer
  * `--enable-autocommit`
  * `--max-messages <n>`
  * `--assignment-strategy <s>`
@@ -249,17 +247,7 @@ class VerifiableClientJava (VerifiableClient):
     def exec_cmd (self, node):
         """ :return: command to execute to start instance
         Translates Verifiable* to the corresponding Java client class name """
-        cmd = ""
-        if self.java_class_name == 'VerifiableProducer' and node.version <= LATEST_0_8_2:
-            # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
-            # the tools jar from 0.9.x to the classpath
-            # TODO remove with KAFKA-14762
-            tools_jar = self.parent.path.jar(TOOLS_JAR_NAME, LATEST_0_9)
-            tools_dependant_libs_jar = self.parent.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, LATEST_0_9)
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar
-            cmd += "export CLASSPATH; "
-        cmd += fix_opts_for_new_jvm(node)
+        cmd = fix_opts_for_new_jvm(node)
         cmd += self.parent.path.script("kafka-run-class.sh", node) + " org.apache.kafka.tools." + self.java_class_name
         return cmd
 

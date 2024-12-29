@@ -56,5 +56,9 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USER }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Release the RC docker image
+      env:
+        RC_DOCKER_IMAGE: ${{ github.event.inputs.rc_docker_image }}
+        KAFKA_URL: ${{ github.event.inputs.kafka_url }}
+        IMAGE_TYPE: ${{ github.event.inputs.image_type }}
       run: |
-        python docker/docker_release.py ${{ github.event.inputs.rc_docker_image }} --kafka-url ${{ github.event.inputs.kafka_url }} --image-type ${{ github.event.inputs.image_type }}
+        python docker/docker_release.py $RC_DOCKER_IMAGE --kafka-url $KAFKA_URL --image-type $IMAGE_TYPE

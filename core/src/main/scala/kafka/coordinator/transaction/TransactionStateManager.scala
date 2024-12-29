@@ -23,7 +23,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.server.{MetadataCache, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool}
-import kafka.utils.Implicits._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ListTransactionsResponseData
@@ -237,7 +236,7 @@ class TransactionStateManager(brokerId: Int,
 
   private[transaction] def removeExpiredTransactionalIds(): Unit = {
     inReadLock(stateLock) {
-      transactionMetadataCache.forKeyValue { (partitionId, partitionCacheEntry) =>
+      transactionMetadataCache.foreachEntry { (partitionId, partitionCacheEntry) =>
         val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
         removeExpiredTransactionalIds(transactionPartition, partitionCacheEntry)
       }
@@ -250,7 +249,7 @@ class TransactionStateManager(brokerId: Int,
     tombstoneRecords: MemoryRecords
   ): Unit = {
     def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
-      responses.forKeyValue { (topicPartition, response) =>
+      responses.foreachEntry { (topicPartition, response) =>
         inReadLock(stateLock) {
           transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
             expiredForPartition.foreach { idCoordinatorEpochAndMetadata =>
@@ -345,7 +344,7 @@ class TransactionStateManager(brokerId: Int,
         }
 
         val states = new java.util.ArrayList[ListTransactionsResponseData.TransactionState]
-        transactionMetadataCache.forKeyValue { (_, cache) =>
+        transactionMetadataCache.foreachEntry { (_, cache) =>
           cache.metadataPerTransactionalId.values.foreach { txnMetadata =>
             txnMetadata.inLock {
               if (shouldInclude(txnMetadata)) {
@@ -480,7 +479,6 @@ class TransactionStateManager(brokerId: Int,
                       case Some(txnMetadata) =>
                         loadedTransactions.put(transactionalId, txnMetadata)
                     }
-                    currOffset = batch.nextOffset
 
                   case unknownKey: UnknownKey =>
                     warn(s"Unknown message key with version ${unknownKey.version}" +
@@ -488,6 +486,7 @@ class TransactionStateManager(brokerId: Int,
                       "It could be a left over from an aborted upgrade.")
                 }
               }
+              currOffset = batch.nextOffset
             }
           }
         } catch {
@@ -597,16 +596,27 @@ class TransactionStateManager(brokerId: Int,
    */
   def removeTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
-    val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
     inWriteLock(stateLock) {
-      loadingPartitions.remove(partitionAndLeaderEpoch)
+      removeLoadingPartitionWithEpoch(partitionId, coordinatorEpoch)
       transactionMetadataCache.remove(partitionId) match {
         case Some(txnMetadataCacheEntry) =>
           info(s"Unloaded transaction metadata $txnMetadataCacheEntry for $topicPartition on become-follower transition")
 
         case None =>
           info(s"No cached transaction metadata found for $topicPartition during become-follower transition")
+      }
+    }
+  }
+
+  /**
+   * Remove the loading partition if the epoch is less than the specified epoch. Note: This method must be called under the write state lock.
+   */
+  private def removeLoadingPartitionWithEpoch(partitionId: Int, coordinatorEpoch: Int): Unit = {
+    loadingPartitions.find(_.txnPartitionId == partitionId).foreach { partitionAndLeaderEpoch =>
+      if (partitionAndLeaderEpoch.coordinatorEpoch < coordinatorEpoch) {
+        loadingPartitions.remove(partitionAndLeaderEpoch)
+        info(s"Cancelling load of currently loading partition $partitionAndLeaderEpoch")
       }
     }
   }

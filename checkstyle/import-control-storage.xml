@@ -44,6 +44,7 @@
     <allow pkg="org.apache.kafka.common.utils" />
     <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
     <allow pkg="org.apache.kafka.common.memory" />
+    <allow pkg="org.apache.kafka.common.test" />
 
 
     <subpackage name="server">
@@ -53,7 +54,7 @@
             <allow pkg="com.fasterxml.jackson" />
             <allow pkg="kafka.api" />
             <allow pkg="kafka.utils" />
-            <allow pkg="kafka.test" />
+            <allow pkg="org.apache.kafka.common.test" />
             <allow pkg="org.apache.kafka.clients" />
             <allow pkg="org.apache.kafka.server.common" />
             <allow pkg="org.apache.kafka.server.config" />
@@ -69,7 +70,7 @@
                 <subpackage name="storage">
                     <allow pkg="com.yammer.metrics.core" />
                     <allow pkg="org.apache.kafka.server.metrics" />
-                    <allow pkg="kafka.test" />
+                    <allow pkg="org.apache.kafka.common.test" />
                 </subpackage>
             </subpackage>
         </subpackage>

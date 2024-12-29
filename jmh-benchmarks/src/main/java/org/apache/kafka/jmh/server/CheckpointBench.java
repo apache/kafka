@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.server;
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
-import kafka.server.BrokerFeatures;
 import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
@@ -65,7 +64,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import scala.Option;
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
+
+import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 
 @Warmup(iterations = 5)
 @Measurement(iterations = 5)
@@ -97,28 +98,25 @@ public class CheckpointBench {
     private AlterPartitionManager alterPartitionManager;
 
 
-    @SuppressWarnings("deprecation")
     @Setup(Level.Trial)
     public void setup() {
         this.scheduler = new KafkaScheduler(1, true, "scheduler-thread");
         this.brokerProperties = KafkaConfig.fromProps(TestUtils.createBrokerConfig(
-                0, TestUtils.MockZkConnect(), true, true, 9092, Option.empty(), Option.empty(),
+                0, null, true, true, 9092, Option.empty(), Option.empty(),
                 Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1,
                 (short) 1, false));
         this.metrics = new Metrics();
         this.time = new MockTime();
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
         final List<File> files =
-            JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
-        this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
+            CollectionConverters.asJava(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
+        this.logManager = TestUtils.createLogManager(CollectionConverters.asScala(files),
                 new LogConfig(new Properties()), new MockConfigRepository(), new CleanerConfig(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024, Double.MAX_VALUE, 15 * 1000, true), time, MetadataVersion.latestTesting(), 4, false, Option.empty(), false, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT);
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         final MetadataCache metadataCache =
-                MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
-                    this.brokerProperties.interBrokerProtocolVersion(),
-                    BrokerFeatures.createEmpty(), false);
+                MetadataCache.kRaftMetadataCache(this.brokerProperties.brokerId(), () -> KRAFT_VERSION_1);
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,
@@ -162,7 +160,7 @@ public class CheckpointBench {
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();
-        for (File dir : JavaConverters.asJavaCollection(logManager.liveLogDirs())) {
+        for (File dir : CollectionConverters.asJavaCollection(logManager.liveLogDirs())) {
             Utils.delete(dir);
         }
     }

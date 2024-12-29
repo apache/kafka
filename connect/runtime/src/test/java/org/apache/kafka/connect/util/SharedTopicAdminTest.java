@@ -104,7 +104,7 @@ public class SharedTopicAdminTest {
         // When closed
         sharedAdmin.close();
         // Then using the admin should fail
-        assertThrows(ConnectException.class, () -> sharedAdmin.topicAdmin());
+        assertThrows(ConnectException.class, sharedAdmin::topicAdmin);
     }
 
     private void verifyTopicAdminCreatesAndCloses(int count) {

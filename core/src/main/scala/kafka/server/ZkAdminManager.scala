@@ -22,7 +22,6 @@ import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
-import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
@@ -45,11 +44,12 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
-import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.common.utils.{Sanitizer, Utils}
 import org.apache.kafka.server.common.AdminOperationException
-import org.apache.kafka.server.config.{ConfigType, QuotaConfigs, ZooKeeperInternals}
+import org.apache.kafka.server.config.{ConfigType, QuotaConfig, ZooKeeperInternals}
 import org.apache.kafka.server.config.ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
 import org.apache.kafka.server.config.ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG
+import org.apache.kafka.server.purgatory.{DelayedOperation, DelayedOperationPurgatory}
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
@@ -75,7 +75,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
-  private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
+  private val topicPurgatory = new DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
   private val adminZkClient = new AdminZkClient(zkClient, Some(config))
   private val configHelper = new ConfigHelper(metadataCache, config, new ZkConfigRepository(adminZkClient))
 
@@ -251,9 +251,9 @@ class ZkAdminManager(val config: KafkaConfig,
       // 3. else pass the assignments and errors to the delayed operation and set the keys
       val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this,
         responseCallback)
-      val delayedCreateKeys = toCreate.values.map(topic => TopicKey(topic.name)).toBuffer
+      val delayedCreateKeys = toCreate.values.map(topic => TopicKey(topic.name)).toList
       // try to complete the request immediately, otherwise put it into the purgatory
-      topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
+      topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys.asJava)
     }
   }
 
@@ -298,9 +298,9 @@ class ZkAdminManager(val config: KafkaConfig,
     } else {
       // 3. else pass the topics and errors to the delayed operation and set the keys
       val delayedDelete = new DelayedDeleteTopics(timeout, metadata.toSeq, this, responseCallback)
-      val delayedDeleteKeys = topics.map(TopicKey).toSeq
+      val delayedDeleteKeys = topics.map(TopicKey).toList
       // try to complete the request immediately, otherwise put it into the purgatory
-      topicPurgatory.tryCompleteElseWatch(delayedDelete, delayedDeleteKeys)
+      topicPurgatory.tryCompleteElseWatch(delayedDelete, delayedDeleteKeys.asJava)
     }
   }
 
@@ -394,9 +394,9 @@ class ZkAdminManager(val config: KafkaConfig,
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
       val delayedCreate = new DelayedCreatePartitions(timeoutMs, metadata, this, callback)
-      val delayedCreateKeys = newPartitions.map(createPartitionTopic => TopicKey(createPartitionTopic.name))
+      val delayedCreateKeys = newPartitions.map(createPartitionTopic => TopicKey(createPartitionTopic.name)).toList
       // try to complete the request immediately, otherwise put it into the purgatory
-      topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
+      topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys.asJava)
     }
   }
 
@@ -547,8 +547,8 @@ class ZkAdminManager(val config: KafkaConfig,
 
   def shutdown(): Unit = {
     topicPurgatory.shutdown()
-    CoreUtils.swallow(createTopicPolicy.foreach(_.close()), this)
-    CoreUtils.swallow(alterConfigPolicy.foreach(_.close()), this)
+    createTopicPolicy.foreach(Utils.closeQuietly(_, "create topic policy"))
+    alterConfigPolicy.foreach(Utils.closeQuietly(_, "alter config policy"))
   }
 
   private def resourceNameToBrokerId(resourceName: String): Int = {
@@ -709,7 +709,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }
 
     (userEntries ++ clientIdEntries ++ bothEntries).flatMap { case ((u, c), p) =>
-      val quotaProps = p.asScala.filter { case (key, _) => QuotaConfigs.isClientOrUserQuotaConfig(key) }
+      val quotaProps = p.asScala.filter { case (key, _) => QuotaConfig.isClientOrUserQuotaConfig(key) }
       if (quotaProps.nonEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
         Some(userClientIdToEntity(u, c) -> ZkAdminManager.clientQuotaPropsToDoubleMap(quotaProps))
       else
@@ -963,7 +963,7 @@ class ZkAdminManager(val config: KafkaConfig,
         }
       ).toMap
 
-    illegalRequestsByUser.forKeyValue { (user, errorMessage) =>
+    illegalRequestsByUser.foreachEntry { (user, errorMessage) =>
       retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
         .setErrorCode(if (errorMessage == unknownScramMechanismMsg) {Errors.UNSUPPORTED_SASL_MECHANISM.code} else {Errors.UNACCEPTABLE_CREDENTIAL.code})
         .setErrorMessage(errorMessage)) }
@@ -1028,7 +1028,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }).collect { case (user: String, exception: Exception) => (user, exception) }.toMap
 
     // report failures
-    usersFailedToPrepareProperties.++(usersFailedToPersist).forKeyValue { (user, exception) =>
+    usersFailedToPrepareProperties.++(usersFailedToPersist).foreachEntry { (user, exception) =>
       val error = Errors.forException(exception)
       retval.results.add(new AlterUserScramCredentialsResult()
         .setUser(user)

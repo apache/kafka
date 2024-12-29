@@ -16,70 +16,19 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.coordinator.transaction.ProducerIdManager.RetryBackoffMs
-import kafka.utils.TestUtils
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.errors.CoordinatorLoadInProgressException
-import org.apache.kafka.common.message.AllocateProducerIdsResponseData
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.AllocateProducerIdsResponse
-import org.apache.kafka.common.utils.{MockTime, Time}
-import org.apache.kafka.server.NodeToControllerChannelManager
-import org.apache.kafka.server.common.ProducerIdsBlock
+import org.apache.kafka.server.common.{NodeToControllerChannelManager, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mock, when}
-
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, Executors, TimeUnit}
-import scala.collection.mutable
-import scala.util.{Failure, Success, Try}
 
 class ProducerIdManagerTest {
 
   var brokerToController: NodeToControllerChannelManager = mock(classOf[NodeToControllerChannelManager])
   val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
-
-  // Mutable test implementation that lets us easily set the idStart and error
-  class MockProducerIdManager(
-    val brokerId: Int,
-    var idStart: Long,
-    val idLen: Int,
-    val errorQueue: ConcurrentLinkedQueue[Errors] = new ConcurrentLinkedQueue[Errors](),
-    val isErroneousBlock: Boolean = false,
-    val time: Time = Time.SYSTEM
-  ) extends RPCProducerIdManager(brokerId, time, () => 1, brokerToController) {
-
-    private val brokerToControllerRequestExecutor = Executors.newSingleThreadExecutor()
-    val capturedFailure: AtomicBoolean = new AtomicBoolean(false)
-
-    override private[transaction] def sendRequest(): Unit = {
-
-      brokerToControllerRequestExecutor.submit(() => {
-        val error = errorQueue.poll()
-        if (error == null || error == Errors.NONE) {
-          handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
-            new AllocateProducerIdsResponseData().setProducerIdStart(idStart).setProducerIdLen(idLen)))
-          if (!isErroneousBlock) {
-            idStart += idLen
-          }
-        } else {
-          handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
-            new AllocateProducerIdsResponseData().setErrorCode(error.code)))
-        }
-      }, 0)
-    }
-
-    override private[transaction] def handleAllocateProducerIdsResponse(response: AllocateProducerIdsResponse): Unit = {
-      super.handleAllocateProducerIdsResponse(response)
-      capturedFailure.set(nextProducerIdBlock.get == null)
-    }
-  }
 
   @Test
   def testGetProducerIdZk(): Unit = {
@@ -104,20 +53,20 @@ class ProducerIdManagerTest {
     val manager1 = new ZkProducerIdManager(0, zkClient)
     val manager2 = new ZkProducerIdManager(1, zkClient)
 
-    val pid1 = manager1.generateProducerId().get
-    val pid2 = manager2.generateProducerId().get
+    val pid1 = manager1.generateProducerId()
+    val pid2 = manager2.generateProducerId()
 
     assertEquals(0, pid1)
     assertEquals(ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE, pid2)
 
     for (i <- 1L until ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
-      assertEquals(pid1 + i, manager1.generateProducerId().get)
+      assertEquals(pid1 + i, manager1.generateProducerId())
 
     for (i <- 1L until ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
-      assertEquals(pid2 + i, manager2.generateProducerId().get)
+      assertEquals(pid2 + i, manager2.generateProducerId())
 
-    assertEquals(pid2 + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE, manager1.generateProducerId().get)
-    assertEquals(pid2 + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE * 2, manager2.generateProducerId().get)
+    assertEquals(pid2 + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE, manager1.generateProducerId())
+    assertEquals(pid2 + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE * 2, manager2.generateProducerId())
   }
 
   @Test
@@ -129,123 +78,4 @@ class ProducerIdManagerTest {
     })
     assertThrows(classOf[KafkaException], () => new ZkProducerIdManager(0, zkClient))
   }
-
-  @ParameterizedTest
-  @ValueSource(ints = Array(1, 2, 10, 100))
-  def testConcurrentGeneratePidRequests(idBlockLen: Int): Unit = {
-    // Send concurrent generateProducerId requests. Ensure that the generated producer id is unique.
-    // For each block (total 3 blocks), only "idBlockLen" number of requests should go through.
-    // All other requests should fail immediately.
-
-    val numThreads = 5
-    val latch = new CountDownLatch(idBlockLen * 3)
-    val manager = new MockProducerIdManager(0, 0, idBlockLen)
-    val pidMap = mutable.Map[Long, Int]()
-    val requestHandlerThreadPool = Executors.newFixedThreadPool(numThreads)
-
-    for ( _ <- 0 until numThreads) {
-      requestHandlerThreadPool.submit(() => {
-        while (latch.getCount > 0) {
-          val result = manager.generateProducerId()
-          result match {
-            case Success(pid) =>
-              pidMap synchronized {
-                if (latch.getCount != 0) {
-                  val counter = pidMap.getOrElse(pid, 0)
-                  pidMap += pid -> (counter + 1)
-                  latch.countDown()
-                }
-              }
-
-            case Failure(exception) =>
-              assertEquals(classOf[CoordinatorLoadInProgressException], exception.getClass)
-          }
-          Thread.sleep(100)
-        }
-      }, 0)
-    }
-    assertTrue(latch.await(12000, TimeUnit.MILLISECONDS))
-    requestHandlerThreadPool.shutdown()
-
-    assertEquals(idBlockLen * 3, pidMap.size)
-    pidMap.foreach { case (pid, count) =>
-      assertEquals(1, count)
-      assertTrue(pid < (3 * idBlockLen) + numThreads, s"Unexpected pid $pid; " +
-        s"non-contiguous blocks generated or did not fully exhaust blocks.")
-    }
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = classOf[Errors], names = Array("UNKNOWN_SERVER_ERROR", "INVALID_REQUEST"))
-  def testUnrecoverableErrors(error: Errors): Unit = {
-    val time = new MockTime()
-    val manager = new MockProducerIdManager(0, 0, 1, errorQueue = queue(Errors.NONE, error), time = time)
-
-    verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
-
-    verifyFailure(manager)
-
-    time.sleep(RetryBackoffMs)
-    verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 1, 1), 1)
-  }
-
-  @Test
-  def testInvalidRanges(): Unit = {
-    var manager = new MockProducerIdManager(0, -1, 10, isErroneousBlock = true)
-    verifyFailure(manager)
-
-    manager = new MockProducerIdManager(0, 0, -1, isErroneousBlock = true)
-    verifyFailure(manager)
-
-    manager = new MockProducerIdManager(0, Long.MaxValue-1, 10, isErroneousBlock = true)
-    verifyFailure(manager)
-  }
-
-  @Test
-  def testRetryBackoff(): Unit = {
-    val time = new MockTime()
-    val manager = new MockProducerIdManager(0, 0, 1,
-      errorQueue = queue(Errors.UNKNOWN_SERVER_ERROR), time = time)
-
-    verifyFailure(manager)
-
-    // We should only get a new block once retry backoff ms has passed.
-    assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
-    time.sleep(RetryBackoffMs)
-    verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
-  }
-
-  private def queue(errors: Errors*): ConcurrentLinkedQueue[Errors] = {
-    val queue = new ConcurrentLinkedQueue[Errors]()
-    errors.foreach(queue.add)
-    queue
-  }
-
-  private def verifyFailure(manager: MockProducerIdManager): Unit = {
-    assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
-    TestUtils.waitUntilTrue(() => {
-      manager synchronized {
-        manager.capturedFailure.get
-      }
-    }, "Expected failure")
-    manager.capturedFailure.set(false)
-  }
-
-  private def verifyNewBlockAndProducerId(manager: MockProducerIdManager,
-                                          expectedBlock: ProducerIdsBlock,
-                                          expectedPid: Long): Unit = {
-
-    assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
-    TestUtils.waitUntilTrue(() => {
-      val nextBlock = manager.nextProducerIdBlock.get
-      nextBlock != null && nextBlock.equals(expectedBlock)
-    }, "failed to generate block")
-    assertEquals(expectedPid, manager.generateProducerId().get)
-  }
-
-  private def assertCoordinatorLoadInProgressExceptionFailure(generatedProducerId: Try[Long]): Unit = {
-    assertTrue(generatedProducerId.isFailure, () => s"expected failure but got producerId: ${generatedProducerId.get}")
-    assertEquals(classOf[CoordinatorLoadInProgressException], generatedProducerId.failed.get.getClass)
-  }
 }
-

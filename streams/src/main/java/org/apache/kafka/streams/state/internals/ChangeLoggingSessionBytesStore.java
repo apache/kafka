@@ -34,16 +34,16 @@ public class ChangeLoggingSessionBytesStore
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
     implements SessionStore<Bytes, byte[]> {
 
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> internalContext;
 
     ChangeLoggingSessionBytesStore(final SessionStore<Bytes, byte[]> bytesStore) {
         super(bytesStore);
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        this.context = asInternalProcessorContext(context);
-        super.init(context, root);
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        internalContext = asInternalProcessorContext(stateStoreContext);
+        super.init(stateStoreContext, root);
     }
 
     @Override
@@ -73,13 +73,13 @@ public class ChangeLoggingSessionBytesStore
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
         wrapped().remove(sessionKey);
-        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), null, context.timestamp(), wrapped().getPosition());
+        internalContext.logChange(name(), SessionKeySchema.toBinary(sessionKey), null, internalContext.timestamp(), wrapped().getPosition());
     }
 
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(sessionKey, aggregate);
-        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), aggregate, context.timestamp(), wrapped().getPosition());
+        internalContext.logChange(name(), SessionKeySchema.toBinary(sessionKey), aggregate, internalContext.timestamp(), wrapped().getPosition());
     }
 
     @Override

@@ -67,17 +67,6 @@ public class MirrorSourceConfigTest {
     }
 
     @Test
-    public void testConfigBackwardsCompatibility() {
-        MirrorSourceConfig config = new MirrorSourceConfig(
-                makeProps("config.properties.blacklist", "prop1",
-                        "topics.blacklist", "topic-1"));
-        assertFalse(config.configPropertyFilter().shouldReplicateConfigProperty("prop1"));
-        assertTrue(config.configPropertyFilter().shouldReplicateConfigProperty("prop2"));
-        assertFalse(config.topicFilter().shouldReplicateTopic("topic-1"));
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic-2"));
-    }
-
-    @Test
     public void testNoTopics() {
         MirrorSourceConfig config = new MirrorSourceConfig(makeProps("topics", ""));
         assertFalse(config.topicFilter().shouldReplicateTopic("topic1"), "topic1 shouldn't exist");

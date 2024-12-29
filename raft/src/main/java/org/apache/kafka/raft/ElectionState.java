@@ -73,11 +73,11 @@ public final class ElectionState {
     public boolean isVotedCandidate(ReplicaKey nodeKey) {
         if (nodeKey.id() < 0) {
             throw new IllegalArgumentException("Invalid node key " + nodeKey);
-        } else if (!votedKey.isPresent()) {
+        } else if (votedKey.isEmpty()) {
             return false;
         } else if (votedKey.get().id() != nodeKey.id()) {
             return false;
-        } else if (!votedKey.get().directoryId().isPresent()) {
+        } else if (votedKey.get().directoryId().isEmpty()) {
             // when the persisted voted directory id is not present assume that we voted for this candidate;
             // this happens when the kraft version is 0.
             return true;
@@ -87,7 +87,7 @@ public final class ElectionState {
     }
 
     public int leaderId() {
-        if (!leaderId.isPresent())
+        if (leaderId.isEmpty())
             throw new IllegalStateException("Attempt to access nil leaderId");
         return leaderId.getAsInt();
     }
@@ -101,7 +101,7 @@ public final class ElectionState {
     }
 
     public ReplicaKey votedKey() {
-        if (!votedKey.isPresent()) {
+        if (votedKey.isEmpty()) {
             throw new IllegalStateException("Attempt to access nil votedId");
         }
 

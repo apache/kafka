@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Objects;
@@ -102,13 +103,14 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         }
 
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
+        final StoreFactory storeFactory = new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy);
 
         return aggregateBuilder.build(
             new NamedInternal(aggregateName),
-            new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            storeFactory,
             new KStreamWindowAggregate<>(
                 windows,
-                materializedInternal.storeName(),
+                storeFactory,
                 emitStrategy,
                 aggregateBuilder.countInitializer,
                 aggregateBuilder.countAggregator),
@@ -154,13 +156,14 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         }
 
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
+        final StoreFactory storeFactory = new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy);
 
         return aggregateBuilder.build(
             new NamedInternal(aggregateName),
-            new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            storeFactory,
             new KStreamWindowAggregate<>(
                 windows,
-                materializedInternal.storeName(),
+                storeFactory,
                 emitStrategy,
                 initializer,
                 aggregator),
@@ -205,13 +208,14 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         }
 
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
+        final StoreFactory storeFactory = new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy);
 
         return aggregateBuilder.build(
             new NamedInternal(reduceName),
-            new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            storeFactory,
             new KStreamWindowAggregate<>(
                 windows,
-                materializedInternal.storeName(),
+                storeFactory,
                 emitStrategy,
                 aggregateBuilder.reduceInitializer,
                 aggregatorForReducer(reducer)),

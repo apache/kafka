@@ -17,12 +17,6 @@
 
 package kafka.admin;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -38,10 +32,16 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
 
@@ -58,11 +58,14 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.admin.AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
@@ -72,11 +75,12 @@ public class ClientTelemetryTest {
             types = Type.KRAFT, 
             brokers = 3,
             serverProperties = {
-                    @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "kafka.admin.ClientTelemetryTest$GetIdClientTelemetry"),
+                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "kafka.admin.ClientTelemetryTest$GetIdClientTelemetry"),
             })
     public void testClientInstanceId(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
+        configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
         try (Admin admin = Admin.create(configs)) {
             String testTopicName = "test_topic";
             admin.createTopics(Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1)));
@@ -124,6 +128,17 @@ public class ClientTelemetryTest {
         }
     }
 
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    public void testIntervalMsParser(ClusterInstance clusterInstance) {
+        List<String> alterOpts = asList("--bootstrap-server", clusterInstance.bootstrapServers(),
+                "--alter", "--entity-type", "client-metrics", "--entity-name", "test", "--add-config", "interval.ms=bbb");
+        try (Admin client = clusterInstance.admin()) {
+            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(alterOpts));
+
+            Throwable e = assertThrows(ExecutionException.class, () -> ConfigCommand.alterConfig(client, addOpts));
+            assertTrue(e.getMessage().contains(InvalidConfigurationException.class.getSimpleName()));
+        }
+    }
 
     @ClusterTest(types = Type.KRAFT)
     public void testMetrics(ClusterInstance clusterInstance) {
@@ -140,6 +155,10 @@ public class ClientTelemetryTest {
                             expectedName)));
             assertTrue(actualMetricsName.containsAll(expectedMetricsName));
         }
+    }
+
+    private static String[] toArray(List<String>... lists) {
+        return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
     }
 
     /**

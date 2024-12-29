@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
-import org.apache.kafka.server.config.QuotaConfigs;
+import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.Json;
 import org.apache.kafka.server.util.json.DecodeJson;
@@ -101,14 +101,14 @@ public class ReassignPartitionsCommand {
     static final int EARLIEST_TOPICS_JSON_VERSION = 1;
 
     static final List<String> BROKER_LEVEL_THROTTLES = Arrays.asList(
-            QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
-            QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
-            QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG
+            QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
+            QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
+            QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG
     );
 
     private static final List<String> TOPIC_LEVEL_THROTTLES = Arrays.asList(
-            QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
-            QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
+            QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
+            QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     );
 
     private static final String CANNOT_EXECUTE_BECAUSE_OF_EXISTING_MESSAGE = "Cannot execute because " +
@@ -129,7 +129,11 @@ public class ReassignPartitionsCommand {
             Properties props = opts.options.has(opts.commandConfigOpt)
                 ? Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
                 : new Properties();
-            props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
+            if (opts.options.has(opts.bootstrapControllerOpt)) {
+                props.put(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, opts.options.valueOf(opts.bootstrapControllerOpt));
+            } else {
+                props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
+            }
             props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "reassign-partitions-tool");
             adminClient = Admin.create(props);
             handleAction(adminClient, opts);
@@ -1096,10 +1100,10 @@ public class ReassignPartitionsCommand {
         topicNames.forEach(topicName -> {
             List<AlterConfigOp> ops = new ArrayList<>();
             if (leaderThrottles.containsKey(topicName)) {
-                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, leaderThrottles.get(topicName)), AlterConfigOp.OpType.SET));
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, leaderThrottles.get(topicName)), AlterConfigOp.OpType.SET));
             }
             if (followerThrottles.containsKey(topicName)) {
-                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, followerThrottles.get(topicName)), AlterConfigOp.OpType.SET));
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, followerThrottles.get(topicName)), AlterConfigOp.OpType.SET));
             }
             if (!ops.isEmpty()) {
                 configs.put(new ConfigResource(ConfigResource.Type.TOPIC, topicName), ops);
@@ -1135,9 +1139,9 @@ public class ReassignPartitionsCommand {
             Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
             reassigningBrokers.forEach(brokerId -> {
                 List<AlterConfigOp> ops = new ArrayList<>();
-                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
                     Long.toString(interBrokerThrottle)), AlterConfigOp.OpType.SET));
-                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
                     Long.toString(interBrokerThrottle)), AlterConfigOp.OpType.SET));
                 configs.put(new ConfigResource(ConfigResource.Type.BROKER, Long.toString(brokerId)), ops);
             });
@@ -1160,7 +1164,7 @@ public class ReassignPartitionsCommand {
             Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
             movingBrokers.forEach(brokerId -> {
                 List<AlterConfigOp> ops = new ArrayList<>();
-                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, Long.toString(logDirThrottle)), AlterConfigOp.OpType.SET));
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, Long.toString(logDirThrottle)), AlterConfigOp.OpType.SET));
                 configs.put(new ConfigResource(ConfigResource.Type.BROKER, Long.toString(brokerId)), ops);
             });
             admin.incrementalAlterConfigs(configs).all().get();
@@ -1405,9 +1409,13 @@ public class ReassignPartitionsCommand {
         }
 
         OptionSpec<?> action = allActions.get(0);
+        
+        if (opts.options.has(opts.bootstrapServerOpt) && opts.options.has(opts.bootstrapControllerOpt))
+            CommandLineUtils.printUsageAndExit(opts.parser, "Please don't specify both --bootstrap-server and --bootstrap-controller");
+        else if (!opts.options.has(opts.bootstrapServerOpt) && !opts.options.has(opts.bootstrapControllerOpt))
+            CommandLineUtils.printUsageAndExit(opts.parser, "Please specify either --bootstrap-server or --bootstrap-controller");
 
-        if (!opts.options.has(opts.bootstrapServerOpt))
-            CommandLineUtils.printUsageAndExit(opts.parser, "Please specify --bootstrap-server");
+        boolean isBootstrapServer = opts.options.has(opts.bootstrapServerOpt);
 
         // Make sure that we have all the required arguments for our action.
         Map<OptionSpec<?>, List<OptionSpec<?>>> requiredArgs = new HashMap<>();
@@ -1451,13 +1459,13 @@ public class ReassignPartitionsCommand {
             opts.timeoutOpt
         ));
         permittedArgs.put(opts.cancelOpt, Arrays.asList(
-            opts.bootstrapServerOpt,
+            isBootstrapServer ? opts.bootstrapServerOpt : opts.bootstrapControllerOpt,
             opts.commandConfigOpt,
             opts.preserveThrottlesOpt,
             opts.timeoutOpt
         ));
         permittedArgs.put(opts.listOpt, Arrays.asList(
-            opts.bootstrapServerOpt,
+            isBootstrapServer ? opts.bootstrapServerOpt : opts.bootstrapControllerOpt,
             opts.commandConfigOpt
         ));
 
@@ -1469,7 +1477,6 @@ public class ReassignPartitionsCommand {
                     String.format("Option \"%s\" can't be used with action \"%s\"", opt, action));
             }
         });
-
         return opts;
     }
 

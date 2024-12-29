@@ -17,14 +17,6 @@
 
 package org.apache.kafka.tools;
 
-import kafka.test.ClusterConfig;
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTemplate;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -36,6 +28,13 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.config.ServerLogConfigs;
@@ -60,8 +59,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static kafka.test.annotation.Type.CO_KRAFT;
-import static kafka.test.annotation.Type.KRAFT;
+import static org.apache.kafka.common.test.api.Type.CO_KRAFT;
+import static org.apache.kafka.common.test.api.Type.KRAFT;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -108,7 +107,7 @@ public class GetOffsetShellTest {
     }
 
     private void setupTopics(Function<Integer, String> topicName, Map<String, String> configs) {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
             List<NewTopic> topics = new ArrayList<>();
 
             IntStream.range(0, topicCount + 1).forEach(i ->
@@ -144,13 +143,9 @@ public class GetOffsetShellTest {
         serverProperties.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "EXTERNAL");
 
         return Collections.singletonList(
-                // we set REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP to EXTERNAL, so we need to
-                // align listener name here as KafkaClusterTestKit (KRAFT/CO_KRAFT) the default
-                // broker listener name is EXTERNAL while in ZK it is PLAINTEXT
                 ClusterConfig.defaultBuilder()
                         .setTypes(Stream.of(KRAFT, CO_KRAFT).collect(Collectors.toSet()))
                         .setServerProperties(serverProperties)
-                        .setListenerName("EXTERNAL")
                         .build());
     }
 
@@ -210,11 +205,7 @@ public class GetOffsetShellTest {
         setUp();
 
         List<Row> output = executeAndParse();
-        if (!cluster.isKRaftTest()) {
-            assertEquals(expectedOffsetsWithInternal(), output);
-        } else {
-            assertEquals(expectedTestTopicOffsets(), output);
-        }
+        assertEquals(expectedTestTopicOffsets(), output);
     }
 
     @ClusterTest
@@ -252,11 +243,7 @@ public class GetOffsetShellTest {
         setUp();
 
         List<Row> offsets = executeAndParse("--partitions", "0,1");
-        if (!cluster.isKRaftTest()) {
-            assertEquals(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
-        } else {
-            assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
-        }
+        assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
     }
 
     @ClusterTest

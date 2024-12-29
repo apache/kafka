@@ -33,13 +33,12 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion, NodeToControllerChannelManager}
 import org.apache.kafka.server.util.Scheduler
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 /**
  * Handles updating the ISR by sending AlterPartition requests to the controller (as of 2.7) or by updating ZK directly
@@ -328,7 +327,7 @@ class DefaultAlterPartitionManager(
               val apiError = Errors.forCode(partition.errorCode)
               debug(s"Controller successfully handled AlterPartition request for $tp: $partition")
               if (apiError == Errors.NONE) {
-                LeaderRecoveryState.optionalOf(partition.leaderRecoveryState).asScala match {
+                LeaderRecoveryState.optionalOf(partition.leaderRecoveryState).toScala match {
                   case Some(leaderRecoveryState) =>
                     partitionResponses(tp) = Right(
                       new LeaderAndIsr(

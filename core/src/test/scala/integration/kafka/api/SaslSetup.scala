@@ -39,9 +39,9 @@ import java.util
 import java.util.Properties
 import javax.security.auth.login.Configuration
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
+import scala.jdk.javaapi.OptionConverters
 import scala.util.Using
 
 /*
@@ -204,7 +204,7 @@ trait SaslSetup {
 
   def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {
     val zkClientConfig = new ZKClientConfig()
-    Using(KafkaZkClient(
+    Using.resource(KafkaZkClient(
       zkConnect, JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig), 30000, 30000,
       Int.MaxValue, Time.SYSTEM, name = "SaslSetup", zkClientConfig = zkClientConfig, enableEntityConfigControllerCheck = false)) { zkClient =>
       val adminZkClient = new AdminZkClient(zkClient)

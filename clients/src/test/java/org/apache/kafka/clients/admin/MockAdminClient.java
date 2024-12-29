@@ -19,7 +19,10 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -48,6 +51,7 @@ import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
@@ -93,6 +97,7 @@ public class MockAdminClient extends AdminClient {
     private final Map<String, Map<String, String>> clientMetricsConfigs;
     private final Map<String, Map<String, String>> groupConfigs;
     private final Map<String, String> defaultGroupConfigs;
+    private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
     private Node controller;
     private int timeoutNextRequests = 0;
@@ -125,7 +130,6 @@ public class MockAdminClient extends AdminClient {
         private Map<String, Short> maxSupportedFeatureLevels = Collections.emptyMap();
         private Map<String, String> defaultGroupConfigs = Collections.emptyMap();
 
-        @SuppressWarnings("this-escape")
         public Builder() {
             numBrokers(1);
         }
@@ -141,7 +145,7 @@ public class MockAdminClient extends AdminClient {
             return this;
         }
 
-        public Builder numBrokers(int numBrokers) {
+        public final Builder numBrokers(int numBrokers) {
             if (brokers.size() >= numBrokers) {
                 brokers = brokers.subList(0, numBrokers);
                 brokerLogDirs = brokerLogDirs.subList(0, numBrokers);
@@ -232,7 +236,6 @@ public class MockAdminClient extends AdminClient {
             Collections.emptyMap());
     }
 
-    @SuppressWarnings("this-escape")
     private MockAdminClient(
         List<Node> brokers,
         Node controller,
@@ -270,7 +273,7 @@ public class MockAdminClient extends AdminClient {
         this.maxSupportedFeatureLevels = new HashMap<>(maxSupportedFeatureLevels);
     }
 
-    public synchronized void controller(Node controller) {
+    public final synchronized void controller(Node controller) {
         if (!brokers.contains(controller))
             throw new IllegalArgumentException("The controller node must be in the list of brokers");
         this.controller = controller;
@@ -644,7 +647,7 @@ public class MockAdminClient extends AdminClient {
         }
 
         String tokenId = Uuid.randomUuid().toString();
-        TokenInformation tokenInfo = new TokenInformation(tokenId, options.renewers().get(0), options.renewers(), System.currentTimeMillis(), options.maxlifeTimeMs(), -1);
+        TokenInformation tokenInfo = new TokenInformation(tokenId, options.renewers().get(0), options.renewers(), System.currentTimeMillis(), options.maxLifetimeMs(), -1);
         DelegationToken token = new DelegationToken(tokenInfo, tokenId.getBytes());
         allTokens.add(token);
         future.complete(token);
@@ -717,6 +720,13 @@ public class MockAdminClient extends AdminClient {
         }
 
         return new DescribeDelegationTokenResult(future);
+    }
+
+    @Override
+    public synchronized ListGroupsResult listGroups(ListGroupsOptions options) {
+        KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
+        future.complete(groupConfigs.keySet().stream().map(g -> new GroupListing(g, Optional.of(GroupType.CONSUMER), ConsumerProtocol.PROTOCOL_TYPE, Optional.of(GroupState.STABLE))).collect(Collectors.toList()));
+        return new ListGroupsResult(future);
     }
 
     @Override
@@ -859,12 +869,6 @@ public class MockAdminClient extends AdminClient {
             configEntries.add(new ConfigEntry(entry.getKey(), entry.getValue()));
         }
         return new Config(configEntries);
-    }
-
-    @Override
-    @Deprecated
-    public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
@@ -1259,15 +1263,14 @@ public class MockAdminClient extends AdminClient {
         Map<String, FeatureUpdate> featureUpdates,
         UpdateFeaturesOptions options
     ) {
-        Map<String, KafkaFuture<Void>> results = new HashMap<>();
+        Throwable error = null;
         for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             String feature = entry.getKey();
+            short cur = featureLevels.getOrDefault(feature, (short) 0);
+            short next = entry.getValue().maxVersionLevel();
+            short min = minSupportedFeatureLevels.getOrDefault(feature, (short) 0);
+            short max = maxSupportedFeatureLevels.getOrDefault(feature, (short) 0);
             try {
-                short cur = featureLevels.getOrDefault(feature, (short) 0);
-                short next = entry.getValue().maxVersionLevel();
-                short min = minSupportedFeatureLevels.getOrDefault(feature, (short) 0);
-                short max = maxSupportedFeatureLevels.getOrDefault(feature, (short) 0);
                 switch (entry.getValue().upgradeType()) {
                     case UNKNOWN:
                         throw new InvalidRequestException("Invalid upgrade type.");
@@ -1302,16 +1305,30 @@ public class MockAdminClient extends AdminClient {
                 if (next > max) {
                     throw new InvalidUpdateVersionException("Can't upgrade above " + max);
                 }
-                if (!options.validateOnly()) {
-                    featureLevels.put(feature, next);
-                }
-                future.complete(null);
             } catch (Exception e) {
-                future.completeExceptionally(e);
+                error = invalidUpdateVersion(feature, next, e.getMessage());
+                break;
             }
-            results.put(feature, future);
         }
+        Map<String, KafkaFuture<Void>> results = new HashMap<>();
+        for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            if (error == null) {
+                future.complete(null);
+                if (!options.validateOnly()) {
+                    featureLevels.put(entry.getKey(), entry.getValue().maxVersionLevel());
+                }
+            } else {
+                future.completeExceptionally(error);
+            }
+            results.put(entry.getKey(), future);
+        }
+
         return new UpdateFeaturesResult(results);
+    }
+
+    private InvalidRequestException invalidUpdateVersion(String feature, short version, String message) {
+        return new InvalidRequestException(String.format("Invalid update version %d for feature %s. %s", version, feature, message));
     }
 
     @Override
@@ -1373,7 +1390,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public synchronized ListShareGroupsResult listShareGroups(ListShareGroupsOptions options) {
+    public synchronized DescribeClassicGroupsResult describeClassicGroups(Collection<String> groupIds, DescribeClassicGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
@@ -1483,5 +1500,19 @@ public class MockAdminClient extends AdminClient {
 
     public synchronized Node broker(int index) {
         return brokers.get(index);
+    }
+
+    public List<KafkaMetric> addedMetrics() {
+        return Collections.unmodifiableList(addedMetrics);
+    }
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        addedMetrics.add(metric);
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        addedMetrics.remove(metric);
     }
 }

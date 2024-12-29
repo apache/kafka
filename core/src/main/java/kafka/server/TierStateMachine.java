@@ -55,7 +55,7 @@ import java.util.List;
 import java.util.Map;
 
 import scala.Option;
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReason.LeaderOffsetIncremented;
 
@@ -135,7 +135,7 @@ public class TierStateMachine {
         // Find the end-offset for the epoch earlier to the given epoch from the leader
         Map<TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition> partitionsWithEpochs = new HashMap<>();
         partitionsWithEpochs.put(partition, new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition().setPartition(partition.partition()).setCurrentLeaderEpoch(currentLeaderEpoch).setLeaderEpoch(previousEpoch));
-        Option<OffsetForLeaderEpochResponseData.EpochEndOffset> maybeEpochEndOffset = leader.fetchEpochEndOffsets(JavaConverters.mapAsScalaMap(partitionsWithEpochs)).get(partition);
+        Option<OffsetForLeaderEpochResponseData.EpochEndOffset> maybeEpochEndOffset = leader.fetchEpochEndOffsets(CollectionConverters.asScala(partitionsWithEpochs)).get(partition);
         if (maybeEpochEndOffset.isEmpty()) {
             throw new KafkaException("No response received for partition: " + partition);
         }
@@ -229,12 +229,8 @@ public class TierStateMachine {
         }
 
         RemoteLogSegmentMetadata remoteLogSegmentMetadata = rlm.fetchRemoteLogSegmentMetadata(topicPartition, targetEpoch, previousOffsetToLeaderLocalLogStartOffset)
-                .orElseThrow(() -> new RemoteStorageException("Couldn't build the state from remote store for partition: " + topicPartition +
-                        ", currentLeaderEpoch: " + currentLeaderEpoch +
-                        ", leaderLocalLogStartOffset: " + leaderLocalLogStartOffset +
-                        ", leaderLogStartOffset: " + leaderLogStartOffset +
-                        ", epoch: " + targetEpoch +
-                        "as the previous remote log segment metadata was not found"));
+                .orElseThrow(() -> buildRemoteStorageException(topicPartition, targetEpoch, currentLeaderEpoch,
+                        leaderLocalLogStartOffset, leaderLogStartOffset));
 
 
         // Build leader epoch cache, producer snapshots until remoteLogSegmentMetadata.endOffset() and start
@@ -264,5 +260,18 @@ public class TierStateMachine {
                 partition, unifiedLog.producerStateManager().activeProducers().size(), leaderLogStartOffset, nextOffset);
 
         return nextOffset;
+    }
+
+    private RemoteStorageException buildRemoteStorageException(TopicPartition topicPartition,
+                                                               int targetEpoch,
+                                                               int currentLeaderEpoch,
+                                                               long leaderLocalLogStartOffset,
+                                                               long leaderLogStartOffset) {
+        String message = String.format(
+                "Couldn't build the state from remote store for partition: %s, currentLeaderEpoch: %d, " +
+                        "leaderLocalLogStartOffset: %d, leaderLogStartOffset: %d, epoch: %d as the previous remote log segment metadata was not found",
+                topicPartition, currentLeaderEpoch, leaderLocalLogStartOffset, leaderLogStartOffset, targetEpoch
+        );
+        return new RemoteStorageException(message);
     }
 }

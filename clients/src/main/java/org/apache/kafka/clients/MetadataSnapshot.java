@@ -133,7 +133,7 @@ public class MetadataSnapshot {
      */
     public OptionalInt leaderEpochFor(TopicPartition tp) {
         PartitionMetadata partitionMetadata = metadataByPartition.get(tp);
-        if (partitionMetadata == null || !partitionMetadata.leaderEpoch.isPresent()) {
+        if (partitionMetadata == null || partitionMetadata.leaderEpoch.isEmpty()) {
             return OptionalInt.empty();
         } else {
             return OptionalInt.of(partitionMetadata.leaderEpoch.get());

@@ -38,7 +38,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
@@ -65,7 +65,7 @@ public class DescribeTopicPartitionsRequestHandler {
         DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
         String cursorTopicName = cursor != null ? cursor.topicName() : "";
         if (fetchAllTopics) {
-            JavaConverters.asJavaCollection(metadataCache.getAllTopics()).forEach(topicName -> {
+            CollectionConverters.asJavaCollection(metadataCache.getAllTopics()).forEach(topicName -> {
                 if (topicName.compareTo(cursorTopicName) >= 0) {
                     topics.add(topicName);
                 }
@@ -105,7 +105,7 @@ public class DescribeTopicPartitionsRequestHandler {
         });
 
         DescribeTopicPartitionsResponseData response = metadataCache.getTopicMetadataForDescribeTopicResponse(
-            JavaConverters.asScalaIterator(authorizedTopicsStream.iterator()),
+            CollectionConverters.asScala(authorizedTopicsStream.iterator()),
             abstractRequest.context().listenerName,
             (String topicName) -> topicName.equals(cursorTopicName) ? cursor.partitionIndex() : 0,
             Math.max(Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()), 1),

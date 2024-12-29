@@ -242,16 +242,17 @@ public class SnapshotGenerator implements MetadataPublisher {
         bytesSinceLastSnapshot += manifest.numBytes();
         if (bytesSinceLastSnapshot >= maxBytesSinceLastSnapshot) {
             if (eventQueue.isEmpty()) {
-                scheduleEmit("we have replayed at least " + maxBytesSinceLastSnapshot +
-                    " bytes", newImage);
+                maybeScheduleEmit("we have replayed at least " + maxBytesSinceLastSnapshot +
+                    " bytes", newImage, manifest.provenance().isOffsetBatchAligned());
             } else if (log.isTraceEnabled()) {
                 log.trace("Not scheduling bytes-based snapshot because event queue is not empty yet.");
             }
         } else if (maxTimeSinceLastSnapshotNs != 0 &&
                 (time.nanoseconds() - lastSnapshotTimeNs >= maxTimeSinceLastSnapshotNs)) {
             if (eventQueue.isEmpty()) {
-                scheduleEmit("we have waited at least " +
-                    TimeUnit.NANOSECONDS.toMinutes(maxTimeSinceLastSnapshotNs) + " minute(s)", newImage);
+                maybeScheduleEmit("we have waited at least " +
+                    TimeUnit.NANOSECONDS.toMinutes(maxTimeSinceLastSnapshotNs) +
+                    " minute(s)", newImage, manifest.provenance().isOffsetBatchAligned());
             } else if (log.isTraceEnabled()) {
                 log.trace("Not scheduling time-based snapshot because event queue is not empty yet.");
             }
@@ -260,18 +261,21 @@ public class SnapshotGenerator implements MetadataPublisher {
         }
     }
 
-    void scheduleEmit(
+    void maybeScheduleEmit(
         String reason,
-        MetadataImage image
+        MetadataImage image,
+        boolean isOffsetBatchAligned
     ) {
-        resetSnapshotCounters();
-        eventQueue.append(() -> {
-            String currentDisabledReason = disabledReason.get();
-            if (currentDisabledReason != null) {
-                log.error("Not emitting {} despite the fact that {} because snapshots are " +
-                    "disabled; {}", image.provenance().snapshotName(), reason,
-                        currentDisabledReason);
-            } else {
+        String currentDisabledReason = disabledReason.get();
+        if (currentDisabledReason != null) {
+            log.error("Not emitting {} despite the fact that {} because snapshots are " +
+                "disabled; {}", image.provenance().snapshotName(), reason, currentDisabledReason);
+        } else if (!isOffsetBatchAligned) {
+            log.debug("Not emitting {} despite the fact that {} because snapshots are " +
+                "disabled; {}", image.provenance().snapshotName(), reason, "metadata image is not batch aligned");
+        } else {
+            eventQueue.append(() -> {
+                resetSnapshotCounters();
                 log.info("Creating new KRaft snapshot file {} because {}.",
                         image.provenance().snapshotName(), reason);
                 try {
@@ -279,8 +283,8 @@ public class SnapshotGenerator implements MetadataPublisher {
                 } catch (Throwable e) {
                     faultHandler.handleFault("KRaft snapshot file generation error", e);
                 }
-            }
-        });
+            });
+        }
     }
 
     public void beginShutdown() {

@@ -16,7 +16,7 @@
 import importlib
 import os
 
-from kafkatest.version import get_version, KafkaVersion, DEV_BRANCH, LATEST_0_9, LATEST_3_5
+from kafkatest.version import get_version, KafkaVersion, DEV_BRANCH, LATEST_3_5
 
 
 """This module serves a few purposes:
@@ -55,11 +55,6 @@ JARS = {
     # This version of the file connectors does not contain ServiceLoader manifests
     LATEST_3_5.__str__(): {
         CONNECT_FILE_JAR: "libs/connect-file*.jar"
-    },
-    # TODO: This is only used in 0.8.2.x system tests, remove with KAFKA-14762
-    LATEST_0_9.__str__(): {
-        TOOLS_JAR_NAME: "libs/kafka-tools*.jar",
-        TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "libs/{argparse4j,jackson}*.jar"
     }
 }
 

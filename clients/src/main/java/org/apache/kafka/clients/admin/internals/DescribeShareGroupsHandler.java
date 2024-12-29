@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.clients.admin.MemberAssignment;
-import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
+import org.apache.kafka.clients.admin.ShareMemberAssignment;
+import org.apache.kafka.clients.admin.ShareMemberDescription;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.ShareGroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.message.ShareGroupDescribeRequestData;
@@ -37,7 +37,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -85,7 +84,7 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
     public ShareGroupDescribeRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         List<String> groupIds = keys.stream().map(key -> {
             if (key.type != FindCoordinatorRequest.CoordinatorType.GROUP) {
-                throw new IllegalArgumentException("Invalid transaction coordinator key " + key +
+                throw new IllegalArgumentException("Invalid group coordinator key " + key +
                     " when building `DescribeShareGroups` request");
             }
             return key.idValue;
@@ -114,22 +113,22 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                 continue;
             }
 
-            final List<MemberDescription> memberDescriptions = new ArrayList<>(describedGroup.members().size());
+            final List<ShareMemberDescription> memberDescriptions = new ArrayList<>(describedGroup.members().size());
             final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
 
             describedGroup.members().forEach(groupMember ->
-                memberDescriptions.add(new MemberDescription(
+                memberDescriptions.add(new ShareMemberDescription(
                     groupMember.memberId(),
                     groupMember.clientId(),
                     groupMember.clientHost(),
-                    new MemberAssignment(convertAssignment(groupMember.assignment()))
+                    new ShareMemberAssignment(convertAssignment(groupMember.assignment()))
                 ))
             );
 
             final ShareGroupDescription shareGroupDescription =
                 new ShareGroupDescription(groupIdKey.idValue,
                     memberDescriptions,
-                    ShareGroupState.parse(describedGroup.groupState()),
+                    GroupState.parse(describedGroup.groupState()),
                     coordinator,
                     authorizedOperations);
             completed.put(groupIdKey, shareGroupDescription);
@@ -177,17 +176,9 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                 break;
 
             case GROUP_ID_NOT_FOUND:
-                // In order to maintain compatibility with describeConsumerGroups, an unknown group ID is
-                // reported as a DEAD share group, and the admin client operation did not fail
                 log.debug("`DescribeShareGroups` request for group id {} failed because the group does not exist. {}",
                     groupId.idValue, errorMsg != null ? errorMsg : "");
-                final ShareGroupDescription shareGroupDescription =
-                    new ShareGroupDescription(groupId.idValue,
-                        Collections.emptySet(),
-                        ShareGroupState.DEAD,
-                        coordinator,
-                        validAclOperations(describedGroup.authorizedOperations()));
-                completed.put(groupId, shareGroupDescription);
+                failed.put(groupId, error.exception(errorMsg));
                 break;
 
             default:

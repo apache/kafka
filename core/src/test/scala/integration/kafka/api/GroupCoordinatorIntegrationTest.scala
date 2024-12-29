@@ -13,12 +13,13 @@
 package kafka.api
 
 import kafka.log.UnifiedLog
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.api.ClusterInstance
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, ConsumerGroupDescription}
 import org.apache.kafka.clients.consumer.{Consumer, GroupProtocol, OffsetAndMetadata}
+import org.apache.kafka.common.errors.GroupIdNotFoundException
 import org.apache.kafka.common.{ConsumerGroupState, GroupType, KafkaFuture, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 
@@ -221,7 +222,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
         .asScala
         .toMap
 
-      assertDescribedGroup(groups, "grp3", GroupType.CLASSIC, ConsumerGroupState.DEAD)
+      assertDescribedDeadGroup(groups, "grp3")
     }
   }
 
@@ -289,7 +290,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
   }
 
   private def withAdmin(f: Admin => Unit): Unit = {
-    val admin: Admin = cluster.createAdminClient()
+    val admin: Admin = cluster.admin()
     try {
       f(admin)
     } finally {
@@ -304,8 +305,8 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
   )(f: Consumer[Array[Byte], Array[Byte]] => Unit): Unit = {
     val consumer = TestUtils.createConsumer(
       brokerList = cluster.bootstrapServers(),
-      groupId = groupId,
       groupProtocol = groupProtocol,
+      groupId = groupId,
       enableAutoCommit = enableAutoCommit
     )
     try {
@@ -327,5 +328,19 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     assertEquals(groupType, group.`type`)
     assertEquals(state, group.state)
     assertEquals(Collections.emptyList, group.members)
+  }
+
+  private def assertDescribedDeadGroup(
+    groups: Map[String, KafkaFuture[ConsumerGroupDescription]],
+    groupId: String
+  ): Unit = {
+    try {
+      groups(groupId).get(10, TimeUnit.SECONDS)
+      fail(s"Group $groupId should not be found")
+    } catch {
+      case e: java.util.concurrent.ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[GroupIdNotFoundException])
+        assertEquals(s"Group $groupId not found.", e.getCause.getMessage)
+    }
   }
 }

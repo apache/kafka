@@ -31,8 +31,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.queue.EventQueue.DeadlineFunction
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion, NodeToControllerChannelManager}
 
 import scala.jdk.CollectionConverters._
 
@@ -50,7 +49,6 @@ class ControllerRegistrationManager(
   val time: Time,
   val threadNamePrefix: String,
   val supportedFeatures: util.Map[String, VersionRange],
-  val zkMigrationEnabled: Boolean,
   val incarnationId: Uuid,
   val listenerInfo: ListenerInfo,
   val resendExponentialBackoff: ExponentialBackoff = new ExponentialBackoff(100, 2, 120000L, 0.02)
@@ -227,7 +225,7 @@ class ControllerRegistrationManager(
       setFeatures(features).
       setIncarnationId(incarnationId).
       setListeners(listenerInfo.toControllerRegistrationRequest).
-      setZkMigrationReady(zkMigrationEnabled)
+      setZkMigrationReady(false)
 
     info(s"sendControllerRegistration: attempting to send $data")
     _channelManager.sendRequest(new ControllerRegistrationRequest.Builder(data),

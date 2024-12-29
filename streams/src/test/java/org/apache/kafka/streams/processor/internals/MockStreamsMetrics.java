@@ -23,6 +23,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 public class MockStreamsMetrics extends StreamsMetricsImpl {
 
     public MockStreamsMetrics(final Metrics metrics) {
-        super(metrics, "test", new MockTime());
+        super(metrics, "test", "processId", new MockTime());
     }
 }

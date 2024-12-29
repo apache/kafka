@@ -192,7 +192,7 @@ public class MemoryRecords extends AbstractRecords {
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
                 boolean needToSetDeleteHorizon = batch.magic() >= RecordBatch.MAGIC_VALUE_V2 && (containsTombstones || containsMarkerForEmptyTxn)
-                    && !batch.deleteHorizonMs().isPresent();
+                    && batch.deleteHorizonMs().isEmpty();
                 if (writeOriginalBatch && !needToSetDeleteHorizon) {
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);

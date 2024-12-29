@@ -52,8 +52,6 @@ import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -88,6 +86,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final RecordCollector recordCollector;
     private final AbstractPartitionGroup.RecordInfo recordInfo;
     private final Map<TopicPartition, Long> consumedOffsets;
+    private final Map<TopicPartition, OffsetAndMetadata> nextOffsetsAndMetadataToBeConsumed = new HashMap<>();
     private final Map<TopicPartition, Long> committedOffsets;
     private final Map<TopicPartition, Long> highWatermark;
     private final Set<TopicPartition> resetOffsetsForPartitions;
@@ -462,23 +461,27 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private Long findOffset(final TopicPartition partition) {
+    private OffsetAndMetadata findOffsetAndMetadata(final TopicPartition partition) {
         Long offset = partitionGroup.headRecordOffset(partition);
+        Optional<Integer> leaderEpoch = partitionGroup.headRecordLeaderEpoch(partition);
+        final long partitionTime = partitionGroup.partitionTimestamp(partition);
         if (offset == null) {
             try {
-                offset = mainConsumer.position(partition);
-            } catch (final TimeoutException error) {
-                // the `consumer.position()` call should never block, because we know that we did process data
-                // for the requested partition and thus the consumer should have a valid local position
-                // that it can return immediately
-
-                // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
-                throw new IllegalStateException(error);
+                if (nextOffsetsAndMetadataToBeConsumed.containsKey(partition)) {
+                    final OffsetAndMetadata offsetAndMetadata = nextOffsetsAndMetadataToBeConsumed.get(partition);
+                    offset = offsetAndMetadata.offset();
+                    leaderEpoch = offsetAndMetadata.leaderEpoch();
+                } else {
+                    // This indicates a bug and thus we rethrow it as fatal `IllegalStateException`
+                    throw new IllegalStateException("Stream task " + id + " does not know the partition: " + partition);
+                }
             } catch (final KafkaException fatal) {
                 throw new StreamsException(fatal);
             }
         }
-        return offset;
+        return new OffsetAndMetadata(offset,
+                leaderEpoch,
+                new TopicPartitionMetadata(partitionTime, processorContext.processorMetadata()).encode());
     }
 
     private Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
@@ -493,7 +496,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             case RUNNING:
             case SUSPENDED:
-                final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
 
                 // If there's processor metadata to be committed. We need to commit them to all
                 // input partitions
@@ -502,10 +504,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 committableOffsets = new HashMap<>(partitionsNeedCommit.size());
 
                 for (final TopicPartition partition : partitionsNeedCommit) {
-                    final Long offset = findOffset(partition);
-                    final long partitionTime = partitionTimes.get(partition);
-                    committableOffsets.put(partition, new OffsetAndMetadata(offset,
-                        new TopicPartitionMetadata(partitionTime, processorContext.processorMetadata()).encode()));
+                    committableOffsets.put(partition, findOffsetAndMetadata(partition));
                 }
                 break;
 
@@ -561,13 +560,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         processorContext.processorMetadata().setNeedsCommit(false);
     }
 
-    private Map<TopicPartition, Long> extractPartitionTimes() {
-        final Map<TopicPartition, Long> partitionTimes = new HashMap<>();
-        for (final TopicPartition partition : partitionGroup.partitions()) {
-            partitionTimes.put(partition, partitionGroup.partitionTimestamp(partition));
-        }
-        return partitionTimes;
-    }
 
     @Override
     public void closeClean() {
@@ -794,7 +786,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
-            if (recordInfo.queue().size() == maxBufferedSize) {
+            if (recordInfo.queue().size() <= maxBufferedSize) {
                 partitionsToResume.add(partition);
             }
 
@@ -808,12 +800,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
         } catch (final FailedProcessingException failedProcessingException) {
             // Do not keep the failed processing exception in the stack trace
-            handleException(failedProcessingException.getMessage(), failedProcessingException.getCause());
+            handleException(
+                failedProcessingException.getMessage(),
+                failedProcessingException.failedProcessorNodeName(),
+                failedProcessingException.getCause()
+            );
         } catch (final StreamsException exception) {
             record = null;
             throw exception;
         } catch (final RuntimeException e) {
-            handleException(e);
+            handleException(processorContext.currentNode().name(), e);
         } finally {
             processorContext.setCurrentNode(null);
         }
@@ -821,22 +817,23 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return true;
     }
 
-    private void handleException(final Throwable originalException) {
+    private void handleException(final String failedProcessorNodeName, final Throwable originalException) {
         handleException(
             String.format(
                 "Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
                 id(),
-                processorContext.currentNode().name(),
+                failedProcessorNodeName,
                 record.topic(),
                 record.partition(),
                 record.offset()
             ),
+            failedProcessorNodeName,
             originalException);
     }
 
-    private void handleException(final String errorMessage, final Throwable originalException) {
+    private void handleException(final String errorMessage, final String failedProcessorNodeName, final Throwable originalException) {
         if (errorMessage == null) {
-            handleException(originalException);
+            handleException(failedProcessorNodeName, originalException);
         }
 
         final StreamsException error = new StreamsException(errorMessage, originalException);
@@ -884,18 +881,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         processTimeMs = 0L;
     }
 
-    private String getStacktraceString(final Throwable e) {
-        String stacktrace = null;
-        try (final StringWriter stringWriter = new StringWriter();
-             final PrintWriter printWriter = new PrintWriter(stringWriter)) {
-            e.printStackTrace(printWriter);
-            stacktrace = stringWriter.toString();
-        } catch (final IOException ioe) {
-            log.error("Encountered error extracting stacktrace from this exception", ioe);
-        }
-        return stacktrace;
-    }
-
     /**
      * @throws IllegalStateException if the current node is not null
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
@@ -938,7 +923,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             throw createStreamsException(node.name(), e.getCause());
         } catch (final TaskCorruptedException | TaskMigratedException e) {
             throw e;
-        } catch (final RuntimeException processingException) {
+        } catch (final Exception processingException) {
+            // while Java distinguishes checked vs unchecked exceptions, other languages
+            // like Scala or Kotlin do not, and thus we need to catch `Exception`
+            // (instead of `RuntimeException`) to work well with those languages
             final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
                 null,
                 recordContext.topic(),
@@ -956,13 +944,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     processingExceptionHandler.handle(errorHandlerContext, null, processingException),
                     "Invalid ProcessingExceptionHandler response."
                 );
-            } catch (final RuntimeException fatalUserException) {
+            } catch (final Exception fatalUserException) {
+                // while Java distinguishes checked vs unchecked exceptions, other languages
+                // like Scala or Kotlin do not, and thus we need to catch `Exception`
+                // (instead of `RuntimeException`) to work well with those languages
                 log.error(
                     "Processing error callback failed after processing error for record: {}",
                     errorHandlerContext,
                     processingException
                 );
-                throw new FailedProcessingException("Fatal user code error in processing error callback", fatalUserException);
+                throw new FailedProcessingException("Fatal user code error in processing error callback", node.name(), fatalUserException);
             }
 
             if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
@@ -1074,10 +1065,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public Map<TopicPartition, Long> purgeableOffsets() {
         final Map<TopicPartition, Long> purgeableConsumedOffsets = new HashMap<>();
-        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+        for (final Map.Entry<TopicPartition, Long> entry : committedOffsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
             if (topology.isRepartitionTopic(tp.topic())) {
-                purgeableConsumedOffsets.put(tp, entry.getValue() + 1);
+                // committedOffsets map is initialized at -1 so no purging until there's a committed offset
+                if (entry.getValue() > -1) {
+                    purgeableConsumedOffsets.put(tp, entry.getValue());
+                }
             }
         }
 
@@ -1118,6 +1112,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (newQueueSize > maxBufferedSize) {
             mainConsumer.pause(singleton(partition));
         }
+    }
+
+    public void updateNextOffsets(final TopicPartition partition, final OffsetAndMetadata offsetAndMetadata) {
+        nextOffsetsAndMetadataToBeConsumed.put(partition, offsetAndMetadata);
     }
 
     /**

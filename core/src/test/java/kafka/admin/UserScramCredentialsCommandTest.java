@@ -16,28 +16,21 @@
  */
 package kafka.admin;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.junit.ClusterTestExtensions;
-
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.io.UnsupportedEncodingException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
-
-import scala.Console;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -69,33 +62,23 @@ public class UserScramCredentialsCommandTest {
         }
     }
 
-    private ConfigCommandResult runConfigCommandViaBroker(String...args) {
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        String utf8 = StandardCharsets.UTF_8.name();
-        PrintStream printStream;
-        try {
-            printStream = new PrintStream(byteArrayOutputStream, true, utf8);
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException(e);
-        }
+    private ConfigCommandResult runConfigCommandViaBroker(String... args) {
         AtomicReference<OptionalInt> exitStatus = new AtomicReference<>(OptionalInt.empty());
         Exit.setExitProcedure((status, __) -> {
-            exitStatus.set(OptionalInt.of((Integer) status));
+            exitStatus.set(OptionalInt.of(status));
             throw new RuntimeException();
         });
 
         List<String> commandArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", cluster.bootstrapServers()));
         commandArgs.addAll(Arrays.asList(args));
         try {
-            Console.withOut(printStream, () -> {
+            String output = ConfigCommandIntegrationTest.captureStandardStream(false, () -> {
                 ConfigCommand.main(commandArgs.toArray(new String[0]));
-                return null;
             });
-            return new ConfigCommandResult(byteArrayOutputStream.toString(utf8));
+            return new ConfigCommandResult(output);
         } catch (Exception e) {
             return new ConfigCommandResult("", exitStatus.get());
         } finally {
-            printStream.close();
             Exit.resetExitProcedure();
         }
     }
@@ -108,20 +91,20 @@ public class UserScramCredentialsCommandTest {
 
         // describe both
         // we don't know the order that quota or scram users come out, so we have 2 possibilities for each, 4 total
-        String quotaPossibilityAOut = quotaMessage(USER1) + quotaMessage(USER2);
-        String quotaPossibilityBOut = quotaMessage(USER2) + quotaMessage(USER1);
-        String scramPossibilityAOut = describeUserMessage(USER1) + describeUserMessage(USER2);
-        String scramPossibilityBOut = describeUserMessage(USER2) + describeUserMessage(USER1);
+        String quotaPossibilityAOut = quotaMessage(USER1) + "\n" + quotaMessage(USER2);
+        String quotaPossibilityBOut = quotaMessage(USER2) + "\n" + quotaMessage(USER1);
+        String scramPossibilityAOut = describeUserMessage(USER1) + "\n" + describeUserMessage(USER2);
+        String scramPossibilityBOut = describeUserMessage(USER2) + "\n" + describeUserMessage(USER1);
         describeUsers(
-            quotaPossibilityAOut + scramPossibilityAOut,
-            quotaPossibilityAOut + scramPossibilityBOut,
-            quotaPossibilityBOut + scramPossibilityAOut,
-            quotaPossibilityBOut + scramPossibilityBOut);
+            quotaPossibilityAOut + "\n" + scramPossibilityAOut,
+            quotaPossibilityAOut + "\n" + scramPossibilityBOut,
+            quotaPossibilityBOut + "\n" + scramPossibilityAOut,
+            quotaPossibilityBOut + "\n" + scramPossibilityBOut);
 
         // now delete configs, in opposite order, for user1 and user2, and describe
         deleteConfig(USER1, "consumer_byte_rate");
         deleteConfig(USER2, "SCRAM-SHA-256");
-        describeUsers(quotaMessage(USER2) + describeUserMessage(USER1));
+        describeUsers(quotaMessage(USER2) + "\n" + describeUserMessage(USER1));
 
         // now delete the rest of the configs, for user1 and user2, and describe
         deleteConfig(USER1, "SCRAM-SHA-256");
@@ -164,7 +147,7 @@ public class UserScramCredentialsCommandTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    return Objects.equals(runConfigCommandViaBroker("--user", user, "--describe").stdout, quotaMessage(user) + describeUserMessage(user));
+                    return Objects.equals(runConfigCommandViaBroker("--user", user, "--describe").stdout, quotaMessage(user) + "\n" + describeUserMessage(user));
                 } catch (Exception e) {
                     throw new NoRetryException(e);
                 }
@@ -191,14 +174,14 @@ public class UserScramCredentialsCommandTest {
     }
 
     private static String describeUserMessage(String user) {
-        return "SCRAM credential configs for user-principal '" + user + "' are SCRAM-SHA-256=iterations=4096\n";
+        return "SCRAM credential configs for user-principal '" + user + "' are SCRAM-SHA-256=iterations=4096";
     }
 
     private static String updateUserMessage(String user) {
-        return "Completed updating config for user " + user + ".\n";
+        return "Completed updating config for user " + user + ".";
     }
 
     private static String quotaMessage(String user) {
-        return "Quota configs for user-principal '" + user + "' are consumer_byte_rate=20000.0\n";
+        return "Quota configs for user-principal '" + user + "' are consumer_byte_rate=20000.0";
     }
 }

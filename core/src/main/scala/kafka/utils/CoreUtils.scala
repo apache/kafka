@@ -36,7 +36,6 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.slf4j.event.Level
 
 import java.util
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -240,31 +239,6 @@ object CoreUtils {
     val properties = new Properties()
     props.foreach { case (k, v) => properties.put(k, v) }
     properties
-  }
-
-  /**
-   * Atomic `getOrElseUpdate` for concurrent maps. This is optimized for the case where
-   * keys often exist in the map, avoiding the need to create a new value. `createValue`
-   * may be invoked more than once if multiple threads attempt to insert a key at the same
-   * time, but the same inserted value will be returned to all threads.
-   *
-   * In Scala 2.12, `ConcurrentMap.getOrElse` has the same behaviour as this method, but JConcurrentMapWrapper that
-   * wraps Java maps does not.
-   */
-  def atomicGetOrUpdate[K, V](map: concurrent.Map[K, V], key: K, createValue: => V): V = {
-    map.get(key) match {
-      case Some(value) => value
-      case None =>
-        val value = createValue
-        map.putIfAbsent(key, value).getOrElse(value)
-    }
-  }
-
-  @nowarn("cat=unused") // see below for explanation
-  def groupMapReduce[T, K, B](elements: Iterable[T])(key: T => K)(f: T => B)(reduce: (B, B) => B): Map[K, B] = {
-    // required for Scala 2.12 compatibility, unused in Scala 2.13 and hence we need to suppress the unused warning
-    import scala.collection.compat._
-    elements.groupMapReduce(key)(f)(reduce)
   }
 
   def replicaToBrokerAssignmentAsScala(map: util.Map[Integer, util.List[Integer]]): Map[Int, Seq[Int]] = {

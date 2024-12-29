@@ -84,7 +84,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import javax.ws.rs.BadRequestException;
+import jakarta.ws.rs.BadRequestException;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS;
@@ -159,22 +159,18 @@ public class ConnectorPluginsResourceTest {
             PREDICATE_PLUGINS.add(new PluginDesc<>(HasHeaderKey.class, appVersion, PluginType.PREDICATE, classLoader));
             PREDICATE_PLUGINS.add(new PluginDesc<>(RecordIsTombstone.class, appVersion, PluginType.PREDICATE, classLoader));
         } catch (Exception e) {
-            e.printStackTrace();
             fail("Failed setting up plugins");
         }
     }
 
     static {
-        List<ConfigInfo> configs = new LinkedList<>();
-        List<ConfigInfo> partialConfigs = new LinkedList<>();
-
         ConfigDef connectorConfigDef = ConnectorConfig.configDef();
         List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(PROPS);
         List<ConfigValue> partialConnectorConfigValues = connectorConfigDef.validate(PARTIAL_PROPS);
         ConfigInfos result = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), connectorConfigValues, Collections.emptyList());
         ConfigInfos partialResult = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), partialConnectorConfigValues, Collections.emptyList());
-        configs.addAll(result.values());
-        partialConfigs.addAll(partialResult.values());
+        List<ConfigInfo> configs = new LinkedList<>(result.values());
+        List<ConfigInfo> partialConfigs = new LinkedList<>(partialResult.values());
 
         ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, null, "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", Collections.emptyList());
         ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", Collections.emptyList(), Collections.emptyList(), true);
@@ -432,14 +428,14 @@ public class ConnectorPluginsResourceTest {
     @Test
     public void testGetConnectorConfigDef() {
         String connName = ConnectorPluginsResourceTestConnector.class.getName();
-        when(herder.connectorPluginConfig(eq(connName))).thenAnswer(answer -> {
+        when(herder.connectorPluginConfig(eq(connName), eq(null))).thenAnswer(answer -> {
             List<ConfigKeyInfo> results = new ArrayList<>();
             for (ConfigDef.ConfigKey configKey : ConnectorPluginsResourceTestConnector.CONFIG_DEF.configKeys().values()) {
                 results.add(AbstractHerder.convertConfigKey(configKey));
             }
             return results;
         });
-        List<ConfigKeyInfo> connectorConfigDef = connectorPluginsResource.getConnectorConfigDef(connName);
+        List<ConfigKeyInfo> connectorConfigDef = connectorPluginsResource.getConnectorConfigDef(connName, null);
         assertEquals(ConnectorPluginsResourceTestConnector.CONFIG_DEF.names().size(), connectorConfigDef.size());
         for (String config : ConnectorPluginsResourceTestConnector.CONFIG_DEF.names()) {
             Optional<ConfigKeyInfo> cki = connectorConfigDef.stream().filter(c -> c.name().equals(config)).findFirst();

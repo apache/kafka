@@ -39,8 +39,6 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -75,7 +73,7 @@ public class SourceConnectorConfigTest {
             TOPIC_CREATION_GROUP_1, TOPIC_CREATION_GROUP_2));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, "1");
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, "1");
-        SourceConnectorConfig config = new SourceConnectorConfig(MOCK_PLUGINS, props, true);
+        new SourceConnectorConfig(MOCK_PLUGINS, props, true);
     }
 
     @Test
@@ -90,13 +88,13 @@ public class SourceConnectorConfigTest {
         Map<String, String> props = defaultConnectorPropsWithTopicCreation();
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(0));
         Exception e = assertThrows(ConfigException.class, () -> new SourceConnectorConfig(MOCK_PLUGINS, props, true));
-        assertThat(e.getMessage(), containsString("Number of partitions must be positive, or -1"));
+        assertTrue(e.getMessage().contains("Number of partitions must be positive, or -1"));
 
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(DEFAULT_PARTITIONS));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(0));
 
         e = assertThrows(ConfigException.class, () -> new SourceConnectorConfig(MOCK_PLUGINS, props, true));
-        assertThat(e.getMessage(), containsString("Replication factor must be positive and not "
+        assertTrue(e.getMessage().contains("Replication factor must be positive and not "
                 + "larger than the number of brokers in the Kafka cluster, or -1 to use the "
                 + "broker's default"));
     }
@@ -108,12 +106,12 @@ public class SourceConnectorConfigTest {
             props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(i));
             props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(DEFAULT_REPLICATION_FACTOR));
             Exception e = assertThrows(ConfigException.class, () -> new SourceConnectorConfig(MOCK_PLUGINS, props, true));
-            assertThat(e.getMessage(), containsString("Number of partitions must be positive, or -1"));
+            assertTrue(e.getMessage().contains("Number of partitions must be positive, or -1"));
 
             props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(DEFAULT_PARTITIONS));
             props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(i));
             e = assertThrows(ConfigException.class, () -> new SourceConnectorConfig(MOCK_PLUGINS, props, true));
-            assertThat(e.getMessage(), containsString("Replication factor must be positive and not "
+            assertTrue(e.getMessage().contains("Replication factor must be positive and not "
                     + "larger than the number of brokers in the Kafka cluster, or -1 to use the "
                     + "broker's default"));
         }

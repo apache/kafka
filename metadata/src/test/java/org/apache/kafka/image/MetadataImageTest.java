@@ -41,7 +41,7 @@ public class MetadataImageTest {
 
     static {
         IMAGE1 = new MetadataImage(
-            new MetadataProvenance(100, 4, 2000),
+            new MetadataProvenance(100, 4, 2000, true),
             FeaturesImageTest.IMAGE1,
             ClusterImageTest.IMAGE1,
             TopicsImageTest.IMAGE1,
@@ -66,7 +66,7 @@ public class MetadataImageTest {
         RecordTestUtils.replayAll(DELTA1, DelegationTokenImageTest.DELTA1_RECORDS);
 
         IMAGE2 = new MetadataImage(
-            new MetadataProvenance(200, 5, 4000),
+            new MetadataProvenance(200, 5, 4000, true),
             FeaturesImageTest.IMAGE2,
             ClusterImageTest.IMAGE2,
             TopicsImageTest.IMAGE2,
@@ -125,7 +125,7 @@ public class MetadataImageTest {
 
     private static void testToImage(MetadataImage image, List<ApiMessageAndVersion> fromRecords) {
         // test from empty image stopping each of the various intermediate images along the way
-        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<MetadataDelta, MetadataImage>(
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
             () -> MetadataImage.EMPTY,
             MetadataDelta::new
         ) {

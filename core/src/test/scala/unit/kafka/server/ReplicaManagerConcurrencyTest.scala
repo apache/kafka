@@ -33,7 +33,7 @@ import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.{FetchRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
@@ -76,7 +76,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
     CoreUtils.swallow(channel.shutdown(), this)
     CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
     CoreUtils.swallow(quotaManagers.shutdown(), this)
-    CoreUtils.swallow(metrics.close(), this)
+    Utils.closeQuietly(metrics, "metrics")
     CoreUtils.swallow(time.scheduler.shutdown(), this)
   }
 
@@ -263,7 +263,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       replicaManager.fetchMessages(
         params = fetchParams,
         fetchInfos = Seq(topicIdPartition -> partitionData),
-        quota = QuotaFactory.UnboundedQuota,
+        quota = QuotaFactory.UNBOUNDED_QUOTA,
         responseCallback = fetchCallback,
       )
 

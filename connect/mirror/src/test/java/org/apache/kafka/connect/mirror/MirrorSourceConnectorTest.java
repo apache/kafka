@@ -40,7 +40,7 @@ import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 
-import org.apache.log4j.Level;
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -113,6 +113,22 @@ public class MirrorSourceConnectorTest {
     }
 
     @Test
+    public void testDoesNotReplicateHeartbeatsWhenDisabled() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter(), false);
+        assertFalse(connector.shouldReplicateTopic("heartbeats"), "should not replicate heartbeats");
+        assertFalse(connector.shouldReplicateTopic("us-west.heartbeats"), "should not replicate upstream heartbeats");
+    }
+
+    @Test
+    public void testReplicatesHeartbeatsWhenDisabledButFilterAllows() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter(), false);
+        assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
+        assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
+    }
+
+    @Test
     public void testNoCycles() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
             new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
@@ -151,10 +167,10 @@ public class MirrorSourceConnectorTest {
             new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
         assertFalse(connector.shouldReplicateAcl(
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
-            new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
+                new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
         assertTrue(connector.shouldReplicateAcl(
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
-            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW))), "should replicate ALLOW ALL");
+                new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW))), "should replicate ALLOW ALL");
     }
 
     @Test

@@ -71,6 +71,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -93,7 +94,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -154,7 +155,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -207,7 +208,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -262,7 +263,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -300,7 +301,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
             build();
@@ -363,7 +364,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -402,7 +403,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -465,7 +466,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
             build();
@@ -768,7 +769,8 @@ public class ClusterControlManagerTest {
     void registerNewBrokerWithDirs(ClusterControlManager clusterControl, int brokerId, List<Uuid> dirs) {
         BrokerRegistrationRequestData data = new BrokerRegistrationRequestData().setBrokerId(brokerId)
                 .setClusterId(clusterControl.clusterId())
-                .setIncarnationId(Uuid.randomUuid()).setLogDirs(dirs);
+                .setIncarnationId(new Uuid(brokerId, brokerId))
+                .setLogDirs(dirs);
         FinalizedControllerFeatures finalizedFeatures = new FinalizedControllerFeatures(Collections.emptyMap(), 456L);
         ControllerResult<BrokerRegistrationReply> result = clusterControl.registerBroker(data, 123L, finalizedFeatures);
         RecordTestUtils.replayAll(clusterControl, result.records());
@@ -854,31 +856,30 @@ public class ClusterControlManagerTest {
     }
 
     @Test
-    public void testRegistrationWithIncorrectInterBrokerListenerName() {
+    public void testBrokerContactTimesAreUpdatedOnClusterControlActivation() {
+        MockTime time = new MockTime(0L, 20L, 1000L);
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
-                setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
-                setFeatureControlManager(new FeatureControlManager.Builder().build()).
-                setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
-                setInterBrokerListenerName("INTERNAL").
-                setZkMigrationEnabled(true).
-                build();
+            setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
+            setFeatureControlManager(new FeatureControlManager.Builder().build()).
+            setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
+            setTime(time).
+            build();
+        clusterControl.replay(new RegisterBrokerRecord().
+            setBrokerEpoch(100).
+            setBrokerId(0).
+            setLogDirs(asList(Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"))), 10002);
+        clusterControl.replay(new RegisterBrokerRecord().
+            setBrokerEpoch(123).
+            setBrokerId(1).
+            setLogDirs(asList(Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg"))), 10005);
         clusterControl.activate();
-        assertEquals("Broker does not have the current inter.broker.listener INTERNAL",
-            assertThrows(InvalidRegistrationException.class,
-                () -> clusterControl.registerBroker(
-                    new BrokerRegistrationRequestData().
-                        setBrokerId(1).
-                        setClusterId(clusterControl.clusterId()).
-                        setIncarnationId(Uuid.fromString("07OOcU7MQFeSmGAFPP2Zww")).
-                        setLogDirs(Arrays.asList(Uuid.fromString("Vv1gzkM2QpuE-PPrIc6XEw"))).
-                        setIsMigratingZkBroker(true).
-                        setListeners(new BrokerRegistrationRequestData.ListenerCollection(Collections.singleton(
-                            new BrokerRegistrationRequestData.Listener().
-                                setName("PLAINTEXT").
-                                setHost("example.com").
-                                setPort(9092).
-                                setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())),
-                        111,
-                    new FinalizedControllerFeatures(Collections.emptyMap(), 100L))).getMessage());
+        assertEquals(OptionalLong.of(1000L), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(0, 100)));
+        assertEquals(OptionalLong.of(1000L), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(1, 123)));
+        assertEquals(OptionalLong.empty(), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(1, 124)));
+        assertEquals(OptionalLong.empty(), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(2, 100)));
     }
 }
