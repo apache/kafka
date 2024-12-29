@@ -22,7 +22,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -76,7 +75,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
 
         buffer = new RocksDBTimeOrderedKeyValueBuffer<>(store, grace, "testing", false);
         buffer.setSerdesIfNull(serdeGetter);
-        buffer.init((StateStoreContext) context, store);
+        buffer.init(context, store);
     }
 
     private boolean pipeRecord(final String key, final String value, final long time) {

@@ -1035,7 +1035,7 @@ public class KStreamWindowAggregateTest {
             stateDir
         );
 
-        context.setCurrentNode(new ProcessorNode("testNode"));
+        context.setCurrentNode(new ProcessorNode<>("testNode"));
 
         // Create, initialize, and register the state store.
         final TimestampedWindowStore<String, String> store = getWindowStore(windowSize);

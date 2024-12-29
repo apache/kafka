@@ -49,7 +49,6 @@ import org.mockito.ArgumentMatchers.anyString
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import org.mockito.Mockito.{mock, verify, verifyNoMoreInteractions, when}
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Set
 
@@ -277,7 +276,6 @@ class DynamicBrokerConfigTest {
     verifyNoMoreInteractions(remoteLogManager)
   }
 
-  @nowarn("cat=deprecation")
   @Test
   def testConfigUpdateWithSomeInvalidConfigs(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, null, port = 8181)
@@ -295,9 +293,6 @@ class DynamicBrokerConfigTest {
     // Test update of configs with invalid type
     val invalidProps = Map(CleanerConfig.LOG_CLEANER_THREADS_PROP -> "invalid")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, invalidProps)
-
-    val excludedTopicConfig = Map(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG -> "0.10.2")
-    verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, excludedTopicConfig)
   }
 
   @Test

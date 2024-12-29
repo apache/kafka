@@ -246,7 +246,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private def requestBuilder(apiKey: ApiKeys): AbstractRequest.Builder[_ <: AbstractRequest] = {
     apiKey match {
         case ApiKeys.PRODUCE =>
-          requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+          requests.ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
               Collections.singletonList(new ProduceRequestData.TopicProduceData()
                 .setName(tp.topic()).setPartitionData(Collections.singletonList(

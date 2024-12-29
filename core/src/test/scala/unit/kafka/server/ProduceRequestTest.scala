@@ -54,7 +54,7 @@ class ProduceRequestTest extends BaseRequestTest {
 
     def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): Unit = {
       val topicPartition = new TopicPartition("topic", partition)
-      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
           new ProduceRequestData.TopicProduceData()
             .setName(topicPartition.topic())
@@ -134,7 +134,7 @@ class ProduceRequestTest extends BaseRequestTest {
 
     val records = createRecords(RecordBatch.MAGIC_VALUE_V2, recordTimestamp, Compression.gzip().build())
     val topicPartition = new TopicPartition("topic", partition)
-    val produceResponse = sendProduceRequest(leader, ProduceRequest.forCurrentMagic(new ProduceRequestData()
+    val produceResponse = sendProduceRequest(leader, ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
         new ProduceRequestData.TopicProduceData()
           .setName(topicPartition.topic())
@@ -183,7 +183,7 @@ class ProduceRequestTest extends BaseRequestTest {
     // Send the produce request to the non-replica
     val records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("key".getBytes, "value".getBytes))
     val topicPartition = new TopicPartition("topic", partition)
-    val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+    val produceRequest = ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
         new ProduceRequestData.TopicProduceData()
           .setName(topicPartition.topic())
@@ -221,7 +221,7 @@ class ProduceRequestTest extends BaseRequestTest {
     val lz4ChecksumOffset = 6
     memoryRecords.buffer.array.update(DefaultRecordBatch.RECORD_BATCH_OVERHEAD + lz4ChecksumOffset, 0)
     val topicPartition = new TopicPartition("topic", partition)
-    val produceResponse = sendProduceRequest(leader, ProduceRequest.forCurrentMagic(new ProduceRequestData()
+    val produceResponse = sendProduceRequest(leader, ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
         new ProduceRequestData.TopicProduceData()
           .setName(topicPartition.topic())
@@ -281,14 +281,6 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse1.errorCode))
     assertEquals(0, partitionProduceResponse1.baseOffset)
     assertEquals(-1, partitionProduceResponse1.logAppendTimeMs)
-
-    // produce request with v3: returns Errors.UNSUPPORTED_COMPRESSION_TYPE.
-    val produceResponse2 = sendProduceRequest(leader, new ProduceRequest.Builder(3, 3, partitionRecords).buildUnsafe(3))
-    val topicProduceResponse2 = produceResponse2.data.responses.asScala.head
-    val partitionProduceResponse2 = topicProduceResponse2.partitionResponses.asScala.head
-    val tp2 = new TopicPartition(topicProduceResponse2.name, partitionProduceResponse2.index)
-    assertEquals(topicPartition, tp2)
-    assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, Errors.forCode(partitionProduceResponse2.errorCode))
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {

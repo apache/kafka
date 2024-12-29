@@ -535,7 +535,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         int brokerId = 1;
         Properties properties = TestUtils.createBrokerConfig(
             brokerId,
-            null,
+            "",
             true,
             true,
             TestUtils.RandomPort(),
@@ -561,7 +561,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, voterId + "@localhost:9093");
         properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL");
         properties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,SSL:SSL");
-        TestUtils.setIbpAndMessageFormatVersions(properties, MetadataVersion.latestProduction());
+        TestUtils.setIbpVersion(properties, MetadataVersion.latestProduction());
         return new KafkaConfig(properties);
     }
 }

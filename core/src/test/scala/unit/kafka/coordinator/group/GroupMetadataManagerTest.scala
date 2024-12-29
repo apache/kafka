@@ -1189,7 +1189,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
@@ -1227,12 +1227,12 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
   def testStoreNonEmptyGroupWhenCoordinatorHasMoved(): Unit = {
-    when(replicaManager.getMagic(any())).thenReturn(None)
+    when(replicaManager.onlinePartition(any())).thenReturn(None)
     val memberId = "memberId"
     val clientId = "clientId"
     val clientHost = "localhost"
@@ -1253,7 +1253,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.storeGroup(group, Map(memberId -> Array[Byte]()), callback)
     assertEquals(Some(Errors.NOT_COORDINATOR), maybeError)
 
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
@@ -1326,7 +1326,7 @@ class GroupMetadataManagerTest {
     val offsets = immutable.Map(topicIdPartition -> offsetAndMetadata)
 
     val capturedResponseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
       commitErrors = Some(errors)
@@ -1348,7 +1348,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
@@ -1377,7 +1377,7 @@ class GroupMetadataManagerTest {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
     val offsets = immutable.Map(topicIdPartition -> new OffsetAndMetadata(offset, noLeader, "", time.milliseconds(), noExpiration))
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
@@ -1410,7 +1410,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
@@ -1429,7 +1429,7 @@ class GroupMetadataManagerTest {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
     val offsets = immutable.Map(topicIdPartition -> new OffsetAndMetadata(offset, noLeader, "", time.milliseconds(), noExpiration))
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
@@ -1462,12 +1462,12 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
   def testCommitOffsetWhenCoordinatorHasMoved(): Unit = {
-    when(replicaManager.getMagic(any())).thenReturn(None)
+    when(replicaManager.onlinePartition(any())).thenReturn(None)
     val memberId = ""
     val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val offset = 37
@@ -1491,7 +1491,7 @@ class GroupMetadataManagerTest {
     val maybeError = commitErrors.get.get(topicIdPartition)
     assertEquals(Some(Errors.NOT_COORDINATOR), maybeError)
 
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
@@ -1520,7 +1520,7 @@ class GroupMetadataManagerTest {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
     val offsets = immutable.Map(topicIdPartition -> new OffsetAndMetadata(offset, noLeader, "", time.milliseconds(), noExpiration))
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
@@ -1549,7 +1549,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topicIdPartition.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
     // Will not update sensor if failed
     assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
   }
@@ -1573,7 +1573,7 @@ class GroupMetadataManagerTest {
       topicIdPartitionFailed -> new OffsetAndMetadata(offset, noLeader, "s" * (offsetConfig.maxMetadataSize + 1) , time.milliseconds(), noExpiration)
     )
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
@@ -1617,7 +1617,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
   }
 
@@ -1740,7 +1740,7 @@ class GroupMetadataManagerTest {
 
     val capturedResponseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
 
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
@@ -1773,7 +1773,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
@@ -1854,7 +1854,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager, times(2)).getMagic(any())
+    verify(replicaManager, times(2)).onlinePartition(any())
   }
 
   @Test
@@ -1871,7 +1871,7 @@ class GroupMetadataManagerTest {
     // expect the group metadata tombstone
     val recordsCapture: ArgumentCaptor[MemoryRecords] = ArgumentCaptor.forClass(classOf[MemoryRecords])
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
     mockGetPartition()
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
@@ -1914,7 +1914,7 @@ class GroupMetadataManagerTest {
     // expect the group metadata tombstone
     val recordsCapture: ArgumentCaptor[MemoryRecords] = ArgumentCaptor.forClass(classOf[MemoryRecords])
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
     mockGetPartition()
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
@@ -1984,7 +1984,7 @@ class GroupMetadataManagerTest {
 
     // expect the offset tombstone
     val recordsCapture: ArgumentCaptor[MemoryRecords] = ArgumentCaptor.forClass(classOf[MemoryRecords])
-
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(partition))
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any(), any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
@@ -2017,7 +2017,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topicIdPartition2.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
   }
 
   @Test
@@ -2088,7 +2088,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition2.topicPartition).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition3.topicPartition).map(_.offset))
 
-    verify(replicaManager).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
 
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Empty)
@@ -2114,7 +2114,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition2.topicPartition).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition3.topicPartition).map(_.offset))
 
-    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(3)).onlinePartition(groupTopicPartition)
 
     time.sleep(2)
 
@@ -2139,7 +2139,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicIdPartition2.topicPartition).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition3.topicPartition).map(_.offset))
 
-    verify(replicaManager, times(3)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(4)).onlinePartition(groupTopicPartition)
 
     // advance time to just before the offset of last partition is to be expired, no offset should expire
     time.sleep(group.currentStateTimestamp.get + defaultOffsetRetentionMs - time.milliseconds() - 1)
@@ -2170,7 +2170,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topicIdPartition3.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager, times(4)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(5)).onlinePartition(groupTopicPartition)
 
     // advance time enough for that last offset to expire
     time.sleep(2)
@@ -2205,7 +2205,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topicIdPartition3.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager, times(5)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(6)).onlinePartition(groupTopicPartition)
 
     assert(group.is(Dead))
   }
@@ -2261,7 +2261,7 @@ class GroupMetadataManagerTest {
     )
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition1.topicPartition).map(_.offset))
 
-    verify(replicaManager).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
 
     // advance time to enough for offsets to expire
     time.sleep(2)
@@ -2286,7 +2286,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topicIdPartition1.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(3)).onlinePartition(groupTopicPartition)
 
     assert(group.is(Dead))
   }
@@ -2401,7 +2401,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topic2IdPartition1.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
 
     group.transitionTo(PreparingRebalance)
 
@@ -2419,6 +2419,7 @@ class GroupMetadataManagerTest {
     group.initNextGeneration()
     group.transitionTo(Stable)
 
+    when(replicaManager.onlinePartition(any)).thenReturn(Some(partition))
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
@@ -2429,7 +2430,7 @@ class GroupMetadataManagerTest {
     verify(partition).appendRecordsToLeader(any[MemoryRecords],
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any(), any())
-    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(3)).onlinePartition(groupTopicPartition)
 
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
     assert(group.is(Stable))
@@ -2932,7 +2933,7 @@ class GroupMetadataManagerTest {
           new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
         )
       )})
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
     capturedRecords
   }
 

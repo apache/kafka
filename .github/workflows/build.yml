@@ -248,7 +248,7 @@ jobs:
   update-test-catalog:
     name: Update Test Catalog
     needs: test
-    if: ${{ always() && inputs.is-trunk && !needs.test.outputs.timed-out }}
+    if: ${{ always() && inputs.is-trunk && needs.test.outputs.timed-out == 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

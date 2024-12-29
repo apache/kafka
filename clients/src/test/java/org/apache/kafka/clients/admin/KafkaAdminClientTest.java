@@ -4172,17 +4172,11 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testListConsumerGroupOffsetsOptionsWithUnbatchedApi() throws Exception {
-        verifyListConsumerGroupOffsetsOptions(false);
-    }
-
-    @Test
     public void testListConsumerGroupOffsetsOptionsWithBatchedApi() throws Exception {
-        verifyListConsumerGroupOffsetsOptions(true);
+        verifyListConsumerGroupOffsetsOptions();
     }
 
-    @SuppressWarnings("deprecation")
-    private void verifyListConsumerGroupOffsetsOptions(boolean batchedApi) throws Exception {
+    private void verifyListConsumerGroupOffsetsOptions() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
         final Time time = new MockTime();
 
@@ -4196,13 +4190,10 @@ public class KafkaAdminClientTest {
             final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions()
                     .requireStable(true)
                     .timeoutMs(300);
-            if (batchedApi) {
-                final ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
-                        .topicPartitions(partitions);
-                env.adminClient().listConsumerGroupOffsets(Collections.singletonMap(GROUP_ID, groupSpec), options);
-            } else {
-                env.adminClient().listConsumerGroupOffsets(GROUP_ID, options.topicPartitions(partitions));
-            }
+
+            final ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
+                    .topicPartitions(partitions);
+            env.adminClient().listConsumerGroupOffsets(Collections.singletonMap(GROUP_ID, groupSpec), options);
 
             final MockClient mockClient = env.kafkaClient();
             waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);

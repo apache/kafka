@@ -57,7 +57,6 @@ import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util.concurrent.{Callable, ConcurrentHashMap, Executors, TimeUnit}
 import java.util.{Optional, OptionalLong, Properties}
-import scala.annotation.nowarn
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -2579,49 +2578,6 @@ class UnifiedLogTest {
       baseOffset = 1L,
       magicValue = RecordVersion.V1.value))
     assertEquals(None, log.leaderEpochCache.flatMap(_.latestEpoch.toScala))
-  }
-
-  @nowarn("cat=deprecation")
-  @Test
-  def testLeaderEpochCacheClearedAfterDynamicMessageFormatDowngrade(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
-    val log = createLog(logDir, logConfig)
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
-    assertEquals(Some(5), log.latestEpoch)
-
-    val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
-    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
-    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
-    val downgradedLogConfig = new LogConfig(logProps)
-    log.updateConfig(downgradedLogConfig)
-    LogTestUtils.assertLeaderEpochCacheEmpty(log)
-
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
-      magicValue = RecordVersion.V1.value), leaderEpoch = 5)
-    LogTestUtils.assertLeaderEpochCacheEmpty(log)
-  }
-
-  @nowarn("cat=deprecation")
-  @Test
-  def testLeaderEpochCacheCreatedAfterMessageFormatUpgrade(): Unit = {
-    val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
-    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
-    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
-    val logConfig = new LogConfig(logProps)
-    val log = createLog(logDir, logConfig)
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
-      magicValue = RecordVersion.V1.value), leaderEpoch = 5)
-    LogTestUtils.assertLeaderEpochCacheEmpty(log)
-
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
-    val upgradedLogConfig = new LogConfig(logProps)
-    log.updateConfig(upgradedLogConfig)
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
-    assertEquals(Some(5), log.latestEpoch)
   }
 
   @Test

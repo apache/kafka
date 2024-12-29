@@ -229,13 +229,14 @@ public class RemoteLogManagerTest {
     private UnifiedLog mockLog = mock(UnifiedLog.class);
 
     private final MockScheduler scheduler = new MockScheduler(time);
+    private final Properties brokerConfig = kafka.utils.TestUtils.createDummyBrokerConfig();
 
     @BeforeEach
     void setUp() throws Exception {
         checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1));
         topicIds.put(leaderTopicIdPartition.topicPartition().topic(), leaderTopicIdPartition.topicId());
         topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
-        Properties props = kafka.utils.TestUtils.createDummyBrokerConfig();
+        Properties props = brokerConfig;
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "100");
         appendRLMConfig(props);
@@ -351,7 +352,7 @@ public class RemoteLogManagerTest {
         String key = "key";
         String configPrefix = "config.prefix";
         Properties props = new Properties();
-        props.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
+        props.putAll(brokerConfig);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, configPrefix);
         props.put(configPrefix + key, "world");
         props.put("remote.log.metadata.y", "z");
@@ -368,7 +369,7 @@ public class RemoteLogManagerTest {
         String key = "key";
         String configPrefix = "config.prefix";
         Properties props = new Properties();
-        props.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
+        props.putAll(brokerConfig);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP, configPrefix);
         props.put(configPrefix + key, "world");
         props.put("remote.storage.manager.y", "z");
@@ -400,7 +401,7 @@ public class RemoteLogManagerTest {
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfigOverridden() throws IOException {
         Properties props = new Properties();
-        props.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
+        props.putAll(brokerConfig);
         // override common security.protocol by adding "RLMM prefix" and "remote log metadata common client prefix"
         props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", "SSL");
         appendRLMConfig(props);
@@ -3337,7 +3338,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testCopyQuotaManagerConfig() {
         Properties defaultProps = new Properties();
-        defaultProps.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
+        defaultProps.putAll(brokerConfig);
         appendRLMConfig(defaultProps);
         KafkaConfig defaultRlmConfig = KafkaConfig.fromProps(defaultProps);
         RLMQuotaManagerConfig defaultConfig = RemoteLogManager.copyQuotaManagerConfig(defaultRlmConfig.remoteLogManagerConfig());
@@ -3346,7 +3347,7 @@ public class RemoteLogManagerTest {
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS, defaultConfig.quotaWindowSizeSeconds());
 
         Properties customProps = new Properties();
-        customProps.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
+        customProps.putAll(brokerConfig);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP, 100);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_PROP, 31);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
@@ -3362,7 +3363,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testFetchQuotaManagerConfig() {
         Properties defaultProps = new Properties();
-        defaultProps.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
+        defaultProps.putAll(brokerConfig);
         appendRLMConfig(defaultProps);
         KafkaConfig defaultRlmConfig = KafkaConfig.fromProps(defaultProps);
 
@@ -3372,7 +3373,7 @@ public class RemoteLogManagerTest {
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS, defaultConfig.quotaWindowSizeSeconds());
 
         Properties customProps = new Properties();
-        customProps.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
+        customProps.putAll(brokerConfig);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP, 100);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_PROP, 31);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
