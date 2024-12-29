@@ -122,10 +122,6 @@ public class FollowerState implements EpochState {
             );
     }
 
-    public Optional<ReplicaKey> votedKey() {
-        return votedKey;
-    }
-
     public boolean hasFetchTimeoutExpired(long currentTimeMs) {
         fetchTimer.update(currentTimeMs);
         return fetchTimer.isExpired();

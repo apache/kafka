@@ -242,7 +242,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
         // unattached with votedKey
-        state.transitionToUnattached(3);
+        state.transitionToUnattached(3, OptionalInt.empty());
         state.unattachedAddVotedState(3, ReplicaKey.of(2, voter2DirectoryId));
         assertEquals("unattached-voted", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
@@ -302,7 +302,7 @@ public class KafkaRaftMetricsTest {
         state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(10L));
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToUnattached(4);
+        state.transitionToUnattached(4, OptionalInt.empty());
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());

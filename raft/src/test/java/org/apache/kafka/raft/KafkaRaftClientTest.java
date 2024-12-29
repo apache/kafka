@@ -972,7 +972,7 @@ public class KafkaRaftClientTest {
         context.deliverRequest(context.beginEpochRequest(votedCandidateEpoch, otherNodeKey.id()));
         context.pollUntilResponse();
 
-        context.assertElectedLeader(votedCandidateEpoch, otherNodeKey.id());
+        context.assertElectedLeaderAndVotedCandidate(votedCandidateEpoch, otherNodeKey.id(), otherNodeKey);
 
         context.assertSentBeginQuorumEpochResponse(
             Errors.NONE,
@@ -2910,7 +2910,11 @@ public class KafkaRaftClientTest {
         // While the vote requests are still inflight, we receive a BeginEpoch for the same epoch
         context.deliverRequest(context.beginEpochRequest(epoch + 1, voter3));
         context.client.poll();
-        context.assertElectedLeader(epoch + 1, voter3);
+        context.assertElectedLeaderAndVotedCandidate(
+            epoch + 1,
+            voter3,
+            ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID)
+        );
 
         // The vote requests now return and should be ignored
         voteResponse1 = context.voteResponse(true, OptionalInt.empty(), epoch + 1);
@@ -2928,7 +2932,11 @@ public class KafkaRaftClientTest {
         );
 
         context.client.poll();
-        context.assertElectedLeader(epoch + 1, voter3);
+        context.assertElectedLeaderAndVotedCandidate(
+            epoch + 1,
+            voter3,
+            ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID)
+        );
     }
 
     @ParameterizedTest

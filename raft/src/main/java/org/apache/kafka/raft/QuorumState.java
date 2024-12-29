@@ -369,16 +369,11 @@ public class QuorumState {
     }
 
     /**
-     * Transition to the "unattached" state. This means we have found an epoch greater than the current epoch
-     * and do not yet know of the elected leader, or we have transitioned from Prospective with the same epoch.
-     * Note, if we are transitioning from unattached and there is no epoch change, we take the path of
-     * unattachedAddVotedState instead.
+     * Transition to the "unattached" state. This means the replica has found an epoch greater than the current epoch,
+     * or the replica has transitioned from Prospective with the same epoch.
+     * Note, if the replica is transitioning from unattached to add voted state and there is no epoch change,
+     * it takes the route of unattachedAddVotedState instead.
      */
-    // Used in testing
-    public void transitionToUnattached(int epoch) {
-        transitionToUnattached(epoch, OptionalInt.empty());
-    }
-
     public void transitionToUnattached(int epoch, OptionalInt leaderId) {
         int currentEpoch = state.epoch();
         if (epoch < currentEpoch || (epoch == currentEpoch && !isProspective())) {
@@ -404,11 +399,14 @@ public class QuorumState {
             electionTimeoutMs = randomElectionTimeoutMs();
         }
 
+        // If the local replica is transitioning to Unattached in the same epoch (i.e. from Prospective), it
+        // should retain its voted key if it exists, so that it will not vote again in the same epoch.
+        Optional<ReplicaKey> votedKey = epoch == currentEpoch ? votedKey() : Optional.empty();
         durableTransitionTo(new UnattachedState(
             time,
             epoch,
             leaderId,
-            epoch == currentEpoch ? votedKey() : Optional.empty(),
+            votedKey,
             partitionState.lastVoterSet().voterIds(),
             state.highWatermark(),
             electionTimeoutMs,
@@ -417,8 +415,10 @@ public class QuorumState {
     }
 
     /**
-     * Grant a vote to a candidate as Unattached. We will transition to Unattached with votedKey
-     * state and remain there until either the election timeout expires or we discover the leader.
+     * Grant a vote to a candidate as Unattached. The replica will transition to Unattached with votedKey
+     * state in the same epoch and remain there until either the election timeout expires or it discovers the leader.
+     * Note, if the replica discovers a higher epoch or is transitioning from Prospective, it takes
+     * the route of transitionToUnattached instead.
      */
     public void unattachedAddVotedState(
         int epoch,
@@ -466,8 +466,9 @@ public class QuorumState {
     }
 
     /**
-     * Grant a vote to a candidate as Prospective. We will transition to Prospective with votedKey
-     * state and remain there until either the election timeout expires or we discover the leader.
+     * Grant a vote to a candidate as Prospective. The replica will transition to Prospective with votedKey
+     * state in the same epoch. Note, if the replica is transitioning to Prospective due to a fetch/election timeout
+     * or loss of election as candidate, it takes the route of transitionToProspective instead.
      */
     public void prospectiveAddVotedState(
         int epoch,
@@ -478,7 +479,7 @@ public class QuorumState {
             throw new IllegalStateException(
                 String.format(
                     "Cannot add voted key (%s) to current state (%s) in epoch %d since it matches the local " +
-                        "broker.id",
+                    "broker.id",
                     candidateKey,
                     state,
                     epoch
@@ -589,12 +590,17 @@ public class QuorumState {
         );
     }
 
+    /**
+     * Transition to the "prospective" state. This means the replica experienced a fetch/election timeout or
+     * loss of election as candidate. Note, if the replica is transitioning from prospective to add voted state
+     * and there is no epoch change, it takes the route of prospectiveAddVotedState instead.
+     */
     public void transitionToProspective() {
         if (isObserver()) {
             throw new IllegalStateException(
                 String.format(
                     "Cannot transition to Prospective since the local id (%s) and directory id (%s) " +
-                        "is not one of the voters %s",
+                    "is not one of the voters %s",
                     localId,
                     localDirectoryId,
                     partitionState.lastVoterSet()
@@ -607,19 +613,21 @@ public class QuorumState {
 
         int retries = isCandidate() ? candidateStateOrThrow().retries() + 1 : 1;
 
-        durableTransitionTo(new ProspectiveState(
-            time,
-            localIdOrThrow(),
-            epoch(),
-            leaderId(),
-            Optional.of(state.leaderEndpoints()),
-            votedKey(),
-            partitionState.lastVoterSet(),
-            state.highWatermark(),
-            retries,
-            randomElectionTimeoutMs(),
-            logContext
-        ));
+        durableTransitionTo(
+            new ProspectiveState(
+                time,
+                localIdOrThrow(),
+                epoch(),
+                leaderId(),
+                Optional.of(state.leaderEndpoints()),
+                votedKey(),
+                partitionState.lastVoterSet(),
+                state.highWatermark(),
+                retries,
+                randomElectionTimeoutMs(),
+                logContext
+            )
+        );
     }
 
     public void transitionToCandidate() {
@@ -861,6 +869,17 @@ public class QuorumState {
         return state instanceof NomineeState;
     }
 
+    /**
+     * Determines if replica in unattached or prospective state can grant a vote request.
+     * @param leaderId local replica's optional leader id.
+     * @param votedKey local replica's optional voted key.
+     * @param epoch local replica's epoch
+     * @param replicaKey replicaKey of nominee which sent the vote request
+     * @param isLogUpToDate whether the log of the nominee is up-to-date with the local replica's log
+     * @param isPreVote whether the vote request is a PreVote request
+     * @param log logger
+     * @return true if the local replica can grant the vote request, false otherwise
+     */
     public static boolean unattachedOrProspectiveCanGrantVote(
         OptionalInt leaderId,
         Optional<ReplicaKey> votedKey,

@@ -158,11 +158,13 @@ public class ProspectiveState implements NomineeState {
     @Override
     public String toString() {
         return String.format(
-            "Prospective(epoch=%d, leaderId=%s, votedKey=%s, voters=%s, electionTimeoutMs=%s, highWatermark=%s)",
+            "ProspectiveState(epoch=%d, leaderId=%s, retries=%d, votedKey=%s, epochElection=%s, " +
+            "electionTimeoutMs=%s, highWatermark=%s)",
             epoch,
             leaderId,
+            retries,
             votedKey,
-            voters,
+            epochElection,
             electionTimeoutMs,
             highWatermark
         );

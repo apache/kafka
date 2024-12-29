@@ -691,13 +691,10 @@ public final class RaftClientTestContext {
     }
 
     void assertVotedCandidate(int epoch, ReplicaKey candidateKey) {
-        ReplicaKey expectedKey = kraftVersion == KRaftVersion.KRAFT_VERSION_0 ?
-            ReplicaKey.of(candidateKey.id(), ReplicaKey.NO_DIRECTORY_ID) :
-            candidateKey;
         assertEquals(
             ElectionState.withVotedCandidate(
                 epoch,
-                expectedKey,
+                persistedVotedKey(candidateKey, kraftVersion),
                 expectedVoters()
             ),
             quorumStateStore.readElectionState().get()
@@ -709,6 +706,26 @@ public final class RaftClientTestContext {
             ElectionState.withElectedLeader(epoch, leaderId, expectedVoters()),
             quorumStateStore.readElectionState().get()
         );
+    }
+
+    public void assertElectedLeaderAndVotedCandidate(int epoch, int leaderId, ReplicaKey candidateKey) {
+        assertEquals(
+            new ElectionState(
+                epoch,
+                OptionalInt.of(leaderId),
+                Optional.of(persistedVotedKey(candidateKey, kraftVersion)),
+                expectedVoters()
+            ),
+            quorumStateStore.readElectionState().get()
+        );
+    }
+
+    private ReplicaKey persistedVotedKey(ReplicaKey replicaKey, KRaftVersion kraftVersion) {
+        if (kraftVersion.featureLevel() == 1) {
+            return replicaKey;
+        }
+
+        return ReplicaKey.of(replicaKey.id(), ReplicaKey.NO_DIRECTORY_ID);
     }
 
     void assertUnknownLeaderAndNoVotedCandidate(int epoch) {

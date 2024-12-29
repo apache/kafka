@@ -173,7 +173,7 @@ public class QuorumStateTest {
         state.transitionToLeader(0L, accumulator);
         assertFalse(state.hasRemoteLeader());
 
-        state.transitionToUnattached(state.epoch() + 1);
+        state.transitionToUnattached(state.epoch() + 1, OptionalInt.empty());
         assertFalse(state.hasRemoteLeader());
 
         state.unattachedAddVotedState(state.epoch(), otherNodeKey);
@@ -206,7 +206,7 @@ public class QuorumStateTest {
         Optional<LogOffsetMetadata> highWatermark = Optional.of(new LogOffsetMetadata(10L));
         assertEquals(highWatermark, state.highWatermark());
 
-        state.transitionToUnattached(6);
+        state.transitionToUnattached(6, OptionalInt.empty());
         assertEquals(highWatermark, state.highWatermark());
 
         state.unattachedAddVotedState(6, otherNodeKey);
@@ -630,7 +630,7 @@ public class QuorumStateTest {
         state.transitionToFollower(1, 1, voters.listeners(1));
         assertTrue(state.isFollower());
 
-        state.transitionToUnattached(2);
+        state.transitionToUnattached(2, OptionalInt.empty());
         assertTrue(state.isUnattached());
     }
 
@@ -667,17 +667,17 @@ public class QuorumStateTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToUnattached(5);
+        state.transitionToUnattached(5, OptionalInt.empty());
         assertTrue(state.isUnattachedNotVoted());
 
         long remainingElectionTimeMs = state.unattachedStateOrThrow().remainingElectionTimeMs(time.milliseconds());
         time.sleep(1000);
 
         // cannot transition to unattached in same epoch
-        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(state.epoch()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(state.epoch(), OptionalInt.empty()));
 
         // can transition to unattached in higher epoch
-        state.transitionToUnattached(6);
+        state.transitionToUnattached(6, OptionalInt.empty());
         assertTrue(state.isUnattachedNotVoted());
         UnattachedState unattachedState = state.unattachedStateOrThrow();
         assertEquals(6, unattachedState.epoch());
@@ -703,7 +703,7 @@ public class QuorumStateTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToUnattached(5);
+        state.transitionToUnattached(5, OptionalInt.empty());
 
         int jitterMs = 2500;
         random.mockNextInt(electionTimeoutMs, jitterMs);
@@ -736,7 +736,7 @@ public class QuorumStateTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToUnattached(5);
+        state.transitionToUnattached(5, OptionalInt.empty());
         assertTrue(state.isUnattachedNotVoted());
 
         assertThrows(IllegalStateException.class, () -> state.unattachedAddVotedState(10, otherNodeKey));
@@ -749,7 +749,7 @@ public class QuorumStateTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToUnattached(5);
+        state.transitionToUnattached(5, OptionalInt.empty());
 
         state.transitionToFollower(
             5,
@@ -773,7 +773,7 @@ public class QuorumStateTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToUnattached(5);
+        state.transitionToUnattached(5, OptionalInt.empty());
 
         state.transitionToFollower(
             8,
@@ -825,7 +825,7 @@ public class QuorumStateTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToUnattached(5);
+        state.transitionToUnattached(5, OptionalInt.empty());
         assertThrows(IllegalStateException.class, () -> state.transitionToCandidate());
     }
 
@@ -853,8 +853,8 @@ public class QuorumStateTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToUnattached(5);
-        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4));
+        state.transitionToUnattached(5, OptionalInt.empty());
+        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4, OptionalInt.empty()));
         assertThrows(IllegalStateException.class, () -> state.unattachedAddVotedState(4, otherNodeKey));
         assertThrows(
             IllegalStateException.class,
@@ -888,7 +888,7 @@ public class QuorumStateTest {
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.unattachedAddVotedState(logEndEpoch, ReplicaKey.of(node1, ReplicaKey.NO_DIRECTORY_ID));
-        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(logEndEpoch));
+        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(logEndEpoch, OptionalInt.empty()));
     }
 
     @ParameterizedTest
@@ -903,7 +903,7 @@ public class QuorumStateTest {
         long remainingElectionTimeMs = state.unattachedStateOrThrow().remainingElectionTimeMs(time.milliseconds());
         time.sleep(1000);
 
-        state.transitionToUnattached(6);
+        state.transitionToUnattached(6, OptionalInt.empty());
         UnattachedState unattachedState = state.unattachedStateOrThrow();
         assertEquals(6, unattachedState.epoch());
 
@@ -1057,7 +1057,7 @@ public class QuorumStateTest {
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 5));
         state.unattachedAddVotedState(5, otherNodeKey);
-        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4));
+        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4, OptionalInt.empty()));
         assertThrows(IllegalStateException.class, () -> state.unattachedAddVotedState(4, otherNodeKey));
         assertThrows(
             IllegalStateException.class,
@@ -1166,7 +1166,7 @@ public class QuorumStateTest {
             node2,
             voters.listeners(node2)
         );
-        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(8));
+        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(8, OptionalInt.empty()));
         assertThrows(IllegalStateException.class, () -> state.unattachedAddVotedState(8, votedKey));
     }
 
@@ -1186,7 +1186,7 @@ public class QuorumStateTest {
 
         int jitterMs = 2500;
         random.mockNextInt(electionTimeoutMs, jitterMs);
-        state.transitionToUnattached(9);
+        state.transitionToUnattached(9, OptionalInt.empty());
         assertTrue(state.isUnattached());
         UnattachedState unattachedState = state.unattachedStateOrThrow();
         assertEquals(9, unattachedState.epoch());
@@ -1407,7 +1407,7 @@ public class QuorumStateTest {
             otherNodeId,
             voters.listeners(otherNodeId)
         );
-        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4));
+        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4, OptionalInt.empty()));
         assertThrows(
             IllegalStateException.class,
             () -> state.transitionToFollower(
@@ -1453,7 +1453,7 @@ public class QuorumStateTest {
 
         assertThrows(
             IllegalStateException.class,
-            () -> state.transitionToUnattached(0)
+            () -> state.transitionToUnattached(0, OptionalInt.empty())
         );
     }
 
@@ -1477,7 +1477,7 @@ public class QuorumStateTest {
         int jitterMs = 2500;
         random.mockNextInt(electionTimeoutMs, jitterMs);
 
-        state.transitionToUnattached(10);
+        state.transitionToUnattached(10, OptionalInt.empty());
         assertTrue(state.isUnattachedNotVoted());
 
         UnattachedState unattached = state.unattachedStateOrThrow();
@@ -1576,7 +1576,7 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToProspective();
 
-        state.transitionToUnattached(state.epoch());
+        state.transitionToUnattached(state.epoch(), OptionalInt.empty());
         assertEquals(
             ElectionState.withUnknownLeader(
                 logEndEpoch,
@@ -1596,7 +1596,7 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToProspective();
 
-        state.transitionToUnattached(20);
+        state.transitionToUnattached(20, OptionalInt.empty());
         assertEquals(
             ElectionState.withUnknownLeader(
                 20,
@@ -1770,7 +1770,7 @@ public class QuorumStateTest {
         state.transitionToProspective();
         state.prospectiveAddVotedState(logEndEpoch, voter1);
 
-        state.transitionToUnattached(logEndEpoch);
+        state.transitionToUnattached(logEndEpoch, OptionalInt.empty());
         assertEquals(
             ElectionState.withVotedCandidate(
                 logEndEpoch,
@@ -1919,7 +1919,7 @@ public class QuorumStateTest {
         );
 
         // transition to unattached
-        state.transitionToUnattached(10);
+        state.transitionToUnattached(10, OptionalInt.empty());
         assertEquals(
             ElectionState.withUnknownLeader(
                 10,
@@ -2073,7 +2073,7 @@ public class QuorumStateTest {
         state.transitionToProspective();
         state.transitionToCandidate();
 
-        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(state.epoch()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(state.epoch(), OptionalInt.empty()));
     }
 
     @ParameterizedTest
@@ -2086,7 +2086,7 @@ public class QuorumStateTest {
         state.transitionToProspective();
         state.transitionToCandidate();
 
-        state.transitionToUnattached(5);
+        state.transitionToUnattached(5, OptionalInt.empty());
         assertEquals(5, state.epoch());
         assertEquals(OptionalInt.empty(), state.leaderId());
         assertEquals(
@@ -2274,10 +2274,10 @@ public class QuorumStateTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToUnattached(5);
+        state.transitionToUnattached(5, OptionalInt.empty());
         state.transitionToProspective();
         state.transitionToCandidate();
-        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4));
+        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4, OptionalInt.empty()));
         assertThrows(
             IllegalStateException.class,
             () -> state.transitionToFollower(
@@ -2313,7 +2313,7 @@ public class QuorumStateTest {
         state.transitionToCandidate();
         state.candidateStateOrThrow().recordGrantedVote(otherNodeId);
         state.transitionToLeader(0L, accumulator);
-        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(state.epoch()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(state.epoch(), OptionalInt.empty()));
     }
 
     @ParameterizedTest
@@ -2327,7 +2327,7 @@ public class QuorumStateTest {
         state.transitionToCandidate();
         state.candidateStateOrThrow().recordGrantedVote(otherNodeId);
         state.transitionToLeader(0L, accumulator);
-        state.transitionToUnattached(5);
+        state.transitionToUnattached(5, OptionalInt.empty());
         assertEquals(5, state.epoch());
         assertEquals(OptionalInt.empty(), state.leaderId());
         assertEquals(
@@ -2476,12 +2476,12 @@ public class QuorumStateTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToUnattached(5);
+        state.transitionToUnattached(5, OptionalInt.empty());
         state.transitionToProspective();
         state.transitionToCandidate();
         state.candidateStateOrThrow().recordGrantedVote(otherNodeKey.id());
         state.transitionToLeader(0L, accumulator);
-        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4));
+        assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4, OptionalInt.empty()));
         assertThrows(
             IllegalStateException.class,
             () -> state.transitionToFollower(
@@ -2538,7 +2538,7 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         assertTrue(state.isObserver());
 
-        state.transitionToUnattached(2);
+        state.transitionToUnattached(2, OptionalInt.empty());
         state.transitionToFollower(3, node1, voters.listeners(node1));
         assertTrue(state.isFollower());
         FollowerState followerState = state.followerStateOrThrow();
@@ -2613,7 +2613,7 @@ public class QuorumStateTest {
             node1,
             voters.listeners(node1)
         );
-        state.transitionToUnattached(3);
+        state.transitionToUnattached(3, OptionalInt.empty());
         assertTrue(state.isUnattached());
         UnattachedState unattachedState = state.unattachedStateOrThrow();
         assertEquals(3, unattachedState.epoch());

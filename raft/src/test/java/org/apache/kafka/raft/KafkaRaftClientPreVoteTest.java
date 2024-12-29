@@ -902,27 +902,13 @@ public class KafkaRaftClientPreVoteTest {
             voteRequest.correlationId(),
             voteRequest.destination(),
             context.voteResponse(false, OptionalInt.empty(), epoch));
-        // handle vote response and mark rejected vote
-        context.client.poll();
-        // transition to unattached after seeing election has failed
         context.client.poll();
         assertTrue(context.client.quorum().isUnattached());
 
         // After election times out again, replica will transition back to prospective and send PreVote requests
         context.time.sleep(context.electionTimeoutMs() * 2L);
         context.pollUntilRequest();
-        voteRequest = context.assertSentVoteRequest(epoch, 0, 0L, 1);
-
-        // If prospective receive vote response with leaderId but empty leader endpoint, it will transition to
-        // unattached with leader immediately
-        context.deliverResponse(
-            voteRequest.correlationId(),
-            voteRequest.destination(),
-            context.voteResponse(false, OptionalInt.of(localId + 2), epoch + 1));
-        context.client.poll();
-        assertTrue(context.client.quorum().isUnattached());
-        assertEquals(epoch + 1, context.currentEpoch());
-        context.assertElectedLeader(epoch + 1, localId + 2);
+        context.assertSentVoteRequest(epoch, 0, 0L, 1);
     }
 
     @ParameterizedTest

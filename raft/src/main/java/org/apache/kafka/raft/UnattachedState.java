@@ -129,7 +129,8 @@ public class UnattachedState implements EpochState {
 
     @Override
     public String toString() {
-        return String.format("Unattached(epoch=%d, leaderId=%s, votedKey=%s, voters=%s, " +
+        return String.format(
+            "UnattachedState(epoch=%d, leaderId=%s, votedKey=%s, voters=%s, " +
             "electionTimeoutMs=%d, highWatermark=%s)",
             epoch,
             leaderId,

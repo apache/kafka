@@ -88,10 +88,6 @@ public class CandidateState implements NomineeState {
         return localId;
     }
 
-    public int retries() {
-        return retries;
-    }
-
     /**
      * Check if the candidate is backing off for the next election
      */
@@ -99,26 +95,8 @@ public class CandidateState implements NomineeState {
         return isBackingOff;
     }
 
-    /**
-     * Record the current election has failed since we've either received sufficient rejecting voters or election timed out
-     */
-    public void startBackingOff(long currentTimeMs, long backoffDurationMs) {
-        this.backoffTimer.update(currentTimeMs);
-        this.backoffTimer.reset(backoffDurationMs);
-        this.isBackingOff = true;
-    }
-
-    public boolean isBackoffComplete(long currentTimeMs) {
-        backoffTimer.update(currentTimeMs);
-        return backoffTimer.isExpired();
-    }
-
-    public long remainingBackoffMs(long currentTimeMs) {
-        if (!isBackingOff) {
-            throw new IllegalStateException("Candidate is not currently backing off");
-        }
-        backoffTimer.update(currentTimeMs);
-        return backoffTimer.remainingMs();
+    public int retries() {
+        return retries;
     }
 
     @Override
@@ -144,10 +122,32 @@ public class CandidateState implements NomineeState {
         return epochElection().recordVote(remoteNodeId, false);
     }
 
+    /**
+     * Record the current election has failed since we've either received sufficient rejecting voters or election timed out
+     */
+    public void startBackingOff(long currentTimeMs, long backoffDurationMs) {
+        this.backoffTimer.update(currentTimeMs);
+        this.backoffTimer.reset(backoffDurationMs);
+        this.isBackingOff = true;
+    }
+
     @Override
     public boolean hasElectionTimeoutExpired(long currentTimeMs) {
         electionTimer.update(currentTimeMs);
         return electionTimer.isExpired();
+    }
+
+    public boolean isBackoffComplete(long currentTimeMs) {
+        backoffTimer.update(currentTimeMs);
+        return backoffTimer.isExpired();
+    }
+
+    public long remainingBackoffMs(long currentTimeMs) {
+        if (!isBackingOff) {
+            throw new IllegalStateException("Candidate is not currently backing off");
+        }
+        backoffTimer.update(currentTimeMs);
+        return backoffTimer.remainingMs();
     }
 
     @Override
@@ -205,12 +205,13 @@ public class CandidateState implements NomineeState {
     @Override
     public String toString() {
         return String.format(
-            "Candidate(localId=%d, localDirectoryId=%s, epoch=%d, voteStates=%s, " +
+            "CandidateState(localId=%d, localDirectoryId=%s, epoch=%d, retries=%d, epochElection=%s, " +
             "highWatermark=%s, electionTimeoutMs=%d)",
             localId,
             localDirectoryId,
             epoch,
-            epochElection().voterStates(),
+            retries,
+            epochElection(),
             highWatermark,
             electionTimeoutMs
         );

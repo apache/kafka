@@ -33,10 +33,12 @@ public class EpochElection {
 
     public EpochElection(Set<ReplicaKey> voters) {
         this.voterStates = voters.stream()
-            .collect(Collectors.toMap(
-                ReplicaKey::id,
-                VoterState::new
-            ));
+            .collect(
+                Collectors.toMap(
+                    ReplicaKey::id,
+                    VoterState::new
+                )
+            );
     }
 
     /**
@@ -165,6 +167,17 @@ public class EpochElection {
         return voterStates.size() / 2 + 1;
     }
 
+    @Override
+    public String toString() {
+        return String.format(
+            "EpochElection(%s)",
+            voterStates.values().stream()
+                .map(VoterState::toString)
+                .collect(
+                    Collectors.joining(", "))
+        );
+    }
+
     private static final class VoterState {
         private final ReplicaKey replicaKey;
         private State state = State.UNRECORDED;
@@ -189,6 +202,15 @@ public class EpochElection {
             UNRECORDED,
             GRANTED,
             REJECTED
+        }
+
+        @Override
+        public String toString() {
+            return String.format(
+                "VoterState(%s, state=%s)",
+                replicaKey,
+                state
+            );
         }
     }
 }
