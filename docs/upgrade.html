@@ -63,6 +63,8 @@
                         </li>
                         <li>The <code>log.message.format.version</code> and <code>message.format.version</code> configs were removed.
                         </li>
+                        <li>The function <code>onNewBatch</code> in <code>org.apache.kafka.clients.producer.Partitioner</code> class was removed.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Broker</b>
@@ -188,6 +190,10 @@
                         <li>The <code>committed(TopicPartition)</code> and <code>committed(TopicPartition, Duration)</code> methods were removed from the consumer.
                             Please use <code>committed(Set&ltTopicPartition&gt)</code> and <code>committed(Set&ltTopicPartition&gt, Duration)</code> instead.
                         </li>
+                        <li>
+                            The <code>setException(KafkaException)</code> method was removed from the <code>org.apache.kafka.clients.consumer.MockConsumer</code>.
+                            Please use <code>setPollException(KafkaException)</code> instead.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Producer</b>
@@ -211,12 +217,34 @@
                             <code>DEAD</code> if the group ID was not found. In Apache Kafka 4.0, the <code>GroupIdNotFoundException</code>
                             is thrown instead as part of the support for new types of group.
                         </li>
-                        <li>The <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, boolean)</code> method were removed.
+                        <li>The <code>org.apache.kafka.clients.admin.DeleteTopicsResult.values()</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.DeleteTopicsResult.topicNameValues()</code> instead.
+                        <li>The <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, boolean)</code> method was removed.
                             Please use <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, Uuid, boolean)</code> instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions.topicPartitions(List&lt;TopicPartition&gt;)</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.Admin.listConsumerGroupOffsets(Map&lt;String, ListConsumerGroupOffsetsSpec&gt;, ListConsumerGroupOffsetsOptions)</code> instead.
                         </li>
                         <li>
                             The deprecated <code>dryRun</code> methods were removed from the <code>org.apache.kafka.clients.admin.UpdateFeaturesOptions</code>.
                             Please use <code>validateOnly</code> instead.
+                        </li>
+                        <li>The constructor <code>org.apache.kafka.clients.admin.FeatureUpdate</code> with short and boolean arguments was removed.
+                            Please use the constructor that accepts short and the specified UpgradeType enum instead.
+                        </li>
+                        <li>
+                            The <code>allowDowngrade</code> method was removed from the <code>org.apache.kafka.clients.admin.FeatureUpdate</code>.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.admin.DescribeTopicsResult.DescribeTopicsResult(Map&lt;String, KafkaFuture&lt;TopicDescription&gt;&gt;)</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.DescribeTopicsResult.DescribeTopicsResult(Map&lt;Uuid, KafkaFuture&lt;TopicDescription&gt;&gt;, Map&lt;String, KafkaFuture&lt;TopicDescription&gt;&gt;)</code> instead.
+                        </li>
+                        <li>
+                            The <code>values()</code> method was removed from the <code>org.apache.kafka.clients.admin.DescribeTopicsResult</code>.
+                            Please use <code>topicNameValues()</code> instead.
+                        </li>
+                        <li>
+                            The <code>all()</code> method was removed from the <code>org.apache.kafka.clients.admin.DescribeTopicsResult</code>.
+                            Please use <code>allTopicNames()</code> instead.
                         </li>
                     </ul>
                 </li>
@@ -225,15 +253,17 @@
         <li>Other changes:
             <ul>
                 <li>
+                    The minimum Java version required by clients and streams applications has been increased from Java 8 to Java 11
+                    while brokers, connect and tools now require Java 17.
+                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> and
+                    <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510">KIP-1013</a> for more details.
+                </li>
+                <li>
                     Java 23 support has been added in Apache Kafka 4.0
                 </li>
                 <li>
                     Scala 2.12 support has been removed in Apache Kafka 4.0
                     See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218">KIP-751</a> for more details
-                </li>
-                <li>
-                    Java 8 support has been removed in Apache Kafka 4.0
-                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> for more details
                 </li>
                 <li>
                     KafkaLog4jAppender has been removed, users should migrate to the log4j2 appender

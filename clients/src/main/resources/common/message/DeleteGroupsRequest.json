@@ -18,12 +18,10 @@
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "DeleteGroupsRequest",
-  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
-  //
   // Version 1 is the same as version 0.
   //
   // Version 2 is the first flexible version.
-  "validVersions": "1-2",
+  "validVersions": "0-2",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "GroupsNames", "type": "[]string", "versions": "0+", "entityType": "groupId",

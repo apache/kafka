@@ -776,7 +776,7 @@ public class RequestConvertToJson {
             header.data(), header.headerVersion(), false
         );
         node.set("requestApiKeyName", new TextNode(header.apiKey().toString()));
-        if (header.apiKey().isVersionDeprecated(header.apiVersion())) {
+        if (header.isApiVersionDeprecated()) {
             node.set("requestApiVersionDeprecated", BooleanNode.TRUE);
         }
         return node;
