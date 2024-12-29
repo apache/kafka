@@ -432,7 +432,7 @@ public class ConnectorConfig extends AbstractConfig {
         try {
             VersionRange range = PluginUtils.connectorVersionRequirement(getString(versionConfig));
             VersionRange connectorRange = PluginUtils.connectorVersionRequirement(getString(CONNECTOR_VERSION));
-            return (T) plugins.newPlugin(classConfig, range, plugins.pluginLoader(getClass(CONNECTOR_CLASS_CONFIG).getName(), connectorRange));
+            return (T) plugins.newPlugin(getClass(classConfig).getName(), range, plugins.pluginLoader(getString(CONNECTOR_CLASS_CONFIG), connectorRange));
         } catch (Exception e) {
             throw new ConnectException(e);
         }
