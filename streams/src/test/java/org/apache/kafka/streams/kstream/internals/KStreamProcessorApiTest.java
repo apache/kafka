@@ -46,7 +46,7 @@ import java.util.Set;
 import static java.util.Arrays.asList;
 
 
-public class KStreamNewProcessorApiTest {
+public class KStreamProcessorApiTest {
 
     @Test
     void shouldGetStateStoreWithConnectedStoreProvider() {

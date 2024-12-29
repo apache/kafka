@@ -49,7 +49,6 @@ ext {
   gradleVersion = versions.gradle
   minClientJavaVersion = 11
   minNonClientJavaVersion = 17
-  // The connect:api module also belongs to the clients module, but it has already been bumped to JDK 17 as part of KIP-1032.
   modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams-scala", ":test-common:test-common-runtime"]
 
   buildVersionFileName = "kafka-version.properties"
@@ -1560,7 +1559,8 @@ project(':group-coordinator') {
     args = [ "-p", "org.apache.kafka.coordinator.group.generated",
              "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/group/generated",
              "-i", "src/main/resources/common/message",
-             "-m", "MessageDataGenerator", "JsonConverterGenerator"
+             "-m", "MessageDataGenerator", "JsonConverterGenerator",
+             "-t", "CoordinatorRecordTypeGenerator"
     ]
     inputs.dir("src/main/resources/common/message")
         .withPropertyName("messages")
@@ -1671,6 +1671,7 @@ project(':transaction-coordinator') {
     implementation libs.jacksonDatabind
     implementation project(':clients')
     implementation project(':server-common')
+    implementation project(':coordinator-common')
     implementation libs.slf4jApi
 
     testImplementation libs.junitJupiter
@@ -2284,7 +2285,6 @@ project(':storage') {
     implementation project(':storage:storage-api')
     implementation project(':server-common')
     implementation project(':clients')
-    implementation project(':transaction-coordinator')
     implementation(libs.caffeine) {
       exclude group: 'org.checkerframework', module: 'checker-qual'
     }
@@ -2766,7 +2766,7 @@ project(':streams') {
   task testAll(
     dependsOn: [
             ':streams:test',
-            ':streams:integration-tests',
+            ':streams:integration-tests:test',
             ':streams:test-utils:test',
             ':streams:streams-scala:test',
             ':streams:upgrade-system-tests-0110:test',

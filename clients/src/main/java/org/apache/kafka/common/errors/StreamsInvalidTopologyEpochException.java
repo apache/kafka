@@ -16,29 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
-/**
- * This server is not the leader for the given partition.
- * @deprecated since 2.6. Use {@link NotLeaderOrFollowerException}.
- */
-@Deprecated
-public class NotLeaderForPartitionException extends InvalidMetadataException {
-
-    private static final long serialVersionUID = 1L;
-
-    public NotLeaderForPartitionException() {
-        super();
-    }
-
-    public NotLeaderForPartitionException(String message) {
+public class StreamsInvalidTopologyEpochException extends ApiException {
+    public StreamsInvalidTopologyEpochException(String message) {
         super(message);
     }
-
-    public NotLeaderForPartitionException(Throwable cause) {
-        super(cause);
-    }
-
-    public NotLeaderForPartitionException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

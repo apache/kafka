@@ -55,6 +55,7 @@ import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
@@ -496,8 +497,8 @@ public class OffsetMetadataManagerTest {
                 throw new IllegalStateException("Received a null key in " + record);
             }
 
-            switch (key.version()) {
-                case OffsetCommitKey.HIGHEST_SUPPORTED_VERSION:
+            switch (CoordinatorRecordType.fromId(key.version())) {
+                case OFFSET_COMMIT:
                     offsetMetadataManager.replay(
                         lastWrittenOffset,
                         producerId,
@@ -1277,7 +1278,6 @@ public class OffsetMetadataManagerTest {
                                 .setCommittedOffset(100L)
                                 .setCommittedLeaderEpoch(10)
                                 .setCommittedMetadata("metadata")
-                                .setCommitTimestamp(context.time.milliseconds())
                         ))
                 ))
         );
@@ -1346,14 +1346,12 @@ public class OffsetMetadataManagerTest {
                                 .setPartitionIndex(0)
                                 .setCommittedOffset(100L)
                                 .setCommittedLeaderEpoch(10)
-                                .setCommittedMetadata("toolarge")
-                                .setCommitTimestamp(context.time.milliseconds()),
+                                .setCommittedMetadata("toolarge"),
                             new OffsetCommitRequestData.OffsetCommitRequestPartition()
                                 .setPartitionIndex(1)
                                 .setCommittedOffset(100L)
                                 .setCommittedLeaderEpoch(10)
                                 .setCommittedMetadata("small")
-                                .setCommitTimestamp(context.time.milliseconds())
                         ))
                 ))
         );

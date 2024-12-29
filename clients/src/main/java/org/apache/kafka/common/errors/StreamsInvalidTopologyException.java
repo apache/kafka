@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/**
- * This package is deprecated.
- * See {@link org.apache.kafka.common.security.oauthbearer}
- */
-package org.apache.kafka.common.security.oauthbearer.secured;
+package org.apache.kafka.common.errors;
+
+public class StreamsInvalidTopologyException extends ApiException {
+    public StreamsInvalidTopologyException(String message) {
+        super(message);
+    }
+}

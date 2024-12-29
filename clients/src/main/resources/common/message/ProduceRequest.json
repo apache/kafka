@@ -18,13 +18,15 @@
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "ProduceRequest",
+  // Versions 0-2 were removed in Apache Kafka 4.0, Version 3 is the new baseline.
+  //
   // Version 1 and 2 are the same as version 0.
   //
   // Version 3 adds the transactional ID, which is used for authorization when attempting to write
   // transactional data.  Version 3 also adds support for Kafka Message Format v2.
   //
   // Version 4 is the same as version 3, but the requester must be prepared to handle a
-  // KAFKA_STORAGE_ERROR. 
+  // KAFKA_STORAGE_ERROR.
   //
   // Version 5 and 6 are the same as version 3.
   //
@@ -42,8 +44,7 @@
   // transaction V2 (KIP_890 part 2) is enabled, the produce request will also include the function for a
   // AddPartitionsToTxn call. If V2 is disabled, the client can't use produce request version higher than 11 within
   // a transaction.
-  "validVersions": "0-12",
-  "deprecatedVersions": "0-6",
+  "validVersions": "3-12",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "3+", "nullableVersions": "3+", "default": "null", "entityType": "transactionalId",

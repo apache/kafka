@@ -106,7 +106,7 @@ public class SaslServerAuthenticator implements Authenticator {
      * state and likewise ends at either {@link #COMPLETE} or {@link #FAILED}.
      */
     private enum SaslState {
-        INITIAL_REQUEST,               // May be GSSAPI token, SaslHandshake or ApiVersions for authentication
+        INITIAL_REQUEST,               // May be SaslHandshake or ApiVersions for authentication
         HANDSHAKE_OR_VERSIONS_REQUEST, // May be SaslHandshake or ApiVersions
         HANDSHAKE_REQUEST,             // After an ApiVersions request, next request must be SaslHandshake
         AUTHENTICATE,                  // Authentication tokens (SaslHandshake v1 and above indicate SaslAuthenticate headers)
@@ -277,15 +277,11 @@ public class SaslServerAuthenticator implements Authenticator {
                 case REAUTH_PROCESS_HANDSHAKE:
                 case HANDSHAKE_OR_VERSIONS_REQUEST:
                 case HANDSHAKE_REQUEST:
+                case INITIAL_REQUEST:
                     handleKafkaRequest(clientToken);
                     break;
                 case REAUTH_BAD_MECHANISM:
                     throw new SaslAuthenticationException(reauthInfo.badMechanismErrorMessage);
-                case INITIAL_REQUEST:
-                    if (handleKafkaRequest(clientToken))
-                        break;
-                    // For default GSSAPI, fall through to authenticate using the client token as the first GSSAPI packet.
-                    // This is required for interoperability with 0.9.0.x clients which do not send handshake request
                 case AUTHENTICATE:
                     handleSaslToken(clientToken);
                     // When the authentication exchange is complete and no more tokens are expected from the client,
@@ -503,63 +499,51 @@ public class SaslServerAuthenticator implements Authenticator {
         }
     }
 
-    private boolean handleKafkaRequest(byte[] requestBytes) throws IOException, AuthenticationException {
-        boolean isKafkaRequest = false;
-        String clientMechanism = null;
+    /**
+     * @throws InvalidRequestException if the request is not in Kafka format or if the API key is invalid. Clients
+     * that support SASL without support for KIP-43 (e.g. Kafka Clients 0.9.x) are in the former bucket - the first
+     * packet such clients send is a GSSAPI token starting with 0x60.
+     */
+    private void handleKafkaRequest(byte[] requestBytes) throws IOException, AuthenticationException {
         try {
             ByteBuffer requestBuffer = ByteBuffer.wrap(requestBytes);
             RequestHeader header = RequestHeader.parse(requestBuffer);
             ApiKeys apiKey = header.apiKey();
 
-            // A valid Kafka request header was received. SASL authentication tokens are now expected only
-            // following a SaslHandshakeRequest since this is not a GSSAPI client token from a Kafka 0.9.0.x client.
-            if (saslState == SaslState.INITIAL_REQUEST)
-                setSaslState(SaslState.HANDSHAKE_OR_VERSIONS_REQUEST);
-            isKafkaRequest = true;
-
             // Raise an error prior to parsing if the api cannot be handled at this layer. This avoids
             // unnecessary exposure to some of the more complex schema types.
             if (apiKey != ApiKeys.API_VERSIONS && apiKey != ApiKeys.SASL_HANDSHAKE)
-                throw new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
+                throw new InvalidRequestException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
 
             LOG.debug("Handling Kafka request {} during {}", apiKey, reauthInfo.authenticationOrReauthenticationText());
-
 
             RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(), Optional.of(clientPort()),
                     KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
+
+            // A valid Kafka request was received, we can now update the sasl state
+            if (saslState == SaslState.INITIAL_REQUEST)
+                setSaslState(SaslState.HANDSHAKE_OR_VERSIONS_REQUEST);
+
             if (apiKey == ApiKeys.API_VERSIONS)
                 handleApiVersionsRequest(requestContext, (ApiVersionsRequest) requestAndSize.request);
-            else
-                clientMechanism = handleHandshakeRequest(requestContext, (SaslHandshakeRequest) requestAndSize.request);
+            else {
+                String clientMechanism = handleHandshakeRequest(requestContext, (SaslHandshakeRequest) requestAndSize.request);
+                if (!reauthInfo.reauthenticating() || reauthInfo.saslMechanismUnchanged(clientMechanism)) {
+                    createSaslServer(clientMechanism);
+                    setSaslState(SaslState.AUTHENTICATE);
+                }
+            }
         } catch (InvalidRequestException e) {
             if (saslState == SaslState.INITIAL_REQUEST) {
-                // InvalidRequestException is thrown if the request is not in Kafka format or if the API key
-                // is invalid. For compatibility with 0.9.0.x where the first packet is a GSSAPI token
-                // starting with 0x60, revert to GSSAPI for both these exceptions.
-                if (LOG.isDebugEnabled()) {
-                    StringBuilder tokenBuilder = new StringBuilder();
-                    for (byte b : requestBytes) {
-                        tokenBuilder.append(String.format("%02x", b));
-                        if (tokenBuilder.length() >= 20)
-                             break;
-                    }
-                    LOG.debug("Received client packet of length {} starting with bytes 0x{}, process as GSSAPI packet", requestBytes.length, tokenBuilder);
-                }
-                if (enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM)) {
-                    LOG.debug("First client packet is not a SASL mechanism request, using default mechanism GSSAPI");
-                    clientMechanism = SaslConfigs.GSSAPI_MECHANISM;
-                } else
-                    throw new UnsupportedSaslMechanismException("Exception handling first SASL packet from client, GSSAPI is not supported by server", e);
-            } else
-                throw e;
+                // InvalidRequestException is thrown if the request is not in Kafka format or if the API key is invalid.
+                // If it's the initial request, this could be an ancient client (see method documentation for more details),
+                // a client configured with the wrong security protocol or a non kafka-client altogether (eg http client).
+                throw new InvalidRequestException("Invalid request, potential reasons: kafka client configured with the " +
+                    "wrong security protocol, it does not support KIP-43 or it is not a kafka client.", e);
+            }
+            throw e;
         }
-        if (clientMechanism != null && (!reauthInfo.reauthenticating()
-                || reauthInfo.saslMechanismUnchanged(clientMechanism))) {
-            createSaslServer(clientMechanism);
-            setSaslState(SaslState.AUTHENTICATE);
-        }
-        return isKafkaRequest;
     }
 
     private String handleHandshakeRequest(RequestContext context, SaslHandshakeRequest handshakeRequest) throws IOException, UnsupportedSaslMechanismException {

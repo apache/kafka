@@ -14,14 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.errors;
 
-package org.apache.kafka.common.security.oauthbearer.secured;
-
-/**
- * @deprecated See org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler
- */
-
-@Deprecated
-public class OAuthBearerLoginCallbackHandler extends org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler {
-
+public class StreamsTopologyFencedException extends ApiException {
+    public StreamsTopologyFencedException(String message) {
+        super(message);
+    }
 }
