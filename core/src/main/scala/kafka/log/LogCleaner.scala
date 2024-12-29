@@ -684,7 +684,7 @@ private[log] class Cleaner(val id: Int,
 
         try {
           cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainLegacyDeletesAndTxnMarkers, log.config.deleteRetentionMs,
-            log.config.maxMessageSize, log.config.messageTimestampType, transactionMetadata, lastOffsetOfActiveProducers,
+            log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers,
             upperBoundOffsetOfCleaningRound, stats, currentTime = currentTime)
         } catch {
           case e: LogSegmentOffsetOverflowException =>
@@ -742,7 +742,6 @@ private[log] class Cleaner(val id: Int,
                              retainLegacyDeletesAndTxnMarkers: Boolean,
                              deleteRetentionMs: Long,
                              maxLogMessageSize: Int,
-                             timestampTypeConfig: TimestampType,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: mutable.Map[Long, LastRecord],
                              upperBoundOffsetOfCleaningRound: Long,
