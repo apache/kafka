@@ -1477,38 +1477,6 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testRejectsLargeNodeIdForZkBasedCaseWithAutoGenEnabled(): Unit = {
-    // Generation of Broker IDs is supported when using ZooKeeper-based controllers,
-    // so pick a broker ID greater than reserved.broker.max.id, which defaults to 1000,
-    // and make sure it is not allowed with broker.id.generation.enable=true (true is the default)
-    val largeBrokerId = 2000
-    val props = TestUtils.createBrokerConfig(largeBrokerId, null, port = TestUtils.MockZkPort)
-    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, listeners)
-    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, listeners)
-    assertFalse(isValidKafkaConfig(props))
-  }
-
-  @Test
-  def testZookeeperConnectRequiredIfEmptyProcessRoles(): Unit = {
-    val props = new Properties()
-    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092")
-    assertFalse(isValidKafkaConfig(props))
-  }
-
-  @Test
-  def testZookeeperConnectNotRequiredIfNonEmptyProcessRoles(): Unit = {
-    val props = new Properties()
-    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
-    KafkaConfig.fromProps(props)
-  }
-
-  @Test
   def testCustomMetadataLogDir(): Unit = {
     val metadataDir = "/path/to/metadata/dir"
     val dataDir = "/path/to/data/dir"
