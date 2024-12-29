@@ -48,9 +48,7 @@ import java.util.Set;
  */
 public interface StoreFactory {
 
-    default void configure(final StreamsConfig config) {
-        // do nothing
-    }
+    void configure(final StreamsConfig config);
 
     StoreBuilder<?> builder();
 
@@ -86,6 +84,10 @@ public interface StoreFactory {
 
         public StoreFactory storeFactory() {
             return storeFactory;
+        }
+
+        public void configure(final StreamsConfig config) {
+            storeFactory.configure(config);
         }
 
         @Override
