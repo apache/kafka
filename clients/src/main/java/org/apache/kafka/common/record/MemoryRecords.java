@@ -137,12 +137,8 @@ public class MemoryRecords extends AbstractRecords {
     /**
      * Filter the records into the provided ByteBuffer.
      *
-     * @param partition                   The partition that is filtered (used only for logging)
      * @param filter                      The filter function
      * @param destinationBuffer           The byte buffer to write the filtered records to
-     * @param maxRecordBatchSize          The maximum record batch size. Note this is not a hard limit: if a batch
-     *                                    exceeds this after filtering, we log a warning, but the batch will still be
-     *                                    created.
      * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported. For small
      *                                    record batches, allocating a potentially large buffer (64 KB for LZ4) will
      *                                    dominate the cost of decompressing and iterating over the records in the
@@ -150,19 +146,18 @@ public class MemoryRecords extends AbstractRecords {
      *                                    performance impact.
      * @return A FilterResult with a summary of the output (for metrics) and potentially an overflow buffer
      */
-    public FilterResult filterTo(TopicPartition partition, RecordFilter filter, ByteBuffer destinationBuffer,
-                                 int maxRecordBatchSize, TimestampType timestampTypeConfig,
+    public FilterResult filterTo(RecordFilter filter, ByteBuffer destinationBuffer, TimestampType timestampTypeConfig,
                                  BufferSupplier decompressionBufferSupplier) {
-        return filterTo(partition, batches(), filter, destinationBuffer, maxRecordBatchSize, timestampTypeConfig, decompressionBufferSupplier);
+        return filterTo(batches(), filter, destinationBuffer, timestampTypeConfig, decompressionBufferSupplier);
     }
 
     /**
      * Note: This method is also used to convert the first timestamp of the batch (which is usually the timestamp of the first record)
      * to the delete horizon of the tombstones or txn markers which are present in the batch.
      */
-    private static FilterResult filterTo(TopicPartition partition, Iterable<MutableRecordBatch> batches,
-                                         RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize,
-                                         TimestampType timestampTypeConfig, BufferSupplier decompressionBufferSupplier) {
+    private static FilterResult filterTo(Iterable<MutableRecordBatch> batches, RecordFilter filter,
+                                         ByteBuffer destinationBuffer, TimestampType timestampTypeConfig,
+                                         BufferSupplier decompressionBufferSupplier) {
         FilterResult filterResult = new FilterResult(destinationBuffer);
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
         for (MutableRecordBatch batch : batches) {
