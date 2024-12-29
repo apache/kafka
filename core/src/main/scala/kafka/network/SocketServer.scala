@@ -206,7 +206,7 @@ class SocketServer(
     // Construct a future that will be completed when all Acceptors have been successfully started.
     // Alternately, if any of them fail to start, this future will be completed exceptionally.
     val enableFuture = new CompletableFuture[Void]
-    FutureUtils.chainFuture(CompletableFuture.allOf(dataPlaneAcceptors.values().asScala.toSeq.map(_.startedFuture).toArray: _*), enableFuture)
+    FutureUtils.chainFuture(CompletableFuture.allOf(dataPlaneAcceptors.values().asScala.toArray.map(_.startedFuture): _*), enableFuture)
     enableFuture
   }
 
