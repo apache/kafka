@@ -146,9 +146,8 @@ public class MemoryRecords extends AbstractRecords {
      *                                    performance impact.
      * @return A FilterResult with a summary of the output (for metrics) and potentially an overflow buffer
      */
-    public FilterResult filterTo(RecordFilter filter, ByteBuffer destinationBuffer, TimestampType timestampTypeConfig,
-                                 BufferSupplier decompressionBufferSupplier) {
-        return filterTo(batches(), filter, destinationBuffer, timestampTypeConfig, decompressionBufferSupplier);
+    public FilterResult filterTo(RecordFilter filter, ByteBuffer destinationBuffer, BufferSupplier decompressionBufferSupplier) {
+        return filterTo(batches(), filter, destinationBuffer, decompressionBufferSupplier);
     }
 
     /**
@@ -156,8 +155,7 @@ public class MemoryRecords extends AbstractRecords {
      * to the delete horizon of the tombstones or txn markers which are present in the batch.
      */
     private static FilterResult filterTo(Iterable<MutableRecordBatch> batches, RecordFilter filter,
-                                         ByteBuffer destinationBuffer, TimestampType timestampTypeConfig,
-                                         BufferSupplier decompressionBufferSupplier) {
+                                         ByteBuffer destinationBuffer, BufferSupplier decompressionBufferSupplier) {
         FilterResult filterResult = new FilterResult(destinationBuffer);
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
         for (MutableRecordBatch batch : batches) {
@@ -193,7 +191,7 @@ public class MemoryRecords extends AbstractRecords {
                     else
                         deleteHorizonMs = batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP);
                     try (final MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords,
-                            timestampTypeConfig, bufferOutputStream, deleteHorizonMs)) {
+                            bufferOutputStream, deleteHorizonMs)) {
                         MemoryRecords records = builder.build();
                         int filteredBatchSize = records.sizeInBytes();
                         MemoryRecordsBuilder.RecordsInfo info = builder.info();
@@ -274,13 +272,15 @@ public class MemoryRecords extends AbstractRecords {
 
     private static MemoryRecordsBuilder buildRetainedRecordsInto(RecordBatch originalBatch,
                                                                  List<Record> retainedRecords,
-                                                                 TimestampType timestampTypeConfig,
                                                                  ByteBufferOutputStream bufferOutputStream,
                                                                  final long deleteHorizonMs) {
         Compression compression = Compression.of(originalBatch.compressionType()).build();
-        // v0 has no timestamp type, use the topic config in that case (like we do when we up-convert produce requests)
+        // V0 has no timestamp type or timestamp, so we set the timestamp to CREATE_TIME and timestamp to NO_TIMESTAMP.
+        // Note that this differs from produce up-conversion where the timestamp type topic config is used and the log append
+        // time is generated if the config is LOG_APPEND_TIME. The reason for the different behavior is that there is
+        // no appropriate log append time we can generate at compaction time.
         TimestampType timestampType = originalBatch.timestampType() == TimestampType.NO_TIMESTAMP_TYPE ?
-                timestampTypeConfig : originalBatch.timestampType();
+                TimestampType.CREATE_TIME : originalBatch.timestampType();
         long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ?
                 originalBatch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
         long baseOffset = originalBatch.magic() >= RecordBatch.MAGIC_VALUE_V2 ?
