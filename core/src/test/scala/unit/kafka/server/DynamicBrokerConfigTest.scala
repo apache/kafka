@@ -26,7 +26,6 @@ import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.types.Password
@@ -203,7 +202,7 @@ class DynamicBrokerConfigTest {
 
   @Test
   def testUpdateRemoteLogManagerDynamicThreadPool(): Unit = {
-    val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val origProps = TestUtils.createBrokerConfig(0, null, port = 8181)
     val config = KafkaConfig(origProps)
     assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE, config.remoteLogManagerConfig.remoteLogManagerCopierThreadPoolSize())
     assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE, config.remoteLogManagerConfig.remoteLogManagerExpirationThreadPoolSize())
@@ -242,7 +241,7 @@ class DynamicBrokerConfigTest {
 
   @Test
   def testRemoteLogDynamicThreadPoolWithInvalidValues(): Unit = {
-    val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val origProps = TestUtils.createBrokerConfig(0, null, port = 8181)
     val config = KafkaConfig(origProps)
 
     val serverMock = mock(classOf[KafkaBroker])
@@ -676,24 +675,6 @@ class DynamicBrokerConfigTest {
       DynamicBrokerConfig.brokerConfigSynonyms("some.config", matchListenerOverride = true))
     assertEquals(List(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG),
       DynamicBrokerConfig.brokerConfigSynonyms(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, matchListenerOverride = true))
-  }
-
-  @Test
-  def testDynamicConfigInitializationWithoutConfigsInZK(): Unit = {
-    val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
-    when(zkClient.getEntityConfigs(anyString(), anyString())).thenReturn(new java.util.Properties())
-
-    val initialProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
-    initialProps.remove(ServerConfigs.BACKGROUND_THREADS_CONFIG)
-    val oldConfig =  KafkaConfig.fromProps(initialProps)
-    val dynamicBrokerConfig = new DynamicBrokerConfig(oldConfig)
-    dynamicBrokerConfig.initialize(Some(zkClient), None)
-    dynamicBrokerConfig.addBrokerReconfigurable(new TestDynamicThreadPool)
-
-    val newprops = new Properties()
-    newprops.put(ServerConfigs.NUM_IO_THREADS_CONFIG, "10")
-    newprops.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "100")
-    dynamicBrokerConfig.updateBrokerConfig(0, newprops)
   }
 
   @Test
