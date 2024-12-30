@@ -18,9 +18,7 @@ import kafka.api.GroupedUserPrincipalBuilder._
 import kafka.api.GroupedUserQuotaCallback._
 import kafka.security.{JaasModule, JaasTestUtils}
 import kafka.server._
-import kafka.utils.TestUtils.{waitForAllPartitionsMetadata, waitUntilTrue}
 import kafka.utils.{Logging, TestInfoUtils, TestUtils}
-import kafka.zk.AdminZkClient
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
@@ -28,10 +26,9 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
-import org.apache.kafka.common.{Cluster, Reconfigurable, TopicPartition}
+import org.apache.kafka.common.{Cluster, Reconfigurable}
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.quota._
-import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
