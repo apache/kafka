@@ -18,6 +18,11 @@
 package test.plugins;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.sink.SinkTask;
+
+import java.util.Collection;
+import java.util.Map;
 
 /**
  * VersionedSamplingSinkConnector is a test connector that extends SamplingConnector and overrides the version method.
@@ -45,4 +50,28 @@ public final class VersionedSamplingSinkConnector extends SamplingConnector {
     return "PLACEHOLDER_FOR_VERSION";
   }
 
+  @Override
+  public Class<? extends SinkTask> taskClass() {
+    super.taskClass();
+    return VersionedSamplingSinkConnectorTask.class;
+  }
+
+  public static class VersionedSamplingSinkConnectorTask extends SinkTask {
+    @Override
+    public String version() {
+      return "PLACEHOLDER_FOR_VERSION";
+    }
+
+    @Override
+    public void start(Map<String, String> props) {
+    }
+
+    @Override
+    public void put(Collection<SinkRecord> records) {
+    }
+
+    @Override
+    public void stop() {
+    }
+  }
 }
