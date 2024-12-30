@@ -89,7 +89,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   }
 
   def properties: Properties = {
-    val props = TestUtils.createBrokerConfig(0, null)
+    val props = TestUtils.createBrokerConfig(0)
     props.put(StandardAuthorizer.SUPER_USERS_CONFIG, superUsers)
     props
   }
