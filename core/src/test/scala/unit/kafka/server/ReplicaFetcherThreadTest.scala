@@ -37,7 +37,6 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
-import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.storage.internals.log.LogAppendInfo
@@ -261,16 +260,11 @@ class ReplicaFetcherThreadTest {
   }
 
   @Test
-  def shouldFetchLeaderEpochOnFirstFetchOnlyIfLeaderEpochKnownToBothIbp26(): Unit = {
-    verifyFetchLeaderEpochOnFirstFetch(IBP_2_6_IV0)
-  }
-
-  @Test
   def shouldNotFetchLeaderEpochOnFirstFetchWithTruncateOnFetch(): Unit = {
     verifyFetchLeaderEpochOnFirstFetch(MetadataVersion.latestTesting, epochFetchCount = 0)
   }
 
-  private def verifyFetchLeaderEpochOnFirstFetch(ibp: MetadataVersion, epochFetchCount: Int = 1): Unit = {
+  private def verifyFetchLeaderEpochOnFirstFetch(ibp: MetadataVersion, epochFetchCount: Int): Unit = {
     val props = TestUtils.createBrokerConfig(1, null)
     props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, ibp.version)
     val config = KafkaConfig.fromProps(props)
@@ -1420,7 +1414,6 @@ class ReplicaFetcherThreadTest {
 
   private def kafkaConfigNoTruncateOnFetch: KafkaConfig = {
     val props = TestUtils.createBrokerConfig(1, null)
-    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_6_IV0.version)
     KafkaConfig.fromProps(props)
   }
 }
