@@ -1841,12 +1841,14 @@ public final class Worker {
             TransformationChain<T, R> transformationChain = new TransformationChain<>(connectorConfig.<R>transformationStages(plugins), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
 
-            TaskPluginsMetadata requiredPluginsMetadata = new TaskPluginsMetadata(
+            TaskPluginsMetadata teskPluginsMetadata = new TaskPluginsMetadata(
                     connector, task, keyConverter, valueConverter, headerConverter, transformationChain.transformationStageInfo(), plugins.safeLoaderSwapper());
             WorkerTask<T, R> workerTask = doBuild(task, id, configState, statusListener, initialState,
                     connectorConfig, keyConverter, valueConverter, headerConverter, classLoader,
                     retryWithToleranceOperator, transformationChain,
                     errorHandlingMetrics, connector.getClass());
+            workerTask.addPluginsMetrics(teskPluginsMetadata);
+            return workerTask;
         }
 
         abstract WorkerTask<T, R> doBuild(
