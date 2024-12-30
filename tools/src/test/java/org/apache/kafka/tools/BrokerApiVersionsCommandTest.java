@@ -54,7 +54,7 @@ public class BrokerApiVersionsCommandTest {
                 BrokerApiVersionsCommand.mainNoExit("--bootstrap-server", clusterInstance.bootstrapServers()));
         Iterator<String> lineIter = Arrays.stream(output.split("\n")).iterator();
         assertTrue(lineIter.hasNext());
-        assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null) -> (", lineIter.next());
+        assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null isFenced: false) -> (", lineIter.next());
 
         ApiMessageType.ListenerType listenerType = ApiMessageType.ListenerType.BROKER;
 

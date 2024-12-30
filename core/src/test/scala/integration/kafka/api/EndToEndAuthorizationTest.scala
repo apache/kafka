@@ -58,7 +58,7 @@ import scala.jdk.CollectionConverters._
   * brokers.
   *
   * To start brokers we need to set a cluster ACL, which happens optionally in KafkaServerTestHarness.
-  * The remaining ACLs to enable access to producers and consumers are set here. To set ACLs, we use AclCommand directly.
+  * The remaining ACLs to enable access to producers and consumers are set here.
   *
   * Finally, we rely on SaslSetup to bootstrap and setup Kerberos. We don't use
   * SaslTestHarness here directly because it extends QuorumTestHarness, and we

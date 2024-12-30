@@ -17,10 +17,12 @@
   "apiKey": 42,
   "type": "response",
   "name": "DeleteGroupsResponse",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
+  //
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   //
   // Version 2 is the first flexible version.
-  "validVersions": "0-2",
+  "validVersions": "1-2",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

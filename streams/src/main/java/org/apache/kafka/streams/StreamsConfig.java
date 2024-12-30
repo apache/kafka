@@ -974,28 +974,6 @@ public class StreamsConfig extends AbstractConfig {
                     DefaultProductionExceptionHandler.class.getName(),
                     Importance.MEDIUM,
                     PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
-            .define(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
-                    Type.INT,
-                    null,
-                    Importance.MEDIUM,
-                    RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC)
-            .define(RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
-                    Type.STRING,
-                    RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
-                    in(RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY),
-                    Importance.MEDIUM,
-                    RACK_AWARE_ASSIGNMENT_STRATEGY_DOC)
-            .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                    Type.LIST,
-                    Collections.emptyList(),
-                    atMostOfSize(MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
-                    Importance.MEDIUM,
-                    RACK_AWARE_ASSIGNMENT_TAGS_DOC)
-            .define(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG,
-                    Type.INT,
-                    null,
-                    Importance.MEDIUM,
-                    RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_DOC)
             .define(TASK_ASSIGNOR_CLASS_CONFIG,
                     Type.STRING,
                     null,
@@ -1058,6 +1036,28 @@ public class StreamsConfig extends AbstractConfig {
                     true,
                     Importance.LOW,
                     ENABLE_METRICS_PUSH_DOC)
+            .define(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
+                    Type.INT,
+                    null,
+                    Importance.LOW,
+                    RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC)
+            .define(RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
+                    Type.STRING,
+                    RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+                    in(RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY),
+                    Importance.LOW,
+                    RACK_AWARE_ASSIGNMENT_STRATEGY_DOC)
+            .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                    Type.LIST,
+                    Collections.emptyList(),
+                    atMostOfSize(MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
+                    Importance.LOW,
+                    RACK_AWARE_ASSIGNMENT_TAGS_DOC)
+            .define(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG,
+                    Type.INT,
+                    null,
+                    Importance.LOW,
+                    RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_DOC)
             .define(REPARTITION_PURGE_INTERVAL_MS_CONFIG,
                     Type.LONG,
                     DEFAULT_COMMIT_INTERVAL_MS,

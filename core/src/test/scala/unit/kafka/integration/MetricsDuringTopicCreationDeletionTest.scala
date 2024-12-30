@@ -24,7 +24,8 @@ import kafka.utils.{Logging, TestUtils}
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import com.yammer.metrics.core.Gauge
-import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.common.test.api.Flaky
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -50,7 +51,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
 
   @volatile private var running = true
 
-  override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum, zkConnectOrNull)
+  override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum, null)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @BeforeEach
@@ -71,6 +72,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
    */
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
+  @Flaky("KAFKA-18245")
   def testMetricsDuringTopicCreateDelete(quorum: String): Unit = {
 
     // For UnderReplicatedPartitions, because of https://issues.apache.org/jira/browse/KAFKA-4605
@@ -145,8 +147,8 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
       // Delete topics
       for (t <- topics if running) {
           try {
-            adminZkClient.deleteTopic(t)
-            TestUtils.verifyTopicDeletion(zkClient, t, partitionNum, servers)
+            deleteTopic(t)
+            TestUtils.verifyTopicDeletion(t, partitionNum, servers)
           } catch {
           case e: Exception => e.printStackTrace()
           }

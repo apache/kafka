@@ -201,7 +201,7 @@
 
     <subpackage name="utils">
       <allow pkg="org.apache.kafka.common" />
-      <allow pkg="org.apache.log4j" />
+      <allow pkg="org.apache.logging.log4j" />
     </subpackage>
 
     <subpackage name="quotas">
@@ -225,7 +225,7 @@
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
     <allow pkg="org.apache.kafka.test" />
-    <allow class="org.apache.log4j.Level" />
+    <allow class="org.apache.logging.log4j.Level" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.clients.consumer" />
@@ -290,6 +290,8 @@
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="kafka.admin" />
     <allow pkg="kafka.server" />
+    <allow pkg="org.apache.kafka.metadata.authorizer" />
+    <allow pkg="org.apache.kafka.security.authorizer" />
     <allow pkg="org.apache.kafka.storage.internals" />
     <allow pkg="org.apache.kafka.server.config" />
     <allow pkg="org.apache.kafka.server.common" />
@@ -308,6 +310,10 @@
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
+    <allow pkg="org.apache.logging.log4j" />
+    <allow pkg="org.apache.logging.log4j.core.config" />
+    <allow pkg="org.apache.logging.log4j.core.config.properties" />
+    <allow pkg="org.apache.logging.log4j.core.spi" />
     <allow pkg="org.apache.kafka.common.test" />
     <allow pkg="joptsimple" />
     <allow pkg="javax.rmi.ssl"/>
@@ -391,7 +397,7 @@
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
     <allow pkg="org.apache.kafka.server.util"/>
-    <allow pkg="org.apache.log4j"/>
+    <allow pkg="org.apache.logging.log4j"/>
 
     <allow pkg="org.apache.kafka.streams"/>
 
@@ -553,6 +559,7 @@
       <allow pkg="org.apache.kafka.connect.integration" />
       <allow pkg="org.apache.kafka.connect.mirror" />
       <allow pkg="org.apache.kafka.server.config" />
+      <allow pkg="org.apache.logging.log4j" />
       <allow pkg="kafka.server" />
       <subpackage name="rest">
         <allow pkg="jakarta.ws.rs" />
@@ -568,7 +575,7 @@
       <allow pkg="javax.crypto"/>
       <allow pkg="org.apache.maven.artifact.versioning" />
       <allow pkg="org.eclipse.jetty.util" />
-      <allow pkg="org.apache.log4j" />
+      <allow pkg="org.apache.logging.log4j" />
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
@@ -580,6 +587,7 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
         <allow pkg="io.swagger.v3.oas.annotations"/>
+        <allow pkg="org.apache.logging.log4j" />
       </subpackage>
 
       <subpackage name="isolation">

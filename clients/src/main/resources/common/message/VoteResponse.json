@@ -18,7 +18,8 @@
   "type": "response",
   "name": "VoteResponse",
   // Version 1 adds leader endpoint (KIP-853)
-  "validVersions": "0-1",
+  // Version 2 handles PreVote requests
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",

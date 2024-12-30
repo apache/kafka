@@ -194,7 +194,7 @@ class ControllerServer(
         startupDeadline, time)
       val controllerNodes = QuorumConfig.voterConnectionsToNodes(voterConnections)
       val quorumFeatures = new QuorumFeatures(config.nodeId,
-        QuorumFeatures.defaultFeatureMap(config.unstableFeatureVersionsEnabled),
+        QuorumFeatures.defaultSupportedFeatureMap(config.unstableFeatureVersionsEnabled),
         controllerNodes.asScala.map(node => Integer.valueOf(node.id())).asJava)
 
       val delegationTokenKeyString = {
@@ -292,7 +292,7 @@ class ControllerServer(
         clusterId,
         time,
         s"controller-${config.nodeId}-",
-        QuorumFeatures.defaultFeatureMap(config.unstableFeatureVersionsEnabled),
+        QuorumFeatures.defaultSupportedFeatureMap(config.unstableFeatureVersionsEnabled),
         incarnationId,
         listenerInfo)
 

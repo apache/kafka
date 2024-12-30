@@ -947,18 +947,20 @@ public class TransactionManagerTest {
 
         TransactionalRequestResult retryResult = transactionManager.beginCommit();
         assertTrue(transactionManager.hasOngoingTransaction());
-        assertFalse(transactionManager.isTransactionV2Enabled());
+        assertTrue(transactionManager.isTransactionV2Enabled());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
+        prepareInitPidResponse(Errors.NONE, false, producerId, (short) (epoch + 1));
         runUntil(() -> !transactionManager.hasOngoingTransaction());
         runUntil(retryResult::isCompleted);
         retryResult.await();
         runUntil(retryResult::isAcked);
         assertFalse(transactionManager.hasOngoingTransaction());
 
-        // After restart the transaction, the V2 is enabled.
+        // After restart the transaction, the V2 is still enabled and epoch is bumped.
         transactionManager.beginTransaction();
         assertTrue(transactionManager.isTransactionV2Enabled());
+        assertEquals(epoch + 1, transactionManager.producerIdAndEpoch().epoch);
     }
 
     @Test
@@ -4319,6 +4321,7 @@ public class TransactionManagerTest {
 
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
+        transactionManager.maybeUpdateTransactionV2Enabled(true);
 
         result.await();
         assertTrue(result.isSuccessful());

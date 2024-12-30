@@ -59,7 +59,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.coordinator.transaction.TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT;
 import static org.apache.kafka.storage.internals.log.ProducerStateManager.LATE_TRANSACTION_BUFFER_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -89,7 +88,7 @@ public class ProducerStateManagerTest {
     public ProducerStateManagerTest() throws IOException {
         logDir = TestUtils.tempDirectory();
         partition = new TopicPartition("test", 0);
-        producerStateManagerConfig = new ProducerStateManagerConfig(PRODUCER_ID_EXPIRATION_MS_DEFAULT, true);
+        producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true);
         time = new MockTime();
         stateManager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs,
                 producerStateManagerConfig, time);

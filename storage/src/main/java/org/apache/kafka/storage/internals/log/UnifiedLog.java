@@ -19,7 +19,6 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -58,7 +57,6 @@ public class UnifiedLog {
                                             LogSegments segments,
                                             long logStartOffset,
                                             long lastOffset,
-                                            RecordVersion recordVersion,
                                             Time time,
                                             boolean reloadFromCleanShutdown,
                                             String logPrefix) throws IOException {
@@ -72,22 +70,20 @@ public class UnifiedLog {
         }
         offsetsToSnapshot.add(Optional.of(lastOffset));
 
-        LOG.info("{}Loading producer state till offset {} with message format version {}", logPrefix, lastOffset, recordVersion.value);
+        LOG.info("{}Loading producer state till offset {}", logPrefix, lastOffset);
 
         // We want to avoid unnecessary scanning of the log to build the producer state when the broker is being
         // upgraded. The basic idea is to use the absence of producer snapshot files to detect the upgrade case,
-        // but we have to be careful not to assume too much in the presence of broker failures. The two most common
-        // upgrade cases in which we expect to find no snapshots are the following:
+        // but we have to be careful not to assume too much in the presence of broker failures. The most common
+        // upgrade case in which we expect to find no snapshots is the following:
         //
-        // 1. The broker has been upgraded, but the topic is still on the old message format.
-        // 2. The broker has been upgraded, the topic is on the new message format, and we had a clean shutdown.
+        // * The broker has been upgraded, and we had a clean shutdown.
         //
-        // If we hit either of these cases, we skip producer state loading and write a new snapshot at the log end
+        // If we hit this case, we skip producer state loading and write a new snapshot at the log end
         // offset (see below). The next time the log is reloaded, we will load producer state using this snapshot
         // (or later snapshots). Otherwise, if there is no snapshot file, then we have to rebuild producer state
         // from the first segment.
-        if (recordVersion.value < RecordBatch.MAGIC_VALUE_V2 ||
-                (!producerStateManager.latestSnapshotOffset().isPresent() && reloadFromCleanShutdown)) {
+        if (!producerStateManager.latestSnapshotOffset().isPresent() && reloadFromCleanShutdown) {
             // To avoid an expensive scan through all the segments, we take empty snapshots from the start of the
             // last two segments and the last offset. This should avoid the full scan in the case that the log needs
             // truncation.

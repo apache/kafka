@@ -44,7 +44,7 @@ public interface Partitioner extends Configurable, Closeable {
     void close();
 
     /**
-     * Note this method is only implemented in DefaultPartitioner and {@link UniformStickyPartitioner} which
+     * Note this method is only implemented in DefaultPartitioner and UniformStickyPartitioner which
      * are now deprecated. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-794%3A+Strictly+Uniform+Sticky+Partitioner">KIP-794</a> for more info.
      * <p>
      * Notifies the partitioner a new batch is about to be created. When using the sticky partitioner,

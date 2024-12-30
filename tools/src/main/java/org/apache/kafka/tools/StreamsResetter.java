@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.KafkaFuture;
@@ -59,6 +60,8 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 
 
 /**
@@ -152,6 +155,12 @@ public class StreamsResetter {
                 }
 
                 final HashMap<Object, Object> consumerConfig = new HashMap<>(config);
+                if (consumerConfig.containsKey(GROUP_PROTOCOL_CONFIG) &&
+                    !consumerConfig.get(GROUP_PROTOCOL_CONFIG).toString().equalsIgnoreCase(GroupProtocol.CLASSIC.name())
+                ) {
+                    System.out.println("WARNING: provided group protocol will be ignored. Using supported " + GroupProtocol.CLASSIC.name() + " protocol instead");
+                }
+                consumerConfig.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
                 consumerConfig.putAll(properties);
                 int exitCode = maybeResetInputAndSeekToEndIntermediateTopicOffsets(consumerConfig, options);
                 exitCode |= maybeDeleteInternalTopics(adminClient, options);
@@ -678,7 +687,9 @@ public class StreamsResetter {
         }
 
         public List<String> intermediateTopicsOption() {
-            System.out.println("intermediateTopicsOption is deprecated and will be removed in a future release");
+            if (options.has(intermediateTopicsOption)) {
+                System.out.println("WARN: `--intermediate-topics` is deprecated and will be removed in a future release");
+            }
             return options.valuesOf(intermediateTopicsOption);
         }
 
