@@ -85,7 +85,6 @@ import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.{BrokerFeatures, ClientMetricsManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.MetadataVersion.IBP_2_2_IV1
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
@@ -8835,27 +8834,6 @@ class KafkaApisTest extends Logging {
 
     val response = verifyNoThrottling[HeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
-  }
-
-  @Test
-  def rejectJoinGroupRequestWhenStaticMembershipNotSupported(): Unit = {
-    val joinGroupRequest = new JoinGroupRequest.Builder(
-      new JoinGroupRequestData()
-        .setGroupId("test")
-        .setMemberId("test")
-        .setGroupInstanceId("instanceId")
-        .setProtocolType("consumer")
-        .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection)
-    ).build()
-
-    val requestChannelRequest = buildRequest(joinGroupRequest)
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleJoinGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[JoinGroupResponse](requestChannelRequest)
-    assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
   }
 
   @ParameterizedTest
