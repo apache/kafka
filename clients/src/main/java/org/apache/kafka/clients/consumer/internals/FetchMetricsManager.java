@@ -35,7 +35,6 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
  * It keeps an internal ID of the assigned set of partitions which is updated to ensure the set of metrics it
  * records matches up with the topic-partitions in use.
  */
-@SuppressWarnings("deprecation")
 public class FetchMetricsManager {
 
     private final Metrics metrics;

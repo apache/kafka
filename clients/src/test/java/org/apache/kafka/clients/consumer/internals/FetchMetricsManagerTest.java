@@ -117,6 +117,7 @@ public class FetchMetricsManagerTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testBytesFetchedTopic() {
         String topicName1 = TOPIC_NAME;
         String topicName2 = "another.topic";
@@ -165,6 +166,7 @@ public class FetchMetricsManagerTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testRecordsFetchedTopic() {
         String topicName1 = TOPIC_NAME;
         String topicName2 = "another.topic";
@@ -201,6 +203,7 @@ public class FetchMetricsManagerTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testPartitionLag() {
         TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 0);
         TopicPartition tp2 = new TopicPartition("another.topic", 0);
@@ -247,6 +250,7 @@ public class FetchMetricsManagerTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testPartitionLead() {
         TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 0);
         TopicPartition tp2 = new TopicPartition("another.topic", 0);
@@ -294,6 +298,7 @@ public class FetchMetricsManagerTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testMaybeUpdateAssignment() {
         TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 0);
         TopicPartition tp2 = new TopicPartition("another.topic", 0);
