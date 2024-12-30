@@ -88,6 +88,10 @@ public class GroupConfigTest {
         // Check for value "earliest"
         props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "earliest");
         doTestValidProps(props);
+
+        // Check for value "by_duration"
+        props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:PT10S");
+        doTestValidProps(props);
     }
 
     @Test
@@ -147,6 +151,18 @@ public class GroupConfigTest {
 
         // Check for invalid shareAutoOffsetReset
         props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "hello");
+        doTestInvalidProps(props, ConfigException.class);
+
+        // Check for invalid shareAutoOffsetReset, by_duration without duration
+        props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration");
+        doTestInvalidProps(props, ConfigException.class);
+
+        // Check for invalid shareAutoOffsetReset, by_duration with negative duration
+        props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:-PT10S");
+        doTestInvalidProps(props, ConfigException.class);
+
+        // Check for invalid shareAutoOffsetReset, by_duration with invalid duration
+        props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:invalid");
         doTestInvalidProps(props, ConfigException.class);
     }
 

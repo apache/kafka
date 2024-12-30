@@ -20,6 +20,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition, consumer_group
+from kafkatest.services.kafka.util import get_log4j_config_param, get_log4j_config_for_tools
 from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_4_0_0
 
@@ -215,7 +216,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "verifiable_consumer.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.properties")
 
     logs = {
@@ -234,7 +234,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                  static_membership=False, max_messages=-1, session_timeout_sec=0, enable_autocommit=False,
                  assignment_strategy=None, group_protocol=None, group_remote_assignor=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
-                 on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
+                 on_record_consumed=None, reset_policy="earliest", verify_offsets=True, prop_file=""):
         """
         :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
         """
@@ -251,7 +251,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.session_timeout_sec = session_timeout_sec
         self.enable_autocommit = enable_autocommit
         self.assignment_strategy = assignment_strategy
-        self.prop_file = ""
+        self.prop_file = prop_file
         self.stop_timeout_sec = stop_timeout_sec
         self.on_record_consumed = on_record_consumed
         self.verify_offsets = verify_offsets
@@ -296,8 +296,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
-        log_config = self.render('tools_log4j.properties', log_file=VerifiableConsumer.LOG_FILE)
-        node.account.create_file(VerifiableConsumer.LOG4J_CONFIG, log_config)
+        log_config = self.render(get_log4j_config_for_tools(node), log_file=VerifiableConsumer.LOG_FILE)
+        node.account.create_file(get_log4j_config_for_tools(node), log_config)
 
         # Create and upload config file
         self.security_config = self.kafka.security_config.client_config(self.prop_file, node,
@@ -380,7 +380,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         cmd = ""
         cmd += "export LOG_DIR=%s;" % VerifiableConsumer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
-        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableConsumer.LOG4J_CONFIG
+        cmd += " export KAFKA_LOG4J_OPTS=\"%s%s\"; " % (get_log4j_config_param(node), get_log4j_config_for_tools(node))
         cmd += self.impl.exec_cmd(node)
         if self.on_record_consumed:
             cmd += " --verbose"

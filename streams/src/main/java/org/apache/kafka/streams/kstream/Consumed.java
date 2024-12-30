@@ -76,10 +76,6 @@ public class Consumed<K, V> implements NamedOperation<Consumed<K, V>> {
         this.processorName = processorName;
     }
 
-    /**
-     * Create an instance of {@link Consumed} from an existing instance.
-     * @param consumed  the instance of {@link Consumed} to copy
-     */
     protected Consumed(final Consumed<K, V> consumed) {
         this(
             consumed.keySerde,

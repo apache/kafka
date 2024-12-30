@@ -62,6 +62,7 @@ import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
@@ -187,7 +188,7 @@ public class StreamThreadTest {
     private final MockTime mockTime = new MockTime();
     private final String stateDir = TestUtils.tempDirectory().getPath();
     private final MockClientSupplier clientSupplier = new MockClientSupplier();
-    private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
+    private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>(Consumed.with(null, null));
     private final ChangelogReader changelogReader = new MockChangelogReader();
     private StateDirectory stateDirectory = null;
     private final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
@@ -2087,7 +2088,7 @@ public class StreamThreadTest {
             .count(Materialized.as(storeName1));
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized
             = new MaterializedInternal<>(Materialized.as(storeName2), internalStreamsBuilder, "");
-        internalStreamsBuilder.table(topic2, new ConsumedInternal<>(), materialized);
+        internalStreamsBuilder.table(topic2, new ConsumedInternal<>(Consumed.with(null, null)), materialized);
 
         internalStreamsBuilder.buildAndOptimizeTopology();
         restoreConsumer.updatePartitions(changelogName1,

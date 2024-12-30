@@ -50,6 +50,7 @@ import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
@@ -177,6 +178,7 @@ public class AbstractHerderTest {
     private final ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
 
     @Mock private Worker worker;
+    @Mock private WorkerConfig workerConfig;
     @Mock private WorkerConfigTransformer transformer;
     @Mock private ConfigBackingStore configStore;
     @Mock private StatusBackingStore statusStore;
@@ -206,10 +208,10 @@ public class AbstractHerderTest {
     public void testConnectorStatus() {
         ConnectorTaskId taskId = new ConnectorTaskId(connectorName, 0);
 
-        AbstractHerder herder = testHerder();
+        when(plugins.newConnector(anyString(), any())).thenReturn(new SampleSourceConnector());
+        when(worker.getPlugins()).thenReturn(plugins);
 
-        when(plugins.newConnector(anyString())).thenReturn(new SampleSourceConnector());
-        when(herder.plugins()).thenReturn(plugins);
+        AbstractHerder herder = testHerder();
 
         when(herder.rawConfig(connectorName)).thenReturn(Collections.singletonMap(
                 ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName()
@@ -240,10 +242,10 @@ public class AbstractHerderTest {
     public void testConnectorStatusMissingPlugin() {
         ConnectorTaskId taskId = new ConnectorTaskId(connectorName, 0);
 
-        AbstractHerder herder = testHerder();
+        when(plugins.newConnector(anyString(), any())).thenThrow(new ConnectException("Unable to find class"));
+        when(worker.getPlugins()).thenReturn(plugins);
 
-        when(plugins.newConnector(anyString())).thenThrow(new ConnectException("Unable to find class"));
-        when(herder.plugins()).thenReturn(plugins);
+        AbstractHerder herder = testHerder();
 
         when(herder.rawConfig(connectorName))
                 .thenReturn(Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "missing"));
@@ -271,10 +273,11 @@ public class AbstractHerderTest {
 
     @Test
     public void testConnectorInfo() {
-        AbstractHerder herder = testHerder();
 
-        when(plugins.newConnector(anyString())).thenReturn(new SampleSourceConnector());
-        when(herder.plugins()).thenReturn(plugins);
+        when(plugins.newConnector(anyString(), any())).thenReturn(new SampleSourceConnector());
+        when(worker.getPlugins()).thenReturn(plugins);
+
+        AbstractHerder herder = testHerder();
 
         when(configStore.snapshot()).thenReturn(SNAPSHOT);
 
@@ -310,10 +313,11 @@ public class AbstractHerderTest {
 
     @Test
     public void testConnectorInfoMissingPlugin() {
-        AbstractHerder herder = testHerder();
 
-        when(plugins.newConnector(anyString())).thenThrow(new ConnectException("No class found"));
-        when(herder.plugins()).thenReturn(plugins);
+        when(plugins.newConnector(anyString(), any())).thenThrow(new ConnectException("No class found"));
+        when(worker.getPlugins()).thenReturn(plugins);
+
+        AbstractHerder herder = testHerder();
 
         when(configStore.snapshot()).thenReturn(SNAPSHOT);
 
@@ -481,7 +485,7 @@ public class AbstractHerderTest {
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
         // Base connector config has 15 fields, connector's configs add 7
-        assertEquals(22, infos.size());
+        assertEquals(26, infos.size());
         // Missing name should generate an error
         assertEquals(ConnectorConfig.NAME_CONFIG,
                 infos.get(ConnectorConfig.NAME_CONFIG).configValue().name());
@@ -592,7 +596,7 @@ public class AbstractHerderTest {
         assertEquals(1, result.errorCount());
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
-        assertEquals(27, infos.size());
+        assertEquals(31, infos.size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
         assertEquals("transforms.xformA.type",
                 infos.get("transforms.xformA.type").configValue().name());
@@ -649,7 +653,7 @@ public class AbstractHerderTest {
         assertEquals(1, result.errorCount());
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
-        assertEquals(29, infos.size());
+        assertEquals(33, infos.size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
         assertEquals("transforms.xformA.type", infos.get("transforms.xformA.type").configValue().name());
         assertTrue(infos.get("transforms.xformA.type").configValue().errors().isEmpty());
@@ -710,8 +714,8 @@ public class AbstractHerderTest {
         );
         assertEquals(expectedGroups, result.groups());
         assertEquals(1, result.errorCount());
-        // Base connector config has 15 fields, connector's configs add 7, and 2 producer overrides
-        assertEquals(24, result.values().size());
+        // Base connector config has 19 fields, connector's configs add 7, and 2 producer overrides
+        assertEquals(28, result.values().size());
         assertTrue(result.values().stream().anyMatch(
             configInfo -> ackConfigKey.equals(configInfo.configValue().name()) && !configInfo.configValue().errors().isEmpty()));
         assertTrue(result.values().stream().anyMatch(
@@ -1040,8 +1044,8 @@ public class AbstractHerderTest {
     ) throws ClassNotFoundException {
         AbstractHerder herder = testHerder();
 
-        when(plugins.pluginClass(pluginName)).then(invocation -> newPluginInstance.get().getClass());
-        when(plugins.newPlugin(anyString())).then(invocation -> newPluginInstance.get());
+        when(plugins.pluginClass(pluginName, null)).then(invocation -> newPluginInstance.get().getClass());
+        when(plugins.newPlugin(anyString(), any())).then(invocation -> newPluginInstance.get());
         when(herder.plugins()).thenReturn(plugins);
 
         List<ConfigKeyInfo> configs = herder.connectorPluginConfig(pluginName);
@@ -1060,7 +1064,7 @@ public class AbstractHerderTest {
         String connName = "AnotherPlugin";
         AbstractHerder herder = testHerder();
         when(worker.getPlugins()).thenReturn(plugins);
-        when(plugins.pluginClass(anyString())).thenThrow(new ClassNotFoundException());
+        when(plugins.pluginClass(anyString(), any())).thenThrow(new ClassNotFoundException());
         assertThrows(NotFoundException.class, () -> herder.connectorPluginConfig(connName));
     }
 
@@ -1070,17 +1074,17 @@ public class AbstractHerderTest {
         String connName = "AnotherPlugin";
         AbstractHerder herder = testHerder();
         when(worker.getPlugins()).thenReturn(plugins);
-        when(plugins.pluginClass(anyString())).thenReturn((Class) Object.class);
-        when(plugins.newPlugin(anyString())).thenReturn(new DirectoryConfigProvider());
+        when(plugins.pluginClass(anyString(), any())).thenReturn((Class) Object.class);
+        when(plugins.newPlugin(anyString(), any())).thenReturn(new DirectoryConfigProvider());
         assertThrows(BadRequestException.class, () -> herder.connectorPluginConfig(connName));
     }
 
     @Test
     public void testGetConnectorTypeWithMissingPlugin() {
         String connName = "AnotherPlugin";
-        AbstractHerder herder = testHerder();
         when(worker.getPlugins()).thenReturn(plugins);
-        when(plugins.newConnector(anyString())).thenThrow(new ConnectException("No class found"));
+        when(plugins.newConnector(anyString(), any())).thenThrow(new ConnectException("No class found"));
+        AbstractHerder herder = testHerder();
         assertEquals(ConnectorType.UNKNOWN, herder.connectorType(Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connName)));
     }
 
@@ -1244,15 +1248,14 @@ public class AbstractHerderTest {
     private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass,
                                                         ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                                         int countOfCallingNewConnector) {
-
-        AbstractHerder herder = testHerder(connectorClientConfigOverridePolicy);
-
         // Call to validateConnectorConfig
         when(worker.configTransformer()).thenReturn(transformer);
         @SuppressWarnings("unchecked")
         final ArgumentCaptor<Map<String, String>> mapArgumentCaptor = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(mapArgumentCaptor.capture())).thenAnswer(invocation -> mapArgumentCaptor.getValue());
         when(worker.getPlugins()).thenReturn(plugins);
+
+        AbstractHerder herder = testHerder(connectorClientConfigOverridePolicy);
         final Connector connector;
         try {
             connector = connectorClass.getConstructor().newInstance();
@@ -1275,14 +1278,17 @@ public class AbstractHerderTest {
                 .defaultAnswer(CALLS_REAL_METHODS));
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void mockValidationIsolation(String connectorClass, Connector connector) {
-        when(plugins.newConnector(connectorClass)).thenReturn(connector);
-        when(plugins.connectorLoader(connectorClass)).thenReturn(classLoader);
+        when(workerConfig.getClass(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG)).thenReturn((Class) SimpleHeaderConverter.class);
+        when(worker.config()).thenReturn(workerConfig);
+        when(plugins.newConnector(anyString(), any())).thenReturn(connector);
+        when(plugins.pluginLoader(connectorClass, null)).thenReturn(classLoader);
         when(plugins.withClassLoader(classLoader)).thenReturn(loaderSwap);
     }
 
     private void verifyValidationIsolation() {
-        verify(plugins).newConnector(anyString());
+        verify(plugins).newConnector(anyString(), any());
         verify(plugins).withClassLoader(classLoader);
         verify(loaderSwap).close();
     }

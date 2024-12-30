@@ -428,14 +428,14 @@ public class ConnectorPluginsResourceTest {
     @Test
     public void testGetConnectorConfigDef() {
         String connName = ConnectorPluginsResourceTestConnector.class.getName();
-        when(herder.connectorPluginConfig(eq(connName))).thenAnswer(answer -> {
+        when(herder.connectorPluginConfig(eq(connName), eq(null))).thenAnswer(answer -> {
             List<ConfigKeyInfo> results = new ArrayList<>();
             for (ConfigDef.ConfigKey configKey : ConnectorPluginsResourceTestConnector.CONFIG_DEF.configKeys().values()) {
                 results.add(AbstractHerder.convertConfigKey(configKey));
             }
             return results;
         });
-        List<ConfigKeyInfo> connectorConfigDef = connectorPluginsResource.getConnectorConfigDef(connName);
+        List<ConfigKeyInfo> connectorConfigDef = connectorPluginsResource.getConnectorConfigDef(connName, null);
         assertEquals(ConnectorPluginsResourceTestConnector.CONFIG_DEF.names().size(), connectorConfigDef.size());
         for (String config : ConnectorPluginsResourceTestConnector.CONFIG_DEF.names()) {
             Optional<ConfigKeyInfo> cki = connectorConfigDef.stream().filter(c -> c.name().equals(config)).findFirst();

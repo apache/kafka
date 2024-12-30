@@ -353,26 +353,44 @@ public class ConsumerGroupCommand {
             return colOpt.map(Collection::size);
         }
 
-        private void printOffsets(Map<String, Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>>> offsets) {
+        private void printOffsets(
+            Map<String, Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>>> offsets,
+            boolean verbose
+        ) {
             offsets.forEach((groupId, tuple) -> {
                 Optional<GroupState> state = tuple.getKey();
                 Optional<Collection<PartitionAssignmentState>> assignments = tuple.getValue();
 
                 if (shouldPrintMemberState(groupId, state, size(assignments))) {
-                    String format = printOffsetFormat(assignments);
+                    String format = printOffsetFormat(assignments, verbose);
 
-                    System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID", "HOST", "CLIENT-ID");
+                    if (verbose) {
+                        System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID", "HOST", "CLIENT-ID");
+                    } else {
+                        System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID", "HOST", "CLIENT-ID");
+                    }
 
                     if (assignments.isPresent()) {
                         Collection<PartitionAssignmentState> consumerAssignments = assignments.get();
                         for (PartitionAssignmentState consumerAssignment : consumerAssignments) {
-                            System.out.printf(format,
-                                consumerAssignment.group,
-                                consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                consumerAssignment.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                consumerAssignment.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE),
-                                consumerAssignment.host.orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.orElse(MISSING_COLUMN_VALUE)
-                            );
+                            if (verbose) {
+                                System.out.printf(format,
+                                    consumerAssignment.group,
+                                    consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.leaderEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.host.orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.orElse(MISSING_COLUMN_VALUE)
+                                );
+                            } else {
+                                System.out.printf(format,
+                                    consumerAssignment.group,
+                                    consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.host.orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.orElse(MISSING_COLUMN_VALUE)
+                                );
+                            }
                         }
                         System.out.println();
                     }
@@ -380,7 +398,10 @@ public class ConsumerGroupCommand {
             });
         }
 
-        private static String printOffsetFormat(Optional<Collection<PartitionAssignmentState>> assignments) {
+        private static String printOffsetFormat(
+            Optional<Collection<PartitionAssignmentState>> assignments,
+            boolean verbose
+        ) {
             // find proper columns width
             int maxGroupLen = 15, maxTopicLen = 15, maxConsumerIdLen = 15, maxHostLen = 15;
             if (assignments.isPresent()) {
@@ -394,15 +415,22 @@ public class ConsumerGroupCommand {
                 }
             }
 
-            return "\n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %" + (-maxConsumerIdLen) + "s %" + (-maxHostLen) + "s %s";
+            if (verbose) {
+                return "\n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %-15s %" + (-maxConsumerIdLen) + "s %" + (-maxHostLen) + "s %s";
+            } else {
+                return "\n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %" + (-maxConsumerIdLen) + "s %" + (-maxHostLen) + "s %s";
+            }
         }
 
         private void printMembers(Map<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> members, boolean verbose) {
             members.forEach((groupId, tuple) -> {
                 Optional<GroupState> groupState = tuple.getKey();
                 Optional<Collection<MemberAssignmentState>> assignments = tuple.getValue();
-                int maxGroupLen = 15, maxConsumerIdLen = 15, maxGroupInstanceIdLen = 17, maxHostLen = 15, maxClientIdLen = 15;
+                int maxGroupLen = 15, maxConsumerIdLen = 15, maxGroupInstanceIdLen = 17, maxHostLen = 15, maxClientIdLen = 15,
+                    maxCurrentAssignment = 20, maxTargetAssignment = 20;
                 boolean includeGroupInstanceId = false;
+                boolean hasClassicMember = false;
+                boolean hasConsumerMember = false;
 
                 if (shouldPrintMemberState(groupId, groupState, size(assignments))) {
                     // find proper columns width
@@ -414,63 +442,121 @@ public class ConsumerGroupCommand {
                             maxHostLen = Math.max(maxHostLen, memberAssignment.host.length());
                             maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId.length());
                             includeGroupInstanceId = includeGroupInstanceId || !memberAssignment.groupInstanceId.isEmpty();
+                            String currentAssignment = memberAssignment.assignment.isEmpty() ?
+                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment);
+                            String targetAssignment = memberAssignment.targetAssignment.isEmpty() ?
+                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment);
+                            maxCurrentAssignment = Math.max(maxCurrentAssignment, currentAssignment.length());
+                            maxTargetAssignment = Math.max(maxTargetAssignment, targetAssignment.length());
+                            hasClassicMember = hasClassicMember || (memberAssignment.upgraded.isPresent() && !memberAssignment.upgraded.get());
+                            hasConsumerMember = hasConsumerMember || (memberAssignment.upgraded.isPresent() && memberAssignment.upgraded.get());
                         }
                     }
                 }
 
-                String format0 = "%" + -maxGroupLen + "s %" + -maxConsumerIdLen + "s %" + -maxGroupInstanceIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %-15s ";
-                String format1 = "%" + -maxGroupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %-15s ";
-
+                String formatWithGroupInstanceId = "%" + -maxGroupLen + "s %" + -maxConsumerIdLen + "s %" + -maxGroupInstanceIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %-15s ";
+                String formatWithoutGroupInstanceId = "%" + -maxGroupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %-15s ";
                 if (includeGroupInstanceId) {
-                    System.out.printf("\n" + format0, "GROUP", "CONSUMER-ID", "GROUP-INSTANCE-ID", "HOST", "CLIENT-ID", "#PARTITIONS");
+                    System.out.printf("\n" + formatWithGroupInstanceId, "GROUP", "CONSUMER-ID", "GROUP-INSTANCE-ID", "HOST", "CLIENT-ID", "#PARTITIONS");
                 } else {
-                    System.out.printf("\n" + format1, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS");
+                    System.out.printf("\n" + formatWithoutGroupInstanceId, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS");
                 }
-                if (verbose)
-                    System.out.printf("%s", "ASSIGNMENT");
+
+                String formatWithUpgrade = "%-15s %" + -maxCurrentAssignment + "s %-15s %" + -maxTargetAssignment + "s %s";
+                String formatWithoutUpgrade = "%-15s %" + -maxCurrentAssignment + "s %-15s %" + -maxTargetAssignment + "s";
+                boolean hasMigrationMember = hasClassicMember && hasConsumerMember;
+                if (verbose) {
+                    if (hasMigrationMember) {
+                        System.out.printf(formatWithUpgrade, "CURRENT-EPOCH", "CURRENT-ASSIGNMENT", "TARGET-EPOCH", "TARGET-ASSIGNMENT", "UPGRADED");
+                    } else {
+                        System.out.printf(formatWithoutUpgrade, "CURRENT-EPOCH", "CURRENT-ASSIGNMENT", "TARGET-EPOCH", "TARGET-ASSIGNMENT");
+                    }
+                }
                 System.out.println();
 
                 if (assignments.isPresent()) {
-                    for (MemberAssignmentState memberAssignment : assignments.get()) {
-                        if (includeGroupInstanceId) {
-                            System.out.printf(format0, memberAssignment.group, memberAssignment.consumerId,
-                                memberAssignment.groupInstanceId, memberAssignment.host, memberAssignment.clientId,
-                                memberAssignment.numPartitions);
-                        } else {
-                            System.out.printf(format1, memberAssignment.group, memberAssignment.consumerId,
-                                memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions);
-                        }
-                        if (verbose) {
-                            String partitions;
-
-                            if (memberAssignment.assignment.isEmpty())
-                                partitions = MISSING_COLUMN_VALUE;
-                            else {
-                                Map<String, List<TopicPartition>> grouped = new HashMap<>();
-                                memberAssignment.assignment.forEach(
-                                    tp -> grouped.computeIfAbsent(tp.topic(), key -> new ArrayList<>()).add(tp));
-                                partitions = grouped.values().stream().map(topicPartitions ->
-                                    topicPartitions.stream().map(TopicPartition::partition).map(Object::toString).sorted().collect(Collectors.joining(",", "(", ")"))
-                                ).sorted().collect(Collectors.joining(", "));
-                            }
-                            System.out.printf("%s", partitions);
-                        }
-                        System.out.println();
-                    }
+                    printMembersHelper(assignments.get(), verbose, includeGroupInstanceId, hasMigrationMember,
+                        formatWithGroupInstanceId, formatWithoutGroupInstanceId, formatWithUpgrade, formatWithoutUpgrade);
                 }
             });
         }
 
-        private void printStates(Map<String, GroupInformation> states) {
+        private void printMembersHelper(
+            Collection<MemberAssignmentState> memberAssignments,
+            boolean verbose,
+            boolean includeGroupInstanceId,
+            boolean hasMigrationMember,
+            String formatWithGroupInstanceId,
+            String formatWithoutGroupInstanceId,
+            String formatWithUpgrade,
+            String formatWithoutUpgrade
+        ) {
+            for (MemberAssignmentState memberAssignment : memberAssignments) {
+                if (includeGroupInstanceId) {
+                    System.out.printf(formatWithGroupInstanceId, memberAssignment.group, memberAssignment.consumerId,
+                        memberAssignment.groupInstanceId, memberAssignment.host, memberAssignment.clientId,
+                        memberAssignment.numPartitions);
+                } else {
+                    System.out.printf(formatWithoutGroupInstanceId, memberAssignment.group, memberAssignment.consumerId,
+                        memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions);
+                }
+                if (verbose) {
+                    String currentEpoch = memberAssignment.currentEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE);
+                    String currentAssignment = memberAssignment.assignment.isEmpty() ?
+                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment);
+                    String targetEpoch = memberAssignment.targetEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE);
+                    String targetAssignment = memberAssignment.targetAssignment.isEmpty() ?
+                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment);
+                    if (hasMigrationMember) {
+                        System.out.printf(formatWithUpgrade, currentEpoch, currentAssignment, targetEpoch, targetAssignment,
+                            memberAssignment.upgraded.map(Object::toString).orElse(MISSING_COLUMN_VALUE));
+                    } else {
+                        System.out.printf(formatWithoutUpgrade, currentEpoch, currentAssignment, targetEpoch, targetAssignment);
+                    }
+                }
+                System.out.println();
+            }
+        }
+
+        private String getAssignmentString(List<TopicPartition> assignment) {
+            Map<String, List<TopicPartition>> grouped = new HashMap<>();
+            assignment.forEach(tp ->
+                grouped
+                    .computeIfAbsent(tp.topic(), key -> new ArrayList<>())
+                    .add(tp)
+            );
+            return grouped.entrySet().stream().map(entry -> {
+                String topicName = entry.getKey();
+                List<TopicPartition> topicPartitions = entry.getValue();
+                return topicPartitions
+                    .stream()
+                    .map(TopicPartition::partition)
+                    .map(Object::toString)
+                    .sorted()
+                    .collect(Collectors.joining(",", topicName + ":", ""));
+            }).sorted().collect(Collectors.joining(";"));
+        }
+
+        private void printStates(Map<String, GroupInformation> states, boolean verbose) {
             states.forEach((groupId, state) -> {
                 if (shouldPrintMemberState(groupId, Optional.of(state.groupState), Optional.of(1))) {
                     String coordinator = state.coordinator.host() + ":" + state.coordinator.port() + "  (" + state.coordinator.idString() + ")";
                     int coordinatorColLen = Math.max(25, coordinator.length());
+                    int groupColLen = Math.max(15, state.group.length());
 
-                    String format = "\n%" + -coordinatorColLen + "s %-25s %-20s %-15s %s";
+                    String assignmentStrategy = state.assignmentStrategy.isEmpty() ? MISSING_COLUMN_VALUE : state.assignmentStrategy;
 
-                    System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
-                    System.out.printf(format, state.group, coordinator, state.assignmentStrategy, state.groupState, state.numMembers);
+                    if (verbose) {
+                        String format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %-15s %-25s %s";
+                        System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE",
+                            "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
+                        System.out.printf(format, state.group, coordinator, assignmentStrategy, state.groupState,
+                            state.groupEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.targetAssignmentEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.numMembers);
+                    } else {
+                        String format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %s";
+                        System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
+                        System.out.printf(format, state.group, coordinator, assignmentStrategy, state.groupState, state.numMembers);
+                    }
                     System.out.println();
                 }
             });
@@ -488,14 +574,14 @@ public class ConsumerGroupCommand {
             if (subActions == 0 || offsetsOptPresent) {
                 TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>>> offsets
                     = collectGroupsOffsets(groupIds);
-                printOffsets(offsets);
+                printOffsets(offsets, opts.options.has(opts.verboseOpt));
             } else if (membersOptPresent) {
                 TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> members
-                    = collectGroupsMembers(groupIds, opts.options.has(opts.verboseOpt));
+                    = collectGroupsMembers(groupIds);
                 printMembers(members, opts.options.has(opts.verboseOpt));
             } else {
                 TreeMap<String, GroupInformation> states = collectGroupsState(groupIds);
-                printStates(states);
+                printStates(states, opts.options.has(opts.verboseOpt));
             }
         }
 
@@ -503,7 +589,7 @@ public class ConsumerGroupCommand {
             String group,
             Optional<Node> coordinator,
             Collection<TopicPartition> topicPartitions,
-            Function<TopicPartition, Optional<Long>> getPartitionOffset,
+            Map<TopicPartition, OffsetAndMetadata> committedOffsets,
             Optional<String> consumerIdOpt,
             Optional<String> hostOpt,
             Optional<String> clientIdOpt
@@ -511,11 +597,11 @@ public class ConsumerGroupCommand {
             if (topicPartitions.isEmpty()) {
                 return Collections.singleton(
                     new PartitionAssignmentState(group, coordinator, Optional.empty(), Optional.empty(), Optional.empty(),
-                        getLag(Optional.empty(), Optional.empty()), consumerIdOpt, hostOpt, clientIdOpt, Optional.empty())
+                        getLag(Optional.empty(), Optional.empty()), consumerIdOpt, hostOpt, clientIdOpt, Optional.empty(), Optional.empty())
                 );
             } else {
                 List<TopicPartition> topicPartitionsSorted = topicPartitions.stream().sorted(Comparator.comparingInt(TopicPartition::partition)).collect(Collectors.toList());
-                return describePartitions(group, coordinator, topicPartitionsSorted, getPartitionOffset, consumerIdOpt, hostOpt, clientIdOpt);
+                return describePartitions(group, coordinator, topicPartitionsSorted, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
             }
         }
 
@@ -523,18 +609,22 @@ public class ConsumerGroupCommand {
             return offset.filter(o -> o != -1).flatMap(offset0 -> logEndOffset.map(end -> end - offset0));
         }
 
-        private Collection<PartitionAssignmentState> describePartitions(String group,
-                                                              Optional<Node> coordinator,
-                                                              List<TopicPartition> topicPartitions,
-                                                              Function<TopicPartition, Optional<Long>> getPartitionOffset,
-                                                              Optional<String> consumerIdOpt,
-                                                              Optional<String> hostOpt,
-                                                              Optional<String> clientIdOpt) {
+        private Collection<PartitionAssignmentState> describePartitions(
+            String group,
+            Optional<Node> coordinator,
+            List<TopicPartition> topicPartitions,
+            Map<TopicPartition, OffsetAndMetadata> committedOffsets,
+            Optional<String> consumerIdOpt,
+            Optional<String> hostOpt,
+            Optional<String> clientIdOpt
+        ) {
             BiFunction<TopicPartition, Optional<Long>, PartitionAssignmentState> getDescribePartitionResult = (topicPartition, logEndOffsetOpt) -> {
-                Optional<Long> offset = getPartitionOffset.apply(topicPartition);
+                // The admin client returns `null` as a value to indicate that there is not committed offset for a partition.
+                Optional<Long> offset = Optional.ofNullable(committedOffsets.get(topicPartition)).map(OffsetAndMetadata::offset);
+                Optional<Integer> leaderEpoch = Optional.ofNullable(committedOffsets.get(topicPartition)).flatMap(OffsetAndMetadata::leaderEpoch);
                 return new PartitionAssignmentState(group, coordinator, Optional.of(topicPartition.topic()),
                     Optional.of(topicPartition.partition()), offset, getLag(offset, logEndOffsetOpt),
-                    consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt);
+                    consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt, leaderEpoch);
             };
 
             return getLogEndOffsets(topicPartitions).entrySet().stream().map(logEndOffsetResult -> {
@@ -759,8 +849,6 @@ public class ConsumerGroupCommand {
             consumerGroups.forEach((groupId, consumerGroup) -> {
                 GroupState state = consumerGroup.groupState();
                 Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(groupId);
-                // The admin client returns `null` as a value to indicate that there is not committed offset for a partition.
-                Function<TopicPartition, Optional<Long>> getPartitionOffset = tp -> Optional.ofNullable(committedOffsets.get(tp)).map(OffsetAndMetadata::offset);
                 List<TopicPartition> assignedTopicPartitions = new ArrayList<>();
                 Comparator<MemberDescription> comparator =
                     Comparator.<MemberDescription>comparingInt(m -> m.assignment().topicPartitions().size()).reversed();
@@ -774,7 +862,7 @@ public class ConsumerGroupCommand {
                             groupId,
                             Optional.of(consumerGroup.coordinator()),
                             topicPartitions,
-                            getPartitionOffset,
+                            committedOffsets,
                             Optional.of(consumerSummary.consumerId()),
                             Optional.of(consumerSummary.host()),
                             Optional.of(consumerSummary.clientId()))
@@ -788,7 +876,7 @@ public class ConsumerGroupCommand {
                         groupId,
                         Optional.of(consumerGroup.coordinator()),
                         unassignedPartitions.keySet(),
-                        getPartitionOffset,
+                        committedOffsets,
                         Optional.of(MISSING_COLUMN_VALUE),
                         Optional.of(MISSING_COLUMN_VALUE),
                         Optional.of(MISSING_COLUMN_VALUE))
@@ -802,11 +890,11 @@ public class ConsumerGroupCommand {
             return groupOffsets;
         }
 
-        Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId, boolean verbose) throws Exception {
-            return collectGroupsMembers(Collections.singleton(groupId), verbose).get(groupId);
+        Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId) throws Exception {
+            return collectGroupsMembers(Collections.singleton(groupId)).get(groupId);
         }
 
-        TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds, boolean verbose) throws Exception {
+        TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds) throws Exception {
             Map<String, ConsumerGroupDescription> consumerGroups = describeConsumerGroups(groupIds);
             TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> res = new TreeMap<>();
 
@@ -820,7 +908,11 @@ public class ConsumerGroupCommand {
                         consumer.clientId(),
                         consumer.groupInstanceId().orElse(""),
                         consumer.assignment().topicPartitions().size(),
-                        new ArrayList<>(verbose ? consumer.assignment().topicPartitions() : Collections.emptySet())
+                        consumer.assignment().topicPartitions().stream().toList(),
+                        consumer.targetAssignment().map(a -> a.topicPartitions().stream().toList()).orElse(Collections.emptyList()),
+                        consumer.memberEpoch(),
+                        consumerGroup.targetAssignmentEpoch(),
+                        consumer.upgraded()
                 )).collect(Collectors.toList());
                 res.put(groupId, new SimpleImmutableEntry<>(Optional.of(state), Optional.of(memberAssignmentStates)));
             });
@@ -840,8 +932,10 @@ public class ConsumerGroupCommand {
                     groupDescription.coordinator(),
                     groupDescription.partitionAssignor(),
                     groupDescription.groupState(),
-                    groupDescription.members().size()
-            )));
+                    groupDescription.members().size(),
+                    groupDescription.groupEpoch(),
+                    groupDescription.targetAssignmentEpoch()
+                )));
             return res;
         }
 

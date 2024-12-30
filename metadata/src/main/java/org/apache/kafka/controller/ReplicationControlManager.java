@@ -1767,7 +1767,7 @@ public class ReplicationControlManager {
                 ApiError result = electLeader(topic.name, topicIdPartition.partitionId(),
                         ElectionType.UNCLEAN, records);
                 if (result.error().equals(Errors.NONE)) {
-                    log.error("Triggering unclean leader election for offline partition {}-{}.",
+                    log.info("Triggering unclean leader election for offline partition {}-{}.",
                             topic.name, topicIdPartition.partitionId());
                 } else {
                     log.warn("Cannot trigger unclean leader election for offline partition {}-{}: {}",

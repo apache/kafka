@@ -342,6 +342,10 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     timeMs = Long.MAX_VALUE;
                     log.trace("For telemetry state {}, returning the value {} ms; the terminating push is in progress, disabling telemetry for further requests", localState, timeMs);
                     break;
+                case TERMINATED:
+                    timeMs = Long.MAX_VALUE;
+                    log.trace("For telemetry state {}, returning the value {} ms; telemetry is terminated, no further requests will be made", localState, timeMs);
+                    break;
                 case TERMINATING_PUSH_NEEDED:
                     timeMs = 0;
                     log.trace("For telemetry state {}, returning the value {} ms; the client should try to submit the final {} network API request ASAP before closing", localState, timeMs, ApiKeys.PUSH_TELEMETRY.name);

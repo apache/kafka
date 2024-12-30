@@ -29,7 +29,7 @@ import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs, TopicConfig}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
@@ -213,11 +213,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val lock = new ReentrantReadWriteLock
   private var metricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin] = _
   private var currentConfig: KafkaConfig = _
-  private val dynamicConfigPasswordEncoder = if (kafkaConfig.processRoles.isEmpty) {
-    maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
-  } else {
-    Some(PasswordEncoder.NOOP)
-  }
+  private val dynamicConfigPasswordEncoder = Some(PasswordEncoder.NOOP)
 
   private[server] def initialize(zkClientOpt: Option[KafkaZkClient], clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
@@ -373,16 +369,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     })
   }
 
-  private def maybeCreatePasswordEncoder(secret: Option[Password]): Option[PasswordEncoder] = {
-   secret.map { secret =>
-     PasswordEncoder.encrypting(secret,
-        kafkaConfig.passwordEncoderKeyFactoryAlgorithm,
-        kafkaConfig.passwordEncoderCipherAlgorithm,
-        kafkaConfig.passwordEncoderKeyLength,
-        kafkaConfig.passwordEncoderIterations)
-    }
-  }
-
   private def passwordEncoder: PasswordEncoder = {
     dynamicConfigPasswordEncoder.getOrElse(throw new ConfigException("Password encoder secret not configured"))
   }
@@ -446,25 +432,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   // encoded using the current secret. Ignore any errors during decoding since old secret may not
   // have been removed during broker restart.
   private def maybeReEncodePasswords(persistentProps: Properties, adminZkClient: AdminZkClient): Properties = {
-    val props = persistentProps.clone().asInstanceOf[Properties]
-    if (props.asScala.keySet.exists(isPasswordConfig)) {
-      maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderOldSecret).foreach { passwordDecoder =>
-        persistentProps.asScala.foreachEntry { (configName, value) =>
-          if (isPasswordConfig(configName) && value != null) {
-            val decoded = try {
-              Some(passwordDecoder.decode(value).value)
-            } catch {
-              case _: Exception =>
-                debug(s"Dynamic password config $configName could not be decoded using old secret, new secret will be used.")
-                None
-            }
-            decoded.foreach(value => props.put(configName, passwordEncoder.encode(new Password(value))))
-          }
-        }
-        adminZkClient.changeBrokerConfig(Some(kafkaConfig.brokerId), props)
-      }
-    }
-    props
+    persistentProps.clone().asInstanceOf[Properties]
   }
 
   /**
@@ -663,23 +631,12 @@ trait BrokerReconfigurable {
 
 object DynamicLogConfig {
   /**
-   * The log configurations that are non-reconfigurable. This set contains the names you
-   * would use when setting a dynamic configuration on a topic, which are different than the
-   * corresponding broker configuration names.
-   *
-   * For now, message.format.version is not reconfigurable, since we need to check that
-   * the version is supported on all brokers in the cluster.
-   */
-  val NonReconfigrableLogConfigs: Set[String] = Set(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-
-  /**
    * The broker configurations pertaining to logs that are reconfigurable. This set contains
    * the names you would use when setting a static or dynamic broker configuration (not topic
    * configuration).
    */
   val ReconfigurableConfigs: Set[String] =
-    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.
-      filterNot(s => NonReconfigrableLogConfigs.contains(s._1)).values.toSet
+    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.values.toSet
 }
 
 class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends BrokerReconfigurable with Logging {
@@ -745,13 +702,6 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
     val originalLogConfig = logManager.currentDefaultConfig
     val originalUncleanLeaderElectionEnable = originalLogConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
-    val originalLogConfigMap = originalLogConfig.originals()
-    DynamicLogConfig.NonReconfigrableLogConfigs.foreach(k => {
-      Option(originalLogConfigMap.get(k)) match {
-        case None => newBrokerDefaults.remove(k)
-        case Some(v) => newBrokerDefaults.put(k, v)
-      }
-    })
 
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
 
@@ -1167,6 +1117,22 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
           throw new ConfigException(s"$errorMsg, value should be at least 1")
         }
       }
+
+      if (RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP.equals(k) ||
+          RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP.equals(k) ||
+          RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP.equals(k)) {
+        val newValue = v.asInstanceOf[Int]
+        val oldValue = server.config.getInt(k)
+        if (newValue != oldValue) {
+          val errorMsg = s"Dynamic thread count update validation failed for $k=$v"
+          if (newValue <= 0)
+            throw new ConfigException(s"$errorMsg, value should be at least 1")
+          if (newValue < oldValue / 2)
+            throw new ConfigException(s"$errorMsg, value should be at least half the current value $oldValue")
+          if (newValue > oldValue * 2)
+            throw new ConfigException(s"$errorMsg, value should not be greater than double the current value $oldValue")
+        }
+      }
     }
   }
 
@@ -1176,29 +1142,40 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
 
     def isChangedLongValue(k : String): Boolean = oldLongValue(k) != newLongValue(k)
 
-    val remoteLogManager = server.remoteLogManagerOpt
-    if (remoteLogManager.nonEmpty) {
+    if (server.remoteLogManagerOpt.nonEmpty) {
+      val remoteLogManager = server.remoteLogManagerOpt.get
       if (isChangedLongValue(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)) {
         val oldValue = oldLongValue(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
         val newValue = newLongValue(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
-        remoteLogManager.get.resizeCacheSize(newValue)
+        remoteLogManager.resizeCacheSize(newValue)
         info(s"Dynamic remote log manager config: ${RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP} updated, " +
           s"old value: $oldValue, new value: $newValue")
       }
       if (isChangedLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP)) {
         val oldValue = oldLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP)
         val newValue = newLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP)
-        remoteLogManager.get.updateCopyQuota(newValue)
+        remoteLogManager.updateCopyQuota(newValue)
         info(s"Dynamic remote log manager config: ${RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP} updated, " +
           s"old value: $oldValue, new value: $newValue")
       }
       if (isChangedLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP)) {
         val oldValue = oldLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP)
         val newValue = newLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP)
-        remoteLogManager.get.updateFetchQuota(newValue)
+        remoteLogManager.updateFetchQuota(newValue)
         info(s"Dynamic remote log manager config: ${RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP} updated, " +
           s"old value: $oldValue, new value: $newValue")
       }
+
+      val newRLMConfig = newConfig.remoteLogManagerConfig
+      val oldRLMConfig = oldConfig.remoteLogManagerConfig
+      if (newRLMConfig.remoteLogManagerCopierThreadPoolSize() != oldRLMConfig.remoteLogManagerCopierThreadPoolSize())
+        remoteLogManager.resizeCopierThreadPool(newRLMConfig.remoteLogManagerCopierThreadPoolSize())
+
+      if (newRLMConfig.remoteLogManagerExpirationThreadPoolSize() != oldRLMConfig.remoteLogManagerExpirationThreadPoolSize())
+        remoteLogManager.resizeExpirationThreadPool(newRLMConfig.remoteLogManagerExpirationThreadPoolSize())
+
+      if (newRLMConfig.remoteLogReaderThreads() != oldRLMConfig.remoteLogReaderThreads())
+        remoteLogManager.resizeReaderThreadPool(newRLMConfig.remoteLogReaderThreads())
     }
   }
 
@@ -1219,6 +1196,9 @@ object DynamicRemoteLogConfig {
     RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP,
     RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP,
     RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP,
-    RemoteLogManagerConfig.REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP
+    RemoteLogManagerConfig.REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP,
+    RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
+    RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
+    RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP
   )
 }

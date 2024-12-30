@@ -17,10 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.Endpoint;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -61,7 +57,7 @@ public class QuorumFeaturesTest {
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         for (Feature feature : Feature.PRODUCTION_FEATURES) {
-            short maxVersion = feature.defaultLevel(MetadataVersion.LATEST_PRODUCTION);
+            short maxVersion = feature.latestProduction();
             if (maxVersion > 0) {
                 expectedFeatures.put(feature.featureName(), VersionRange.of(
                     feature.minimumProduction(),
@@ -69,7 +65,7 @@ public class QuorumFeaturesTest {
                 ));
             }
         }
-        assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(false));
+        assertEquals(expectedFeatures, QuorumFeatures.defaultSupportedFeatureMap(false));
     }
 
     @Test
@@ -87,13 +83,13 @@ public class QuorumFeaturesTest {
                 ));
             }
         }
-        assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));
+        assertEquals(expectedFeatures, QuorumFeatures.defaultSupportedFeatureMap(true));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void ensureDefaultSupportedFeaturesRangeMaxNotZero(boolean unstableVersionsEnabled) {
-        Map<String, VersionRange> quorumFeatures = QuorumFeatures.defaultFeatureMap(unstableVersionsEnabled);
+        Map<String, VersionRange> quorumFeatures = QuorumFeatures.defaultSupportedFeatureMap(unstableVersionsEnabled);
         for (VersionRange range : quorumFeatures.values()) {
             assertNotEquals(0, range.max());
         }
@@ -123,57 +119,5 @@ public class QuorumFeaturesTest {
         assertTrue(QUORUM_FEATURES.isControllerId(1));
         assertTrue(QUORUM_FEATURES.isControllerId(2));
         assertFalse(QUORUM_FEATURES.isControllerId(3));
-    }
-
-    @Test
-    public void testZkMigrationNotReadyIfMetadataVersionTooLow() {
-        assertEquals(Optional.of("The metadata.version too low at 3.0-IV1"),
-            QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
-                MetadataVersion.IBP_3_0_IV1, Collections.emptyMap()));
-    }
-
-    @Test
-    public void testZkMigrationReadyIfControllerRegistrationNotSupported() {
-        assertEquals(Optional.empty(),
-            QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
-                MetadataVersion.IBP_3_4_IV0, Collections.emptyMap()));
-    }
-
-    @Test
-    public void testZkMigrationNotReadyIfNotAllControllersRegistered() {
-        assertEquals(Optional.of("No registration found for controller 0"),
-            QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
-                MetadataVersion.IBP_3_7_IV0, Collections.emptyMap()));
-    }
-
-    @Test
-    public void testZkMigrationNotReadyIfControllerNotReady() {
-        assertEquals(Optional.of("Controller 0 has not enabled zookeeper.metadata.migration.enable"),
-            QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
-                MetadataVersion.IBP_3_7_IV0, Collections.singletonMap(0,
-                    new ControllerRegistration.Builder().
-                        setId(0).
-                        setZkMigrationReady(false).
-                        setIncarnationId(Uuid.fromString("kCBJaDGNQk6x3y5xbtQOpg")).
-                        setListeners(Collections.singletonMap("CONTROLLER",
-                                new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
-                        build())));
-    }
-
-    @Test
-    public void testZkMigrationReadyIfAllControllersReady() {
-        Map<Integer, ControllerRegistration> controllers = new HashMap<>();
-        QUORUM_FEATURES.quorumNodeIds().forEach(id ->
-            controllers.put(id,
-                new ControllerRegistration.Builder().
-                    setId(id).
-                    setZkMigrationReady(true).
-                    setIncarnationId(Uuid.fromString("kCBJaDGNQk6x3y5xbtQOpg")).
-                    setListeners(Collections.singletonMap("CONTROLLER",
-                        new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
-                    build())
-        );
-        assertEquals(Optional.empty(), QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
-            MetadataVersion.IBP_3_7_IV0, controllers));
     }
 }

@@ -53,7 +53,7 @@ public class ConsumerGroupListing {
      */
     @Deprecated
     public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup, Optional<ConsumerGroupState> state) {
-        this(groupId, Objects.requireNonNull(state).map(state0 -> GroupState.parse(state0.name())), Optional.empty(), isSimpleConsumerGroup);
+        this(groupId, Objects.requireNonNull(state).map(state0 -> GroupState.parse(state0.toString())), Optional.empty(), isSimpleConsumerGroup);
     }
 
     /**
@@ -72,7 +72,7 @@ public class ConsumerGroupListing {
         Optional<ConsumerGroupState> state,
         Optional<GroupType> type
     ) {
-        this(groupId, Objects.requireNonNull(state).map(state0 -> GroupState.parse(state0.name())), type, isSimpleConsumerGroup);
+        this(groupId, Objects.requireNonNull(state).map(state0 -> GroupState.parse(state0.toString())), type, isSimpleConsumerGroup);
     }
 
     /**
@@ -137,7 +137,7 @@ public class ConsumerGroupListing {
      */
     @Deprecated
     public Optional<ConsumerGroupState> state() {
-        return groupState.map(state0 -> ConsumerGroupState.parse(state0.name()));
+        return groupState.map(state0 -> ConsumerGroupState.parse(state0.toString()));
     }
 
     /**

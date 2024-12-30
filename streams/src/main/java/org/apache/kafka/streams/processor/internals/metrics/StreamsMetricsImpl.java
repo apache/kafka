@@ -151,6 +151,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATIO_DESCRIPTION = "The fraction of time the thread spent on ";
     public static final String AVG_LATENCY_DESCRIPTION = "The average latency of ";
     public static final String MAX_LATENCY_DESCRIPTION = "The maximum latency of ";
+    public static final String LATENCY_DESCRIPTION_SUFFIX = " in milliseconds";
     public static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     public static final String RATE_DESCRIPTION_SUFFIX = " per second";
 

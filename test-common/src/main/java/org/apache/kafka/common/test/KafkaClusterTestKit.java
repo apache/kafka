@@ -539,15 +539,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public Controller waitForActiveController() throws InterruptedException {
         AtomicReference<Controller> active = new AtomicReference<>(null);
-        TestUtils.retryOnExceptionWithTimeout(() -> {
+        TestUtils.waitForCondition(() -> {
             for (ControllerServer controllerServer : controllers.values()) {
                 if (controllerServer.controller().isActive()) {
                     active.set(controllerServer.controller());
                 }
             }
-            if (active.get() == null)
-                throw new RuntimeException("Controller not active");
-        });
+            return active.get() != null;
+        }, 60_000, "Controller not active");
         return active.get();
     }
 

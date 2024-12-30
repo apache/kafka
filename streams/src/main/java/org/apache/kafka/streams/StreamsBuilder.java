@@ -288,7 +288,7 @@ public class StreamsBuilder {
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic) {
-        return table(topic, new ConsumedInternal<>());
+        return table(topic, Consumed.with(null, null));
     }
 
     /**

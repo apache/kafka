@@ -31,6 +31,10 @@ TC_PATHS="tests/kafkatest/tests/streams tests/kafkatest/tests/tools" bash tests/
 ```
 TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py" bash tests/docker/run_tests.sh
 ```
+* Run multiple test files
+```
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py tests/kafkatest/services/console_consumer.py" bash tests/docker/run_tests.sh
+```
 * Run a specific test class
 ```
 TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest" bash tests/docker/run_tests.sh

@@ -232,9 +232,10 @@ https://kafka.apache.org/{docs_version}/documentation.html
 * Protocol:
 https://kafka.apache.org/{docs_version}/protocol.html
 
-* Successful Jenkins builds for the {dev_branch} branch:
+* Successful CI builds for the {dev_branch} branch:
 Unit/integration tests: https://ci-builds.apache.org/job/Kafka/job/kafka/job/{dev_branch}/<BUILD NUMBER>/
-System tests: https://jenkins.confluent.io/job/system-test-kafka/job/{dev_branch}/<BUILD_NUMBER>/
+-- Confluent engineers can access the semphore build to provide the build number
+System tests: https://confluent-open-source-kafka-system-test-results.s3-us-west-2.amazonaws.com/{dev_branch}/<BUILD_NUMBER>/report.html
 
 <USE docker/README.md FOR STEPS TO RUN DOCKER BUILD TEST GITHUB ACTIONS>
 * Successful Docker Image Github Actions Pipeline for {dev_branch} branch:

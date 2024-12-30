@@ -119,16 +119,18 @@ public class UnattachedState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
-        if (votedKey.isPresent()) {
+    public boolean canGrantVote(ReplicaKey replicaKey, boolean isLogUpToDate, boolean isPreVote) {
+        if (isPreVote) {
+            return canGrantPreVote(replicaKey, isLogUpToDate);
+        } else if (votedKey.isPresent()) {
             ReplicaKey votedReplicaKey = votedKey.get();
-            if (votedReplicaKey.id() == candidateKey.id()) {
-                return votedReplicaKey.directoryId().isEmpty() || votedReplicaKey.directoryId().equals(candidateKey.directoryId());
+            if (votedReplicaKey.id() == replicaKey.id()) {
+                return votedReplicaKey.directoryId().isEmpty() || votedReplicaKey.directoryId().equals(replicaKey.directoryId());
             }
             log.debug(
-                "Rejecting vote request from candidate ({}), already have voted for another " +
+                "Rejecting Vote request (preVote=false) from candidate ({}), already have voted for another " +
                     "candidate ({}) in epoch {}",
-                candidateKey,
+                replicaKey,
                 votedKey,
                 epoch
             );
@@ -136,16 +138,27 @@ public class UnattachedState implements EpochState {
         } else if (leaderId.isPresent()) {
             // If the leader id is known it should behave similar to the follower state
             log.debug(
-                "Rejecting vote request from candidate ({}) since we already have a leader {} in epoch {}",
-                candidateKey,
+                "Rejecting Vote request (preVote=false) from candidate ({}) since we already have a leader {} in epoch {}",
+                replicaKey,
                 leaderId,
                 epoch
             );
             return false;
         } else if (!isLogUpToDate) {
             log.debug(
-                "Rejecting vote request from candidate ({}) since candidate epoch/offset is not up to date with us",
-                candidateKey
+                "Rejecting Vote request (preVote=false) from candidate ({}) since candidate epoch/offset is not up to date with us",
+                replicaKey
+            );
+        }
+
+        return isLogUpToDate;
+    }
+
+    private boolean canGrantPreVote(ReplicaKey replicaKey, boolean isLogUpToDate) {
+        if (!isLogUpToDate) {
+            log.debug(
+                "Rejecting Vote request (preVote=true) from replica ({}) since replica's log is not up to date with us",
+                replicaKey
             );
         }
 

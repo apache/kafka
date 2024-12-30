@@ -125,10 +125,10 @@ public final class SourceConnectorConfig extends ConnectorConfig {
     private final EnrichedSourceConnectorConfig enrichedSourceConfig;
     private final String offsetsTopic;
 
-    public static ConfigDef configDef() {
+    private static ConfigDef configDef(ConfigDef baseConfigDef) {
         ConfigDef.Validator atLeastZero = ConfigDef.Range.atLeast(0);
         int orderInGroup = 0;
-        return new ConfigDef(ConnectorConfig.configDef())
+        return new ConfigDef(baseConfigDef)
                 .define(
                         TOPIC_CREATION_GROUPS_CONFIG,
                         ConfigDef.Type.LIST,
@@ -201,6 +201,18 @@ public final class SourceConnectorConfig extends ConnectorConfig {
                         orderInGroup = 1,
                         ConfigDef.Width.LONG,
                         OFFSETS_TOPIC_DISPLAY);
+    }
+
+    public static ConfigDef configDef() {
+        return configDef(ConnectorConfig.configDef());
+    }
+
+    public static ConfigDef enrichedConfigDef(Plugins plugins, Map<String, String> connProps, WorkerConfig workerConfig) {
+        return configDef(ConnectorConfig.enrichedConfigDef(plugins, connProps, workerConfig));
+    }
+
+    public static ConfigDef enrichedConfigDef(Plugins plugins, String connectorClass) {
+        return configDef(ConnectorConfig.enrichedConfigDef(plugins, connectorClass));
     }
 
     public static ConfigDef embedDefaultGroup(ConfigDef baseConfigDef) {

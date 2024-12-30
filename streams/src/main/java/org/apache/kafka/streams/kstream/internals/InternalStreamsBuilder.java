@@ -442,9 +442,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             GraphNode left = null, right = null;
             for (final GraphNode child: parent.children()) {
                 if (child instanceof WindowedStreamProcessorNode && child.buildPriority() < joinNode.buildPriority()) {
-                    if (child.nodeName().equals(joinNode.thisWindowedStreamProcessorParameters().processorName())) {
+                    if (child.nodeName().equals(joinNode.thisWindowedStreamProcessorName())) {
                         left = child;
-                    } else if (child.nodeName().equals(joinNode.otherWindowedStreamProcessorParameters().processorName())) {
+                    } else if (child.nodeName().equals(joinNode.otherWindowedStreamProcessorName())) {
                         right = child;
                     }
                 }

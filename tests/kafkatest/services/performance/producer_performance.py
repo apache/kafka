@@ -19,7 +19,7 @@ from ducktape.utils.util import wait_until
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
-from kafkatest.services.kafka.util import fix_opts_for_new_jvm
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm, get_log4j_config_param, get_log4j_config_for_tools
 from kafkatest.services.monitor.http import HttpMetricsCollector
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
@@ -33,7 +33,6 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "producer_performance.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "producer_performance.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=DEV_BRANCH, settings=None,
                  intermediate_stats=False, client_id="producer-performance"):
@@ -90,7 +89,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
                 cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % jar
             cmd += "export CLASSPATH; "
 
-        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
+        cmd += " export KAFKA_LOG4J_OPTS=\"%s%s\"; " % (get_log4j_config_param(node), get_log4j_config_for_tools(node))
         cmd += "KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError\" %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
               "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s %(metrics_props)s" % args
 
@@ -119,8 +118,8 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
         node.account.ssh("mkdir -p %s" % ProducerPerformanceService.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
-        log_config = self.render('tools_log4j.properties', log_file=ProducerPerformanceService.LOG_FILE)
-        node.account.create_file(ProducerPerformanceService.LOG4J_CONFIG, log_config)
+        log_config = self.render(get_log4j_config_for_tools(node), log_file=ProducerPerformanceService.LOG_FILE)
+        node.account.create_file(get_log4j_config_for_tools(node), log_config)
 
         cmd = self.start_cmd(node)
         self.logger.debug("Producer performance %d command: %s", idx, cmd)
