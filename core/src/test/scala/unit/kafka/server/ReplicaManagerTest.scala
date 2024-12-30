@@ -58,7 +58,7 @@ import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, MetadataVersion, OffsetAndEpoch, RequestLocal, StopPartition}
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.BrokerEndPoint
@@ -4101,7 +4101,12 @@ class ReplicaManagerTest {
     val tidp0 = new TopicIdPartition(topicId, tp0)
 
     val props = new Properties()
-    props.put("zookeeper.connect", "test")
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "0")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
+    props.setProperty("listeners", "CONTROLLER://:9093")
+    props.setProperty("advertised.listeners", "CONTROLLER://127.0.0.1:9093")
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
     props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
     props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
@@ -4209,7 +4214,12 @@ class ReplicaManagerTest {
     val tidp0 = new TopicIdPartition(topicId, tp0)
 
     val props = new Properties()
-    props.put("zookeeper.connect", "test")
+    props.setProperty("process.roles", "controller")
+    props.setProperty("node.id", "0")
+    props.setProperty("controller.listener.names", "CONTROLLER")
+    props.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
+    props.setProperty("listeners", "CONTROLLER://:9093")
+    props.setProperty("advertised.listeners", "CONTROLLER://127.0.0.1:9093")
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
     props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
     props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)

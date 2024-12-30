@@ -29,7 +29,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 
@@ -50,7 +50,7 @@ class KafkaConfigTest {
     assertEquals(1, config1.brokerId)
 
     // We should be able to override given property on command line
-    val config2 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=2")))
+    val config2 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "node.id=2")))
     assertEquals(2, config2.brokerId)
 
     // We should be also able to set completely new property
@@ -59,7 +59,7 @@ class KafkaConfigTest {
     assertEquals(util.Arrays.asList("compact"), config3.logCleanupPolicy)
 
     // We should be also able to set several properties
-    val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "broker.id=2")))
+    val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "node.id=2")))
     assertEquals(2, config4.brokerId)
     assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
   }
@@ -155,16 +155,6 @@ class KafkaConfigTest {
       |must contain the set of bootstrap controllers or controller.quorum.voters must contain a
       |parseable set of controllers.""".stripMargin.replace("\n", " ")
     )
-
-    // Ensure that if neither process.roles nor controller.quorum.voters is populated, then an exception is thrown if zookeeper.connect is not defined
-    propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "")
-    assertBadConfigContainingMessage(propertiesFile,
-      "Missing required configuration `zookeeper.connect` which has no default value.")
-
-    // Ensure that no exception is thrown once zookeeper.connect is defined (and we clear controller.listener.names)
-    propertiesFile.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
-    propertiesFile.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "")
-    KafkaConfig.fromProps(propertiesFile)
   }
 
   private def setListenerProps(props: Properties): Unit = {
@@ -244,7 +234,14 @@ class KafkaConfigTest {
   }
 
   def prepareDefaultConfig(): String = {
-    prepareConfig(Array("broker.id=1", "zookeeper.connect=somewhere"))
+    prepareConfig(Array(
+      "node.id=1", 
+      "process.roles=controller", 
+      "controller.listener.names=CONTROLLER",
+      "controller.quorum.voters=1@localhost:9093,2@localhost:9093",
+      "listeners=CONTROLLER://:9093",
+      "advertised.listeners=CONTROLLER://127.0.0.1:9093"
+    ))
   }
 
   def prepareConfig(lines : Array[String]): String = {
