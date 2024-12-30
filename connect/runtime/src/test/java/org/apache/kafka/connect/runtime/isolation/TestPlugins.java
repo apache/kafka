@@ -51,6 +51,7 @@ import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
+
 /**
  * Utility class for constructing test plugins for Connect.
  *
@@ -292,7 +293,7 @@ public class TestPlugins {
                 if (pluginJars.containsKey(testPackage)) {
                     log.debug("Skipping recompilation of " + testPackage.resourceDir());
                 }
-                pluginJars.put(testPackage, createPluginJar(testPackage.resourceDir(), testPackage.removeRuntimeClasses()));
+                pluginJars.put(testPackage, createPluginJar(testPackage.resourceDir(), testPackage.removeRuntimeClasses(), Collections.emptyMap()));
             }
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
@@ -375,10 +376,11 @@ public class TestPlugins {
                 .toArray(TestPlugin[]::new);
     }
 
-    private static Path createPluginJar(String resourceDir, Predicate<String> removeRuntimeClasses) throws IOException {
+
+    static Path createPluginJar(String resourceDir, Predicate<String> removeRuntimeClasses, Map<String, String> replacements) throws IOException {
         Path inputDir = resourceDirectoryPath("test-plugins/" + resourceDir);
         Path binDir = Files.createTempDirectory(resourceDir + ".bin.");
-        compileJavaSources(inputDir, binDir);
+        compileJavaSources(inputDir, binDir, replacements);
         Path jarFile = Files.createTempFile(resourceDir + ".", ".jar");
         try (JarOutputStream jar = openJarFile(jarFile)) {
             writeJar(jar, inputDir, removeRuntimeClasses);
@@ -438,7 +440,7 @@ public class TestPlugins {
      * @param sourceDir Directory containing java source files
      * @throws IOException if the files cannot be compiled
      */
-    private static void compileJavaSources(Path sourceDir, Path binDir) throws IOException {
+    private static void compileJavaSources(Path sourceDir, Path binDir, Map<String, String> replacements) throws IOException {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         List<File> sourceFiles;
         try (Stream<Path> stream = Files.walk(sourceDir)) {
@@ -446,13 +448,14 @@ public class TestPlugins {
                     .filter(Files::isRegularFile)
                     .map(Path::toFile)
                     .filter(file -> file.getName().endsWith(".java"))
+                    .map(file -> copyAndReplace(file, replacements))
                     .collect(Collectors.toList());
         }
+
         StringWriter writer = new StringWriter();
         List<String> options = Arrays.asList(
             "-d", binDir.toString() // Write class output to a different directory.
         );
-
         try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {
             boolean success = compiler.getTask(
                 writer,
@@ -465,6 +468,27 @@ public class TestPlugins {
             if (!success) {
                 throw new RuntimeException("Failed to compile test plugin:\n" + writer);
             }
+        } finally {
+            if (!replacements.isEmpty()) {
+                sourceFiles.forEach(File::delete);
+            }
+        }
+    }
+
+    private static File copyAndReplace(File source, Map<String, String> replacements) throws RuntimeException {
+        if (replacements.isEmpty()) {
+            return source;
+        }
+        try {
+            String content = Files.readString(source.toPath());
+            for (Map.Entry<String, String> entry : replacements.entrySet()) {
+                content = content.replace(entry.getKey(), entry.getValue());
+            }
+            File tmpFile = new File(System.getProperty("java.io.tmpdir") + File.separator + source.getName());
+            Files.writeString(tmpFile.toPath(), content);
+            return tmpFile;
+        } catch (IOException e) {
+            throw new RuntimeException("Could not copy and replace file: " + source, e);
         }
     }
 
@@ -493,5 +517,4 @@ public class TestPlugins {
             }
         }
     }
-
 }

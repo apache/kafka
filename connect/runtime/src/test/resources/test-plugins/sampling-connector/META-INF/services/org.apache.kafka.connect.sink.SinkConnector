@@ -14,3 +14,4 @@
  # limitations under the License.
 
 test.plugins.SamplingConnector
+test.plugins.VersionedSamplingSinkConnector

@@ -77,12 +77,12 @@ public class PluginsRecommenders {
         return headerConverterPluginVersionRecommender;
     }
 
-    public TransformationPluginRecommender transformationPluginRecommender(String classOrAlias) {
-        return new TransformationPluginRecommender(classOrAlias);
+    public TransformationPluginRecommender transformationPluginRecommender(String classOrAliasConfig) {
+        return new TransformationPluginRecommender(classOrAliasConfig);
     }
 
-    public PredicatePluginRecommender predicatePluginRecommender(String classOrAlias) {
-        return new PredicatePluginRecommender(classOrAlias);
+    public PredicatePluginRecommender predicatePluginRecommender(String classOrAliasConfig) {
+        return new PredicatePluginRecommender(classOrAliasConfig);
     }
 
     public class ConnectorPluginVersionRecommender implements ConfigDef.Recommender {

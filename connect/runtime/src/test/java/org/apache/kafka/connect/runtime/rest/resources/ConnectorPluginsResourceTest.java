@@ -34,10 +34,12 @@ import org.apache.kafka.connect.runtime.SampleSinkConnector;
 import org.apache.kafka.connect.runtime.SampleSourceConnector;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoaderTest;
+import org.apache.kafka.connect.runtime.isolation.MultiVersionTest;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.VersionedPluginBuilder;
 import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
@@ -90,6 +92,7 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -440,6 +443,30 @@ public class ConnectorPluginsResourceTest {
         for (String config : ConnectorPluginsResourceTestConnector.CONFIG_DEF.names()) {
             Optional<ConfigKeyInfo> cki = connectorConfigDef.stream().filter(c -> c.name().equals(config)).findFirst();
             assertTrue(cki.isPresent());
+        }
+    }
+
+    @Test
+    public void testMultiplePluginVersions() {
+        assertNotNull(MultiVersionTest.MULTI_VERSION_PLUGINS, "Plugins with multiple plugin artifacts is not initialized in MultiVersionTest.MULTI_VERSION_PLUGINS");
+        when(herder.plugins()).thenReturn(MultiVersionTest.MULTI_VERSION_PLUGINS);
+        RestRequestTimeout requestTimeout = RestRequestTimeout.constant(
+            DEFAULT_REST_REQUEST_TIMEOUT_MS,
+            DEFAULT_HEALTH_CHECK_TIMEOUT_MS
+        );
+        ConnectorPluginsResource pluginsResource = new ConnectorPluginsResource(herder, requestTimeout);
+        Map<String, Set<String>> pluginAndVersions = new HashMap<>();
+        for (PluginInfo info: pluginsResource.listConnectorPlugins(false)) {
+            pluginAndVersions.computeIfAbsent(info.className(), k -> new HashSet<>()).add(info.version());
+        }
+        List<VersionedPluginBuilder.BuildInfo> artifacts = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS.values().stream()
+            .flatMap(Collection::stream)
+            .toList();
+        for (VersionedPluginBuilder.BuildInfo artifact : artifacts) {
+            String pluginName = artifact.plugin().className();
+            String version = artifact.version();
+            assertTrue(pluginAndVersions.containsKey(pluginName), "Plugin " + pluginName + " is not listed");
+            assertTrue(pluginAndVersions.get(pluginName).contains(version), "Plugin " + pluginName + " with version " + version + " is not listed");
         }
     }
 
