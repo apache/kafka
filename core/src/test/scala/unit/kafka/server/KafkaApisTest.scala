@@ -74,14 +74,12 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
-import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.{BrokerFeatures, ClientMetricsManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, TransactionVersion}
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData}
 import org.apache.kafka.server.quota.ThrottleCallback
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
@@ -159,15 +157,9 @@ class KafkaApisTest extends Logging {
                       authorizer: Option[Authorizer] = None,
                       enableForwarding: Boolean = false,
                       configRepository: ConfigRepository = new MockConfigRepository(),
-                      raftSupport: Boolean = false,
                       overrideProperties: Map[String, String] = Map.empty,
                       featureVersions: Seq[FeatureVersion] = Seq.empty): KafkaApis = {
     val properties = TestUtils.createBrokerConfig(brokerId)
-    properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
-    properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
-    properties.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://:9092,CONTROLLER://:9093")
-
     overrideProperties.foreach( p => properties.put(p._1, p._2))
     TestUtils.setIbpVersion(properties, interBrokerProtocolVersion)
     val config = new KafkaConfig(properties)
@@ -301,7 +293,7 @@ class KafkaApisTest extends Logging {
     val requestData = DescribeQuorumRequest.singletonRequest(KafkaRaftServer.MetadataPartition)
     val requestBuilder = new DescribeQuorumRequest.Builder(requestData)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis = createKafkaApis()
     testForwardableApi(kafkaApis = kafkaApis,
       ApiKeys.DESCRIBE_QUORUM,
       requestBuilder
@@ -313,7 +305,7 @@ class KafkaApisTest extends Logging {
     requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]
   ): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(enableForwarding = true, raftSupport = true)
+    kafkaApis = createKafkaApis(enableForwarding = true)
     testForwardableApi(kafkaApis = kafkaApis,
       apiKey,
       requestBuilder
@@ -424,7 +416,7 @@ class KafkaApisTest extends Logging {
     val requestBuilder = new CreateTopicsRequest.Builder(requestData).build()
     val request = buildRequest(requestBuilder)
 
-    kafkaApis = createKafkaApis(enableForwarding = true, raftSupport = true)
+    kafkaApis = createKafkaApis(enableForwarding = true)
     val forwardCallback: ArgumentCaptor[Option[AbstractResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Option[AbstractResponse] => Unit])
 
@@ -3693,8 +3685,8 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      raftSupport = true)
+        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
+    )
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
     val responseData = response.data()
