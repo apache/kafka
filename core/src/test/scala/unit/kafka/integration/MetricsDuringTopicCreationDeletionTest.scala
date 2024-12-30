@@ -51,7 +51,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
 
   @volatile private var running = true
 
-  override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum, null)
+  override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @BeforeEach
