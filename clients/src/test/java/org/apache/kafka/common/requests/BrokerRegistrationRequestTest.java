@@ -113,11 +113,7 @@ class BrokerRegistrationRequestTest {
                     new BrokerRegistrationRequestData.Feature().
                         setName("metadata.version").
                         setMinSupportedVersion((short) 1).
-                        setMaxSupportedVersion((short) 17),
-                    new BrokerRegistrationRequestData.Feature().
-                        setName("kraft.version").
-                        setMinSupportedVersion((short) 1).
-                        setMaxSupportedVersion((short) 1)).iterator()), data.features());
+                        setMaxSupportedVersion((short) 17)).iterator()), data.features());
         } else {
             assertEquals(new BrokerRegistrationRequestData.FeatureCollection(
                 Arrays.asList(

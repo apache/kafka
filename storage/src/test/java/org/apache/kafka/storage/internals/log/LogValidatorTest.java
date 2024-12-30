@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import kafka.server.RequestLocal;
-
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
@@ -41,6 +39,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult;
 import org.apache.kafka.test.TestUtils;
@@ -133,12 +132,12 @@ public class LogValidatorTest {
 
     @ParameterizedTest
     @CsvSource({
-            "0,gzip,none", "1,gzip,none", "2,gzip,none",
-            "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
-            "0,snappy,gzip", "1,snappy,gzip", "2,snappy,gzip",
-            "0,lz4,gzip", "1,lz4,gzip", "2,lz4,gzip",
-            "2,none,none", "2,none,gzip",
-            "2,zstd,gzip",
+        "0,gzip,none", "1,gzip,none", "2,gzip,none",
+        "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
+        "0,snappy,gzip", "1,snappy,gzip", "2,snappy,gzip",
+        "0,lz4,gzip", "1,lz4,gzip", "2,lz4,gzip",
+        "2,none,none", "2,none,gzip",
+        "2,zstd,gzip",
     })
     public void checkOnlyOneBatch(Byte magic, String sourceCompression,
                                    String targetCompression) {
@@ -713,9 +712,9 @@ public class LogValidatorTest {
 
     @ParameterizedTest
     @CsvSource({
-            "0,gzip,gzip", "1,gzip,gzip",
-            "0,lz4,lz4", "1,lz4,lz4",
-            "0,snappy,snappy", "1,snappy,snappy",
+        "0,gzip,gzip", "1,gzip,gzip",
+        "0,lz4,lz4", "1,lz4,lz4",
+        "0,snappy,snappy", "1,snappy,snappy",
     })
     public void checkInvalidChecksum(byte magic, String compressionName, String typeName) {
         Compression compression = Compression.of(compressionName).build();
@@ -814,10 +813,10 @@ public class LogValidatorTest {
 
     @ParameterizedTest
     @CsvSource({
-            "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
-            "0,lz4,lz4", "1,lz4,lz4", "2,lz4,lz4",
-            "0,snappy,snappy", "1,snappy,snappy", "2,snappy,snappy",
-            "2,zstd,zstd"
+        "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
+        "0,lz4,lz4", "1,lz4,lz4", "2,lz4,lz4",
+        "0,snappy,snappy", "1,snappy,snappy", "2,snappy,snappy",
+        "2,zstd,zstd"
     })
     public void checkNoKeyCompactedTopic(byte magic, String compressionName, String typeName) {
         Compression codec = Compression.of(compressionName).build();

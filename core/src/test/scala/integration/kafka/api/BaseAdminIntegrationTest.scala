@@ -30,7 +30,8 @@ import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.test.TestUtils.assertFutureThrows
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -38,7 +39,7 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 /**
  * Base integration test cases for [[Admin]]. Each test case added here will be executed
@@ -71,14 +72,14 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateDeleteTopics(quorum: String): Unit = {
     client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
       new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
       new NewTopic("mytopic2", 3, 3.toShort),
-      new NewTopic("mytopic3", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
+      new NewTopic("mytopic3", Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava)
     )
     val validateResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true))
     validateResult.all.get()
@@ -108,14 +109,14 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     val failedCreateResult = client.createTopics(newTopics.asJava)
     val results = failedCreateResult.values()
     assertTrue(results.containsKey("mytopic"))
-    assertFutureExceptionTypeEquals(results.get("mytopic"), classOf[TopicExistsException])
+    assertFutureThrows(results.get("mytopic"), classOf[TopicExistsException])
     assertTrue(results.containsKey("mytopic2"))
-    assertFutureExceptionTypeEquals(results.get("mytopic2"), classOf[TopicExistsException])
+    assertFutureThrows(results.get("mytopic2"), classOf[TopicExistsException])
     assertTrue(results.containsKey("mytopic3"))
-    assertFutureExceptionTypeEquals(results.get("mytopic3"), classOf[TopicExistsException])
-    assertFutureExceptionTypeEquals(failedCreateResult.numPartitions("mytopic3"), classOf[TopicExistsException])
-    assertFutureExceptionTypeEquals(failedCreateResult.replicationFactor("mytopic3"), classOf[TopicExistsException])
-    assertFutureExceptionTypeEquals(failedCreateResult.config("mytopic3"), classOf[TopicExistsException])
+    assertFutureThrows(results.get("mytopic3"), classOf[TopicExistsException])
+    assertFutureThrows(failedCreateResult.numPartitions("mytopic3"), classOf[TopicExistsException])
+    assertFutureThrows(failedCreateResult.replicationFactor("mytopic3"), classOf[TopicExistsException])
+    assertFutureThrows(failedCreateResult.config("mytopic3"), classOf[TopicExistsException])
 
     val topicToDescription = client.describeTopics(topics.asJava).allTopicNames.get()
     assertEquals(topics.toSet, topicToDescription.keySet.asScala)
@@ -164,7 +165,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAuthorizedOperations(quorum: String): Unit = {
     client = createAdminClient
 
@@ -218,7 +219,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     }
   }
 
-  override def kraftControllerConfigs(): Seq[Properties] = {
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     val controllerConfig = new Properties()
     val controllerConfigs = Seq(controllerConfig)
     modifyConfigs(controllerConfigs)

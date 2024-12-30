@@ -41,6 +41,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Disable warnings about creating Classloaders inside doPrivilege.
+            DP_CREATE_CLASSLOADER_INSIDE_DO_PRIVILEGED: Classloaders should only be created inside doPrivileged block
+            The security manager has been deprecated for removal as of JDK 17, see https://openjdk.org/jeps/411 -->
+        <Bug pattern="DP_CREATE_CLASSLOADER_INSIDE_DO_PRIVILEGED"/>
+    </Match>
+
+    <Match>
         <!-- Disable warnings about the lack of equals() when compareTo() is implemented.
             EQ_COMPARETO_USE_OBJECT_EQUALS: This class defines a compareTo method but no equals() method -->
         <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
@@ -163,15 +170,8 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
              Given that, this bug pattern doesn't make sense for Scala code. -->
         <Or>
             <Class name="kafka.log.Log"/>
-            <Class name="kafka.log.LocalLog$"/>
         </Or>
         <Bug pattern="REC_CATCH_EXCEPTION"/>
-    </Match>
-
-    <Match>
-        <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
-        <Class name="kafka.tools.StateChangeLogMerger$"/>
-        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
     </Match>
 
     <Match>
@@ -185,65 +185,9 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
-        <Source name="AdminUtils.scala"/>
-        <Package name="kafka.admin"/>
-        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
-    </Match>
-
-    <Match>
-        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
-        <Source name="ControllerContext.scala"/>
-        <Package name="kafka.controller"/>
-        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
-    </Match>
-
-    <Match>
         <!-- offsets is a lazy val and it confuses spotBugs with its locking scheme -->
         <Class name="kafka.server.checkpoints.LazyOffsetCheckpointMap"/>
         <Bug pattern="IS2_INCONSISTENT_SYNC"/>
-    </Match>
-
-    <Match>
-        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
-        <Source name="ReplicaManager.scala"/>
-        <Package name="kafka.server"/>
-        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
-    </Match>
-
-    <Match>
-        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
-        <Source name="LogManager.scala"/>
-        <Package name="kafka.log"/>
-        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
-    </Match>
-
-    <Match>
-        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
-        <Source name="DelayedElectLeader.scala"/>
-        <Package name="kafka.server"/>
-        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
-    </Match>
-
-    <Match>
-        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
-        <Source name="AdminZkClient.scala"/>
-        <Package name="kafka.zk"/>
-        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
-    </Match>
-
-    <Match>
-        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
-        <Source name="AuthHelper.scala"/>
-        <Package name="kafka.server"/>
-        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
-    </Match>
-
-    <Match>
-        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
-        <Source name="KafkaApis.scala"/>
-        <Package name="kafka.server"/>
-        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
     </Match>
 
     <Match>
@@ -325,6 +269,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Package name="kafka.internals.generated"/>
         </Or>
         <Bug pattern="MS_MUTABLE_ARRAY"/>
+    </Match>
+
+    <Match>
+        <Class name="org.apache.kafka.streams.processor.internals.TopologyMetadata"/>
+        <Method name="offsetResetStrategy"/>
+        <Bug pattern="NP_OPTIONAL_RETURN_NULL"/>
     </Match>
 
     <Match>
@@ -608,6 +558,21 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.tools.StreamsResetter"/>
         </Or>
         <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+    <Match>
+        <!-- Suppress warning about using static DateFormat in a multithreaded context -->
+        <Class name="org.apache.kafka.tools.ReplicaVerificationTool$ReplicaBuffer"/>
+        <Bug pattern="STCAL_INVOKE_ON_STATIC_DATE_FORMAT_INSTANCE"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warning about SING_SINGLETON_HAS_NONPRIVATE_CONSTRUCTOR in multiple class -->
+        <Or>
+            <Class name="org.apache.kafka.common.Node"/>
+            <Class name="org.apache.kafka.common.record.UnalignedMemoryRecords"/>
+            <Class name="org.apache.kafka.clients.Metadata$LeaderAndEpoch"/>
+        </Or>
+        <Bug pattern="SING_SINGLETON_HAS_NONPRIVATE_CONSTRUCTOR"/>
     </Match>
 
 </FindBugsFilter>

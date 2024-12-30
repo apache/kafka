@@ -1,0 +1,275 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Check and Test
+
+# This workflow should only be called from ci.yml which is triggered on
+# the "pull_request" event type. We should never dispatch this workflow from
+# a "pull_request_target" event.
+on:
+  workflow_call:
+    inputs:
+      gradle-cache-read-only:
+        description: "Should the Gradle cache be read-only?"
+        default: true
+        type: boolean
+      gradle-cache-write-only:
+        description: "Should the Gradle cache be write-only?"
+        default: false
+        type: boolean
+      is-public-fork:
+        description: "Is this CI run from a public fork?"
+        default: true
+        type: boolean
+
+jobs:
+  load-catalog:
+    runs-on: ubuntu-latest
+    name: Load Test Catalog
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout test-catalog
+        uses: actions/checkout@v4
+        with:
+          ref: 'test-catalog'
+          persist-credentials: false
+          fetch-depth: 100  # Needs to be large enough to ensure we can fetch N days ago
+          path: test-catalog
+
+      - name: Checkout catalog at earlier date
+        run: |
+          cd test-catalog
+          SHA=$(git rev-list -1 --before 7.days.ago origin/test-catalog)
+          echo $SHA
+          git switch --detach $SHA
+          git show --no-patch
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
+
+      # Prior to this step, we don't expect any errors. For the rest of this "load-catalog" job, we need to ensure
+      # we do not fail as this will fail the overall workflow.
+      - name: Combine Catalog into single file
+        id: combine-catalog
+        continue-on-error: true
+        run: |
+          python .github/scripts/format-test-catalog.py --path "test-catalog/test-catalog/**/*.yaml"
+
+      - name: Archive Combined Test Catalog
+        if: steps.combine-catalog.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-test-catalog
+          path: combined-test-catalog.txt
+          compression-level: 9
+
+  validate:
+    runs-on: ubuntu-latest
+    name: Compile and Check Java
+    outputs:
+      is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Check for Draft PR
+        id: check-draft-pr
+        if: |
+          github.event_name == 'pull_request' && 
+          github.event.pull_request.draft
+        run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
+      - name: Setup Gradle
+        uses: ./.github/actions/setup-gradle
+        with:
+          java-version: 23
+          gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
+          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
+          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+      - name: Compile and validate
+        env:
+          SCAN_ARG: ${{ inputs.is-public-fork && '--no-scan' || '--scan' }}
+        # Gradle flags
+        # --build-cache:  Let Gradle restore the build cache
+        # --info:         For now, we'll generate lots of logs while setting up the GH Actions
+        # --scan:         Publish the build scan. This will only work on PRs from apache/kafka and trunk
+        # --no-scan:      For public fork PRs, we won't attempt to publish the scan
+        run: |
+          ./gradlew --build-cache --info $SCAN_ARG check -x test
+      - name: Archive check reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-reports
+          path: |
+            **/build/**/*.html
+          compression-level: 9
+          if-no-files-found: ignore
+      - name: Annotate checkstyle errors
+        if: failure()
+        run: python .github/scripts/checkstyle.py
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+      - name: Annotate Rat errors
+        if: failure()
+        run: python .github/scripts/rat.py
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+
+  test:
+    needs: [validate, load-catalog]
+    if: ${{ ! needs.validate.outputs.is-draft }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ 23, 17 ]  # If we change these, make sure to adjust ci-complete.yml
+    name: JUnit tests Java ${{ matrix.java }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
+      - name: Setup Gradle
+        uses: ./.github/actions/setup-gradle
+        with:
+          java-version: ${{ matrix.java }}
+          gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
+          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
+          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+
+      # If the load-catalog job failed, we won't be able to download the artifact. Since we don't want this to fail
+      # the overall workflow, so we'll continue here without a test catalog.
+      - name: Load Test Catalog
+        id: load-test-catalog
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: combined-test-catalog
+
+      - name: JUnit Quarantined Tests
+        id: junit-quarantined-test
+        uses: ./.github/actions/run-gradle
+        with:
+          test-task: quarantinedTest
+          timeout-minutes: 30
+          test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
+          build-scan-artifact-name: build-scan-quarantined-test-${{ matrix.java }}
+
+      - name: JUnit Tests
+        id: junit-test
+        uses: ./.github/actions/run-gradle
+        with:
+          test-task: test
+          timeout-minutes: 180  # 3 hours
+          test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
+          build-scan-artifact-name: build-scan-test-${{ matrix.java }}
+
+      - name: Archive JUnit HTML reports
+        uses: actions/upload-artifact@v4
+        id: junit-upload-artifact
+        with:
+          name: junit-reports-${{ matrix.java }}
+          path: |
+            **/build/reports/tests/*
+          compression-level: 9
+          if-no-files-found: ignore
+
+      - name: Archive JUnit XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-xml-${{ matrix.java }}
+          path: |
+            build/junit-xml/**/*.xml
+          compression-level: 9
+          if-no-files-found: ignore
+
+      - name: Archive Thread Dumps
+        id: thread-dump-upload-artifact
+        if: always() && (steps.junit-test.outputs.gradle-exitcode == '124' || steps.junit-quarantined-test.outputs.gradle-exitcode == '124')
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-thread-dumps-${{ matrix.java }}
+          path: |
+            thread-dumps/*
+          compression-level: 9
+          if-no-files-found: ignore
+
+      - name: Parse JUnit tests
+        run: python .github/scripts/junit.py --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          JUNIT_REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
+          THREAD_DUMP_URL: ${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}
+          GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.gradle-exitcode }}
+
+      - name: Archive Test Catalog
+        if: ${{ always() && matrix.java == '23' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-catalog
+          path: test-catalog
+          compression-level: 9
+          if-no-files-found: ignore
+
+  update-test-catalog:
+    name: Update Test Catalog
+    needs: test
+    if: ${{ always() && !inputs.is-public-fork }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Test Catalog
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true  # Needed to commit and push later
+          ref: test-catalog
+      - name: Reset Catalog
+        run: |
+          rm -rf test-catalog
+      - name: Download Test Catalog
+        uses: actions/download-artifact@v4
+        with:
+          name: test-catalog
+          path: test-catalog
+      - name: Push Test Catalog
+        # Git user.name and user.email come from https://github.com/actions/checkout?tab=readme-ov-file#push-a-commit-using-the-built-in-token
+        env:
+          COMMIT_MSG: |
+            Update test catalog data for GHA workflow run ${{ github.run_id }}
+            
+            Commit: https://github.com/apache/kafka/commit/${{ github.sha }}
+            GitHub Run: https://github.com/apache/kafka/actions/runs/${{ github.run_id }}
+        run: |
+          pwd
+          ls -R
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test-catalog
+          git diff --quiet && git diff --staged --quiet || git commit -m "$COMMIT_MSG"
+          git push

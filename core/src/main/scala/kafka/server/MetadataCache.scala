@@ -22,6 +22,7 @@ import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.message.{MetadataResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
@@ -116,10 +117,9 @@ trait MetadataCache {
 object MetadataCache {
   def zkMetadataCache(brokerId: Int,
                       metadataVersion: MetadataVersion,
-                      brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty(),
-                      zkMigrationEnabled: Boolean = false)
+                      brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty())
   : ZkMetadataCache = {
-    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures, zkMigrationEnabled)
+    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures)
   }
 
   def kRaftMetadataCache(

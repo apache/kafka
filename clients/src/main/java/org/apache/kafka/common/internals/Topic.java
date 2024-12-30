@@ -18,9 +18,7 @@ package org.apache.kafka.common.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.utils.Utils;
 
-import java.util.Collections;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -36,8 +34,7 @@ public class Topic {
     );
     public static final String LEGAL_CHARS = "[a-zA-Z0-9._-]";
 
-    private static final Set<String> INTERNAL_TOPICS = Collections.unmodifiableSet(
-            Utils.mkSet(GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, SHARE_GROUP_STATE_TOPIC_NAME));
+    private static final Set<String> INTERNAL_TOPICS = Set.of(GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, SHARE_GROUP_STATE_TOPIC_NAME);
 
     private static final int MAX_NAME_LENGTH = 249;
 

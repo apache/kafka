@@ -34,15 +34,6 @@ public class VersionedPluginLoadingException extends ConfigException {
         this.availableVersions = availableVersions;
     }
 
-    public VersionedPluginLoadingException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
-    public VersionedPluginLoadingException(String message, Throwable cause, List<String> availableVersions) {
-        super(message, cause);
-        this.availableVersions = availableVersions;
-    }
-
     public List<String> availableVersions() {
         return availableVersions;
     }

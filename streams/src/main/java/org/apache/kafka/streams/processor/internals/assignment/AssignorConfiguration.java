@@ -97,7 +97,7 @@ public final class AssignorConfiguration {
     public RebalanceProtocol rebalanceProtocol() {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
-            switch (UpgradeFromValues.getValueFromString(upgradeFrom)) {
+            switch (UpgradeFromValues.fromString(upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                 case UPGRADE_FROM_0101:
                 case UPGRADE_FROM_0102:
@@ -130,6 +130,7 @@ public final class AssignorConfiguration {
                 case UPGRADE_FROM_36:
                 case UPGRADE_FROM_37:
                 case UPGRADE_FROM_38:
+                case UPGRADE_FROM_39:
                     // we need to add new version when new "upgrade.from" values become available
 
                     // This config is for explicitly sending FK response to a requested partition
@@ -154,7 +155,7 @@ public final class AssignorConfiguration {
     public int configuredMetadataVersion(final int priorVersion) {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
-            switch (UpgradeFromValues.getValueFromString(upgradeFrom)) {
+            switch (UpgradeFromValues.fromString(upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                     log.info(
                         "Downgrading metadata.version from {} to 1 for upgrade from 0.10.0.x.",
@@ -192,6 +193,7 @@ public final class AssignorConfiguration {
                 case UPGRADE_FROM_36:
                 case UPGRADE_FROM_37:
                 case UPGRADE_FROM_38:
+                case UPGRADE_FROM_39:
                     // we need to add new version when new "upgrade.from" values become available
 
                     // This config is for explicitly sending FK response to a requested partition

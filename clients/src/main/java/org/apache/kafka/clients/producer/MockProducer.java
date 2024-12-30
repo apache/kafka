@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
@@ -36,6 +37,7 @@ import org.apache.kafka.common.utils.Time;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -71,6 +73,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean producerFenced;
     private boolean sentOffsets;
     private long commitCount = 0L;
+    private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
     public RuntimeException initTransactionException = null;
     public RuntimeException beginTransactionException = null;
@@ -197,14 +200,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionCommitted = false;
         this.transactionAborted = false;
         this.sentOffsets = false;
-    }
-
-    @Deprecated
-    @Override
-    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                         String consumerGroupId) throws ProducerFencedException {
-        Objects.requireNonNull(consumerGroupId);
-        sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
     }
 
     @Override
@@ -334,7 +329,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
             keySerializer.serialize(record.topic(), record.key());
             valueSerializer.serialize(record.topic(), record.value());
         }
-            
+
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
         ProduceRequestResult result = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(result, 0, RecordBatch.NO_TIMESTAMP,
@@ -607,4 +602,17 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
     }
 
+    public List<KafkaMetric> addedMetrics() {
+        return Collections.unmodifiableList(addedMetrics);
+    }
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        addedMetrics.add(metric);
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        addedMetrics.remove(metric);
+    }
 }

@@ -38,6 +38,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -57,7 +58,7 @@ public class RecordDeserializerTest {
         new byte[0],
         new byte[0],
         headers,
-        Optional.empty());
+        Optional.of(5));
 
     private final InternalProcessorContext<Void, Void> context = new InternalMockProcessorContext<>();
 
@@ -85,6 +86,7 @@ public class RecordDeserializerTest {
             assertEquals(rawRecord.timestamp(), record.timestamp());
             assertEquals(TimestampType.CREATE_TIME, record.timestampType());
             assertEquals(rawRecord.headers(), record.headers());
+            assertEquals(rawRecord.leaderEpoch(), record.leaderEpoch());
         }
     }
 
@@ -122,7 +124,7 @@ public class RecordDeserializerTest {
                             + "to fail upon a deserialization error. "
                             + "If you would rather have the streaming pipeline "
                             + "continue after a deserialization error, please set the "
-                            + "default.deserialization.exception.handler appropriately."
+                            + DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately."
             );
         }
     }
@@ -280,6 +282,7 @@ public class RecordDeserializerTest {
             assertEquals(expectedRecord.offset(), context.offset());
             assertEquals(expectedProcessorNodeId, context.processorNodeId());
             assertEquals(expectedTaskId, context.taskId());
+            assertEquals(expectedRecord.timestamp(), context.timestamp());
             assertEquals(expectedRecord, record);
             assertInstanceOf(RuntimeException.class, exception);
             assertEquals("KABOOM!", exception.getMessage());

@@ -251,7 +251,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 final Optional<ApiVersion> brokerApiVersion = apiKey.toApiVersion(enableUnstableLastVersion);
-                if (!brokerApiVersion.isPresent()) {
+                if (brokerApiVersion.isEmpty()) {
                     // Broker does not support this API key.
                     continue;
                 }
@@ -289,19 +289,17 @@ public class ApiVersionsResponse extends AbstractResponse {
         SupportedFeatureKeyCollection converted = new SupportedFeatureKeyCollection();
         for (Map.Entry<String, SupportedVersionRange> feature : latestSupportedFeatures.features().entrySet()) {
             final SupportedVersionRange versionRange = feature.getValue();
-            final SupportedFeatureKey key = new SupportedFeatureKey();
-            key.setName(feature.getKey());
             if (alterV0 && versionRange.min() == 0) {
                 // Some older clients will have deserialization problems if a feature's
                 // minimum supported level is 0. Therefore, when preparing ApiVersionResponse
-                // at versions less than 4, we must set the minimum version for these features
-                // to 1 rather than 0. See KAFKA-17011 for details.
-                key.setMinVersion((short) 1);
+                // at versions less than 4, we must omit these features. See KAFKA-17492.
             } else {
+                final SupportedFeatureKey key = new SupportedFeatureKey();
+                key.setName(feature.getKey());
                 key.setMinVersion(versionRange.min());
+                key.setMaxVersion(versionRange.max());
+                converted.add(key);
             }
-            key.setMaxVersion(versionRange.max());
-            converted.add(key);
         }
 
         return converted;

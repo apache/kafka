@@ -53,6 +53,7 @@ import org.apache.kafka.tiered.storage.specs.OffloadableSpec;
 import org.apache.kafka.tiered.storage.specs.OffloadedSegmentSpec;
 import org.apache.kafka.tiered.storage.specs.ProducableSpec;
 import org.apache.kafka.tiered.storage.specs.RemoteDeleteSegmentSpec;
+import org.apache.kafka.tiered.storage.specs.RemoteFetchCount;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchSpec;
 import org.apache.kafka.tiered.storage.specs.TopicSpec;
 
@@ -180,7 +181,7 @@ public final class TieredStorageTestBuilder {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         List<ProducerRecord<String, String>> records = new ArrayList<>();
         for (KeyValueSpec kv: keyValues) {
-            records.add(new ProducerRecord<>(topic, partition, kv.getKey(), kv.getValue()));
+            records.add(new ProducerRecord<>(topic, partition, kv.getTimestamp(), kv.getKey(), kv.getValue()));
         }
         offloadables.computeIfAbsent(topicPartition, k -> new ArrayList<>())
                 .add(new OffloadableSpec(fromBroker, baseOffset, records));
@@ -228,10 +229,17 @@ public final class TieredStorageTestBuilder {
     public TieredStorageTestBuilder expectFetchFromTieredStorage(Integer fromBroker,
                                                                  String topic,
                                                                  Integer partition,
-                                                                 Integer remoteFetchRequestCount) {
+                                                                 Integer segmentFetchRequestCount) {
+        return expectFetchFromTieredStorage(fromBroker, topic, partition, new RemoteFetchCount(segmentFetchRequestCount));
+    }
+
+    public TieredStorageTestBuilder expectFetchFromTieredStorage(Integer fromBroker,
+                                                                 String topic,
+                                                                 Integer partition,
+                                                                 RemoteFetchCount remoteFetchRequestCount) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         assertTrue(partition >= 0, "Partition must be >= 0");
-        assertTrue(remoteFetchRequestCount >= 0, "Expected fetch count from tiered storage must be >= 0");
+        assertTrue(remoteFetchRequestCount.getSegmentFetchCountAndOp().getCount() >= 0, "Expected fetch count from tiered storage must be >= 0");
         assertFalse(fetchables.containsKey(topicPartition), "Consume already in progress for " + topicPartition);
         fetchables.put(topicPartition, new FetchableSpec(fromBroker, remoteFetchRequestCount));
         return this;
@@ -371,7 +379,7 @@ public final class TieredStorageTestBuilder {
     private void createConsumeAction() {
         if (!consumables.isEmpty()) {
             consumables.forEach((topicPartition, consumableSpec) -> {
-                FetchableSpec fetchableSpec = fetchables.computeIfAbsent(topicPartition, k -> new FetchableSpec(0, 0));
+                FetchableSpec fetchableSpec = fetchables.computeIfAbsent(topicPartition, k -> new FetchableSpec(0, new RemoteFetchCount(0)));
                 RemoteFetchSpec remoteFetchSpec = new RemoteFetchSpec(fetchableSpec.getSourceBrokerId(), topicPartition,
                         fetchableSpec.getFetchCount());
                 ConsumeAction action = new ConsumeAction(topicPartition, consumableSpec.getFetchOffset(),

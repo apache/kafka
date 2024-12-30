@@ -18,11 +18,19 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 
 /**
- * This interface allows user code to inspect the context of a record that has failed processing.
+ * This interface allows user code to inspect the context of a record that has failed during processing.
+ *
+ * <p> {@code ErrorHandlerContext} instances are passed into {@link DeserializationExceptionHandler},
+ * {@link ProcessingExceptionHandler}, or {@link ProductionExceptionHandler} dependent on what error occurred.
  */
 public interface ErrorHandlerContext {
     /**
@@ -36,8 +44,10 @@ public interface ErrorHandlerContext {
      * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
      * (and siblings), that do not always guarantee to provide a valid topic name, as they might be
      * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
+     * Additionally, when writing into a changelog topic, there is no associated input record,
+     * and thus no topic name is available.
      *
-     * @return the topic name
+     * @return The topic name.
      */
     String topic();
 
@@ -52,8 +62,10 @@ public interface ErrorHandlerContext {
      * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
      * (and siblings), that do not always guarantee to provide a valid partition ID, as they might be
      * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
+     * Additionally, when writing into a changelog topic, there is no associated input record,
+     * and thus no partition is available.
      *
-     * @return the partition ID
+     * @return The partition ID.
      */
     int partition();
 
@@ -68,8 +80,10 @@ public interface ErrorHandlerContext {
      * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
      * (and siblings), that do not always guarantee to provide a valid offset, as they might be
      * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
+     * Additionally, when writing into a changelog topic, there is no associated input record,
+     * and thus no offset is available.
      *
-     * @return the offset
+     * @return The offset.
      */
     long offset();
 
@@ -84,22 +98,53 @@ public interface ErrorHandlerContext {
      * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
      * (and siblings), that do not always guarantee to provide valid headers, as they might be
      * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
+     * Additionally, when writing into a changelog topic, there is no associated input record,
+     * and thus no headers are available.
      *
-     * @return the headers
+     * @return The headers.
      */
     Headers headers();
 
     /**
      * Return the current processor node ID.
      *
-     * @return the processor node ID
+     * @return The processor node ID.
      */
     String processorNodeId();
 
     /**
      * Return the task ID.
      *
-     * @return the task ID
+     * @return The task ID.
      */
     TaskId taskId();
+
+    /**
+     * Return the current timestamp; could be {@code -1} if it is not available.
+     *
+     * <p> For example, when writing into a changelog topic, there is no associated input record,
+     * and thus no timestamp is available.
+     *
+     * <p> If it is triggered while processing a record streamed from the source processor,
+     * timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
+     * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
+     * Note, that an upstream {@link Processor} might have set a new timestamp by calling
+     * {@link ProcessorContext#forward(Record) forward(record.withTimestamp(...))}.
+     * In particular, some Kafka Streams DSL operators set result record timestamps explicitly,
+     * to guarantee deterministic results.
+     *
+     * <p> If it is triggered while processing a record generated not from the source processor (for example,
+     * if this method is invoked from the punctuate call):
+     * <ul>
+     *   <li>In case of {@link PunctuationType#STREAM_TIME} timestamp is defined as the current task's stream time,
+     *   which is defined as the largest timestamp of any record processed by the task</li>
+     *   <li>In case of {@link PunctuationType#WALL_CLOCK_TIME} timestamp is defined the current system time</li>
+     * </ul>
+     *
+     * <p> If it is triggered from a deserialization failure, timestamp is defined as the timestamp of the
+     * current rawRecord {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord}.
+     *
+     * @return The timestamp.
+     */
+    long timestamp();
 }

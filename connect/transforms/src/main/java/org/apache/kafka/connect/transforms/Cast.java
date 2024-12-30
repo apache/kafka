@@ -71,22 +71,16 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     public static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(SPEC_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.Validator() {
-                    @SuppressWarnings("unchecked")
-                    @Override
-                    public void ensureValid(String name, Object valueObject) {
+            .define(SPEC_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.LambdaValidator.with(
+                    (name, valueObject) -> {
+                        @SuppressWarnings("unchecked")
                         List<String> value = (List<String>) valueObject;
                         if (value == null || value.isEmpty()) {
                             throw new ConfigException("Must specify at least one field to cast.");
                         }
                         parseFieldTypes(value);
-                    }
-
-                    @Override
-                    public String toString() {
-                        return "list of colon-delimited pairs, e.g. <code>foo:bar,abc:xyz</code>";
-                    }
-            },
+                    },
+                    () -> "list of colon-delimited pairs, e.g. <code>foo:bar,abc:xyz</code>"),
             ConfigDef.Importance.HIGH,
             "List of fields and the type to cast them to of the form field1:type,field2:type to cast fields of "
                     + "Maps or Structs. A single type to cast the entire value. Valid types are int8, int16, int32, "
@@ -418,7 +412,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         for (String mapping : mappings) {
             final String[] parts = mapping.split(":");
             if (parts.length > 2) {
-                throw new ConfigException(ReplaceField.ConfigName.RENAME, mappings, "Invalid rename mapping: " + mapping);
+                throw new ConfigException(ReplaceField.ConfigName.RENAMES, mappings, "Invalid rename mapping: " + mapping);
             }
             if (parts.length == 1) {
                 Schema.Type targetType;

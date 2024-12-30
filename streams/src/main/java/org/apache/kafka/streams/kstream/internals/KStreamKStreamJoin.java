@@ -27,9 +27,12 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
@@ -38,7 +41,9 @@ import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.LinkedHashSet;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
@@ -46,7 +51,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> implements ProcessorSupplier<K, VThis, K, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
-    private final String otherWindowName;
+    private final StoreFactory otherWindowStoreFactory;
     private final long joinBeforeMs;
     private final long joinAfterMs;
     private final long joinGraceMs;
@@ -55,20 +60,20 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
     private final long windowsAfterMs;
 
     private final boolean outer;
-    private final Optional<String> outerJoinWindowName;
+    private final Optional<StoreFactory> outerJoinWindowStoreFactory;
     private final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner;
 
     private final TimeTrackerSupplier sharedTimeTrackerSupplier;
 
-    KStreamKStreamJoin(final String otherWindowName,
-                       final JoinWindowsInternal windows,
+    KStreamKStreamJoin(final JoinWindowsInternal windows,
                        final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner,
                        final boolean outer,
-                       final Optional<String> outerJoinWindowName,
                        final long joinBeforeMs,
                        final long joinAfterMs,
-                       final TimeTrackerSupplier sharedTimeTrackerSupplier) {
-        this.otherWindowName = otherWindowName;
+                       final TimeTrackerSupplier sharedTimeTrackerSupplier,
+                       final StoreFactory otherWindowStoreFactory,
+                       final Optional<StoreFactory> outerJoinWindowStoreFactory) {
+        this.otherWindowStoreFactory = otherWindowStoreFactory;
         this.joinBeforeMs = joinBeforeMs;
         this.joinAfterMs = joinAfterMs;
         this.windowsAfterMs = windows.afterMs;
@@ -77,8 +82,20 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
         this.enableSpuriousResultFix = windows.spuriousResultFixEnabled();
         this.joiner = joiner;
         this.outer = outer;
-        this.outerJoinWindowName = outerJoinWindowName;
+        this.outerJoinWindowStoreFactory = outerJoinWindowStoreFactory;
         this.sharedTimeTrackerSupplier = sharedTimeTrackerSupplier;
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        // use ordered set for deterministic topology string in tests
+        final Set<StoreBuilder<?>> stores = new LinkedHashSet<>();
+        stores.add(new FactoryWrappingStoreBuilder<>(otherWindowStoreFactory));
+
+        if (outerJoinWindowStoreFactory.isPresent() && enableSpuriousResultFix) {
+            stores.add(new FactoryWrappingStoreBuilder<>(outerJoinWindowStoreFactory.get()));
+        }
+        return stores;
     }
 
     protected abstract class KStreamKStreamJoinProcessor extends ContextualProcessor<K, VThis, K, VOut> {
@@ -95,11 +112,11 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
             final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
             droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
-            otherWindowStore = context.getStateStore(otherWindowName);
+            otherWindowStore = context.getStateStore(otherWindowStoreFactory.storeName());
             sharedTimeTracker = sharedTimeTrackerSupplier.get(context.taskId());
 
             if (enableSpuriousResultFix) {
-                outerJoinStore = outerJoinWindowName.map(context::getStateStore);
+                outerJoinStore = outerJoinWindowStoreFactory.map(s -> context.getStateStore(s.storeName()));
 
                 sharedTimeTracker.setEmitInterval(
                     StreamsConfig.InternalConfig.getLong(
@@ -170,9 +187,9 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
         protected abstract TimestampedKeyAndJoinSide<K> makeOtherKey(final K key, final long timestamp);
 
-        protected abstract VThis getThisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
+        protected abstract VThis thisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
 
-        protected abstract VOther getOtherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
+        protected abstract VOther otherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
 
         private void emitNonJoinedOuterRecords(final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> store,
                                                final Record<K, VThis> record) {
@@ -207,7 +224,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
                 while (it.hasNext()) {
                     final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> nextKeyValue = it.next();
                     final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = nextKeyValue.key;
-                    sharedTimeTracker.minTime = timestampedKeyAndJoinSide.getTimestamp();
+                    sharedTimeTracker.minTime = timestampedKeyAndJoinSide.timestamp();
                     if (outerJoinLeftWindowOpen && outerJoinRightWindowOpen) {
                         // if windows are open for both joinSides we can break since there are no more candidates to emit
                         break;
@@ -250,10 +267,10 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
         private void forwardNonJoinedOuterRecords(final Record<K, VThis> record,
                                                   final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide,
                                                   final LeftOrRightValue<VLeft, VRight> leftOrRightValue) {
-            final K key = timestampedKeyAndJoinSide.getKey();
-            final long timestamp = timestampedKeyAndJoinSide.getTimestamp();
-            final VThis thisValue = getThisValue(leftOrRightValue);
-            final VOther otherValue = getOtherValue(leftOrRightValue);
+            final K key = timestampedKeyAndJoinSide.key();
+            final long timestamp = timestampedKeyAndJoinSide.timestamp();
+            final VThis thisValue = thisValue(leftOrRightValue);
+            final VOther otherValue = otherValue(leftOrRightValue);
             final VOut nullJoinedValue = joiner.apply(key, thisValue, otherValue);
             context().forward(
                     record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp)

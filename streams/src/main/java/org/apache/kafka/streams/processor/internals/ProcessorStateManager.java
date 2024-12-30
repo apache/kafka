@@ -24,6 +24,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -166,11 +167,11 @@ public class ProcessorStateManager implements StateManager {
 
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
-    private final String logPrefix;
+    private String logPrefix;
 
     private final TaskId taskId;
     private final boolean eosEnabled;
-    private final ChangelogRegister changelogReader;
+    private ChangelogRegister changelogReader;
     private final Collection<TopicPartition> sourcePartitions;
     private final Map<String, String> storeToChangelogTopic;
 
@@ -222,6 +223,39 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Created state store manager for task {}", taskId);
     }
 
+    /**
+     * Special constructor used by {@link StateDirectory} to partially initialize startup tasks for local state, before
+     * they're assigned to a thread. When the task is assigned to a thread, the initialization of this StateManager is
+     * completed in {@link #assignToStreamThread(LogContext, ChangelogRegister, Collection)}.
+     */
+    static ProcessorStateManager createStartupTaskStateManager(final TaskId taskId,
+                                                               final boolean eosEnabled,
+                                                               final LogContext logContext,
+                                                               final StateDirectory stateDirectory,
+                                                               final Map<String, String> storeToChangelogTopic,
+                                                               final Set<TopicPartition> sourcePartitions,
+                                                               final boolean stateUpdaterEnabled) {
+        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, null, storeToChangelogTopic, sourcePartitions, stateUpdaterEnabled);
+    }
+
+    /**
+     * Standby tasks initialized for local state on-startup are only partially initialized, because they are not yet
+     * assigned to a StreamThread. Once assigned to a StreamThread, we complete their initialization here using the
+     * assigned StreamThread's context.
+     */
+    void assignToStreamThread(final LogContext logContext,
+                              final ChangelogRegister changelogReader,
+                              final Collection<TopicPartition> sourcePartitions) {
+        if (this.changelogReader != null) {
+            throw new IllegalStateException("Attempted to replace an existing changelogReader on a StateManager without closing it.");
+        }
+        this.sourcePartitions.clear();
+        this.log = logContext.logger(ProcessorStateManager.class);
+        this.logPrefix = logContext.logPrefix();
+        this.changelogReader = changelogReader;
+        this.sourcePartitions.addAll(sourcePartitions);
+    }
+
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext processorContext) {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
@@ -244,7 +278,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public StateStore getGlobalStore(final String name) {
+    public StateStore globalStore(final String name) {
         return globalStores.get(name);
     }
 
@@ -314,7 +348,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     private void maybeRegisterStoreWithChangelogReader(final String storeName) {
-        if (isLoggingEnabled(storeName)) {
+        if (isLoggingEnabled(storeName) && changelogReader != null) {
             changelogReader.register(getStorePartition(storeName), this);
         }
     }
@@ -379,7 +413,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public StateStore getStore(final String name) {
+    public StateStore store(final String name) {
         if (stores.containsKey(name)) {
             return stores.get(name).stateStore;
         } else {
@@ -505,13 +539,20 @@ public class ProcessorStateManager implements StateManager {
                 } catch (final RuntimeException exception) {
                     if (firstException == null) {
                         // do NOT wrap the error if it is actually caused by Streams itself
-                        if (exception instanceof StreamsException)
+                        // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
+                        if (exception instanceof FailedProcessingException)
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to flush state store %s", logPrefix, store.name()),
+                                exception.getCause());
+                        else if (exception instanceof StreamsException)
                             firstException = exception;
                         else
                             firstException = new ProcessorStateException(
                                 format("%sFailed to flush state store %s", logPrefix, store.name()), exception);
+                        log.error("Failed to flush state store {}: ", store.name(), firstException);
+                    } else {
+                        log.error("Failed to flush state store {}: ", store.name(), exception);
                     }
-                    log.error("Failed to flush state store {}: ", store.name(), exception);
                 }
             }
         }
@@ -540,7 +581,12 @@ public class ProcessorStateManager implements StateManager {
                 } catch (final RuntimeException exception) {
                     if (firstException == null) {
                         // do NOT wrap the error if it is actually caused by Streams itself
-                        if (exception instanceof StreamsException) {
+                        // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
+                        if (exception instanceof FailedProcessingException) {
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to flush cache of store %s", logPrefix, store.name()),
+                                exception.getCause());
+                        } else if (exception instanceof StreamsException) {
                             firstException = exception;
                         } else {
                             firstException = new ProcessorStateException(
@@ -548,8 +594,10 @@ public class ProcessorStateManager implements StateManager {
                                 exception
                             );
                         }
+                        log.error("Failed to flush cache of store {}: ", store.name(), firstException);
+                    } else {
+                        log.error("Failed to flush cache of store {}: ", store.name(), exception);
                     }
-                    log.error("Failed to flush cache of store {}: ", store.name(), exception);
                 }
             }
         }
@@ -569,7 +617,7 @@ public class ProcessorStateManager implements StateManager {
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
-        if (!stateUpdaterEnabled) {
+        if (!stateUpdaterEnabled && changelogReader != null) {
             changelogReader.unregister(getAllChangelogTopicPartitions());
         }
 
@@ -585,13 +633,20 @@ public class ProcessorStateManager implements StateManager {
                 } catch (final RuntimeException exception) {
                     if (firstException == null) {
                         // do NOT wrap the error if it is actually caused by Streams itself
-                        if (exception instanceof StreamsException)
+                        // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
+                        if (exception instanceof FailedProcessingException)
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to close state store %s", logPrefix, store.name()),
+                                exception.getCause());
+                        else if (exception instanceof StreamsException)
                             firstException = exception;
                         else
                             firstException = new ProcessorStateException(
                                 format("%sFailed to close state store %s", logPrefix, store.name()), exception);
+                        log.error("Failed to close state store {}: ", store.name(), firstException);
+                    } else {
+                        log.error("Failed to close state store {}: ", store.name(), exception);
                     }
-                    log.error("Failed to close state store {}: ", store.name(), exception);
                 }
             }
 
@@ -610,7 +665,7 @@ public class ProcessorStateManager implements StateManager {
     void recycle() {
         log.debug("Recycling state for {} task {}.", taskType, taskId);
 
-        if (!stateUpdaterEnabled) {
+        if (!stateUpdaterEnabled && changelogReader != null) {
             final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
             changelogReader.unregister(allChangelogs);
         }

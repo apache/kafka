@@ -29,7 +29,7 @@
     { "name": "Topics", "type": "[]DescribableLogDirTopic", "versions": "0+", "nullableVersions": "0+",
       "about": "Each topic that we want to describe log directories for, or null for all topics.", "fields": [
       { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
-        "about": "The topic name" },
+        "about": "The topic name." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partition indexes." }
     ]}

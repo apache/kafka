@@ -86,7 +86,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     public boolean hasNext() {
         ensureOpen();
 
-        if (!nextBatch.isPresent()) {
+        if (nextBatch.isEmpty()) {
             nextBatch = nextBatch();
         }
 
@@ -334,7 +334,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             throw new IllegalArgumentException("Got key in the record when no key was expected");
         }
 
-        if (!value.isPresent()) {
+        if (value.isEmpty()) {
             throw new IllegalArgumentException("Missing value in the record when a value was expected");
         } else if (value.get().remaining() == 0) {
             throw new IllegalArgumentException("Got an unexpected empty value in the record");
@@ -346,13 +346,13 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     }
 
     private static ControlRecord decodeControlRecord(Optional<ByteBuffer> key, Optional<ByteBuffer> value) {
-        if (!key.isPresent()) {
+        if (key.isEmpty()) {
             throw new IllegalArgumentException("Missing key in the record when a key was expected");
         } else if (key.get().remaining() == 0) {
             throw new IllegalArgumentException("Got an unexpected empty key in the record");
         }
 
-        if (!value.isPresent()) {
+        if (value.isEmpty()) {
             throw new IllegalArgumentException("Missing value in the record when a value was expected");
         } else if (value.get().remaining() == 0) {
             throw new IllegalArgumentException("Got an unexpected empty value in the record");

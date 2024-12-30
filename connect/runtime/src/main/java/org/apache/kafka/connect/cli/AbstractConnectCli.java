@@ -29,7 +29,6 @@ import org.apache.kafka.connect.runtime.rest.ConnectRestServer;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 
-import org.apache.kafka.connect.util.PluginVersionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

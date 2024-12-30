@@ -26,13 +26,13 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -102,7 +102,7 @@ public class TimerTest {
             }
         });
 
-        assertEquals(mkSet(-5, -4, -3, -2, -1), new HashSet<>(output),
+        assertEquals(Set.of(-5, -4, -3, -2, -1), new HashSet<>(output),
             "output of already expired tasks");
     }
 

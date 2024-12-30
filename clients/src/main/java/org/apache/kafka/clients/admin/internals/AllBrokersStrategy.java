@@ -195,7 +195,7 @@ public class AllBrokersStrategy implements AdminApiLookupStrategy<AllBrokersStra
         }
 
         private KafkaFutureImpl<V> futureOrThrow(BrokerKey key) {
-            if (!key.brokerId.isPresent()) {
+            if (key.brokerId.isEmpty()) {
                 throw new IllegalArgumentException("Attempt to complete with invalid key: " + key);
             } else {
                 int brokerId = key.brokerId.getAsInt();

@@ -68,7 +68,6 @@ import java.util.function.Supplier;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -172,7 +171,7 @@ public class ProcessorTopologyTest {
 
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
 
-        assertThat(processorTopology.terminalNodes(), equalTo(mkSet("processor-2", "sink-1")));
+        assertThat(processorTopology.terminalNodes(), equalTo(Set.of("processor-2", "sink-1")));
     }
 
     @Test
@@ -1268,35 +1267,6 @@ public class ProcessorTopologyTest {
 
     }
 
-    @Deprecated // testing old PAPI
-    @Test
-    public void shouldDriveGlobalStore() {
-        final String storeName = "my-store";
-        final String global = "global";
-        final String topic = "topic";
-
-        topology.addGlobalStore(
-            Stores.keyValueStoreBuilder(
-                Stores.inMemoryKeyValueStore(storeName),
-                Serdes.String(),
-                Serdes.String()
-            ).withLoggingDisabled(),
-            global,
-            STRING_DESERIALIZER,
-            STRING_DESERIALIZER,
-            topic,
-            "processor",
-            define(new OldAPIStatefulProcessor(storeName)));
-
-        driver = new TopologyTestDriver(topology, props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(topic, STRING_SERIALIZER, STRING_SERIALIZER);
-        final KeyValueStore<String, String> globalStore = driver.getKeyValueStore(storeName);
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        assertEquals("value1", globalStore.get("key1"));
-        assertEquals("value2", globalStore.get("key2"));
-    }
-
     @Test
     public void testDrivingSimpleMultiSourceTopology() {
         final int partition = 10;
@@ -1512,18 +1482,6 @@ public class ProcessorTopologyTest {
         assertTrue(processorTopology.hasPersistentLocalStore());
     }
 
-    @Test
-    public void inMemoryStoreShouldNotResultInPersistentGlobalStore() {
-        final ProcessorTopology processorTopology = createGlobalStoreTopology(Stores.inMemoryKeyValueStore("my-store"));
-        assertFalse(processorTopology.hasPersistentGlobalStore());
-    }
-
-    @Test
-    public void persistentGlobalStoreShouldBeDetected() {
-        final ProcessorTopology processorTopology = createGlobalStoreTopology(Stores.persistentKeyValueStore("my-store"));
-        assertTrue(processorTopology.hasPersistentGlobalStore());
-    }
-
     private ProcessorTopology createLocalStoreTopology(final KeyValueBytesStoreSupplier storeSupplier) {
         final TopologyWrapper topology = new TopologyWrapper();
         final String processor = "processor";
@@ -1535,15 +1493,7 @@ public class ProcessorTopologyTest {
         return topology.getInternalBuilder("anyAppId").buildTopology();
     }
 
-    @Deprecated // testing old PAPI
-    private ProcessorTopology createGlobalStoreTopology(final KeyValueBytesStoreSupplier storeSupplier) {
-        final TopologyWrapper topology = new TopologyWrapper();
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-                Stores.keyValueStoreBuilder(storeSupplier, Serdes.String(), Serdes.String()).withLoggingDisabled();
-        topology.addGlobalStore(storeBuilder, "global", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic", "processor",
-                define(new OldAPIStatefulProcessor(storeSupplier.name())));
-        return topology.getInternalBuilder("anyAppId").buildTopology();
-    }
+
 
     private void assertNextOutputRecord(final TestRecord<String, String> record,
                                         final String key,
@@ -1569,8 +1519,8 @@ public class ProcessorTopologyTest {
         assertEquals(headers, record.headers());
     }
 
-    private StreamPartitioner<Object, Object> constantPartitioner(final Integer partition) {
-        return (topic, key, value, numPartitions) -> partition;
+    private StreamPartitioner<String, String> constantPartitioner(final Integer partition) {
+        return (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(partition));
     }
 
     private Topology createSimpleTopology(final int partition) {
@@ -1598,13 +1548,6 @@ public class ProcessorTopologyTest {
     }
 
     static class DroppingPartitioner implements StreamPartitioner<String, String> {
-
-        @Override
-        @Deprecated
-        public Integer partition(final String topic, final String key, final String value, final int numPartitions) {
-            return null;
-        }
-
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final String key, final String value, final int numPartitions) {
             final Set<Integer> partitions = new HashSet<>();

@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -105,16 +104,6 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
         return store;
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
-        final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
-        when(inner.name()).thenReturn("store");
-        outer.init((ProcessorContext) context, outer);
-        verify(inner).init((ProcessorContext) context, outer);
     }
 
     @Test

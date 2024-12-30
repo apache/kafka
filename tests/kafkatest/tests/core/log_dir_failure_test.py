@@ -17,7 +17,6 @@ from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from kafkatest.services.kafka import config_property
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
@@ -62,10 +61,9 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
 
         self.topic1 = "test_topic_1"
         self.topic2 = "test_topic_2"
-        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = KafkaService(test_context,
                                   num_nodes=3,
-                                  zk=self.zk,
+                                  zk=None,
                                   topics={
                                       self.topic1: {"partitions": 1, "replication-factor": 3, "configs": {"min.insync.replicas": 1}},
                                       self.topic2: {"partitions": 1, "replication-factor": 3, "configs": {"min.insync.replicas": 2}}
@@ -83,16 +81,10 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
         self.num_producers = 1
         self.num_consumers = 1
 
-    def setUp(self):
-        if self.zk:
-            self.zk.start()
-
     def min_cluster_size(self):
         """Override this since we're adding services outside of the constructor"""
         return super(LogDirFailureTest, self).min_cluster_size() + self.num_producers * 2 + self.num_consumers * 2
 
-    @cluster(num_nodes=8)
-    @matrix(bounce_broker=[False, True], broker_type=["leader", "follower"], security_protocol=["PLAINTEXT"], metadata_quorum=[quorum.zk])
     @cluster(num_nodes=10)
     @matrix(bounce_broker=[False, True], broker_type=["leader", "follower"], security_protocol=["PLAINTEXT"], metadata_quorum=[quorum.isolated_kraft])
     def test_replication_with_disk_failure(self, bounce_broker, security_protocol, broker_type, metadata_quorum):

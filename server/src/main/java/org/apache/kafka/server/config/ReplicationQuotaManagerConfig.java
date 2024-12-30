@@ -38,10 +38,10 @@ public class ReplicationQuotaManagerConfig {
     }
 
     public ReplicationQuotaManagerConfig(int numQuotaSamples, int quotaWindowSizeSeconds) {
-        this(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, numQuotaSamples, quotaWindowSizeSeconds);
+        this(QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, numQuotaSamples, quotaWindowSizeSeconds);
     }
 
     public ReplicationQuotaManagerConfig() {
-        this(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, QuotaConfigs.NUM_QUOTA_SAMPLES_DEFAULT, QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
+        this(QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, QuotaConfig.NUM_QUOTA_SAMPLES_DEFAULT, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
     }
 }

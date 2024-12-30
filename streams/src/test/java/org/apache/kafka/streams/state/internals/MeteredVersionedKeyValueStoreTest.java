@@ -27,8 +27,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -105,7 +103,7 @@ public class MeteredVersionedKeyValueStoreTest {
     private final Metrics metrics = new Metrics();
     private final Time mockTime = new MockTime();
     private final String threadId = Thread.currentThread().getName();
-    private InternalProcessorContext context = mock(InternalProcessorContext.class);
+    private final InternalProcessorContext context = mock(InternalProcessorContext.class);
     private Map<String, String> tags;
 
     private MeteredVersionedKeyValueStore<String, String> store;
@@ -113,7 +111,7 @@ public class MeteredVersionedKeyValueStoreTest {
     @BeforeEach
     public void setUp() {
         when(inner.name()).thenReturn(STORE_NAME);
-        when(context.metrics()).thenReturn(new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, mockTime));
+        when(context.metrics()).thenReturn(new StreamsMetricsImpl(metrics, "test", "processId", mockTime));
         when(context.applicationId()).thenReturn(APPLICATION_ID);
         when(context.taskId()).thenReturn(TASK_ID);
 
@@ -136,19 +134,6 @@ public class MeteredVersionedKeyValueStoreTest {
             STRING_SERDE,
             STRING_SERDE
         );
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        // recreate store in order to re-init
-        store.close();
-        final VersionedBytesStore mockInner = mock(VersionedBytesStore.class);
-        store = newMeteredStore(mockInner);
-
-        store.init((ProcessorContext) context, store);
-
-        verify(mockInner).init((ProcessorContext) context, store);
     }
 
     @Test

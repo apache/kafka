@@ -68,7 +68,7 @@ public class ConsumerMetadata extends Metadata {
 
     @Override
     public synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
-        if (subscription.hasPatternSubscription())
+        if (subscription.hasPatternSubscription() || subscription.hasRe2JPatternSubscription())
             return MetadataRequest.Builder.allTopics();
         List<String> topics = new ArrayList<>();
         topics.addAll(subscription.metadataTopics());

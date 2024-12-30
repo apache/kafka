@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
@@ -58,6 +59,7 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
+
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example,
@@ -93,7 +95,6 @@ public class StreamsResetter {
     private static final String USAGE = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
             + "* This tool resets offsets of input topics to the earliest available offset (by default), or to a specific defined position"
-            + " and it skips to the end of intermediate topics (topics that are input and output topics, e.g., used by deprecated through() method).\n"
             + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
             + "\"<application.id>-\").\n"
             + "The tool finds these internal topics automatically. If the topics flagged automatically for deletion by "
@@ -136,8 +137,6 @@ public class StreamsResetter {
             String bootstrapServerValue = "localhost:9092";
             if (options.hasBootstrapServer()) {
                 bootstrapServerValue = options.bootstrapServer();
-            } else if (options.hasBootstrapServers()) {
-                bootstrapServerValue = options.bootstrapServers();
             }
 
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
@@ -172,17 +171,24 @@ public class StreamsResetter {
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
             Collections.singleton(groupId),
             new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
-        final List<MemberDescription> members =
-            new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
-        if (!members.isEmpty()) {
-            if (options.hasForce()) {
-                System.out.println("Force deleting all active members in the group: " + groupId);
-                adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
-            } else {
-                throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
+        try {
+            final List<MemberDescription> members =
+                new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
+            if (!members.isEmpty()) {
+                if (options.hasForce()) {
+                    System.out.println("Force deleting all active members in the group: " + groupId);
+                    adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
+                } else {
+                    throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
                         + "and has following members: " + members + ". "
                         + "Make sure to stop all running application instances before running the reset tool."
                         + " You can use option '--force' to remove active members from the group.");
+                }
+            }
+        } catch (ExecutionException ee) {
+            // If the group ID is not found, this is not an error case
+            if (!(ee.getCause() instanceof GroupIdNotFoundException)) {
+                throw ee;
             }
         }
     }
@@ -546,7 +552,6 @@ public class StreamsResetter {
     }
 
     private static class StreamsResetterOptions extends CommandDefaultOptions {
-        private final OptionSpec<String> bootstrapServersOption;
         private final OptionSpec<String> bootstrapServerOption;
         private final OptionSpec<String> applicationIdOption;
         private final OptionSpec<String> inputTopicsOption;
@@ -570,11 +575,7 @@ public class StreamsResetter {
                 .ofType(String.class)
                 .describedAs("id")
                 .required();
-            bootstrapServersOption = parser.accepts("bootstrap-servers", "DEPRECATED: Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
-                .withRequiredArg()
-                .ofType(String.class)
-                .describedAs("urls");
-            bootstrapServerOption = parser.accepts("bootstrap-server", "REQUIRED unless --bootstrap-servers(deprecated) is specified. The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2. (default: localhost:9092)")
+            bootstrapServerOption = parser.accepts("bootstrap-server", "The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2. (default: localhost:9092)")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("server to connect to");
@@ -584,8 +585,8 @@ public class StreamsResetter {
                 .ofType(String.class)
                 .withValuesSeparatedBy(',')
                 .describedAs("list");
-            intermediateTopicsOption = parser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics that are input and output topics, "
-                    + "e.g., used in the deprecated through() method). For these topics, the tool will skip to the end.")
+            intermediateTopicsOption = parser.accepts("intermediate-topics", "[deprecated] Comma-separated list of intermediate user topics (topics that are input and output topics). "
+                    + "For these topics, the tool will skip to the end.")
                 .withRequiredArg()
                 .ofType(String.class)
                 .withValuesSeparatedBy(',')
@@ -668,14 +669,6 @@ public class StreamsResetter {
             return options.valueOf(bootstrapServerOption);
         }
 
-        public boolean hasBootstrapServers() {
-            return options.has(bootstrapServersOption);
-        }
-
-        public String bootstrapServers() {
-            return options.valueOf(bootstrapServersOption);
-        }
-
         public boolean hasForce() {
             return options.has(forceOption);
         }
@@ -685,6 +678,7 @@ public class StreamsResetter {
         }
 
         public List<String> intermediateTopicsOption() {
+            System.out.println("intermediateTopicsOption is deprecated and will be removed in a future release");
             return options.valuesOf(intermediateTopicsOption);
         }
 

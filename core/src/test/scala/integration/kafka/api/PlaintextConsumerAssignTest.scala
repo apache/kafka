@@ -19,13 +19,9 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
-import org.apache.kafka.common.PartitionInfo
-import java.util.stream.Stream
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable
-import org.junit.jupiter.params.provider.CsvSource
 
 /**
  * Integration tests for the consumer that covers logic related to manual assignment.
@@ -135,36 +131,6 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     assertEquals(numRecords, consumer.position(tp))
   }
 
-  // partitionsFor not implemented in consumer group protocol and this test requires ZK also
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @CsvSource(Array(
-    "zk, classic"
-  ))
-  def testAssignAndConsumeWithLeaderChangeValidatingPositions(quorum: String, groupProtocol: String): Unit = {
-    val numRecords = 10
-    val producer = createProducer()
-    val startingTimestamp = System.currentTimeMillis()
-    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
-    val props = new Properties()
-    val consumer = createConsumer(configOverrides = props,
-      configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
-    consumer.assign(List(tp).asJava)
-    consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
-
-    // Force leader epoch change to trigger position validation
-    var parts: mutable.Buffer[PartitionInfo] = null
-    while (parts == null)
-      parts = consumer.partitionsFor(tp.topic()).asScala
-    val leader = parts.head.leader().id()
-    this.servers(leader).shutdown()
-    this.servers(leader).startup()
-
-    // Consume after leader change
-    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
-    consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 10,
-      startingTimestamp = startingTimestamp)
-  }
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAssignAndFetchCommittedOffsets(quorum: String, groupProtocol: String): Unit = {
@@ -238,9 +204,4 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
   }
 
-}
-
-object PlaintextConsumerAssignTest {
-  def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
 }

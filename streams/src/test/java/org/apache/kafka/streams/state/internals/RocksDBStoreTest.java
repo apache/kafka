@@ -235,7 +235,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     public static class RocksDBConfigSetterWithUserProvidedStatistics implements RocksDBConfigSetter {
-        public RocksDBConfigSetterWithUserProvidedStatistics(){}
+        public RocksDBConfigSetterWithUserProvidedStatistics() {}
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
             lastStatistics = new Statistics();
@@ -306,7 +306,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
 
     public static class RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig implements RocksDBConfigSetter {
-        public RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig(){}
+        public RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig() {}
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
             options.setTableFormatConfig(new BlockBasedTableConfig());
@@ -335,7 +335,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     public static class RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig implements RocksDBConfigSetter {
-        public RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig(){}
+        public RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig() {}
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
             options.setTableFormatConfig(new PlainTableConfig());
@@ -716,7 +716,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Utils.mkSet("2", "3")));
+            assertThat(keys, equalTo(Set.of("2", "3")));
         }
     }
 
@@ -741,7 +741,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Utils.mkSet("1", "2", "3")));
+            assertThat(keys, equalTo(Set.of("1", "2", "3")));
 
             assertEquals(
                 "restored",
@@ -800,7 +800,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Utils.mkSet("2", "3")));
+            assertThat(keys, equalTo(Set.of("2", "3")));
         }
     }
 
@@ -919,7 +919,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.DEBUG));
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
+            new StreamsMetricsImpl(metrics, "test-application", "processId", time);
 
         context = mock(InternalMockProcessorContext.class);
         when(context.metrics()).thenReturn(streamsMetrics);
@@ -952,7 +952,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.INFO));
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
+            new StreamsMetricsImpl(metrics, "test-application", "processId", time);
 
         context = mock(InternalMockProcessorContext.class);
         when(context.metrics()).thenReturn(streamsMetrics);
@@ -984,7 +984,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.INFO));
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
+            new StreamsMetricsImpl(metrics, "test-application", "processId", time);
 
         final Properties props = StreamsTestUtils.getStreamsConfig();
         context = mock(InternalMockProcessorContext.class);

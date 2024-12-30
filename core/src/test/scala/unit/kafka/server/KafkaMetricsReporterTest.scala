@@ -81,16 +81,11 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testMetricsContextNamespacePresent(quorum: String): Unit = {
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.CLUSTERID.get())
-    if (isKRaftTest()) {
-      assertNull(KafkaMetricsReporterTest.MockMetricsReporter.BROKERID.get())
-      assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.NODEID.get())
-    } else {
-      assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.BROKERID.get())
-      assertNull(KafkaMetricsReporterTest.MockMetricsReporter.NODEID.get())
-    }
+    assertNull(KafkaMetricsReporterTest.MockMetricsReporter.BROKERID.get())
+    assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.NODEID.get())
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.JMXPREFIX.get())
 
     broker.shutdown()

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
@@ -42,7 +43,6 @@ import java.util.HashSet;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -180,7 +180,7 @@ public class ShareGroupTest {
         // Compute while taking into account member 1.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(null, member1),
@@ -195,7 +195,7 @@ public class ShareGroupTest {
         // It should return foo now.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(null, null),
@@ -217,8 +217,8 @@ public class ShareGroupTest {
         // Compute while taking into account member 2.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(null, member2),
@@ -233,8 +233,8 @@ public class ShareGroupTest {
         // It should return foo and bar.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(null, null),
@@ -246,7 +246,7 @@ public class ShareGroupTest {
         // Compute while taking into account removal of member 2.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(member2, null),
@@ -258,7 +258,7 @@ public class ShareGroupTest {
         // Removing member1 results in returning bar.
         assertEquals(
             mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(member1, null),
@@ -270,9 +270,9 @@ public class ShareGroupTest {
         // Compute while taking into account member 3.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(null, member3),
@@ -287,9 +287,9 @@ public class ShareGroupTest {
         // It should return foo, bar and zar.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(null, null),
@@ -311,7 +311,7 @@ public class ShareGroupTest {
         // Compute while taking into account removal of member 2 and member 3.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member2, member3))),
@@ -323,8 +323,8 @@ public class ShareGroupTest {
         // Compute while taking into account removal of member 1.
         assertEquals(
             mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(Collections.singleton(member1)),
@@ -336,9 +336,9 @@ public class ShareGroupTest {
         // It should return foo, bar and zar.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(Collections.emptySet()),
@@ -551,7 +551,7 @@ public class ShareGroupTest {
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testValidateOffsetCommit(short version) {
         ShareGroup shareGroup = createShareGroup("group-foo");
-        assertThrows(UnsupportedOperationException.class, () ->
+        assertThrows(GroupIdNotFoundException.class, () ->
             shareGroup.validateOffsetCommit(null, null, -1, false, version));
     }
 
@@ -581,14 +581,14 @@ public class ShareGroupTest {
     @Test
     public void testValidateOffsetFetch() {
         ShareGroup shareGroup = createShareGroup("group-foo");
-        assertThrows(UnsupportedOperationException.class, () ->
+        assertThrows(GroupIdNotFoundException.class, () ->
             shareGroup.validateOffsetFetch(null, -1, -1));
     }
 
     @Test
     public void testValidateOffsetDelete() {
         ShareGroup shareGroup = createShareGroup("group-foo");
-        assertThrows(UnsupportedOperationException.class, shareGroup::validateOffsetDelete);
+        assertThrows(GroupIdNotFoundException.class, shareGroup::validateOffsetDelete);
     }
 
     @Test
@@ -643,8 +643,8 @@ public class ShareGroupTest {
 
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             shareGroup.computeSubscriptionMetadata(
                 shareGroup.computeSubscribedTopicNames(null, null),

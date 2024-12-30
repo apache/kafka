@@ -620,7 +620,7 @@ public class AbstractConfig {
                 provider.configure(configProperties);
                 configProviderInstances.put(entry.getKey(), provider);
             } catch (ClassNotFoundException e) {
-                log.error("Could not load config provider class " + entry.getValue(), e);
+                log.error("Could not load config provider class {}", entry.getValue(), e);
                 throw new ConfigException(providerClassProperty(entry.getKey()), entry.getValue(), "Could not load config provider class or one of its dependencies");
             }
         }

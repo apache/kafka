@@ -17,16 +17,18 @@
 
 package kafka.utils
 
-import kafka.api.LeaderAndIsr
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.metadata.LeaderAndIsr
+
+import scala.jdk.CollectionConverters._
 
 object ReplicationUtils extends Logging {
 
   def updateLeaderAndIsr(zkClient: KafkaZkClient, partition: TopicPartition, newLeaderAndIsr: LeaderAndIsr,
                          controllerEpoch: Int): (Boolean, Int) = {
-    debug(s"Updated ISR for $partition to ${newLeaderAndIsr.isr.mkString(",")}")
+    debug(s"Updated ISR for $partition to ${newLeaderAndIsr.isr.asScala.mkString(",")}")
     val path = TopicPartitionStateZNode.path(partition)
     val newLeaderData = TopicPartitionStateZNode.encode(LeaderIsrAndControllerEpoch(newLeaderAndIsr, controllerEpoch))
     // use the epoch of the controller that made the leadership decision, instead of the current controller epoch

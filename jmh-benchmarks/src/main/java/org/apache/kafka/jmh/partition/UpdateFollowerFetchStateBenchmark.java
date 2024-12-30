@@ -23,10 +23,8 @@ import kafka.cluster.Partition;
 import kafka.cluster.Replica;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
-import kafka.server.BrokerTopicStats;
 import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
-import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 
 import org.apache.kafka.common.TopicPartition;
@@ -35,10 +33,12 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -64,7 +64,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import scala.Option;
-import scala.compat.java8.OptionConverters;
+import scala.jdk.javaapi.OptionConverters;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -109,7 +109,7 @@ public class UpdateFollowerFetchStateBenchmark {
             setKeepPartitionMetadataFile(true).
             build();
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
-        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Option.apply(0L));
+        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Optional.of(0L));
         DelayedOperations delayedOperations = new DelayedOperationsMock();
 
         // one leader, plus two followers
@@ -139,7 +139,7 @@ public class UpdateFollowerFetchStateBenchmark {
     // avoid mocked DelayedOperations to avoid mocked class affecting benchmark results
     private class DelayedOperationsMock extends DelayedOperations {
         DelayedOperationsMock() {
-            super(topicPartition, null, null, null);
+            super(topicId, topicPartition, null, null, null, null);
         }
 
         @Override

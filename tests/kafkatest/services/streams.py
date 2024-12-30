@@ -22,7 +22,6 @@ from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import KafkaConfig
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.version import KafkaVersion, LATEST_0_10_0, LATEST_0_10_1
 
 STATE_DIR = "state.dir"
 
@@ -384,17 +383,16 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
 
     clean_node_enabled = True
 
-    def __init__(self, test_context, kafka, processing_guarantee, command):
+    def __init__(self, test_context, kafka, command):
         super(StreamsEosTestBaseService, self).__init__(test_context,
                                                         kafka,
                                                         "org.apache.kafka.streams.tests.StreamsEosTest",
                                                         command)
-        self.PROCESSING_GUARANTEE = processing_guarantee
 
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
-                      streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE,
+                      streams_property.PROCESSING_GUARANTEE: "exactly_once_v2",
                       "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
                       "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
                       }
@@ -440,24 +438,24 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
 
 class StreamsEosTestDriverService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "not-required", "run")
+        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "run")
 
 class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, processing_guarantee):
-        super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, processing_guarantee, "process")
+    def __init__(self, test_context, kafka):
+        super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
 class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, processing_guarantee):
-        super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, processing_guarantee, "process-complex")
+    def __init__(self, test_context, kafka):
+        super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex")
 
 class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "not-required", "verify")
+        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify")
 
 
 class StreamsComplexEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "not-required", "verify-complex")
+        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify-complex")
 
 
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
@@ -628,11 +626,6 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
 
     def start_cmd(self, node):
         args = self.args.copy()
-
-        if self.KAFKA_STREAMS_VERSION == str(LATEST_0_10_0) or self.KAFKA_STREAMS_VERSION == str(LATEST_0_10_1):
-            args['zk'] = self.kafka.zk.connect_setting()
-        else:
-            args['zk'] = ""
         args['config_file'] = self.CONFIG_FILE
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
@@ -643,7 +636,7 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true UPGRADE_KAFKA_STREAMS_TEST_VERSION=%(version)s " \
-              " %(kafka_run_class)s %(streams_class_name)s %(zk)s %(config_file)s " \
+              " %(kafka_run_class)s %(streams_class_name)s %(config_file)s " \
               " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         self.logger.info("Executing: " + cmd)
@@ -733,11 +726,6 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
 
     def start_cmd(self, node):
         args = self.args.copy()
-
-        if self.KAFKA_STREAMS_VERSION == str(LATEST_0_10_0) or self.KAFKA_STREAMS_VERSION == str(LATEST_0_10_1):
-            args['zk'] = self.kafka.zk.connect_setting()
-        else:
-            args['zk'] = ""
         args['config_file'] = self.CONFIG_FILE
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
@@ -748,7 +736,7 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true UPGRADE_KAFKA_STREAMS_TEST_VERSION=%(version)s " \
-              " %(kafka_run_class)s %(streams_class_name)s %(zk)s %(config_file)s " \
+              " %(kafka_run_class)s %(streams_class_name)s %(config_file)s " \
               " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         self.logger.info("Executing: " + cmd)

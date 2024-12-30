@@ -35,9 +35,26 @@ public class ApiVersions {
     private final Map<String, NodeApiVersions> nodeApiVersions = new HashMap<>();
     private byte maxUsableProduceMagic = RecordBatch.CURRENT_MAGIC_VALUE;
 
+    // The maximum finalized feature epoch of all the node api versions.
+    private long maxFinalizedFeaturesEpoch = -1;
+    private Map<String, Short> finalizedFeatures;
+
+    public static class FinalizedFeaturesInfo {
+        public final long finalizedFeaturesEpoch;
+        public final Map<String, Short> finalizedFeatures;
+        FinalizedFeaturesInfo(long finalizedFeaturesEpoch, Map<String, Short> finalizedFeatures) {
+            this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
+            this.finalizedFeatures = finalizedFeatures;
+        }
+    }
+
     public synchronized void update(String nodeId, NodeApiVersions nodeApiVersions) {
         this.nodeApiVersions.put(nodeId, nodeApiVersions);
         this.maxUsableProduceMagic = computeMaxUsableProduceMagic();
+        if (maxFinalizedFeaturesEpoch < nodeApiVersions.finalizedFeaturesEpoch()) {
+            this.maxFinalizedFeaturesEpoch = nodeApiVersions.finalizedFeaturesEpoch();
+            this.finalizedFeatures = nodeApiVersions.finalizedFeatures();
+        }
     }
 
     public synchronized void remove(String nodeId) {
@@ -47,6 +64,14 @@ public class ApiVersions {
 
     public synchronized NodeApiVersions get(String nodeId) {
         return this.nodeApiVersions.get(nodeId);
+    }
+
+    public synchronized long getMaxFinalizedFeaturesEpoch() {
+        return maxFinalizedFeaturesEpoch;
+    }
+
+    public synchronized FinalizedFeaturesInfo getFinalizedFeaturesInfo() {
+        return new FinalizedFeaturesInfo(maxFinalizedFeaturesEpoch, finalizedFeatures);
     }
 
     private byte computeMaxUsableProduceMagic() {

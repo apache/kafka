@@ -25,15 +25,15 @@ import kafka.utils.TestUtils.{consumeRecords, createAdminClient}
 import org.apache.kafka.clients.admin.{Admin, ProducerState}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.CsvSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -60,6 +60,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
 
     producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
     consumer = TestUtils.createConsumer(bootstrapServers(),
+      groupProtocolFromTestParameters(),
       enableAutoCommit = false,
       readCommitted = true)
     admin = createAdminClient(brokers, listenerName)
@@ -81,8 +82,13 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testBumpTransactionalEpochAfterInvalidProducerIdMapping(quorum: String): Unit = {
+  @CsvSource(Array(
+    "kraft,classic,false",
+    "kraft,consumer,false",
+    "kraft,classic,true",
+    "kraft,consumer,true",
+  ))
+  def testFatalErrorAfterInvalidProducerIdMapping(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
     producer.initTransactions()
 
     // Start and then abort a transaction to allow the transactional ID to expire.
@@ -95,14 +101,22 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     waitUntilTransactionalStateExists()
     waitUntilTransactionalStateExpires()
 
-    // Start a new transaction and attempt to send, which will trigger an AddPartitionsToTxnRequest, which will fail due to the expired transactional ID.
+    // Start a new transaction and attempt to send, triggering an AddPartitionsToTxnRequest that will fail
+    // due to the expired transactional ID, resulting in a fatal error.
     producer.beginTransaction()
     val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 3, "1", "1", willBeCommitted = false))
     TestUtils.waitUntilTrue(() => failedFuture.isDone, "Producer future never completed.")
-
     org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[InvalidPidMappingException])
-    producer.abortTransaction()
 
+    // Assert that aborting the transaction throws a KafkaException due to the fatal error.
+    assertThrows(classOf[KafkaException], () => producer.abortTransaction())
+
+    // Close the producer and reinitialize to recover from the fatal error.
+    producer.close()
+    producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
+    producer.initTransactions()
+
+    // Proceed with a new transaction after reinitializing.
     producer.beginTransaction()
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 2, "4", "4", willBeCommitted = true))
@@ -120,9 +134,14 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testTransactionAfterProducerIdExpires(quorum: String): Unit = {
+  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isTV2Enabled={2}")
+  @CsvSource(Array(
+    "kraft,classic,false",
+    "kraft,consumer,false",
+    "kraft,classic,true",
+    "kraft,consumer,true",
+  ))
+  def testTransactionAfterProducerIdExpires(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
     producer.initTransactions()
 
     // Start and then abort a transaction to allow the producer ID to expire.
@@ -163,7 +182,13 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     // Because the transaction IDs outlive the producer IDs, creating a producer with the same transactional id
     // soon after the first will re-use the same producerId, while bumping the epoch to indicate that they are distinct.
     assertEquals(oldProducerId, newProducerId)
-    assertEquals(oldProducerEpoch + 1, newProducerEpoch)
+    if (isTV2Enabled) {
+      // TV2 bumps epoch on EndTxn, and the final commit may or may not have bumped the epoch in the producer state.
+      // The epoch should be at least oldProducerEpoch + 2 for the first commit and the restarted producer.
+      assertTrue(oldProducerEpoch + 2 <= newProducerEpoch)
+    } else {
+      assertEquals(oldProducerEpoch + 1, newProducerEpoch)
+    }
 
     consumer.subscribe(List(topic1).asJava)
 
@@ -205,18 +230,18 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     // Set a smaller value for the number of partitions for the __consumer_offsets topic
     // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long.
     serverProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 1.toString)
-    serverProps.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 3.toString)
-    serverProps.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, 2.toString)
-    serverProps.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, 2.toString)
+    serverProps.put(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 3.toString)
+    serverProps.put(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, 2.toString)
+    serverProps.put(TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, 2.toString)
     serverProps.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, true.toString)
     serverProps.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, false.toString)
     serverProps.put(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
     serverProps.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
-    serverProps.put(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, "200")
-    serverProps.put(TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG, "10000")
-    serverProps.put(TransactionStateManagerConfigs.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG, "500")
-    serverProps.put(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG, "5000")
-    serverProps.put(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG, "500")
+    serverProps.put(TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, "200")
+    serverProps.put(TransactionStateManagerConfig.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG, "10000")
+    serverProps.put(TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG, "500")
+    serverProps.put(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG, "5000")
+    serverProps.put(TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG, "500")
     serverProps
   }
 }

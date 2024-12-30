@@ -38,8 +38,8 @@ public class CombinedKeySchemaTest {
         final Bytes result = cks.toBytes("foreignKey", primary);
 
         final CombinedKey<String, Integer> deserializedKey = cks.fromBytes(result);
-        assertEquals("foreignKey", deserializedKey.getForeignKey());
-        assertEquals(primary, deserializedKey.getPrimaryKey());
+        assertEquals("foreignKey", deserializedKey.foreignKey());
+        assertEquals(primary, deserializedKey.primaryKey());
     }
 
     @Test

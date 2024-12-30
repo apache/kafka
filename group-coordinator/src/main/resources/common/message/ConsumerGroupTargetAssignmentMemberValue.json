@@ -22,8 +22,10 @@
   "fields": [
     { "name": "TopicPartitions", "versions": "0+", "type": "[]TopicPartition",
       "about": "The assigned partitions.", "fields": [
-      { "name": "TopicId", "versions": "0+", "type": "uuid" },
-      { "name": "Partitions", "versions": "0+", "type": "[]int32" }
+      { "name": "TopicId", "versions": "0+", "type": "uuid",
+        "about": "The topic id."},
+      { "name": "Partitions", "versions": "0+", "type": "[]int32",
+        "about": "The partition indexes."}
     ]}
   ]
 }

@@ -150,6 +150,11 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
+    public void updateNextOffsets(final TopicPartition partition, final OffsetAndMetadata offsetAndMetadata) {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
     public boolean process(final long wallClockTime) {
         throw new UnsupportedOperationException("This task is read-only");
     }
@@ -213,8 +218,8 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
-    public StateStore getStore(final String name) {
-        return task.getStore(name);
+    public StateStore store(final String name) {
+        return task.store(name);
     }
 
     @Override

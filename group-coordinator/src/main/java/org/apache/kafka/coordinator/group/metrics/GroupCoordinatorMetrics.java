@@ -23,9 +23,12 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -65,14 +68,18 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
     public static final String GROUP_COUNT_METRIC_NAME = "group-count";
     public static final String GROUP_COUNT_PROTOCOL_TAG = "protocol";
+    public static final String SHARE_GROUP_PROTOCOL_TAG = GROUP_COUNT_PROTOCOL_TAG;
     public static final String CONSUMER_GROUP_COUNT_METRIC_NAME = "consumer-group-count";
+    public static final String SHARE_GROUP_COUNT_METRIC_NAME = "group-count";
     public static final String CONSUMER_GROUP_COUNT_STATE_TAG = "state";
+    public static final String SHARE_GROUP_COUNT_STATE_TAG = CONSUMER_GROUP_COUNT_STATE_TAG;
 
     public static final String OFFSET_COMMITS_SENSOR_NAME = "OffsetCommits";
     public static final String OFFSET_EXPIRED_SENSOR_NAME = "OffsetExpired";
     public static final String OFFSET_DELETIONS_SENSOR_NAME = "OffsetDeletions";
     public static final String CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME = "CompletedRebalances";
     public static final String CONSUMER_GROUP_REBALANCES_SENSOR_NAME = "ConsumerGroupRebalances";
+    public static final String SHARE_GROUP_REBALANCES_SENSOR_NAME = "ShareGroupRebalances";
 
     private final MetricName classicGroupCountMetricName;
     private final MetricName consumerGroupCountMetricName;
@@ -81,6 +88,10 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     private final MetricName consumerGroupCountReconcilingMetricName;
     private final MetricName consumerGroupCountStableMetricName;
     private final MetricName consumerGroupCountDeadMetricName;
+    private final MetricName shareGroupCountMetricName;
+    private final MetricName shareGroupCountEmptyMetricName;
+    private final MetricName shareGroupCountStableMetricName;
+    private final MetricName shareGroupCountDeadMetricName;
 
     private final MetricsRegistry registry;
     private final Metrics metrics;
@@ -148,6 +159,37 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.DEAD.toString())
         );
 
+        shareGroupCountMetricName = metrics.metricName(
+            SHARE_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The total number of share groups.",
+            Collections.singletonMap(SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString())
+        );
+
+        shareGroupCountEmptyMetricName = metrics.metricName(
+            SHARE_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of share groups in empty state.",
+            SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString(),
+            SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.EMPTY.toString()
+        );
+
+        shareGroupCountStableMetricName = metrics.metricName(
+            SHARE_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of share groups in stable state.",
+            SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString(),
+            SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.STABLE.toString()
+        );
+
+        shareGroupCountDeadMetricName = metrics.metricName(
+            SHARE_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of share groups in dead state.",
+            SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString(),
+            SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.DEAD.toString()
+        );
+
         registerGauges();
 
         Sensor offsetCommitsSensor = metrics.sensor(OFFSET_COMMITS_SENSOR_NAME);
@@ -195,12 +237,24 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
                 METRICS_GROUP,
                 "The total number of consumer group rebalances")));
 
+        Sensor shareGroupRebalanceSensor = metrics.sensor(SHARE_GROUP_REBALANCES_SENSOR_NAME);
+        shareGroupRebalanceSensor.add(new Meter(
+            metrics.metricName("rebalance-rate",
+                METRICS_GROUP,
+                "The rate of share group rebalances",
+                SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString()),
+            metrics.metricName("rebalance-count",
+                METRICS_GROUP,
+                "The total number of share group rebalances",
+                SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString())));
+
         globalSensors = Collections.unmodifiableMap(Utils.mkMap(
             Utils.mkEntry(OFFSET_COMMITS_SENSOR_NAME, offsetCommitsSensor),
             Utils.mkEntry(OFFSET_EXPIRED_SENSOR_NAME, offsetExpiredSensor),
             Utils.mkEntry(OFFSET_DELETIONS_SENSOR_NAME, offsetDeletionsSensor),
             Utils.mkEntry(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME, classicGroupCompletedRebalancesSensor),
-            Utils.mkEntry(CONSUMER_GROUP_REBALANCES_SENSOR_NAME, consumerGroupRebalanceSensor)
+            Utils.mkEntry(CONSUMER_GROUP_REBALANCES_SENSOR_NAME, consumerGroupRebalanceSensor),
+            Utils.mkEntry(SHARE_GROUP_REBALANCES_SENSOR_NAME, shareGroupRebalanceSensor)
         ));
     }
 
@@ -224,6 +278,14 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         return shards.values().stream().mapToLong(shard -> shard.numConsumerGroups(state)).sum();
     }
 
+    private long numShareGroups() {
+        return shards.values().stream().mapToLong(GroupCoordinatorMetricsShard::numShareGroups).sum();
+    }
+
+    private long numShareGroups(ShareGroup.ShareGroupState state) {
+        return shards.values().stream().mapToLong(shard -> shard.numShareGroups(state)).sum();
+    }
+
     @Override
     public void close() {
         Arrays.asList(
@@ -243,7 +305,11 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             consumerGroupCountAssigningMetricName,
             consumerGroupCountReconcilingMetricName,
             consumerGroupCountStableMetricName,
-            consumerGroupCountDeadMetricName
+            consumerGroupCountDeadMetricName,
+            shareGroupCountMetricName,
+            shareGroupCountEmptyMetricName,
+            shareGroupCountStableMetricName,
+            shareGroupCountDeadMetricName
         ).forEach(metrics::removeMetric);
 
         Arrays.asList(
@@ -251,7 +317,8 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             OFFSET_EXPIRED_SENSOR_NAME,
             OFFSET_DELETIONS_SENSOR_NAME,
             CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME,
-            CONSUMER_GROUP_REBALANCES_SENSOR_NAME
+            CONSUMER_GROUP_REBALANCES_SENSOR_NAME,
+            SHARE_GROUP_REBALANCES_SENSOR_NAME
         ).forEach(metrics::removeSensor);
     }
 
@@ -373,6 +440,26 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         metrics.addMetric(
             consumerGroupCountDeadMetricName,
             (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.DEAD)
+        );
+
+        metrics.addMetric(
+            shareGroupCountMetricName,
+            (Gauge<Long>) (config, now) -> numShareGroups()
+        );
+
+        metrics.addMetric(
+            shareGroupCountEmptyMetricName,
+            (Gauge<Long>) (config, now) -> numShareGroups(ShareGroup.ShareGroupState.EMPTY)
+        );
+
+        metrics.addMetric(
+            shareGroupCountStableMetricName,
+            (Gauge<Long>) (config, now) -> numShareGroups(ShareGroup.ShareGroupState.STABLE)
+        );
+
+        metrics.addMetric(
+            shareGroupCountDeadMetricName,
+            (Gauge<Long>) (config, now) -> numShareGroups(ShareGroup.ShareGroupState.DEAD)
         );
     }
 }

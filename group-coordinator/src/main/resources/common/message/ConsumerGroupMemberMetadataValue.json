@@ -33,7 +33,7 @@
     { "name": "SubscribedTopicRegex", "versions": "0+", "nullableVersions": "0+", "type": "string",
       "about": "The subscribed topic regular expression." },
     { "name": "RebalanceTimeoutMs", "type": "int32", "versions": "0+", "default": -1,
-      "about": "The rebalance timeout" },
+      "about": "The rebalance timeout." },
     { "name": "ServerAssignor", "versions": "0+", "nullableVersions": "0+", "type": "string",
       "about": "The server assignor to use; or null if not used." },
     { "name": "ClassicMemberMetadata", "versions": "0+", "nullableVersions": "0+", "type": "ClassicMemberMetadata",

@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 
 import java.util.Arrays;
 import java.util.List;
@@ -65,6 +66,13 @@ public interface Group {
             GroupType type = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
 
             return type == null ? UNKNOWN : type;
+        }
+        
+        static String[] documentValidValues() {
+            return Arrays.stream(GroupType.values())
+                .filter(type -> type != UNKNOWN)
+                .map(GroupType::toString)
+                .toArray(String[]::new);
         }
     }
 

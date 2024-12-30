@@ -20,7 +20,6 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
 import java.util.{Optional, Properties}
-import kafka.api.LeaderAndIsr
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.metadata.MockConfigRepository
@@ -34,17 +33,18 @@ import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.{FetchRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.Mockito
@@ -76,7 +76,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
     CoreUtils.swallow(channel.shutdown(), this)
     CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
     CoreUtils.swallow(quotaManagers.shutdown(), this)
-    CoreUtils.swallow(metrics.close(), this)
+    Utils.closeQuietly(metrics, "metrics")
     CoreUtils.swallow(time.scheduler.shutdown(), this)
   }
 
@@ -263,7 +263,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       replicaManager.fetchMessages(
         params = fetchParams,
         fetchInfos = Seq(topicIdPartition -> partitionData),
-        quota = QuotaFactory.UnboundedQuota,
+        quota = QuotaFactory.UNBOUNDED_QUOTA,
         responseCallback = fetchCallback,
       )
 
@@ -439,7 +439,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       delta.replay(new PartitionChangeRecord()
         .setTopicId(topic.topicId)
         .setPartitionId(partitionId)
-        .setIsr(leaderAndIsr.isr.map(Int.box).asJava)
+        .setIsr(leaderAndIsr.isr)
         .setLeader(leaderAndIsr.leader)
       )
       this.registration = delta.topicsDelta

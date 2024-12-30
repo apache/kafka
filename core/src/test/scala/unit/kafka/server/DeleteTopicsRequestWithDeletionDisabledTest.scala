@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse}
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.TestInfo
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -32,8 +33,8 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
 
   override def brokerCount: Int = 1
 
-  override def kraftControllerConfigs() = {
-    val props = super.kraftControllerConfigs()
+  override def kraftControllerConfigs(testInfo: TestInfo) = {
+    val props = super.kraftControllerConfigs(testInfo)
     props.head.setProperty(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "false")
     props
   }
@@ -48,7 +49,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDeleteRecordsRequest(quorum: String): Unit = {
     val topic = "topic-1"
     val request = new DeleteTopicsRequest.Builder(
@@ -70,7 +71,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
     connectAndReceive[DeleteTopicsResponse](
       request,
       controllerSocketServer,
-      if (isKRaftTest()) ListenerName.normalised("CONTROLLER") else listenerName
+      ListenerName.normalised("CONTROLLER")
     )
   }
 

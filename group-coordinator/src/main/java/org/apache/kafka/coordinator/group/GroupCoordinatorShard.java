@@ -48,6 +48,14 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorExecutor;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorShard;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilder;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -56,6 +64,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -76,14 +86,8 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
-import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
-import org.apache.kafka.coordinator.group.metrics.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorShard;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilder;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -113,11 +117,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     public static class Builder implements CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> {
         private final GroupCoordinatorConfig config;
+        private final GroupConfigManager groupConfigManager;
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
         private Time time;
         private CoordinatorTimer<Void, CoordinatorRecord> timer;
-        private GroupConfigManager groupConfigManager;
+        private CoordinatorExecutor<CoordinatorRecord> executor;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
 
@@ -154,6 +159,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         @Override
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withExecutor(
+            CoordinatorExecutor<CoordinatorRecord> executor
+        ) {
+            this.executor = executor;
+            return this;
+        }
+
+        @Override
         public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withCoordinatorMetrics(
             CoordinatorMetrics coordinatorMetrics
         ) {
@@ -175,6 +188,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return this;
         }
 
+        @SuppressWarnings("NPathComplexity")
         @Override
         public GroupCoordinatorShard build() {
             if (logContext == null) logContext = new LogContext();
@@ -186,6 +200,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 throw new IllegalArgumentException("Time must be set.");
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
+            if (executor == null)
+                throw new IllegalArgumentException("Executor must be set.");
             if (coordinatorMetrics == null || !(coordinatorMetrics instanceof GroupCoordinatorMetrics))
                 throw new IllegalArgumentException("CoordinatorMetrics must be set and be of type GroupCoordinatorMetrics.");
             if (topicPartition == null)
@@ -201,20 +217,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withSnapshotRegistry(snapshotRegistry)
                 .withTime(time)
                 .withTimer(timer)
+                .withExecutor(executor)
+                .withConfig(config)
                 .withGroupConfigManager(groupConfigManager)
-                .withConsumerGroupAssignors(config.consumerGroupAssignors())
-                .withConsumerGroupMaxSize(config.consumerGroupMaxSize())
-                .withConsumerGroupSessionTimeout(config.consumerGroupSessionTimeoutMs())
-                .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs())
-                .withClassicGroupMaxSize(config.classicGroupMaxSize())
-                .withClassicGroupInitialRebalanceDelayMs(config.classicGroupInitialRebalanceDelayMs())
-                .withClassicGroupNewMemberJoinTimeoutMs(config.classicGroupNewMemberJoinTimeoutMs())
-                .withClassicGroupMinSessionTimeoutMs(config.classicGroupMinSessionTimeoutMs())
-                .withClassicGroupMaxSessionTimeoutMs(config.classicGroupMaxSessionTimeoutMs())
-                .withConsumerGroupMigrationPolicy(config.consumerGroupMigrationPolicy())
-                .withShareGroupMaxSize(config.shareGroupMaxSize())
-                .withShareGroupSessionTimeout(config.shareGroupSessionTimeoutMs())
-                .withShareGroupHeartbeatInterval(config.shareGroupHeartbeatIntervalMs())
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .build();
 
@@ -246,6 +251,18 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * Visible for testing.
      */
     static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
+
+    /**
+     * The classic group size counter key to schedule a timer task.
+     *
+     * Visible for testing.
+     */
+    static final String CLASSIC_GROUP_SIZE_COUNTER_KEY = "classic-group-size-counter";
+
+    /**
+     * Hardcoded default value of the interval to update the classic group size counter.
+     */
+    static final int DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS = 60 * 1000;
 
     /**
      * The logger.
@@ -586,7 +603,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         List<String> groupIds,
         long committedOffset
     ) {
-        return groupMetadataManager.describeGroups(groupIds, committedOffset);
+        return groupMetadataManager.describeGroups(context, groupIds, committedOffset);
     }
 
     /**
@@ -677,6 +694,30 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Schedules (or reschedules) the group size counter for the classic groups.
+     */
+    private void scheduleClassicGroupSizeCounter() {
+        timer.schedule(
+            CLASSIC_GROUP_SIZE_COUNTER_KEY,
+            DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> {
+                groupMetadataManager.updateClassicGroupSizeCounter();
+                scheduleClassicGroupSizeCounter();
+                return GroupMetadataManager.EMPTY_RESULT;
+            }
+        );
+    }
+
+    /**
+     * Cancels the group size counter for the classic groups.
+     */
+    private void cancelClassicGroupSizeCounter() {
+        timer.cancel(CLASSIC_GROUP_SIZE_COUNTER_KEY);
+    }
+
+    /**
      * The coordinator has been loaded. This is used to apply any
      * post loading operations (e.g. registering timers).
      *
@@ -691,6 +732,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         groupMetadataManager.onLoaded();
         scheduleGroupMetadataExpiration();
+        scheduleClassicGroupSizeCounter();
     }
 
     @Override
@@ -698,6 +740,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         timer.cancel(GROUP_EXPIRATION_KEY);
         coordinatorMetrics.deactivateMetricsShard(metricsShard);
         groupMetadataManager.onUnloaded();
+        cancelClassicGroupSizeCounter();
     }
 
     /**
@@ -721,6 +764,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param record        The record to apply to the state machine.
      * @throws RuntimeException
      */
+    @SuppressWarnings({"CyclomaticComplexity"})
     @Override
     public void replay(
         long offset,
@@ -830,6 +874,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.replay(
                     (ShareGroupCurrentMemberAssignmentKey) key.message(),
                     (ShareGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
+                );
+                break;
+
+            case 16:
+                groupMetadataManager.replay(
+                    (ConsumerGroupRegularExpressionKey) key.message(),
+                    (ConsumerGroupRegularExpressionValue) Utils.messageOrNull(value)
                 );
                 break;
 

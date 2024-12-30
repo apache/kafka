@@ -66,25 +66,24 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         public byte[] serialize(final String topic, final SubscriptionResponseWrapper<V> data) {
             //{1-bit-isHashNull}{7-bits-version}{Optional-16-byte-Hash}{n-bytes serialized data}
 
-            //7-bit (0x7F) maximum for data version.
-            if (Byte.compare((byte) 0x7F, data.getVersion()) < 0) {
-                throw new UnsupportedVersionException("SubscriptionResponseWrapper version is larger than maximum supported 0x7F");
+            if (data.version() < 0) {
+                throw new UnsupportedVersionException("SubscriptionResponseWrapper version cannot be negative");
             }
 
-            final byte[] serializedData = data.getForeignValue() == null ? null : serializer.serialize(topic, data.getForeignValue());
+            final byte[] serializedData = data.foreignValue() == null ? null : serializer.serialize(topic, data.foreignValue());
             final int serializedDataLength = serializedData == null ? 0 : serializedData.length;
-            final long[] originalHash = data.getOriginalValueHash();
+            final long[] originalHash = data.originalValueHash();
             final int hashLength = originalHash == null ? 0 : 2 * Long.BYTES;
 
             final ByteBuffer buf = ByteBuffer.allocate(1 + hashLength + serializedDataLength);
 
             if (originalHash != null) {
-                buf.put(data.getVersion());
+                buf.put(data.version());
                 buf.putLong(originalHash[0]);
                 buf.putLong(originalHash[1]);
             } else {
                 //Don't store hash as it's null.
-                buf.put((byte) (data.getVersion() | (byte) 0x80));
+                buf.put((byte) (data.version() | (byte) 0x80));
             }
 
             if (serializedData != null)

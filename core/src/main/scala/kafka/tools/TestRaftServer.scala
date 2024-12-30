@@ -81,7 +81,6 @@ class TestRaftServer(
     val apiVersionManager = new SimpleApiVersionManager(
       ListenerType.CONTROLLER,
       true,
-      false,
       () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_KRAFT_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
@@ -104,8 +103,8 @@ class TestRaftServer(
       time,
       metrics,
       Some(threadNamePrefix),
-      CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
-      QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+      CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
+      QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
       endpoints,
       new ProcessTerminatingFaultHandler.Builder().build()
     )
@@ -148,8 +147,7 @@ class TestRaftServer(
       CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
     if (socketServer != null)
       CoreUtils.swallow(socketServer.shutdown(), this)
-    if (metrics != null)
-      CoreUtils.swallow(metrics.close(), this)
+    Utils.closeQuietly(metrics, "metrics")
     shutdownLatch.countDown()
   }
 

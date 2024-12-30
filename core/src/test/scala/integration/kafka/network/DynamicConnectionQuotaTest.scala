@@ -29,9 +29,10 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.{KafkaException, requests}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.QuotaConfigs
+import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -57,7 +58,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   var admin: Admin = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(QuotaConfigs.NUM_QUOTA_SAMPLES_CONFIG, "2")
+    properties.put(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, "2")
     properties.put("listener.name.plaintext.max.connection.creation.rate", plaintextListenerDefaultQuota.toString)
   }
 
@@ -81,8 +82,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
+  @Flaky("KAFKA-17999")
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDynamicConnectionQuota(quorum: String): Unit = {
     val maxConnectionsPerIP = 5
 
@@ -110,7 +112,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDynamicListenerConnectionQuota(quorum: String): Unit = {
     val initialConnectionCount = connectionCount
 
@@ -183,7 +185,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDynamicListenerConnectionCreationRateQuota(quorum: String): Unit = {
     // Create another listener. PLAINTEXT is an inter-broker listener
     // keep default limits
@@ -245,7 +247,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDynamicIpConnectionRateQuota(quorum: String): Unit = {
     val connRateLimit = 10
     val initialConnectionCount = connectionCount
@@ -274,7 +276,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   private def updateIpConnectionRate(ip: Option[String], updatedRate: Int): Unit = {
     val initialConnectionCount = connectionCount
     val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> ip.orNull).asJava)
-    val request = Map(entity -> Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(updatedRate.toDouble)))
+    val request = Map(entity -> Map(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(updatedRate.toDouble)))
     alterClientQuotas(admin, request).all.get()
     // use a random throwaway address if ip isn't specified to get the default value
     TestUtils.waitUntilTrue(() => brokers.head.socketServer.connectionQuotas.

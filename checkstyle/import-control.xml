@@ -49,6 +49,7 @@
 
   <subpackage name="common">
     <allow class="org.apache.kafka.clients.consumer.ConsumerRecord" exact-match="true" />
+    <allow class="org.apache.kafka.clients.NodeApiVersions" exact-match="true" />
     <allow class="org.apache.kafka.common.message.ApiMessageType" exact-match="true" />
     <disallow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common" exact-match="true" />
@@ -224,6 +225,7 @@
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
     <allow pkg="org.apache.kafka.test" />
+    <allow class="org.apache.log4j.Level" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.clients.consumer" />
@@ -282,6 +284,7 @@
 
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metadata.properties" />
     <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.server.util" />
@@ -292,6 +295,8 @@
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.log.remote.metadata.storage" />
     <allow pkg="org.apache.kafka.server.log.remote.storage" />
+    <allow pkg="org.apache.kafka.server.quota" />
+    <allow pkg="org.apache.kafka.streams" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="org.apache.kafka.clients.producer" />
@@ -303,13 +308,18 @@
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
-    <allow pkg="kafka.test" />
+    <allow pkg="org.apache.kafka.common.test" />
     <allow pkg="joptsimple" />
     <allow pkg="javax.rmi.ssl"/>
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
+    <allow pkg="scala.jdk.javaapi" />
     <allow pkg="org.apache.kafka.coordinator.transaction" />
     <allow pkg="org.apache.kafka.coordinator.group" />
+    <allow pkg="org.apache.kafka.tools" />
+    <allow pkg="org.apache.kafka.tools.api" />
+    <allow pkg="org.apache.kafka.tools.filter" />
+    <allow pkg="org.apache.kafka.image" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>
@@ -321,6 +331,11 @@
         <allow pkg="org.apache.kafka.tools"/>
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="scala"/>
+        <allow pkg="com.google.re2j"/>
+        <subpackage name="share">
+          <allow pkg="org.apache.kafka.server.share" />
+          <allow pkg="org.apache.kafka.coordinator.share" />
+        </subpackage>
       </subpackage>
     </subpackage>
 
@@ -345,8 +360,8 @@
 
   <subpackage name="trogdor">
     <allow pkg="com.fasterxml.jackson" />
-    <allow pkg="javax.servlet" />
-    <allow pkg="javax.ws.rs" />
+    <allow pkg="jakarta.servlet" />
+    <allow pkg="jakarta.ws.rs" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
@@ -355,6 +370,7 @@
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.kafka.trogdor" />
+    <allow pkg="org.apache.kafka.coordinator" />
     <allow pkg="org.eclipse.jetty" />
     <allow pkg="org.glassfish.jersey" />
   </subpackage>
@@ -363,7 +379,9 @@
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="com.fasterxml.jackson.annotation" />
     <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.kafka.message" />
     <allow pkg="org.apache.message" />
+    <allow pkg="org.eclipse.jgit" />
   </subpackage>
 
   <subpackage name="streams">
@@ -391,6 +409,8 @@
     </subpackage>
 
     <subpackage name="integration">
+      <allow pkg="org.apache.kafka.common.test"/>
+      <allow pkg="org.apache.kafka.metadata"/>
       <allow pkg="kafka.admin" />
       <allow pkg="kafka.api" />
       <allow pkg="kafka.cluster" />
@@ -403,8 +423,13 @@
       <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.tools" />
       <allow pkg="org.apache.kafka.server.config" />
+      <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
+      <allow class="org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.MetricsData"/>
+      <allow class="org.apache.kafka.server.telemetry.ClientTelemetry" />
+      <allow class="org.apache.kafka.server.telemetry.ClientTelemetryPayload" />
+      <allow class="org.apache.kafka.server.telemetry.ClientTelemetryReceiver" />
       <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
-      <allow class="org.apache.kafka.coordinator.transaction.TransactionLogConfigs" />
+      <allow class="org.apache.kafka.coordinator.transaction.TransactionLogConfig" />
       <allow pkg="org.apache.kafka.coordinator.group" />
       <allow pkg="org.apache.kafka.network" />
     </subpackage>
@@ -425,13 +450,6 @@
         <allow pkg="org.apache.log4j" />
       </subpackage>
     </subpackage>
-  </subpackage>
-
-  <subpackage name="log4jappender">
-    <allow pkg="org.apache.log4j" />
-    <allow pkg="org.apache.kafka.clients" />
-    <allow pkg="org.apache.kafka.common" />
-    <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
   <subpackage name="test">
@@ -511,7 +529,7 @@
 
     <subpackage name="rest">
       <allow pkg="org.apache.kafka.connect.health" />
-      <allow pkg="javax.ws.rs" />
+      <allow pkg="jakarta.ws.rs" />
       <allow pkg= "javax.security.auth"/>
       <subpackage name="basic">
         <allow pkg="org.apache.kafka.connect.rest"/>
@@ -537,8 +555,8 @@
       <allow pkg="org.apache.kafka.server.config" />
       <allow pkg="kafka.server" />
       <subpackage name="rest">
-        <allow pkg="javax.ws.rs" />
-        <allow pkg="javax.inject" />
+        <allow pkg="jakarta.ws.rs" />
+        <allow pkg="jakarta.inject" />
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="org.glassfish.hk2" />
       </subpackage>
@@ -546,18 +564,18 @@
 
     <subpackage name="runtime">
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="org.reflections"/>
-      <allow pkg="org.reflections.util"/>
+      <allow pkg="io.github.classgraph"/>
       <allow pkg="javax.crypto"/>
+      <allow pkg="org.apache.maven.artifact.versioning" />
       <allow pkg="org.eclipse.jetty.util" />
       <allow pkg="org.apache.log4j" />
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
-        <allow pkg="javax.ws.rs" />
-        <allow pkg="javax.inject" />
+        <allow pkg="jakarta.ws.rs" />
+        <allow pkg="jakarta.inject" />
         <allow pkg="org.glassfish.hk2" />
-        <allow pkg="javax.servlet" />
+        <allow pkg="jakarta.servlet" />
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
@@ -566,12 +584,11 @@
 
       <subpackage name="isolation">
         <allow pkg="com.fasterxml.jackson" />
-        <allow pkg="org.apache.maven.artifact.versioning" />
         <allow pkg="javax.tools" />
       </subpackage>
 
       <subpackage name="distributed">
-        <allow pkg="javax.ws.rs.core" />
+        <allow pkg="jakarta.ws.rs.core" />
       </subpackage>
     </subpackage>
 
@@ -593,7 +610,6 @@
 
     <subpackage name="util">
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="org.reflections.vfs" />
       <!-- for annotations to avoid code duplication -->
       <allow pkg="com.fasterxml.jackson.annotation" />
       <allow pkg="com.fasterxml.jackson.databind" />
@@ -601,11 +617,11 @@
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="kafka.cluster" />
         <allow pkg="kafka.server" />
-        <allow pkg="kafka.testkit" />
+        <allow pkg="org.apache.kafka.common.test" />
         <allow pkg="kafka.zk" />
         <allow pkg="kafka.utils" />
-        <allow class="javax.servlet.http.HttpServletResponse" />
-        <allow class="javax.ws.rs.core.Response" />
+        <allow class="jakarta.servlet.http.HttpServletResponse" />
+        <allow class="jakarta.ws.rs.core.Response" />
         <allow pkg="com.fasterxml.jackson.core.type" />
         <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.eclipse.jetty.client"/>
@@ -617,7 +633,7 @@
     <subpackage name="integration">
       <allow pkg="org.apache.kafka.connect.util.clusters" />
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="javax.ws.rs" />
+      <allow pkg="jakarta.ws.rs" />
       <allow pkg="org.apache.http"/>
       <allow pkg="org.eclipse.jetty.util"/>
       <!-- for tests -->

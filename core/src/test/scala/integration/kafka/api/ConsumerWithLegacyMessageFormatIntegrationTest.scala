@@ -16,13 +16,13 @@
  */
 package kafka.api
 
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
 import java.util.{Collections, Optional, Properties}
@@ -31,17 +31,10 @@ import scala.jdk.CollectionConverters._
 
 class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTest {
 
-  override protected def brokerPropertyOverrides(properties: Properties): Unit = {
-    // legacy message formats are only supported with IBP < 3.0
-    // KRaft mode is not supported for inter.broker.protocol.version = 2.8, The minimum version required is 3.0-IV1"
-    if (!isKRaftTest())
-      properties.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
-  }
-
   @nowarn("cat=deprecation")
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testOffsetsForTimes(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testOffsetsForTimes(quorum: String, groupProtocol: String): Unit = {
     val numParts = 2
     val topic1 = "part-test-topic-1"
     val topic2 = "part-test-topic-2"
@@ -90,22 +83,16 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     assertEquals(20, timestampTopic1P1.timestamp)
     assertEquals(Optional.of(0), timestampTopic1P1.leaderEpoch)
 
-    if (!isKRaftTest()) {
-      assertNull(timestampOffsets.get(new TopicPartition(topic2, 0)), "null should be returned when message format is 0.9.0")
-      assertNull(timestampOffsets.get(new TopicPartition(topic2, 1)), "null should be returned when message format is 0.9.0")
-    }
-    else {
-      // legacy message formats are supported for IBP version < 3.0 and KRaft runs on minimum version 3.0-IV1
-      val timestampTopic2P0 = timestampOffsets.get(new TopicPartition(topic2, 0))
-      assertEquals(40, timestampTopic2P0.offset)
-      assertEquals(40, timestampTopic2P0.timestamp)
-      assertEquals(Optional.of(0), timestampTopic2P0.leaderEpoch)
+    // legacy message formats are supported for IBP version < 3.0 and KRaft runs on minimum version 3.0-IV1
+    val timestampTopic2P0 = timestampOffsets.get(new TopicPartition(topic2, 0))
+    assertEquals(40, timestampTopic2P0.offset)
+    assertEquals(40, timestampTopic2P0.timestamp)
+    assertEquals(Optional.of(0), timestampTopic2P0.leaderEpoch)
 
-      val timestampTopic2P1 = timestampOffsets.get(new TopicPartition(topic2, 1))
-      assertEquals(60, timestampTopic2P1.offset)
-      assertEquals(60, timestampTopic2P1.timestamp)
-      assertEquals(Optional.of(0), timestampTopic2P1.leaderEpoch)
-    }
+    val timestampTopic2P1 = timestampOffsets.get(new TopicPartition(topic2, 1))
+    assertEquals(60, timestampTopic2P1.offset)
+    assertEquals(60, timestampTopic2P1.timestamp)
+    assertEquals(Optional.of(0), timestampTopic2P1.leaderEpoch)
 
     val timestampTopic3P0 = timestampOffsets.get(new TopicPartition(topic3, 0))
     assertEquals(80, timestampTopic3P0.offset)
@@ -116,9 +103,9 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
   }
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testEarliestOrLatestOffsets(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testEarliestOrLatestOffsets(quorum: String, groupProtocol: String): Unit = {
     val topic0 = "topicWithNewMessageFormat"
     val topic1 = "topicWithOldMessageFormat"
     val prop = new Properties()

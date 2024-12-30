@@ -52,5 +52,5 @@ class PluggableConsumerTest(VerifiableConsumerTest):
 
         self.logger.debug("Waiting for %d nodes to stop" % len(consumer.nodes))
         wait_until(lambda: len(consumer.dead_nodes()) == len(consumer.nodes),
-                   timeout_sec=self.session_timeout_sec+5,
+                   timeout_sec=60,
                    err_msg="Timed out waiting for consumers to shutdown")

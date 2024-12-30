@@ -17,7 +17,7 @@
   "apiKey": 57,
   "type": "response",
   "name": "UpdateFeaturesResponse",
-  "validVersions": "0-1",
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
@@ -26,7 +26,7 @@
       "about": "The top-level error code, or `0` if there was no top-level error." },
     { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The top-level error message, or `null` if there was no top-level error." },
-    { "name": "Results", "type": "[]UpdatableFeatureResult", "versions": "0+",
+    { "name": "Results", "type": "[]UpdatableFeatureResult", "versions": "0-1", "ignorable": true,
       "about": "Results for each feature update.", "fields": [
       { "name": "Feature", "type": "string", "versions": "0+", "mapKey": true,
         "about": "The name of the finalized feature."},

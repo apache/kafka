@@ -23,20 +23,28 @@
   "flexibleVersions": "1+",
   "fields": [
     { "name": "ProducerId", "type": "int64", "versions": "0+",
-      "about": "Producer id in use by the transactional id"},
+      "about": "Producer id in use by the transactional id."},
+    { "name": "PreviousProducerId", "type": "int64", "taggedVersions": "1+", "tag": 0, "default": -1,
+      "about": "Producer id used by the last committed transaction."},
+    { "name": "NextProducerId", "type": "int64", "taggedVersions": "1+", "tag": 1, "default": -1,
+      "about": "Latest producer ID sent to the producer for the given transactional id."},
     { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
-      "about": "Epoch associated with the producer id"},
+      "about": "Epoch associated with the producer id."},
     { "name": "TransactionTimeoutMs", "type": "int32", "versions": "0+",
-      "about": "Transaction timeout in milliseconds"},
+      "about": "Transaction timeout in milliseconds."},
     { "name": "TransactionStatus", "type": "int8", "versions": "0+",
-      "about": "TransactionState the transaction is in"},
+      "about": "TransactionState the transaction is in."},
     { "name": "TransactionPartitions", "type": "[]PartitionsSchema", "versions": "0+", "nullableVersions": "0+",
-      "about": "Set of partitions involved in the transaction", "fields": [
-      { "name": "Topic", "type": "string", "versions": "0+"},
-      { "name": "PartitionIds", "type": "[]int32", "versions": "0+"}]},
+      "about": "Partitions involved in the transaction.", "fields": [
+      { "name": "Topic", "type": "string", "versions": "0+",
+        "about": "Topic involved in the transaction."},
+      { "name": "PartitionIds", "type": "[]int32", "versions": "0+",
+        "about": "Partition ids involved in the transaction."}]},
     { "name": "TransactionLastUpdateTimestampMs", "type": "int64", "versions": "0+",
-      "about": "Time the transaction was last updated"},
+      "about": "Time the transaction was last updated."},
     { "name": "TransactionStartTimestampMs", "type": "int64", "versions": "0+",
-      "about": "Time the transaction was started"}
+      "about": "Time the transaction was started."},
+    { "name": "ClientTransactionVersion", "type": "int16", "default": 0, "taggedVersions": "1+", "tag": 2,
+      "about": "The transaction version used by the client."}
   ]
 }

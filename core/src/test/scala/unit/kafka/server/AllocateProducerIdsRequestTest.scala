@@ -18,30 +18,26 @@ package unit.kafka.server
 
 import kafka.network.SocketServer
 import kafka.server.{BrokerServer, ControllerServer, IntegrationTestUtils}
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
-import kafka.test.junit.ClusterTestExtensions
-import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
+import org.apache.kafka.common.test.api.ClusterInstance
+import org.apache.kafka.common.test.api.{ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.server.common.ProducerIdsBlock
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
-@Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT))
 class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testAllocateProducersIdSentToController(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
-    val sourceBroker = raftCluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
+    val sourceBroker = cluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
 
     val controllerId = sourceBroker.raftManager.leaderAndEpoch.leaderId().getAsInt
-    val controllerServer = raftCluster.controllers.values().stream()
+    val controllerServer = cluster.controllers.values().stream()
       .filter(_.config.nodeId == controllerId)
       .findFirst()
       .get()
@@ -54,11 +50,10 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest(controllers = 3)
   def testAllocateProducersIdSentToNonController(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
-    val sourceBroker = raftCluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
+    val sourceBroker = cluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
 
     val controllerId = sourceBroker.raftManager.leaderAndEpoch.leaderId().getAsInt
-    val controllerServer = raftCluster.controllers().values().stream()
+    val controllerServer = cluster.controllers().values().stream()
       .filter(_.config.nodeId != controllerId)
       .findFirst()
       .get()

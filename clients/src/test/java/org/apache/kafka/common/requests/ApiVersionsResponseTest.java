@@ -288,11 +288,7 @@ public class ApiVersionsResponseTest {
             setAlterFeatureLevel0(alterV0Features).
             build();
         if (alterV0Features) {
-            assertEquals(new SupportedFeatureKey().
-                setName("my.feature").
-                setMinVersion((short) 1).
-                setMaxVersion((short) 1),
-                response.data().supportedFeatures().find("my.feature"));
+            assertNull(response.data().supportedFeatures().find("my.feature"));
         } else {
             assertEquals(new SupportedFeatureKey().
                 setName("my.feature").

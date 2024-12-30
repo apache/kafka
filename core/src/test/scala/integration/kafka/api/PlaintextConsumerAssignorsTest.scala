@@ -19,12 +19,11 @@ import org.apache.kafka.common.errors.UnsupportedAssignorException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
+import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
-import java.util.stream.Stream
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -238,7 +237,7 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
   // Remote assignors only supported with consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @CsvSource(Array(
-    "kraft+kip848, consumer"
+    "kraft, consumer"
   ))
   def testRemoteAssignorInvalid(quorum: String, groupProtocol: String): Unit = {
     // 1 consumer using invalid remote assignor
@@ -268,7 +267,7 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
   // Remote assignors only supported with consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @CsvSource(Array(
-    "kraft+kip848, consumer"
+    "kraft, consumer"
   ))
   def testRemoteAssignorRange(quorum: String, groupProtocol: String): Unit = {
     // 1 consumer using range assignment
@@ -307,16 +306,16 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
   }
 
   // Only the classic group protocol supports client-side assignors
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.assignmentStrategy={2}")
   @CsvSource(Array(
-    "org.apache.kafka.clients.consumer.CooperativeStickyAssignor,   zk",
-    "org.apache.kafka.clients.consumer.RangeAssignor,               zk",
-    "org.apache.kafka.clients.consumer.CooperativeStickyAssignor,   kraft",
-    "org.apache.kafka.clients.consumer.RangeAssignor,               kraft"
+    "zk,    classic, org.apache.kafka.clients.consumer.CooperativeStickyAssignor",
+    "zk,    classic, org.apache.kafka.clients.consumer.RangeAssignor",
+    "kraft, classic, org.apache.kafka.clients.consumer.CooperativeStickyAssignor",
+    "kraft, classic, org.apache.kafka.clients.consumer.RangeAssignor"
   ))
-  def testRebalanceAndRejoin(assignmentStrategy: String, quorum: String): Unit = {
+  def testRebalanceAndRejoin(quorum: String, groupProtocol: String, assignmentStrategy: String): Unit = {
     // create 2 consumers
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic")
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "rebalance-and-rejoin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, assignmentStrategy)
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
@@ -395,9 +394,4 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
     consumerPoller2.shutdown()
   }
 
-}
-
-object PlaintextConsumerAssignorsTest {
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly()
 }

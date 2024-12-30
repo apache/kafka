@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.internals.SecurityManagerCompatibility;
 import org.apache.kafka.connect.components.Versioned;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.InvocationTargetException;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.sql.Driver;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -93,8 +92,8 @@ public abstract class PluginScanner {
     private void loadJdbcDrivers(final ClassLoader loader) {
         // Apply here what java.sql.DriverManager does to discover and register classes
         // implementing the java.sql.Driver interface.
-        AccessController.doPrivileged(
-            (PrivilegedAction<Void>) () -> {
+        SecurityManagerCompatibility.get().doPrivileged(
+            () -> {
                 ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(
                         Driver.class,
                         loader
@@ -222,7 +221,7 @@ public abstract class PluginScanner {
         }
     }
 
-    protected static LoaderSwap withClassLoader(ClassLoader loader) {
+    protected LoaderSwap withClassLoader(ClassLoader loader) {
         ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
         try {
             return new LoaderSwap(savedLoader);

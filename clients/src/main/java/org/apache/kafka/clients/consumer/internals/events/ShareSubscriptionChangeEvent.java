@@ -17,14 +17,29 @@
 
 package org.apache.kafka.clients.consumer.internals.events;
 
+import java.util.Collection;
+import java.util.Set;
+
 /**
  * Application event indicating that the subscription state has changed, triggered when a user
  * calls the subscribe API. This will make the consumer join a share group if not part of it
  * yet, or just send the updated subscription to the broker if it's already a member of the group.
  */
-public class ShareSubscriptionChangeEvent extends ApplicationEvent {
+public class ShareSubscriptionChangeEvent extends CompletableApplicationEvent<Void> {
 
-    public ShareSubscriptionChangeEvent() {
-        super(Type.SHARE_SUBSCRIPTION_CHANGE);
+    private final Set<String> topics;
+
+    public ShareSubscriptionChangeEvent(final Collection<String> topics) {
+        super(Type.SHARE_SUBSCRIPTION_CHANGE, Long.MAX_VALUE);
+        this.topics = Set.copyOf(topics);
+    }
+
+    public Set<String> topics() {
+        return topics;
+    }
+
+    @Override
+    protected String toStringBase() {
+        return super.toStringBase() + ", topics=" + topics;
     }
 }

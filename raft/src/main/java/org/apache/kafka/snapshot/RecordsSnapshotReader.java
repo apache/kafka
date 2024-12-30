@@ -61,7 +61,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
 
     @Override
     public long lastContainedLogTimestamp() {
-        if (!lastContainedLogTimestamp.isPresent()) {
+        if (lastContainedLogTimestamp.isEmpty()) {
             nextBatch.ifPresent(batch -> {
                 throw new IllegalStateException(
                     String.format(
@@ -83,7 +83,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
 
     @Override
     public boolean hasNext() {
-        if (!nextBatch.isPresent()) {
+        if (nextBatch.isEmpty()) {
             nextBatch = nextBatch();
         }
 
@@ -127,7 +127,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         if (iterator.hasNext()) {
             Batch<T> batch = iterator.next();
 
-            if (!lastContainedLogTimestamp.isPresent()) {
+            if (lastContainedLogTimestamp.isEmpty()) {
                 // This must be the first batch which is expected to be a control batch with at least one record for
                 // the snapshot header.
                 if (batch.controlRecords().isEmpty()) {

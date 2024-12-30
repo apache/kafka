@@ -45,7 +45,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.raft.{Endpoints, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.common.Features
+import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
@@ -90,7 +90,7 @@ object KafkaRaftManager {
    *
    * This is only used by ZK brokers that are in pre-migration or hybrid mode of the ZK to KRaft migration.
    * The rationale for deleting the metadata log in these cases is that it is safe to do on brokers and it
-   * it makes recovery from a failed migration much easier. See KAFKA-16463.
+   * makes recovery from a failed migration much easier. See KAFKA-16463.
    *
    * @param config  The broker config
    */
@@ -98,8 +98,6 @@ object KafkaRaftManager {
     // These constraints are enforced in KafkaServer, but repeating them here to guard against future callers
     if (config.processRoles.nonEmpty) {
       throw new RuntimeException("Not deleting metadata log dir since this node is in KRaft mode.")
-    } else if (!config.migrationEnabled) {
-      throw new RuntimeException("Not deleting metadata log dir since migrations are not enabled.")
     } else {
       val metadataDir = new File(config.metadataLogDir)
       val logDirName = UnifiedLog.logDirName(Topic.CLUSTER_METADATA_TOPIC_PARTITION)
@@ -202,11 +200,11 @@ class KafkaRaftManager[T](
 
   def shutdown(): Unit = {
     CoreUtils.swallow(expirationService.shutdown(), this)
-    CoreUtils.swallow(expirationTimer.close(), this)
+    Utils.closeQuietly(expirationTimer, "expiration timer")
     CoreUtils.swallow(clientDriver.shutdown(), this)
     CoreUtils.swallow(scheduler.shutdown(), this)
-    CoreUtils.swallow(netChannel.close(), this)
-    CoreUtils.swallow(replicatedLog.close(), this)
+    Utils.closeQuietly(netChannel, "net channel")
+    Utils.closeQuietly(replicatedLog, "replicated log")
     CoreUtils.swallow(dataDirLock.foreach(_.destroy()), this)
   }
 
@@ -235,17 +233,19 @@ class KafkaRaftManager[T](
       time,
       expirationService,
       logContext,
+      // Controllers should always flush the log on replication because they may become voters
+      config.processRoles.contains(ProcessRole.ControllerRole),
       clusterId,
       bootstrapServers,
       localListeners,
-      Features.KRAFT_VERSION.supportedVersionRange(),
+      Feature.KRAFT_VERSION.supportedVersionRange(),
       raftConfig
     )
   }
 
   private def buildNetworkChannel(): KafkaNetworkChannel = {
     val (listenerName, netClient) = buildNetworkClient()
-    new KafkaNetworkChannel(time, listenerName, netClient, config.quorumRequestTimeoutMs, threadNamePrefix)
+    new KafkaNetworkChannel(time, listenerName, netClient, config.quorumConfig.requestTimeoutMs, threadNamePrefix)
   }
 
   private def createDataDir(): File = {
@@ -311,7 +311,7 @@ class KafkaRaftManager[T](
       reconnectBackoffMsMs,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
-      config.quorumRequestTimeoutMs,
+      config.quorumConfig.requestTimeoutMs,
       config.connectionSetupTimeoutMs,
       config.connectionSetupTimeoutMaxMs,
       time,

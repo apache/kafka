@@ -142,14 +142,6 @@ public class BrokerRegistration {
         }
     }
 
-    public static Optional<Long> zkBrokerEpoch(long value) {
-        if (value == -1) {
-            return Optional.empty();
-        } else {
-            return Optional.of(value);
-        }
-    }
-
     private final int id;
     private final long epoch;
     private final Uuid incarnationId;
@@ -178,7 +170,7 @@ public class BrokerRegistration {
         this.incarnationId = incarnationId;
         Map<String, Endpoint> newListeners = new HashMap<>(listeners.size());
         for (Entry<String, Endpoint> entry : listeners.entrySet()) {
-            if (!entry.getValue().listenerName().isPresent()) {
+            if (entry.getValue().listenerName().isEmpty()) {
                 throw new IllegalArgumentException("Broker listeners must be named.");
             }
             newListeners.put(entry.getKey(), entry.getValue());

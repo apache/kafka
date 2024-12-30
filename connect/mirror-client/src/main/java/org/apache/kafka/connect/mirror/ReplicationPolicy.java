@@ -98,7 +98,7 @@ public interface ReplicationPolicy {
      * This is used to make sure the topic doesn't need to be replicated.
      */
     default boolean isMM2InternalTopic(String topic) {
-        return  topic.endsWith(".internal");
+        return  topic.startsWith("mm2") && topic.endsWith(".internal") || isCheckpointsTopic(topic);
     }
 
     /**
@@ -106,7 +106,6 @@ public interface ReplicationPolicy {
      */
     default boolean isInternalTopic(String topic) {
         boolean isKafkaInternalTopic = topic.startsWith("__") || topic.startsWith(".");
-        boolean isDefaultConnectTopic =  topic.endsWith("-internal") ||  topic.endsWith(".internal");
-        return isMM2InternalTopic(topic) || isKafkaInternalTopic || isDefaultConnectTopic;
+        return isMM2InternalTopic(topic) || isKafkaInternalTopic;
     }
 }

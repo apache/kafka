@@ -21,30 +21,34 @@ import kafka.log.LogManager;
 import kafka.log.remote.RemoteLogManager;
 import kafka.server.AddPartitionsToTxnManager;
 import kafka.server.AlterPartitionManager;
-import kafka.server.BrokerTopicStats;
 import kafka.server.DelayedDeleteRecords;
 import kafka.server.DelayedElectLeader;
 import kafka.server.DelayedFetch;
-import kafka.server.DelayedOperationPurgatory;
 import kafka.server.DelayedProduce;
 import kafka.server.DelayedRemoteFetch;
+import kafka.server.DelayedRemoteListOffsets;
 import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
+import kafka.server.share.DelayedShareFetch;
 import kafka.zk.KafkaZkClient;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.DelayedActionQueue;
 import org.apache.kafka.server.common.DirectoryEventHandler;
+import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import scala.compat.java8.OptionConverters;
+import scala.jdk.javaapi.OptionConverters;
+
 
 
 public class ReplicaManagerBuilder {
@@ -66,6 +70,8 @@ public class ReplicaManagerBuilder {
     private Optional<DelayedOperationPurgatory<DelayedDeleteRecords>> delayedDeleteRecordsPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedElectLeader>> delayedElectLeaderPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedRemoteFetch>> delayedRemoteFetchPurgatory = Optional.empty();
+    private Optional<DelayedOperationPurgatory<DelayedRemoteListOffsets>> delayedRemoteListOffsetsPurgatory = Optional.empty();
+    private Optional<DelayedOperationPurgatory<DelayedShareFetch>> delayedShareFetchPurgatory = Optional.empty();
     private Optional<String> threadNamePrefix = Optional.empty();
     private Long brokerEpoch = -1L;
     private Optional<AddPartitionsToTxnManager> addPartitionsToTxnManager = Optional.empty();
@@ -210,9 +216,12 @@ public class ReplicaManagerBuilder {
                              OptionConverters.toScala(delayedDeleteRecordsPurgatory),
                              OptionConverters.toScala(delayedElectLeaderPurgatory),
                              OptionConverters.toScala(delayedRemoteFetchPurgatory),
+                             OptionConverters.toScala(delayedRemoteListOffsetsPurgatory),
+                             OptionConverters.toScala(delayedShareFetchPurgatory),
                              OptionConverters.toScala(threadNamePrefix),
                              () -> brokerEpoch,
                              OptionConverters.toScala(addPartitionsToTxnManager),
-                             directoryEventHandler);
+                             directoryEventHandler,
+                             new DelayedActionQueue());
     }
 }

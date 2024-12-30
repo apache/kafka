@@ -38,21 +38,23 @@ import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.tools.ToolsUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
+import com.google.re2j.Pattern;
+import com.google.re2j.PatternSyntaxException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,6 +88,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import joptsimple.OptionException;
+import joptsimple.OptionSpec;
 
 public class ConsumerGroupCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommand.class);
@@ -95,10 +98,27 @@ public class ConsumerGroupCommand {
     public static void main(String[] args) {
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         try {
-            // should have exactly one action
-            long actions = Stream.of(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).filter(opts.options::has).count();
-            if (actions != 1)
-                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets");
+            List<OptionSpec<?>> actions = List.of(
+                opts.listOpt,
+                opts.describeOpt,
+                opts.deleteOpt,
+                opts.resetOffsetsOpt,
+                opts.deleteOffsetsOpt,
+                opts.validateRegexOpt
+            );
+
+            // Should have exactly one action.
+            if (actions.stream().filter(opts.options::has).count() != 1) {
+                CommandLineUtils.printUsageAndExit(
+                    opts.parser,
+                    String.format(
+                        "Command must include exactly one action: %s",
+                        actions.stream().map(opt ->
+                            "--" + opt.options().get(0)
+                        ).collect(Collectors.joining(", "))
+                    )
+                );
+            }
 
             run(opts);
         } catch (OptionException e) {
@@ -107,6 +127,11 @@ public class ConsumerGroupCommand {
     }
 
     static void run(ConsumerGroupCommandOptions opts) {
+        if (opts.options.has(opts.validateRegexOpt)) {
+            validateRegex(opts.options.valueOf(opts.validateRegexOpt));
+            return;
+        }
+
         try (ConsumerGroupService consumerGroupService = new ConsumerGroupService(opts, Collections.emptyMap())) {
             if (opts.options.has(opts.listOpt))
                 consumerGroupService.listGroups();
@@ -131,11 +156,21 @@ public class ConsumerGroupCommand {
         }
     }
 
-    static Set<ConsumerGroupState> consumerGroupStatesFromString(String input) {
-        Set<ConsumerGroupState> parsedStates = Arrays.stream(input.split(",")).map(s -> ConsumerGroupState.parse(s.trim())).collect(Collectors.toSet());
-        if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
-            Collection<ConsumerGroupState> validStates = Arrays.stream(ConsumerGroupState.values()).filter(s -> s != ConsumerGroupState.UNKNOWN).collect(Collectors.toList());
-            throw new IllegalArgumentException("Invalid state list '" + input + "'. Valid states are: " + validStates.stream().map(ConsumerGroupState::toString).collect(Collectors.joining(", ")));
+    static void validateRegex(String regex) {
+        try {
+            Pattern.compile(regex);
+            System.out.printf("The regular expression `%s` is valid.%n", regex);
+        } catch (PatternSyntaxException ex) {
+            System.out.printf("The regular expression `%s` is invalid: %s.%n", regex, ex.getDescription());
+        }
+    }
+
+    static Set<GroupState> groupStatesFromString(String input) {
+        Set<GroupState> parsedStates = Arrays.stream(input.split(",")).map(s -> GroupState.parse(s.trim())).collect(Collectors.toSet());
+        Set<GroupState> validStates = GroupState.groupStatesForType(GroupType.CONSUMER);
+        if (!validStates.containsAll(parsedStates)) {
+            throw new IllegalArgumentException("Invalid state list '" + input + "'. Valid states are: " +
+                    validStates.stream().map(GroupState::toString).collect(Collectors.joining(", ")));
         }
         return parsedStates;
     }
@@ -156,9 +191,9 @@ public class ConsumerGroupCommand {
     }
 
     static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
-        String format = "%-30s %-30s %-10s %-15s";
+        String format = "%n%-30s %-30s %-10s %-15s";
         if (!groupAssignmentsToReset.isEmpty())
-            System.out.printf("\n" + format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
+            System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
 
         groupAssignmentsToReset.forEach((groupId, assignment) ->
             assignment.forEach((consumerAssignment, offsetAndMetadata) ->
@@ -167,6 +202,7 @@ public class ConsumerGroupCommand {
                     consumerAssignment.topic(),
                     consumerAssignment.partition(),
                     offsetAndMetadata.offset())));
+        System.out.println();
     }
 
     @SuppressWarnings("ClassFanOutComplexity")
@@ -204,7 +240,7 @@ public class ConsumerGroupCommand {
 
             if (includeType || includeState) {
                 Set<GroupType> types = typeValues();
-                Set<ConsumerGroupState> states = stateValues();
+                Set<GroupState> states = stateValues();
                 List<ConsumerGroupListing> listings = listConsumerGroupsWithFilters(types, states);
 
                 printGroupInfo(listings, includeType, includeState);
@@ -213,11 +249,11 @@ public class ConsumerGroupCommand {
             }
         }
 
-        private Set<ConsumerGroupState> stateValues() {
+        private Set<GroupState> stateValues() {
             String stateValue = opts.options.valueOf(opts.stateOpt);
             return (stateValue == null || stateValue.isEmpty())
                 ? Collections.emptySet()
-                : consumerGroupStatesFromString(stateValue);
+                : groupStatesFromString(stateValue);
         }
 
         private Set<GroupType> typeValues() {
@@ -230,7 +266,7 @@ public class ConsumerGroupCommand {
         private void printGroupInfo(List<ConsumerGroupListing> groups, boolean includeType, boolean includeState) {
             Function<ConsumerGroupListing, String> groupId = ConsumerGroupListing::groupId;
             Function<ConsumerGroupListing, String> groupType = groupListing -> groupListing.type().orElse(GroupType.UNKNOWN).toString();
-            Function<ConsumerGroupListing, String> groupState = groupListing -> groupListing.state().orElse(ConsumerGroupState.UNKNOWN).toString();
+            Function<ConsumerGroupListing, String> groupState = groupListing -> groupListing.groupState().orElse(GroupState.UNKNOWN).toString();
 
             OptionalInt maybeMax = groups.stream().mapToInt(groupListing -> Math.max(15, groupId.apply(groupListing).length())).max();
             int maxGroupLen = maybeMax.orElse(15) + 10;
@@ -270,26 +306,26 @@ public class ConsumerGroupCommand {
             }
         }
 
-        List<ConsumerGroupListing> listConsumerGroupsWithFilters(Set<GroupType> types, Set<ConsumerGroupState> states) throws ExecutionException, InterruptedException {
+        List<ConsumerGroupListing> listConsumerGroupsWithFilters(Set<GroupType> types, Set<GroupState> states) throws ExecutionException, InterruptedException {
             ListConsumerGroupsOptions listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions());
             listConsumerGroupsOptions
-                .inStates(states)
+                .inGroupStates(states)
                 .withTypes(types);
             ListConsumerGroupsResult result = adminClient.listConsumerGroups(listConsumerGroupsOptions);
             return new ArrayList<>(result.all().get());
         }
 
-        private boolean shouldPrintMemberState(String group, Optional<ConsumerGroupState> state, Optional<Integer> numRows) {
+        private boolean shouldPrintMemberState(String group, Optional<GroupState> state, Optional<Integer> numRows) {
             // numRows contains the number of data rows, if any, compiled from the API call in the caller method.
             // if it's undefined or 0, there is no relevant group information to display.
-            if (!numRows.isPresent()) {
+            if (numRows.isEmpty()) {
                 printError("The consumer group '" + group + "' does not exist.", Optional.empty());
                 return false;
             }
 
             int num = numRows.get();
 
-            ConsumerGroupState state0 = state.orElse(ConsumerGroupState.UNKNOWN);
+            GroupState state0 = state.orElse(GroupState.UNKNOWN);
             switch (state0) {
                 case DEAD:
                     printError("Consumer group '" + group + "' does not exist.", Optional.empty());
@@ -310,16 +346,16 @@ public class ConsumerGroupCommand {
                     throw new KafkaException("Expected a valid consumer group state, but found '" + state0 + "'.");
             }
 
-            return !state0.equals(ConsumerGroupState.DEAD) && num > 0;
+            return !state0.equals(GroupState.DEAD) && num > 0;
         }
 
         private Optional<Integer> size(Optional<? extends Collection<?>> colOpt) {
             return colOpt.map(Collection::size);
         }
 
-        private void printOffsets(Map<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>>> offsets) {
+        private void printOffsets(Map<String, Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>>> offsets) {
             offsets.forEach((groupId, tuple) -> {
-                Optional<ConsumerGroupState> state = tuple.getKey();
+                Optional<GroupState> state = tuple.getKey();
                 Optional<Collection<PartitionAssignmentState>> assignments = tuple.getValue();
 
                 if (shouldPrintMemberState(groupId, state, size(assignments))) {
@@ -338,6 +374,7 @@ public class ConsumerGroupCommand {
                                 consumerAssignment.host.orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.orElse(MISSING_COLUMN_VALUE)
                             );
                         }
+                        System.out.println();
                     }
                 }
             });
@@ -360,14 +397,14 @@ public class ConsumerGroupCommand {
             return "\n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %" + (-maxConsumerIdLen) + "s %" + (-maxHostLen) + "s %s";
         }
 
-        private void printMembers(Map<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>>> members, boolean verbose) {
+        private void printMembers(Map<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> members, boolean verbose) {
             members.forEach((groupId, tuple) -> {
-                Optional<ConsumerGroupState> state = tuple.getKey();
+                Optional<GroupState> groupState = tuple.getKey();
                 Optional<Collection<MemberAssignmentState>> assignments = tuple.getValue();
                 int maxGroupLen = 15, maxConsumerIdLen = 15, maxGroupInstanceIdLen = 17, maxHostLen = 15, maxClientIdLen = 15;
                 boolean includeGroupInstanceId = false;
 
-                if (shouldPrintMemberState(groupId, state, size(assignments))) {
+                if (shouldPrintMemberState(groupId, groupState, size(assignments))) {
                     // find proper columns width
                     if (assignments.isPresent()) {
                         for (MemberAssignmentState memberAssignment : assignments.get()) {
@@ -424,16 +461,16 @@ public class ConsumerGroupCommand {
             });
         }
 
-        private void printStates(Map<String, GroupState> states) {
+        private void printStates(Map<String, GroupInformation> states) {
             states.forEach((groupId, state) -> {
-                if (shouldPrintMemberState(groupId, Optional.of(state.state), Optional.of(1))) {
+                if (shouldPrintMemberState(groupId, Optional.of(state.groupState), Optional.of(1))) {
                     String coordinator = state.coordinator.host() + ":" + state.coordinator.port() + "  (" + state.coordinator.idString() + ")";
                     int coordinatorColLen = Math.max(25, coordinator.length());
 
                     String format = "\n%" + -coordinatorColLen + "s %-25s %-20s %-15s %s";
 
                     System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
-                    System.out.printf(format, state.group, coordinator, state.assignmentStrategy, state.state.toString(), state.numMembers);
+                    System.out.printf(format, state.group, coordinator, state.assignmentStrategy, state.groupState, state.numMembers);
                     System.out.println();
                 }
             });
@@ -449,15 +486,15 @@ public class ConsumerGroupCommand {
             long subActions = Stream.of(membersOptPresent, offsetsOptPresent, stateOptPresent).filter(x -> x).count();
 
             if (subActions == 0 || offsetsOptPresent) {
-                TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>>> offsets
+                TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>>> offsets
                     = collectGroupsOffsets(groupIds);
                 printOffsets(offsets);
             } else if (membersOptPresent) {
-                TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>>> members
+                TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> members
                     = collectGroupsMembers(groupIds, opts.options.has(opts.verboseOpt));
                 printMembers(members, opts.options.has(opts.verboseOpt));
             } else {
-                TreeMap<String, GroupState> states = collectGroupsState(groupIds);
+                TreeMap<String, GroupInformation> states = collectGroupsState(groupIds);
                 printStates(states);
             }
         }
@@ -529,36 +566,56 @@ public class ConsumerGroupCommand {
 
             consumerGroups.forEach((groupId, groupDescription) -> {
                 try {
-                    String state = groupDescription.get().state().toString();
+                    String state = groupDescription.get().groupState().toString();
                     switch (state) {
                         case "Empty":
                         case "Dead":
-                            Collection<TopicPartition> partitionsToReset = getPartitionsToReset(groupId);
-                            Map<TopicPartition, OffsetAndMetadata> preparedOffsets = prepareOffsetsToReset(groupId, partitionsToReset);
-
-                            // Dry-run is the default behavior if --execute is not specified
-                            boolean dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt);
-                            if (!dryRun) {
-                                adminClient.alterConsumerGroupOffsets(
-                                    groupId,
-                                    preparedOffsets,
-                                    withTimeoutMs(new AlterConsumerGroupOffsetsOptions())
-                                ).all().get();
-                            }
-
-                            result.put(groupId, preparedOffsets);
-
+                            result.put(groupId, resetOffsetsForInactiveGroup(groupId));
                             break;
                         default:
                             printError("Assignments can only be reset if the group '" + groupId + "' is inactive, but the current state is " + state + ".", Optional.empty());
                             result.put(groupId, Collections.emptyMap());
                     }
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
+                } catch (InterruptedException ie) {
+                    throw new RuntimeException(ie);
+                } catch (ExecutionException ee) {
+                    if (ee.getCause() instanceof GroupIdNotFoundException) {
+                        result.put(groupId, resetOffsetsForInactiveGroup(groupId));
+                    } else {
+                        throw new RuntimeException(ee);
+                    }
                 }
             });
 
             return result;
+        }
+
+        private Map<TopicPartition, OffsetAndMetadata> resetOffsetsForInactiveGroup(String groupId) {
+            try {
+                Collection<TopicPartition> partitionsToReset = getPartitionsToReset(groupId);
+                Map<TopicPartition, OffsetAndMetadata> preparedOffsets = prepareOffsetsToReset(groupId, partitionsToReset);
+
+                // Dry-run is the default behavior if --execute is not specified
+                boolean dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt);
+                if (!dryRun) {
+                    adminClient.alterConsumerGroupOffsets(
+                        groupId,
+                        preparedOffsets,
+                        withTimeoutMs(new AlterConsumerGroupOffsetsOptions())
+                    ).all().get();
+                }
+
+                return preparedOffsets;
+            } catch (InterruptedException ie) {
+                throw new RuntimeException(ie);
+            } catch (ExecutionException ee) {
+                Throwable cause = ee.getCause();
+                if (cause instanceof KafkaException) {
+                    throw (KafkaException) cause;
+                } else {
+                    throw new RuntimeException(cause);
+                }
+            }
         }
 
         Entry<Errors, Map<TopicPartition, Throwable>> deleteOffsets(String groupId, List<String> topics) {
@@ -655,9 +712,9 @@ public class ConsumerGroupCommand {
                     printError("Encounter some unknown error: " + topLevelResult, Optional.empty());
             }
 
-            String format = "%-30s %-15s %-15s";
+            String format = "%n%-30s %-15s %-15s";
 
-            System.out.printf("\n" + format, "TOPIC", "PARTITION", "STATUS");
+            System.out.printf(format, "TOPIC", "PARTITION", "STATUS");
             partitionLevelResult.entrySet().stream()
                 .sorted(Comparator.comparing(e -> e.getKey().topic() + e.getKey().partition()))
                 .forEach(e -> {
@@ -666,9 +723,10 @@ public class ConsumerGroupCommand {
                     System.out.printf(format,
                         tp.topic(),
                         tp.partition() >= 0 ? tp.partition() : "Not Provided",
-                        error != null ? "Error: :" + error.getMessage() : "Successful"
+                        error != null ? "Error: " + error.getMessage() : "Successful"
                     );
                 });
+            System.out.println();
         }
 
         Map<String, ConsumerGroupDescription> describeConsumerGroups(Collection<String> groupIds) throws Exception {
@@ -687,19 +745,19 @@ public class ConsumerGroupCommand {
         /**
          * Returns the state of the specified consumer group and partition assignment states
          */
-        Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> collectGroupOffsets(String groupId) throws Exception {
+        Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> collectGroupOffsets(String groupId) throws Exception {
             return collectGroupsOffsets(Collections.singletonList(groupId)).getOrDefault(groupId, new SimpleImmutableEntry<>(Optional.empty(), Optional.empty()));
         }
 
         /**
          * Returns states of the specified consumer groups and partition assignment states
          */
-        TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>>> collectGroupsOffsets(Collection<String> groupIds) throws Exception {
+        TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>>> collectGroupsOffsets(Collection<String> groupIds) throws Exception {
             Map<String, ConsumerGroupDescription> consumerGroups = describeConsumerGroups(groupIds);
-            TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>>> groupOffsets = new TreeMap<>();
+            TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>>> groupOffsets = new TreeMap<>();
 
             consumerGroups.forEach((groupId, consumerGroup) -> {
-                ConsumerGroupState state = consumerGroup.state();
+                GroupState state = consumerGroup.groupState();
                 Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(groupId);
                 // The admin client returns `null` as a value to indicate that there is not committed offset for a partition.
                 Function<TopicPartition, Optional<Long>> getPartitionOffset = tp -> Optional.ofNullable(committedOffsets.get(tp)).map(OffsetAndMetadata::offset);
@@ -744,16 +802,16 @@ public class ConsumerGroupCommand {
             return groupOffsets;
         }
 
-        Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId, boolean verbose) throws Exception {
+        Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId, boolean verbose) throws Exception {
             return collectGroupsMembers(Collections.singleton(groupId), verbose).get(groupId);
         }
 
-        TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds, boolean verbose) throws Exception {
+        TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds, boolean verbose) throws Exception {
             Map<String, ConsumerGroupDescription> consumerGroups = describeConsumerGroups(groupIds);
-            TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>>> res = new TreeMap<>();
+            TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> res = new TreeMap<>();
 
             consumerGroups.forEach((groupId, consumerGroup) -> {
-                ConsumerGroupState state = consumerGroup.state();
+                GroupState state = consumerGroup.groupState();
                 List<MemberAssignmentState> memberAssignmentStates = consumerGroup.members().stream().map(consumer ->
                     new MemberAssignmentState(
                         groupId,
@@ -769,19 +827,19 @@ public class ConsumerGroupCommand {
             return res;
         }
 
-        GroupState collectGroupState(String groupId) throws Exception {
+        GroupInformation collectGroupState(String groupId) throws Exception {
             return collectGroupsState(Collections.singleton(groupId)).get(groupId);
         }
 
-        TreeMap<String, GroupState> collectGroupsState(Collection<String> groupIds) throws Exception {
+        TreeMap<String, GroupInformation> collectGroupsState(Collection<String> groupIds) throws Exception {
             Map<String, ConsumerGroupDescription> consumerGroups = describeConsumerGroups(groupIds);
-            TreeMap<String, GroupState> res = new TreeMap<>();
+            TreeMap<String, GroupInformation> res = new TreeMap<>();
             consumerGroups.forEach((groupId, groupDescription) ->
-                res.put(groupId, new GroupState(
+                res.put(groupId, new GroupInformation(
                     groupId,
                     groupDescription.coordinator(),
                     groupDescription.partitionAssignor(),
-                    groupDescription.state(),
+                    groupDescription.groupState(),
                     groupDescription.members().size()
             )));
             return res;
@@ -999,8 +1057,7 @@ public class ConsumerGroupCommand {
                     LogOffsetResult logOffsetResult = logStartOffsets.get(topicPartition);
 
                     if (!(logOffsetResult instanceof LogOffset)) {
-                        ToolsUtils.printUsageAndExit(opts.parser, "Error getting starting offset of topic partition: " + topicPartition);
-                        return null;
+                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting starting offset of topic partition: " + topicPartition);
                     }
 
                     return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
@@ -1011,8 +1068,7 @@ public class ConsumerGroupCommand {
                     LogOffsetResult logOffsetResult = logEndOffsets.get(topicPartition);
 
                     if (!(logOffsetResult instanceof LogOffset)) {
-                        ToolsUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + topicPartition);
-                        return null;
+                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + topicPartition);
                     }
 
                     return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
@@ -1039,8 +1095,7 @@ public class ConsumerGroupCommand {
                         LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
 
                         if (!(logTimestampOffset instanceof LogOffset)) {
-                            ToolsUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
-                            return null;
+                            CommandLineUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
                         }
 
                         return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
@@ -1059,8 +1114,7 @@ public class ConsumerGroupCommand {
                     LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
 
                     if (!(logTimestampOffset instanceof LogOffset)) {
-                        ToolsUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
-                        return null;
+                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
                     }
 
                     return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
@@ -1107,8 +1161,7 @@ public class ConsumerGroupCommand {
                 Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(partitionsToResetWithoutCommittedOffset)
                     .entrySet().stream().collect(Collectors.toMap(Entry::getKey, e -> {
                         if (!(e.getValue() instanceof LogOffset)) {
-                            ToolsUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + e.getKey());
-                            return null;
+                            CommandLineUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + e.getKey());
                         }
 
                         return new OffsetAndMetadata(((LogOffset) e.getValue()).value);
@@ -1119,7 +1172,7 @@ public class ConsumerGroupCommand {
                 return preparedOffsetsForPartitionsWithCommittedOffset;
             }
 
-            ToolsUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
+            CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
         }
 
@@ -1199,8 +1252,10 @@ public class ConsumerGroupCommand {
                 try {
                     f.get();
                     success.put(g, null);
-                } catch (ExecutionException | InterruptedException e) {
-                    failed.put(g, e);
+                } catch (InterruptedException ie) {
+                    failed.put(g, ie);
+                } catch (ExecutionException e) {
+                    failed.put(g, e.getCause());
                 }
             });
 

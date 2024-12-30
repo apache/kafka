@@ -124,8 +124,8 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public StateStore getStore(final String name) {
-        return stateMgr.getStore(name);
+    public StateStore store(final String name) {
+        return stateMgr.store(name);
     }
 
     @Override

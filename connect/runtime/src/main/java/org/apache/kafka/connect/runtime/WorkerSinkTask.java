@@ -47,7 +47,6 @@ import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.ClusterConfigState;
@@ -237,7 +236,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
 
             // Maybe commit
             if (!committing && (context.isCommitRequested() || now >= nextCommit)) {
-                commitOffsets(now, false);
+                commitOffsets(now);
                 nextCommit = now + offsetCommitIntervalMs;
                 context.clearCommitRequest();
             }
@@ -291,7 +290,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
                 log.error("{} Commit of offsets threw an unexpected exception for sequence number {}: {}",
                         this, seqno, committedOffsets, error);
                 commitFailures++;
-                recordCommitFailure(durationMillis, error);
+                recordCommitFailure(durationMillis);
             } else {
                 log.debug("{} Finished offset commit successfully in {} ms for sequence number {}: {}",
                         this, durationMillis, seqno, committedOffsets);
@@ -405,8 +404,8 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         }
     }
 
-    private void commitOffsets(long now, boolean closing) {
-        commitOffsets(now, closing, consumer.assignment());
+    private void commitOffsets(long now) {
+        commitOffsets(now, false, consumer.assignment());
     }
 
     private void commitOffsets(long now, boolean closing, Collection<TopicPartition> topicPartitions) {
@@ -547,12 +546,14 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(context, () -> {
             try (LoaderSwap swap = pluginLoaderSwapper.apply(keyConverter.getClass().getClassLoader())) {
                 return keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key());
-            }}, Stage.KEY_CONVERTER, keyConverter.getClass());
+            }
+        }, Stage.KEY_CONVERTER, keyConverter.getClass());
 
         SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(context, () -> {
-            try(LoaderSwap swap = pluginLoaderSwapper.apply(valueConverter.getClass().getClassLoader())) {
-                    return valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value());
-            }}, Stage.VALUE_CONVERTER, valueConverter.getClass());
+            try (LoaderSwap swap = pluginLoaderSwapper.apply(valueConverter.getClass().getClassLoader())) {
+                return valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value());
+            }
+        }, Stage.VALUE_CONVERTER, valueConverter.getClass());
 
         Headers headers = retryWithToleranceOperator.execute(context, () -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
 

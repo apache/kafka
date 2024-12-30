@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService, quorum, consumer_group
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.verifiable_producer import VerifiableProducer
@@ -59,15 +58,10 @@ class TransactionsTest(Test):
         self.progress_timeout_sec = 60
         self.consumer_group = "transactions-test-consumer-group"
 
-        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = KafkaService(test_context,
                                   num_nodes=self.num_brokers,
-                                  zk=self.zk,
+                                  zk=None,
                                   controller_num_nodes_override=1)
-
-    def setUp(self):
-        if self.zk:
-            self.zk.start()
 
     def seed_messages(self, topic, num_seed_messages):
         seed_timeout_sec = 10000
@@ -96,16 +90,11 @@ class TransactionsTest(Test):
             else:
                 self.kafka.stop_node(node, clean_shutdown = False)
                 gracePeriodSecs = 5
-                if self.zk:
-                    wait_until(lambda: not self.kafka.pids(node) and not self.kafka.is_registered(node),
-                               timeout_sec=self.kafka.zk_session_timeout + gracePeriodSecs,
-                               err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(node.account))
-                else:
-                    brokerSessionTimeoutSecs = 18
-                    wait_until(lambda: not self.kafka.pids(node),
-                               timeout_sec=brokerSessionTimeoutSecs + gracePeriodSecs,
-                               err_msg="Failed to see timely disappearance of process for hard-killed broker %s" % str(node.account))
-                    time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)
+                brokerSessionTimeoutSecs = 18
+                wait_until(lambda: not self.kafka.pids(node),
+                           timeout_sec=brokerSessionTimeoutSecs + gracePeriodSecs,
+                           err_msg="Failed to see timely disappearance of process for hard-killed broker %s" % str(node.account))
+                time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)
                 self.kafka.start_node(node)
 
             self.kafka.await_no_under_replicated_partitions()
@@ -222,14 +211,6 @@ class TransactionsTest(Test):
         bounce_target=["brokers", "clients"],
         check_order=[True, False],
         use_group_metadata=[True, False],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        failure_mode=["hard_bounce", "clean_bounce"],
-        bounce_target=["brokers", "clients"],
-        check_order=[True, False],
-        use_group_metadata=[True, False],
         metadata_quorum=quorum.all_kraft,
         use_new_coordinator=[False]
     )
@@ -242,7 +223,7 @@ class TransactionsTest(Test):
         use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol

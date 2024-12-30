@@ -69,6 +69,8 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
+    private Optional<Exception> metadataError;
+    private final boolean notifyMetadataErrorsViaErrorQueue;
 
     public NetworkClientDelegate(
             final Time time,
@@ -76,7 +78,8 @@ public class NetworkClientDelegate implements AutoCloseable {
             final LogContext logContext,
             final KafkaClient client,
             final Metadata metadata,
-            final BackgroundEventHandler backgroundEventHandler) {
+            final BackgroundEventHandler backgroundEventHandler,
+            final boolean notifyMetadataErrorsViaErrorQueue) {
         this.time = time;
         this.client = client;
         this.metadata = metadata;
@@ -85,6 +88,8 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.metadataError = Optional.empty();
+        this.notifyMetadataErrorsViaErrorQueue = notifyMetadataErrorsViaErrorQueue;
     }
 
     // Visible for testing
@@ -150,7 +155,11 @@ public class NetworkClientDelegate implements AutoCloseable {
         try {
             metadata.maybeThrowAnyException();
         } catch (Exception e) {
-            backgroundEventHandler.add(new ErrorEvent(e));
+            if (notifyMetadataErrorsViaErrorQueue) {
+                backgroundEventHandler.add(new ErrorEvent(e));
+            } else {
+                metadataError = Optional.of(e);
+            }
         }
     }
 
@@ -229,6 +238,12 @@ public class NetworkClientDelegate implements AutoCloseable {
             (int) unsent.timer.remainingMs(),
             unsent.handler
         );
+    }
+    
+    public Optional<Exception> getAndClearMetadataError() {
+        Optional<Exception> metadataError = this.metadataError;
+        this.metadataError = Optional.empty();
+        return metadataError;
     }
 
     public Node leastLoadedNode() {
@@ -412,8 +427,9 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final Metrics metrics,
                                                            final Sensor throttleTimeSensor,
                                                            final ClientTelemetrySender clientTelemetrySender,
-                                                           final BackgroundEventHandler backgroundEventHandler) {
-        return new CachedSupplier<NetworkClientDelegate>() {
+                                                           final BackgroundEventHandler backgroundEventHandler,
+                                                           final boolean notifyMetadataErrorsViaErrorQueue) {
+        return new CachedSupplier<>() {
             @Override
             protected NetworkClientDelegate create() {
                 KafkaClient client = ClientUtils.createNetworkClient(config,
@@ -426,7 +442,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                         metadata,
                         throttleTimeSensor,
                         clientTelemetrySender);
-                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler);
+                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue);
             }
         };
     }

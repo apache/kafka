@@ -21,8 +21,9 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs;
-import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfigs;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
+import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.security.PasswordEncoderConfigs;
@@ -31,7 +32,7 @@ import org.apache.kafka.server.metrics.MetricConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -41,31 +42,32 @@ import java.util.Map;
  * For more details check KAFKA-15853
  */
 public abstract class AbstractKafkaConfig extends AbstractConfig {
-    @SuppressWarnings("deprecation")
-    public static final ConfigDef CONFIG_DEF =  Utils.mergeConfigs(Arrays.asList(
-            RemoteLogManagerConfig.configDef(),
-            ZkConfigs.CONFIG_DEF,
-            ServerConfigs.CONFIG_DEF,
-            KRaftConfigs.CONFIG_DEF,
-            SocketServerConfigs.CONFIG_DEF,
-            ReplicationConfigs.CONFIG_DEF,
-            GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
-            GroupCoordinatorConfig.NEW_GROUP_CONFIG_DEF,
-            GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
-            GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
-            GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF,
-            CleanerConfig.CONFIG_DEF,
-            LogConfig.SERVER_CONFIG_DEF,
-            ShareGroupConfig.CONFIG_DEF,
-            TransactionLogConfigs.CONFIG_DEF,
-            TransactionStateManagerConfigs.CONFIG_DEF,
-            QuorumConfig.CONFIG_DEF,
-            MetricConfigs.CONFIG_DEF,
-            QuotaConfigs.CONFIG_DEF,
-            BrokerSecurityConfigs.CONFIG_DEF,
-            DelegationTokenManagerConfigs.CONFIG_DEF,
-            PasswordEncoderConfigs.CONFIG_DEF
-        ));
+    public static final ConfigDef CONFIG_DEF = Utils.mergeConfigs(List.of(
+        RemoteLogManagerConfig.configDef(),
+        ZkConfigs.CONFIG_DEF,
+        ServerConfigs.CONFIG_DEF,
+        KRaftConfigs.CONFIG_DEF,
+        SocketServerConfigs.CONFIG_DEF,
+        ReplicationConfigs.CONFIG_DEF,
+        GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
+        GroupCoordinatorConfig.NEW_GROUP_CONFIG_DEF,
+        GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
+        GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
+        GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF,
+        CleanerConfig.CONFIG_DEF,
+        LogConfig.SERVER_CONFIG_DEF,
+        ShareGroupConfig.CONFIG_DEF,
+        ShareCoordinatorConfig.CONFIG_DEF,
+        TransactionLogConfig.CONFIG_DEF,
+        TransactionStateManagerConfig.CONFIG_DEF,
+        QuorumConfig.CONFIG_DEF,
+        MetricConfigs.CONFIG_DEF,
+        QuotaConfig.CONFIG_DEF,
+        BrokerSecurityConfigs.CONFIG_DEF,
+        DelegationTokenManagerConfigs.CONFIG_DEF,
+        PasswordEncoderConfigs.CONFIG_DEF
+    ));
+
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
     }

@@ -23,12 +23,11 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
-import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.PluginsRecommenders;
@@ -40,13 +39,19 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConcreteSubClassValidator;
 import org.apache.kafka.connect.util.InstantiableClassValidator;
 
-import org.apache.kafka.connect.util.PluginVersionUtils;
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.config.ConfigDef.NonEmptyStringWithoutControlChars.nonEmptyStringWithoutControlChars;
@@ -83,11 +88,10 @@ public class ConnectorConfig extends AbstractConfig {
                     " or use \"FileStreamSink\" or \"FileStreamSinkConnector\" to make the configuration a bit shorter";
     private static final String CONNECTOR_CLASS_DISPLAY = "Connector class";
 
-    public static final String CONNECTOR_VERSION = "connector.version";
-    private static final String CONNECTOR_VERSION_DEFAULT = null;
+    public static final String CONNECTOR_VERSION = "connector." + WorkerConfig.PLUGIN_VERSION_SUFFIX;
     private static final String CONNECTOR_VERSION_DOC = "Version of the connector.";
     private static final String CONNECTOR_VERSION_DISPLAY = "Connector version";
-    private static final ConfigDef.Validator CONNECTOR_VERSION_VALIDATOR = new PluginVersionUtils.PluginVersionValidator();
+    private static final ConfigDef.Validator CONNECTOR_VERSION_VALIDATOR = new PluginVersionValidator();
 
     public static final String KEY_CONVERTER_CLASS_CONFIG = WorkerConfig.KEY_CONVERTER_CLASS_CONFIG;
     public static final String KEY_CONVERTER_CLASS_DOC = WorkerConfig.KEY_CONVERTER_CLASS_DOC;
@@ -98,10 +102,9 @@ public class ConnectorConfig extends AbstractConfig {
     );
 
     public static final String KEY_CONVERTER_VERSION_CONFIG = WorkerConfig.KEY_CONVERTER_VERSION;
-    private static final String KEY_CONVERTER_VERSION_DEFAULT = null;
     private static final String KEY_CONVERTER_VERSION_DOC = "Version of the key converter.";
     private static final String KEY_CONVERTER_VERSION_DISPLAY = "Key converter version";
-    private static final ConfigDef.Validator KEY_CONVERTER_VERSION_VALIDATOR = new PluginVersionUtils.PluginVersionValidator();
+    private static final ConfigDef.Validator KEY_CONVERTER_VERSION_VALIDATOR = new PluginVersionValidator();
 
 
     public static final String VALUE_CONVERTER_CLASS_CONFIG = WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG;
@@ -113,27 +116,22 @@ public class ConnectorConfig extends AbstractConfig {
     );
 
     public static final String VALUE_CONVERTER_VERSION_CONFIG = WorkerConfig.VALUE_CONVERTER_VERSION;
-    private static final String VALUE_CONVERTER_VERSION_DEFAULT = null;
     private static final String VALUE_CONVERTER_VERSION_DOC = "Version of the value converter.";
     private static final String VALUE_CONVERTER_VERSION_DISPLAY = "Value converter version";
-    private static final ConfigDef.Validator VALUE_CONVERTER_VERSION_VALIDATOR = new PluginVersionUtils.PluginVersionValidator();
+    private static final ConfigDef.Validator VALUE_CONVERTER_VERSION_VALIDATOR = new PluginVersionValidator();
 
     public static final String HEADER_CONVERTER_CLASS_CONFIG = WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG;
     public static final String HEADER_CONVERTER_CLASS_DOC = WorkerConfig.HEADER_CONVERTER_CLASS_DOC;
     public static final String HEADER_CONVERTER_CLASS_DISPLAY = "Header converter class";
-    // The Connector config should not have a default for the header converter, since the absence of a config property means that
-    // the worker config settings should be used. Thus, we set the default to null here.
-    public static final String HEADER_CONVERTER_CLASS_DEFAULT = null;
     private static final ConfigDef.Validator HEADER_CONVERTER_CLASS_VALIDATOR = ConfigDef.CompositeValidator.of(
             ConcreteSubClassValidator.forSuperClass(HeaderConverter.class),
             new InstantiableClassValidator()
     );
 
     public static final String HEADER_CONVERTER_VERSION_CONFIG = WorkerConfig.HEADER_CONVERTER_VERSION;
-    private static final String HEADER_CONVERTER_VERSION_DEFAULT = null;
     private static final String HEADER_CONVERTER_VERSION_DOC = "Version of the header converter.";
     private static final String HEADER_CONVERTER_VERSION_DISPLAY = "Header converter version";
-    private static final ConfigDef.Validator HEADER_CONVERTER_VERSION_VALIDATOR = new PluginVersionUtils.PluginVersionValidator();
+    private static final ConfigDef.Validator HEADER_CONVERTER_VERSION_VALIDATOR = new PluginVersionValidator();
 
     public static final String TASKS_MAX_CONFIG = "tasks.max";
     private static final String TASKS_MAX_DOC = "Maximum number of tasks to use for this connector.";
@@ -163,12 +161,12 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String CONFIG_RELOAD_ACTION_CONFIG = "config.action.reload";
     private static final String CONFIG_RELOAD_ACTION_DOC =
             "The action that Connect should take on the connector when changes in external " +
-                    "configuration providers result in a change in the connector's configuration properties. " +
-                    "A value of 'none' indicates that Connect will do nothing. " +
-                    "A value of 'restart' indicates that Connect should restart/reload the connector with the " +
-                    "updated configuration properties." +
-                    "The restart may actually be scheduled in the future if the external configuration provider " +
-                    "indicates that a configuration value will expire in the future.";
+            "configuration providers result in a change in the connector's configuration properties. " +
+            "A value of 'none' indicates that Connect will do nothing. " +
+            "A value of 'restart' indicates that Connect should restart/reload the connector with the " +
+            "updated configuration properties." +
+            "The restart may actually be scheduled in the future if the external configuration provider " +
+            "indicates that a configuration value will expire in the future.";
 
     private static final String CONFIG_RELOAD_ACTION_DISPLAY = "Reload Action";
     public static final String CONFIG_RELOAD_ACTION_NONE = Herder.ConfigReloadAction.NONE.name().toLowerCase(Locale.ROOT);
@@ -213,8 +211,8 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX = "admin.override.";
     public static final String PREDICATES_PREFIX = "predicates.";
 
-    private static final PluginsRecommenders emptyRecommender = new PluginsRecommenders();
-    private static final ConverterDefaults emptyDefaults = new ConverterDefaults();
+    private static final PluginsRecommenders EMPTY_RECOMMENDER = new PluginsRecommenders();
+    private static final ConverterDefaults CONVERTER_DEFAULTS = new ConverterDefaults(null, null);
 
     private final ConnectorConfig.EnrichedConnectorConfig enrichedConfig;
 
@@ -270,41 +268,36 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     public static ConfigDef configDef() {
-        return configDef(null, emptyDefaults, emptyDefaults, emptyDefaults, emptyRecommender);
+        return configDef(null, CONVERTER_DEFAULTS, CONVERTER_DEFAULTS, CONVERTER_DEFAULTS, EMPTY_RECOMMENDER);
     }
 
     // ConfigDef with additional defaults and recommenders
-    public static ConfigDef enrichedConfigDef(Plugins plugins, Map<String, String> connProps, Map<String, String> workerProps) {
+    public static ConfigDef enrichedConfigDef(Plugins plugins, Map<String, String> connProps, WorkerConfig workerConfig) {
+        PluginsRecommenders recommender = new PluginsRecommenders(plugins);
         ConverterDefaults keyConverterDefaults = converterDefaults(plugins, KEY_CONVERTER_CLASS_CONFIG,
-                WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, WorkerConfig.KEY_CONVERTER_VERSION, connProps, workerProps, Converter.class);
+                WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, WorkerConfig.KEY_CONVERTER_VERSION, connProps, workerConfig, PluginType.CONVERTER);
         ConverterDefaults valueConverterDefaults = converterDefaults(plugins, VALUE_CONVERTER_CLASS_CONFIG,
-                WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, WorkerConfig.VALUE_CONVERTER_VERSION, connProps, workerProps, Converter.class);
+                WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, WorkerConfig.VALUE_CONVERTER_VERSION, connProps, workerConfig, PluginType.CONVERTER);
         ConverterDefaults headerConverterDefaults = converterDefaults(plugins, HEADER_CONVERTER_CLASS_CONFIG,
-                WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, WorkerConfig.HEADER_CONVERTER_VERSION, connProps, workerProps, HeaderConverter.class);
-        return configDef(plugins.latestVersion(connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)),
-                keyConverterDefaults, valueConverterDefaults, headerConverterDefaults, plugins.pluginsRecommenders());
+                WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, WorkerConfig.HEADER_CONVERTER_VERSION, connProps, workerConfig, PluginType.HEADER_CONVERTER);
+        return configDef(plugins.latestVersion(connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG), PluginType.SINK, PluginType.SOURCE),
+                keyConverterDefaults, valueConverterDefaults, headerConverterDefaults, recommender);
     }
 
     public static ConfigDef enrichedConfigDef(Plugins plugins, String connectorClass) {
-        return configDef(plugins.latestVersion(connectorClass), emptyDefaults, emptyDefaults, emptyDefaults, emptyRecommender);
+        return configDef(plugins.latestVersion(connectorClass, PluginType.SINK, PluginType.SOURCE), CONVERTER_DEFAULTS, CONVERTER_DEFAULTS, CONVERTER_DEFAULTS, EMPTY_RECOMMENDER);
     }
 
     private static ConfigDef.CompositeValidator aliasValidator(String kind) {
-        return ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), new ConfigDef.Validator() {
-            @SuppressWarnings("unchecked")
-            @Override
-            public void ensureValid(String name, Object value) {
+        return ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ConfigDef.LambdaValidator.with(
+            (name, value) -> {
+                @SuppressWarnings("unchecked")
                 final List<String> aliases = (List<String>) value;
                 if (aliases.size() > new HashSet<>(aliases).size()) {
                     throw new ConfigException(name, value, "Duplicate alias provided.");
                 }
-            }
-
-            @Override
-            public String toString() {
-                return "unique " + kind + " aliases";
-            }
-        });
+            },
+            () -> "unique " + kind + " aliases"));
     }
 
     public ConnectorConfig(Plugins plugins) {
@@ -377,7 +370,8 @@ public class ConnectorConfig extends AbstractConfig {
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
 
             try {
-                @SuppressWarnings("unchecked") final Transformation<R> transformation = Utils.newInstance(getClass(prefix + "type"), Transformation.class);
+                @SuppressWarnings("unchecked")
+                final Transformation<R> transformation = Utils.newInstance(getClass(prefix + "type"), Transformation.class);
                 Map<String, Object> configs = originalsWithPrefix(prefix);
                 String predicateAlias = (String) configs.remove(TransformationStage.PREDICATE_CONFIG);
                 Object negate = configs.remove(TransformationStage.NEGATE_CONFIG);
@@ -410,7 +404,7 @@ public class ConnectorConfig extends AbstractConfig {
             try {
                 final String typeConfig = prefix + "type";
                 final String versionConfig = prefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
-                @SuppressWarnings("unchecked") final Transformation<R> transformation = getTransformationOrPredicate(plugins, typeConfig, versionConfig, Transformation.class);
+                @SuppressWarnings("unchecked") final Transformation<R> transformation = getTransformationOrPredicate(plugins, typeConfig, versionConfig);
                 Map<String, Object> configs = originalsWithPrefix(prefix);
                 String predicateAlias = (String) configs.remove(TransformationStage.PREDICATE_CONFIG);
                 Object negate = configs.remove(TransformationStage.NEGATE_CONFIG);
@@ -420,7 +414,7 @@ public class ConnectorConfig extends AbstractConfig {
                     final String predicateTypeConfig = predicatePrefix + "type";
                     final String predicateVersionConfig = predicatePrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
                     @SuppressWarnings("unchecked")
-                    Predicate<R> predicate = getTransformationOrPredicate(plugins, predicateTypeConfig, predicateVersionConfig, Predicate.class);
+                    Predicate<R> predicate = getTransformationOrPredicate(plugins, predicateTypeConfig, predicateVersionConfig);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
                     transformations.add(new TransformationStage<>(
                             predicate, predicateAlias, negate != null && Boolean.parseBoolean(negate.toString()), transformation, alias, plugins.safeLoaderSwapper()));
@@ -435,23 +429,12 @@ public class ConnectorConfig extends AbstractConfig {
         return transformations;
     }
 
-    public boolean isKeyConverterVersionPresent() {
-        return get(ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG) != null;
-    }
-
-    public boolean isValueConverterVersionPresent() {
-        return get(ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG) != null;
-    }
-
-    public boolean isHeaderConverterVersionPresent() {
-        return get(ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG) != null;
-    }
-
     @SuppressWarnings("unchecked")
-    private <T> T getTransformationOrPredicate(Plugins plugins, String classConfig, String versionConfig, Class<T> type) {
+    private <T> T getTransformationOrPredicate(Plugins plugins, String classConfig, String versionConfig) {
         try {
-            VersionRange range = PluginVersionUtils.connectorVersionRequirement(getString(versionConfig));
-            return (T) plugins.newPlugin(getClass(classConfig).getName(), type, range);
+            VersionRange range = PluginUtils.connectorVersionRequirement(getString(versionConfig));
+            VersionRange connectorRange = PluginUtils.connectorVersionRequirement(getString(CONNECTOR_VERSION));
+            return (T) plugins.newPlugin(getClass(classConfig).getName(), range, plugins.pluginLoader(getString(CONNECTOR_CLASS_CONFIG), connectorRange));
         } catch (Exception e) {
             throw new ConnectException(e);
         }
@@ -462,10 +445,9 @@ public class ConnectorConfig extends AbstractConfig {
      * <p>
      * {@code requireFullConfig} specifies whether required config values that are missing should cause an exception to be thrown.
      */
-    @SuppressWarnings({"rawtypes", "unchecked"})
     public static ConfigDef enrich(Plugins plugins, ConfigDef baseConfigDef, Map<String, String> props, boolean requireFullConfig) {
         ConfigDef newDef = new ConfigDef(baseConfigDef);
-        new EnrichablePlugin<Transformation<?>>("Transformation", TRANSFORMS_CONFIG, TRANSFORMS_GROUP, (Class) Transformation.class,
+        new EnrichablePlugin<Transformation<?>>("Transformation", TRANSFORMS_CONFIG, TRANSFORMS_GROUP, PluginType.TRANSFORMATION,
                 props, requireFullConfig) {
 
             @Override
@@ -517,13 +499,13 @@ public class ConnectorConfig extends AbstractConfig {
 
             @Override
             protected ConfigDef.Recommender versionRecommender(String typeConfig) {
-                return plugins.pluginsRecommenders().transformationPluginRecommender(typeConfig);
+                return new PluginsRecommenders(plugins).transformationPluginRecommender(typeConfig);
             }
 
         }.enrich(newDef, plugins);
 
         new EnrichablePlugin<Predicate<?>>("Predicate", PREDICATES_CONFIG, PREDICATES_GROUP,
-                (Class) Predicate.class, props, requireFullConfig) {
+                PluginType.PREDICATE, props, requireFullConfig) {
             @Override
             protected Set<PluginDesc<Predicate<?>>> plugins() {
                 return plugins.predicates();
@@ -536,7 +518,7 @@ public class ConnectorConfig extends AbstractConfig {
 
             @Override
             protected ConfigDef.Recommender versionRecommender(String typeConfig) {
-                return plugins.pluginsRecommenders().predicatePluginRecommender(typeConfig);
+                return new PluginsRecommenders(plugins).predicatePluginRecommender(typeConfig);
             }
 
         }.enrich(newDef, plugins);
@@ -550,8 +532,8 @@ public class ConnectorConfig extends AbstractConfig {
             String workerConverterConfig,
             String workerConverterVersionConfig,
             Map<String, String> connectorProps,
-            Map<String, String> workerProps,
-            Class<T> converterType
+            WorkerConfig workerConfig,
+            PluginType converterType
     ) {
         /*
         if a converter is specified in the connector config it overrides the worker config for the corresponding converter
@@ -576,57 +558,38 @@ public class ConnectorConfig extends AbstractConfig {
         should still show the correct default version regardless of the bug.
         */
         final String connectorConverter = connectorProps.get(connectorConverterConfig);
-        final String workerConverter = workerProps.get(workerConverterConfig);
+        // since header converter defines a default in the worker config we need to handle it separately
+        final String workerConverter = workerConverterConfig.equals(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG) ?
+                workerConfig.getClass(workerConverterConfig).getName() : workerConfig.originalsStrings().get(workerConverterConfig);
         final String connectorClass = connectorProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         final String connectorVersion = connectorProps.get(ConnectorConfig.CONNECTOR_VERSION);
+        String type = null;
         if (connectorClass == null || (connectorConverter == null && workerConverter == null)) {
-            return new ConverterDefaults();
+            return new ConverterDefaults(null, null);
         }
-
-        ConverterDefaults defaults = new ConverterDefaults();
         // update the default of connector converter based on if the worker converter is provided
-        defaults.type = workerConverter;
-
+        type = workerConverter;
 
         String version = null;
         if (connectorConverter != null) {
             version = fetchPluginVersion(plugins, connectorClass, connectorVersion, connectorConverter, converterType);
         } else {
-            version = workerProps.get(workerConverterVersionConfig);
+            version = workerConfig.originalsStrings().get(workerConverterVersionConfig);
             if (version == null) {
-                version = plugins.latestVersion(workerConverter);
+                version = plugins.latestVersion(workerConverter, converterType);
             }
         }
-        defaults.version = version;
-        return defaults;
+        return new ConverterDefaults(type, version);
     }
 
-    private static void updateKeyDefault(ConfigDef configDef, String versionConfigKey, String versionDefault) {
-        ConfigDef.ConfigKey key = configDef.configKeys().get(versionConfigKey);
-        if (key == null) {
-            return;
-        }
-        configDef.configKeys().put(versionConfigKey, new ConfigDef.ConfigKey(
-                versionConfigKey, key.type, versionDefault, key.validator, key.importance, key.documentation, key.group, key.orderInGroup, key.width, key.displayName, key.dependents, key.recommender, false
-        ));
-    }
-
-    private static <T> String fetchPluginVersion(Plugins plugins, String connectorClass, String connectorVersion, String pluginName, Class<T> pluginClass) {
-        if (connectorClass == null || pluginName == null) {
+    private static <T> String fetchPluginVersion(Plugins plugins, String connectorClass, String connectorVersion, String pluginName, PluginType pluginType) {
+        if (pluginName == null || connectorClass == null) {
             return null;
         }
         try {
-            VersionRange range = PluginVersionUtils.connectorVersionRequirement(connectorVersion);
-            ClassLoader connectorLoader = plugins.pluginLoader(connectorClass, range);
-            try(LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
-                // this will load using the connector classloader, and then delegate to delegating classloader if not found
-                // this will ultimately get the latest version of the plugin if a different version is not packaged with the connector
-                T plugin = Utils.newInstance(pluginName, pluginClass);
-                if (plugin instanceof Versioned) {
-                    return ((Versioned) plugin).version();
-                }
-            }
-        } catch (InvalidVersionSpecificationException | ClassNotFoundException | VersionedPluginLoadingException e) {
+            VersionRange range = PluginUtils.connectorVersionRequirement(connectorVersion);
+            return plugins.pluginVersion(pluginName, plugins.pluginLoader(connectorClass, range), pluginType);
+        } catch (InvalidVersionSpecificationException | VersionedPluginLoadingException e) {
             // these errors should be captured in other places, so we can ignore them here
             log.warn("Failed to determine default plugin version for {}", connectorClass, e);
         }
@@ -636,11 +599,10 @@ public class ConnectorConfig extends AbstractConfig {
     /**
      * An abstraction over "enrichable plugins" ({@link Transformation}s and {@link Predicate}s) used for computing the
      * contribution to a Connectors ConfigDef.
-     * <p>
+     *
      * This is not entirely elegant because
      * although they basically use the same "alias prefix" configuration idiom there are some differences.
      * The abstract method pattern is used to cope with this.
-     *
      * @param <T> The type of plugin (either {@code Transformation} or {@code Predicate}).
      */
     abstract static class EnrichablePlugin<T> {
@@ -648,25 +610,26 @@ public class ConnectorConfig extends AbstractConfig {
         private final String aliasKind;
         private final String aliasConfig;
         private final String aliasGroup;
+        private final PluginType pluginType;
         private final Class<T> baseClass;
         private final Map<String, String> props;
         private final boolean requireFullConfig;
 
+        @SuppressWarnings("unchecked")
         public EnrichablePlugin(
                 String aliasKind,
-                String aliasConfig, String aliasGroup, Class<T> baseClass,
+                String aliasConfig, String aliasGroup, PluginType pluginType,
                 Map<String, String> props, boolean requireFullConfig) {
             this.aliasKind = aliasKind;
             this.aliasConfig = aliasConfig;
             this.aliasGroup = aliasGroup;
-            this.baseClass = baseClass;
+            this.pluginType = pluginType;
+            this.baseClass = (Class<T>) pluginType.superClass();
             this.props = props;
             this.requireFullConfig = requireFullConfig;
         }
 
-        /**
-         * Add the configs for this alias to the given {@code ConfigDef}.
-         */
+        /** Add the configs for this alias to the given {@code ConfigDef}. */
         void enrich(ConfigDef newDef, Plugins plugins) {
             Object aliases = ConfigDef.parseType(aliasConfig, props.get(aliasConfig), Type.LIST);
             if (!(aliases instanceof List)) {
@@ -686,6 +649,8 @@ public class ConnectorConfig extends AbstractConfig {
 
                 final String typeConfig = prefix + "type";
                 final String versionConfig = prefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
+                final String defaultVersion = fetchPluginVersion(plugins, props.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG),
+                        props.get(ConnectorConfig.CONNECTOR_VERSION), props.get(typeConfig), pluginType);
 
                 // Add the class configuration
                 final ConfigDef.Validator typeValidator = ConfigDef.LambdaValidator.with(
@@ -693,7 +658,7 @@ public class ConnectorConfig extends AbstractConfig {
                             validateProps(prefix);
                             // The value will be null if the class couldn't be found; no point in performing follow-up validation
                             if (value != null) {
-                                getConfigDefFromPlugin(typeConfig, ((Class<?>) value).getName(), null, plugins);
+                                getConfigDefFromPlugin(typeConfig, ((Class<?>) value).getName(), props.getOrDefault(versionConfig, defaultVersion), plugins);
                             }
                         },
                         () -> "valid configs for " + alias + " " + aliasKind.toLowerCase(Locale.ENGLISH));
@@ -704,17 +669,17 @@ public class ConnectorConfig extends AbstractConfig {
 
                 // Add the version configuration
                 final ConfigDef.Validator versionValidator = (name, value) -> {
-                    try {
-                        PluginVersionUtils.connectorVersionRequirement((String) value);
-                    } catch (InvalidVersionSpecificationException e) {
-                        throw new ConfigException(name, value, e.getMessage());
-                    }
                     if (value != null) {
-                        getConfigDefFromPlugin(typeConfig, props.get(typeConfig), (String) value, plugins);
+                        try {
+                            getConfigDefFromPlugin(typeConfig, props.get(typeConfig), (String) value, plugins);
+                        } catch (VersionedPluginLoadingException e) {
+                            throw e;
+                        } catch (Exception e) {
+                            // ignore any other exception here as they are not related to version validation and
+                            // will be captured in the validation of the class configuration
+                        }
                     }
                 };
-                String defaultVersion = fetchPluginVersion(plugins, props.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG),
-                        props.get(ConnectorConfig.CONNECTOR_VERSION), props.get(typeConfig), baseClass);
                 newDef.define(versionConfig, Type.STRING, defaultVersion, versionValidator, Importance.HIGH,
                         "Version of the '" + alias + "' " + aliasKind.toLowerCase(Locale.ENGLISH) + ".", group, orderInGroup++, Width.LONG,
                         baseClass.getSimpleName() + " version for " + alias,
@@ -726,9 +691,7 @@ public class ConnectorConfig extends AbstractConfig {
             }
         }
 
-        /**
-         * Subclasses can add extra validation of the {@link #props}.
-         */
+        /** Subclasses can add extra validation of the {@link #props}. */
         protected void validateProps(String prefix) {
         }
 
@@ -756,70 +719,58 @@ public class ConnectorConfig extends AbstractConfig {
          * named in the {@code ...type} parameter of the {@code props}.
          */
         protected Stream<Map.Entry<String, ConfigDef.ConfigKey>> configDefsForClass(String typeConfig, String versionConfig, Plugins plugins) {
+            if (props.get(typeConfig) == null) {
+                throw new ConfigException(typeConfig, null, "Not a " + baseClass.getSimpleName());
+            }
             return getConfigDefFromPlugin(typeConfig, props.get(typeConfig), props.get(versionConfig), plugins)
                     .configKeys().entrySet().stream();
         }
 
-        /**
-         * Get an initial ConfigDef
-         */
+        /** Get an initial ConfigDef */
         protected ConfigDef initialConfigDef() {
             return new ConfigDef();
         }
 
-        /**
-         * Return {@link ConfigDef} from {@code cls}, which is expected to be a non-null {@code Class<T>},
-         * by instantiating it and invoking {@link #config(T)}.
-         *
-         * @param key
-         * @param cls The subclass of the baseclass.
-         */
-        ConfigDef getConfigDefFromConfigProvidingClass(String key, Class<?> cls) {
-            if (cls == null) {
-                throw new ConfigException(key, null, "Not a " + baseClass.getSimpleName());
+        @SuppressWarnings("unchecked")
+        ConfigDef getConfigDefFromPlugin(String key, String pluginClass, String version, Plugins plugins) {
+            String connectorClass = props.get(CONNECTOR_CLASS_CONFIG);
+            if (pluginClass == null || connectorClass == null) {
+                // if transformation class is null or connector class is null, we return empty as these validations are done in respective validators
+                return new ConfigDef();
             }
+            VersionRange connectorVersionRange;
+            try {
+                connectorVersionRange = PluginUtils.connectorVersionRequirement(props.get(CONNECTOR_VERSION));
+            } catch (InvalidVersionSpecificationException e) {
+                // this should be caught in connector version validation
+                return new ConfigDef();
+            }
+
+            VersionRange pluginVersion;
+            try {
+                pluginVersion = PluginUtils.connectorVersionRequirement(version);
+            } catch (InvalidVersionSpecificationException e) {
+                throw new VersionedPluginLoadingException(e.getMessage());
+            }
+
+            // validate that the plugin class is a subclass of the base class
+            final Class<?> cls = (Class<?>) ConfigDef.parseType(key, props.get(key), Type.CLASS);
             Utils.ensureConcreteSubclass(baseClass, cls);
 
-            T pluginInstance;
+            T plugin;
             try {
-                pluginInstance = Utils.newInstance(cls, baseClass);
+                plugin = (T) plugins.newPlugin(pluginClass, pluginVersion, plugins.pluginLoader(connectorClass, connectorVersionRange));
+            } catch (VersionedPluginLoadingException e) {
+                throw e;
             } catch (Exception e) {
-                throw new ConfigException(key, String.valueOf(cls), "Error getting config definition from " + baseClass.getSimpleName() + ": " + e.getMessage());
+                throw new ConfigException(key, pluginClass, "Error getting config definition from " + baseClass.getSimpleName() + ": " + e.getMessage());
             }
-            ConfigDef configDef = config(pluginInstance);
+            ConfigDef configDef = config(plugin);
             if (null == configDef) {
                 throw new ConnectException(
                         String.format(
                                 "%s.config() must return a ConfigDef that is not null.",
-                                cls.getName()
-                        )
-                );
-            }
-            return configDef;
-        }
-
-        @SuppressWarnings("unchecked")
-        ConfigDef getConfigDefFromPlugin(String key, String classOrAlias, String version, Plugins plugins) {
-            if (classOrAlias == null) {
-                throw new ConfigException(key, null, "Not a " + baseClass.getSimpleName());
-            }
-            T pluginInstance;
-            try {
-                VersionRange range = PluginVersionUtils.connectorVersionRequirement(version);
-                pluginInstance = (T) plugins.newPlugin(classOrAlias, baseClass, range);
-            } catch (InvalidVersionSpecificationException e) {
-                // this should be caught in the validation of the version string, just return empty config def to prevent entire validation from failing
-                return new ConfigDef();
-            } catch (Exception e) {
-                throw new ConfigException(key, classOrAlias, "Error getting config definition from " + baseClass.getSimpleName() + ": " + e.getMessage());
-            }
-            Utils.ensureConcreteSubclass(baseClass, pluginInstance.getClass());
-            ConfigDef configDef = config(pluginInstance);
-            if (null == configDef) {
-                throw new ConnectException(
-                        String.format(
-                                "%s.config() must return a ConfigDef that is not null.",
-                                pluginInstance.getClass().getName()
+                                plugin.getClass().getName()
                         )
                 );
             }
@@ -863,7 +814,33 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     private static class ConverterDefaults {
-        private String type = null;
-        private String version = null;
+        private final String type;
+        private final String version;
+
+        public ConverterDefaults(String type, String version) {
+            this.type = type;
+            this.version = version;
+        }
+
+        public String type() {
+            return type;
+        }
+
+        public String version() {
+            return version;
+        }
+    }
+
+    public static class PluginVersionValidator implements ConfigDef.Validator {
+
+        @Override
+        public void ensureValid(String name, Object value) {
+
+            try {
+                PluginUtils.connectorVersionRequirement((String) value);
+            } catch (InvalidVersionSpecificationException e) {
+                throw new VersionedPluginLoadingException(e.getMessage());
+            }
+        }
     }
 }

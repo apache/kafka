@@ -56,7 +56,6 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 
 @Timeout(value = 40)
@@ -136,8 +135,7 @@ public class ConfigurationControlManagerTest {
             setName("def").setValue("blah"));
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
             manager.getConfigs(MYTOPIC));
-        assertEquals("x,y,z", manager.getTopicConfig(MYTOPIC.name(), "abc"));
-        assertNull(manager.getTopicConfig(MYTOPIC.name(), "none-exists"));
+        assertEquals("x,y,z", manager.getTopicConfig(MYTOPIC.name(), "abc").value());
     }
 
     @Test
@@ -318,10 +316,10 @@ public class ConfigurationControlManagerTest {
         assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
                     setName("foo.bar").setValue("123"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("quux").setValue("456"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("broker.config.to.remove").setValue(null), CONFIG_RECORD.highestSupportedVersion())
+                                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                                        setName("quux").setValue("456"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
+                                            new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                                                    setName("broker.config.to.remove").setValue(null), CONFIG_RECORD.highestSupportedVersion())
                 ),
                 toMap(entry(MYTOPIC, new ApiError(Errors.POLICY_VIOLATION,
                     "Expected: AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +

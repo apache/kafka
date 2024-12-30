@@ -38,6 +38,7 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKey;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySchema;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignKeyExtractor;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignTableJoinProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionJoinProcessorSupplier;
@@ -86,6 +87,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -573,7 +575,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>>> storeBuilder;
 
         if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
-            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().getLogConfig();
+            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().logConfig();
             storeBuilder = new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(
                 storeName,
                 keySerde,
@@ -590,7 +592,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorGraphNode<K, Change<V>> node = new TableSuppressNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
-            new StoreBuilderWrapper(storeBuilder)
+            StoreBuilderWrapper.wrapStoreBuilder(storeBuilder)
         );
         node.setOutputVersioned(false);
 
@@ -746,26 +748,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             ((KTableImpl<?, ?, ?>) other).enableSendingOldValues(true);
         }
 
-        final KTableKTableAbstractJoin<K, V, VO, VR> joinThis;
-        final KTableKTableAbstractJoin<K, VO, V, VR> joinOther;
-
-        if (!leftOuter) { // inner
-            joinThis = new KTableKTableInnerJoin<>(this, (KTableImpl<K, ?, VO>) other, joiner);
-            joinOther = new KTableKTableInnerJoin<>((KTableImpl<K, ?, VO>) other, this, reverseJoiner(joiner));
-        } else if (!rightOuter) { // left
-            joinThis = new KTableKTableLeftJoin<>(this, (KTableImpl<K, ?, VO>) other, joiner);
-            joinOther = new KTableKTableRightJoin<>((KTableImpl<K, ?, VO>) other, this, reverseJoiner(joiner));
-        } else { // outer
-            joinThis = new KTableKTableOuterJoin<>(this, (KTableImpl<K, ?, VO>) other, joiner);
-            joinOther = new KTableKTableOuterJoin<>((KTableImpl<K, ?, VO>) other, this, reverseJoiner(joiner));
-        }
-
-        final String joinThisName = renamed.suffixWithOrElseGet("-join-this", builder, JOINTHIS_NAME);
-        final String joinOtherName = renamed.suffixWithOrElseGet("-join-other", builder, JOINOTHER_NAME);
-
-        final ProcessorParameters<K, Change<V>, ?, ?> joinThisProcessorParameters = new ProcessorParameters<>(joinThis, joinThisName);
-        final ProcessorParameters<K, Change<VO>, ?, ?> joinOtherProcessorParameters = new ProcessorParameters<>(joinOther, joinOtherName);
-
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
@@ -786,19 +768,45 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             storeFactory = null;
         }
 
+        final KTableKTableAbstractJoin<K, V, VO, VR> joinThis;
+        final KTableKTableAbstractJoin<K, VO, V, VR> joinOther;
+
+        if (!leftOuter) { // inner
+            joinThis = new KTableKTableInnerJoin<>(this, (KTableImpl<K, ?, VO>) other, joiner);
+            joinOther = new KTableKTableInnerJoin<>((KTableImpl<K, ?, VO>) other, this, reverseJoiner(joiner));
+        } else if (!rightOuter) { // left
+            joinThis = new KTableKTableLeftJoin<>(this, (KTableImpl<K, ?, VO>) other, joiner);
+            joinOther = new KTableKTableRightJoin<>((KTableImpl<K, ?, VO>) other, this, reverseJoiner(joiner));
+        } else { // outer
+            joinThis = new KTableKTableOuterJoin<>(this, (KTableImpl<K, ?, VO>) other, joiner);
+            joinOther = new KTableKTableOuterJoin<>((KTableImpl<K, ?, VO>) other, this, reverseJoiner(joiner));
+        }
+
+        final String joinThisName = renamed.suffixWithOrElseGet("-join-this", builder, JOINTHIS_NAME);
+        final String joinOtherName = renamed.suffixWithOrElseGet("-join-other", builder, JOINOTHER_NAME);
+
+        final ProcessorParameters<K, Change<V>, ?, ?> joinThisProcessorParameters = new ProcessorParameters<>(joinThis, joinThisName);
+        final ProcessorParameters<K, Change<VO>, ?, ?> joinOtherProcessorParameters = new ProcessorParameters<>(joinOther, joinOtherName);
+        final ProcessorParameters<K, Change<VR>, ?, ?> joinMergeProcessorParameters = new ProcessorParameters<>(
+                KTableKTableJoinMerger.of(
+                        (KTableProcessorSupplier<K, V, K, VR>) joinThisProcessorParameters.processorSupplier(),
+                        (KTableProcessorSupplier<K, VO, K, VR>) joinOtherProcessorParameters.processorSupplier(),
+                        queryableStoreName,
+                        storeFactory),
+                joinMergeName);
+
         final KTableKTableJoinNode<K, V, VO, VR> kTableKTableJoinNode =
             KTableKTableJoinNode.<K, V, VO, VR>kTableKTableJoinNodeBuilder()
                 .withNodeName(joinMergeName)
                 .withJoinThisProcessorParameters(joinThisProcessorParameters)
                 .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
+                .withMergeProcessorParameters(joinMergeProcessorParameters)
                 .withThisJoinSideNodeName(name)
                 .withOtherJoinSideNodeName(((KTableImpl<?, ?, ?>) other).name)
                 .withJoinThisStoreNames(valueGetterSupplier().storeNames())
                 .withJoinOtherStoreNames(((KTableImpl<?, ?, ?>) other).valueGetterSupplier().storeNames())
                 .withKeySerde(keySerde)
                 .withValueSerde(valueSerde)
-                .withQueryableStoreName(queryableStoreName)
-                .withStoreBuilder(storeFactory)
                 .build();
 
         final boolean isOutputVersioned = materializedInternal != null
@@ -906,9 +914,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
                                            final Function<V, KO> foreignKeyExtractor,
                                            final ValueJoiner<V, VO, VR> joiner) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
         return doJoinOnForeignKey(
             other,
-            foreignKeyExtractor,
+            adaptedExtractor,
             joiner,
             TableJoined.with(null, null),
             Materialized.with(null, null),
@@ -916,17 +925,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         );
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final Function<V, KO> foreignKeyExtractor,
-                                           final ValueJoiner<V, VO, VR> joiner,
-                                           final Named named) {
+                                           final BiFunction<K, V, KO> foreignKeyExtractor,
+                                           final ValueJoiner<V, VO, VR> joiner) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
         return doJoinOnForeignKey(
             other,
-            foreignKeyExtractor,
+            adaptedExtractor,
             joiner,
-            TableJoined.as(new NamedInternal(named).name()),
+            TableJoined.with(null, null),
             Materialized.with(null, null),
             false
         );
@@ -937,9 +945,26 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                            final Function<V, KO> foreignKeyExtractor,
                                            final ValueJoiner<V, VO, VR> joiner,
                                            final TableJoined<K, KO> tableJoined) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
         return doJoinOnForeignKey(
             other,
-            foreignKeyExtractor,
+            adaptedExtractor,
+            joiner,
+            tableJoined,
+            Materialized.with(null, null),
+            false
+        );
+    }
+
+    @Override
+    public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
+                                           final BiFunction<K, V, KO> foreignKeyExtractor,
+                                           final ValueJoiner<V, VO, VR> joiner,
+                                           final TableJoined<K, KO> tableJoined) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
+        return doJoinOnForeignKey(
+            other,
+            adaptedExtractor,
             joiner,
             tableJoined,
             Materialized.with(null, null),
@@ -952,24 +977,17 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                            final Function<V, KO> foreignKeyExtractor,
                                            final ValueJoiner<V, VO, VR> joiner,
                                            final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
-        return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, TableJoined.with(null, null), materialized, false);
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
+        return doJoinOnForeignKey(other, adaptedExtractor, joiner, TableJoined.with(null, null), materialized, false);
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final Function<V, KO> foreignKeyExtractor,
+                                           final BiFunction<K, V, KO> foreignKeyExtractor,
                                            final ValueJoiner<V, VO, VR> joiner,
-                                           final Named named,
                                            final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
-        return doJoinOnForeignKey(
-            other,
-            foreignKeyExtractor,
-            joiner,
-            TableJoined.as(new NamedInternal(named).name()),
-            materialized,
-            false
-        );
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
+        return doJoinOnForeignKey(other, adaptedExtractor, joiner, TableJoined.with(null, null), materialized, false);
     }
 
     @Override
@@ -978,9 +996,27 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                            final ValueJoiner<V, VO, VR> joiner,
                                            final TableJoined<K, KO> tableJoined,
                                            final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
         return doJoinOnForeignKey(
             other,
-            foreignKeyExtractor,
+            adaptedExtractor,
+            joiner,
+            tableJoined,
+            materialized,
+            false
+        );
+    }
+
+    @Override
+    public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
+                                           final BiFunction<K, V, KO> foreignKeyExtractor,
+                                           final ValueJoiner<V, VO, VR> joiner,
+                                           final TableJoined<K, KO> tableJoined,
+                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
+        return doJoinOnForeignKey(
+            other,
+            adaptedExtractor,
             joiner,
             tableJoined,
             materialized,
@@ -992,9 +1028,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
                                                final Function<V, KO> foreignKeyExtractor,
                                                final ValueJoiner<V, VO, VR> joiner) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
         return doJoinOnForeignKey(
             other,
-            foreignKeyExtractor,
+            adaptedExtractor,
             joiner,
             TableJoined.with(null, null),
             Materialized.with(null, null),
@@ -1002,17 +1039,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         );
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final Function<V, KO> foreignKeyExtractor,
-                                               final ValueJoiner<V, VO, VR> joiner,
-                                               final Named named) {
+                                               final BiFunction<K, V, KO> foreignKeyExtractor,
+                                               final ValueJoiner<V, VO, VR> joiner) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
         return doJoinOnForeignKey(
             other,
-            foreignKeyExtractor,
+            adaptedExtractor,
             joiner,
-            TableJoined.as(new NamedInternal(named).name()),
+            TableJoined.with(null, null),
             Materialized.with(null, null),
             true
         );
@@ -1023,9 +1059,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                                final Function<V, KO> foreignKeyExtractor,
                                                final ValueJoiner<V, VO, VR> joiner,
                                                final TableJoined<K, KO> tableJoined) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
         return doJoinOnForeignKey(
             other,
-            foreignKeyExtractor,
+            adaptedExtractor,
             joiner,
             tableJoined,
             Materialized.with(null, null),
@@ -1033,20 +1070,20 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         );
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final Function<V, KO> foreignKeyExtractor,
+                                               final BiFunction<K, V, KO> foreignKeyExtractor,
                                                final ValueJoiner<V, VO, VR> joiner,
-                                               final Named named,
-                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                               final TableJoined<K, KO> tableJoined) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
         return doJoinOnForeignKey(
             other,
-            foreignKeyExtractor,
+            adaptedExtractor,
             joiner,
-            TableJoined.as(new NamedInternal(named).name()),
-            materialized,
-            true);
+            tableJoined,
+            Materialized.with(null, null),
+            true
+        );
     }
 
     @Override
@@ -1055,9 +1092,26 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                                final ValueJoiner<V, VO, VR> joiner,
                                                final TableJoined<K, KO> tableJoined,
                                                final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
         return doJoinOnForeignKey(
             other,
-            foreignKeyExtractor,
+            adaptedExtractor,
+            joiner,
+            tableJoined,
+            materialized,
+            true);
+    }
+
+    @Override
+    public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
+                                               final BiFunction<K, V, KO> foreignKeyExtractor,
+                                               final ValueJoiner<V, VO, VR> joiner,
+                                               final TableJoined<K, KO> tableJoined,
+                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
+        return doJoinOnForeignKey(
+            other,
+            adaptedExtractor,
             joiner,
             tableJoined,
             materialized,
@@ -1069,23 +1123,33 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                                final Function<V, KO> foreignKeyExtractor,
                                                final ValueJoiner<V, VO, VR> joiner,
                                                final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
-        return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, TableJoined.with(null, null), materialized, true);
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
+        return doJoinOnForeignKey(other, adaptedExtractor, joiner, TableJoined.with(null, null), materialized, true);
     }
 
-    private final Function<Optional<Set<Integer>>, Integer> getPartition = maybeMulticastPartitions -> {
+    @Override
+    public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
+                                               final BiFunction<K, V, KO> foreignKeyExtractor,
+                                               final ValueJoiner<V, VO, VR> joiner,
+                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final ForeignKeyExtractor<K, V, KO> adaptedExtractor = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
+        return doJoinOnForeignKey(other, adaptedExtractor, joiner, TableJoined.with(null, null), materialized, true);
+    }
+
+    private final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition = maybeMulticastPartitions -> {
         if (!maybeMulticastPartitions.isPresent()) {
-            return null;
+            return Optional.empty();
         }
         if (maybeMulticastPartitions.get().size() != 1) {
             throw new IllegalArgumentException("The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set");
         }
-        return maybeMulticastPartitions.get().iterator().next();
+        return maybeMulticastPartitions;
     };
 
 
     @SuppressWarnings({"unchecked", "deprecation"})
     private <VR, KO, VO> KTable<K, VR> doJoinOnForeignKey(final KTable<KO, VO> foreignKeyTable,
-                                                          final Function<V, KO> foreignKeyExtractor,
+                                                          final ForeignKeyExtractor<K, V, KO> foreignKeyExtractor,
                                                           final ValueJoiner<V, VO, VR> joiner,
                                                           final TableJoined<K, KO> tableJoined,
                                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
@@ -1228,9 +1292,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String finalRepartitionTopicName = renamed.suffixWithOrElseGet("-subscription-response", builder, SUBSCRIPTION_RESPONSE) + TOPIC_SUFFIX;
         builder.internalTopologyBuilder.addInternalTopic(finalRepartitionTopicName, InternalTopicProperties.empty());
 
+        final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> defaultForeignResponseSinkPartitioner =
+                (topic, key, subscriptionResponseWrapper, numPartitions) -> {
+                    final Integer partition = subscriptionResponseWrapper.primaryPartition();
+                    return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition));
+                };
+
         final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> foreignResponseSinkPartitioner =
                 tableJoinedInternal.partitioner() == null
-                        ? (topic, key, subscriptionResponseWrapper, numPartitions) -> subscriptionResponseWrapper.getPrimaryPartition()
+                        ? defaultForeignResponseSinkPartitioner
                         : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.partitioner().partitions(topic, key, null, numPartitions));
 
         final StreamSinkNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSink =
@@ -1286,10 +1356,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             materializedInternal.withKeySerde(keySerde);
         }
 
-        final KTableSource<K, VR> resultProcessorSupplier = new KTableSource<>(
-            materializedInternal.storeName(),
-            materializedInternal.queryableStoreName()
-        );
+        final KTableSource<K, VR> resultProcessorSupplier = new KTableSource<>(materializedInternal);
 
         final StoreFactory resultStore =
             new KeyValueStoreMaterializer<>(materializedInternal);

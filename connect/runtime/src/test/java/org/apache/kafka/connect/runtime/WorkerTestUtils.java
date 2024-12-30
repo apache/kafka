@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.distributed.ExtendedAssignment;
-import org.apache.kafka.connect.runtime.distributed.ExtendedWorkerState;
 import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -30,36 +29,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class WorkerTestUtils {
-
-    public static WorkerLoad emptyWorkerLoad(String worker) {
-        return new WorkerLoad.Builder(worker).build();
-    }
-
-    public WorkerLoad workerLoad(String worker, int connectorStart, int connectorNum,
-                                  int taskStart, int taskNum) {
-        return new WorkerLoad.Builder(worker).with(
-                newConnectors(connectorStart, connectorStart + connectorNum),
-                newTasks(taskStart, taskStart + taskNum)).build();
-    }
-
-    public static List<String> newConnectors(int start, int end) {
-        return IntStream.range(start, end)
-                .mapToObj(i -> "connector" + i)
-                .collect(Collectors.toList());
-    }
-
-    public static List<ConnectorTaskId> newTasks(int start, int end) {
-        return IntStream.range(start, end)
-                .mapToObj(i -> new ConnectorTaskId("task", i))
-                .collect(Collectors.toList());
-    }
 
     public static ClusterConfigState clusterConfigState(long offset,
                                                         int connectorNum,
@@ -82,24 +55,6 @@ public class WorkerTestUtils {
                 appliedConnectorConfigs,
                 Collections.emptySet(),
                 Collections.emptySet());
-    }
-
-    public static Map<String, ExtendedWorkerState> memberConfigs(String givenLeader,
-                                                                 long givenOffset,
-                                                                 Map<String, ExtendedAssignment> givenAssignments) {
-        return givenAssignments.entrySet().stream()
-                .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> new ExtendedWorkerState(expectedLeaderUrl(givenLeader), givenOffset, e.getValue())));
-    }
-
-    public static Map<String, ExtendedWorkerState> memberConfigs(String givenLeader,
-                                                                 long givenOffset,
-                                                                 int start,
-                                                                 int connectorNum) {
-        return IntStream.range(start, connectorNum + 1)
-                .mapToObj(i -> new SimpleEntry<>("worker" + i, new ExtendedWorkerState(expectedLeaderUrl(givenLeader), givenOffset, null)))
-                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
     }
 
     public static Map<String, Integer> connectorTaskCounts(int start,
@@ -187,14 +142,12 @@ public class WorkerTestUtils {
 
         assertEquals(expectedOffset, assignment.offset(), "Wrong offset in " + assignment);
 
-        assertThat("Wrong set of assigned connectors in " + assignment,
-                assignment.connectors(), is(expectedAssignedConnectors));
+        assertEquals(expectedAssignedConnectors, assignment.connectors(), "Wrong set of assigned connectors in " + assignment);
 
         assertEquals(expectedAssignedTaskNum, assignment.tasks().size(),
                 "Wrong number of assigned tasks in " + assignment);
 
-        assertThat("Wrong set of revoked connectors in " + assignment,
-                assignment.revokedConnectors(), is(expectedRevokedConnectors));
+        assertEquals(expectedRevokedConnectors, assignment.revokedConnectors(), "Wrong set of revoked connectors in " + assignment);
 
         assertEquals(expectedRevokedTaskNum, assignment.revokedTasks().size(),
                 "Wrong number of revoked tasks in " + assignment);

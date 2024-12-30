@@ -24,25 +24,28 @@
   "flexibleVersions": "1+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+",
-      "nullableVersions": "0+", "default": "null"},
-    { "name": "Topics", "type": "[]TopicData",
-      "versions": "0+", "fields": [
+      "nullableVersions": "0+", "default": "null",
+      "about": "The cluster id."},
+    { "name": "Topics", "type": "[]TopicData", "versions": "0+",
+      "about": "The topics.", "fields": [
         { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
           "about": "The topic name." },
-        { "name": "Partitions", "type": "[]PartitionData",
-          "versions": "0+", "fields": [
+        { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
+          "about": "The partitions.", "fields": [
             { "name": "PartitionIndex", "type": "int32", "versions": "0+",
               "about": "The partition index." },
             { "name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
-              "about": "The current leader ID that is resigning"},
+              "about": "The current leader ID that is resigning."},
             { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
-              "about": "The current epoch"},
+              "about": "The current epoch."},
             { "name": "PreferredSuccessors", "type": "[]int32", "versions": "0", "ignorable": true,
-              "about": "A sorted list of preferred successors to start the election" },
+              "about": "A sorted list of preferred successors to start the election." },
             { "name": "PreferredCandidates", "type": "[]ReplicaInfo", "versions": "1+", "ignorable": true,
-              "about": "A sorted list of preferred candidates to start the election", "fields": [
-                { "name": "CandidateId", "type": "int32", "versions": "1+", "entityType": "brokerId" },
-                { "name": "CandidateDirectoryId", "type": "uuid", "versions": "1+" }
+              "about": "A sorted list of preferred candidates to start the election.", "fields": [
+                { "name": "CandidateId", "type": "int32", "versions": "1+", "entityType": "brokerId",
+                  "about": "The ID of the candidate replica."},
+                { "name": "CandidateDirectoryId", "type": "uuid", "versions": "1+",
+                  "about": "The directory ID of the candidate replica."}
               ]
             }
           ]
@@ -50,10 +53,10 @@
       ]
     },
     { "name": "LeaderEndpoints", "type": "[]LeaderEndpoint", "versions": "1+", "ignorable": true,
-      "about": "Endpoints for the leader", "fields": [
-        { "name": "Name", "type": "string", "versions": "1+", "mapKey": true, "about": "The name of the endpoint" },
-        { "name": "Host", "type": "string", "versions": "1+", "about": "The node's hostname" },
-        { "name": "Port", "type": "uint16", "versions": "1+", "about": "The node's port" }
+      "about": "Endpoints for the leader.", "fields": [
+        { "name": "Name", "type": "string", "versions": "1+", "mapKey": true, "about": "The name of the endpoint." },
+        { "name": "Host", "type": "string", "versions": "1+", "about": "The node's hostname." },
+        { "name": "Port", "type": "uint16", "versions": "1+", "about": "The node's port." }
       ]
     }
   ]

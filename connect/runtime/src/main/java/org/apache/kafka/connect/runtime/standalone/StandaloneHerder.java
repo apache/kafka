@@ -69,7 +69,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Single process, in-memory "herder". Useful for a standalone Kafka Connect process.
  */
-public class StandaloneHerder extends AbstractHerder {
+public final class StandaloneHerder extends AbstractHerder {
     private static final Logger log = LoggerFactory.getLogger(StandaloneHerder.class);
 
     private final AtomicLong requestSeqNum = new AtomicLong();
@@ -92,7 +92,6 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     // visible for testing
-    @SuppressWarnings("this-escape")
     StandaloneHerder(Worker worker,
                      String workerId,
                      String kafkaClusterId,
@@ -150,7 +149,7 @@ public class StandaloneHerder extends AbstractHerder {
     public synchronized void connectors(Callback<Collection<String>> callback) {
         callback.onCompletion(null, connectors());
     }
-    
+
     @Override
     public synchronized void connectorInfo(String connName, Callback<ConnectorInfo> callback) {
         ConnectorInfo connectorInfo = connectorInfo(connName);
@@ -636,15 +635,4 @@ public class StandaloneHerder extends AbstractHerder {
             return Objects.hash(seq);
         }
     }
-
-    @Override
-    public void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback) {
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig = buildTasksConfig(connName);
-        if (tasksConfig.isEmpty()) {
-            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
-            return;
-        }
-        callback.onCompletion(null, tasksConfig);
-    }
-
 }

@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeAclsResult;
@@ -33,7 +32,6 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -59,7 +57,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.admin.AdminClientTestUtils.alterConfigsResult;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.SOURCE_PREFIX;
@@ -76,14 +73,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -115,6 +110,22 @@ public class MirrorSourceConnectorTest {
         defaultReplicationPolicy.configure(configs);
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertFalse(connector.shouldReplicateTopic("us-west.heartbeats"), "should not consider this topic as a heartbeats topic");
+    }
+
+    @Test
+    public void testDoesNotReplicateHeartbeatsWhenDisabled() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter(), false);
+        assertFalse(connector.shouldReplicateTopic("heartbeats"), "should not replicate heartbeats");
+        assertFalse(connector.shouldReplicateTopic("us-west.heartbeats"), "should not replicate upstream heartbeats");
+    }
+
+    @Test
+    public void testReplicatesHeartbeatsWhenDisabledButFilterAllows() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter(), false);
+        assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
+        assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
     }
 
     @Test
@@ -156,10 +167,10 @@ public class MirrorSourceConnectorTest {
             new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
         assertFalse(connector.shouldReplicateAcl(
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
-            new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
+                new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
         assertTrue(connector.shouldReplicateAcl(
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
-            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW))), "should replicate ALLOW ALL");
+                new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW))), "should replicate ALLOW ALL");
     }
 
     @Test
@@ -368,113 +379,6 @@ public class MirrorSourceConnectorTest {
         verify(connector).createNewTopics(any(), any());
     }
 
-    @Test
-    @Deprecated
-    public void testIncrementalAlterConfigsRequested() throws Exception {
-        Map<String, String> props = makeProps();
-        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIGS);
-        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
-
-        Admin admin = mock(Admin.class);
-        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
-        final String topic = "testtopic";
-        List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
-        Config config = new Config(entries);
-        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
-        doReturn(alterConfigsResult(new ConfigResource(ConfigResource.Type.TOPIC, topic), new UnsupportedVersionException("Unsupported API"))).when(admin).incrementalAlterConfigs(any());
-        doNothing().when(connector).deprecatedAlterConfigs(any());
-        connector.syncTopicConfigs();
-        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
-        verify(connector).incrementalAlterConfigs(topicConfigs);
-
-        // the next time we sync topic configurations, expect to use the deprecated API
-        connector.syncTopicConfigs();
-        verify(connector, times(1)).deprecatedAlterConfigs(topicConfigs);
-    }
-
-    @Test
-    @Deprecated
-    public void testIncrementalAlterConfigsRequired() throws Exception {
-        Map<String, String> props = makeProps();
-        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS);
-        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
-
-        Admin admin = mock(Admin.class);
-        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
-        final String topic = "testtopic";
-        List<ConfigEntry> entries = new ArrayList<>();
-        ConfigEntry entryWithNonDefaultValue = new ConfigEntry("name-1", "value-1");
-        ConfigEntry entryWithDefaultValue = new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false,
-                Collections.emptyList(), ConfigEntry.ConfigType.STRING, "");
-        entries.add(entryWithNonDefaultValue);
-        entries.add(entryWithDefaultValue);
-        Config config = new Config(entries);
-        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
-
-        doAnswer(invocation -> {
-            Map<ConfigResource, Collection<AlterConfigOp>> configOps = invocation.getArgument(0);
-            assertNotNull(configOps);
-            assertEquals(1, configOps.size());
-
-            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, "source." + topic);
-            Collection<AlterConfigOp> ops = new ArrayList<>();
-            ops.add(new AlterConfigOp(entryWithNonDefaultValue, AlterConfigOp.OpType.SET));
-            ops.add(new AlterConfigOp(entryWithDefaultValue, AlterConfigOp.OpType.DELETE));
-
-            assertEquals(ops, configOps.get(configResource));
-
-            return alterConfigsResult(configResource);
-        }).when(admin).incrementalAlterConfigs(any());
-
-        connector.syncTopicConfigs();
-        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
-        verify(connector).incrementalAlterConfigs(topicConfigs);
-    }
-
-    @Test
-    @Deprecated
-    public void testIncrementalAlterConfigsRequiredButUnsupported() throws Exception {
-        Map<String, String> props = makeProps();
-        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS);
-        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
-
-        Admin admin = mock(Admin.class);
-        ConnectorContext connectorContext = mock(ConnectorContext.class);
-        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
-        connector.initialize(connectorContext);
-        final String topic = "testtopic";
-        List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
-        Config config = new Config(entries);
-        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
-        doReturn(alterConfigsResult(new ConfigResource(ConfigResource.Type.TOPIC, topic), new UnsupportedVersionException("Unsupported API"))).when(admin).incrementalAlterConfigs(any());
-
-        connector.syncTopicConfigs();
-        verify(connectorContext).raiseError(isA(ConnectException.class));
-    }
-
-
-    @Test
-    @Deprecated
-    public void testIncrementalAlterConfigsNeverUsed() throws Exception {
-        Map<String, String> props = makeProps();
-        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
-        MirrorSourceConfig connectorConfigs = new MirrorSourceConfig(props);
-
-        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), connectorConfigs, new DefaultConfigPropertyFilter(), null));
-        final String topic = "testtopic";
-        List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
-        Config config = new Config(entries);
-        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
-        doNothing().when(connector).deprecatedAlterConfigs(any());
-        connector.syncTopicConfigs();
-        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
-        verify(connector).deprecatedAlterConfigs(topicConfigs);
-        verify(connector, never()).incrementalAlterConfigs(any());
-    }
 
     @Test
     public void testMirrorSourceConnectorTaskConfig() {

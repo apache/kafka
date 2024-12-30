@@ -40,7 +40,7 @@ public class WorkerHandle {
 
     /**
      * Track the worker status during startup.
-     * @return {@link Connect#herderTask} to track or null
+     * @return {@link Connect#herderTask()} to track or null
      */
     public Future<?> herderTask() {
         return worker.herderTask();

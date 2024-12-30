@@ -38,8 +38,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyMap;
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 
 /**
@@ -177,30 +175,13 @@ public class TaskExecutor {
 
         final Set<TaskId> corruptedTasks = new HashSet<>();
 
-        if (executionMetadata.processingMode() == EXACTLY_ONCE_ALPHA) {
-            for (final Task task : taskManager.activeRunningTaskIterable()) {
-                final Map<TopicPartition, OffsetAndMetadata> taskOffsetsToCommit = offsetsPerTask.getOrDefault(task, emptyMap());
-                if (!taskOffsetsToCommit.isEmpty() || taskManager.streamsProducerForTask(task.id()).transactionInFlight()) {
-                    try {
-                        taskManager.streamsProducerForTask(task.id())
-                            .commitTransaction(taskOffsetsToCommit, taskManager.consumerGroupMetadata());
-                        updateTaskCommitMetadata(taskOffsetsToCommit);
-                    } catch (final TimeoutException timeoutException) {
-                        log.error(
-                            String.format("Committing task %s failed.", task.id()),
-                            timeoutException
-                        );
-                        corruptedTasks.add(task.id());
-                    }
-                }
-            }
-        } else if (executionMetadata.processingMode() == EXACTLY_ONCE_V2) {
-            if (!offsetsPerTask.isEmpty() || taskManager.threadProducer().transactionInFlight()) {
+        if (executionMetadata.processingMode() == EXACTLY_ONCE_V2) {
+            if (!offsetsPerTask.isEmpty() || taskManager.streamsProducer().transactionInFlight()) {
                 final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
                     .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
                 try {
-                    taskManager.threadProducer().commitTransaction(allOffsets, taskManager.consumerGroupMetadata());
+                    taskManager.streamsProducer().commitTransaction(allOffsets, taskManager.consumerGroupMetadata());
                     updateTaskCommitMetadata(allOffsets);
                 } catch (final TimeoutException timeoutException) {
                     log.error(

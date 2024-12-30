@@ -16,34 +16,100 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.message.LeaveGroupResponseData
+import org.apache.kafka.common.test.api.ClusterInstance
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.JoinGroupRequest
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
-@Timeout(120)
+import scala.jdk.CollectionConverters._
+
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(types = Array(Type.KRAFT))
+@ClusterTestDefaults(types = Array(Type.KRAFT), serverProperties = Array(
+  new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+  new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+))
 class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
+  @ClusterTest
+  def testLeaveGroupWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    def instanceId(memberId: String): String = "instance_" + memberId
+    val memberIds = Range(0, 3).map { __ =>
+      Uuid.randomUuid().toString
+    }
+
+    for (version <- 3 to ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)) {
+      // Join with all the members.
+      memberIds.foreach { memberId =>
+        assertEquals(Errors.NONE.code, consumerGroupHeartbeat(
+          groupId = "group",
+          memberId = memberId,
+          memberEpoch = 0,
+          instanceId = instanceId(memberId),
+          rebalanceTimeoutMs = 5 * 60 * 1000,
+          subscribedTopicNames = List("foo"),
+          topicPartitions = List.empty,
+        ).errorCode)
+      }
+
+      assertEquals(
+        new LeaveGroupResponseData()
+          .setMembers(List(
+            new LeaveGroupResponseData.MemberResponse()
+              .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+              .setGroupInstanceId(instanceId(memberIds(0))),
+            new LeaveGroupResponseData.MemberResponse()
+              .setMemberId(memberIds(1))
+              .setGroupInstanceId(instanceId(memberIds(1))),
+            new LeaveGroupResponseData.MemberResponse()
+              .setMemberId(memberIds(2))
+              .setGroupInstanceId(null)
+          ).asJava),
+        classicLeaveGroup(
+          groupId = "group",
+          memberIds = List(
+            JoinGroupRequest.UNKNOWN_MEMBER_ID,
+            memberIds(1),
+            memberIds(2)
+          ),
+          groupInstanceIds = List(
+            instanceId(memberIds(0)),
+            instanceId(memberIds(1)),
+            null
+          ),
+          version = version.toShort
+        )
+      )
+
+      assertEquals(
+        ConsumerGroupState.EMPTY.toString,
+        consumerGroupDescribe(List("group")).head.groupState
+      )
+    }
+  }
+
+  @ClusterTest
   def testLeaveGroupWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
     testLeaveGroup()
   }
 
-  @ClusterTest(types = Array(Type.ZK, Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
+  @ClusterTest
   def testLeaveGroupWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
     testLeaveGroup()
   }

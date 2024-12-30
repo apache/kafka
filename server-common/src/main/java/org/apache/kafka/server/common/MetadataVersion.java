@@ -208,6 +208,9 @@ public enum MetadataVersion {
     // Support ListOffsetRequest v9 for KIP-1005.
     IBP_3_9_IV0(21, "3.9", "IV0", false),
 
+    // Bootstrap metadata version for version 1 of the GroupVersion feature (KIP-848).
+    IBP_4_0_IV0(22, "4.0", "IV0", false),
+
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
     // If users attempt to use an unstable MetadataVersion, they will get an error.
@@ -215,10 +218,13 @@ public enum MetadataVersion {
     //
 
     // Add ELR related supports (KIP-966).
-    IBP_4_0_IV0(22, "4.0", "IV0", true),
+    IBP_4_0_IV1(23, "4.0", "IV1", true),
 
-    // Bootstrap metadata version for version 1 of the GroupVersion feature (KIP-848) and transaction versions 1 and 2 (KIP-890)
-    IBP_4_0_IV1(23, "4.0", "IV1", false);
+    // Bootstrap metadata version for transaction versions 1 and 2 (KIP-890)
+    IBP_4_0_IV2(24, "4.0", "IV2", false),
+
+    // Enables async remote LIST_OFFSETS support (KIP-1075)
+    IBP_4_0_IV3(25, "4.0", "IV3", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -244,7 +250,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_3_9_IV0;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV0;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
@@ -345,7 +351,7 @@ public enum MetadataVersion {
     }
 
     public boolean isElrSupported() {
-        return this.isAtLeast(IBP_4_0_IV0);
+        return this.isAtLeast(IBP_4_0_IV1);
     }
 
     public boolean isKRaftSupported() {
@@ -472,7 +478,9 @@ public enum MetadataVersion {
     }
 
     public short listOffsetRequestVersion() {
-        if (this.isAtLeast(IBP_3_9_IV0)) {
+        if (this.isAtLeast(IBP_4_0_IV3)) {
+            return 10;
+        } else if (this.isAtLeast(IBP_3_9_IV0)) {
             return 9;
         } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 8;
@@ -644,6 +652,14 @@ public enum MetadataVersion {
             }
         }
         return version != lowVersion;
+    }
+
+    public short writeTxnMarkersRequestVersion() {
+        if (isAtLeast(IBP_2_8_IV0)) {
+            return 1;
+        } else {
+            return 0;
+        }
     }
 
     public boolean isAtLeast(MetadataVersion otherVersion) {

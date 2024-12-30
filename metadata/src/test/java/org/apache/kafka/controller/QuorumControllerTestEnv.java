@@ -17,9 +17,12 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.metadata.FakeKafkaConfigSchema;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
@@ -114,10 +117,17 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 fatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 MockFaultHandler nonFatalFaultHandler = new MockFaultHandler("nonFatalFaultHandler");
                 builder.setNonFatalFaultHandler(nonFatalFaultHandler);
-                builder.setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled);
+                builder.setConfigSchema(FakeKafkaConfigSchema.INSTANCE);
                 nonFatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 controllerBuilderInitializer.accept(builder);
-                this.controllers.add(builder.build());
+                QuorumController controller = builder.build();
+                if (eligibleLeaderReplicasEnabled) {
+                    controller.featureControl().replay(new FeatureLevelRecord()
+                        .setName(EligibleLeaderReplicasVersion.FEATURE_NAME)
+                        .setFeatureLevel(EligibleLeaderReplicasVersion.ELRV_1.featureLevel())
+                    );
+                }
+                this.controllers.add(controller);
             }
         } catch (Exception e) {
             close();

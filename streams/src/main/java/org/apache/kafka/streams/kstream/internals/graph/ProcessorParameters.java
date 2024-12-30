@@ -17,11 +17,13 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.state.StoreBuilder;
+
+import java.util.Set;
 
 /**
  * Class used to represent a {@link ProcessorSupplier} or {@link FixedKeyProcessorSupplier} and the name
@@ -35,26 +37,12 @@ import org.apache.kafka.streams.state.StoreBuilder;
  */
 public class ProcessorParameters<KIn, VIn, KOut, VOut> {
 
-    // During the transition to KIP-478, we capture arguments passed from the old API to simplify
-    // the performance of casts that we still need to perform. This will eventually be removed.
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> oldProcessorSupplier;
     private final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier;
     private final FixedKeyProcessorSupplier<KIn, VIn, VOut> fixedKeyProcessorSupplier;
     private final String processorName;
 
-    @SuppressWarnings("deprecation") // Old PAPI compatibility.
-    public ProcessorParameters(final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> processorSupplier,
-                               final String processorName) {
-        oldProcessorSupplier = processorSupplier;
-        this.processorSupplier = () -> ProcessorAdapter.adapt(processorSupplier.get());
-        fixedKeyProcessorSupplier = null;
-        this.processorName = processorName;
-    }
-
     public ProcessorParameters(final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
                                final String processorName) {
-        oldProcessorSupplier = null;
         this.processorSupplier = processorSupplier;
         fixedKeyProcessorSupplier = null;
         this.processorName = processorName;
@@ -62,7 +50,6 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
 
     public ProcessorParameters(final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier,
                                final String processorName) {
-        oldProcessorSupplier = null;
         this.processorSupplier = null;
         fixedKeyProcessorSupplier = processorSupplier;
         this.processorName = processorName;
@@ -76,30 +63,34 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
         return fixedKeyProcessorSupplier;
     }
 
-    public void addProcessorTo(final InternalTopologyBuilder topologyBuilder, final String[] parentNodeNames) {
+    public void addProcessorTo(final InternalTopologyBuilder topologyBuilder, final String... parentNodeNames) {
         if (processorSupplier != null) {
-            topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames);
-            if (processorSupplier.stores() != null) {
-                for (final StoreBuilder<?> storeBuilder : processorSupplier.stores()) {
+            ApiUtils.checkSupplier(processorSupplier);
+
+            final ProcessorSupplier<KIn, VIn, KOut, VOut> wrapped =
+                topologyBuilder.wrapProcessorSupplier(processorName, processorSupplier);
+
+            topologyBuilder.addProcessor(processorName, wrapped, parentNodeNames);
+            final Set<StoreBuilder<?>> stores = wrapped.stores();
+            if (stores != null) {
+                for (final StoreBuilder<?> storeBuilder : stores) {
                     topologyBuilder.addStateStore(storeBuilder, processorName);
                 }
             }
         }
 
         if (fixedKeyProcessorSupplier != null) {
-            topologyBuilder.addProcessor(processorName, fixedKeyProcessorSupplier, parentNodeNames);
-            if (fixedKeyProcessorSupplier.stores() != null) {
-                for (final StoreBuilder<?> storeBuilder : fixedKeyProcessorSupplier.stores()) {
+            ApiUtils.checkSupplier(fixedKeyProcessorSupplier);
+
+            final FixedKeyProcessorSupplier<KIn, VIn, VOut> wrapped =
+                topologyBuilder.wrapFixedKeyProcessorSupplier(processorName, fixedKeyProcessorSupplier);
+
+            topologyBuilder.addProcessor(processorName, wrapped, parentNodeNames);
+            final Set<StoreBuilder<?>> stores = wrapped.stores();
+            if (stores != null) {
+                for (final StoreBuilder<?> storeBuilder : stores) {
                     topologyBuilder.addStateStore(storeBuilder, processorName);
                 }
-            }
-        }
-
-        // temporary hack until KIP-478 is fully implemented
-        // Old PAPI. Needs to be migrated.
-        if (oldProcessorSupplier != null && oldProcessorSupplier.stores() != null) {
-            for (final StoreBuilder<?> storeBuilder : oldProcessorSupplier.stores()) {
-                topologyBuilder.addStateStore(storeBuilder, processorName);
             }
         }
     }

@@ -38,7 +38,7 @@
           "about": "The indexes of the partitions to write transaction markers for." }
       ]},
       { "name": "CoordinatorEpoch", "type": "int32", "versions": "0+",
-        "about": "Epoch associated with the transaction state partition hosted by this transaction coordinator" }
+        "about": "Epoch associated with the transaction state partition hosted by this transaction coordinator." }
     ]}
   ]
 }

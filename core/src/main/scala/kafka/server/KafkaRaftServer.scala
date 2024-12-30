@@ -19,8 +19,7 @@ package kafka.server
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import kafka.log.UnifiedLog
-import kafka.metrics.KafkaMetricsReporter
-import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
+import kafka.utils.{CoreUtils, Logging, Mx4jLoader}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
@@ -30,9 +29,8 @@ import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadat
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.slf4j.Logger
 
@@ -53,8 +51,6 @@ class KafkaRaftServer(
 ) extends Server with Logging {
 
   this.logIdent = s"[KafkaRaftServer nodeId=${config.nodeId}] "
-  KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
-  KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
   private val (metaPropsEnsemble, bootstrapMetadata) =
     KafkaRaftServer.initializeLogDirs(config, this.logger.underlying, this.logIdent)
@@ -70,9 +66,10 @@ class KafkaRaftServer(
     metaPropsEnsemble,
     time,
     metrics,
-    CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
-    QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+    CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
+    QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
     new StandardFaultHandlerFactory(),
+    ServerSocketFactory.INSTANCE,
   )
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(ProcessRole.BrokerRole)) {

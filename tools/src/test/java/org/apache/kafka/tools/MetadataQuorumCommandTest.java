@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTests;
-import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
+import org.apache.kafka.common.test.api.ClusterTests;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -33,14 +31,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
@@ -52,9 +47,9 @@ class MetadataQuorumCommandTest {
      * 3. Fewer brokers than controllers
      */
     @ClusterTests({
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 2),
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 1),
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, controllers = 2),
+        @ClusterTest(brokers = 2, controllers = 2),
+        @ClusterTest(brokers = 2, controllers = 1),
+        @ClusterTest(brokers = 1, controllers = 2),
     })
     public void testDescribeQuorumReplicationSuccessful(ClusterInstance cluster) throws InterruptedException {
         cluster.waitForReadyBrokers();
@@ -68,10 +63,10 @@ class MetadataQuorumCommandTest {
 
         assertTrue(header.matches("NodeId\\s+DirectoryId\\s+LogEndOffset\\s+Lag\\s+LastFetchTimestamp\\s+LastCaughtUpTimestamp\\s+Status\\s+"));
 
-        if (cluster.type() == Type.CO_KRAFT)
-          assertEquals(Math.max(cluster.config().numControllers(), cluster.config().numBrokers()), data.size());
-        else
-          assertEquals(cluster.config().numBrokers() + cluster.config().numControllers(), data.size());
+        if (cluster.type() == Type.CO_KRAFT) 
+            assertEquals(Math.max(cluster.config().numControllers(), cluster.config().numBrokers()), data.size());
+        else 
+            assertEquals(cluster.config().numBrokers() + cluster.config().numControllers(), data.size());
 
         Pattern leaderPattern = Pattern.compile("\\d+\\s+\\S+\\s+\\d+\\s+\\d+\\s+-?\\d+\\s+-?\\d+\\s+Leader\\s*");
         assertTrue(leaderPattern.matcher(data.get(0)).find());
@@ -94,16 +89,22 @@ class MetadataQuorumCommandTest {
      * 3. Fewer brokers than controllers
      */
     @ClusterTests({
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 2),
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 1),
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, controllers = 2),
+        @ClusterTest(brokers = 2, controllers = 2),
+        @ClusterTest(brokers = 2, controllers = 1),
+        @ClusterTest(brokers = 1, controllers = 2),
     })
     public void testDescribeQuorumStatusSuccessful(ClusterInstance cluster) throws InterruptedException {
+        testDescribeQuorumStatusSuccessful(cluster, false);
+        testDescribeQuorumStatusSuccessful(cluster, true);
+    }
+
+    private void testDescribeQuorumStatusSuccessful(ClusterInstance cluster, boolean usingBootstrapController) throws InterruptedException {
         cluster.waitForReadyBrokers();
+
         String describeOutput = ToolsTestUtils.captureStandardOut(
             () -> MetadataQuorumCommand.mainNoExit(
-                "--bootstrap-server",
-                cluster.bootstrapServers(),
+                usingBootstrapController ? "--bootstrap-controller" : "--bootstrap-server",
+                usingBootstrapController ? cluster.bootstrapControllers() : cluster.bootstrapServers(),
                 "describe",
                 "--status"
             )
@@ -135,16 +136,27 @@ class MetadataQuorumCommandTest {
         }
     }
 
-    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
+    @ClusterTest
     public void testOnlyOneBrokerAndOneController(ClusterInstance cluster) {
+        testOnlyOneBrokerAndOneController(cluster, false);
+        testOnlyOneBrokerAndOneController(cluster, true);
+    }
+
+    public void testOnlyOneBrokerAndOneController(ClusterInstance cluster, boolean usingBootstrapController) {
         String statusOutput = ToolsTestUtils.captureStandardOut(() ->
-            MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
+            MetadataQuorumCommand.mainNoExit(
+                    usingBootstrapController ? "--bootstrap-controller" : "--bootstrap-server",
+                    usingBootstrapController ? cluster.bootstrapControllers() : cluster.bootstrapServers(),
+                    "describe", "--status")
         );
         assertEquals("MaxFollowerLag:         0", statusOutput.split("\n")[4]);
         assertEquals("MaxFollowerLagTimeMs:   0", statusOutput.split("\n")[5]);
 
         String replicationOutput = ToolsTestUtils.captureStandardOut(() ->
-            MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
+            MetadataQuorumCommand.mainNoExit(
+                    usingBootstrapController ? "--bootstrap-controller" : "--bootstrap-server",
+                    usingBootstrapController ? cluster.bootstrapControllers() : cluster.bootstrapServers(),
+                    "describe", "--replication")
         );
         assertEquals("0", replicationOutput.split("\n")[1].split("\\s+")[3]);
     }
@@ -155,19 +167,6 @@ class MetadataQuorumCommandTest {
         File tmpfile = TestUtils.tempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SSL_PLAINTEXT");
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
                         "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
-    }
-
-    @ClusterTest(types = {Type.ZK})
-    public void testDescribeQuorumInZkMode(ClusterInstance cluster) {
-        assertInstanceOf(UnsupportedVersionException.class, assertThrows(
-                ExecutionException.class,
-                () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
-        ).getCause());
-
-        assertInstanceOf(UnsupportedVersionException.class, assertThrows(
-                ExecutionException.class,
-                () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
-        ).getCause());
     }
 
     @ClusterTest(types = {Type.CO_KRAFT})

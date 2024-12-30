@@ -21,7 +21,7 @@ from kafkatest.services.transactional_message_copier import TransactionalMessage
 from kafkatest.utils import is_int
 from kafkatest.utils.transactions_utils import create_and_start_copiers
 from kafkatest.version import LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, \
-    LATEST_3_6, LATEST_3_7, DEV_BRANCH, KafkaVersion, LATEST_STABLE_METADATA_VERSION
+    LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, DEV_BRANCH, KafkaVersion, LATEST_STABLE_METADATA_VERSION
 
 from ducktape.tests.test import Test
 from ducktape.mark import matrix
@@ -178,7 +178,7 @@ class TransactionsMixedVersionsTest(Test):
 
     @cluster(num_nodes=8)
     @matrix(
-        old_kafka_version=[str(LATEST_3_7), str(LATEST_3_6), str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3), str(LATEST_3_2), str(LATEST_3_1)],
+        old_kafka_version=[str(LATEST_3_9), str(LATEST_3_8), str(LATEST_3_7), str(LATEST_3_6), str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3), str(LATEST_3_2), str(LATEST_3_1)],
         metadata_quorum=[isolated_kraft],
         use_new_coordinator=[False],
         group_protocol=[None]
@@ -199,6 +199,9 @@ class TransactionsMixedVersionsTest(Test):
         self.kafka.logs["kafka_data_1"]["collect_default"] = True
         self.kafka.logs["kafka_data_2"]["collect_default"] = True
         self.kafka.logs["kafka_operational_logs_debug"]["collect_default"] = False if old_kafka_version == str(LATEST_3_2) else True
+        # The 3.2.3 release does not include KAFKA-14259, which will cause an exception when writing debug messages.
+        # Therefore, changing the log level to INFO can avoid triggering the bug.
+        self.kafka.log_level = "INFO" if old_kafka_version == str(LATEST_3_2) else "DEBUG"
 
         self.setup_topics()
         self.kafka.start()

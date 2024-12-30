@@ -53,7 +53,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -268,7 +267,6 @@ public class TestUtils {
         } catch (final IOException ex) {
             throw new RuntimeException("Failed to create a temp dir", ex);
         }
-        file.deleteOnExit();
 
         Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
             try {
@@ -279,6 +277,23 @@ public class TestUtils {
         });
 
         return file;
+    }
+
+    /**
+     * Create a random log directory in the format <string>-<int> used for Kafka partition logs.
+     * It is the responsibility of the caller to set up a shutdown hook for deletion of the directory.
+     */
+    public static File randomPartitionLogDir(File parentDir) {
+        int attempts = 1000;
+        while (attempts > 0) {
+            File f = new File(parentDir, "kafka-" + RANDOM.nextInt(1000000));
+            if (f.mkdir()) {
+                f.deleteOnExit();
+                return f;
+            }
+            attempts--;
+        }
+        throw new RuntimeException("Failed to create directory after 1000 attempts");
     }
 
     public static Properties producerConfig(final String bootstrapServers,
@@ -515,10 +530,6 @@ public class TestUtils {
         for (T item : iterable)
             list.add(item);
         return list;
-    }
-
-    public static <T> Set<T> toSet(Collection<T> collection) {
-        return new HashSet<>(collection);
     }
 
     public static ByteBuffer toBuffer(Send send) {

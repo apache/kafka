@@ -16,16 +16,15 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -81,7 +80,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
 
     @ClusterTest
     public void testDoesTopicExist() throws ExecutionException, InterruptedException {
-        try (Admin admin = clusterInstance.createAdminClient()) {
+        try (Admin admin = clusterInstance.admin()) {
             String topic = "test-topic-exist";
             admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, (short) 1))).all().get();
             clusterInstance.waitForTopic(topic, 1);
@@ -92,7 +91,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
 
     @ClusterTest
     public void testTopicDoesNotExist() {
-        try (Admin admin = clusterInstance.createAdminClient()) {
+        try (Admin admin = clusterInstance.admin()) {
             String topic = "dummy-test-topic";
             boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
             assertFalse(doesTopicExist);
@@ -111,7 +110,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         // Create topics.
         String leaderTopic = "new-leader";
         String followerTopic = "new-follower";
-        try (Admin admin = clusterInstance.createAdminClient()) {
+        try (Admin admin = clusterInstance.admin()) {
             // Set broker id 0 as the first entry which is taken as the leader.
             admin.createTopics(Collections.singletonList(new NewTopic(leaderTopic, Collections.singletonMap(0, Arrays.asList(0, 1, 2))))).all().get();
             clusterInstance.waitForTopic(leaderTopic, 1);
@@ -153,6 +152,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         assertThrows(RemoteResourceNotFoundException.class, () -> topicBasedRlmm().listRemoteLogSegments(newLeaderTopicIdPartition));
         assertThrows(RemoteResourceNotFoundException.class, () -> topicBasedRlmm().listRemoteLogSegments(newFollowerTopicIdPartition));
 
+        assertFalse(topicBasedRlmm().isReady(newLeaderTopicIdPartition));
+        assertFalse(topicBasedRlmm().isReady(newFollowerTopicIdPartition));
+
         topicBasedRlmm().onPartitionLeadershipChanges(Collections.singleton(newLeaderTopicIdPartition),
                                                       Collections.singleton(newFollowerTopicIdPartition));
 
@@ -167,6 +169,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         verify(spyRemotePartitionMetadataEventHandler).handleRemoteLogSegmentMetadata(followerSegmentMetadata);
         assertTrue(topicBasedRlmm().listRemoteLogSegments(newLeaderTopicIdPartition).hasNext());
         assertTrue(topicBasedRlmm().listRemoteLogSegments(newFollowerTopicIdPartition).hasNext());
+
+        assertTrue(topicBasedRlmm().isReady(newLeaderTopicIdPartition));
+        assertTrue(topicBasedRlmm().isReady(newFollowerTopicIdPartition));
     }
 
     @ClusterTest

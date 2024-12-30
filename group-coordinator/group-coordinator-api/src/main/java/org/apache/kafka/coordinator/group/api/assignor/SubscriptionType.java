@@ -25,12 +25,12 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 public enum SubscriptionType {
     /**
      * A homogeneous subscription type means that all the members
-     * of the group are subscribed to the same set of topics.
+     * of the group use the same subscription.
      */
     HOMOGENEOUS("Homogeneous"),
     /**
      * A heterogeneous subscription type means that not all the members
-     * of the group are subscribed to the same set of topics.
+     * of the group use the same subscription.
      */
     HETEROGENEOUS("Heterogeneous");
 

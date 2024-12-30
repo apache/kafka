@@ -33,15 +33,16 @@
   // - INVALID_REQUEST (version 0+)
   // - UNKNOWN_SERVER_ERROR (version 0+)
   "fields": [
-    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+", "ignorable": true,
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-    { "name": "ErrorCode", "type": "int16", "versions": "0+", "ignorable": true,
+    { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top-level response error code." },
     { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "The top-level error message, or null if there was no error." },
-     { "name": "Responses", "type": "[]ShareFetchableTopicResponse", "versions": "0+",
+    { "name": "Responses", "type": "[]ShareFetchableTopicResponse", "versions": "0+",
       "about": "The response topics.", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+", "ignorable": true, "about": "The unique topic ID."},
+      { "name": "TopicId", "type": "uuid", "versions": "0+",
+        "about": "The unique topic ID."},
       { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
         "about": "The topic partitions.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
@@ -54,7 +55,8 @@
           "about": "The acknowledge error code, or 0 if there was no acknowledge error." },
         { "name": "AcknowledgeErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
           "about": "The acknowledge error message, or null if there was no acknowledge error." },
-        { "name": "CurrentLeader", "type": "LeaderIdAndEpoch", "versions": "0+", "fields": [
+        { "name": "CurrentLeader", "type": "LeaderIdAndEpoch", "versions": "0+",
+          "about": "The current leader of the partition.", "fields": [
           { "name": "LeaderId", "type": "int32", "versions": "0+",
             "about": "The ID of the current leader or -1 if the leader is unknown." },
           { "name": "LeaderEpoch", "type": "int32", "versions": "0+",

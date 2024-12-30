@@ -23,9 +23,8 @@ import java.net.Socket;
 /**
  * test helper class that will connect to a given server address, write out the given payload and disconnect
  */
-public class PlaintextSender extends Thread {
+public final class PlaintextSender extends Thread {
 
-    @SuppressWarnings("this-escape")
     public PlaintextSender(final InetSocketAddress serverAddress, final byte[] payload) {
         super(() -> {
             try (Socket connection = new Socket(serverAddress.getAddress(), serverAddress.getPort());

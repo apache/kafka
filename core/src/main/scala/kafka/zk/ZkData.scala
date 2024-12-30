@@ -21,11 +21,9 @@ import java.util
 import java.util.Properties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
-import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.server.DelegationTokenManagerZk
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
@@ -38,8 +36,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.{MetadataVersion, ProducerIdsBlock}
@@ -387,7 +384,7 @@ object TopicPartitionStateZNode {
       "leader" -> leaderAndIsr.leader,
       "leader_epoch" -> leaderAndIsr.leaderEpoch,
       "controller_epoch" -> controllerEpoch,
-      "isr" -> leaderAndIsr.isr.asJava
+      "isr" -> leaderAndIsr.isr
     )
 
     if (leaderAndIsr.leaderRecoveryState != LeaderRecoveryState.RECOVERED) {
@@ -410,7 +407,7 @@ object TopicPartitionStateZNode {
       val controllerEpoch = leaderIsrAndEpochInfo("controller_epoch").to[Int]
 
       val zkPathVersion = stat.getVersion
-      LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, recovery, zkPathVersion), controllerEpoch)
+      LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader, epoch, isr.map(Int.box).asJava, recovery, zkPathVersion), controllerEpoch)
     }
   }
 }
@@ -767,7 +764,7 @@ object ResourceZNode {
   def path(resource: ResourcePattern): String = ZkAclStore(resource.patternType).path(resource.resourceType, resource.name)
 
   def encode(acls: Set[AclEntry]): Array[Byte] = Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls.asJava))
-  def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(AclEntry.fromBytes(bytes).asScala.toSet, stat.getVersion)
+  def decode(bytes: Array[Byte], stat: Stat): ZkData.VersionedAcls = ZkData.VersionedAcls(AclEntry.fromBytes(bytes).asScala.toSet, stat.getVersion)
 }
 
 object ExtendedAclChangeEvent {
@@ -1046,45 +1043,13 @@ object FeatureZNode {
   }
 }
 
-object MigrationZNode {
-  val path = "/migration"
-
-  def encode(migration: ZkMigrationLeadershipState): Array[Byte] = {
-    val jsonMap = Map(
-      "version" -> 0,
-      "kraft_controller_id" -> migration.kraftControllerId(),
-      "kraft_controller_epoch" -> migration.kraftControllerEpoch(),
-      "kraft_metadata_offset" -> migration.kraftMetadataOffset(),
-      "kraft_metadata_epoch" -> migration.kraftMetadataEpoch()
-    )
-    Json.encodeAsBytes(jsonMap.asJava)
-  }
-
-  def decode(bytes: Array[Byte], zkVersion: Int, modifyTimeMs: Long): ZkMigrationLeadershipState = {
-    val jsonDataAsString = bytes.map(_.toChar).mkString
-    Json.parseBytes(bytes).map(_.asJsonObject).flatMap { js =>
-      val version = js("version").to[Int]
-      if (version != 0) {
-        throw new KafkaException(s"Encountered unknown version $version when parsing migration json $jsonDataAsString")
-      }
-      val controllerId = js("kraft_controller_id").to[Int]
-      val controllerEpoch = js("kraft_controller_epoch").to[Int]
-      val metadataOffset = js("kraft_metadata_offset").to[Long]
-      val metadataEpoch = js("kraft_metadata_epoch").to[Int]
-      Some(new ZkMigrationLeadershipState(
-        controllerId,
-        controllerEpoch,
-        metadataOffset,
-        metadataEpoch,
-        modifyTimeMs,
-        zkVersion,
-        ZkMigrationLeadershipState.EMPTY.zkControllerEpoch(),
-        ZkMigrationLeadershipState.EMPTY.zkControllerEpochZkVersion()))
-    }.getOrElse(throw new KafkaException(s"Failed to parse the migration json $jsonDataAsString"))
-  }
-}
 
 object ZkData {
+
+  case class VersionedAcls(acls: Set[AclEntry], zkVersion: Int) {
+    def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
+  }
+
 
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
   val SecureRootPaths: Seq[String] = Seq(AdminZNode.path,
@@ -1098,7 +1063,6 @@ object ZkData {
     LogDirEventNotificationZNode.path,
     DelegationTokenAuthZNode.path,
     ExtendedAclZNode.path,
-    MigrationZNode.path,
     FeatureZNode.path) ++ ZkAclStore.securePaths
 
   // These are persistent ZK paths that should exist on kafka broker startup.

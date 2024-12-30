@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals.metrics;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThreadTotalBlockedTime;
 
 import org.junit.jupiter.api.Test;
@@ -412,6 +413,39 @@ public class ThreadMetricsTest {
             startTime
         );
     }
+
+    @Test
+    public void shouldAddThreadStateTelemetryMetric() {
+        final Gauge<Integer> threadStateProvider = (streamsMetrics, startTime) -> StreamThread.State.RUNNING.ordinal();
+        ThreadMetrics.addThreadStateTelemetryMetric(
+                THREAD_ID,
+                streamsMetrics,
+                threadStateProvider
+        );
+        verify(streamsMetrics).addThreadLevelMutableMetric(
+                "thread-state",
+                "The current state of the thread",
+                THREAD_ID,
+                threadStateProvider
+        );
+    }
+
+    @Test
+    public void shouldAddThreadStateJmxMetric() {
+        final Gauge<StreamThread.State> threadStateProvider = (streamsMetrics, startTime) -> StreamThread.State.RUNNING;
+        ThreadMetrics.addThreadStateMetric(
+                THREAD_ID,
+                streamsMetrics,
+                threadStateProvider
+        );
+        verify(streamsMetrics).addThreadLevelMutableMetric(
+                "state",
+                "The current state of the thread",
+                THREAD_ID,
+                threadStateProvider
+        );
+    }
+    
 
     @Test
     public void shouldAddTotalBlockedTimeMetric() {

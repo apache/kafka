@@ -16,14 +16,19 @@
  */
 package org.apache.kafka.coordinator.group.metrics;
 
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import com.yammer.metrics.core.MetricsRegistry;
@@ -40,6 +45,7 @@ import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.METRICS_GROUP;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_COMMITS_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_EXPIRED_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.SHARE_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.assertGaugeValue;
 import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.assertMetricsForTypeEqual;
 import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.metricName;
@@ -92,7 +98,37 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", ConsumerGroupState.DEAD.toString()))
+                Collections.singletonMap("state", ConsumerGroupState.DEAD.toString())),
+            metrics.metricName(
+                "group-count",
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Collections.singletonMap("protocol", Group.GroupType.SHARE.toString())),
+            metrics.metricName(
+                "rebalance-rate",
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Collections.singletonMap("protocol", Group.GroupType.SHARE.toString())),
+            metrics.metricName(
+                "rebalance-count",
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Collections.singletonMap("protocol", Group.GroupType.SHARE.toString())),
+            metrics.metricName(
+                "group-count",
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                "The number of share groups in empty state.",
+                "protocol", Group.GroupType.SHARE.toString(),
+                "state", GroupState.EMPTY.toString()),
+            metrics.metricName(
+                "group-count",
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                "The number of share groups in stable state.",
+                "protocol", Group.GroupType.SHARE.toString(),
+                "state", GroupState.STABLE.toString()),
+            metrics.metricName(
+                "group-count",
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                "The number of share groups in dead state.",
+                "protocol", Group.GroupType.SHARE.toString(),
+                "state", GroupState.DEAD.toString())
         ));
 
         try {
@@ -124,18 +160,26 @@ public class GroupCoordinatorMetricsTest {
         GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
         SnapshotRegistry snapshotRegistry0 = new SnapshotRegistry(new LogContext());
         SnapshotRegistry snapshotRegistry1 = new SnapshotRegistry(new LogContext());
-        TopicPartition tp0 = new TopicPartition("__consumer_offsets", 0);
-        TopicPartition tp1 = new TopicPartition("__consumer_offsets", 1);
+        TopicPartition tp0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0);
+        TopicPartition tp1 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1);
         GroupCoordinatorMetricsShard shard0 = coordinatorMetrics.newMetricsShard(snapshotRegistry0, tp0);
         GroupCoordinatorMetricsShard shard1 = coordinatorMetrics.newMetricsShard(snapshotRegistry1, tp1);
         coordinatorMetrics.activateMetricsShard(shard0);
         coordinatorMetrics.activateMetricsShard(shard1);
 
-        IntStream.range(0, 5).forEach(__ -> shard0.incrementNumClassicGroups(ClassicGroupState.PREPARING_REBALANCE));
-        IntStream.range(0, 1).forEach(__ -> shard0.decrementNumClassicGroups(ClassicGroupState.COMPLETING_REBALANCE));
-        IntStream.range(0, 5).forEach(__ -> shard1.incrementNumClassicGroups(ClassicGroupState.STABLE));
-        IntStream.range(0, 4).forEach(__ -> shard1.incrementNumClassicGroups(ClassicGroupState.DEAD));
-        IntStream.range(0, 4).forEach(__ -> shard1.decrementNumClassicGroups(ClassicGroupState.EMPTY));
+        shard0.setClassicGroupGauges(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.STABLE, 1L),
+            Utils.mkEntry(ClassicGroupState.EMPTY, 1L)
+        ));
+        shard1.setClassicGroupGauges(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.STABLE, 1L),
+            Utils.mkEntry(ClassicGroupState.EMPTY, 1L),
+            Utils.mkEntry(ClassicGroupState.DEAD, 1L)
+        ));
 
         IntStream.range(0, 5).forEach(__ -> shard0.incrementNumConsumerGroups(ConsumerGroupState.ASSIGNING));
         IntStream.range(0, 5).forEach(__ -> shard1.incrementNumConsumerGroups(ConsumerGroupState.RECONCILING));
@@ -144,6 +188,10 @@ public class GroupCoordinatorMetricsTest {
         IntStream.range(0, 6).forEach(__ -> shard0.incrementNumOffsets());
         IntStream.range(0, 2).forEach(__ -> shard1.incrementNumOffsets());
         IntStream.range(0, 1).forEach(__ -> shard1.decrementNumOffsets());
+
+        IntStream.range(0, 5).forEach(__ -> shard0.incrementNumShareGroups(ShareGroup.ShareGroupState.STABLE));
+        IntStream.range(0, 5).forEach(__ -> shard1.incrementNumShareGroups(ShareGroup.ShareGroupState.EMPTY));
+        IntStream.range(0, 3).forEach(__ -> shard1.decrementNumShareGroups(ShareGroup.ShareGroupState.DEAD));
 
         assertEquals(4, shard0.numClassicGroups());
         assertEquals(5, shard1.numClassicGroups());
@@ -169,6 +217,14 @@ public class GroupCoordinatorMetricsTest {
             7
         );
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumOffsets"), 7);
+
+        assertEquals(5, shard0.numShareGroups());
+        assertEquals(2, shard1.numShareGroups());
+        assertGaugeValue(
+            metrics,
+            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("protocol", "share")),
+            7
+        );
     }
 
     @Test
@@ -178,7 +234,7 @@ public class GroupCoordinatorMetricsTest {
         Metrics metrics = new Metrics(time);
         GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
         GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(
-            new SnapshotRegistry(new LogContext()), new TopicPartition("__consumer_offsets", 0)
+            new SnapshotRegistry(new LogContext()), new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
         );
 
         shard.record(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME, 10);
@@ -196,6 +252,20 @@ public class GroupCoordinatorMetricsTest {
         shard.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME, 50);
         assertMetricValue(metrics, metrics.metricName("consumer-group-rebalance-rate", GroupCoordinatorMetrics.METRICS_GROUP), 5.0 / 3.0);
         assertMetricValue(metrics, metrics.metricName("consumer-group-rebalance-count", GroupCoordinatorMetrics.METRICS_GROUP), 50);
+
+        shard.record(SHARE_GROUP_REBALANCES_SENSOR_NAME, 50);
+        assertMetricValue(metrics, metrics.metricName(
+            "rebalance-rate",
+            GroupCoordinatorMetrics.METRICS_GROUP,
+            "The rate of share group rebalances",
+            "protocol", "share"
+        ), 5.0 / 3.0);
+        assertMetricValue(metrics, metrics.metricName(
+            "rebalance-count",
+            GroupCoordinatorMetrics.METRICS_GROUP,
+            "The total number of share group rebalances",
+            "protocol", "share"
+        ), 50);
     }
 
     private void assertMetricValue(Metrics metrics, MetricName metricName, double val) {

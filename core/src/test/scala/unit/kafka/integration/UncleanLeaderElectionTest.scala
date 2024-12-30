@@ -22,8 +22,8 @@ import java.util.concurrent.ExecutionException
 import scala.util.Random
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
-import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.server.{KafkaBroker, KafkaConfig, MetadataCache, QuorumTestHarness}
+import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -38,8 +38,9 @@ import org.apache.log4j.{Level, Logger}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 import com.yammer.metrics.core.Meter
+import org.apache.kafka.metadata.LeaderConstants
 
 class UncleanLeaderElectionTest extends QuorumTestHarness {
   val brokerId1 = 0
@@ -97,6 +98,15 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     super.tearDown()
   }
 
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
+    val properties = new Properties()
+    if (testInfo.getTestMethod.get().getName.contains("testUncleanLeaderElectionEnabled")) {
+      properties.setProperty("unclean.leader.election.enable", "true")
+    }
+    properties.setProperty("unclean.leader.election.interval.ms", "10")
+    Seq(properties)
+  }
+
   private def startBrokers(cluster: Seq[Properties]): Unit = {
     for (props <- cluster) {
       val config = KafkaConfig.fromProps(props)
@@ -109,9 +119,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     admin = TestUtils.createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), adminConfigs)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testUncleanLeaderElectionEnabled(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionEnabled(quorum: String, groupProtocol: String): Unit = {
     // enable unclean leader election
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
@@ -122,9 +132,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionEnabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testUncleanLeaderElectionDisabled(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionDisabled(quorum: String, groupProtocol: String): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
 
@@ -134,9 +144,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionDisabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testUncleanLeaderElectionEnabledByTopicOverride(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionEnabledByTopicOverride(quorum: String, groupProtocol: String): Unit = {
     // disable unclean leader election globally, but enable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "false")
     configProps2.put("unclean.leader.election.enable", "false")
@@ -150,9 +160,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionEnabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testUncleanLeaderElectionDisabledByTopicOverride(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionDisabledByTopicOverride(quorum: String, groupProtocol: String): Unit = {
     // enable unclean leader election globally, but disable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
@@ -166,9 +176,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionDisabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testUncleanLeaderElectionInvalidTopicOverride(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionInvalidTopicOverride(quorum: String, groupProtocol: String): Unit = {
     startBrokers(Seq(configProps1))
 
     // create topic with an invalid value for unclean leader election
@@ -205,7 +215,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     //verify that unclean election metric count is 0
     val uncleanLeaderElectionsPerSecGauge = getGauge("UncleanLeaderElectionsPerSec")
     @volatile var uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 0)
+    assertEquals(0, uncleanLeaderElectionsPerSec)
 
     // shutdown leader and then restart follower
     brokers.filter(_.config.brokerId == leaderId).map(shutdownBroker)
@@ -215,7 +225,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     // wait until new leader is (uncleanly) elected
     awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(followerId), timeout = 30000)
     uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 1)
+    assertEquals(1, uncleanLeaderElectionsPerSec)
 
     produceMessage(brokers, topic, "third")
 
@@ -247,17 +257,18 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     //remove any previous unclean election metric
     val uncleanLeaderElectionsPerSecGauge = getGauge("UncleanLeaderElectionsPerSec")
     @volatile var uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 0)
+    assertEquals(0, uncleanLeaderElectionsPerSec)
 
     // shutdown leader and then restart follower
     brokers.filter(_.config.brokerId == leaderId).map(shutdownBroker)
     val followerServer = brokers.find(_.config.brokerId == followerId).get
     followerServer.startup()
 
-    // verify that unclean election to non-ISR follower does not occur
-    awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(leaderId))
+    // verify that unclean election to non-ISR follower does not occur.
+    // That is, leader should be NO_LEADER(-1) and the ISR should has only old leaderId.
+    waitForNoLeaderAndIsrHasOldLeaderId(followerServer.replicaManager.metadataCache, leaderId)
     uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 0)
+    assertEquals(0, uncleanLeaderElectionsPerSec)
 
     // message production and consumption should both fail while leader is down
     val e = assertThrows(classOf[ExecutionException], () => produceMessage(brokers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000))
@@ -300,6 +311,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     val brokerList = TestUtils.plaintextBootstrapServers(brokers)
     // Don't rely on coordinator as it may be down when this method is called
     val consumer = TestUtils.createConsumer(brokerList,
+      groupProtocolFromTestParameters(),
       groupId = "group" + random.nextLong(),
       enableAutoCommit = false,
       valueDeserializer = new StringDeserializer)
@@ -311,9 +323,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     } finally consumer.close()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testTopicUncleanLeaderElectionEnableWithAlterTopicConfigs(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testTopicUncleanLeaderElectionEnableWithAlterTopicConfigs(quorum: String, groupProtocol: String): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
 
@@ -330,26 +342,45 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     waitForPartitionMetadata(brokers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic, 1))
 
+    // Verify the "unclean.leader.election.enable" won't be triggered even if it is enabled/disabled dynamically,
+    // because the leader is still alive
+    val adminClient = createAdminClient()
+    try {
+      val newProps = new Properties
+      newProps.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+      alterTopicConfigs(adminClient, topic, newProps).all.get
+      // leader should not change to followerId
+      awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(leaderId), timeout = 10000)
+
+      newProps.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
+      alterTopicConfigs(adminClient, topic, newProps).all.get
+      // leader should not change to followerId
+      awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(leaderId), timeout = 10000)
+    } finally {
+      adminClient.close()
+    }
+
     // shutdown follower server
     brokers.filter(broker => broker.config.brokerId == followerId).map(broker => shutdownBroker(broker))
 
     produceMessage(brokers, topic, "second")
     assertEquals(List("first", "second"), consumeAllMessages(topic, 2))
 
-    //verify that unclean election metric count is 0
+    // verify that unclean election metric count is 0
     val uncleanLeaderElectionsPerSecGauge = getGauge("UncleanLeaderElectionsPerSec")
     @volatile var uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 0)
+    assertEquals(0, uncleanLeaderElectionsPerSec)
 
     // shutdown leader and then restart follower
     brokers.filter(_.config.brokerId == leaderId).map(shutdownBroker)
     val followerBroker = brokers.find(_.config.brokerId == followerId).get
     followerBroker.startup()
 
-    // leader should not change
-    awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(leaderId), timeout = 30000)
+    // verify that unclean election to non-ISR follower does not occur.
+    // That is, leader should be NO_LEADER(-1) and the ISR should has only old leaderId.
+    waitForNoLeaderAndIsrHasOldLeaderId(followerBroker.replicaManager.metadataCache, leaderId)
     uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 0)
+    assertEquals(0, uncleanLeaderElectionsPerSec)
 
     // message production and consumption should both fail while leader is down
     val e = assertThrows(classOf[ExecutionException], () => produceMessage(brokers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000))
@@ -358,16 +389,19 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     assertEquals(List.empty[String], consumeAllMessages(topic, 0))
 
     // Enable unclean leader election for topic
-    val adminClient = createAdminClient()
-    val newProps = new Properties
-    newProps.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
-    alterTopicConfigs(adminClient, topic, newProps).all.get
-    adminClient.close()
+    val adminClient2 = createAdminClient()
+    try {
+      val newProps = new Properties
+      newProps.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+      alterTopicConfigs(adminClient2, topic, newProps).all.get
+    } finally {
+      adminClient2.close()
+    }
 
     // wait until new leader is (uncleanly) elected
     awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(followerId), timeout = 30000)
     uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 1)
+    assertEquals(1, uncleanLeaderElectionsPerSec)
 
     produceMessage(brokers, topic, "third")
 
@@ -388,5 +422,12 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
     Admin.create(config)
+  }
+
+  private def waitForNoLeaderAndIsrHasOldLeaderId(metadataCache: MetadataCache, leaderId: Int): Unit = {
+    waitUntilTrue(() => metadataCache.getPartitionInfo(topic, partitionId).isDefined &&
+      metadataCache.getPartitionInfo(topic, partitionId).get.leader() == LeaderConstants.NO_LEADER &&
+      java.util.Arrays.asList(leaderId).equals(metadataCache.getPartitionInfo(topic, partitionId).get.isr()),
+      "Timed out waiting for broker metadata cache updates the info for topic partition:" + topicPartition)
   }
 }

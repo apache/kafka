@@ -14,13 +14,12 @@
 package kafka.api
 
 import java.util
-import java.util.Properties
+import java.util.{Collections, Properties}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils.assertFutureExceptionTypeEquals
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsOptions, Config, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsOptions, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, SslConfigs, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
@@ -28,12 +27,12 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -65,12 +64,12 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     Map[String, Object](AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()).asJava
 
   override def generateConfigs: collection.Seq[KafkaConfig] = {
-    val configs = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull)
+    val configs = TestUtils.createBrokerConfigs(brokerCount, null)
     configs.foreach(overrideNodeConfigs)
     configs.map(KafkaConfig.fromProps)
   }
 
-  override def kraftControllerConfigs(): Seq[Properties] = {
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     val props = new Properties()
     overrideNodeConfigs(props)
     Seq(props)
@@ -81,34 +80,35 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testValidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
     // Create topics
     val topic1 = "describe-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
     val topicConfig1 = new Properties
-    topicConfig1.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "500000")
-    topicConfig1.setProperty(TopicConfig.RETENTION_MS_CONFIG, "60000000")
+    val maxMessageBytes = "500000"
+    val retentionMs = "60000000"
+    topicConfig1.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes)
+    topicConfig1.setProperty(TopicConfig.RETENTION_MS_CONFIG, retentionMs)
     createTopic(topic1, 1, 1, topicConfig1)
 
     val topic2 = "describe-alter-configs-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
     createTopic(topic2)
 
-    PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, this, topicResource1, topicResource2)
+    PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, this, topicResource1, topicResource2, maxMessageBytes, retentionMs)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testInvalidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
     PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(this, client)
   }
 
-  @nowarn("cat=deprecation")
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testInvalidAlterConfigsDueToPolicy(quorum: String): Unit = {
     client = Admin.create(createConfig)
 
@@ -127,36 +127,38 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     // Set a mutable broker config
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
-    val brokerConfigs = Seq(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000")).asJava
-    val alterResult1 = client.alterConfigs(Map(brokerResource -> new Config(brokerConfigs)).asJava)
-    alterResult1.all.get
+    var alterResult = client.incrementalAlterConfigs(Collections.singletonMap(brokerResource,
+      util.Arrays.asList(new AlterConfigOp(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000"), OpType.SET))))
+    alterResult.all.get
     assertEquals(Set(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG), validationsForResource(brokerResource).head.configs().keySet().asScala)
     validations.clear()
 
-    val topicConfigEntries1 = Seq(
-      new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"),
-      new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2") // policy doesn't allow this
-    ).asJava
+    val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    alterConfigs.put(topicResource1, util.Arrays.asList(
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"), OpType.SET),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"), OpType.SET)
+    ))
 
-    var topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.8")).asJava
+    alterConfigs.put(topicResource2, util.Arrays.asList(
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.8"), OpType.SET),
+    ))
 
-    val topicConfigEntries3 = Seq(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "-1")).asJava
+    alterConfigs.put(topicResource3, util.Arrays.asList(
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "-1"), OpType.SET),
+    ))
 
-    val brokerConfigEntries = Seq(new ConfigEntry(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "12313")).asJava
+    alterConfigs.put(brokerResource, util.Arrays.asList(
+      new AlterConfigOp(new ConfigEntry(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "12313"), OpType.SET),
+    ))
 
     // Alter configs: second is valid, the others are invalid
-    var alterResult = client.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2),
-      topicResource3 -> new Config(topicConfigEntries3),
-      brokerResource -> new Config(brokerConfigEntries)
-    ).asJava)
+    alterResult = client.incrementalAlterConfigs(alterConfigs)
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
-    assertFutureExceptionTypeEquals(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
+    assertFutureThrows(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
     alterResult.values.get(topicResource2).get
-    assertFutureExceptionTypeEquals(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
-    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureThrows(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
+    assertFutureThrows(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
     assertTrue(validationsForResource(brokerResource).isEmpty,
       "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.")
     validations.clear()
@@ -175,20 +177,17 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertNull(configs.get(brokerResource).get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
 
     // Alter configs with validateOnly = true: only second is valid
-    topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.7")).asJava
+    alterConfigs.put(topicResource2, util.Arrays.asList(
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.7"), OpType.SET),
+    ))
 
-    alterResult = client.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2),
-      brokerResource -> new Config(brokerConfigEntries),
-      topicResource3 -> new Config(topicConfigEntries3)
-    ).asJava, new AlterConfigsOptions().validateOnly(true))
+    alterResult = client.incrementalAlterConfigs(alterConfigs, new AlterConfigsOptions().validateOnly(true))
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
-    assertFutureExceptionTypeEquals(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
+    assertFutureThrows(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
     alterResult.values.get(topicResource2).get
-    assertFutureExceptionTypeEquals(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
-    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureThrows(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
+    assertFutureThrows(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
     assertTrue(validationsForResource(brokerResource).isEmpty,
       "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.")
     validations.clear()

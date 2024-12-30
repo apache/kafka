@@ -86,8 +86,8 @@ public class SinkConnectorConfig extends ConnectorConfig {
         return configDef(ConnectorConfig.configDef());
     }
 
-    public static ConfigDef enrichedConfigDef(Plugins plugins, Map<String, String> connProps, Map<String, String> workerProps) {
-        return configDef(ConnectorConfig.enrichedConfigDef(plugins, connProps, workerProps));
+    public static ConfigDef enrichedConfigDef(Plugins plugins, Map<String, String> connProps, WorkerConfig workerConfig) {
+        return configDef(ConnectorConfig.enrichedConfigDef(plugins, connProps, workerConfig));
     }
 
     public static ConfigDef enrichedConfigDef(Plugins plugins, String connectorClass) {

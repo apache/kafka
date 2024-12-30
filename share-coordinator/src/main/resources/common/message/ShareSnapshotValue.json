@@ -1,0 +1,45 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// KIP-932 is in development. This schema is subject to non-backwards-compatible changes.
+
+{
+  "type": "data",
+  "name": "ShareSnapshotValue",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "SnapshotEpoch", "type": "uint16", "versions": "0",
+      "about": "The snapshot epoch." },
+    { "name": "StateEpoch", "type": "int32", "versions": "0+",
+      "about": "The state epoch for this share-partition." },
+    { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+      "about": "The leader epoch of the share-partition." },
+    { "name": "StartOffset", "type": "int64", "versions": "0",
+      "about": "The share-partition start offset." },
+    { "name": "StateBatches", "type": "[]StateBatch", "versions": "0",
+      "about": "The state batches.", "fields": [
+      { "name": "FirstOffset", "type": "int64", "versions": "0",
+        "about": "The first offset of this state batch." },
+      { "name": "LastOffset", "type": "int64", "versions": "0",
+        "about": "The last offset of this state batch." },
+      { "name": "DeliveryState", "type": "int8", "versions": "0",
+        "about": "The delivery state - 0:Available,2:Acked,4:Archived." },
+      { "name": "DeliveryCount", "type": "int16", "versions": "0",
+        "about": "The delivery count." }
+    ]}
+  ]
+}
+

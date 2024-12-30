@@ -18,7 +18,6 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -57,7 +56,7 @@ public class UnattachedStateTest {
 
     @Test
     public void testElectionTimeout() {
-        Set<Integer> voters = Utils.mkSet(1, 2, 3);
+        Set<Integer> voters = Set.of(1, 2, 3);
 
         UnattachedState state = newUnattachedState(voters, OptionalInt.empty());
 
@@ -79,7 +78,7 @@ public class UnattachedStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testGrantVote(boolean isLogUpToDate) {
-        UnattachedState state = newUnattachedState(Utils.mkSet(1, 2, 3), OptionalInt.empty());
+        UnattachedState state = newUnattachedState(Set.of(1, 2, 3), OptionalInt.empty());
 
         assertEquals(
             isLogUpToDate,
@@ -97,7 +96,7 @@ public class UnattachedStateTest {
 
     @Test
     void testLeaderEndpoints() {
-        UnattachedState state = newUnattachedState(Utils.mkSet(1, 2, 3), OptionalInt.empty());
+        UnattachedState state = newUnattachedState(Set.of(1, 2, 3), OptionalInt.empty());
 
         assertEquals(Endpoints.empty(), state.leaderEndpoints());
     }
@@ -106,7 +105,7 @@ public class UnattachedStateTest {
     @ValueSource(booleans = {true, false})
     void testUnattachedWithLeader(boolean isLogUpToDate) {
         int leaderId = 3;
-        Set<Integer> voters = Utils.mkSet(1, 2, leaderId);
+        Set<Integer> voters = Set.of(1, 2, leaderId);
 
         UnattachedState state = newUnattachedState(voters, OptionalInt.of(leaderId));
 

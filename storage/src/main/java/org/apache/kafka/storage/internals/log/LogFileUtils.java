@@ -51,6 +51,21 @@ public final class LogFileUtils {
      */
     public static final String TXN_INDEX_FILE_SUFFIX = ".txnindex";
 
+    /** Suffix of a temporary file that is being used for log cleaning */
+    public static final String CLEANED_FILE_SUFFIX = ".cleaned";
+
+    /** Suffix of a temporary file used when swapping files into the log */
+    public static final String SWAP_FILE_SUFFIX = ".swap";
+
+    /** Suffix of a directory that is scheduled to be deleted */
+    public static final String DELETE_DIR_SUFFIX = "-delete";
+
+    /** Suffix of a directory that is used for future partition */
+    public static final String FUTURE_DIR_SUFFIX = "-future";
+
+    /** Suffix of a directory that is used for stray partition */
+    public static final String STRAY_DIR_SUFFIX = "-stray";
+
     private LogFileUtils() {
     }
 
@@ -185,6 +200,15 @@ public final class LogFileUtils {
      */
     public static Long offsetFromFile(File file) {
         return offsetFromFileName(file.getName());
+    }
+
+    public static boolean isLogFile(File file) {
+        return file.getPath().endsWith(LOG_FILE_SUFFIX);
+    }
+
+    public static boolean isIndexFile(File file) {
+        String fileName = file.getName();
+        return fileName.endsWith(INDEX_FILE_SUFFIX) || fileName.endsWith(TIME_INDEX_FILE_SUFFIX) || fileName.endsWith(TXN_INDEX_FILE_SUFFIX);
     }
 
 }

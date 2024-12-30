@@ -470,24 +470,6 @@ class LogConfigTest {
       "`remote.log.copy.disable` under Zookeeper's mode."))
   }
 
-  /* Verify that when the deprecated config LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG has non default value the new configs
-   * LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG and LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG are not changed from the default we are using
-   * the deprecated config for backward compatibility.
-   * See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details */
-  @nowarn("cat=deprecation")
-  @Test
-  def testTimestampBeforeMaxMsUsesDeprecatedConfig(): Unit = {
-    val oneDayInMillis = 24 * 60 * 60 * 1000L
-    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-    kafkaProps.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, Long.MaxValue.toString)
-    kafkaProps.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.MaxValue.toString)
-    kafkaProps.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, oneDayInMillis.toString)
-
-    val logProps = KafkaConfig.fromProps(kafkaProps).extractLogConfigMap
-    assertEquals(oneDayInMillis, logProps.get(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG))
-    assertEquals(oneDayInMillis, logProps.get(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG))
-  }
-
   @Test
   def testValidateWithMetadataVersionJbodSupport(): Unit = {
     def validate(metadataVersion: MetadataVersion, jbodConfig: Boolean): Unit =

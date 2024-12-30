@@ -23,10 +23,10 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.record.{ControlRecordType, FileRecords, MemoryRecords}
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.{LoadSummary, UnknownRecordTypeException}
-import org.apache.kafka.coordinator.group.runtime.{CoordinatorLoader, CoordinatorPlayback, Deserializer}
+import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.{LoadSummary, UnknownRecordTypeException}
+import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoader, CoordinatorPlayback, Deserializer}
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.storage.internals.log.FetchIsolation
 
 import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
@@ -140,12 +140,20 @@ class CoordinatorLoaderImpl[T](
                 batch.asScala.foreach { record =>
                   val controlRecord = ControlRecordType.parse(record.key)
                   if (controlRecord == ControlRecordType.COMMIT) {
+                    if (isTraceEnabled) {
+                      trace(s"Replaying end transaction marker from $tp at offset ${record.offset} to commit transaction " +
+                        s"with producer id ${batch.producerId} and producer epoch ${batch.producerEpoch}.")
+                    }
                     coordinator.replayEndTransactionMarker(
                       batch.producerId,
                       batch.producerEpoch,
                       TransactionResult.COMMIT
                     )
                   } else if (controlRecord == ControlRecordType.ABORT) {
+                    if (isTraceEnabled) {
+                      trace(s"Replaying end transaction marker from $tp at offset ${record.offset} to abort transaction " +
+                        s"with producer id ${batch.producerId} and producer epoch ${batch.producerEpoch}.")
+                    }
                     coordinator.replayEndTransactionMarker(
                       batch.producerId,
                       batch.producerEpoch,
@@ -156,17 +164,42 @@ class CoordinatorLoaderImpl[T](
               } else {
                 batch.asScala.foreach { record =>
                   numRecords = numRecords + 1
-                  try {
-                    coordinator.replay(
-                      record.offset(),
-                      batch.producerId,
-                      batch.producerEpoch,
-                      deserializer.deserialize(record.key, record.value)
-                    )
-                  } catch {
-                    case ex: UnknownRecordTypeException =>
-                      warn(s"Unknown record type ${ex.unknownType} while loading offsets and group metadata " +
-                        s"from $tp. Ignoring it. It could be a left over from an aborted upgrade.")
+
+                  val coordinatorRecordOpt = {
+                    try {
+                      Some(deserializer.deserialize(record.key, record.value))
+                    } catch {
+                      case ex: UnknownRecordTypeException =>
+                        warn(s"Unknown record type ${ex.unknownType} while loading offsets and group metadata " +
+                          s"from $tp. Ignoring it. It could be a left over from an aborted upgrade.")
+                        None
+                      case ex: RuntimeException =>
+                        val msg = s"Deserializing record $record from $tp failed due to: ${ex.getMessage}"
+                        error(s"$msg.")
+                        throw new RuntimeException(msg, ex)
+                    }
+                  }
+
+                  coordinatorRecordOpt.foreach { coordinatorRecord =>
+                    try {
+                      if (isTraceEnabled) {
+                        trace(s"Replaying record $coordinatorRecord from $tp at offset ${record.offset()} " +
+                          s"with producer id ${batch.producerId} and producer epoch ${batch.producerEpoch}.")
+                      }
+                      coordinator.replay(
+                        record.offset(),
+                        batch.producerId,
+                        batch.producerEpoch,
+                        coordinatorRecord
+                      )
+                    } catch {
+                      case ex: RuntimeException =>
+                        val msg = s"Replaying record $coordinatorRecord from $tp at offset ${record.offset()} " +
+                          s"with producer id ${batch.producerId} and producer epoch ${batch.producerEpoch} " +
+                          s"failed due to: ${ex.getMessage}"
+                        error(s"$msg.")
+                        throw new RuntimeException(msg, ex)
+                    }
                   }
                 }
               }

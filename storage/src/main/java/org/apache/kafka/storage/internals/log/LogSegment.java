@@ -177,8 +177,8 @@ public class LogSegment implements Closeable {
     public void sanityCheck(boolean timeIndexFileNewlyCreated) throws IOException {
         if (offsetIndexFile().exists()) {
             // Resize the time index file to 0 if it is newly created.
-            if (timeIndexFileNewlyCreated)
-              timeIndex().resize(0);
+            if (timeIndexFileNewlyCreated) 
+                timeIndex().resize(0);
             // Sanity checks for time index and offset index are skipped because
             // we will recover the segments above the recovery point in recoverLog()
             // in any case so sanity checking them here is redundant.
@@ -372,7 +372,7 @@ public class LogSegment implements Closeable {
     }
 
     /**
-     * Find the physical file position for the first message with offset >= the requested offset.
+     * Find the physical file position for the message batch that contains the requested offset.
      *
      * The startingFilePosition argument is an optimization that can be used if we already know a valid starting position
      * in the file higher than the greatest-lower-bound from the index.
@@ -382,8 +382,8 @@ public class LogSegment implements Closeable {
      * @param offset The offset we want to translate
      * @param startingFilePosition A lower bound on the file position from which to begin the search. This is purely an optimization and
      * when omitted, the search will begin at the position in the offset index.
-     * @return The position in the log storing the message with the least offset >= the requested offset and the size of the
-     *        message or null if no message meets this criteria.
+     * @return The base offset, position in the log, and size of the message batch that contains the requested offset,
+     * or null if no such batch is found.
      */
     LogOffsetPosition translateOffset(long offset, int startingFilePosition) throws IOException {
         OffsetPosition mapping = offsetIndex().lookup(offset);
@@ -409,17 +409,17 @@ public class LogSegment implements Closeable {
     }
 
     /**
-     * Read a message set from this segment beginning with the first offset >= startOffset. The message set will include
+     * Read a message set from this segment that contains startOffset. The message set will include
      * no more than maxSize bytes and will end before maxOffset if a maxOffset is specified.
      *
      * This method is thread-safe.
      *
-     * @param startOffset A lower bound on the first offset to include in the message set we read
+     * @param startOffset The logical log offset we are trying to read
      * @param maxSize The maximum number of bytes to include in the message set we read
      * @param maxPositionOpt The maximum position in the log segment that should be exposed for read
      * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxSize` (if one exists)
      *
-     * @return The fetched data and the offset metadata of the first message whose offset is >= startOffset,
+     * @return The fetched data and the base offset metadata of the message batch that contains startOffset,
      *         or null if the startOffset is larger than the largest offset in this log
      */
     public FetchDataInfo read(long startOffset, int maxSize, Optional<Long> maxPositionOpt, boolean minOneMessage) throws IOException {
@@ -433,7 +433,7 @@ public class LogSegment implements Closeable {
             return null;
 
         int startPosition = startOffsetAndSize.position;
-        LogOffsetMetadata offsetMetadata = new LogOffsetMetadata(startOffset, this.baseOffset, startPosition);
+        LogOffsetMetadata offsetMetadata = new LogOffsetMetadata(startOffsetAndSize.offset, this.baseOffset, startPosition);
 
         int adjustedMaxSize = maxSize;
         if (minOneMessage)
@@ -804,6 +804,9 @@ public class LogSegment implements Closeable {
             else {
                 if (logIfMissing) {
                     LOGGER.info("Failed to delete {} {} because it does not exist.", fileType, file.getAbsolutePath());
+                }
+                if (file.getParent() == null) {
+                    return null;
                 }
 
                 // During alter log dir, the log segment may be moved to a new directory, so async delete may fail.

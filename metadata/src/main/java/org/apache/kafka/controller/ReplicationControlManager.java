@@ -95,6 +95,7 @@ import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.TopicAssignment;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
@@ -152,6 +153,7 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
  */
 public class ReplicationControlManager {
     static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
+    static final int MAX_PARTITIONS_PER_BATCH = 10_000;
 
     static class Builder {
         private SnapshotRegistry snapshotRegistry = null;
@@ -159,13 +161,11 @@ public class ReplicationControlManager {
         private short defaultReplicationFactor = (short) 3;
         private int defaultNumPartitions = 1;
 
-        private int defaultMinIsr = 1;
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private FeatureControlManager featureControl = null;
-        private boolean eligibleLeaderReplicasEnabled = false;
 
         Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
@@ -184,16 +184,6 @@ public class ReplicationControlManager {
 
         Builder setDefaultNumPartitions(int defaultNumPartitions) {
             this.defaultNumPartitions = defaultNumPartitions;
-            return this;
-        }
-
-        Builder setDefaultMinIsr(int defaultMinIsr) {
-            this.defaultMinIsr = defaultMinIsr;
-            return this;
-        }
-
-        Builder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
-            this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
             return this;
         }
 
@@ -237,9 +227,7 @@ public class ReplicationControlManager {
                 logContext,
                 defaultReplicationFactor,
                 defaultNumPartitions,
-                defaultMinIsr,
                 maxElectionsPerImbalance,
-                eligibleLeaderReplicasEnabled,
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
@@ -310,16 +298,6 @@ public class ReplicationControlManager {
      * not specify a number of partitions.
      */
     private final int defaultNumPartitions;
-
-    /**
-     * The default min ISR that is used if a CreateTopics request does not specify one.
-     */
-    private final int defaultMinIsr;
-
-    /**
-     * True if eligible leader replicas is enabled.
-     */
-    private final boolean eligibleLeaderReplicasEnabled;
 
     /**
      * Maximum number of leader elections to perform during one partition leader balancing operation.
@@ -409,9 +387,7 @@ public class ReplicationControlManager {
         LogContext logContext,
         short defaultReplicationFactor,
         int defaultNumPartitions,
-        int defaultMinIsr,
         int maxElectionsPerImbalance,
-        boolean eligibleLeaderReplicasEnabled,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
@@ -421,9 +397,7 @@ public class ReplicationControlManager {
         this.log = logContext.logger(ReplicationControlManager.class);
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
-        this.defaultMinIsr = defaultMinIsr;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
-        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         this.configurationControl = configurationControl;
         this.createTopicPolicy = createTopicPolicy;
         this.featureControl = featureControl;
@@ -605,6 +579,8 @@ public class ReplicationControlManager {
     ) {
         Map<String, ApiError> topicErrors = new HashMap<>();
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+
+        validateTotalNumberOfPartitions(request, defaultNumPartitions);
 
         // Check the topic names.
         validateNewTopicNames(topicErrors, request.topics(), topicsWithCollisionChars);
@@ -950,17 +926,39 @@ public class ReplicationControlManager {
         Map<Uuid, ApiError> results = new HashMap<>(ids.size());
         List<ApiMessageAndVersion> records =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP, ids.size());
+        StringBuilder resultsBuilder = new StringBuilder();
+        String resultsPrefix = "";
+
         for (Uuid id : ids) {
+            String topicName = "null";
+            ApiError error;
             try {
+                log.trace("Starting deletion of topic with ID {}.", id);
                 deleteTopic(context, id, records);
-                results.put(id, ApiError.NONE);
+                error = ApiError.NONE;
             } catch (ApiException e) {
-                results.put(id, ApiError.fromThrowable(e));
+                error = ApiError.fromThrowable(e);
             } catch (Exception e) {
                 log.error("Unexpected deleteTopics error for {}", id, e);
-                results.put(id, ApiError.fromThrowable(e));
+                error = ApiError.fromThrowable(e);
             }
+
+            results.put(id, error);
+
+            if (!error.isFailure() || error.error() != UNKNOWN_TOPIC_ID) {
+                topicName = topics.get(id).name;
+            }
+
+            resultsBuilder.append(resultsPrefix)
+                    .append("{id: ").append(id)
+                    .append(", name: ").append(topicName)
+                    .append(", result: ")
+                    .append(error.isFailure() ? error.error() : "SUCCESS")
+                    .append("}");
+            resultsPrefix = ", ";
         }
+
+        log.info("DeleteTopics result(s): {}", resultsBuilder);
         return ControllerResult.atomicOf(records, results);
     }
 
@@ -970,8 +968,10 @@ public class ReplicationControlManager {
             throw new UnknownTopicIdException(UNKNOWN_TOPIC_ID.message());
         }
         int numPartitions = topic.parts.size();
+        log.trace("Deleting topic {} with ID {} and {} partitions", topic.name, id, numPartitions);
         try {
             context.applyPartitionChangeQuota(numPartitions); // check controller mutation quota
+            log.trace("Checked for a partition change quota on topic {} with ID {}", topic.name, id);
         } catch (ThrottlingQuotaExceededException e) {
             // log a message and rethrow the exception
             log.debug("Topic deletion of {} partitions not allowed because quota is violated. Delay time: {}",
@@ -1016,7 +1016,8 @@ public class ReplicationControlManager {
     }
 
     boolean isElrEnabled() {
-        return eligibleLeaderReplicasEnabled && featureControl.metadataVersion().isElrSupported();
+        return featureControl.metadataVersion().isElrSupported() && featureControl.latestFinalizedFeatures().
+            versionOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >= EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
     }
 
     ControllerResult<AlterPartitionResponseData> alterPartition(
@@ -1084,7 +1085,6 @@ public class ReplicationControlManager {
                     featureControl.metadataVersion(),
                     getTopicEffectiveMinIsr(topic.name)
                 )
-                    .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
                     .setEligibleLeaderReplicasEnabled(isElrEnabled());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -1149,6 +1149,34 @@ public class ReplicationControlManager {
         }
 
         return ControllerResult.of(records, response);
+    }
+
+    /**
+     * Validates that a batch of topics will create less than {@value MAX_PARTITIONS_PER_BATCH}. Exceeding this number of topics per batch
+     * has led to out-of-memory exceptions. We use this validation to fail earlier to avoid allocating the memory.
+     * Validates an upper bound number of partitions. The actual number may be smaller if some topics are misconfigured.
+     *
+     * @param request a batch of topics to create.
+     * @param defaultNumPartitions default number of partitions to assign if unspecified.
+     * @throws PolicyViolationException if total number of partitions exceeds {@value MAX_PARTITIONS_PER_BATCH}.
+     */
+    static void validateTotalNumberOfPartitions(CreateTopicsRequestData request, int defaultNumPartitions) {
+        int totalPartitions = 0;
+        for (CreatableTopic topic: request.topics()) {
+            if (topic.assignments().isEmpty()) {
+                if (topic.numPartitions() == -1) {
+                    totalPartitions += defaultNumPartitions;
+                } else if (topic.numPartitions() > 0) {
+                    totalPartitions += topic.numPartitions();
+                }
+            } else {
+                totalPartitions += topic.assignments().size();
+            }
+
+        }
+        if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
+            throw new PolicyViolationException("Excessively large number of partitions per request.");
+        }
     }
 
     /**
@@ -1394,11 +1422,17 @@ public class ReplicationControlManager {
      * @param records       The record list to append to.
      */
     void handleBrokerUncleanShutdown(int brokerId, List<ApiMessageAndVersion> records) {
-        if (!featureControl.metadataVersion().isElrSupported()) return;
-        generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
-            brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
-        generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
-            brokersToElrs.partitionsWithBrokerInElr(brokerId));
+        if (featureControl.metadataVersion().isElrSupported()) {
+            // ELR is enabled, generate unclean shutdown partition change records
+            generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
+                brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
+            generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
+                brokersToElrs.partitionsWithBrokerInElr(brokerId));
+        } else {
+            // ELR is not enabled, handle the unclean shutdown as if the broker was fenced
+            generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", brokerId, NO_LEADER, NO_LEADER, records,
+                brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
+        }
     }
 
     /**
@@ -1531,7 +1565,6 @@ public class ReplicationControlManager {
             getTopicEffectiveMinIsr(topic)
         )
             .setElection(election)
-            .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
             .setEligibleLeaderReplicasEnabled(isElrEnabled())
             .setDefaultDirProvider(clusterDescriber)
             .build();
@@ -1613,22 +1646,42 @@ public class ReplicationControlManager {
         return ControllerResult.of(records, null);
     }
 
-    ControllerResult<Void> maybeFenceOneStaleBroker() {
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+    ControllerResult<Boolean> maybeFenceOneStaleBroker() {
         BrokerHeartbeatManager heartbeatManager = clusterControl.heartbeatManager();
-        heartbeatManager.findOneStaleBroker().ifPresent(brokerId -> {
-            // Even though multiple brokers can go stale at a time, we will process
-            // fencing one at a time so that the effect of fencing each broker is visible
-            // to the system prior to processing the next one
-            log.info("Fencing broker {} because its session has timed out.", brokerId);
-            handleBrokerFenced(brokerId, records);
-            heartbeatManager.fence(brokerId);
-        });
-        return ControllerResult.of(records, null);
+        Optional<BrokerIdAndEpoch> idAndEpoch = heartbeatManager.tracker().maybeRemoveExpired();
+        if (!idAndEpoch.isPresent()) {
+            log.debug("No stale brokers found.");
+            return ControllerResult.of(Collections.emptyList(), false);
+        }
+        int id = idAndEpoch.get().id();
+        long epoch = idAndEpoch.get().epoch();
+        if (!clusterControl.brokerRegistrations().containsKey(id)) {
+            log.info("Removing heartbeat tracker entry for unknown broker {} at epoch {}.",
+                    id, epoch);
+            heartbeatManager.remove(id);
+            return ControllerResult.of(Collections.emptyList(), true);
+        } else if (clusterControl.brokerRegistrations().get(id).epoch() != epoch) {
+            log.info("Removing heartbeat tracker entry for broker {} at previous epoch {}. " +
+                "Current epoch is {}", id, epoch,
+                clusterControl.brokerRegistrations().get(id).epoch());
+            return ControllerResult.of(Collections.emptyList(), true);
+        }
+        // Even though multiple brokers can go stale at a time, we will process
+        // fencing one at a time so that the effect of fencing each broker is visible
+        // to the system prior to processing the next one.
+        log.info("Fencing broker {} at epoch {} because its session has timed out.", id, epoch);
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        handleBrokerFenced(id, records);
+        heartbeatManager.fence(id);
+        return ControllerResult.of(records, true);
     }
 
     boolean arePartitionLeadersImbalanced() {
         return !imbalancedPartitions.isEmpty();
+    }
+
+    boolean areSomePartitionsLeaderless() {
+        return brokersToIsrs.partitionsWithNoLeader().hasNext();
     }
 
     /**
@@ -1641,12 +1694,17 @@ public class ReplicationControlManager {
      */
     ControllerResult<Boolean> maybeBalancePartitionLeaders() {
         List<ApiMessageAndVersion> records = new ArrayList<>();
+        maybeTriggerLeaderChangeForPartitionsWithoutPreferredLeader(records, maxElectionsPerImbalance);
+        return ControllerResult.of(records, records.size() >= maxElectionsPerImbalance);
+    }
 
-        boolean rescheduleImmediately = false;
+    void maybeTriggerLeaderChangeForPartitionsWithoutPreferredLeader(
+        List<ApiMessageAndVersion> records,
+        int maxElections
+    ) {
         for (TopicIdPartition topicPartition : imbalancedPartitions) {
-            if (records.size() >= maxElectionsPerImbalance) {
-                rescheduleImmediately = true;
-                break;
+            if (records.size() >= maxElections) {
+                return;
             }
 
             TopicControlInfo topic = topics.get(topicPartition.topicId());
@@ -1671,13 +1729,56 @@ public class ReplicationControlManager {
                 getTopicEffectiveMinIsr(topic.name)
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
-                .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
                 .setEligibleLeaderReplicasEnabled(isElrEnabled())
                 .setDefaultDirProvider(clusterDescriber)
                 .build().ifPresent(records::add);
         }
+    }
 
-        return ControllerResult.of(records, rescheduleImmediately);
+    /**
+     * Check if we can do an unclean election for partitions with no leader.
+     *
+     * The response() method in the return object is true if this method returned without electing all possible preferred replicas.
+     * The quorum controller should reschedule this operation immediately if it is true.
+     *
+     * @return All of the election records and true if there may be more elections to be done.
+     */
+    ControllerResult<Boolean> maybeElectUncleanLeaders() {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        maybeTriggerUncleanLeaderElectionForLeaderlessPartitions(records, maxElectionsPerImbalance);
+        return ControllerResult.of(records, records.size() >= maxElectionsPerImbalance);
+    }
+
+    /**
+     * Trigger unclean leader election for partitions without leader (visiable for testing)
+     *
+     * @param records       The record list to append to.
+     * @param maxElections  The maximum number of elections to perform.
+     */
+    void maybeTriggerUncleanLeaderElectionForLeaderlessPartitions(
+            List<ApiMessageAndVersion> records,
+            int maxElections
+    ) {
+        Iterator<TopicIdPartition> iterator = brokersToIsrs.partitionsWithNoLeader();
+        while (iterator.hasNext() && records.size() < maxElections) {
+            TopicIdPartition topicIdPartition = iterator.next();
+            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
+            if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
+                ApiError result = electLeader(topic.name, topicIdPartition.partitionId(),
+                        ElectionType.UNCLEAN, records);
+                if (result.error().equals(Errors.NONE)) {
+                    log.info("Triggering unclean leader election for offline partition {}-{}.",
+                            topic.name, topicIdPartition.partitionId());
+                } else {
+                    log.warn("Cannot trigger unclean leader election for offline partition {}-{}: {}",
+                            topic.name, topicIdPartition.partitionId(), result.error());
+                }
+            } else if (log.isDebugEnabled()) {
+                log.debug("Cannot trigger unclean leader election for offline partition {}-{} " +
+                                "because unclean leader election is disabled for this topic.",
+                        topic.name, topicIdPartition.partitionId());
+            }
+        }
     }
 
     ControllerResult<List<CreatePartitionsTopicResult>> createPartitions(
@@ -1897,7 +1998,6 @@ public class ReplicationControlManager {
                 featureControl.metadataVersion(),
                 getTopicEffectiveMinIsr(topic.name)
             );
-            builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
             builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -2016,7 +2116,6 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topicName)
         );
-        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -2078,7 +2177,6 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
         );
-        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
@@ -2222,14 +2320,8 @@ public class ReplicationControlManager {
 
     // Visible to test.
     int getTopicEffectiveMinIsr(String topicName) {
-        int currentMinIsr = defaultMinIsr;
-        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG);
-        if (minIsrConfig != null) {
-            currentMinIsr = Integer.parseInt(minIsrConfig);
-        } else {
-            log.debug("Can't find the min isr config for topic: " + topicName + ". Use default value " + defaultMinIsr);
-        }
-        
+        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value();
+        int currentMinIsr = Integer.parseInt(minIsrConfig);
         Uuid topicId = topicsByName.get(topicName);
         int replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
         return Math.min(currentMinIsr, replicationFactor);

@@ -27,6 +27,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -38,6 +39,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
+import org.apache.kafka.test.MockCachedKeyValueStore;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.TestUtils;
@@ -57,11 +59,13 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.emptyMap;
@@ -70,7 +74,6 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -206,7 +209,7 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            mkSet(persistentStorePartition, nonPersistentStorePartition),
+            Set.of(persistentStorePartition, nonPersistentStorePartition),
             false);
 
         assertTrue(stateMgr.changelogAsSource(persistentStorePartition));
@@ -338,7 +341,7 @@ public class ProcessorStateManagerTest {
 
         stateMgr.recycle();
         assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
-        assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
+        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
 
         stateMgr.registerStateStores(singletonList(store), context);
 
@@ -361,7 +364,7 @@ public class ProcessorStateManagerTest {
 
         stateMgr.recycle();
         assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
-        assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
+        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
 
         verify(store).clearCache();
     }
@@ -431,7 +434,7 @@ public class ProcessorStateManagerTest {
             stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
             assertTrue(checkpointFile.exists());
-            assertEquals(mkSet(
+            assertEquals(Set.of(
                 persistentStorePartition,
                 persistentStoreTwoPartition,
                 nonPersistentStorePartition),
@@ -472,7 +475,7 @@ public class ProcessorStateManagerTest {
             stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
             assertFalse(checkpointFile.exists());
-            assertEquals(mkSet(
+            assertEquals(Set.of(
                     persistentStorePartition,
                     persistentStoreTwoPartition,
                     nonPersistentStorePartition),
@@ -500,9 +503,9 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback, null);
 
-            assertNull(stateMgr.getStore("noSuchStore"));
-            assertEquals(persistentStore, stateMgr.getStore(persistentStoreName));
-            assertEquals(nonPersistentStore, stateMgr.getStore(nonPersistentStoreName));
+            assertNull(stateMgr.store("noSuchStore"));
+            assertEquals(persistentStore, stateMgr.store(persistentStoreName));
+            assertEquals(nonPersistentStore, stateMgr.store(nonPersistentStoreName));
         } finally {
             stateMgr.close();
         }
@@ -772,6 +775,64 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldThrowProcessorStateExceptionOnFlushIfStoreThrowsAFailedProcessingException() {
+        final RuntimeException exception = new RuntimeException("KABOOM!");
+        final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
+        final MockKeyValueStore stateStore = new MockKeyValueStore(persistentStoreName, true) {
+            @Override
+            public void flush() {
+                throw new FailedProcessingException("processor", exception);
+            }
+        };
+        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
+
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flush);
+        assertEquals(exception, thrown.getCause());
+        assertFalse(exception.getMessage().contains("FailedProcessingException"));
+        assertFalse(Arrays.stream(thrown.getStackTrace()).anyMatch(
+            element -> element.getClassName().contains(FailedProcessingException.class.getSimpleName())));
+    }
+
+    @Test
+    public void shouldThrowProcessorStateExceptionOnFlushCacheIfStoreThrowsAFailedProcessingException() {
+        final RuntimeException exception = new RuntimeException("KABOOM!");
+        final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
+        final MockCachedKeyValueStore stateStore = new MockCachedKeyValueStore(persistentStoreName, true) {
+            @Override
+            public void flushCache() {
+                throw new FailedProcessingException("processor", exception);
+            }
+        };
+        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
+
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flushCache);
+        assertEquals(exception, thrown.getCause());
+        assertFalse(exception.getMessage().contains("FailedProcessingException"));
+        assertFalse(Arrays.stream(thrown.getStackTrace()).anyMatch(
+            element -> element.getClassName().contains(FailedProcessingException.class.getSimpleName())));
+
+    }
+
+    @Test
+    public void shouldThrowProcessorStateExceptionOnCloseIfStoreThrowsAFailedProcessingException() {
+        final RuntimeException exception = new RuntimeException("KABOOM!");
+        final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
+        final MockKeyValueStore stateStore = new MockKeyValueStore(persistentStoreName, true) {
+            @Override
+            public void close() {
+                throw new FailedProcessingException("processor", exception);
+            }
+        };
+        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
+
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::close);
+        assertEquals(exception, thrown.getCause());
+        assertFalse(exception.getMessage().contains("FailedProcessingException"));
+        assertFalse(Arrays.stream(thrown.getStackTrace()).anyMatch(
+            element -> element.getClassName().contains(FailedProcessingException.class.getSimpleName())));
+    }
+
+    @Test
     public void shouldThrowIfRestoringUnregisteredStore() {
         final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
 
@@ -997,7 +1058,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
-            stateMgr.markChangelogAsCorrupted(mkSet(persistentStorePartition));
+            stateMgr.markChangelogAsCorrupted(Set.of(persistentStorePartition));
 
             final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, () -> stateMgr.initializeStoreOffsetsFromCheckpoint(true));
             assertInstanceOf(IllegalStateException.class, thrown.getCause());
@@ -1126,7 +1187,7 @@ public class ProcessorStateManagerTest {
     }
 
     public static class StateStorePositionCommit implements CommitCallback {
-        private File file;
+        private final File file;
         private final OffsetCheckpoint checkpointFile;
         private final Position position;
 

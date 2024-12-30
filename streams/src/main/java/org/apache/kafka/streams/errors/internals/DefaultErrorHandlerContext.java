@@ -33,7 +33,9 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     private final Headers headers;
     private final String processorNodeId;
     private final TaskId taskId;
-    private ProcessorContext processorContext;
+
+    private final long timestamp;
+    private final ProcessorContext processorContext;
 
     public DefaultErrorHandlerContext(final ProcessorContext processorContext,
                                       final String topic,
@@ -41,7 +43,8 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
                                       final long offset,
                                       final Headers headers,
                                       final String processorNodeId,
-                                      final TaskId taskId) {
+                                      final TaskId taskId,
+                                      final long timestamp) {
         this.topic = topic;
         this.partition = partition;
         this.offset = offset;
@@ -49,6 +52,7 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
         this.processorNodeId = processorNodeId;
         this.taskId = taskId;
         this.processorContext = processorContext;
+        this.timestamp = timestamp;
     }
 
     @Override
@@ -79,6 +83,11 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     @Override
     public TaskId taskId() {
         return taskId;
+    }
+
+    @Override
+    public long timestamp() {
+        return timestamp;
     }
 
     @Override

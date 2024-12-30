@@ -154,10 +154,9 @@ public class ConnectMetricsTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testDisableJmxReporter() {
         Map<String, String> props = new HashMap<>(DEFAULT_WORKER_CONFIG);
-        props.put(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        props.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, "");
         ConnectMetrics cm = new ConnectMetrics("worker-testDisableJmxReporter", new WorkerConfig(WorkerConfig.baseConfigDef(), props), new MockTime(), "cluster-1");
         assertTrue(cm.metrics().reporters().isEmpty());
         cm.stop();

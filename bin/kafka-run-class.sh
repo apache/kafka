@@ -49,7 +49,7 @@ should_include_file() {
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-  SCALA_VERSION=2.13.14
+  SCALA_VERSION=2.13.15
   if [[ -f "$base_dir/gradle.properties" ]]; then
     SCALA_VERSION=`grep "^scalaVersion=" "$base_dir/gradle.properties" | cut -d= -f 2`
   fi
@@ -116,14 +116,6 @@ else
       CLASSPATH="$file":"$CLASSPATH"
     fi
   done
-  if [ "$SHORT_VERSION_NO_DOTS" = "0100" ]; then
-    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.8.jar":"$CLASSPATH"
-    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.6.jar":"$CLASSPATH"
-  fi
-  if [ "$SHORT_VERSION_NO_DOTS" = "0101" ]; then
-    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.9.jar":"$CLASSPATH"
-    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.8.jar":"$CLASSPATH"
-  fi
 fi
 
 for file in "$streams_dependant_clients_lib_dir"/rocksdb*.jar;

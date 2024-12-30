@@ -18,14 +18,11 @@
 package org.apache.kafka.jmh.fetcher;
 
 import kafka.cluster.AlterPartitionListener;
-import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerBlockingSender;
-import kafka.server.BrokerFeatures;
-import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
 import kafka.server.KafkaConfig;
@@ -38,7 +35,6 @@ import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.server.metadata.ZkMetadataCache;
 import kafka.utils.Pool;
@@ -65,14 +61,18 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.BrokerFeatures;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.network.BrokerEndPoint;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -97,6 +97,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -177,10 +178,10 @@ public class ReplicaFetcherThreadBenchmark {
 
             AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
             OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
-            Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
+            Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Optional.of(0L));
             AlterPartitionManager isrChannelManager = Mockito.mock(AlterPartitionManager.class);
             Partition partition = new Partition(tp, 100, MetadataVersion.latestTesting(),
-                    0, () -> -1, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
+                    0, () -> -1, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(topicId, tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager, topicId);
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId, Option.empty());
@@ -219,7 +220,7 @@ public class ReplicaFetcherThreadBenchmark {
 
         // TODO: fix to support raft
         ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(0,
-            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(), false);
+            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty());
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
         replicaManager = new ReplicaManagerBuilder().
@@ -276,8 +277,8 @@ public class ReplicaFetcherThreadBenchmark {
 
     // avoid mocked DelayedOperations to avoid mocked class affecting benchmark results
     private static class DelayedOperationsMock extends DelayedOperations {
-        DelayedOperationsMock(TopicPartition topicPartition) {
-            super(topicPartition, null, null, null);
+        DelayedOperationsMock(Option<Uuid>  topicId, TopicPartition topicPartition) {
+            super(topicId, topicPartition, null, null, null, null);
         }
 
         @Override

@@ -25,6 +25,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
+import org.slf4j.Logger;
+
 /**
  * {@code ShareConsumerDelegateCreator} implements a quasi-factory pattern to allow the caller to remain unaware of the
  * underlying {@link ShareConsumer} implementation that is created. This provides the means by which
@@ -41,6 +43,9 @@ public class ShareConsumerDelegateCreator {
                                                      final Deserializer<K> keyDeserializer,
                                                      final Deserializer<V> valueDeserializer) {
         try {
+            LogContext logContext = new LogContext();
+            Logger log = logContext.logger(getClass());
+            log.warn("Share groups and KafkaShareConsumer are part of the early access of KIP-932 and MUST NOT be used in production.");
             return new ShareConsumerImpl<>(config, keyDeserializer, valueDeserializer);
         } catch (KafkaException e) {
             throw e;
@@ -60,6 +65,8 @@ public class ShareConsumerDelegateCreator {
                                                      final SubscriptionState subscriptions,
                                                      final ConsumerMetadata metadata) {
         try {
+            Logger log = logContext.logger(getClass());
+            log.warn("Share groups and KafkaShareConsumer are part of the early access of KIP-932 and MUST NOT be used in production.");
             return new ShareConsumerImpl<>(
                     logContext,
                     clientId,

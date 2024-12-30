@@ -18,7 +18,7 @@
 package kafka.log
 
 import kafka.common._
-import kafka.server.{BrokerTopicStats, KafkaConfig}
+import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, Logging, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
@@ -26,11 +26,12 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
 import org.apache.kafka.storage.internals.utils.Throttler
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers
@@ -42,10 +43,10 @@ import java.nio._
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import java.util.Properties
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import scala.collection._
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 /**
  * Unit tests for the log cleaning logic
@@ -63,7 +64,7 @@ class LogCleanerTest extends Logging {
   val throttler = new Throttler(Double.MaxValue, Long.MaxValue, "throttler", "entries", time)
   val tombstoneRetentionMs = 86400000
   val largeTimestamp = Long.MaxValue - tombstoneRetentionMs - 1
-  val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false)
+  val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false)
 
   @AfterEach
   def teardown(): Unit = {
@@ -167,7 +168,7 @@ class LogCleanerTest extends Logging {
     val stats = new CleanerStats()
     val expectedBytesRead = segments.map(_.size).sum
     val shouldRemain = LogTestUtils.keysInLog(log).filterNot(keys.contains)
-    cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata, -1)
+    cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata, -1, segments.last.readNextOffset)
     assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
     assertEquals(expectedBytesRead, stats.bytesRead)
   }
@@ -186,7 +187,7 @@ class LogCleanerTest extends Logging {
     val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val maxTransactionTimeoutMs = 5 * 60 * 1000
-    val producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
+    val producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
     val logSegments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
       dir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, time.scheduler)
@@ -199,12 +200,14 @@ class LogCleanerTest extends Logging {
       time.scheduler,
       time,
       logDirFailureChannel,
-      hadCleanShutdown = true,
+      true,
       logSegments,
       0L,
       0L,
-      leaderEpochCache.asJava,
-      producerStateManager
+      leaderEpochCache.toJava,
+      producerStateManager,
+      new ConcurrentHashMap[String, Integer],
+      false
     ).load()
     val localLog = new LocalLog(dir, config, logSegments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, time.scheduler, time, topicPartition, logDirFailureChannel)
@@ -255,7 +258,7 @@ class LogCleanerTest extends Logging {
     val segments = log.logSegments(0, log.activeSegment.baseOffset).toSeq
     val stats = new CleanerStats()
     cleaner.buildOffsetMap(log, 0, log.activeSegment.baseOffset, offsetMap, stats)
-    cleaner.cleanSegments(log, segments, offsetMap, 0L, stats, new CleanedTransactionMetadata, -1)
+    cleaner.cleanSegments(log, segments, offsetMap, 0L, stats, new CleanedTransactionMetadata, -1, segments.last.readNextOffset)
 
     // Validate based on the file name that log segment file is renamed exactly once for async deletion
     assertEquals(expectedFileName, firstLogFile.file().getPath)
@@ -422,7 +425,7 @@ class LogCleanerTest extends Logging {
       val segments = log.logSegments(0, log.activeSegment.baseOffset).toSeq
       val stats = new CleanerStats(time)
       cleaner.buildOffsetMap(log, dirtyOffset, log.activeSegment.baseOffset, offsetMap, stats)
-      cleaner.cleanSegments(log, segments, offsetMap, time.milliseconds(), stats, new CleanedTransactionMetadata, Long.MaxValue)
+      cleaner.cleanSegments(log, segments, offsetMap, time.milliseconds(), stats, new CleanedTransactionMetadata, Long.MaxValue, segments.last.readNextOffset)
       dirtyOffset = offsetMap.latestOffset + 1
     }
 
@@ -924,7 +927,7 @@ class LogCleanerTest extends Logging {
 
     // clean the log
     val stats = new CleanerStats()
-    cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head), map, 0L, stats, new CleanedTransactionMetadata, -1)
+    cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head), map, 0L, stats, new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
     val shouldRemain = LogTestUtils.keysInLog(log).filterNot(keys.contains)
     assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
   }
@@ -937,7 +940,7 @@ class LogCleanerTest extends Logging {
     val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
-    cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats, new CleanedTransactionMetadata, -1)
+    cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats, new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
     val shouldRemain = LogTestUtils.keysInLog(log).filter(k => !offsetMap.map.containsKey(k.toString))
     assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
   }
@@ -956,7 +959,7 @@ class LogCleanerTest extends Logging {
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
     assertThrows(classOf[CorruptRecordException], () =>
-      cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats, new CleanedTransactionMetadata, -1)
+      cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats, new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
     )
   }
 
@@ -973,7 +976,7 @@ class LogCleanerTest extends Logging {
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
     assertThrows(classOf[CorruptRecordException], () =>
-      cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats, new CleanedTransactionMetadata, -1)
+      cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats, new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
     )
   }
 
@@ -1355,10 +1358,40 @@ class LogCleanerTest extends Logging {
     val keys = LogTestUtils.keysInLog(log)
     val map = new FakeOffsetMap(Int.MaxValue)
     keys.foreach(k => map.put(key(k), Long.MaxValue))
+    val segments = log.logSegments.asScala.take(3).toSeq
     assertThrows(classOf[LogCleaningAbortedException], () =>
-      cleaner.cleanSegments(log, log.logSegments.asScala.take(3).toSeq, map, 0L, new CleanerStats(),
-        new CleanedTransactionMetadata, -1)
+      cleaner.cleanSegments(log, segments, map, 0L, new CleanerStats(),
+        new CleanedTransactionMetadata, -1, segments.last.readNextOffset)
     )
+  }
+
+  @Test
+  def testCleanSegmentsRetainingLastEmptyBatch(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    // append messages to the log until we have four segments
+    while (log.numberOfSegments < 4)
+      log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+    val keysFound = LogTestUtils.keysInLog(log)
+    assertEquals(0L until log.logEndOffset, keysFound)
+
+    // pretend all keys are deleted
+    val map = new FakeOffsetMap(Int.MaxValue)
+    keysFound.foreach(k => map.put(key(k), Long.MaxValue))
+
+    // clean the log
+    val segments = log.logSegments.asScala.take(3).toSeq
+    val stats = new CleanerStats()
+    cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata, -1, segments.last.readNextOffset)
+    assertEquals(2, log.logSegments.size)
+    assertEquals(1, log.logSegments.asScala.head.log.batches.asScala.size, "one batch should be retained in the cleaned segment")
+    val retainedBatch = log.logSegments.asScala.head.log.batches.asScala.head
+    assertEquals(log.logSegments.asScala.last.baseOffset - 1, retainedBatch.lastOffset, "the retained batch should be the last batch")
+    assertFalse(retainedBatch.iterator.hasNext,  "the retained batch should be an empty batch")
   }
 
   /**
@@ -1617,16 +1650,17 @@ class LogCleanerTest extends Logging {
     // Try to clean segment with offset overflow. This will trigger log split and the cleaning itself must abort.
     assertThrows(classOf[LogCleaningAbortedException], () =>
       cleaner.cleanSegments(log, Seq(segmentWithOverflow), offsetMap, 0L, new CleanerStats(),
-        new CleanedTransactionMetadata, -1)
+        new CleanedTransactionMetadata, -1, segmentWithOverflow.readNextOffset)
     )
     assertEquals(numSegmentsInitial + 1, log.logSegments.size)
     assertEquals(allKeys, LogTestUtils.keysInLog(log))
     assertFalse(LogTestUtils.hasOffsetOverflow(log))
 
     // Clean each segment now that split is complete.
+    val upperBoundOffset = log.logSegments.asScala.last.readNextOffset
     for (segmentToClean <- log.logSegments.asScala)
       cleaner.cleanSegments(log, List(segmentToClean), offsetMap, 0L, new CleanerStats(),
-        new CleanedTransactionMetadata, -1)
+        new CleanedTransactionMetadata, -1, upperBoundOffset)
     assertEquals(expectedKeysAfterCleaning, LogTestUtils.keysInLog(log))
     assertFalse(LogTestUtils.hasOffsetOverflow(log))
     log.close()
@@ -1665,9 +1699,11 @@ class LogCleanerTest extends Logging {
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
 
+    val upperBoundOffset = log.activeSegment.baseOffset
+
     // clean the log
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
-      new CleanedTransactionMetadata, -1)
+      new CleanedTransactionMetadata, -1, upperBoundOffset)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     var cleanedKeys = LogTestUtils.keysInLog(log)
@@ -1683,7 +1719,7 @@ class LogCleanerTest extends Logging {
 
     // clean again
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
-      new CleanedTransactionMetadata, -1)
+      new CleanedTransactionMetadata, -1, upperBoundOffset)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
@@ -1700,7 +1736,7 @@ class LogCleanerTest extends Logging {
 
     // clean again
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
-      new CleanedTransactionMetadata, -1)
+      new CleanedTransactionMetadata, -1, upperBoundOffset)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
@@ -1722,7 +1758,7 @@ class LogCleanerTest extends Logging {
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
-      new CleanedTransactionMetadata, -1)
+      new CleanedTransactionMetadata, -1, upperBoundOffset)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
@@ -1740,7 +1776,7 @@ class LogCleanerTest extends Logging {
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
-      new CleanedTransactionMetadata, -1)
+      new CleanedTransactionMetadata, -1, upperBoundOffset)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
@@ -1758,7 +1794,7 @@ class LogCleanerTest extends Logging {
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
-      new CleanedTransactionMetadata, -1)
+      new CleanedTransactionMetadata, -1, upperBoundOffset)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
@@ -2056,7 +2092,7 @@ class LogCleanerTest extends Logging {
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
       producerStateManagerConfig = producerStateManagerConfig,
-      producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+      producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true

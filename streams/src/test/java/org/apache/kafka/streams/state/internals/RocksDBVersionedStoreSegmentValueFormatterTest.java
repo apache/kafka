@@ -270,8 +270,8 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
     public void shouldGetTimestamps(final TestCase testCase) {
         final byte[] segmentValue = buildSegmentWithInsertLatest(testCase).serialize();
 
-        assertThat(RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(segmentValue), equalTo(testCase.nextTimestamp));
-        assertThat(RocksDBVersionedStoreSegmentValueFormatter.getMinTimestamp(segmentValue), equalTo(testCase.minTimestamp));
+        assertThat(RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(segmentValue), equalTo(testCase.nextTimestamp));
+        assertThat(RocksDBVersionedStoreSegmentValueFormatter.minTimestamp(segmentValue), equalTo(testCase.minTimestamp));
     }
 
     @ParameterizedTest

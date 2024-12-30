@@ -75,18 +75,18 @@ public class SubscriptionReceiveProcessorSupplier<K, KO>
 
             @Override
             public void process(final Record<KO, SubscriptionWrapper<K>> record) {
-                if (record.key() == null && !SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE.equals(record.value().getInstruction())) {
+                if (record.key() == null && !SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE.equals(record.value().instruction())) {
                     dropRecord();
                     return;
                 }
-                if (record.value().getVersion() > SubscriptionWrapper.CURRENT_VERSION) {
+                if (record.value().version() > SubscriptionWrapper.CURRENT_VERSION) {
                     //Guard against modifications to SubscriptionWrapper. Need to ensure that there is compatibility
                     //with previous versions to enable rolling upgrades. Must develop a strategy for upgrading
                     //from older SubscriptionWrapper versions to newer versions.
                     throw new UnsupportedVersionException("SubscriptionWrapper is of an incompatible version.");
                 }
                 context().forward(
-                    record.withKey(new CombinedKey<>(record.key(), record.value().getPrimaryKey()))
+                    record.withKey(new CombinedKey<>(record.key(), record.value().primaryKey()))
                         .withValue(inferChange(record))
                         .withTimestamp(record.timestamp())
                 );
@@ -101,14 +101,14 @@ public class SubscriptionReceiveProcessorSupplier<K, KO>
             }
 
             private Change<ValueAndTimestamp<SubscriptionWrapper<K>>> inferBasedOnState(final Record<KO, SubscriptionWrapper<K>> record) {
-                final Bytes subscriptionKey = keySchema.toBytes(record.key(), record.value().getPrimaryKey());
+                final Bytes subscriptionKey = keySchema.toBytes(record.key(), record.value().primaryKey());
 
                 final ValueAndTimestamp<SubscriptionWrapper<K>> newValue = ValueAndTimestamp.make(record.value(), record.timestamp());
                 final ValueAndTimestamp<SubscriptionWrapper<K>> oldValue = store.get(subscriptionKey);
 
                 //This store is used by the prefix scanner in ForeignTableJoinProcessorSupplier
-                if (record.value().getInstruction().equals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE) ||
-                    record.value().getInstruction().equals(SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE)) {
+                if (record.value().instruction().equals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE) ||
+                    record.value().instruction().equals(SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE)) {
                     store.delete(subscriptionKey);
                 } else {
                     store.put(subscriptionKey, newValue);

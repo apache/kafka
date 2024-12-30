@@ -21,7 +21,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition, consumer_group
 from kafkatest.services.verifiable_client import VerifiableClientMixin
-from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_0_10_0_0
+from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_4_0_0
 
 
 class ConsumerState:
@@ -231,10 +231,10 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         }
 
     def __init__(self, context, num_nodes, kafka, topic, group_id,
-                 static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
+                 static_membership=False, max_messages=-1, session_timeout_sec=0, enable_autocommit=False,
                  assignment_strategy=None, group_protocol=None, group_remote_assignor=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
-                 on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
+                 on_record_consumed=None, reset_policy="earliest", verify_offsets=True, prop_file=""):
         """
         :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
         """
@@ -251,9 +251,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.session_timeout_sec = session_timeout_sec
         self.enable_autocommit = enable_autocommit
         self.assignment_strategy = assignment_strategy
-        self.group_protocol = group_protocol
-        self.group_remote_assignor = group_remote_assignor
-        self.prop_file = ""
+        self.prop_file = prop_file
         self.stop_timeout_sec = stop_timeout_sec
         self.on_record_consumed = on_record_consumed
         self.verify_offsets = verify_offsets
@@ -316,10 +314,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             assert node.version >= V_2_3_0, \
                 "Version %s does not support static membership (must be 2.3 or higher)" % str(node.version)
             node.group_instance_id = self.group_id + "-instance-" + str(idx)
-
-        if self.assignment_strategy:
-            assert node.version >= V_0_10_0_0, \
-                "Version %s does not setting an assignment strategy (must be 0.10.0 or higher)" % str(node.version)
 
         cmd = self.start_cmd(node)
         self.logger.debug("VerifiableConsumer %d command: %s" % (idx, cmd))
@@ -416,11 +410,17 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         if self.enable_autocommit:
             cmd += " --enable-autocommit "
 
-        cmd += " --reset-policy %s --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
-               (self.reset_policy, self.group_id, self.topic,
-                self.kafka.bootstrap_servers(self.security_config.security_protocol),
-                self.session_timeout_sec*1000)
-               
+        if node.version < V_4_0_0:
+            cmd += " --broker-list %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
+        else:
+            cmd += " --bootstrap-server %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
+
+        cmd += " --reset-policy %s --group-id %s --topic %s" % \
+                (self.reset_policy, self.group_id, self.topic)
+
+        if self.session_timeout_sec > 0:
+            cmd += " --session-timeout %s" % self.session_timeout_sec*1000
+
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
 

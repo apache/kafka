@@ -66,7 +66,7 @@ public class MockNetworkChannel implements NetworkChannel {
         Iterator<RaftRequest.Outbound> iterator = sendQueue.iterator();
         while (iterator.hasNext()) {
             RaftRequest.Outbound request = iterator.next();
-            if (!apiKeyFilter.isPresent() || request.data().apiKey() == apiKeyFilter.get().id) {
+            if (apiKeyFilter.isEmpty() || request.data().apiKey() == apiKeyFilter.get().id) {
                 awaitingResponse.put(request.correlationId(), request);
                 requests.add(request);
                 iterator.remove();

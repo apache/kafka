@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.log.UnifiedLog
+import kafka.log.{OffsetResultHolder, UnifiedLog}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
@@ -57,10 +57,10 @@ class LogOffsetTest extends BaseRequestTest {
 
   @deprecated("ListOffsetsRequest V0", since = "")
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testGetOffsetsForUnknownTopic(quorum: String): Unit = {
     val topicPartition = new TopicPartition("foo", 0)
-    val request = ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false)
+    val request = ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.LATEST_TIMESTAMP, 10).asJava).build(0)
     val response = sendListOffsetsRequest(request)
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, findPartition(response.topics.asScala, topicPartition).errorCode)
@@ -68,7 +68,7 @@ class LogOffsetTest extends BaseRequestTest {
 
   @deprecated("ListOffsetsRequest V0", since = "")
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testGetOffsetsAfterDeleteRecords(quorum: String): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
@@ -94,7 +94,7 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testFetchOffsetByTimestampForMaxTimestampAfterTruncate(quorum: String): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
@@ -106,17 +106,17 @@ class LogOffsetTest extends BaseRequestTest {
 
     log.updateHighWatermark(log.logEndOffset)
 
-    val firstOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
+    val firstOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP).timestampAndOffsetOpt
     assertEquals(19L, firstOffset.get.offset)
     assertEquals(19L, firstOffset.get.timestamp)
 
     log.truncateTo(0)
 
-    assertEquals(Option.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
+    assertEquals(Option.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP).timestampAndOffsetOpt)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testFetchOffsetByTimestampForMaxTimestampWithUnorderedTimestamps(quorum: String): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
@@ -128,14 +128,14 @@ class LogOffsetTest extends BaseRequestTest {
 
     log.updateHighWatermark(log.logEndOffset)
 
-    val maxTimestampOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
+    val maxTimestampOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP).timestampAndOffsetOpt
     assertEquals(7L, log.logEndOffset)
     assertEquals(5L, maxTimestampOffset.get.offset)
     assertEquals(6L, maxTimestampOffset.get.timestamp)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testGetOffsetsBeforeLatestTime(quorum: String): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
@@ -168,7 +168,7 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testEmptyLogsGetOffsets(quorum: String): Unit = {
     val random = new Random
     val topic = "kafka-"
@@ -192,7 +192,7 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testFetchOffsetByTimestampForMaxTimestampWithEmptyLog(quorum: String): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
@@ -201,12 +201,12 @@ class LogOffsetTest extends BaseRequestTest {
     log.updateHighWatermark(log.logEndOffset)
 
     assertEquals(0L, log.logEndOffset)
-    assertEquals(Option.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
+    assertEquals(OffsetResultHolder(None), log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
   }
 
   @deprecated("legacyFetchOffsetsBefore", since = "")
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testGetOffsetsBeforeNow(quorum: String): Unit = {
     val random = new Random
     val topic = "kafka-"
@@ -236,7 +236,7 @@ class LogOffsetTest extends BaseRequestTest {
 
   @deprecated("legacyFetchOffsetsBefore", since = "")
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testGetOffsetsBeforeEarliestTime(quorum: String): Unit = {
     val random = new Random
     val topic = "kafka-"
@@ -250,23 +250,21 @@ class LogOffsetTest extends BaseRequestTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush(false)
 
-    for (timestamp <- Seq(ListOffsetsRequest.EARLIEST_TIMESTAMP, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP)) {
-      val offsets = log.legacyFetchOffsetsBefore(timestamp, 10)
-      assertEquals(Seq(0L), offsets)
+    val offsets = log.legacyFetchOffsetsBefore(ListOffsetsRequest.EARLIEST_TIMESTAMP, 10)
+    assertEquals(Seq(0L), offsets)
 
-      TestUtils.waitUntilTrue(() => isLeaderLocalOnBroker(topic, topicPartition.partition, broker),
-        "Leader should be elected")
-      val request = ListOffsetsRequest.Builder.forReplica(0, 0)
-        .setTargetTimes(buildTargetTimes(topicPartition, timestamp, 10).asJava).build()
-      val consumerOffsets = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).oldStyleOffsets.asScala
-      assertEquals(Seq(0L), consumerOffsets)
-    }
+    TestUtils.waitUntilTrue(() => isLeaderLocalOnBroker(topic, topicPartition.partition, broker),
+      "Leader should be elected")
+    val request = ListOffsetsRequest.Builder.forReplica(0, 0)
+      .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.EARLIEST_TIMESTAMP, 10).asJava).build()
+    val consumerOffsets = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).oldStyleOffsets.asScala
+    assertEquals(Seq(0L), consumerOffsets)
   }
 
   /* We test that `fetchOffsetsBefore` works correctly if `LogSegment.size` changes after each invocation (simulating
    * a race condition) */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testFetchOffsetsBeforeWithChangingSegmentSize(quorum: String): Unit = {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val logSegment: LogSegment = mock(classOf[LogSegment])
@@ -282,7 +280,7 @@ class LogOffsetTest extends BaseRequestTest {
   /* We test that `fetchOffsetsBefore` works correctly if `Log.logSegments` content and size are
    * different (simulating a race condition) */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testFetchOffsetsBeforeWithChangingSegments(quorum: String): Unit = {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val logSegment: LogSegment = mock(classOf[LogSegment])

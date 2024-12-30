@@ -19,7 +19,6 @@ package kafka.server
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
-import kafka.api.LeaderAndIsr
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
@@ -33,15 +32,13 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion, NodeToControllerChannelManager}
 import org.apache.kafka.server.util.Scheduler
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-import scala.compat.java8.OptionConverters._
-import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 /**
  * Handles updating the ISR by sending AlterPartition requests to the controller (as of 2.7) or by updating ZK directly
@@ -284,7 +281,7 @@ class DefaultAlterPartitionManager(
         val partitionData = new AlterPartitionRequestData.PartitionData()
           .setPartitionIndex(item.topicIdPartition.partition)
           .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
-          .setNewIsrWithEpochs(item.leaderAndIsr.isrWithBrokerEpoch.asJava)
+          .setNewIsrWithEpochs(item.leaderAndIsr.isrWithBrokerEpoch)
           .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
 
         if (metadataVersion.isLeaderRecoverySupported) {
@@ -330,13 +327,13 @@ class DefaultAlterPartitionManager(
               val apiError = Errors.forCode(partition.errorCode)
               debug(s"Controller successfully handled AlterPartition request for $tp: $partition")
               if (apiError == Errors.NONE) {
-                LeaderRecoveryState.optionalOf(partition.leaderRecoveryState).asScala match {
+                LeaderRecoveryState.optionalOf(partition.leaderRecoveryState).toScala match {
                   case Some(leaderRecoveryState) =>
                     partitionResponses(tp) = Right(
-                      LeaderAndIsr(
+                      new LeaderAndIsr(
                         partition.leaderId,
                         partition.leaderEpoch,
-                        partition.isr.asScala.toList.map(_.toInt),
+                        partition.isr,
                         leaderRecoveryState,
                         partition.partitionEpoch
                       )

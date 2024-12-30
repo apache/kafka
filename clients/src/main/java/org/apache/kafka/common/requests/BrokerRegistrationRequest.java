@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.Iterator;
 
 public class BrokerRegistrationRequest extends AbstractRequest {
 
@@ -47,16 +46,10 @@ public class BrokerRegistrationRequest extends AbstractRequest {
         @Override
         public BrokerRegistrationRequest build(short version) {
             if (version < 4) {
-                // Workaround for KAFKA-17011: for BrokerRegistrationRequest versions older than 4,
-                // translate minSupportedVersion = 0 to minSupportedVersion = 1.
+                // Workaround for KAFKA-17492: for BrokerRegistrationRequest versions older than 4,
+                // remove features with minSupportedVersion = 0.
                 BrokerRegistrationRequestData newData = data.duplicate();
-                for (Iterator<BrokerRegistrationRequestData.Feature> iter = newData.features().iterator();
-                     iter.hasNext(); ) {
-                    BrokerRegistrationRequestData.Feature feature = iter.next();
-                    if (feature.minSupportedVersion() == 0) {
-                        feature.setMinSupportedVersion((short) 1);
-                    }
-                }
+                newData.features().removeIf(feature -> feature.minSupportedVersion() == 0);
                 return new BrokerRegistrationRequest(newData, version);
             } else {
                 return new BrokerRegistrationRequest(data, version);

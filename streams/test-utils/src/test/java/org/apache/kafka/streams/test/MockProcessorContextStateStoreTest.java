@@ -22,6 +22,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
@@ -49,6 +51,8 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class MockProcessorContextStateStoreTest {
 
@@ -151,7 +155,7 @@ public class MockProcessorContextStateStoreTest {
         return values.stream();
     }
 
-    @ParameterizedTest(name = "builder = {0}, timestamped = {1}, caching = {2}, logging = {3}")
+    @ParameterizedTest
     @MethodSource(value = "parameters")
     public void shouldEitherInitOrThrow(final StoreBuilder<StateStore> builder,
                                         final boolean timestamped,
@@ -174,7 +178,12 @@ public class MockProcessorContextStateStoreTest {
                     () -> store.init(context.getStateStoreContext(), store)
                 );
             } else {
-                store.init(context.getStateStoreContext(), store);
+                final InternalProcessorContext internalProcessorContext = mock(InternalProcessorContext.class);
+                when(internalProcessorContext.taskId()).thenReturn(context.taskId());
+                when(internalProcessorContext.stateDir()).thenReturn(stateDir);
+                when(internalProcessorContext.metrics()).thenReturn((StreamsMetricsImpl) context.metrics());
+                when(internalProcessorContext.appConfigs()).thenReturn(context.appConfigs());
+                store.init(internalProcessorContext, store);
                 store.close();
             }
         } finally {

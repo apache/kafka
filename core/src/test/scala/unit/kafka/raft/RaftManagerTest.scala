@@ -34,7 +34,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.Endpoints
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.FaultHandler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -46,29 +46,6 @@ import scala.util.Using
 import scala.jdk.CollectionConverters._
 
 class RaftManagerTest {
-  private def createZkBrokerConfig(
-    migrationEnabled: Boolean,
-    nodeId: Int,
-    logDir: Seq[Path],
-    metadataDir: Option[Path]
-  ): KafkaConfig = {
-    val props = new Properties
-    logDir.foreach { value =>
-      props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, value.toString)
-    }
-    if (migrationEnabled) {
-      metadataDir.foreach { value =>
-        props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, value.toString)
-      }
-      props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
-      props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
-      props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    }
-
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
-    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, nodeId.toString)
-    new KafkaConfig(props)
-  }
 
   private def createConfig(
     processRoles: Set[ProcessRole],
@@ -128,8 +105,8 @@ class RaftManagerTest {
       Time.SYSTEM,
       new Metrics(Time.SYSTEM),
       Option.empty,
-      CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
-      QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+      CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
+      QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
       endpoints,
       mock(classOf[FaultHandler])
     )
@@ -243,61 +220,6 @@ class RaftManagerTest {
     } else {
       assertFalse(Files.exists(metadataLogDir.get.resolve("__cluster_metadata-0")))
     }
-  }
-
-  @Test
-  def testMigratingZkBrokerDeletesMetadataLog(): Unit = {
-    val logDirs = Seq(TestUtils.tempDir().toPath)
-    val metadataLogDir = Some(TestUtils.tempDir().toPath)
-    val nodeId = 1
-    val config = createZkBrokerConfig(migrationEnabled = true, nodeId, logDirs, metadataLogDir)
-    createMetadataLog(config)
-
-    KafkaRaftManager.maybeDeleteMetadataLogDir(config)
-    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = false)
-  }
-
-  @Test
-  def testNonMigratingZkBrokerDoesNotDeleteMetadataLog(): Unit = {
-    val logDirs = Seq(TestUtils.tempDir().toPath)
-    val metadataLogDir = Some(TestUtils.tempDir().toPath)
-    val nodeId = 1
-
-    val config = createZkBrokerConfig(migrationEnabled = false, nodeId, logDirs, metadataLogDir)
-
-    // Create the metadata log dir directly as if the broker was previously in migration mode.
-    // This simulates a misconfiguration after downgrade
-    Files.createDirectory(metadataLogDir.get.resolve("__cluster_metadata-0"))
-
-    val err = assertThrows(classOf[RuntimeException], () => KafkaRaftManager.maybeDeleteMetadataLogDir(config),
-      "Should have not deleted the metadata log")
-    assertEquals("Not deleting metadata log dir since migrations are not enabled.", err.getMessage)
-
-    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = true)
-  }
-
-  @Test
-  def testZkBrokerDoesNotDeleteSeparateLogDirs(): Unit = {
-    val logDirs = Seq(TestUtils.tempDir().toPath, TestUtils.tempDir().toPath)
-    val metadataLogDir = Some(TestUtils.tempDir().toPath)
-    val nodeId = 1
-    val config = createZkBrokerConfig(migrationEnabled = true, nodeId, logDirs, metadataLogDir)
-    createMetadataLog(config)
-
-    KafkaRaftManager.maybeDeleteMetadataLogDir(config)
-    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = false)
-  }
-
-  @Test
-  def testZkBrokerDoesNotDeleteSameLogDir(): Unit = {
-    val logDirs = Seq(TestUtils.tempDir().toPath, TestUtils.tempDir().toPath)
-    val metadataLogDir = logDirs.headOption
-    val nodeId = 1
-    val config = createZkBrokerConfig(migrationEnabled = true, nodeId, logDirs, metadataLogDir)
-    createMetadataLog(config)
-
-    KafkaRaftManager.maybeDeleteMetadataLogDir(config)
-    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = false)
   }
 
   @Test

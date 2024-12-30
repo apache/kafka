@@ -17,12 +17,12 @@
 
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.test.ClusterConfig;
-
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.Feature;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -37,40 +37,34 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
-import static kafka.test.annotation.Type.CO_KRAFT;
-import static kafka.test.annotation.Type.KRAFT;
-import static kafka.test.annotation.Type.ZK;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
+import static org.apache.kafka.common.test.api.Type.CO_KRAFT;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 
 /**
  * The old test framework {@link kafka.api.BaseConsumerTest#getTestQuorumAndGroupProtocolParametersAll} test for the following cases:
  * <ul>
- *     <li>(ZK / KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 2 cases</li>
  *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (classic group protocol) = 1 case</li>
  *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (consumer group protocol) = 1 case</li>
  * </ul>
  * <p>
  * The new test framework run seven cases for the following cases:
  * <ul>
- *     <li>(ZK / KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 3 cases</li>
+ *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 2 cases</li>
  *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=true) with (classic group protocol) = 2 cases</li>
  *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=true) with (consumer group protocol) = 2 cases</li>
  * </ul>
  * <p>
  * We can reduce the number of cases as same as the old test framework by using the following methods:
  * <ul>
- *     <li>{@link #forConsumerGroupCoordinator} for the case of (consumer group protocol)</li>
  *     <li>(CO_KRAFT servers) with (group.coordinator.new.enable=true) with (classic / consumer group protocols) = 2 cases</li>
  * </ul>
  * <ul>
- *     <li>{@link #forClassicGroupCoordinator} for the case of (classic group protocol)</li>
- *     <li>(ZK / KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 2 cases</li>
+ *     <li>(KRAFT server) with (group.coordinator.new.enable=false) with (classic group protocol) = 1 case</li>
  * </ul>
  */
 class ConsumerGroupCommandTestUtils {
@@ -79,34 +73,20 @@ class ConsumerGroupCommandTestUtils {
     }
 
     static List<ClusterConfig> generator() {
-        return Stream.concat(forConsumerGroupCoordinator().stream(), forClassicGroupCoordinator().stream())
-                .collect(Collectors.toList());
-    }
-
-    static List<ClusterConfig> forConsumerGroupCoordinator() {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
-        serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
-        serverProperties.put(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer");
+        serverProperties.put(GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "1000");
+        serverProperties.put(CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "500");
+        serverProperties.put(CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "500");
 
         return Collections.singletonList(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(CO_KRAFT))
                 .setServerProperties(serverProperties)
-                .setTags(Collections.singletonList("consumerGroupCoordinator"))
-                .build());
-    }
-
-    static List<ClusterConfig> forClassicGroupCoordinator() {
-        Map<String, String> serverProperties = new HashMap<>();
-        serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
-        serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
-        serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false");
-
-        return Collections.singletonList(ClusterConfig.defaultBuilder()
-                .setTypes(Stream.of(ZK, KRAFT).collect(Collectors.toSet()))
-                .setServerProperties(serverProperties)
-                .setTags(Collections.singletonList("classicGroupCoordinator"))
+                .setTags(Collections.singletonList("kraftGroupCoordinator"))
+                .setFeatures(Utils.mkMap(
+                    Utils.mkEntry(Feature.TRANSACTION_VERSION, (short) 2),
+                    Utils.mkEntry(Feature.GROUP_VERSION, (short) 1)))
                 .build());
     }
 

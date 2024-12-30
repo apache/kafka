@@ -33,6 +33,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
@@ -52,7 +53,7 @@ import java.util.Set;
  * Instances returned from the {@code create} methods of this interface are guaranteed to be thread safe.
  * However, the {@link KafkaFuture KafkaFutures} returned from request methods are executed
  * by a single thread so it is important that any code which executes on that thread when they complete
- * (using {@link KafkaFuture#thenApply(KafkaFuture.Function)}, for example) doesn't block
+ * (using {@link KafkaFuture#thenApply(KafkaFuture.BaseFunction)}, for example) doesn't block
  * for too long. If necessary, processing of results should be passed to another thread.
  * <p>
  * The operations exposed by Admin follow a consistent pattern:
@@ -446,7 +447,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
-     * @param resources The resources (topic and broker resource types are currently supported)
+     * @param resources See relevant type {@link ConfigResource.Type}
      * @return The DescribeConfigsResult
      */
     default DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources) {
@@ -464,48 +465,26 @@ public interface Admin extends AutoCloseable {
      * <p>
      * Config entries where isReadOnly() is true cannot be updated.
      * <p>
+     * The different behavior of nonexistent resource:
+     * <ul>
+     *     <li>{@link ConfigResource.Type#BROKER}:
+     *     will throw a {@link org.apache.kafka.common.errors.TimeoutException} exception</li>
+     *     <li>{@link ConfigResource.Type#TOPIC}:
+     *     will throw a {@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException} exception</li>
+     *     <li>{@link ConfigResource.Type#GROUP}:
+     *     just return default configs even if the target group is nonexistent</li>
+     *     <li>{@link ConfigResource.Type#BROKER_LOGGER}:
+     *     will throw a {@link org.apache.kafka.common.errors.TimeoutException} exception</li>
+     *     <li>{@link ConfigResource.Type#CLIENT_METRICS}: will return empty configs</li>
+     * </ul>
+     * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
-     * @param resources The resources (topic and broker resource types are currently supported)
+     * @param resources See relevant type {@link ConfigResource.Type}
      * @param options   The options to use when describing configs
      * @return The DescribeConfigsResult
      */
     DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options);
-
-    /**
-     * Update the configuration for the specified resources with the default options.
-     * <p>
-     * This is a convenience method for {@link #alterConfigs(Map, AlterConfigsOptions)} with default options.
-     * See the overload for more details.
-     * <p>
-     * This operation is supported by brokers with version 0.11.0.0 or higher.
-     *
-     * @param configs The resources with their configs (topic is the only resource type with configs that can
-     *                be updated currently)
-     * @return The AlterConfigsResult
-     * @deprecated Since 2.3. Use {@link #incrementalAlterConfigs(Map)}.
-     */
-    @Deprecated
-    default AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs) {
-        return alterConfigs(configs, new AlterConfigsOptions());
-    }
-
-    /**
-     * Update the configuration for the specified resources with the default options.
-     * <p>
-     * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
-     * a particular resource are updated atomically.
-     * <p>
-     * This operation is supported by brokers with version 0.11.0.0 or higher.
-     *
-     * @param configs The resources with their configs (topic is the only resource type with configs that can
-     *                be updated currently)
-     * @param options The options to use when describing configs
-     * @return The AlterConfigsResult
-     * @deprecated Since 2.3. Use {@link #incrementalAlterConfigs(Map, AlterConfigsOptions)}.
-     */
-    @Deprecated
-    AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
 
     /**
      * Incrementally updates the configuration for the specified resources with default options.
@@ -1007,6 +986,26 @@ public interface Admin extends AutoCloseable {
     default DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions) {
         return deleteConsumerGroupOffsets(groupId, partitions, new DeleteConsumerGroupOffsetsOptions());
     }
+
+    /**
+     * List the groups available in the cluster with the default options.
+     *
+     * <p>This is a convenience method for {@link #listGroups(ListGroupsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return The ListGroupsResult.
+     */
+    default ListGroupsResult listGroups() {
+        return listGroups(new ListGroupsOptions());
+    }
+
+    /**
+     * List the groups available in the cluster.
+     *
+     * @param options The options to use when listing the groups.
+     * @return The ListGroupsResult.
+     */
+    ListGroupsResult listGroups(ListGroupsOptions options);
 
     /**
      * Elect a replica as leader for topic partitions.
@@ -1791,24 +1790,61 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * List the share groups available in the cluster.
+     * Describe some classic groups in the cluster.
      *
-     * @param options The options to use when listing the share groups.
-     * @return The ListShareGroupsResult.
+     * @param groupIds The IDs of the groups to describe.
+     * @param options  The options to use when describing the groups.
+     * @return The DescribeClassicGroupsResult.
      */
-    ListShareGroupsResult listShareGroups(ListShareGroupsOptions options);
+    DescribeClassicGroupsResult describeClassicGroups(Collection<String> groupIds,
+                                                      DescribeClassicGroupsOptions options);
 
     /**
-     * List the share groups available in the cluster with the default options.
+     * Describe some classic groups in the cluster, with the default options.
      * <p>
-     * This is a convenience method for {@link #listShareGroups(ListShareGroupsOptions)} with default options.
-     * See the overload for more details.
+     * This is a convenience method for {@link #describeClassicGroups(Collection, DescribeClassicGroupsOptions)}
+     * with default options. See the overload for more details.
      *
-     * @return The ListShareGroupsResult.
+     * @param groupIds The IDs of the groups to describe.
+     * @return The DescribeClassicGroupsResult.
      */
-    default ListShareGroupsResult listShareGroups() {
-        return listShareGroups(new ListShareGroupsOptions());
+    default DescribeClassicGroupsResult describeClassicGroups(Collection<String> groupIds) {
+        return describeClassicGroups(groupIds, new DescribeClassicGroupsOptions());
     }
+
+    /**
+     * Add the provided application metric for subscription.
+     * This metric will be added to this client's metrics
+     * that are available for subscription and sent as
+     * telemetry data to the broker.
+     * The provided metric must map to an OTLP metric data point
+     * type in the OpenTelemetry v1 metrics protobuf message types.
+     * Specifically, the metric should be one of the following:
+     * <ul>
+     *  <li>
+     *     `Sum`: Monotonic total count meter (Counter). Suitable for metrics like total number of X, e.g., total bytes sent.
+     *  </li>
+     *  <li>
+     *     `Gauge`: Non-monotonic current value meter (UpDownCounter). Suitable for metrics like current value of Y, e.g., current queue count.
+     *  </li>
+     * </ul>
+     * Metrics not matching these types are silently ignored.
+     * Executing this method for a previously registered metric is a benign operation and results in updating that metrics entry.
+     *
+     * @param metric The application metric to register
+     */
+    void registerMetricForSubscription(KafkaMetric metric);
+
+    /**
+     * Remove the provided application metric for subscription.
+     * This metric is removed from this client's metrics
+     * and will not be available for subscription any longer.
+     * Executing this method with a metric that has not been registered is a
+     * benign operation and does not result in any action taken (no-op).
+     *
+     * @param metric The application metric to remove
+     */
+    void unregisterMetricFromSubscription(KafkaMetric metric);
 
     /**
      * Get the metrics kept by the adminClient

@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 
 import javax.crypto.Mac;
@@ -59,6 +60,8 @@ import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
  * Manages DelegationTokens.
  */
 public class DelegationTokenControlManager {
+    private static final int MAX_RECORDS_PER_EXPIRATION = 1000;
+
     private final Time time = Time.SYSTEM;
 
     static class Builder {
@@ -95,6 +98,7 @@ public class DelegationTokenControlManager {
 
         DelegationTokenControlManager build() {
             if (logContext == null) logContext = new LogContext();
+            if (tokenCache == null) tokenCache = new DelegationTokenCache(Collections.emptySet());
             return new DelegationTokenControlManager(
               logContext,
               tokenCache,
@@ -188,8 +192,8 @@ public class DelegationTokenControlManager {
             maxLifeTime = Math.min(maxLifeTime, requestData.maxLifetimeMs());
         }
 
-        long maxTimestamp = now + maxLifeTime;
-        long expiryTimestamp = Math.min(maxTimestamp, now + tokenDefaultRenewLifetimeMs);
+        long maxTimestamp = sum(now, maxLifeTime);
+        long expiryTimestamp = Math.min(maxTimestamp, sum(now, tokenDefaultRenewLifetimeMs));
 
         String tokenId = Uuid.randomUuid().toString();
 
@@ -302,10 +306,6 @@ public class DelegationTokenControlManager {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_NOT_FOUND.code()));
         }
 
-        if (myTokenInformation.maxTimestamp() < now || myTokenInformation.expiryTimestamp() < now) {
-            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_EXPIRED.code()));
-        }
-
         if (!allowedToRenew(myTokenInformation, context.principal())) {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_OWNER_MISMATCH.code()));
         }
@@ -313,12 +313,13 @@ public class DelegationTokenControlManager {
         if (requestData.expiryTimePeriodMs() < 0) { // expire immediately
             responseData
                 .setErrorCode(NONE.code())
-                .setExpiryTimestampMs(requestData.expiryTimePeriodMs());
+                .setExpiryTimestampMs(now);
             records.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
                 setTokenId(myTokenInformation.tokenId()), (short) 0));
-        } else {
-            long expiryTimestamp = Math.min(myTokenInformation.maxTimestamp(),
-                now + requestData.expiryTimePeriodMs());
+        } else if (myTokenInformation.maxTimestamp() < now || myTokenInformation.expiryTimestamp() < now) {
+            responseData.setErrorCode(DELEGATION_TOKEN_EXPIRED.code());
+        }  else {
+            long expiryTimestamp = Math.min(myTokenInformation.maxTimestamp(), sum(now, requestData.expiryTimePeriodMs()));
 
             responseData
                 .setErrorCode(NONE.code())
@@ -333,9 +334,9 @@ public class DelegationTokenControlManager {
     }
 
     // Periodic call to remove expired DelegationTokens
-    public List<ApiMessageAndVersion> sweepExpiredDelegationTokens() {
+    public ControllerResult<Boolean> sweepExpiredDelegationTokens() {
         long now = time.milliseconds();
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = new ArrayList<>(0);
 
         for (TokenInformation oldTokenInformation: tokenCache.tokens()) {
             if ((oldTokenInformation.maxTimestamp() < now) ||
@@ -344,9 +345,12 @@ public class DelegationTokenControlManager {
                     oldTokenInformation.tokenId(), oldTokenInformation.ownerAsString());
                 records.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
                     setTokenId(oldTokenInformation.tokenId()), (short) 0));
+                if (records.size() >= MAX_RECORDS_PER_EXPIRATION) {
+                    return ControllerResult.of(records, true);
+                }
             }
         }
-        return records;
+        return ControllerResult.of(records, false);
     }
 
     public void replay(DelegationTokenRecord record) {
@@ -355,5 +359,9 @@ public class DelegationTokenControlManager {
 
     public void replay(RemoveDelegationTokenRecord record) {
         log.info("Replayed RemoveDelegationTokenRecord for {}.", record.tokenId());
+    }
+
+    private long sum(long now, long duration) {
+        return now > Long.MAX_VALUE - duration ? Long.MAX_VALUE : now + duration;
     }
 }

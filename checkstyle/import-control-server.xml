@@ -99,4 +99,8 @@
     <allow pkg="org.apache.kafka.server.authorizer" />
   </subpackage>
 
+  <subpackage name="network">
+    <allow pkg="com.fasterxml.jackson" />
+  </subpackage>
+
 </import-control>

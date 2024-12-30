@@ -25,27 +25,6 @@
   </suppress>
   <suppress>
     <notes><![CDATA[
-      This older version of BCEL is only included in spotbugs.
-      CVE-2022-42920 is irrelevant for spotbugs
-      (https://github.com/spotbugs/spotbugs/discussions/2251),
-      This suppression will no longer be needed when spotbugs 4.7.4 is
-      released.
-    ]]></notes>
-    <cve>CVE-2022-42920</cve>
-  </suppress>
-  <suppress>
-    <notes><![CDATA[
-      This older version of Guava is only included in checkstyle.
-      CVE-2023-2976 and CVE-2020-8908 are irrelevant for checkstyle,
-      as it is not executed with elevated privileges.
-      This suppression will no longer be needed when checkstyle
-      is updated to 10.5.0 or later.
-    ]]></notes>
-    <cve>CVE-2020-8908</cve>
-    <cve>CVE-2023-2976</cve>
-  </suppress>
-  <suppress>
-    <notes><![CDATA[
       Kafka does not use CgiServlet
     ]]></notes>
     <cve>CVE-2023-36479</cve>

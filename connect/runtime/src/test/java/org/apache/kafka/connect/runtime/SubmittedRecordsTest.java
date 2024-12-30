@@ -342,7 +342,7 @@ public class SubmittedRecordsTest {
     }
 
     @SafeVarargs
-    private final void assertRemovedDeques(Map<String, ?>... partitions) {
+    private void assertRemovedDeques(Map<String, ?>... partitions) {
         for (Map<String, ?> partition : partitions) {
             assertFalse(submittedRecords.records.containsKey(partition), "Deque for partition " + partition + " should have been cleaned up from internal records map");
         }
@@ -365,7 +365,7 @@ public class SubmittedRecordsTest {
 
     @SafeVarargs
     @SuppressWarnings("varargs")
-    private final void assertMetadata(
+    private void assertMetadata(
             CommittableOffsets committableOffsets,
             int committableMessages,
             int uncommittableMessages,

@@ -24,7 +24,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.SensorAccessor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -98,7 +97,7 @@ public class SourceNodeTest {
     public void shouldExposeProcessMetrics() {
         final Metrics metrics = new Metrics();
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
+            new StreamsMetricsImpl(metrics, "test-client", "processId", new MockTime());
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(streamsMetrics);
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());

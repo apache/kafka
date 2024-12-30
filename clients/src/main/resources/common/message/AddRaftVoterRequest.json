@@ -21,20 +21,22 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+" },
-    { "name": "TimeoutMs", "type": "int32", "versions": "0+" },
+    { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+",
+      "about": "The cluster id." },
+    { "name": "TimeoutMs", "type": "int32", "versions": "0+",
+      "about": "The maximum time to wait for the request to complete before returning."},
     { "name": "VoterId", "type": "int32", "versions": "0+",
-      "about": "The replica id of the voter getting added to the topic partition" },
+      "about": "The replica id of the voter getting added to the topic partition." },
     { "name": "VoterDirectoryId", "type": "uuid", "versions": "0+",
-      "about": "The directory id of the voter getting added to the topic partition" },
+      "about": "The directory id of the voter getting added to the topic partition." },
     { "name": "Listeners", "type": "[]Listener", "versions": "0+",
-      "about": "The endpoints that can be used to communicate with the voter", "fields": [
+      "about": "The endpoints that can be used to communicate with the voter.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
-        "about": "The name of the endpoint" },
+        "about": "The name of the endpoint." },
       { "name": "Host", "type": "string", "versions": "0+",
-        "about": "The hostname" },
+        "about": "The hostname." },
       { "name": "Port", "type": "uint16", "versions": "0+",
-        "about": "The port" }
+        "about": "The port." }
     ]}
   ]
 }

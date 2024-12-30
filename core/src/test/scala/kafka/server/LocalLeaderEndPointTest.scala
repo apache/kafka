@@ -17,9 +17,7 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
@@ -32,7 +30,9 @@ import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.server.common.OffsetAndEpoch
+import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
+import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogDirFailureChannel}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
@@ -49,7 +49,7 @@ class LocalLeaderEndPointTest extends Logging {
   val topicId: Uuid = Uuid.randomUuid()
   val topic = "test"
   val topicPartition = new TopicPartition(topic, 5)
-  val sourceBroker: BrokerEndPoint = BrokerEndPoint(0, "localhost", 9092)
+  val sourceBroker: BrokerEndPoint = new BrokerEndPoint(0, "localhost", 9092)
   var replicaManager: ReplicaManager = _
   var endPoint: LeaderEndPoint = _
   var quotaManager: QuotaManagers = _
@@ -74,13 +74,13 @@ class LocalLeaderEndPointTest extends Logging {
       alterPartitionManager = alterPartitionManager)
     val partition = replicaManager.createPartition(topicPartition)
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-      new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+      new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
     // Make this replica the leader.
     val leaderAndIsrRequest = buildLeaderAndIsrRequest(leaderEpoch = 0)
     replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
     replicaManager.getPartitionOrException(topicPartition)
       .localLogOrException
-    endPoint = new LocalLeaderEndPoint(sourceBroker, config, replicaManager, QuotaFactory.UnboundedQuota)
+    endPoint = new LocalLeaderEndPoint(sourceBroker, config, replicaManager, QuotaFactory.UNBOUNDED_QUOTA)
   }
 
   @AfterEach

@@ -16,18 +16,21 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation._
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.api.ClusterInstance
+import org.apache.kafka.common.test.api._
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
-import org.apache.kafka.common.ShareGroupState
+import org.apache.kafka.common.GroupState
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup
 import org.apache.kafka.common.message.{ShareGroupDescribeRequestData, ShareGroupDescribeResponseData, ShareGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ShareGroupDescribeRequest, ShareGroupDescribeResponse}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -37,13 +40,15 @@ import scala.jdk.CollectionConverters._
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1)
+@ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
+  new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "")
+))
 @Tag("integration")
 class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest(
     serverProperties = Array(
-      new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+      new ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true")
     )
   )
   def testShareGroupDescribeIsInAccessibleWhenConfigsDisabled(): Unit = {
@@ -70,10 +75,10 @@ class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoord
 
   @ClusterTest(
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-      new ClusterConfigProperty(key = "group.share.enable", value = "true"),
-      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer,share"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG, value = "true"),
     )
   )
   def testShareGroupDescribe(): Unit = {
@@ -81,55 +86,59 @@ class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoord
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
 
-    val admin = cluster.createAdminClient()
-    TestUtils.createTopicWithAdminRaw(
-      admin = admin,
-      topic = "foo",
-      numPartitions = 3
-    )
-
-    val clientId = "client-id"
-    val clientHost = "/127.0.0.1"
-    val authorizedOperationsInt = Utils.to32BitField(
-      AclEntry.supportedOperations(ResourceType.GROUP).asScala
-        .map(_.code.asInstanceOf[JByte]).asJava)
-
-    // Add first group with one member.
-    var grp1Member1Response: ShareGroupHeartbeatResponseData = null
-    TestUtils.waitUntilTrue(() => {
-      grp1Member1Response = shareGroupHeartbeat(
-        groupId = "grp-1",
-        subscribedTopicNames = List("bar"),
-      )
-      grp1Member1Response.errorCode == Errors.NONE.code
-    }, msg = s"Could not join the group successfully. Last response $grp1Member1Response.")
-
-    for (version <- ApiKeys.SHARE_GROUP_DESCRIBE.oldestVersion() to ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)) {
-      val expected = List(
-        new DescribedGroup()
-          .setGroupId("grp-1")
-          .setGroupState(ShareGroupState.STABLE.toString)
-          .setGroupEpoch(1)
-          .setAssignmentEpoch(1)
-          .setAssignorName("simple")
-          .setAuthorizedOperations(authorizedOperationsInt)
-          .setMembers(List(
-            new ShareGroupDescribeResponseData.Member()
-              .setMemberId(grp1Member1Response.memberId)
-              .setMemberEpoch(grp1Member1Response.memberEpoch)
-              .setClientId(clientId)
-              .setClientHost(clientHost)
-              .setSubscribedTopicNames(List("bar").asJava)
-          ).asJava),
+    val admin = cluster.admin()
+    try {
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
       )
 
-      val actual = shareGroupDescribe(
-        groupIds = List("grp-1"),
-        includeAuthorizedOperations = true,
-        version = version.toShort,
-      )
+      val clientId = "client-id"
+      val clientHost = "/127.0.0.1"
+      val authorizedOperationsInt = Utils.to32BitField(
+        AclEntry.supportedOperations(ResourceType.GROUP).asScala
+          .map(_.code.asInstanceOf[JByte]).asJava)
 
-      assertEquals(expected, actual)
+      // Add first group with one member.
+      var grp1Member1Response: ShareGroupHeartbeatResponseData = null
+      TestUtils.waitUntilTrue(() => {
+        grp1Member1Response = shareGroupHeartbeat(
+          groupId = "grp-1",
+          subscribedTopicNames = List("bar"),
+        )
+        grp1Member1Response.errorCode == Errors.NONE.code
+      }, msg = s"Could not join the group successfully. Last response $grp1Member1Response.")
+
+      for (version <- ApiKeys.SHARE_GROUP_DESCRIBE.oldestVersion() to ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)) {
+        val expected = List(
+          new DescribedGroup()
+            .setGroupId("grp-1")
+            .setGroupState(GroupState.STABLE.toString)
+            .setGroupEpoch(1)
+            .setAssignmentEpoch(1)
+            .setAssignorName("simple")
+            .setAuthorizedOperations(authorizedOperationsInt)
+            .setMembers(List(
+              new ShareGroupDescribeResponseData.Member()
+                .setMemberId(grp1Member1Response.memberId)
+                .setMemberEpoch(grp1Member1Response.memberEpoch)
+                .setClientId(clientId)
+                .setClientHost(clientHost)
+                .setSubscribedTopicNames(List("bar").asJava)
+            ).asJava),
+        )
+
+        val actual = shareGroupDescribe(
+          groupIds = List("grp-1"),
+          includeAuthorizedOperations = true,
+          version = version.toShort,
+        )
+
+        assertEquals(expected, actual)
+      }
+    } finally {
+      admin.close()
     }
   }
 }

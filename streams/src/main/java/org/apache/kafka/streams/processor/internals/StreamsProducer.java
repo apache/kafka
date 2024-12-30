@@ -37,27 +37,20 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.KafkaClientSupplier;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
-import org.apache.kafka.streams.processor.TaskId;
 
 import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
 
 /**
  * {@code StreamsProducer} manages the producers within a Kafka Streams application.
@@ -71,75 +64,27 @@ public class StreamsProducer {
     private final Logger log;
     private final String logPrefix;
 
-    private final Map<String, Object> eosV2ProducerConfigs;
-    private final KafkaClientSupplier clientSupplier;
     private final ProcessingMode processingMode;
     private final Time time;
 
     private Producer<byte[], byte[]> producer;
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
+    private boolean closed = false;
     private double oldProducerTotalBlockedTime = 0;
+    // we have a single `StreamsProducer` per thread, and thus a single `sendException` instance,
+    // which we share across all tasks, ie, all `RecordCollectorImpl`
     private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
-    public StreamsProducer(final StreamsConfig config,
-                           final String threadId,
-                           final KafkaClientSupplier clientSupplier,
-                           final TaskId taskId,
-                           final UUID processId,
-                           final LogContext logContext,
-                           final Time time) {
-        Objects.requireNonNull(config, "config cannot be null");
-        Objects.requireNonNull(threadId, "threadId cannot be null");
-        this.clientSupplier = Objects.requireNonNull(clientSupplier, "clientSupplier cannot be null");
+    public StreamsProducer(final Producer<byte[], byte[]> producer,
+                           final ProcessingMode processingMode,
+                           final Time time,
+                           final LogContext logContext) {
+        this.producer = Objects.requireNonNull(producer, "producer cannot be null");
+        this.processingMode = Objects.requireNonNull(processingMode, "processingMode cannot be null");
+        this.time = Objects.requireNonNull(time, "time cannot be null");
         log = Objects.requireNonNull(logContext, "logContext cannot be null").logger(getClass());
         logPrefix = logContext.logPrefix().trim();
-        this.time = Objects.requireNonNull(time, "time");
-
-        processingMode = StreamsConfigUtils.processingMode(config);
-
-        final Map<String, Object> producerConfigs;
-        switch (processingMode) {
-            case AT_LEAST_ONCE: {
-                producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
-                eosV2ProducerConfigs = null;
-
-                break;
-            }
-            case EXACTLY_ONCE_ALPHA: {
-                producerConfigs = config.getProducerConfigs(
-                    getTaskProducerClientId(
-                        threadId,
-                        Objects.requireNonNull(taskId, "taskId cannot be null for exactly-once alpha")
-                    )
-                );
-
-                final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
-
-                eosV2ProducerConfigs = null;
-
-                break;
-            }
-            case EXACTLY_ONCE_V2: {
-                producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
-
-                final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-                producerConfigs.put(
-                    ProducerConfig.TRANSACTIONAL_ID_CONFIG,
-                    applicationId + "-" +
-                        Objects.requireNonNull(processId, "processId cannot be null for exactly-once v2") +
-                        "-" + threadId.split("-StreamThread-")[1]);
-
-                eosV2ProducerConfigs = producerConfigs;
-
-                break;
-            }
-            default:
-                throw new IllegalArgumentException("Unknown processing mode: " + processingMode);
-        }
-
-        producer = clientSupplier.getProducer(producerConfigs);
     }
 
     private String formatException(final String message) {
@@ -147,11 +92,15 @@ public class StreamsProducer {
     }
 
     boolean eosEnabled() {
-        return StreamsConfigUtils.eosEnabled(processingMode);
+        return processingMode == EXACTLY_ONCE_V2;
     }
 
     boolean transactionInFlight() {
         return transactionInFlight;
+    }
+
+    boolean isClosed() {
+        return closed;
     }
 
     /**
@@ -189,18 +138,18 @@ public class StreamsProducer {
         }
     }
 
-    public void resetProducer() {
-        if (processingMode != EXACTLY_ONCE_V2) {
-            throw new IllegalStateException("Expected eos-v2 to be enabled, but the processing mode was " + processingMode);
+    public void resetProducer(final Producer<byte[], byte[]> producer) {
+        if (!eosEnabled()) {
+            throw new IllegalStateException("Expected EOS to be enabled, but processing mode is " + processingMode);
         }
 
-        oldProducerTotalBlockedTime += totalBlockedTime(producer);
+        oldProducerTotalBlockedTime += totalBlockedTime(this.producer);
         final long start = time.nanoseconds();
         close();
         final long closeTime = time.nanoseconds() - start;
         oldProducerTotalBlockedTime += closeTime;
 
-        producer = clientSupplier.getProducer(eosV2ProducerConfigs);
+        this.producer = producer;
     }
 
     private double getMetricValue(final Map<MetricName, ? extends Metric> metrics,
@@ -295,17 +244,14 @@ public class StreamsProducer {
      * @throws IllegalStateException if EOS is disabled
      * @throws TaskMigratedException
      */
-    protected void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
+    public void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                      final ConsumerGroupMetadata consumerGroupMetadata) {
         if (!eosEnabled()) {
             throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
         maybeBeginTransaction();
         try {
-            // EOS-v2 assumes brokers are on version 2.5+ and thus can understand the full set of consumer group metadata
-            // Thus if we are using EOS-v1 and can't make this assumption, we must downgrade the request to include only the group id metadata
-            final ConsumerGroupMetadata maybeDowngradedGroupMetadata = processingMode == EXACTLY_ONCE_V2 ? consumerGroupMetadata : new ConsumerGroupMetadata(consumerGroupMetadata.groupId());
-            producer.sendOffsetsToTransaction(offsets, maybeDowngradedGroupMetadata);
+            producer.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
             producer.commitTransaction();
             transactionInFlight = false;
         } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException | InvalidPidMappingException error) {
@@ -379,6 +325,7 @@ public class StreamsProducer {
 
     void close() {
         producer.close();
+        closed = true;
         transactionInFlight = false;
         transactionInitialized = false;
     }

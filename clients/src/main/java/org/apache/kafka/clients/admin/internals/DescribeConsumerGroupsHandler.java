@@ -21,7 +21,7 @@ import org.apache.kafka.clients.admin.MemberAssignment;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -40,9 +40,7 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
-import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 
@@ -58,12 +56,15 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.admin.internals.AdminUtils.validAclOperations;
+
 public class DescribeConsumerGroupsHandler implements AdminApiHandler<CoordinatorKey, ConsumerGroupDescription> {
 
     private final boolean includeAuthorizedOperations;
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
     private final Set<String> useClassicGroupApi;
+    private final Map<String, String> groupIdNotFoundErrorMessages;
 
     public DescribeConsumerGroupsHandler(
         boolean includeAuthorizedOperations,
@@ -73,6 +74,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         this.log = logContext.logger(DescribeConsumerGroupsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
         this.useClassicGroupApi = new HashSet<>();
+        this.groupIdNotFoundErrorMessages = new HashMap<>();
     }
 
     private static Set<CoordinatorKey> buildKeySet(Collection<String> groupIds) {
@@ -220,7 +222,9 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                     groupMember.clientId(),
                     groupMember.clientHost(),
                     new MemberAssignment(convertAssignment(groupMember.assignment())),
-                    Optional.of(new MemberAssignment(convertAssignment(groupMember.targetAssignment())))
+                    Optional.of(new MemberAssignment(convertAssignment(groupMember.targetAssignment()))),
+                    Optional.of(groupMember.memberEpoch()),
+                    groupMember.memberType() == -1 ? Optional.empty() : Optional.of(groupMember.memberType() == 1)
                 ))
             );
 
@@ -231,9 +235,11 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                     memberDescriptions,
                     describedGroup.assignorName(),
                     GroupType.CONSUMER,
-                    ConsumerGroupState.parse(describedGroup.groupState()),
+                    GroupState.parse(describedGroup.groupState()),
                     coordinator,
-                    authorizedOperations
+                    authorizedOperations,
+                    Optional.of(describedGroup.groupEpoch()),
+                    Optional.of(describedGroup.assignmentEpoch())
                 );
             completed.put(groupIdKey, consumerGroupDescription);
         }
@@ -255,7 +261,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 handleError(
                     groupIdKey,
                     error,
-                    null,
+                    describedGroup.errorMessage(),
                     failed,
                     groupsToUnmap,
                     false
@@ -279,16 +285,21 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                         Optional.ofNullable(groupMember.groupInstanceId()),
                         groupMember.clientId(),
                         groupMember.clientHost(),
-                        new MemberAssignment(partitions)));
+                        new MemberAssignment(partitions),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty()));
                 }
                 final ConsumerGroupDescription consumerGroupDescription =
                     new ConsumerGroupDescription(groupIdKey.idValue, protocolType.isEmpty(),
                         memberDescriptions,
                         describedGroup.protocolData(),
                         GroupType.CLASSIC,
-                        ConsumerGroupState.parse(describedGroup.groupState()),
+                        GroupState.parse(describedGroup.groupState()),
                         coordinator,
-                        authorizedOperations);
+                        authorizedOperations,
+                        Optional.empty(),
+                        Optional.empty());
                 completed.put(groupIdKey, consumerGroupDescription);
             } else {
                 failed.put(groupIdKey, new IllegalArgumentException(
@@ -354,11 +365,18 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
             case GROUP_ID_NOT_FOUND:
                 if (isConsumerGroupResponse) {
                     log.debug("`{}` request for group id {} failed because the group is not " +
-                        "a new consumer group. Will retry with `DescribeGroups` API.", apiName, groupId.idValue);
+                        "a new consumer group. Will retry with `DescribeGroups` API. {}",
+                        apiName, groupId.idValue, errorMsg != null ? errorMsg : "");
                     useClassicGroupApi.add(groupId.idValue);
+
+                    // The error message from the ConsumerGroupDescribe API is more informative to the user
+                    // than the error message from the classic group API. Capture it and use it if we get the
+                    // same error code for the classic group API also.
+                    groupIdNotFoundErrorMessages.put(groupId.idValue, errorMsg);
                 } else {
-                    log.error("`{}` request for group id {} failed because the group does not exist.", apiName, groupId.idValue);
-                    failed.put(groupId, error.exception(errorMsg));
+                    log.debug("`{}` request for group id {} failed because the group does not exist. {}",
+                        apiName, groupId.idValue, errorMsg != null ? errorMsg : "");
+                    failed.put(groupId, error.exception(groupIdNotFoundErrorMessages.getOrDefault(groupId.idValue, errorMsg)));
                 }
                 break;
 
@@ -367,18 +385,4 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 failed.put(groupId, error.exception(errorMsg));
         }
     }
-
-    private Set<AclOperation> validAclOperations(final int authorizedOperations) {
-        if (authorizedOperations == MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED) {
-            return null;
-        }
-        return Utils.from32BitField(authorizedOperations)
-            .stream()
-            .map(AclOperation::fromCode)
-            .filter(operation -> operation != AclOperation.UNKNOWN
-                && operation != AclOperation.ALL
-                && operation != AclOperation.ANY)
-            .collect(Collectors.toSet());
-    }
-
 }

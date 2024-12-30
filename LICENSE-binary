@@ -206,15 +206,15 @@ This project bundles some components that are also licensed under the Apache
 License Version 2.0:
 
 audience-annotations-0.12.0
-caffeine-2.9.3
+caffeine-3.1.1
 commons-beanutils-1.9.4
 commons-cli-1.4
 commons-collections-3.2.2
 commons-digester-2.1
-commons-io-2.11.0
+commons-io-2.14.0
 commons-lang3-3.12.0
-commons-logging-1.2
-commons-validator-1.7
+commons-logging-1.3.2
+commons-validator-1.9.0
 error_prone_annotations-2.10.0
 jackson-annotations-2.16.2
 jackson-core-2.16.2
@@ -223,53 +223,44 @@ jackson-dataformat-csv-2.16.2
 jackson-datatype-jdk8-2.16.2
 jackson-jaxrs-base-2.16.2
 jackson-jaxrs-json-provider-2.16.2
-jackson-module-afterburner-2.16.2
+jackson-module-blackbird-2.16.2
 jackson-module-jaxb-annotations-2.16.2
 jackson-module-scala_2.13-2.16.2
-jackson-module-scala_2.12-2.16.2
 jakarta.validation-api-2.0.2
 javassist-3.29.2-GA
-jetty-client-9.4.54.v20240208
-jetty-continuation-9.4.54.v20240208
-jetty-http-9.4.54.v20240208
-jetty-io-9.4.54.v20240208
-jetty-security-9.4.54.v20240208
-jetty-server-9.4.54.v20240208
-jetty-servlet-9.4.54.v20240208
-jetty-servlets-9.4.54.v20240208
-jetty-util-9.4.54.v20240208
-jetty-util-ajax-9.4.54.v20240208
+jetty-client-9.4.56.v20240826
+jetty-continuation-9.4.56.v20240826
+jetty-http-9.4.56.v20240826
+jetty-io-9.4.56.v20240826
+jetty-security-9.4.56.v20240826
+jetty-server-9.4.56.v20240826
+jetty-servlet-9.4.56.v20240826
+jetty-servlets-9.4.56.v20240826
+jetty-util-9.4.56.v20240826
+jetty-util-ajax-9.4.56.v20240826
 jose4j-0.9.4
 lz4-java-1.8.0
 maven-artifact-3.9.6
 metrics-core-4.1.12.1
 metrics-core-2.2.0
-netty-buffer-4.1.111.Final
-netty-codec-4.1.111.Final
-netty-common-4.1.111.Final
-netty-handler-4.1.111.Final
-netty-resolver-4.1.111.Final
-netty-transport-4.1.111.Final
-netty-transport-classes-epoll-4.1.111.Final
-netty-transport-native-epoll-4.1.111.Final
-netty-transport-native-unix-common-4.1.111.Final
+netty-buffer-4.1.115.Final
+netty-codec-4.1.115.Final
+netty-common-4.1.115.Final
+netty-handler-4.1.115.Final
+netty-resolver-4.1.115.Final
+netty-transport-4.1.115.Final
+netty-transport-classes-epoll-4.1.115.Final
+netty-transport-native-epoll-4.1.115.Final
+netty-transport-native-unix-common-4.1.115.Final
 opentelemetry-proto-1.0.0-alpha
 plexus-utils-3.5.1
-reflections-0.10.2
 reload4j-1.2.25
 rocksdbjni-7.9.2
-scala-collection-compat_2.12-2.10.0
-scala-collection-compat_2.13-2.10.0
-scala-library-2.12.19
-scala-library-2.13.14
-scala-logging_2.12-3.9.5
+scala-library-2.13.15
 scala-logging_2.13-3.9.5
-scala-reflect-2.12.19
-scala-reflect-2.13.14
-scala-java8-compat_2.12-1.0.2
-scala-java8-compat_2.13-1.0.2
+scala-reflect-2.13.15
 snappy-java-1.1.10.5
-swagger-annotations-2.2.8
+swagger-annotations-2.2.25
 zookeeper-3.8.4
 zookeeper-jute-3.8.4
 
@@ -311,7 +302,6 @@ see: licenses/CDDL+GPL-1.1
 javax.activation-api-1.2.0
 javax.annotation-api-1.3.2
 javax.servlet-api-3.1.0
-javax.ws.rs-api-2.1.1
 jaxb-api-2.3.1
 activation-1.1.1
 
@@ -319,6 +309,7 @@ activation-1.1.1
 MIT License
 
 argparse4j-0.7.0, see: licenses/argparse-MIT
+classgraph-4.8.173, see: licenses/classgraph-MIT
 jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
 slf4j-api-1.7.36, see: licenses/slf4j-MIT
 slf4j-reload4j-1.7.36, see: licenses/slf4j-MIT
@@ -327,7 +318,8 @@ pcollections-4.0.1, see: licenses/pcollections-MIT
 ---------------------------------------
 BSD 2-Clause
 
-zstd-jni-1.5.6-4 see: licenses/zstd-jni-BSD-2-clause
+zstd-jni-1.5.6-6 see: licenses/zstd-jni-BSD-2-clause
+HdrHistogram-2.2.2 see: licenses/hdrHistogram-BSD-2-clause
 
 ---------------------------------------
 BSD 3-Clause
@@ -335,10 +327,9 @@ BSD 3-Clause
 jline-3.25.1, see: licenses/jline-BSD-3-clause
 jsr305-3.0.2, see: licenses/jsr305-BSD-3-clause
 paranamer-2.8, see: licenses/paranamer-BSD-3-clause
-protobuf-java-3.23.4, see: licenses/protobuf-java-BSD-3-clause
+protobuf-java-3.25.5, see: licenses/protobuf-java-BSD-3-clause
 
 ---------------------------------------
-Do What The F*ck You Want To Public License
-see: licenses/DWTFYWTPL
+Go License
 
-reflections-0.10.2
+re2j-1.7 see: licenses/re2j-GO

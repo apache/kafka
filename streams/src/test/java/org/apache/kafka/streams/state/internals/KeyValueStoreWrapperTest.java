@@ -161,14 +161,14 @@ public class KeyValueStoreWrapperTest {
     public void shouldGetTimestampedStore() {
         givenWrapperWithTimestampedStore();
 
-        assertThat(wrapper.getStore(), equalTo(timestampedStore));
+        assertThat(wrapper.store(), equalTo(timestampedStore));
     }
 
     @Test
     public void shouldGetVersionedStore() {
         givenWrapperWithVersionedStore();
 
-        assertThat(wrapper.getStore(), equalTo(versionedStore));
+        assertThat(wrapper.store(), equalTo(versionedStore));
     }
 
     @Test
@@ -185,30 +185,6 @@ public class KeyValueStoreWrapperTest {
         when(versionedStore.name()).thenReturn(STORE_NAME);
 
         assertThat(wrapper.name(), equalTo(STORE_NAME));
-    }
-
-    @Deprecated
-    @Test
-    public void shouldDeprecatedInitTimestampedStore() {
-        givenWrapperWithTimestampedStore();
-        final org.apache.kafka.streams.processor.ProcessorContext mockContext
-            = mock(org.apache.kafka.streams.processor.ProcessorContext.class);
-
-        wrapper.init(mockContext, wrapper);
-
-        verify(timestampedStore).init(mockContext, wrapper);
-    }
-
-    @Deprecated
-    @Test
-    public void shouldDeprecatedInitVersionedStore() {
-        givenWrapperWithVersionedStore();
-        final org.apache.kafka.streams.processor.ProcessorContext mockContext
-            = mock(org.apache.kafka.streams.processor.ProcessorContext.class);
-
-        wrapper.init(mockContext, wrapper);
-
-        verify(versionedStore).init(mockContext, wrapper);
     }
 
     @Test

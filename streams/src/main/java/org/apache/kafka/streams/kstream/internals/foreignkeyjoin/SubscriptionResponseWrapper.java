@@ -48,19 +48,19 @@ public class SubscriptionResponseWrapper<FV> {
         this.primaryPartition = primaryPartition;
     }
 
-    public long[] getOriginalValueHash() {
+    public long[] originalValueHash() {
         return originalValueHash;
     }
 
-    public FV getForeignValue() {
+    public FV foreignValue() {
         return foreignValue;
     }
 
-    public byte getVersion() {
+    public byte version() {
         return version;
     }
 
-    public Integer getPrimaryPartition() {
+    public Integer primaryPartition() {
         return primaryPartition;
     }
 

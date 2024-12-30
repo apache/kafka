@@ -23,15 +23,12 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
-import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
-import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
@@ -73,7 +70,7 @@ import java.util.TreeSet;
  * </ol>
  *
  */
-public class ShareMembershipManager extends AbstractMembershipManager<ShareGroupHeartbeatResponseData> {
+public class ShareMembershipManager extends AbstractMembershipManager<ShareGroupHeartbeatResponse> {
 
     /**
      * Rack ID of the member, if specified.
@@ -85,7 +82,6 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                                   String rackId,
                                   SubscriptionState subscriptions,
                                   ConsumerMetadata metadata,
-                                  Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                   Time time,
                                   Metrics metrics) {
         this(logContext,
@@ -93,7 +89,6 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                 rackId,
                 subscriptions,
                 metadata,
-                clientTelemetryReporter,
                 time,
                 new ShareRebalanceMetricsManager(metrics));
     }
@@ -104,14 +99,12 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                            String rackId,
                            SubscriptionState subscriptions,
                            ConsumerMetadata metadata,
-                           Optional<ClientTelemetryReporter> clientTelemetryReporter,
                            Time time,
                            ShareRebalanceMetricsManager metricsManager) {
         super(groupId,
                 subscriptions,
                 metadata,
                 logContext.logger(ShareMembershipManager.class),
-                clientTelemetryReporter,
                 time,
                 metricsManager);
         this.rackId = rackId;
@@ -128,11 +121,12 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
      * {@inheritDoc}
      */
     @Override
-    public void onHeartbeatSuccess(ShareGroupHeartbeatResponseData response) {
-        if (response.errorCode() != Errors.NONE.code()) {
+    public void onHeartbeatSuccess(ShareGroupHeartbeatResponse response) {
+        ShareGroupHeartbeatResponseData responseData = response.data();
+        if (responseData.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
                     "Unexpected error in Heartbeat response. Expected no error, but received: %s",
-                    Errors.forCode(response.errorCode())
+                    Errors.forCode(responseData.errorCode())
             );
             throw new IllegalArgumentException(errorMessage);
         }
@@ -153,19 +147,9 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
             return;
         }
 
-        // Update the group member id label in the client telemetry reporter if the member id has
-        // changed. Initially the member id is empty, and it is updated when the member joins the
-        // group. This is done here to avoid updating the label on every heartbeat response. Also
-        // check if the member id is null, as the schema defines it as nullable.
-        if (response.memberId() != null && !response.memberId().equals(memberId)) {
-            clientTelemetryReporter.ifPresent(reporter -> reporter.updateMetricsLabels(
-                    Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, response.memberId())));
-        }
+        updateMemberEpoch(responseData.memberEpoch());
 
-        this.memberId = response.memberId();
-        updateMemberEpoch(response.memberEpoch());
-
-        ShareGroupHeartbeatResponseData.Assignment assignment = response.assignment();
+        ShareGroupHeartbeatResponseData.Assignment assignment = responseData.assignment();
 
         if (assignment != null) {
             if (!state.canHandleNewAssignment()) {

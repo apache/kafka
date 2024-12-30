@@ -127,9 +127,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         private final String childName;
         private final long timestamp;
         private final Headers headers;
-        private final KeyValue keyValue;
+        private final KeyValue<?, ?> keyValue;
 
-        private CapturedForward(final KeyValue keyValue, final To to, final Headers headers) {
+        private CapturedForward(final KeyValue<?, ?> keyValue, final To to, final Headers headers) {
             if (keyValue == null) {
                 throw new IllegalArgumentException();
             }
@@ -165,7 +165,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          *
          * @return A key/value pair. Not null.
          */
-        @SuppressWarnings({"WeakerAccess", "unused"})
+        @SuppressWarnings({"WeakerAccess", "unused", "rawtypes"})
         public KeyValue keyValue() {
             return keyValue;
         }
@@ -240,10 +240,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
         final String threadId = Thread.currentThread().getName();
         this.metrics = new StreamsMetricsImpl(
-            new Metrics(metricConfig),
-            threadId,
-            streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
-            Time.SYSTEM
+                new Metrics(metricConfig),
+                threadId,
+                "processId",
+                Time.SYSTEM
         );
         TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), metrics);
     }
@@ -375,18 +375,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.headers = headers;
     }
 
-    /**
-     * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
-     * but for the purpose of driving unit tests, you can set it directly. Setting this attribute doesn't affect the others.
-     *
-     * @param timestamp A record timestamp
-     * @deprecated Since 3.0.0; use {@link MockProcessorContext#setRecordTimestamp(long)} instead.
-     */
-    @Deprecated
-    @SuppressWarnings({"WeakerAccess", "unused"})
-    public void setTimestamp(final long timestamp) {
-        this.recordTimestamp = timestamp;
-    }
 
     /**
      * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
@@ -451,7 +439,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     @Override
     public long timestamp() {
         if (recordTimestamp == null) {
-            throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata() or setTimestamp().");
+            throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata() or setRecordTimestamp().");
         }
         return recordTimestamp;
     }
@@ -470,7 +458,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return (S) stateStores.get(name);
     }
 
-    @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,

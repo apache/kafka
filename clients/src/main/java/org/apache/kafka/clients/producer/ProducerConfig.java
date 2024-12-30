@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -253,11 +254,8 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>metric.reporters</code> */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
-    /** <code>auto.include.jmx.reporter</code> */
-    @Deprecated
-    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG;
-
     // max.in.flight.requests.per.connection should be less than or equal to 5 when idempotence producer enabled to ensure message ordering
+    // The value 5 is aligned with ProducerStateEntry#NUM_BATCHES_TO_RETAIN.
     private static final int MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE = 5;
 
     /** <code>max.in.flight.requests.per.connection</code> */
@@ -266,8 +264,8 @@ public class ProducerConfig extends AbstractConfig {
                                                                             + " Note that if this configuration is set to be greater than 1 and <code>enable.idempotence</code> is set to false, there is a risk of"
                                                                             + " message reordering after a failed send due to retries (i.e., if retries are enabled); "
                                                                             + " if retries are disabled or if <code>enable.idempotence</code> is set to true, ordering will be preserved."
-                                                                            + " Additionally, enabling idempotence requires the value of this configuration to be less than or equal to " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + "."
-                                                                            + " If conflicting configurations are set and idempotence is not explicitly enabled, idempotence is disabled. ";
+                                                                            + " Additionally, enabling idempotence requires the value of this configuration to be less than or equal to " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + ","
+                                                                            + " because broker only retains at most 5 batches for each producer. If the value is more than 5, previous batches may be removed on broker side.";
 
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
@@ -449,15 +447,10 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
+                                        JmxReporter.class.getName(),
                                         new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
-                                .define(AUTO_INCLUDE_JMX_REPORTER_CONFIG,
-                                        Type.BOOLEAN,
-                                        true,
-                                        Importance.LOW,
-                                        CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC)
                                 .define(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
                                         Type.INT,
                                         5,
@@ -534,7 +527,13 @@ public class ProducerConfig extends AbstractConfig {
                                         ConfigDef.CaseInsensitiveValidString
                                                 .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
                                         Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC);
+                                        CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
+                                .define(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
+                                        atLeast(0),
+                                        Importance.LOW,
+                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
     }
 
     @Override
@@ -590,13 +589,8 @@ public class ProducerConfig extends AbstractConfig {
 
             final int inFlightConnection = this.getInt(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
             if (MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE < inFlightConnection) {
-                if (userConfiguredIdempotence) {
-                    throw new ConfigException("Must set " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
-                        " to use the idempotent producer.");
-                }
-                log.warn("Idempotence will be disabled because {} is set to {}, which is greater than 5. " +
-                    "Please note that in v4.0.0 and onward, this will become an error.", MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, inFlightConnection);
-                shouldDisableIdempotence = true;
+                throw new ConfigException("To use the idempotent producer, " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION +
+                                          " must be set to at most 5. Current value is " + inFlightConnection + ".");
             }
         }
 

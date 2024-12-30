@@ -16,37 +16,22 @@
 # under the License.
 
 notifications:
-  commits:      commits@kafka.apache.org
-  issues:       jira@kafka.apache.org
+  commits: commits@kafka.apache.org
+  issues: jira@kafka.apache.org
   pullrequests: jira@kafka.apache.org
   jira_options: link label
 
-# This list allows you to trigger builds on pull requests. It can have a maximum of 10 people.
-# https://cwiki.apache.org/confluence/pages/viewpage.action?spaceKey=INFRA&title=Git+-+.asf.yaml+features#Git.asf.yamlfeatures-JenkinsPRwhitelisting
-jenkins:
-  github_whitelist:
-    - FrankYang0529
-    - kamalcph
-    - apoorvmittal10
-    - lianetm
-    - brandboat
-    - kirktrue
-    - nizhikov
-    - OmniaGM
-    - dongnuo123
-    - frankvicky
-
-# This list allows you to triage pull requests. It can have a maximum of 10 people.
-# https://cwiki.apache.org/confluence/pages/viewpage.action?spaceKey=INFRA&title=Git+-+.asf.yaml+features#Git.asf.yamlfeatures-AssigningexternalcollaboratorswiththetriageroleonGitHub
+# This list allows you to triage pull requests and trigger workflow runs on GitHub Actions. It can have a maximum of 10 collaborators.
+# Read more here: https://github.com/apache/infrastructure-asfyaml
 github:
   collaborators:
     - FrankYang0529
-    - kamalcph
-    - apoorvmittal10
-    - lianetm
-    - brandboat
     - kirktrue
-    - nizhikov
+    - brandboat
+    - AndrewJSchofield
     - OmniaGM
+    - nizhikov
     - dongnuo123
-    - frankvicky
+    - gaurav-narula
+    - apourchet
+    - apoorvmittal10

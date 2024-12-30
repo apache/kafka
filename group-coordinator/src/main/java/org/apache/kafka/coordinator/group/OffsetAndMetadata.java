@@ -31,7 +31,7 @@ import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
  * Represents a committed offset with its metadata.
  */
 public class OffsetAndMetadata {
-    private static final String NO_METADATA = "";
+    public static final String NO_METADATA = "";
 
     /**
      * The committed offset.

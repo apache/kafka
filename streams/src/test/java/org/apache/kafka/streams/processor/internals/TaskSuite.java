@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 
-import org.apache.kafka.streams.integration.StandbyTaskCreationIntegrationTest;
 import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignorTest;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetricsTest;
 
@@ -32,14 +31,13 @@ import org.junit.platform.suite.api.Suite;
  */
 @Suite
 @SelectClasses({
-        StreamTaskTest.class,
-        StandbyTaskTest.class,
-        GlobalStateTaskTest.class,
-        TaskManagerTest.class,
-        TaskMetricsTest.class,
-        LegacyStickyTaskAssignorTest.class,
-        StreamsPartitionAssignorTest.class,
-        StandbyTaskCreationIntegrationTest.class,
+    StreamTaskTest.class,
+    StandbyTaskTest.class,
+    GlobalStateTaskTest.class,
+    TaskManagerTest.class,
+    TaskMetricsTest.class,
+    LegacyStickyTaskAssignorTest.class,
+    StreamsPartitionAssignorTest.class,
 })
 public class TaskSuite {
 }

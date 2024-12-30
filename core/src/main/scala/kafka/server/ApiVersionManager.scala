@@ -16,13 +16,12 @@
  */
 package kafka.server
 
-import kafka.network
-import kafka.network.RequestChannel
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
-import org.apache.kafka.server.ClientMetricsManager
+import org.apache.kafka.network.metrics.RequestChannelMetrics
+import org.apache.kafka.server.{BrokerFeatures, ClientMetricsManager}
 import org.apache.kafka.server.common.FinalizedFeatures
 
 import scala.collection.mutable
@@ -38,7 +37,7 @@ trait ApiVersionManager {
   def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
     apiKey != null && apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
   }
-  def newRequestMetrics: RequestChannel.Metrics = new network.RequestChannel.Metrics(enabledApis)
+  def newRequestMetrics: RequestChannelMetrics = new RequestChannelMetrics(enabledApis.asJava)
 
   def features: FinalizedFeatures
 }
@@ -58,7 +57,6 @@ object ApiVersionManager {
       supportedFeatures,
       metadataCache,
       config.unstableApiVersionsEnabled,
-      config.migrationEnabled,
       clientMetricsManager
     )
   }
@@ -72,7 +70,6 @@ object ApiVersionManager {
  * @param enabledApis the enabled apis, which are computed by the listener type
  * @param brokerFeatures the broker features
  * @param enableUnstableLastVersion whether to enable unstable last version, see [[KafkaConfig.unstableApiVersionsEnabled]]
- * @param zkMigrationEnabled whether to enable zk migration, see [[KafkaConfig.migrationEnabled]]
  * @param featuresProvider a provider to the finalized features supported
  */
 class SimpleApiVersionManager(
@@ -80,14 +77,12 @@ class SimpleApiVersionManager(
   val enabledApis: collection.Set[ApiKeys],
   brokerFeatures: org.apache.kafka.common.feature.Features[SupportedVersionRange],
   val enableUnstableLastVersion: Boolean,
-  val zkMigrationEnabled: Boolean,
   val featuresProvider: () => FinalizedFeatures
 ) extends ApiVersionManager {
 
   def this(
     listenerType: ListenerType,
     enableUnstableLastVersion: Boolean,
-    zkMigrationEnabled: Boolean,
     featuresProvider: () => FinalizedFeatures
   ) = {
     this(
@@ -95,7 +90,6 @@ class SimpleApiVersionManager(
       ApiKeys.apisForListener(listenerType).asScala,
       BrokerFeatures.defaultSupportedFeatures(enableUnstableLastVersion),
       enableUnstableLastVersion,
-      zkMigrationEnabled,
       featuresProvider
     )
   }
@@ -113,7 +107,7 @@ class SimpleApiVersionManager(
       setSupportedFeatures(brokerFeatures).
       setFinalizedFeatures(currentFeatures.finalizedFeatures()).
       setFinalizedFeaturesEpoch(currentFeatures.finalizedFeaturesEpoch()).
-      setZkMigrationEnabled(zkMigrationEnabled).
+      setZkMigrationEnabled(false).
       setAlterFeatureLevel0(alterFeatureLevel0).
       build()
   }
@@ -131,7 +125,6 @@ class SimpleApiVersionManager(
  * @param brokerFeatures the broker features
  * @param metadataCache the metadata cache, used to get the finalized features and the metadata version
  * @param enableUnstableLastVersion whether to enable unstable last version, see [[KafkaConfig.unstableApiVersionsEnabled]]
- * @param zkMigrationEnabled whether to enable zk migration, see [[KafkaConfig.migrationEnabled]]
  * @param clientMetricsManager the client metrics manager, helps to determine whether client telemetry is enabled
  */
 class DefaultApiVersionManager(
@@ -140,7 +133,6 @@ class DefaultApiVersionManager(
   brokerFeatures: BrokerFeatures,
   metadataCache: MetadataCache,
   val enableUnstableLastVersion: Boolean,
-  val zkMigrationEnabled: Boolean = false,
   val clientMetricsManager: Option[ClientMetricsManager] = None
 ) extends ApiVersionManager {
 
@@ -176,7 +168,7 @@ class DefaultApiVersionManager(
       setSupportedFeatures(brokerFeatures.supportedFeatures).
       setFinalizedFeatures(finalizedFeatures.finalizedFeatures()).
       setFinalizedFeaturesEpoch(finalizedFeatures.finalizedFeaturesEpoch()).
-      setZkMigrationEnabled(zkMigrationEnabled).
+      setZkMigrationEnabled(false).
       setAlterFeatureLevel0(alterFeatureLevel0).
       build()
   }

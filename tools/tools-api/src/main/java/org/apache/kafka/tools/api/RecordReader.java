@@ -28,7 +28,7 @@ import java.util.Map;
  * Typical implementations of this interface convert data from an `InputStream` received via `readRecords` into a
  * iterator of `ProducerRecord` instance. Note that implementations must have a public nullary constructor.
  *
- * This is used by the `kafka.tools.ConsoleProducer`.
+ * This is used by the `org.apache.kafka.tools.ConsoleProducer`.
  */
 public interface RecordReader extends Closeable, Configurable {
 

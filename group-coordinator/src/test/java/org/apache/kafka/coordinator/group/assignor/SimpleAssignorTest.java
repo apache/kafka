@@ -35,7 +35,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
@@ -88,8 +87,7 @@ public class SimpleAssignorTest {
                 new TopicMetadata(
                     TOPIC_1_UUID,
                     TOPIC_1_NAME,
-                    3,
-                    Collections.emptyMap()
+                    3
                 )
             )
         );
@@ -126,8 +124,7 @@ public class SimpleAssignorTest {
                 new TopicMetadata(
                     TOPIC_1_UUID,
                     TOPIC_1_NAME,
-                    3,
-                    Collections.emptyMap()
+                    3
                 )
             )
         );
@@ -137,7 +134,7 @@ public class SimpleAssignorTest {
             new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
                 Optional.empty(),
-                mkSet(TOPIC_2_UUID),
+                Set.of(TOPIC_2_UUID),
                 Assignment.EMPTY
             )
         );
@@ -158,14 +155,12 @@ public class SimpleAssignorTest {
         topicMetadata.put(TOPIC_1_UUID, new TopicMetadata(
             TOPIC_1_UUID,
             TOPIC_1_NAME,
-            3,
-            Collections.emptyMap()
+            3
         ));
         topicMetadata.put(TOPIC_3_UUID, new TopicMetadata(
             TOPIC_3_UUID,
             TOPIC_3_NAME,
-            2,
-            Collections.emptyMap()
+            2
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -173,14 +168,14 @@ public class SimpleAssignorTest {
         members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(TOPIC_1_UUID, TOPIC_3_UUID),
+            Set.of(TOPIC_1_UUID, TOPIC_3_UUID),
             Assignment.EMPTY
         ));
 
         members.put(MEMBER_B, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(TOPIC_1_UUID, TOPIC_3_UUID),
+            Set.of(TOPIC_1_UUID, TOPIC_3_UUID),
             Assignment.EMPTY
         ));
 
@@ -215,35 +210,32 @@ public class SimpleAssignorTest {
         topicMetadata.put(TOPIC_1_UUID, new TopicMetadata(
             TOPIC_1_UUID,
             TOPIC_1_NAME,
-            3,
-            Collections.emptyMap()
+            3
         ));
 
         topicMetadata.put(TOPIC_2_UUID, new TopicMetadata(
             TOPIC_2_UUID,
             "topic2",
-            3,
-            Collections.emptyMap()
+            3
         ));
         topicMetadata.put(TOPIC_3_UUID, new TopicMetadata(
             TOPIC_3_UUID,
             TOPIC_3_NAME,
-            2,
-            Collections.emptyMap()
+            2
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
         members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(TOPIC_1_UUID, TOPIC_2_UUID),
+            Set.of(TOPIC_1_UUID, TOPIC_2_UUID),
             Assignment.EMPTY
         ));
 
         members.put(MEMBER_B, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(TOPIC_3_UUID),
+            Set.of(TOPIC_3_UUID),
             Assignment.EMPTY
         ));
 
@@ -251,7 +243,7 @@ public class SimpleAssignorTest {
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(TOPIC_2_UUID, TOPIC_3_UUID),
+            Set.of(TOPIC_2_UUID, TOPIC_3_UUID),
             Assignment.EMPTY
         ));
 
@@ -289,22 +281,20 @@ public class SimpleAssignorTest {
         topicMetadata.put(TOPIC_1_UUID, new TopicMetadata(
             TOPIC_1_UUID,
             TOPIC_1_NAME,
-            3,
-            Collections.emptyMap()
+            3
         ));
 
         topicMetadata.put(TOPIC_2_UUID, new TopicMetadata(
             TOPIC_2_UUID,
             "topic2",
-            2,
-            Collections.emptyMap()
+            2
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
         members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(TOPIC_1_UUID, TOPIC_2_UUID),
+            Set.of(TOPIC_1_UUID, TOPIC_2_UUID),
             Assignment.EMPTY
         ));
 

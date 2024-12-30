@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -33,7 +32,6 @@ import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.utils.LogContext;
@@ -225,21 +223,22 @@ class OffsetFetcherUtils {
         }
     }
 
-    Map<TopicPartition, Long> getOffsetResetTimestamp() {
+    /**
+     * get OffsetResetStrategy for all assigned partitions
+     */
+    Map<TopicPartition, AutoOffsetResetStrategy> getOffsetResetStrategyForPartitions() {
         // Raise exception from previous offset fetch if there is one
         RuntimeException exception = cachedResetPositionsException.getAndSet(null);
         if (exception != null)
             throw exception;
 
         Set<TopicPartition> partitions = subscriptionState.partitionsNeedingReset(time.milliseconds());
-        final Map<TopicPartition, Long> offsetResetTimestamps = new HashMap<>();
+        final Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap = new HashMap<>();
         for (final TopicPartition partition : partitions) {
-            Long timestamp = offsetResetStrategyTimestamp(partition);
-            if (timestamp != null)
-                offsetResetTimestamps.put(partition, timestamp);
+            partitionAutoOffsetResetStrategyMap.put(partition, offsetResetStrategyWithValidTimestamp(partition));
         }
 
-        return offsetResetTimestamps;
+        return partitionAutoOffsetResetStrategyMap;
     }
 
     static Map<TopicPartition, OffsetAndTimestamp> buildListOffsetsResult(
@@ -286,14 +285,13 @@ class OffsetFetcherUtils {
         return offsetsResults;
     }
 
-    private Long offsetResetStrategyTimestamp(final TopicPartition partition) {
-        OffsetResetStrategy strategy = subscriptionState.resetStrategy(partition);
-        if (strategy == OffsetResetStrategy.EARLIEST)
-            return ListOffsetsRequest.EARLIEST_TIMESTAMP;
-        else if (strategy == OffsetResetStrategy.LATEST)
-            return ListOffsetsRequest.LATEST_TIMESTAMP;
-        else
+    private AutoOffsetResetStrategy offsetResetStrategyWithValidTimestamp(final TopicPartition partition) {
+        AutoOffsetResetStrategy strategy = subscriptionState.resetStrategy(partition);
+        if (strategy.timestamp().isPresent()) {
+            return strategy;
+        } else {
             throw new NoOffsetForPartitionException(partition);
+        }
     }
 
     static Set<String> topicsForPartitions(Collection<TopicPartition> partitions) {
@@ -322,18 +320,9 @@ class OffsetFetcherUtils {
         }
     }
 
-    static OffsetResetStrategy timestampToOffsetResetStrategy(long timestamp) {
-        if (timestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP)
-            return OffsetResetStrategy.EARLIEST;
-        else if (timestamp == ListOffsetsRequest.LATEST_TIMESTAMP)
-            return OffsetResetStrategy.LATEST;
-        else
-            return null;
-    }
-
     void onSuccessfulResponseForResettingPositions(
-            final Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> resetTimestamps,
-            final ListOffsetResult result) {
+            final ListOffsetResult result,
+            final Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap) {
         if (!result.partitionsToRetry.isEmpty()) {
             subscriptionState.requestFailed(result.partitionsToRetry, time.milliseconds() + retryBackoffMs);
             metadata.requestUpdate(false);
@@ -342,10 +331,9 @@ class OffsetFetcherUtils {
         for (Map.Entry<TopicPartition, ListOffsetData> fetchedOffset : result.fetchedOffsets.entrySet()) {
             TopicPartition partition = fetchedOffset.getKey();
             ListOffsetData offsetData = fetchedOffset.getValue();
-            ListOffsetsRequestData.ListOffsetsPartition requestedReset = resetTimestamps.get(partition);
             resetPositionIfNeeded(
                     partition,
-                    timestampToOffsetResetStrategy(requestedReset.timestamp()),
+                    partitionAutoOffsetResetStrategyMap.get(partition),
                     offsetData);
         }
     }
@@ -413,7 +401,7 @@ class OffsetFetcherUtils {
     }
 
     // Visible for testing
-    void resetPositionIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy,
+    void resetPositionIfNeeded(TopicPartition partition, AutoOffsetResetStrategy requestedResetStrategy,
                                ListOffsetData offsetData) {
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
                 offsetData.offset,

@@ -55,24 +55,6 @@ public final class RecordMetadata {
     }
 
     /**
-     * Creates a new instance with the provided parameters.
-     *
-     * @deprecated use constructor without `checksum` parameter. This constructor will be removed in
-     *             Apache Kafka 4.0 (deprecated since 3.0).
-     */
-    @Deprecated
-    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long batchIndex, long timestamp,
-                          Long checksum, int serializedKeySize, int serializedValueSize) {
-        this(topicPartition, baseOffset, batchIndexToInt(batchIndex), timestamp, serializedKeySize, serializedValueSize);
-    }
-
-    private static int batchIndexToInt(long batchIndex) {
-        if (batchIndex > Integer.MAX_VALUE)
-            throw new IllegalArgumentException("batchIndex is larger than Integer.MAX_VALUE: " + batchIndex);
-        return (int) batchIndex;
-    }
-
-    /**
      * Indicates whether the record metadata includes the offset.
      * @return true if the offset is included in the metadata, false otherwise.
      */

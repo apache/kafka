@@ -33,11 +33,10 @@ import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.RE
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
 
-public class RemoteStorageThreadPool extends ThreadPoolExecutor {
+public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteStorageThreadPool.class);
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
-    @SuppressWarnings("this-escape")
     public RemoteStorageThreadPool(String threadNamePrefix,
                                    int numThreads,
                                    int maxPendingTasks) {

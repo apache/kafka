@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -41,7 +42,6 @@ import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
@@ -57,6 +57,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -191,10 +192,9 @@ public class KeyValueStoreTestDriver<K, V> {
     private final Set<K> flushedRemovals = new HashSet<>();
     private final List<KeyValue<byte[], byte[]>> restorableEntries = new LinkedList<>();
 
-    private final InternalMockProcessorContext context;
+    private final InternalMockProcessorContext<?, ?> context;
     private final StateSerdes<K, V> stateSerdes;
 
-    @SuppressWarnings("unchecked")
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
@@ -213,13 +213,11 @@ public class KeyValueStoreTestDriver<K, V> {
             logContext,
             new TaskId(0, 0),
             new StreamsProducer(
-                new StreamsConfig(props),
-                "threadId",
-                new MockClientSupplier(),
-                null,
-                null,
-                logContext,
-                Time.SYSTEM),
+                new MockProducer<>(null, true, null, null),
+                AT_LEAST_ONCE,
+                Time.SYSTEM,
+                logContext
+            ),
             new DefaultProductionExceptionHandler(),
             new MockStreamsMetrics(new Metrics()),
             topology
@@ -266,7 +264,7 @@ public class KeyValueStoreTestDriver<K, V> {
         stateDir.mkdirs();
         stateSerdes = serdes;
 
-        context = new InternalMockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
+        context = new InternalMockProcessorContext<Object, Object>(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
             final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
 
             @Override

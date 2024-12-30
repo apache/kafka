@@ -53,8 +53,8 @@ public final class RemoteLogManagerConfig {
     public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX = "rlmm.config.";
 
     public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP = "remote.log.storage.system.enable";
-    public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC = "Whether to enable tiered storage functionality in a broker or not. Valid values " +
-            "are `true` or `false` and the default value is false. When it is true broker starts all the services required for the tiered storage functionality.";
+    public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC = "Whether to enable tiered storage functionality in a broker or not. " +
+            "When it is true broker starts all the services required for the tiered storage functionality.";
     public static final boolean DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE = false;
 
     public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP = "remote.log.storage.manager.class.name";
@@ -93,20 +93,23 @@ public final class RemoteLogManagerConfig {
     public static final long DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES = 1024 * 1024 * 1024L;
 
     public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP = "remote.log.manager.thread.pool.size";
-    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling tasks to copy " +
+    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC = "Deprecated. Size of the thread pool used in scheduling tasks to copy " +
             "segments, fetch remote log indexes and clean up remote log segments.";
-    public static final int DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE = 10;
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE = 2;
+
+    private static final String REMOTE_LOG_MANAGER_THREAD_POOL_FALLBACK = "The default value of -1 means that this will be set to the configured value of " +
+        REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP + ", if available; otherwise, it defaults to " + DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE + ".";
 
     public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP = "remote.log.manager.copier.thread.pool.size";
-    public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in " +
-            "scheduling tasks to copy segments.";
+    public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling tasks " +
+            "to copy segments. " + REMOTE_LOG_MANAGER_THREAD_POOL_FALLBACK;
     public static final int DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE = 10;
 
     public static final String REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP = "remote.log.manager.expiration.thread.pool.size";
-    public static final String REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in" +
-            " scheduling tasks to clean up remote log segments.";
+    public static final String REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling tasks " +
+            "to clean up remote log segments. " + REMOTE_LOG_MANAGER_THREAD_POOL_FALLBACK;
     public static final int DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE = 10;
-
+    
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP = "remote.log.manager.task.interval.ms";
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_DOC = "Interval at which remote log manager runs the scheduled tasks like copy " +
             "segments, and clean up remote log segments.";
@@ -186,6 +189,10 @@ public final class RemoteLogManagerConfig {
     public static final String REMOTE_FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will wait before answering the remote fetch request";
     public static final int DEFAULT_REMOTE_FETCH_MAX_WAIT_MS = 500;
 
+    public static final String REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP = "remote.list.offsets.request.timeout.ms";
+    public static final String REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_DOC = "The maximum amount of time the server will wait for the remote list offsets request to complete.";
+    public static final long DEFAULT_REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS = 30000L;
+
     private final AbstractConfig config;
 
     public static ConfigDef configDef() {
@@ -253,13 +260,13 @@ public final class RemoteLogManagerConfig {
                         atLeast(1),
                         MEDIUM,
                         REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC)
-                .defineInternal(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
+                .define(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
                         INT,
                         DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE,
                         atLeast(1),
                         MEDIUM,
                         REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC)
-                .defineInternal(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
+                .define(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
                         INT,
                         DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE,
                         atLeast(1),
@@ -353,7 +360,13 @@ public final class RemoteLogManagerConfig {
                         DEFAULT_REMOTE_FETCH_MAX_WAIT_MS,
                         atLeast(1),
                         MEDIUM,
-                        REMOTE_FETCH_MAX_WAIT_MS_DOC);
+                        REMOTE_FETCH_MAX_WAIT_MS_DOC)
+                .define(REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP,
+                        LONG,
+                        DEFAULT_REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS,
+                        atLeast(1),
+                        MEDIUM,
+                        REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_DOC);
     }
     
     public RemoteLogManagerConfig(AbstractConfig config) {
@@ -385,11 +398,13 @@ public final class RemoteLogManagerConfig {
     }
 
     public int remoteLogManagerCopierThreadPoolSize() {
-        return config.getInt(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP);
+        int size = config.getInt(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP);
+        return size == -1 ? remoteLogManagerThreadPoolSize() : size;
     }
 
     public int remoteLogManagerExpirationThreadPoolSize() {
-        return config.getInt(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP);
+        int size = config.getInt(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP);
+        return size == -1 ? remoteLogManagerThreadPoolSize() : size;
     }
 
     public long remoteLogManagerTaskIntervalMs() {
@@ -483,6 +498,10 @@ public final class RemoteLogManagerConfig {
 
     public long logLocalRetentionMs() {
         return config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP);
+    }
+
+    public long remoteListOffsetsRequestTimeoutMs() {
+        return config.getLong(REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP);
     }
 
     public static void main(String[] args) {

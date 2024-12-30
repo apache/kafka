@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Map;
 import java.util.Set;
@@ -51,7 +52,7 @@ public interface StoreFactory {
         // do nothing
     }
 
-    StateStore build();
+    StoreBuilder<?> builder();
 
     long retentionPeriod();
 
@@ -61,7 +62,7 @@ public interface StoreFactory {
 
     boolean loggingEnabled();
 
-    String name();
+    String storeName();
 
     boolean isWindowStore();
 
@@ -74,5 +75,80 @@ public interface StoreFactory {
     StoreFactory withLoggingDisabled();
 
     boolean isCompatibleWith(StoreFactory storeFactory);
+
+    class FactoryWrappingStoreBuilder<T extends StateStore> implements StoreBuilder<T> {
+
+        private final StoreFactory storeFactory;
+
+        public FactoryWrappingStoreBuilder(final StoreFactory storeFactory) {
+            this.storeFactory = storeFactory;
+        }
+
+        public StoreFactory storeFactory() {
+            return storeFactory;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+
+            final FactoryWrappingStoreBuilder<?> that = (FactoryWrappingStoreBuilder<?>) o;
+
+            return storeFactory.isCompatibleWith(that.storeFactory);
+        }
+
+        @Override
+        public int hashCode() {
+            return storeFactory.hashCode();
+        }
+
+        @Override
+        public StoreBuilder<T> withCachingEnabled() {
+            throw new IllegalStateException("Should not try to modify StoreBuilder wrapper");
+        }
+
+        @Override
+        public StoreBuilder<T> withCachingDisabled() {
+            storeFactory.withCachingDisabled();
+            return this;
+        }
+
+        @Override
+        public StoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
+            throw new IllegalStateException("Should not try to modify StoreBuilder wrapper");
+        }
+
+        @Override
+        public StoreBuilder<T> withLoggingDisabled() {
+            storeFactory.withLoggingDisabled();
+            return this;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public T build() {
+            return (T) storeFactory.builder().build();
+        }
+
+        @Override
+        public Map<String, String> logConfig() {
+            return storeFactory.logConfig();
+        }
+
+        @Override
+        public boolean loggingEnabled() {
+            return storeFactory.loggingEnabled();
+        }
+
+        @Override
+        public String name() {
+            return storeFactory.storeName();
+        }
+    }
 
 }

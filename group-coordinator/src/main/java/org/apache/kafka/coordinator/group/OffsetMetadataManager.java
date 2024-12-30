@@ -39,13 +39,14 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -311,6 +312,7 @@ public class OffsetMetadataManager {
                 // either the admin client or a consumer which does not use the group management
                 // facility. In this case, a so-called simple group is created and the request
                 // is accepted.
+                log.info("[GroupId {}] Creating a simple consumer group via manual offset commit.", request.groupId());
                 group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
             } else {
                 if (context.header.apiVersion() >= 9) {
@@ -492,7 +494,7 @@ public class OffsetMetadataManager {
                         expireTimestampMs
                     );
 
-                    records.add(CoordinatorRecordHelpers.newOffsetCommitRecord(
+                    records.add(GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
                         request.groupId(),
                         topic.name(),
                         partition.partitionIndex(),
@@ -552,7 +554,7 @@ public class OffsetMetadataManager {
                         currentTimeMs
                     );
 
-                    records.add(CoordinatorRecordHelpers.newOffsetCommitRecord(
+                    records.add(GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
                         request.groupId(),
                         topic.name(),
                         partition.partitionIndex(),
@@ -608,7 +610,7 @@ public class OffsetMetadataManager {
                     // if a pending transactional offset exists.
                     if (hasCommittedOffset(request.groupId(), topic.name(), partition.partitionIndex()) ||
                         hasPendingTransactionalOffsets(request.groupId(), topic.name(), partition.partitionIndex())) {
-                        records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
+                        records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
                             request.groupId(),
                             topic.name(),
                             partition.partitionIndex()
@@ -651,7 +653,7 @@ public class OffsetMetadataManager {
         if (offsetsByTopic != null) {
             offsetsByTopic.forEach((topic, offsetsByPartition) ->
                 offsetsByPartition.keySet().forEach(partition -> {
-                    records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+                    records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
                     numDeletedOffsets.getAndIncrement();
                 })
             );
@@ -671,7 +673,7 @@ public class OffsetMetadataManager {
                         pendingGroupOffsets.forEach((topic, offsetsByPartition) -> {
                             offsetsByPartition.keySet().forEach(partition -> {
                                 if (!hasCommittedOffset(groupId, topic, partition)) {
-                                    records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+                                    records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
                                     numDeletedOffsets.getAndIncrement();
                                 }
                             });
@@ -870,7 +872,7 @@ public class OffsetMetadataManager {
         long currentTimestampMs = time.milliseconds();
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
 
-        if (!offsetExpirationCondition.isPresent()) {
+        if (offsetExpirationCondition.isEmpty()) {
             return false;
         }
 
@@ -954,7 +956,7 @@ public class OffsetMetadataManager {
         int partition, 
         List<CoordinatorRecord> records
     ) {
-        records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+        records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
         TopicPartition tp = new TopicPartition(topic, partition);
         log.trace("[GroupId {}] Removing expired offset and metadata for {}", groupId, tp);
         return tp;

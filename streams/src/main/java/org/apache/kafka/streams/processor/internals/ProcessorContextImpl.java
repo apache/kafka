@@ -47,9 +47,9 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTEN
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
-import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
+import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.wrapWithReadWriteStore;
 
-public class ProcessorContextImpl extends AbstractProcessorContext<Object, Object> implements RecordCollector.Supplier {
+public final class ProcessorContextImpl extends AbstractProcessorContext<Object, Object> implements RecordCollector.Supplier {
     // the below are null for standby tasks
     private StreamTask streamTask;
     private RecordCollector collector;
@@ -59,7 +59,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
 
     final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
 
-    @SuppressWarnings("this-escape")
     public ProcessorContextImpl(final TaskId id,
                                 final StreamsConfig config,
                                 final ProcessorStateManager stateMgr,
@@ -165,7 +164,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
             throw new StreamsException("Accessing from an unknown node");
         }
 
-        final StateStore globalStore = stateManager.getGlobalStore(name);
+        final StateStore globalStore = stateManager.globalStore(name);
         if (globalStore != null) {
             return (S) getReadOnlyStore(globalStore);
         }
@@ -181,8 +180,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                 "please file a bug report at https://issues.apache.org/jira/projects/KAFKA.");
         }
 
-        final StateStore store = stateManager.getStore(name);
-        return (S) getReadWriteStore(store);
+        final StateStore store = stateManager.store(name);
+        return (S) wrapWithReadWriteStore(store);
     }
 
     @Override
@@ -270,7 +269,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                     forwardInternal((ProcessorNode<K, V, ?, ?>) child, record);
                 }
             } else {
-                final ProcessorNode<?, ?, ?, ?> child = currentNode().getChild(childName);
+                final ProcessorNode<?, ?, ?, ?> child = currentNode().child(childName);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + childName
                                                    + " either does not exist or is not connected to this processor.");

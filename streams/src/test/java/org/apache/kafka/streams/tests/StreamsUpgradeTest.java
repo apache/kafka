@@ -194,7 +194,7 @@ public class StreamsUpgradeTest {
                     LATEST_SUPPORTED_VERSION + 1,
                     taskManager.processId(),
                     userEndPoint(),
-                    taskManager.getTaskOffsetSums(),
+                    taskManager.taskOffsetSums(),
                     uniqueField,
                     0,
                     CLIENT_TAGS
@@ -203,8 +203,8 @@ public class StreamsUpgradeTest {
                 return new FutureSubscriptionInfo(
                     usedSubscriptionMetadataVersion,
                     taskManager.processId().id(),
-                    SubscriptionInfo.getActiveTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
-                    SubscriptionInfo.getStandbyTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
+                    SubscriptionInfo.getActiveTasksFromTaskOffsetSumMap(taskManager.taskOffsetSums()),
+                    SubscriptionInfo.getStandbyTasksFromTaskOffsetSumMap(taskManager.taskOffsetSums()),
                     userEndPoint())
                     .encode();
             }
@@ -296,7 +296,7 @@ public class StreamsUpgradeTest {
                                 LATEST_SUPPORTED_VERSION,
                                 info.processId(),
                                 info.userEndPoint(),
-                                taskManager().getTaskOffsetSums(),
+                                taskManager().taskOffsetSums(),
                                 (byte) 0,
                                 0,
                                 CLIENT_TAGS

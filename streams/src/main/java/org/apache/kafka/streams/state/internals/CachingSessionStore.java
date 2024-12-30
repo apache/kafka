@@ -21,7 +21,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -70,21 +69,9 @@ class CachingSessionStore
         this.maxObservedTimestamp = RecordQueue.UNKNOWN;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
-        super.init(context, root);
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
-        super.init(context, root);
-    }
-
-    private void initInternal(final InternalProcessorContext<?, ?> context) {
-        this.context = context;
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        this.context = asInternalProcessorContext(stateStoreContext);
 
         cacheName = context.taskId() + "-" + name();
         context.registerCacheFlushListener(cacheName, entries -> {
@@ -92,6 +79,7 @@ class CachingSessionStore
                 putAndMaybeForward(entry, context);
             }
         });
+        super.init(stateStoreContext, root);
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext<?, ?> context) {

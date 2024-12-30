@@ -49,8 +49,7 @@ public class StandbyTask extends AbstractTask implements Task {
     private final Sensor updateSensor;
     private final StreamsMetricsImpl streamsMetrics;
 
-    @SuppressWarnings("rawtypes")
-    protected final InternalProcessorContext processorContext;
+    protected final InternalProcessorContext<?, ?> processorContext;
 
     /**
      * @param id              the ID of this task
@@ -61,7 +60,6 @@ public class StandbyTask extends AbstractTask implements Task {
      * @param stateMgr        the {@link ProcessorStateManager} for this task
      * @param stateDirectory  the {@link StateDirectory} created by the thread
      */
-    @SuppressWarnings("rawtypes")
     StandbyTask(final TaskId id,
                 final Set<TopicPartition> inputPartitions,
                 final ProcessorTopology topology,
@@ -70,7 +68,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 final ProcessorStateManager stateMgr,
                 final StateDirectory stateDirectory,
                 final ThreadCache cache,
-                final InternalProcessorContext processorContext) {
+                final InternalProcessorContext<?, ?> processorContext) {
         super(
             id,
             topology,
@@ -331,11 +329,6 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         throw new IllegalStateException("Attempted to add records to task " + id() + " for invalid input partition " + partition);
-    }
-
-    @SuppressWarnings("rawtypes")
-    InternalProcessorContext processorContext() {
-        return processorContext;
     }
 
     /**

@@ -1,0 +1,62 @@
+<!DOCTYPE import-control PUBLIC
+        "-//Puppy Crawl//DTD Import Control 1.1//EN"
+        "http://www.puppycrawl.com/dtds/import_control_1_1.dtd">
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<import-control pkg="org.apache.kafka">
+
+  <!-- THINK HARD ABOUT THE LAYERING OF THE PROJECT BEFORE CHANGING THIS FILE -->
+
+  <!-- common library dependencies -->
+  <allow pkg="java" />
+  <allow pkg="org.slf4j" />
+  <allow pkg="org.junit" />
+  <allow pkg="org.mockito" />
+
+  <!-- no one depends on the server -->
+  <disallow pkg="kafka" />
+
+  <!-- anyone can use public classes -->
+  <allow pkg="org.apache.kafka.common" exact-match="true" />
+  <allow pkg="org.apache.kafka.common.utils" />
+  <allow pkg="org.apache.kafka.common.annotation" />
+
+  <!-- protocol, records and request/response utilities -->
+  <allow pkg="org.apache.kafka.common.message" />
+  <allow pkg="org.apache.kafka.common.protocol" />
+  <allow pkg="org.apache.kafka.common.requests" />
+
+  <subpackage name="server">
+    <subpackage name="share">
+      <allow pkg="org.apache.kafka.server.share" />
+
+      <subpackage name="fetch">
+        <allow pkg="org.apache.kafka.server.purgatory" />
+        <allow class="org.apache.kafka.server.storage.log.FetchParams"/>
+      </subpackage>
+
+      <subpackage name="persister">
+        <allow pkg="org.apache.kafka.clients" />
+        <allow pkg="org.apache.kafka.common.internals" />
+        <allow pkg="org.apache.kafka.server.util" />
+        <allow pkg="org.apache.kafka.test" />
+      </subpackage>
+    </subpackage>
+  </subpackage>
+
+</import-control>

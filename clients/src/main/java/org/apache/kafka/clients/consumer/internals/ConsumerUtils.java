@@ -25,7 +25,6 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -130,8 +129,8 @@ public final class ConsumerUtils {
     }
 
     public static SubscriptionState createSubscriptionState(ConsumerConfig config, LogContext logContext) {
-        String s = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT);
-        OffsetResetStrategy strategy = OffsetResetStrategy.valueOf(s);
+        String s = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+        AutoOffsetResetStrategy strategy = AutoOffsetResetStrategy.fromString(s);
         return new SubscriptionState(logContext, strategy);
     }
 
@@ -215,10 +214,12 @@ public final class ConsumerUtils {
         }
     }
 
-    public static <T> T getResult(Future<T> future, Timer timer) {
+    public static <T> T getResult(Future<T> future, long timeoutMs) {
         try {
-            return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+            return future.get(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof IllegalStateException)
+                throw (IllegalStateException) e.getCause();
             throw maybeWrapAsKafkaException(e.getCause());
         } catch (InterruptedException e) {
             throw new InterruptException(e);
@@ -227,10 +228,16 @@ public final class ConsumerUtils {
         }
     }
 
+    public static <T> T getResult(Future<T> future, Timer timer) {
+        return getResult(future, timer.remainingMs());
+    }
+
     public static <T> T getResult(Future<T> future) {
         try {
             return future.get();
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof IllegalStateException)
+                throw (IllegalStateException) e.getCause();
             throw maybeWrapAsKafkaException(e.getCause());
         } catch (InterruptedException e) {
             throw new InterruptException(e);

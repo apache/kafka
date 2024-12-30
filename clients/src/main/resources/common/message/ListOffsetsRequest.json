@@ -36,7 +36,9 @@
   // Version 8 enables listing offsets by local log start offset (KIP-405).
   //
   // Version 9 enables listing offsets by last tiered offset (KIP-1005).
-  "validVersions": "0-9",
+  //
+  // Version 10 enables async remote list offsets support (KIP-1075)
+  "validVersions": "0-10",
   "deprecatedVersions": "0",
   "flexibleVersions": "6+",
   "latestVersionUnstable": false,
@@ -44,7 +46,7 @@
     { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker ID of the requester, or -1 if this request is being made by a normal consumer." },
     { "name": "IsolationLevel", "type": "int8", "versions": "2+",
-      "about": "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), non-transactional and COMMITTED transactional records are visible. To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the result, which allows consumers to discard ABORTED transactional records" },
+      "about": "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), non-transactional and COMMITTED transactional records are visible. To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the result, which allows consumers to discard ABORTED transactional records." },
     { "name": "Topics", "type": "[]ListOffsetsTopic", "versions": "0+",
       "about": "Each topic in the request.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
@@ -60,6 +62,8 @@
         { "name": "MaxNumOffsets", "type": "int32", "versions": "0", "default": "1",
           "about": "The maximum number of offsets to report." }
       ]}
-    ]}
+    ]},
+    { "name": "TimeoutMs", "type": "int32", "versions": "10+", "ignorable": true,
+      "about": "The timeout to await a response in milliseconds for requests that require reading from remote storage for topics enabled with tiered storage." }
   ]
 }

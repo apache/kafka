@@ -21,7 +21,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
@@ -203,7 +202,7 @@ public class RocksDBMetricsRecorderGaugesTest {
 
     private void runAndVerifySumOfProperties(final String propertyName) throws Exception {
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
+            new StreamsMetricsImpl(new Metrics(), "test-client", "processId", new MockTime());
         final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
 
         recorder.init(streamsMetrics, TASK_ID);
@@ -220,7 +219,7 @@ public class RocksDBMetricsRecorderGaugesTest {
 
     private void runAndVerifyBlockCacheMetricsWithMultipleCaches(final String propertyName) throws Exception {
         final StreamsMetricsImpl streamsMetrics =
-                new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
+                new StreamsMetricsImpl(new Metrics(), "test-client", "processId", new MockTime());
         final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
 
         recorder.init(streamsMetrics, TASK_ID);
@@ -237,7 +236,7 @@ public class RocksDBMetricsRecorderGaugesTest {
 
     private void runAndVerifyBlockCacheMetricsWithSingleCache(final String propertyName) throws Exception {
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
+            new StreamsMetricsImpl(new Metrics(), "test-client", "processId", new MockTime());
         final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
 
         recorder.init(streamsMetrics, TASK_ID);

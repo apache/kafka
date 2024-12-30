@@ -250,7 +250,7 @@ class TopicDeletionManager(config: KafkaConfig,
    * Invoked with the list of topics to be deleted
    * It invokes onPartitionDeletion for all partitions of a topic.
    * The updateMetadataRequest is also going to set the leader for the topics being deleted to
-   * [[kafka.api.LeaderAndIsr#LeaderDuringDelete]]. This lets each broker know that this topic is being deleted and can be
+   * [[org.apache.kafka.metadata.LeaderAndIsr#LeaderDuringDelete]]. This lets each broker know that this topic is being deleted and can be
    * removed from their caches.
    */
   private def onTopicDeletion(topics: Set[String]): Unit = {

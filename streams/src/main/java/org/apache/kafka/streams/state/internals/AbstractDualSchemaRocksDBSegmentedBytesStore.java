@@ -22,12 +22,11 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
@@ -45,6 +44,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractDualSchemaRocksDBSegmentedBytesStore.class);
@@ -55,9 +55,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     protected final Optional<KeySchema> indexKeySchema;
     private final long retentionPeriod;
 
-
-    protected ProcessorContext context;
-    private StateStoreContext stateStoreContext;
+    protected InternalProcessorContext internalProcessorContext;
     private Sensor expiredRecordSensor;
     protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     protected boolean consistencyEnabled = false;
@@ -115,7 +113,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     public void remove(final Bytes rawBaseKey) {
         final long timestamp = baseKeySchema.segmentTimestamp(rawBaseKey);
         observedStreamTime = Math.max(observedStreamTime, timestamp);
-        final S segment = segments.getSegmentForTimestamp(timestamp);
+        final S segment = segments.segmentForTimestamp(timestamp);
         if (segment == null) {
             return;
         }
@@ -146,7 +144,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
         final long timestamp = indexKeySchema.get().segmentTimestamp(indexKey);
         final long segmentId = segments.segmentId(timestamp);
-        final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+        final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
 
         if (segment != null) {
             segment.put(indexKey, value);
@@ -160,7 +158,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
         final long timestamp = indexKeySchema.get().segmentTimestamp(indexKey);
         final long segmentId = segments.segmentId(timestamp);
-        final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+        final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
 
         if (segment != null) {
             return segment.get(indexKey);
@@ -175,7 +173,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
         final long timestamp = indexKeySchema.get().segmentTimestamp(indexKey);
         final long segmentId = segments.segmentId(timestamp);
-        final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+        final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
 
         if (segment != null) {
             segment.delete(indexKey);
@@ -188,14 +186,14 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         final long timestamp = baseKeySchema.segmentTimestamp(rawBaseKey);
         observedStreamTime = Math.max(observedStreamTime, timestamp);
         final long segmentId = segments.segmentId(timestamp);
-        final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+        final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
 
         if (segment == null) {
-            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
             synchronized (position) {
-                StoreQueryUtils.updatePosition(position, stateStoreContext);
+                StoreQueryUtils.updatePosition(position, internalProcessorContext);
 
                 // Put to index first so that if put to base failed, when we iterate index, we will
                 // find no base value. If put to base first but putting to index fails, when we iterate
@@ -229,7 +227,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             }
         }
 
-        final S segment = segments.getSegmentForTimestamp(timestampFromRawKey);
+        final S segment = segments.segmentForTimestamp(timestampFromRawKey);
         if (segment == null) {
             return null;
         }
@@ -241,15 +239,13 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         return name;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        this.context = context;
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        this.internalProcessorContext = asInternalProcessorContext(stateStoreContext);
 
-        final StreamsMetricsImpl metrics = ProcessorContextUtils.getMetricsImpl(context);
+        final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
         final String threadId = Thread.currentThread().getName();
-        final String taskName = context.taskId().toString();
+        final String taskName = stateStoreContext.taskId().toString();
 
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
             threadId,
@@ -257,12 +253,12 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             metrics
         );
 
-        final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
+        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
         segments.setPosition(this.position);
 
-        segments.openExisting(context, observedStreamTime);
+        segments.openExisting(internalProcessorContext, observedStreamTime);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
@@ -274,16 +270,10 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         open = true;
 
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-            context.appConfigs(),
+            stateStoreContext.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
             false
         );
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        this.stateStoreContext = context;
-        init(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     @Override

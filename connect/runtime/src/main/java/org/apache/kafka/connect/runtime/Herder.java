@@ -31,7 +31,7 @@ import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
+
 import org.apache.maven.artifact.versioning.VersionRange;
 
 import java.util.Collection;
@@ -103,13 +103,6 @@ public interface Herder {
      * @param callback callback to invoke with the configuration
      */
     void connectorConfig(String connName, Callback<Map<String, String>> callback);
-
-    /**
-     * Get the configuration for all tasks of a connector.
-     * @param connName name of the connector
-     * @param callback callback to invoke with the configuration
-     */
-    void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback);
 
     /**
      * Set the configuration for a connector. This supports creation and updating.

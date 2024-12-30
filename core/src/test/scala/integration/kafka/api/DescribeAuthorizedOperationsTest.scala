@@ -13,9 +13,9 @@
 package kafka.api
 
 import kafka.security.JaasTestUtils
+
 import java.util
 import java.util.Properties
-import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.AclOperation.{ALL, ALTER, CLUSTER_ACTION, DELETE, DESCRIBE}
@@ -24,13 +24,15 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.{ServerConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 object DescribeAuthorizedOperationsTest {
   val Group1 = "group1"
@@ -72,12 +74,13 @@ object DescribeAuthorizedOperationsTest {
   }
 }
 
+@Disabled("KAFKA-17833: change to use kraft")
 class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslSetup {
   import DescribeAuthorizedOperationsTest._
 
   override val brokerCount = 1
   this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
-  this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AclAuthorizer].getName)
+  this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
 
   var client: Admin = _
 
@@ -86,7 +89,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
 
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
-    val authorizer = CoreUtils.createObject[Authorizer](classOf[AclAuthorizer].getName)
+    val authorizer = CoreUtils.createObject[Authorizer](classOf[StandardAuthorizer].getName)
     val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
     val topicResource = new ResourcePattern(ResourceType.TOPIC, AclEntry.WILDCARD_RESOURCE, PatternType.LITERAL)
 
@@ -126,7 +129,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     adminClientConfig.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
     val securityProps: util.Map[Object, Object] =
-      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+      JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
     adminClientConfig.putAll(securityProps)
     adminClientConfig
   }

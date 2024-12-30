@@ -20,12 +20,11 @@ package kafka.admin
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils.{createProducer, plaintextBootstrapServers, tempDir, waitForAllReassignmentsToComplete}
+import kafka.utils.TestUtils.{createProducer, plaintextBootstrapServers, tempDir, waitUntilTrue}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.ListOffsetsResponse
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.apache.kafka.server.config.ServerLogConfigs
@@ -45,7 +44,6 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   private val topicNameWithCustomConfigs = "foo2"
   private var adminClient: Admin = _
   private val mockTime: Time = new MockTime(1)
-  private var version = RecordBatch.MAGIC_VALUE_V2
   private val dataFolder = Seq(tempDir().getAbsolutePath, tempDir().getAbsolutePath)
 
   @BeforeEach
@@ -66,7 +64,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testListMaxTimestampWithEmptyLog(quorum: String): Unit = {
     val maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp(), topicName)
     assertEquals(ListOffsetsResponse.UNKNOWN_OFFSET, maxTimestampOffset.offset())
@@ -74,21 +72,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testListVersion0(quorum: String): Unit = {
-    // create records for version 0
-    createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V0)
-    produceMessagesInSeparateBatch()
-
-    // update version to version 1 to list offset for max timestamp
-    createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V1)
-    // the offset of max timestamp is always -1 if the batch version is 0
-    verifyListOffsets(expectedMaxTimestampOffset = -1)
-  }
-
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeCompressedRecordsInOneBatch(quorum: String): Unit = {
     produceMessagesInOneBatch("gzip")
     verifyListOffsets()
@@ -102,7 +86,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeNonCompressedRecordsInOneBatch(quorum: String): Unit = {
     produceMessagesInOneBatch()
     verifyListOffsets()
@@ -117,7 +101,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeNonCompressedRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch()
     verifyListOffsets()
@@ -129,40 +113,8 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 
-  // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
   @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testThreeRecordsInOneBatchWithMessageConversion(quorum: String): Unit = {
-    createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V1)
-    produceMessagesInOneBatch()
-    verifyListOffsets()
-
-    // test LogAppendTime case
-    setUpForLogAppendTimeCase()
-    produceMessagesInOneBatch(topic = topicNameWithCustomConfigs)
-    // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
-    // So in this one batch test, it'll be the first offset 0
-    verifyListOffsets(topic = topicNameWithCustomConfigs, 0)
-  }
-
-  // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testThreeRecordsInSeparateBatchWithMessageConversion(quorum: String): Unit = {
-    createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V1)
-    produceMessagesInSeparateBatch()
-    verifyListOffsets()
-
-    // test LogAppendTime case
-    setUpForLogAppendTimeCase()
-    produceMessagesInSeparateBatch(topic = topicNameWithCustomConfigs)
-    // In LogAppendTime's case, the maxTimestampOffset is the message in the last batch since we advance the time
-    // for each batch, So it'll be the last offset 2
-    verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeRecordsInOneBatchHavingDifferentCompressionTypeWithServer(quorum: String): Unit = {
     val props: Properties = new Properties()
     props.setProperty(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
@@ -172,7 +124,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeRecordsInSeparateBatchHavingDifferentCompressionTypeWithServer(quorum: String): Unit = {
     val props: Properties = new Properties()
     props.setProperty(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
@@ -182,7 +134,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeCompressedRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch("gzip")
     verifyListOffsets()
@@ -201,15 +153,6 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     createTopicWithConfig(topicNameWithCustomConfigs, props)
   }
 
-  private def createMessageFormatBrokers(recordVersion: Byte): Unit = {
-    version = recordVersion
-    recreateBrokers(reconfigure = true, startup = true)
-    Utils.closeQuietly(adminClient, "ListOffsetsAdminClient")
-    adminClient = Admin.create(Map[String, Object](
-      AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()
-    ).asJava)
-  }
-
   private def createTopicWithConfig(topic: String, props: Properties): Unit = {
     createTopic(topic, 1, 1.toShort, topicConfig = props)
   }
@@ -224,12 +167,9 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
       val maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp(), topic)
       assertEquals(expectedMaxTimestampOffset, maxTimestampOffset.offset())
-      if (version >= RecordBatch.MAGIC_VALUE_V2)
-        // the epoch is related to the returned offset.
-        // Hence, it should be zero (the earliest leader epoch), regardless of new leader election
-        assertEquals(Optional.of(0), maxTimestampOffset.leaderEpoch())
-      else
-        assertEquals(Optional.empty(), maxTimestampOffset.leaderEpoch())
+      // the epoch is related to the returned offset.
+      // Hence, it should be zero (the earliest leader epoch), regardless of new leader election
+      assertEquals(Optional.of(0), maxTimestampOffset.leaderEpoch())
     }
 
     // case 0: test the offsets from leader's append path
@@ -247,7 +187,8 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     adminClient.alterPartitionReassignments(java.util.Collections.singletonMap(new TopicPartition(topic, 0),
       Optional.of(new NewPartitionReassignment(java.util.Arrays.asList(newLeader))))).all().get()
     // wait for all reassignments get completed
-    waitForAllReassignmentsToComplete(adminClient)
+    waitUntilTrue(() => adminClient.listPartitionReassignments().reassignments().get().isEmpty,
+      s"There still are ongoing reassignments")
     // make sure we are able to see the new leader
     var lastLeader = -1
     TestUtils.waitUntilTrue(() => {
@@ -335,15 +276,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(2, zkConnectOrNull).zipWithIndex.map{ case (props, index) =>
-      if (version == RecordBatch.MAGIC_VALUE_V0) {
-        props.setProperty("log.message.format.version", "0.9.0")
-        props.setProperty("inter.broker.protocol.version", "0.9.0")
-      }
-      if (version == RecordBatch.MAGIC_VALUE_V1) {
-        props.setProperty("log.message.format.version", "0.10.0")
-        props.setProperty("inter.broker.protocol.version", "0.10.0")
-      }
+    TestUtils.createBrokerConfigs(2, null).zipWithIndex.map{ case (props, index) =>
      // We use mock timer so the records can get removed if the test env is too busy to complete
      // tests before kafka-log-retention. Hence, we disable the retention to avoid failed tests
      props.setProperty(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "-1")

@@ -29,18 +29,21 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class WindowedStreamPartitionerTest {
 
-    private String topicName = "topic";
+    private final String topicName = "topic";
 
-    private IntegerSerializer intSerializer = new IntegerSerializer();
-    private StringSerializer stringSerializer = new StringSerializer();
+    private final IntegerSerializer intSerializer = new IntegerSerializer();
+    private final StringSerializer stringSerializer = new StringSerializer();
 
-    private List<PartitionInfo> infos = Arrays.asList(
+    private final List<PartitionInfo> infos = Arrays.asList(
             new PartitionInfo(topicName, 0, Node.noNode(), new Node[0], new Node[0]),
             new PartitionInfo(topicName, 1, Node.noNode(), new Node[0], new Node[0]),
             new PartitionInfo(topicName, 2, Node.noNode(), new Node[0], new Node[0]),
@@ -49,7 +52,7 @@ public class WindowedStreamPartitionerTest {
             new PartitionInfo(topicName, 5, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
+    private final Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
             Collections.emptySet(), Collections.emptySet());
 
     @Test
@@ -67,16 +70,16 @@ public class WindowedStreamPartitionerTest {
             final String value = key.toString();
             final byte[] valueBytes = stringSerializer.serialize(topicName, value);
 
-            final Integer expected = defaultPartitioner.partition("topic", key, keyBytes, value, valueBytes, cluster);
+            final Set<Integer> expected = Collections.singleton(defaultPartitioner.partition(topicName, key, keyBytes, value, valueBytes, cluster));
 
             for (int w = 1; w < 10; w++) {
                 final TimeWindow window = new TimeWindow(10 * w, 20 * w);
 
                 final Windowed<Integer> windowedKey = new Windowed<>(key, window);
-                @SuppressWarnings("deprecation")
-                final Integer actual = streamPartitioner.partition(topicName, windowedKey, value, infos.size());
+                final Optional<Set<Integer>> actual = streamPartitioner.partitions(topicName, windowedKey, value, infos.size());
 
-                assertEquals(expected, actual);
+                assertTrue(actual.isPresent());
+                assertEquals(expected, actual.get());
             }
         }
 

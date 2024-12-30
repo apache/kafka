@@ -63,7 +63,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 
@@ -238,7 +237,7 @@ public class ClientTelemetryReporterTest {
         assertEquals(Long.MAX_VALUE, telemetrySender.timeToNextUpdate(100));
 
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATED));
-        assertThrows(IllegalStateException.class, () -> telemetrySender.timeToNextUpdate(100));
+        assertEquals(Long.MAX_VALUE, telemetrySender.timeToNextUpdate(100));
     }
 
     @Test
@@ -727,6 +726,48 @@ public class ClientTelemetryReporterTest {
         assertEquals(1, telemetrySender.computeStaggeredIntervalMs(1, 0.99, 1));
         long timeMs = telemetrySender.computeStaggeredIntervalMs(1000, 0.5, 1.5);
         assertTrue(timeMs >= 500 && timeMs <= 1500);
+    }
+
+    @Test
+    public void testTelemetryReporterInitiateClose() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+        clientTelemetryReporter.initiateClose();
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_NEEDED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
+            .telemetrySender()).state());
+    }
+
+    @Test
+    public void testTelemetryReporterInitiateCloseNoSubscription() {
+        clientTelemetryReporter.initiateClose();
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
+            .telemetrySender()).state());
+    }
+
+    @Test
+    public void testTelemetryReporterInitiateCloseAlreadyInTerminatedStates() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
+
+        clientTelemetryReporter.initiateClose();
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_NEEDED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
+            .telemetrySender()).state());
+
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS));
+        clientTelemetryReporter.initiateClose();
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
+            .telemetrySender()).state());
+
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATED));
+        clientTelemetryReporter.initiateClose();
+        assertEquals(ClientTelemetryState.TERMINATED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
+            .telemetrySender()).state());
     }
 
     @AfterEach

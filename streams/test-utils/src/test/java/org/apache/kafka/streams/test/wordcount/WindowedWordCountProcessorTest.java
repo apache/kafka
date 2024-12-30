@@ -18,11 +18,14 @@ package org.apache.kafka.streams.test.wordcount;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForward;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.TestUtils;
@@ -38,6 +41,10 @@ import java.util.Properties;
 import static java.util.Arrays.asList;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class WindowedWordCountProcessorTest {
     @Test
@@ -55,8 +62,9 @@ public class WindowedWordCountProcessorTest {
                   .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
                   .withCachingDisabled() // Caching is not supported by MockProcessorContext.
                   .build();
-        store.init(context.getStateStoreContext(), store);
-        context.getStateStoreContext().register(store, null);
+        final InternalProcessorContext internalProcessorContext = mockInternalProcessorContext(context);
+        store.init(internalProcessorContext, store);
+        internalProcessorContext.register(store, null);
 
         // Create and initialize the processor under test
         final Processor<String, String, String, String> processor = new WindowedWordCountProcessorSupplier().get();
@@ -111,8 +119,9 @@ public class WindowedWordCountProcessorTest {
                       .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
                       .withCachingDisabled() // Caching is not supported by MockProcessorContext.
                       .build();
-            store.init(context.getStateStoreContext(), store);
-            context.getStateStoreContext().register(store, null);
+            final InternalProcessorContext internalProcessorContext = mockInternalProcessorContext(context, stateDir);
+            store.init(internalProcessorContext, store);
+            internalProcessorContext.register(store, null);
 
             // Create and initialize the processor under test
             final Processor<String, String, String, String> processor = new WindowedWordCountProcessorSupplier().get();
@@ -146,5 +155,25 @@ public class WindowedWordCountProcessorTest {
         } finally {
             Utils.delete(stateDir);
         }
+    }
+
+    private InternalProcessorContext mockInternalProcessorContext(final MockProcessorContext<String, String> context) {
+        return mockInternalProcessorContext(context, null);
+    }
+
+    private InternalProcessorContext mockInternalProcessorContext(final MockProcessorContext<String, String> context,
+                                                                  final File stateDir) {
+        final InternalProcessorContext internalProcessorContext = mock(InternalProcessorContext.class);
+        when(internalProcessorContext.taskId()).thenReturn(context.taskId());
+        when(internalProcessorContext.metrics()).thenReturn((StreamsMetricsImpl) context.metrics());
+        when(internalProcessorContext.appConfigs()).thenReturn(context.appConfigs());
+        when(internalProcessorContext.stateDir()).thenReturn(stateDir);
+        doAnswer(invocation -> {
+            final StateStore stateStore = invocation.getArgument(0);
+            context.addStateStore(stateStore);
+            return null;
+        }).when(internalProcessorContext).register(any(), any());
+
+        return internalProcessorContext;
     }
 }

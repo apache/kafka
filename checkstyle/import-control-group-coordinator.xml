@@ -68,8 +68,12 @@
             <allow pkg="org.apache.kafka.storage.internals.log"/>
             <allow pkg="org.apache.kafka.test" />
             <allow pkg="org.apache.kafka.timeline" />
+            <allow pkg="org.apache.kafka.coordinator.common" />
+            <allow pkg="org.apache.kafka.coordinator.common.runtime" />
+            <allow pkg="com.google.re2j" />
             <subpackage name="metrics">
                 <allow pkg="com.yammer.metrics"/>
+                <allow pkg="org.HdrHistogram" />
                 <allow pkg="org.apache.kafka.common.metrics" />
                 <allow pkg="org.apache.kafka.server.metrics" />
             </subpackage>

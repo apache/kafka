@@ -107,7 +107,8 @@ public class MetadataQuorumCommand {
             .help("A comma-separated list of host:port pairs to use for establishing the connection to the Kafka controllers.");
         parser.addArgument("--command-config")
             .type(Arguments.fileType())
-            .help("Property file containing configs to be passed to Admin Client.");
+            .help("Property file containing configs to be passed to Admin Client. " +
+                "For add-controller, the file is used to specify the controller properties as well.");
         Subparsers subparsers = parser.addSubparsers().dest("command");
         addDescribeSubParser(subparsers);
         addAddControllerSubParser(subparsers);

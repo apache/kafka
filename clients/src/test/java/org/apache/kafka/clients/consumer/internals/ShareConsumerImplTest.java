@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.common.KafkaException;
@@ -49,6 +50,8 @@ import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -66,15 +69,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @SuppressWarnings("unchecked")
 public class ShareConsumerImplTest {
-
-    private final int defaultApiTimeoutMs = 1000;
 
     private ShareConsumerImpl<String, String> consumer = null;
 
@@ -127,11 +130,23 @@ public class ShareConsumerImplTest {
     }
 
     private ShareConsumerImpl<String, String> newConsumer(
+        SubscriptionState subscriptions
+    ) {
+        return newConsumer(
+                mock(ShareFetchBuffer.class),
+                subscriptions,
+                "group-id",
+                "client-id");
+    }
+
+    private ShareConsumerImpl<String, String> newConsumer(
             ShareFetchBuffer fetchBuffer,
             SubscriptionState subscriptions,
             String groupId,
             String clientId
     ) {
+        final int defaultApiTimeoutMs = 1000;
+
         return new ShareConsumerImpl<>(
                 new LogContext(),
                 clientId,
@@ -153,9 +168,11 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testSuccessfulStartupShutdown() {
-        consumer = newConsumer();
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
-        completeShareUnsubscribeApplicationEventSuccessfully();
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         assertDoesNotThrow(() -> consumer.close());
     }
 
@@ -166,11 +183,29 @@ public class ShareConsumerImplTest {
     }
 
     @Test
+    public void testFailConstructor() {
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
+        props.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "an.invalid.class");
+        final ConsumerConfig config = new ConsumerConfig(props);
+        KafkaException ce = assertThrows(
+                KafkaException.class,
+                () -> newConsumer(config));
+        assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
+        assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
+    }
+
+    @Test
     public void testWakeupBeforeCallingPoll() {
-        consumer = newConsumer();
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
         final String topicName = "foo";
         doReturn(ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
-        consumer.subscribe(singletonList(topicName));
+
+        final List<String> subscriptionTopic = Collections.singletonList(topicName);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
+        consumer.subscribe(subscriptionTopic);
 
         consumer.wakeup();
 
@@ -179,10 +214,58 @@ public class ShareConsumerImplTest {
     }
 
     @Test
+    public void testWakeupAfterEmptyFetch() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        final String topicName = "foo";
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            return ShareFetch.empty();
+        }).doAnswer(invocation -> ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        final List<String> subscriptionTopic = Collections.singletonList(topicName);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
+        consumer.subscribe(subscriptionTopic);
+
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ofMinutes(1)));
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testWakeupAfterNonEmptyFetch() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topicName);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
+        batch.addRecord(new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"));
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            final ShareFetch<String, String> fetch = ShareFetch.empty();
+            fetch.add(tip, batch);
+            return fetch;
+        }).when(fetchCollector).collect(Mockito.any(ShareFetchBuffer.class));
+
+        final List<String> subscriptionTopic = Collections.singletonList(topicName);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
+        consumer.subscribe(subscriptionTopic);
+
+        // since wakeup() is called when the non-empty fetch is returned the wakeup should be ignored
+        assertDoesNotThrow(() -> consumer.poll(Duration.ofMinutes(1)));
+        // the previously ignored wake-up should not be ignored in the next call
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
     public void testFailOnClosedConsumer() {
-        consumer = newConsumer();
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
-        completeShareUnsubscribeApplicationEventSuccessfully();
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         consumer.close();
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::subscription);
         assertEquals("This consumer has already been closed.", res.getMessage());
@@ -190,12 +273,49 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testVerifyApplicationEventOnShutdown() {
-        consumer = newConsumer();
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
-        completeShareUnsubscribeApplicationEventSuccessfully();
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         consumer.close();
         verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
         verify(applicationEventHandler).add(any(ShareUnsubscribeEvent.class));
+    }
+
+    @Test
+    public void testAcknowledgementCommitCallbackRegistrationEvent() {
+        consumer = newConsumer();
+        AcknowledgementCommitCallback callback = mock(AcknowledgementCommitCallback.class);
+
+        consumer.setAcknowledgementCommitCallback(callback);
+        verify(applicationEventHandler).add(argThat(event ->
+            event instanceof ShareAcknowledgementCommitCallbackRegistrationEvent &&
+            ((ShareAcknowledgementCommitCallbackRegistrationEvent) event).isCallbackRegistered()
+        ));
+
+        consumer.setAcknowledgementCommitCallback(callback);
+        // As we have already set the callback, we should not add another event. We only add when we initially register.
+        verify(applicationEventHandler, times(1)).add(any(ShareAcknowledgementCommitCallbackRegistrationEvent.class));
+    }
+
+    @Test
+    public void testAcknowledgementCommitCallbackRegistrationEvent_Null() {
+        consumer = newConsumer();
+        AcknowledgementCommitCallback callback = mock(AcknowledgementCommitCallback.class);
+
+        consumer.setAcknowledgementCommitCallback(null);
+        // Initially callback is set to null, setting again to null should not add an event.
+        verify(applicationEventHandler, times(0)).add(any(ShareAcknowledgementCommitCallbackRegistrationEvent.class));
+
+        consumer.setAcknowledgementCommitCallback(callback);
+        verify(applicationEventHandler, times(1)).add(any(ShareAcknowledgementCommitCallbackRegistrationEvent.class));
+
+        // Now we are changing from a non-null callback to null, this should add an event.
+        consumer.setAcknowledgementCommitCallback(null);
+        verify(applicationEventHandler).add(argThat(event ->
+                event instanceof ShareAcknowledgementCommitCallbackRegistrationEvent &&
+                !((ShareAcknowledgementCommitCallbackRegistrationEvent) event).isCallbackRegistered()));
     }
 
     @Test
@@ -215,32 +335,39 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testSubscribeGeneratesEvent() {
-        consumer = newConsumer();
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
         String topic = "topic1";
-        consumer.subscribe(singletonList(topic));
+        final List<String> subscriptionTopic = singletonList(topic);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
+        consumer.subscribe(subscriptionTopic);
         assertEquals(singleton(topic), consumer.subscription());
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(ShareSubscriptionChangeEvent.class));
+        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareSubscriptionChangeEvent.class));
     }
 
     @Test
     public void testUnsubscribeGeneratesUnsubscribeEvent() {
-        consumer = newConsumer();
-        completeShareUnsubscribeApplicationEventSuccessfully();
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
 
         consumer.unsubscribe();
 
-        assertTrue(consumer.subscription().isEmpty());
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(ShareUnsubscribeEvent.class));
+        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareUnsubscribeEvent.class));
     }
 
     @Test
     public void testSubscribeToEmptyListActsAsUnsubscribe() {
-        consumer = newConsumer();
-        completeShareUnsubscribeApplicationEventSuccessfully();
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
 
         consumer.subscribe(Collections.emptyList());
-        assertTrue(consumer.subscription().isEmpty());
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(ShareUnsubscribeEvent.class));
+
+        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareUnsubscribeEvent.class));
     }
 
     @Test
@@ -333,12 +460,9 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testEnsurePollEventSentOnConsumerPoll() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(
-                mock(ShareFetchBuffer.class),
-                subscriptions,
-                "group-id",
-                "client-id");
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
         final TopicPartition tp = new TopicPartition("topic", 0);
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), tp);
         final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
@@ -349,13 +473,16 @@ public class ShareConsumerImplTest {
                 .when(fetchCollector)
                 .collect(Mockito.any(ShareFetchBuffer.class));
 
-        consumer.subscribe(singletonList("topic1"));
+        final List<String> subscriptionTopic = singletonList("topic");
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
+        consumer.subscribe(subscriptionTopic);
+
         consumer.poll(Duration.ofMillis(100));
         verify(applicationEventHandler).add(any(PollEvent.class));
-        verify(applicationEventHandler).add(any(ShareSubscriptionChangeEvent.class));
+        verify(applicationEventHandler).addAndGet(any(ShareSubscriptionChangeEvent.class));
 
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
-        completeShareUnsubscribeApplicationEventSuccessfully();
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         consumer.close();
         verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
     }
@@ -451,9 +578,19 @@ public class ShareConsumerImplTest {
         assertEquals(0, timer.remainingMs());
     }
 
-    private void completeShareUnsubscribeApplicationEventSuccessfully() {
+    private void completeShareSubscriptionChangeApplicationEventSuccessfully(SubscriptionState subscriptions, List<String> topics) {
+        doAnswer(invocation -> {
+            ShareSubscriptionChangeEvent event = invocation.getArgument(0);
+            subscriptions.subscribeToShareGroup(new HashSet<>(topics));
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareSubscriptionChangeEvent.class));
+    }
+
+    private void completeShareUnsubscribeApplicationEventSuccessfully(SubscriptionState subscriptions) {
         doAnswer(invocation -> {
             ShareUnsubscribeEvent event = invocation.getArgument(0);
+            subscriptions.unsubscribe();
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(ShareUnsubscribeEvent.class));

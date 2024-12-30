@@ -36,8 +36,8 @@ fetch_jdk_tgz() {
   fi
 }
 
-JDK_MAJOR="${JDK_MAJOR:-8}"
-JDK_FULL="${JDK_FULL:-8u202-linux-x64}"
+JDK_MAJOR="${JDK_MAJOR:-17}"
+JDK_FULL="${JDK_FULL:-17-linux-x64}"
 
 if [ -z `which javac` ]; then
     apt-get -y update
@@ -114,16 +114,8 @@ apt-get install -y iperf traceroute
 # We want to use the latest Scala version per Kafka version
 # Previously we could not pull in Scala 2.12 builds, because Scala 2.12 requires Java 8 and we were running the system
 # tests with Java 7. We have since switched to Java 8, so 2.0.0 and later use Scala 2.12.
-get_kafka 0.8.2.2 2.11
-chmod a+rw /opt/kafka-0.8.2.2
-get_kafka 0.9.0.1 2.11
-chmod a+rw /opt/kafka-0.9.0.1
-get_kafka 0.10.0.1 2.11
-chmod a+rw /opt/kafka-0.10.0.1
-get_kafka 0.10.1.1 2.11
-chmod a+rw /opt/kafka-0.10.1.1
-get_kafka 0.10.2.2 2.11
-chmod a+rw /opt/kafka-0.10.2.2
+# The versions between 0.11.0.3 and 2.0.1 are used to run client code, because zookeeper in these versions is not compatible with JDK 17.
+# See KAFKA-17888 for more details.
 get_kafka 0.11.0.3 2.11
 chmod a+rw /opt/kafka-0.11.0.3
 get_kafka 1.0.2 2.11
@@ -164,8 +156,32 @@ get_kafka 3.6.2 2.12
 chmod a+rw /opt/kafka-3.6.2
 get_kafka 3.7.1 2.12
 chmod a+rw /opt/kafka-3.7.1
-get_kafka 3.8.0 2.12
-chmod a+rw /opt/kafka-3.8.0
+get_kafka 3.8.1 2.12
+chmod a+rw /opt/kafka-3.8.1
+get_kafka 3.9.0 2.12
+chmod a+rw /opt/kafka-3.9.0
+
+# To ensure the Kafka cluster starts successfully under JDK 17, we need to update the Zookeeper
+# client from version 3.4.x to 3.5.7 in Kafka versions 2.1.1, 2.2.2, and 2.3.1, as the older Zookeeper
+# client is incompatible with JDK 17. See KAFKA-17888 for more details.
+curl -s "https://repo1.maven.org/maven2/org/apache/zookeeper/zookeeper/3.5.7/zookeeper-3.5.7.jar" -o /opt/zookeeper-3.5.7.jar
+curl -s "https://repo1.maven.org/maven2/org/apache/zookeeper/zookeeper-jute/3.5.7/zookeeper-jute-3.5.7.jar" -o /opt/zookeeper-jute-3.5.7.jar
+rm -f /opt/kafka-2.1.1/libs/zookeeper-*
+rm -f /opt/kafka-2.2.2/libs/zookeeper-*
+rm -f /opt/kafka-2.3.1/libs/zookeeper-*
+
+cp /opt/zookeeper-3.5.7.jar /opt/kafka-2.1.1/libs/zookeeper-3.5.7.jar
+chmod a+rw /opt/kafka-2.1.1/libs/zookeeper-3.5.7.jar
+cp /opt/zookeeper-3.5.7.jar /opt/kafka-2.2.2/libs/zookeeper-3.5.7.jar
+chmod a+rw /opt/kafka-2.2.2/libs/zookeeper-3.5.7.jar
+cp /opt/zookeeper-3.5.7.jar /opt/kafka-2.3.1/libs/zookeeper-3.5.7.jar
+chmod a+rw /opt/kafka-2.3.1/libs/zookeeper-3.5.7.jar
+cp /opt/zookeeper-jute-3.5.7.jar /opt/kafka-2.1.1/libs/zookeeper-jute-3.5.7.jar
+chmod a+rw /opt/kafka-2.1.1/libs/zookeeper-jute-3.5.7.jar
+cp /opt/zookeeper-jute-3.5.7.jar /opt/kafka-2.2.2/libs/zookeeper-jute-3.5.7.jar
+chmod a+rw /opt/kafka-2.2.2/libs/zookeeper-jute-3.5.7.jar
+cp /opt/zookeeper-jute-3.5.7.jar /opt/kafka-2.3.1/libs/zookeeper-jute-3.5.7.jar
+chmod a+rw /opt/kafka-2.3.1/libs/zookeeper-jute-3.5.7.jar
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local
 # VMs, we can just create it if it doesn't exist and use it like we'd use

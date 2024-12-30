@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.KafkaException;
-
-import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -50,23 +47,19 @@ public class Sanitizer {
      * using URL-encoding.
      */
     public static String sanitize(String name) {
-        try {
-            String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8.name());
-            StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < encoded.length(); i++) {
-                char c = encoded.charAt(i);
-                if (c == '*') {         // Metric ObjectName treats * as pattern
-                    builder.append("%2A");
-                } else if (c == '+') {  // Space URL-encoded as +, replace with percent encoding
-                    builder.append("%20");
-                } else {
-                    builder.append(c);
-                }
+        String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8);
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < encoded.length(); i++) {
+            char c = encoded.charAt(i);
+            if (c == '*') {         // Metric ObjectName treats * as pattern
+                builder.append("%2A");
+            } else if (c == '+') {  // Space URL-encoded as +, replace with percent encoding
+                builder.append("%20");
+            } else {
+                builder.append(c);
             }
-            return builder.toString();
-        } catch (UnsupportedEncodingException e) {
-            throw new KafkaException(e);
         }
+        return builder.toString();
     }
 
     /**
@@ -74,11 +67,7 @@ public class Sanitizer {
      * is used to obtain the desanitized version of node names in ZooKeeper.
      */
     public static String desanitize(String name) {
-        try {
-            return URLDecoder.decode(name, StandardCharsets.UTF_8.name());
-        } catch (UnsupportedEncodingException e) {
-            throw new KafkaException(e);
-        }
+        return URLDecoder.decode(name, StandardCharsets.UTF_8);
     }
 
     /**

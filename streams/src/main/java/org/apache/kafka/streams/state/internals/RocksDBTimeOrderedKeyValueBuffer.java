@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -167,17 +166,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     @Override
     public String name() {
         return store.name();
-    }
-
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        store.init(context, root);
-        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
-        partition = context.taskId().partition();
-        if (loggingEnabled) {
-            changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
-        }
     }
 
     @Override

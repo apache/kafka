@@ -108,7 +108,7 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
     }
 
-    public StateStore getStore() {
+    public StateStore store() {
         return store;
     }
 
@@ -119,12 +119,6 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     @Override
     public String name() {
         return store.name();
-    }
-
-    @Deprecated
-    @Override
-    public void init(final org.apache.kafka.streams.processor.ProcessorContext context, final StateStore root) {
-        store.init(context, root);
     }
 
     @Override

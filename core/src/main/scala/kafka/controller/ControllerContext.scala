@@ -17,10 +17,9 @@
 
 package kafka.controller
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import kafka.utils.Implicits._
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderAndIsr
 
 import scala.collection.{Map, Seq, Set, mutable}
 
@@ -458,11 +457,11 @@ class ControllerContext extends ControllerChannelContext {
     // A sentinel (-2) is used as an epoch if the topic is queued for deletion. It overrides
     // any existing epoch.
     if (isTopicQueuedUpForDeletion(partition.topic)) {
-      LeaderAndIsr.EpochDuringDelete
+      LeaderAndIsr.EPOCH_DURING_DELETE
     } else {
       partitionLeadershipInfo.get(partition)
         .map(_.leaderAndIsr.leaderEpoch)
-        .getOrElse(LeaderAndIsr.NoEpoch)
+        .getOrElse(LeaderAndIsr.NO_EPOCH)
     }
   }
 
@@ -522,7 +521,7 @@ class ControllerContext extends ControllerChannelContext {
   }
 
   private def cleanPreferredReplicaImbalanceMetric(topic: String): Unit = {
-    partitionAssignments.getOrElse(topic, mutable.Map.empty).forKeyValue { (partition, replicaAssignment) =>
+    partitionAssignments.getOrElse(topic, mutable.Map.empty).foreachEntry { (partition, replicaAssignment) =>
       partitionLeadershipInfo.get(new TopicPartition(topic, partition)).foreach { leadershipInfo =>
         if (!hasPreferredLeader(replicaAssignment, leadershipInfo))
           preferredReplicaImbalanceCount -= 1

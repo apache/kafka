@@ -31,15 +31,14 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import java.util
 import java.util.Optional
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.{RichOption, RichOptionalInt}
 
 case class ControllerInformation(
   node: Option[Node],
@@ -115,7 +114,7 @@ class RaftControllerNodeProvider(
   private def idToNode(id: Int): Option[Node] = raftManager.voterNode(id, listenerName)
 
   override def getControllerInfo(): ControllerInformation =
-    ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.flatMap(idToNode),
+    ControllerInformation(raftManager.leaderAndEpoch.leaderId.toScala.flatMap(idToNode),
       listenerName, securityProtocol, saslMechanism, isZkController = false)
 }
 
@@ -231,8 +230,10 @@ class NodeToControllerChannelManagerImpl(
   def controllerApiVersions(): Optional[NodeApiVersions] = {
     requestThread.activeControllerAddress().flatMap { activeController =>
       Option(apiVersions.get(activeController.idString))
-    }.asJava
+    }.toJava
   }
+
+  def getTimeoutMs: Long = retryTimeoutMs
 }
 
 case class NodeToControllerQueueItem(

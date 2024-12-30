@@ -17,9 +17,8 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
@@ -62,7 +61,7 @@ public final class QuorumFeatures {
                 enableUnstable ?
                     MetadataVersion.latestTesting().featureLevel() :
                     MetadataVersion.latestProduction().featureLevel()));
-        for (Features feature : Features.PRODUCTION_FEATURES) {
+        for (Feature feature : Feature.PRODUCTION_FEATURES) {
             short maxVersion = enableUnstable ? feature.latestTesting() : feature.latestProduction();
             if (maxVersion > 0) {
                 features.put(feature.featureName(), VersionRange.of(feature.minimumProduction(), maxVersion));
@@ -108,27 +107,6 @@ public final class QuorumFeatures {
         return reasonNotSupported(newVersion,
             "Local controller " + nodeId,
             localSupportedFeature(featureName));
-    }
-
-    public Optional<String> reasonAllControllersZkMigrationNotReady(
-        MetadataVersion metadataVersion,
-        Map<Integer, ControllerRegistration> controllers
-    ) {
-        if (!metadataVersion.isMigrationSupported()) {
-            return Optional.of("The metadata.version too low at " + metadataVersion);
-        } else if (!metadataVersion.isControllerRegistrationSupported()) {
-            return Optional.empty();
-        }
-        for (int quorumNodeId : quorumNodeIds) {
-            ControllerRegistration registration = controllers.get(quorumNodeId);
-            if (registration == null) {
-                return Optional.of("No registration found for controller " + quorumNodeId);
-            } else if (!registration.zkMigrationReady()) {
-                return Optional.of("Controller " + quorumNodeId + " has not enabled " +
-                        "zookeeper.metadata.migration.enable");
-            }
-        }
-        return Optional.empty();
     }
 
     @Override

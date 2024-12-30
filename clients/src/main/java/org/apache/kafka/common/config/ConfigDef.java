@@ -661,7 +661,6 @@ public class ConfigDef {
         ConfigValue value = configs.get(name);
         if (key.recommender != null) {
             try {
-                System.out.println(name + " " + parsed);
                 List<Object> recommendedValues = key.recommender.validValues(name, parsed);
                 List<Object> originalRecommendedValues = value.recommendedValues();
                 if (!originalRecommendedValues.isEmpty()) {
@@ -1502,7 +1501,7 @@ public class ConfigDef {
         b.append("``").append(key.name).append("``").append("\n");
         if (key.documentation != null) {
             for (String docLine : key.documentation.split("\n")) {
-                if (docLine.length() == 0) {
+                if (docLine.isEmpty()) {
                     continue;
                 }
                 b.append("  ").append(docLine).append("\n\n");
@@ -1533,7 +1532,7 @@ public class ConfigDef {
         }
 
         List<ConfigKey> configs = new ArrayList<>(configKeys.values());
-        Collections.sort(configs, (k1, k2) -> compare(k1, k2, groupOrd));
+        configs.sort((k1, k2) -> compare(k1, k2, groupOrd));
         return configs;
     }
 
@@ -1585,16 +1584,8 @@ public class ConfigDef {
      */
     private static Validator embeddedValidator(final String keyPrefix, final Validator base) {
         if (base == null) return null;
-        return new Validator() {
-            public void ensureValid(String name, Object value) {
-                base.ensureValid(name.substring(keyPrefix.length()), value);
-            }
-
-            @Override
-            public String toString() {
-                return base.toString();
-            }
-        };
+        return ConfigDef.LambdaValidator.with(
+            (name, value) -> base.ensureValid(name.substring(keyPrefix.length()), value), base::toString);
     }
 
     /**

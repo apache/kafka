@@ -904,8 +904,15 @@ public class Sender implements Runnable {
         }
 
         String transactionalId = null;
+
+        // When we use transaction V1 protocol in transaction we set the request version upper limit to
+        // LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 so that the broker knows that we're using transaction protocol V1.
+        boolean useTransactionV1Version = false;
         if (transactionManager != null && transactionManager.isTransactional()) {
             transactionalId = transactionManager.transactionalId();
+            if (!transactionManager.isTransactionV2Enabled()) {
+                useTransactionV1Version = true;
+            }
         }
 
         ProduceRequest.Builder requestBuilder = ProduceRequest.forMagic(minUsedMagic,
@@ -913,7 +920,9 @@ public class Sender implements Runnable {
                         .setAcks(acks)
                         .setTimeoutMs(timeout)
                         .setTransactionalId(transactionalId)
-                        .setTopicData(tpd));
+                        .setTopicData(tpd),
+                useTransactionV1Version
+        );
         RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, time.milliseconds());
 
         String nodeId = Integer.toString(destination);

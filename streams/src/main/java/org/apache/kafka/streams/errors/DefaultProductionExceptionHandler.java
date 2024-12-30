@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.RetriableException;
 
 import java.util.Map;
 
@@ -25,18 +26,23 @@ import java.util.Map;
  * happens while attempting to produce result records.
  */
 public class DefaultProductionExceptionHandler implements ProductionExceptionHandler {
+    @SuppressWarnings("deprecation")
     @Deprecated
     @Override
     public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
-        return ProductionExceptionHandlerResponse.FAIL;
+        return exception instanceof RetriableException ?
+            ProductionExceptionHandlerResponse.RETRY :
+            ProductionExceptionHandlerResponse.FAIL;
     }
 
     @Override
     public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
                                                      final ProducerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
-        return ProductionExceptionHandlerResponse.FAIL;
+        return exception instanceof RetriableException ?
+            ProductionExceptionHandlerResponse.RETRY :
+            ProductionExceptionHandlerResponse.FAIL;
     }
 
     @Override

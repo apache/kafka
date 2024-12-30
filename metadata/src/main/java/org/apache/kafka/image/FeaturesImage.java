@@ -21,7 +21,6 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.image.node.FeaturesImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
-import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
@@ -41,30 +40,23 @@ import java.util.Optional;
 public final class FeaturesImage {
     public static final FeaturesImage EMPTY = new FeaturesImage(
         Collections.emptyMap(),
-        MetadataVersion.MINIMUM_KRAFT_VERSION,
-        ZkMigrationState.NONE
+        MetadataVersion.MINIMUM_KRAFT_VERSION
     );
 
     private final Map<String, Short> finalizedVersions;
 
     private final MetadataVersion metadataVersion;
 
-    private final ZkMigrationState zkMigrationState;
-
     public FeaturesImage(
         Map<String, Short> finalizedVersions,
-        MetadataVersion metadataVersion,
-        ZkMigrationState zkMigrationState
-    ) {
+        MetadataVersion metadataVersion) {
         this.finalizedVersions = Collections.unmodifiableMap(finalizedVersions);
         this.metadataVersion = metadataVersion;
-        this.zkMigrationState = zkMigrationState;
     }
 
     public boolean isEmpty() {
         return finalizedVersions.isEmpty() &&
-            metadataVersion.equals(MetadataVersion.MINIMUM_KRAFT_VERSION) &&
-            zkMigrationState.equals(ZkMigrationState.NONE);
+            metadataVersion.equals(MetadataVersion.MINIMUM_KRAFT_VERSION);
     }
 
     public MetadataVersion metadataVersion() {
@@ -73,10 +65,6 @@ public final class FeaturesImage {
 
     public Map<String, Short> finalizedVersions() {
         return finalizedVersions;
-    }
-
-    public ZkMigrationState zkMigrationState() {
-        return zkMigrationState;
     }
 
     private Optional<Short> finalizedVersion(String feature) {
@@ -88,14 +76,6 @@ public final class FeaturesImage {
             handleFeatureLevelNotSupported(options);
         } else {
             writeFeatureLevels(writer, options);
-        }
-
-        if (options.metadataVersion().isMigrationSupported()) {
-            writer.write(0, zkMigrationState.toRecord().message());
-        } else {
-            if (!zkMigrationState.equals(ZkMigrationState.NONE)) {
-                options.handleLoss("the ZK Migration state which was " + zkMigrationState);
-            }
         }
     }
 
@@ -131,7 +111,7 @@ public final class FeaturesImage {
 
     @Override
     public int hashCode() {
-        return Objects.hash(finalizedVersions, metadataVersion, zkMigrationState);
+        return Objects.hash(finalizedVersions, metadataVersion);
     }
 
     @Override
@@ -139,8 +119,7 @@ public final class FeaturesImage {
         if (!(o instanceof FeaturesImage)) return false;
         FeaturesImage other = (FeaturesImage) o;
         return finalizedVersions.equals(other.finalizedVersions) &&
-            metadataVersion.equals(other.metadataVersion) &&
-            zkMigrationState.equals(other.zkMigrationState);
+            metadataVersion.equals(other.metadataVersion);
     }
 
     @Override

@@ -37,14 +37,15 @@ import org.apache.kafka.connect.util.SinkUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.HttpClient;
-import org.eclipse.jetty.client.api.ContentResponse;
-import org.eclipse.jetty.client.api.Request;
-import org.eclipse.jetty.client.util.StringContentProvider;
+import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.StringRequestContent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -55,7 +56,9 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
+
+import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
 abstract class EmbeddedConnect {
 
@@ -81,6 +84,10 @@ abstract class EmbeddedConnect {
         this.kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps, clientProps);
         this.maskExitProcedures = maskExitProcedures;
         this.httpClient = new HttpClient();
+        // Necessary to prevent the rest request from timing out too early
+        // Before this change,ConnectWorkerIntegrationTest#testPollTimeoutExpiry() was failing
+        // because the request was being stopped by jetty before the framework responded
+        this.httpClient.setIdleTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
         this.assertions = new ConnectAssertions(this);
         // we should keep the original class loader and set it back after connector stopped since the connector will change the class loader,
         // and then, the Mockito will use the unexpected class loader to generate the wrong proxy instance, which makes mock failed
@@ -618,7 +625,7 @@ abstract class EmbeddedConnect {
             if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
                 // We use String instead of ConnectorTaskId as the key here since the latter can't be automatically
                 // deserialized by Jackson when used as a JSON object key (i.e., when it's serialized as a JSON string)
-                return mapper.readValue(responseToString(response), new TypeReference<List<TaskInfo>>() { });
+                return mapper.readValue(responseToString(response), new TypeReference<>() { });
             }
         } catch (IOException e) {
             log.error("Could not read task configs from response: {}",
@@ -920,19 +927,6 @@ abstract class EmbeddedConnect {
      * @param url the HTTP endpoint
      * @return the response to the GET request
      * @throws ConnectException if execution of the GET request fails
-     * @deprecated Use {@link #requestGet(String)} instead.
-     */
-    @Deprecated
-    public String executeGet(String url) {
-        return responseToString(requestGet(url));
-    }
-
-    /**
-     * Execute a GET request on the given URL.
-     *
-     * @param url the HTTP endpoint
-     * @return the response to the GET request
-     * @throws ConnectException if execution of the GET request fails
      */
     public Response requestGet(String url) {
         return requestHttpMethod(url, null, Collections.emptyMap(), "GET");
@@ -945,38 +939,9 @@ abstract class EmbeddedConnect {
      * @param body the payload of the PUT request
      * @return the response to the PUT request
      * @throws ConnectException if execution of the PUT request fails
-     * @deprecated Use {@link #requestPut(String, String)} instead.
-     */
-    @Deprecated
-    public int executePut(String url, String body) {
-        return requestPut(url, body).getStatus();
-    }
-
-    /**
-     * Execute a PUT request on the given URL.
-     *
-     * @param url the HTTP endpoint
-     * @param body the payload of the PUT request
-     * @return the response to the PUT request
-     * @throws ConnectException if execution of the PUT request fails
      */
     public Response requestPut(String url, String body) {
         return requestHttpMethod(url, body, Collections.emptyMap(), "PUT");
-    }
-
-    /**
-     * Execute a POST request on the given URL.
-     *
-     * @param url the HTTP endpoint
-     * @param body the payload of the POST request
-     * @param headers a map that stores the POST request headers
-     * @return the response to the POST request
-     * @throws ConnectException if execution of the POST request fails
-     * @deprecated Use {@link #requestPost(String, String, java.util.Map)} instead.
-     */
-    @Deprecated
-    public int executePost(String url, String body, Map<String, String> headers) {
-        return requestPost(url, body, headers).getStatus();
     }
 
     /**
@@ -1010,19 +975,6 @@ abstract class EmbeddedConnect {
      * @param url the HTTP endpoint
      * @return the response to the DELETE request
      * @throws ConnectException if execution of the DELETE request fails
-     * @deprecated Use {@link #requestDelete(String)} instead.
-     */
-    @Deprecated
-    public int executeDelete(String url) {
-        return requestDelete(url).getStatus();
-    }
-
-    /**
-     * Execute a DELETE request on the given URL.
-     *
-     * @param url the HTTP endpoint
-     * @return the response to the DELETE request
-     * @throws ConnectException if execution of the DELETE request fails
      */
     public Response requestDelete(String url) {
         return requestHttpMethod(url, null, Collections.emptyMap(), "DELETE");
@@ -1047,8 +999,8 @@ abstract class EmbeddedConnect {
             Request req = httpClient.newRequest(url);
             req.method(httpMethod);
             if (body != null) {
-                headers.forEach(req::header);
-                req.content(new StringContentProvider(body), "application/json");
+                req.headers(mutable -> headers.forEach(mutable::add));
+                req.body(new StringRequestContent("application/json", body, StandardCharsets.UTF_8));
             }
 
             ContentResponse res = req.send();

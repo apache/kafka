@@ -52,14 +52,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OAuthBearerSaslServerTest {
     private static final String USER = "user";
-    private static final Map<String, ?> CONFIGS;
-    static {
-        String jaasConfigText = "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule Required"
+    private static final String JAAS_CONFIG_TEXT = "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule Required"
                 + " unsecuredLoginStringClaim_sub=\"" + USER + "\";";
-        Map<String, Object> tmp = new HashMap<>();
-        tmp.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(jaasConfigText));
-        CONFIGS = Collections.unmodifiableMap(tmp);
-    }
+    private static final Map<String, ?> CONFIGS = Map.of(SaslConfigs.SASL_JAAS_CONFIG, new Password(JAAS_CONFIG_TEXT));
+
     private static final AuthenticateCallbackHandler LOGIN_CALLBACK_HANDLER;
     static {
         LOGIN_CALLBACK_HANDLER = new OAuthBearerUnsecuredLoginCallbackHandler();

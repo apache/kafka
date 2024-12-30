@@ -55,14 +55,15 @@
       "about": "True if the leader must skip running the assignment." },
     { "name": "MemberId", "type": "string", "versions": "0+",
       "about": "The member ID assigned by the group coordinator." },
-    { "name": "Members", "type": "[]JoinGroupResponseMember", "versions": "0+", "fields": [
+    { "name": "Members", "type": "[]JoinGroupResponseMember", "versions": "0+",
+      "about": "The group members.", "fields": [
       { "name": "MemberId", "type": "string", "versions": "0+",
         "about": "The group member ID." },
       { "name": "GroupInstanceId", "type": "string", "versions": "5+", "ignorable": true,
         "nullableVersions": "5+", "default": "null",
         "about": "The unique identifier of the consumer instance provided by end user." },
       { "name": "Metadata", "type": "bytes", "versions": "0+",
-        "about": "The group member metadata." }
-    ]}
+        "about": "The group member metadata." }]
+    }
   ]
 }

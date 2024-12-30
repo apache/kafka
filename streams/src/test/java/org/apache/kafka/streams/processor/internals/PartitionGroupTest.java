@@ -19,9 +19,11 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Value;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -45,12 +47,13 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -133,24 +136,38 @@ public class PartitionGroupTest {
         return new TopicPartition(topics[0], 2);
     }
 
+    private ConsumerRecord<byte[], byte[]> createConsumerRecord(
+            final int partition,
+            final long offset,
+            final byte[] key,
+            final byte[] value,
+            final int leaderEpoch
+    ) {
+        return new ConsumerRecord<>(topics[0], partition, offset, ConsumerRecord.NO_TIMESTAMP,
+                TimestampType.NO_TIMESTAMP_TYPE, ConsumerRecord.NULL_SIZE, ConsumerRecord.NULL_SIZE,
+                key, value, new RecordHeaders(), Optional.of(leaderEpoch));
+    }
+
     private void testFirstBatch(final PartitionGroup group) {
         StampedRecord record;
         final PartitionGroup.RecordInfo info = new RecordInfo();
         assertThat(group.numBuffered(), is(0));
+        assertNull(group.headRecordLeaderEpoch(partition1));
+        assertNull(group.headRecordLeaderEpoch(partition2));
 
         // add three 3 records with timestamp 1, 3, 5 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
-                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
+                createConsumerRecord(1, 1L, recordKey, recordValue, 0),
+                createConsumerRecord(1, 3L, recordKey, recordValue, 0),
+                createConsumerRecord(1, 5L, recordKey, recordValue, 2));
 
         group.addRawRecords(partition1, list1);
 
         // add three 3 records with timestamp 2, 4, 6 to partition-2
         final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
-                new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
+                createConsumerRecord(2, 2L, recordKey, recordValue, 1),
+                createConsumerRecord(2, 4L, recordKey, recordValue, 4),
+                createConsumerRecord(2, 6L, recordKey, recordValue, 4));
 
         group.addRawRecords(partition2, list2);
         // 1:[1, 3, 5]
@@ -162,6 +179,8 @@ public class PartitionGroupTest {
         assertThat(group.partitionTimestamp(partition2), is(RecordQueue.UNKNOWN));
         assertThat(group.headRecordOffset(partition1), is(1L));
         assertThat(group.headRecordOffset(partition2), is(2L));
+        assertThat(group.headRecordLeaderEpoch(partition1), is(Optional.of(0)));
+        assertThat(group.headRecordLeaderEpoch(partition2), is(Optional.of(1)));
         assertThat(group.streamTime(), is(RecordQueue.UNKNOWN));
         assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
 
@@ -175,6 +194,8 @@ public class PartitionGroupTest {
         assertThat(group.partitionTimestamp(partition2), is(RecordQueue.UNKNOWN));
         assertThat(group.headRecordOffset(partition1), is(3L));
         assertThat(group.headRecordOffset(partition2), is(2L));
+        assertThat(group.headRecordLeaderEpoch(partition1), is(Optional.of(0)));
+        assertThat(group.headRecordLeaderEpoch(partition2), is(Optional.of(1)));
         verifyTimes(record, 1L, 1L, group);
         assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
 
@@ -188,6 +209,8 @@ public class PartitionGroupTest {
         assertThat(group.partitionTimestamp(partition2), is(2L));
         assertThat(group.headRecordOffset(partition1), is(3L));
         assertThat(group.headRecordOffset(partition2), is(4L));
+        assertThat(group.headRecordLeaderEpoch(partition1), is(Optional.of(0)));
+        assertThat(group.headRecordLeaderEpoch(partition2), is(Optional.of(4)));
         verifyTimes(record, 2L, 2L, group);
         verifyBuffered(4, 2, 2, group);
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
@@ -199,8 +222,8 @@ public class PartitionGroupTest {
 
         // add 2 more records with timestamp 2, 4 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
-                new ConsumerRecord<>("topic", 1, 2L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 4L, recordKey, recordValue));
+                createConsumerRecord(1, 2L, recordKey, recordValue, 5),
+                createConsumerRecord(1, 4L, recordKey, recordValue, 6));
 
         group.addRawRecords(partition1, list3);
         // 1:[3, 5, 2, 4]
@@ -211,6 +234,8 @@ public class PartitionGroupTest {
         assertThat(group.partitionTimestamp(partition2), is(2L));
         assertThat(group.headRecordOffset(partition1), is(3L));
         assertThat(group.headRecordOffset(partition2), is(4L));
+        assertThat(group.headRecordLeaderEpoch(partition1), is(Optional.of(0)));
+        assertThat(group.headRecordLeaderEpoch(partition2), is(Optional.of(4)));
         assertThat(group.streamTime(), is(2L));
         assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
 
@@ -224,6 +249,8 @@ public class PartitionGroupTest {
         assertThat(group.partitionTimestamp(partition2), is(2L));
         assertThat(group.headRecordOffset(partition1), is(5L));
         assertThat(group.headRecordOffset(partition2), is(4L));
+        assertThat(group.headRecordLeaderEpoch(partition1), is(Optional.of(2)));
+        assertThat(group.headRecordLeaderEpoch(partition2), is(Optional.of(4)));
         verifyTimes(record, 3L, 3L, group);
         verifyBuffered(5, 3, 2, group);
         assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
@@ -238,6 +265,8 @@ public class PartitionGroupTest {
         assertThat(group.partitionTimestamp(partition2), is(4L));
         assertThat(group.headRecordOffset(partition1), is(5L));
         assertThat(group.headRecordOffset(partition2), is(6L));
+        assertThat(group.headRecordLeaderEpoch(partition1), is(Optional.of(2)));
+        assertThat(group.headRecordLeaderEpoch(partition2), is(Optional.of(4)));
         verifyTimes(record, 4L, 4L, group);
         verifyBuffered(4, 3, 1, group);
         assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
@@ -252,6 +281,8 @@ public class PartitionGroupTest {
         assertThat(group.partitionTimestamp(partition2), is(4L));
         assertThat(group.headRecordOffset(partition1), is(2L));
         assertThat(group.headRecordOffset(partition2), is(6L));
+        assertThat(group.headRecordLeaderEpoch(partition1), is(Optional.of(5)));
+        assertThat(group.headRecordLeaderEpoch(partition2), is(Optional.of(4)));
         verifyTimes(record, 5L, 5L, group);
         verifyBuffered(3, 2, 1, group);
         assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
@@ -266,6 +297,8 @@ public class PartitionGroupTest {
         assertThat(group.partitionTimestamp(partition2), is(4L));
         assertThat(group.headRecordOffset(partition1), is(4L));
         assertThat(group.headRecordOffset(partition2), is(6L));
+        assertThat(group.headRecordLeaderEpoch(partition1), is(Optional.of(6)));
+        assertThat(group.headRecordLeaderEpoch(partition2), is(Optional.of(4)));
         verifyTimes(record, 2L, 5L, group);
         verifyBuffered(2, 1, 1, group);
         assertThat(metrics.metric(lastLatenessValue).metricValue(), is(3.0));
@@ -280,6 +313,8 @@ public class PartitionGroupTest {
         assertThat(group.partitionTimestamp(partition2), is(4L));
         assertNull(group.headRecordOffset(partition1));
         assertThat(group.headRecordOffset(partition2), is(6L));
+        assertThat(group.headRecordLeaderEpoch(partition1), is(nullValue()));
+        assertThat(group.headRecordLeaderEpoch(partition2), is(Optional.of(4)));
         verifyTimes(record, 4L, 5L, group);
         verifyBuffered(1, 0, 1, group);
         assertThat(metrics.metric(lastLatenessValue).metricValue(), is(1.0));
@@ -294,6 +329,8 @@ public class PartitionGroupTest {
         assertThat(group.partitionTimestamp(partition2), is(6L));
         assertNull(group.headRecordOffset(partition1));
         assertNull(group.headRecordOffset(partition2));
+        assertNull(group.headRecordLeaderEpoch(partition1));
+        assertNull(group.headRecordLeaderEpoch(partition2));
         verifyTimes(record, 6L, 6L, group);
         verifyBuffered(0, 0, 0, group);
         assertThat(metrics.metric(lastLatenessValue).metricValue(), is(0.0));
@@ -429,6 +466,16 @@ public class PartitionGroupTest {
     }
 
     @Test
+    public void shouldThrowIllegalStateExceptionUponHeadRecordLeaderEpochIfPartitionUnknown() {
+        final PartitionGroup group = getBasicGroup();
+
+        final IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> group.headRecordLeaderEpoch(unknownPartition));
+        assertThat(errMessage, equalTo(exception.getMessage()));
+    }
+
+    @Test
     public void shouldEmptyPartitionsOnClear() {
         final PartitionGroup group =
             new PartitionGroup(
@@ -481,7 +528,7 @@ public class PartitionGroupTest {
         group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // shrink list of queues
-        group.updatePartitions(mkSet(createPartition2()), p -> {
+        group.updatePartitions(Set.of(createPartition2()), p -> {
             fail("should not create any queues");
             return null;
         });
@@ -514,7 +561,7 @@ public class PartitionGroupTest {
         group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // expand list of queues
-        group.updatePartitions(mkSet(createPartition1(), createPartition2()), p -> {
+        group.updatePartitions(Set.of(createPartition1(), createPartition2()), p -> {
             assertEquals(createPartition2(), p);
             return createQueue2();
         });
@@ -546,7 +593,7 @@ public class PartitionGroupTest {
         group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // expand and shrink list of queues
-        group.updatePartitions(mkSet(createPartition2()), p -> {
+        group.updatePartitions(Set.of(createPartition2()), p -> {
             assertEquals(createPartition2(), p);
             return createQueue2();
         });
@@ -557,6 +604,88 @@ public class PartitionGroupTest {
         assertThrows(IllegalStateException.class, () -> group.partitionTimestamp(partition1));
         assertThat(group.partitionTimestamp(partition2), equalTo(RecordQueue.UNKNOWN));
         assertThat(group.nextRecord(new RecordInfo(), time.milliseconds()), nullValue());  // all available records removed
+    }
+
+    @Test
+    public void shouldUpdateBufferSizeCorrectlyForSkippedRecords() {
+        final PartitionGroup group = new PartitionGroup(
+            logContext,
+            mkMap(mkEntry(partition1, queue1)),
+            tp -> OptionalLong.of(0L),
+            getValueSensor(metrics, lastLatenessValue),
+            enforcedProcessingSensor,
+            maxTaskIdleMs
+        );
+        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue),
+            new ConsumerRecord<>(
+                "topic",
+                1,
+                -1, // offset as invalid timestamp
+                -1, // invalid timestamp
+                TimestampType.CREATE_TIME,
+                0,
+                0,
+                recordKey,
+                recordValue,
+                new RecordHeaders(),
+                Optional.empty()
+            ),
+            new ConsumerRecord<>(
+                "topic",
+                1,
+                11,
+                0,
+                TimestampType.CREATE_TIME,
+                0,
+                0,
+                new byte[0], // corrupted key
+                recordValue,
+                new RecordHeaders(),
+                Optional.empty()
+            ),
+            new ConsumerRecord<>(
+                "topic",
+                1,
+                -1, // offset as invalid timestamp
+                -1, // invalid timestamp
+                TimestampType.CREATE_TIME,
+                0,
+                0,
+                recordKey,
+                recordValue,
+                new RecordHeaders(),
+                Optional.empty()
+            ),
+            new ConsumerRecord<>(
+                "topic",
+                1,
+                13,
+                0,
+                TimestampType.CREATE_TIME,
+                0,
+                0,
+                recordKey,
+                new byte[0], // corrupted value
+                new RecordHeaders(),
+                Optional.empty()
+            ),
+            new ConsumerRecord<>("topic", 1, 20L, recordKey, recordValue)
+        );
+
+        group.addRawRecords(partition1, list1);
+        assertEquals(7, group.numBuffered());
+
+        group.nextRecord(new RecordInfo(), time.milliseconds());
+        assertEquals(6, group.numBuffered());
+
+        // drain corrupted records
+        group.nextRecord(new RecordInfo(), time.milliseconds());
+        assertEquals(1, group.numBuffered());
+
+        group.nextRecord(new RecordInfo(), time.milliseconds());
+        assertEquals(0, group.numBuffered());
     }
 
     @Test

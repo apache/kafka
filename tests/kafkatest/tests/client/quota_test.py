@@ -21,7 +21,7 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.performance import ProducerPerformanceService
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.version import DEV_BRANCH, LATEST_1_1
+from kafkatest.version import DEV_BRANCH
 
 class QuotaConfig(object):
     CLIENT_ID = 'client-id'
@@ -129,24 +129,14 @@ class QuotaTest(Test):
     @cluster(num_nodes=5)
     @matrix(quota_type=[QuotaConfig.CLIENT_ID, QuotaConfig.USER, QuotaConfig.USER_CLIENT], override_quota=[True, False])
     @parametrize(quota_type=QuotaConfig.CLIENT_ID, consumer_num=2)
-    @parametrize(quota_type=QuotaConfig.CLIENT_ID, old_broker_throttling_behavior=True)
-    @parametrize(quota_type=QuotaConfig.CLIENT_ID, old_client_throttling_behavior=True)
-    def test_quota(self, quota_type, override_quota=True, producer_num=1, consumer_num=1,
-                   old_broker_throttling_behavior=False, old_client_throttling_behavior=False):
-        # Old (pre-2.0) throttling behavior for broker throttles before sending a response to the client.
-        if old_broker_throttling_behavior:
-            self.kafka.set_version(LATEST_1_1)
+    def test_quota(self, quota_type, override_quota=True, producer_num=1, consumer_num=1):
         self.kafka.start()
 
         self.quota_config = QuotaConfig(quota_type, override_quota, self.kafka)
         producer_client_id = self.quota_config.client_id
         consumer_client_id = self.quota_config.client_id
 
-        # Old (pre-2.0) throttling behavior for client does not throttle upon receiving a response with a non-zero throttle time.
-        if old_client_throttling_behavior:
-            client_version = LATEST_1_1
-        else:
-            client_version = DEV_BRANCH
+        client_version = DEV_BRANCH
 
         # Produce all messages
         producer = ProducerPerformanceService(

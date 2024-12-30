@@ -165,7 +165,9 @@ public class TopicConfig {
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "unclean.leader.election.enable";
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas " +
         "not in the ISR set to be elected as leader as a last resort, even though doing so may result in data " +
-        "loss.";
+        "loss.<p>Note: In KRaft mode, when enabling this config dynamically, it needs to wait for the unclean leader election" +
+        "thread to trigger election periodically (default is 5 minutes). Please run `kafka-leader-election.sh` with `unclean` option " +
+         "to trigger the unclean leader election immediately if needed.</p>";
 
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
     public static final String MIN_IN_SYNC_REPLICAS_DOC = "When a producer sets acks to \"all\" (or \"-1\"), " +
@@ -218,24 +220,7 @@ public class TopicConfig {
 
     public static final String MESSAGE_TIMESTAMP_TYPE_CONFIG = "message.timestamp.type";
     public static final String MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is " +
-        "message create time or log append time. The value should be either `CreateTime` or `LogAppendTime`";
-
-    /**
-     * @deprecated since 3.6, removal planned in 4.0.
-     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
-     */
-    @Deprecated
-    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG = "message.timestamp.difference.max.ms";
-
-    /**
-     * @deprecated since 3.6, removal planned in 4.0.
-     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
-     */
-    @Deprecated
-    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC = "[DEPRECATED] The maximum difference allowed between " +
-        "the timestamp when a broker receives a message and the timestamp specified in the message. If " +
-        "message.timestamp.type=CreateTime, a message will be rejected if the difference in timestamp " +
-        "exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+        "message create time or log append time.";
 
     public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG = "message.timestamp.before.max.ms";
     public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC = "This configuration sets the allowable timestamp " +

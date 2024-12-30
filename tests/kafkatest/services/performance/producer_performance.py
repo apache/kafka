@@ -19,6 +19,7 @@ from ducktape.utils.util import wait_until
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 from kafkatest.services.monitor.http import HttpMetricsCollector
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
@@ -54,10 +55,6 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
 
-        security_protocol = self.security_config.security_protocol
-        assert version.consumer_supports_bootstrap_server() or security_protocol == SecurityConfig.PLAINTEXT, \
-            "Security protocol %s is only supported if version >= 0.9.0.0, version %s" % (self.security_config, str(version))
-
         self.args = {
             'topic': topic,
             'kafka_opts': self.security_config.kafka_opts,
@@ -81,7 +78,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
             'metrics_props': ' '.join("%s=%s" % (k, v) for k, v in self.http_metrics_client_configs.items())
             })
 
-        cmd = ""
+        cmd = fix_opts_for_new_jvm(node)
 
         if node.version < DEV_BRANCH:
             # In order to ensure more consistent configuration between versions, always use the ProducerPerformance

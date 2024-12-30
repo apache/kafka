@@ -36,7 +36,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -54,6 +54,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 
@@ -61,13 +62,14 @@ import static org.apache.kafka.raft.KafkaRaftClientTest.replicaKey;
 import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testLeaderWritesBootstrapRecords() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -142,7 +144,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testBootstrapCheckpointIsNotReturnedOnFetch() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -172,14 +174,13 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testLeaderDoesNotBootstrapRecordsWithKraftVersion0() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withStaticVoters(voters)
-            .withBootstrapSnapshot(Optional.empty())
             .withUnknownLeader(0)
             .build();
 
@@ -201,19 +202,6 @@ public class KafkaRaftClientReconfigTest {
             )
         );
 
-        // check the bootstrap snapshot exists but is empty
-        assertEquals(BOOTSTRAP_SNAPSHOT_ID, context.log.latestSnapshotId().get());
-        try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
-                context.log.latestSnapshot().get(),
-                context.serde,
-                BufferSupplier.NO_CACHING,
-                KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-                false
-            )
-        ) {
-            SnapshotWriterReaderTest.assertControlSnapshot(expectedBootstrapRecords, reader);
-        }
-
         // check leader does not write bootstrap records to log
         context.becomeLeader();
 
@@ -234,7 +222,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testFollowerDoesNotRequestLeaderBootstrapSnapshot() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey leader = replicaKey(local.id() + 1, true);
         int epoch = 1;
 
@@ -264,7 +252,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testFollowerReadsKRaftBootstrapRecords() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey leader = replicaKey(local.id() + 1, true);
         ReplicaKey follower = replicaKey(local.id() + 2, true);
         VoterSet voterSet = VoterSetTest.voterSet(Stream.of(local, leader));
@@ -334,7 +322,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testAddVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -392,7 +380,7 @@ public class KafkaRaftClientReconfigTest {
             apiVersionsResponse(Errors.NONE)
         );
 
-        // Handle the the API_VERSIONS response
+        // Handle the API_VERSIONS response
         context.client.poll();
         // Append new VotersRecord to log
         context.client.poll();
@@ -413,7 +401,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterInvalidClusterId() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -450,7 +438,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterToNotLeader() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -478,7 +466,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterWithMissingDefaultListener() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -508,7 +496,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterWithPendingAddVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -564,7 +552,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterWithoutFencedPreviousLeaders() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -602,7 +590,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterWithKraftVersion0() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -647,7 +635,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterWithExistingVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -692,7 +680,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterTimeout() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -747,7 +735,7 @@ public class KafkaRaftClientReconfigTest {
             apiVersionsResponse(Errors.NONE)
         );
 
-        // Handle the the API_VERSIONS response
+        // Handle the API_VERSIONS response
         context.client.poll();
 
         // Wait for request timeout without sending a FETCH request to timeout the add voter RPC
@@ -764,7 +752,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterWithApiVersionsFromIncorrectNode() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -824,7 +812,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterInvalidFeatureVersion() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -884,7 +872,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterWithLaggingNewVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -937,7 +925,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterFailsWhenLosingLeadership() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -986,7 +974,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterWithMissingDirectoryId() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1024,7 +1012,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testRemoveVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1073,7 +1061,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testRemoveVoterIsLeader() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1113,7 +1101,7 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
 
-        // Send a FETCH request for follower2 and increaes the HWM
+        // Send a FETCH request for follower2 and increase the HWM
         context.deliverRequest(
             context.fetchRequest(epoch, follower2, context.log.endOffset().offset(), epoch, 0)
         );
@@ -1126,10 +1114,17 @@ public class KafkaRaftClientReconfigTest {
 
         // Expect END_QUORUM_EPOCH requests
         context.pollUntilRequest();
-        context.collectEndQuorumRequests(epoch, new HashSet<>(Arrays.asList(follower1.id(), follower2.id())), Optional.empty());
+        context.collectEndQuorumRequests(
+            epoch,
+            new HashSet<>(Arrays.asList(follower1.id(), follower2.id())),
+            Optional.empty()
+        );
 
-        // Election timeout is randome numer in [electionTimeoutMs, 2 * electionTimeoutMs)
-        context.time.sleep(2 * context.electionTimeoutMs());
+        // Calls to resign should be allowed and not throw an exception
+        context.client.resign(epoch);
+
+        // Election timeout is random number in [electionTimeoutMs, 2 * electionTimeoutMs)
+        context.time.sleep(2L * context.electionTimeoutMs());
         context.client.poll();
 
         assertTrue(context.client.quorum().isObserver());
@@ -1138,7 +1133,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testRemoveVoterInvalidClusterId() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1167,7 +1162,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testRemoveVoterToNotLeader() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1187,7 +1182,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testRemoveVoterWithPendingRemoveVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1225,7 +1220,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testRemoveVoterWithoutFencedPreviousLeaders() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1247,7 +1242,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testRemoveVoterWithKraftVersion0() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1277,7 +1272,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testRemoveVoterWithNoneVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1307,7 +1302,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testRemoveVoterWithNoneVoterId() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1341,7 +1336,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testRemoveVoterToEmptyVoterSet() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local));
 
@@ -1359,7 +1354,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testRemoveVoterTimedOut() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1403,7 +1398,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testRemoveVoterFailsWhenLosingLeadership() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1445,7 +1440,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testAddVoterWithPendingRemoveVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower1 = replicaKey(local.id() + 1, true);
         ReplicaKey follower2 = replicaKey(local.id() + 2, true);
 
@@ -1491,7 +1486,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testRemoveVoterWithPendingAddVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1539,7 +1534,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testUpdateVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1578,12 +1573,12 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 newListeners
             )
         );
 
-        // Expect reply for UpdateVoter request without commiting the record
+        // Expect reply for UpdateVoter request without committing the record
         context.pollUntilResponse();
         context.assertSentUpdateVoterResponse(
             Errors.NONE,
@@ -1597,7 +1592,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testLeaderUpdatesVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1636,7 +1631,7 @@ public class KafkaRaftClientReconfigTest {
             VoterSet.VoterNode.of(
                 local,
                 localListeners,
-                Features.KRAFT_VERSION.supportedVersionRange()
+                Feature.KRAFT_VERSION.supportedVersionRange()
             )
         );
         assertEquals(updatedVoterSet, context.listener.lastCommittedVoterSet());
@@ -1644,7 +1639,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testUpdateVoterInvalidClusterId() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1664,7 +1659,7 @@ public class KafkaRaftClientReconfigTest {
                 "",
                 follower,
                 epoch,
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 Endpoints.empty()
             )
         );
@@ -1681,7 +1676,7 @@ public class KafkaRaftClientReconfigTest {
                 "invalid-uuid",
                 follower,
                 epoch,
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 Endpoints.empty()
             )
         );
@@ -1695,7 +1690,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testUpdateVoterOldEpoch() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1714,7 +1709,7 @@ public class KafkaRaftClientReconfigTest {
                 context.clusterId,
                 follower,
                 epoch - 1,
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 Endpoints.empty()
             )
         );
@@ -1728,7 +1723,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testUpdateVoterNewEpoch() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1747,7 +1742,7 @@ public class KafkaRaftClientReconfigTest {
                 context.clusterId,
                 follower,
                 epoch + 1,
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 Endpoints.empty()
             )
         );
@@ -1761,7 +1756,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testUpdateVoterToNotLeader() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1772,11 +1767,11 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        // Attempt to uodate voter in the quorum
+        // Attempt to update voter in the quorum
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 Endpoints.empty()
             )
         );
@@ -1790,7 +1785,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testUpdateVoterWithoutFencedPreviousLeaders() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1820,7 +1815,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 newListeners
             )
         );
@@ -1835,7 +1830,7 @@ public class KafkaRaftClientReconfigTest {
     // KAFKA-16538 is going to allow UpdateVoter RPC when the kraft.version is 0
     @Test
     void testUpdateVoterWithKraftVersion0() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1872,7 +1867,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 newListeners
             )
         );
@@ -1886,7 +1881,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testUpdateVoterWithNoneVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1923,7 +1918,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 replicaKey(follower.id(), true),
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 newListeners
             )
         );
@@ -1937,7 +1932,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testUpdateVoterWithNoneVoterId() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -1974,7 +1969,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 ReplicaKey.of(follower.id() + 1, follower.directoryId().get()),
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 newListeners
             )
         );
@@ -1988,7 +1983,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testUpdateVoterWithPendingAddVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
@@ -2044,7 +2039,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 newListeners
             )
         );
@@ -2058,7 +2053,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testFollowerSendsUpdateVoter() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey voter1 = replicaKey(local.id() + 1, true);
         ReplicaKey voter2 = replicaKey(local.id() + 2, true);
 
@@ -2110,7 +2105,7 @@ public class KafkaRaftClientReconfigTest {
         RaftRequest.Outbound updateRequest = context.assertSentUpdateVoterRequest(
             local,
             epoch,
-            Features.KRAFT_VERSION.supportedVersionRange(),
+            Feature.KRAFT_VERSION.supportedVersionRange(),
             localListeners
         );
         context.deliverResponse(
@@ -2130,7 +2125,7 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     void testFollowerSendsUpdateVoterWhenDifferent() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey voter1 = replicaKey(local.id() + 1, true);
         ReplicaKey voter2 = replicaKey(local.id() + 2, true);
 
@@ -2170,11 +2165,16 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+
+        // after more than 3 fetch timeouts the update voter period timer should have expired.
+        // check that the update voter period timer doesn't remain at zero (0) and cause the message queue to get
+        // called with a zero (0) timeout and result in a busy-loop.
+        assertNotEquals(OptionalLong.of(0L), context.messageQueue.lastPollTimeoutMs());
     }
 
     @Test
     void testUpdateVoterResponseCausesEpochChange() throws Exception {
-        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey voter1 = replicaKey(local.id() + 1, true);
         ReplicaKey voter2 = replicaKey(local.id() + 2, true);
 
@@ -2226,7 +2226,7 @@ public class KafkaRaftClientReconfigTest {
         RaftRequest.Outbound updateRequest = context.assertSentUpdateVoterRequest(
             local,
             epoch,
-            Features.KRAFT_VERSION.supportedVersionRange(),
+            Feature.KRAFT_VERSION.supportedVersionRange(),
             localListeners
         );
         context.deliverResponse(
@@ -2243,6 +2243,64 @@ public class KafkaRaftClientReconfigTest {
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0);
         assertEquals(voter2.id(), fetchRequest.destination().id());
+    }
+
+    @Test
+    void testObserverDiscoversLeaderWithUnknownVoters() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        InetSocketAddress bootstrapAddress = InetSocketAddress.createUnresolved("localhost", 1234);
+        int epoch = 3;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.empty())
+            .withUnknownLeader(epoch)
+            .withBootstrapServers(Optional.of(Collections.singletonList(bootstrapAddress)))
+            .build();
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        assertEquals(-2, fetchRequest.destination().id());
+    }
+
+    @Test
+    public void testHandleBeginQuorumRequestMoreEndpoints() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey leader = replicaKey(local.id() + 1, true);
+        int leaderEpoch = 3;
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, leader));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withElectedLeader(leaderEpoch, leader.id())
+            .withKip853Rpc(true)
+            .build();
+
+        context.client.poll();
+
+        HashMap<ListenerName, InetSocketAddress> leaderListenersMap = new HashMap<>(2);
+        leaderListenersMap.put(
+            VoterSetTest.DEFAULT_LISTENER_NAME,
+            InetSocketAddress.createUnresolved("localhost", 9990 + leader.id())
+        );
+        leaderListenersMap.put(
+            ListenerName.normalised("ANOTHER_LISTENER"),
+            InetSocketAddress.createUnresolved("localhost", 8990 + leader.id())
+        );
+        Endpoints leaderEndpoints = Endpoints.fromInetSocketAddresses(leaderListenersMap);
+
+        context.deliverRequest(context.beginEpochRequest(leaderEpoch, leader.id(), leaderEndpoints));
+        context.pollUntilResponse();
+
+        context.assertElectedLeader(leaderEpoch, leader.id());
+
+        context.assertSentBeginQuorumEpochResponse(
+            Errors.NONE,
+            leaderEpoch,
+            OptionalInt.of(leader.id())
+        );
     }
 
     private static void verifyVotersRecord(
@@ -2268,12 +2326,12 @@ public class KafkaRaftClientReconfigTest {
         assertEquals(expectedKRaftVersion, kRaftVersionRecord.kRaftVersion());
     }
 
-    private int randomeReplicaId() {
+    private int randomReplicaId() {
         return ThreadLocalRandom.current().nextInt(1025);
     }
 
     private static ApiVersionsResponseData apiVersionsResponse(Errors error) {
-        return apiVersionsResponse(error, Features.KRAFT_VERSION.supportedVersionRange());
+        return apiVersionsResponse(error, Feature.KRAFT_VERSION.supportedVersionRange());
     }
 
     private static ApiVersionsResponseData apiVersionsResponse(Errors error, SupportedVersionRange supportedVersions) {

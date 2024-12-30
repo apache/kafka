@@ -27,6 +27,7 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.NoOpProcessorWrapper;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 
@@ -38,6 +39,7 @@ import java.util.Properties;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
@@ -48,6 +50,8 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC;
+import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DEFAULT;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DOC;
@@ -55,24 +59,39 @@ import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_DOC;
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSize;
 
 /**
  * Streams configs that apply at the topology level. The values in the {@link StreamsConfig} parameter of the
- * {@link org.apache.kafka.streams.KafkaStreams} or {@link KafkaStreamsNamedTopologyWrapper} constructors will
- * determine the defaults, which can then be overridden for specific topologies by passing them in when creating the
- * topology builders via the {@link org.apache.kafka.streams.StreamsBuilder#StreamsBuilder(TopologyConfig)} StreamsBuilder(TopologyConfig)} method.
+ * {@link org.apache.kafka.streams.KafkaStreams} constructor or the {@link KafkaStreamsNamedTopologyWrapper} constructor (deprecated)
+ * will determine the defaults, which can then be overridden for specific topologies by passing them in when creating the
+ * topology builders via the {@link StreamsBuilder#StreamsBuilder(TopologyConfig)} constructor for DSL applications,
+ * or the {@link Topology#Topology(TopologyConfig)} for PAPI applications.
+ * <p>
+ * Note that some configs, such as the {@code processor.wrapper.class} config, can only take effect while the
+ * topology is being built, which means they have to be passed in as a TopologyConfig to the
+ * {@link Topology#Topology(TopologyConfig)} constructor (PAPI) or the
+ * {@link StreamsBuilder#StreamsBuilder(TopologyConfig)} constructor (DSL).
+ * If they are only set in the configs passed in to the KafkaStreams constructor, it will be too late for them
+ * to be applied and the config will be ignored.
  */
 @SuppressWarnings("deprecation")
-public class TopologyConfig extends AbstractConfig {
+public final class TopologyConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
     static {
         CONFIG = new ConfigDef()
+            .define(PROCESSOR_WRAPPER_CLASS_CONFIG,
+                    Type.CLASS,
+                    NoOpProcessorWrapper.class.getName(),
+                    Importance.LOW,
+                    PROCESSOR_WRAPPER_CLASS_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                 Type.INT,
                 null,
@@ -98,6 +117,11 @@ public class TopologyConfig extends AbstractConfig {
                 null,
                 Importance.MEDIUM,
                 DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
+            .define(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                Type.CLASS,
+                null,
+                Importance.MEDIUM,
+                DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                 Type.LONG,
                 null,
@@ -140,11 +164,10 @@ public class TopologyConfig extends AbstractConfig {
     public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
     public final Supplier<ProcessingExceptionHandler> processingExceptionHandlerSupplier;
 
-    public TopologyConfig(final StreamsConfig globalAppConfigs) {
-        this(null, globalAppConfigs, new Properties());
+    public TopologyConfig(final StreamsConfig configs) {
+        this(null, configs, mkObjectProperties(configs.originals()));
     }
 
-    @SuppressWarnings("this-escape")
     public TopologyConfig(final String topologyName, final StreamsConfig globalAppConfigs, final Properties topologyOverrides) {
         super(CONFIG, topologyOverrides, false);
 
@@ -167,7 +190,7 @@ public class TopologyConfig extends AbstractConfig {
         final boolean cacheMaxBytesBufferingOverridden = isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides);
 
         if (!stateStoreCacheMaxBytesOverridden && !cacheMaxBytesBufferingOverridden) {
-            cacheSize = getTotalCacheSize(globalAppConfigs);
+            cacheSize = totalCacheSize(globalAppConfigs);
         } else {
             if (stateStoreCacheMaxBytesOverridden && cacheMaxBytesBufferingOverridden) {
                 cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
@@ -223,11 +246,17 @@ public class TopologyConfig extends AbstractConfig {
             timestampExtractorSupplier = () -> globalAppConfigs.getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         }
 
-        if (isTopologyOverride(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, topologyOverrides)) {
-            deserializationExceptionHandlerSupplier = () -> getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
-            log.info("Topology {} is overriding {} to {}", topologyName, DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, getClass(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG));
+
+        final String deserializationExceptionHandlerKey = (globalAppConfigs.originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG)
+            || originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG)) ?
+            DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG :
+            DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
+
+        if (isTopologyOverride(deserializationExceptionHandlerKey, topologyOverrides)) {
+            deserializationExceptionHandlerSupplier = () -> getConfiguredInstance(deserializationExceptionHandlerKey, DeserializationExceptionHandler.class);
+            log.info("Topology {} is overriding {} to {}", topologyName, deserializationExceptionHandlerKey, getClass(deserializationExceptionHandlerKey));
         } else {
-            deserializationExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
+            deserializationExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(deserializationExceptionHandlerKey, DeserializationExceptionHandler.class);
         }
 
         if (isTopologyOverride(DEFAULT_DSL_STORE_CONFIG, topologyOverrides)) {

@@ -1,0 +1,138 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+build:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/**'
+      - 'gradle/**'
+      - '*gradlew*'
+      - 'build.gradle'
+      - 'settings.gradle'
+
+clients:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'clients/**'
+
+
+tests:
+- all:
+  - changed-files:
+    - any-glob-to-all-files: 
+      - 'tests/**'
+      - '**/test/**'
+
+
+connect:
+- all:
+  - changed-files:
+    - any-glob-to-any-file: 
+      - 'connect/**/*'
+    - all-globs-to-all-files:
+      - '!connect/mirror/*'
+
+mirror-maker-2:
+- changed-files:
+  - any-glob-to-any-file: 
+    - 'connect/mirror/**'
+
+
+core:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'core/**'
+    - '*server*/**'
+
+storage:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'storage/**'
+
+streams:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'streams/**'
+
+tools:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'tools/**'
+    - 'trogdor/**'
+    - 'vagrant/**'
+    - 'committer-tools/**'
+    - 'shell/**'
+
+docs:
+- changed-files:
+  - any-glob-to-all-files:
+    - 'docs/**'
+    - '**/*.md'
+    - 'examples/**'
+
+generator:
+  - changed-files:
+      - any-glob-to-any-file:
+        - 'generator/**'
+
+transactions:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'transaction-coordinator/**'
+
+kip-932:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'share/**'
+          - 'share-coordinator/**'
+          - 'core/src/*/java/kafka/server/share/**'
+
+docker:
+- changed-files:
+  - any-glob-to-any-file: 
+    - 'docker/**'
+
+performance:
+- changed-files:
+  - any-glob-to-any-file: 
+    - 'jmh-benchmarks/**'
+
+consumer:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'clients/src/*/java/org/apache/kafka/clients/consumer/**'
+
+producer:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'clients/src/*/java/org/apache/kafka/clients/producer/**'
+
+kraft:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'metadata/**'
+      - 'raft/**'
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "grade/dependencies.gradle"
+      - "LICENSE-binary"
+
+tiered-storage:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '*/src/*/java/org/apache/kafka/server/log/remote/**'
+      - '*/src/*/java/kafka/log/remote/**'

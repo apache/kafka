@@ -26,7 +26,6 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
@@ -66,6 +65,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -84,7 +84,6 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -95,12 +94,14 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class OffsetFetcherTest {
 
     private final String topicName = "test";
     private final Uuid topicId = Uuid.randomUuid();
-    private final Map<String, Uuid> topicIds = new HashMap<String, Uuid>() {
+    private final Map<String, Uuid> topicIds = new HashMap<>() {
         {
             put(topicName, topicId);
         }
@@ -112,6 +113,7 @@ public class OffsetFetcherTest {
     private final int validLeaderEpoch = 0;
     private final MetadataResponse initialUpdateResponse =
         RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 4), topicIds);
+    private final int requestTimeoutMs = 30000;
 
     private final long retryBackoffMs = 100;
     private MockTime time = new MockTime(1);
@@ -174,11 +176,31 @@ public class OffsetFetcherTest {
     public void testUpdateFetchPositionResetToLatestOffset() {
         buildFetcher();
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         client.updateMetadata(initialUpdateResponse);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        offsetFetcher.resetPositionsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(5, subscriptions.position(tp0).offset);
+    }
+
+    @Test
+    public void testUpdateFetchPositionResetToDurationOffset() {
+        long timestamp = Instant.now().toEpochMilli();
+        AutoOffsetResetStrategy durationStrategy = mock(AutoOffsetResetStrategy.class);
+        when(durationStrategy.timestamp()).thenReturn(Optional.of(timestamp));
+        buildFetcher(durationStrategy);
+        assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, durationStrategy);
+
+        client.updateMetadata(initialUpdateResponse);
+
+        client.prepareResponse(listOffsetRequestMatcher(timestamp),
                 listOffsetResponse(Errors.NONE, 1L, 5L));
         offsetFetcher.resetPositionsIfNeeded();
         consumerClient.pollNoWakeup();
@@ -194,7 +216,7 @@ public class OffsetFetcherTest {
     public void testFetchOffsetErrors() {
         buildFetcher();
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         // Fail with OFFSET_NOT_AVAILABLE
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP,
@@ -241,10 +263,11 @@ public class OffsetFetcherTest {
         buildFetcher(isolationLevel);
 
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         client.prepareResponse(body -> {
             ListOffsetsRequest request = (ListOffsetsRequest) body;
+            assertEquals(requestTimeoutMs, request.timeoutMs());
             return request.isolationLevel() == isolationLevel;
         }, listOffsetResponse(Errors.NONE, 1L, 5L));
         offsetFetcher.resetPositionsIfNeeded();
@@ -259,7 +282,7 @@ public class OffsetFetcherTest {
     public void testresetPositionsSkipsBlackedOutConnections() {
         buildFetcher();
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.EARLIEST);
 
         // Check that we skip sending the ListOffset request when the node is blacked out
         client.updateMetadata(initialUpdateResponse);
@@ -269,7 +292,7 @@ public class OffsetFetcherTest {
         assertEquals(0, consumerClient.pendingRequestCount());
         consumerClient.pollNoWakeup();
         assertTrue(subscriptions.isOffsetResetNeeded(tp0));
-        assertEquals(OffsetResetStrategy.EARLIEST, subscriptions.resetStrategy(tp0));
+        assertEquals(AutoOffsetResetStrategy.EARLIEST, subscriptions.resetStrategy(tp0));
 
         time.sleep(500);
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.EARLIEST_TIMESTAMP),
@@ -286,7 +309,7 @@ public class OffsetFetcherTest {
     public void testUpdateFetchPositionResetToEarliestOffset() {
         buildFetcher();
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.EARLIEST);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.EARLIEST_TIMESTAMP,
             validLeaderEpoch), listOffsetResponse(Errors.NONE, 1L, 5L));
@@ -302,7 +325,7 @@ public class OffsetFetcherTest {
     public void testresetPositionsMetadataRefresh() {
         buildFetcher();
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         // First fetch fails with stale metadata
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP,
@@ -339,7 +362,7 @@ public class OffsetFetcherTest {
         client.updateMetadata(metadataWithNoLeaderEpochs);
 
         // Return a ListOffsets response with leaderEpoch=1, we should ignore it
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP),
                 listOffsetResponse(tp0, Errors.NONE, 1L, 5L, 1));
         offsetFetcher.resetPositionsIfNeeded();
@@ -362,7 +385,7 @@ public class OffsetFetcherTest {
         client.updateMetadata(metadataWithLeaderEpochs);
 
         // Reset offsets to trigger ListOffsets call
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         // Now we see a ListOffsets with leaderEpoch=2 epoch, we trigger a metadata update
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP, 1),
@@ -379,7 +402,7 @@ public class OffsetFetcherTest {
     public void testUpdateFetchPositionDisconnect() {
         buildFetcher();
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         // First request gets a disconnect
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP,
@@ -415,7 +438,7 @@ public class OffsetFetcherTest {
     public void testAssignmentChangeWithInFlightReset() {
         buildFetcher();
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         // Send the ListOffsets request to reset the position
         offsetFetcher.resetPositionsIfNeeded();
@@ -439,7 +462,7 @@ public class OffsetFetcherTest {
     public void testSeekWithInFlightReset() {
         buildFetcher();
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         // Send the ListOffsets request to reset the position
         offsetFetcher.resetPositionsIfNeeded();
@@ -461,7 +484,7 @@ public class OffsetFetcherTest {
 
     private boolean listOffsetMatchesExpectedReset(
         TopicPartition tp,
-        OffsetResetStrategy strategy,
+        AutoOffsetResetStrategy strategy,
         AbstractRequest request
     ) {
         assertInstanceOf(ListOffsetsRequest.class, request);
@@ -475,9 +498,9 @@ public class OffsetFetcherTest {
             .map(ListOffsetsPartition::partitionIndex).collect(Collectors.toSet()));
 
         ListOffsetsPartition listPartition = listTopic.partitions().get(0);
-        if (strategy == OffsetResetStrategy.EARLIEST) {
+        if (strategy == AutoOffsetResetStrategy.EARLIEST) {
             assertEquals(ListOffsetsRequest.EARLIEST_TIMESTAMP, listPartition.timestamp());
-        } else if (strategy == OffsetResetStrategy.LATEST) {
+        } else if (strategy == AutoOffsetResetStrategy.LATEST) {
             assertEquals(ListOffsetsRequest.LATEST_TIMESTAMP, listPartition.timestamp());
         }
         return true;
@@ -488,13 +511,13 @@ public class OffsetFetcherTest {
         buildFetcher();
         assignFromUser(singleton(tp0));
 
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.EARLIEST);
         offsetFetcher.resetPositionsIfNeeded();
 
         client.prepareResponse(req -> {
-            if (listOffsetMatchesExpectedReset(tp0, OffsetResetStrategy.EARLIEST, req)) {
+            if (listOffsetMatchesExpectedReset(tp0, AutoOffsetResetStrategy.EARLIEST, req)) {
                 // Before the response is handled, we get a request to reset to the latest offset
-                subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+                subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
                 return true;
             } else {
                 return false;
@@ -504,11 +527,11 @@ public class OffsetFetcherTest {
 
         // The list offset result should be ignored
         assertTrue(subscriptions.isOffsetResetNeeded(tp0));
-        assertEquals(OffsetResetStrategy.LATEST, subscriptions.resetStrategy(tp0));
+        assertEquals(AutoOffsetResetStrategy.LATEST, subscriptions.resetStrategy(tp0));
 
         offsetFetcher.resetPositionsIfNeeded();
         client.prepareResponse(
-            req -> listOffsetMatchesExpectedReset(tp0, OffsetResetStrategy.LATEST, req),
+            req -> listOffsetMatchesExpectedReset(tp0, AutoOffsetResetStrategy.LATEST, req),
             listOffsetResponse(Errors.NONE, 1L, 10L)
         );
         consumerClient.pollNoWakeup();
@@ -521,7 +544,7 @@ public class OffsetFetcherTest {
     public void testChangeResetWithInFlightReset() {
         buildFetcher();
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         // Send the ListOffsets request to reset the position
         offsetFetcher.resetPositionsIfNeeded();
@@ -530,7 +553,7 @@ public class OffsetFetcherTest {
         assertTrue(client.hasInFlightRequests());
 
         // Now we get a seek from the user
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.EARLIEST);
 
         // The response returns and is discarded
         client.respond(listOffsetResponse(Errors.NONE, 1L, 5L));
@@ -539,14 +562,14 @@ public class OffsetFetcherTest {
         assertFalse(client.hasPendingResponses());
         assertFalse(client.hasInFlightRequests());
         assertTrue(subscriptions.isOffsetResetNeeded(tp0));
-        assertEquals(OffsetResetStrategy.EARLIEST, subscriptions.resetStrategy(tp0));
+        assertEquals(AutoOffsetResetStrategy.EARLIEST, subscriptions.resetStrategy(tp0));
     }
 
     @Test
     public void testIdempotentResetWithInFlightReset() {
         buildFetcher();
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         // Send the ListOffsets request to reset the position
         offsetFetcher.resetPositionsIfNeeded();
@@ -555,7 +578,7 @@ public class OffsetFetcherTest {
         assertTrue(client.hasInFlightRequests());
 
         // Now we get a seek from the user
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         client.respond(listOffsetResponse(Errors.NONE, 1L, 5L));
         consumerClient.pollNoWakeup();
@@ -569,7 +592,7 @@ public class OffsetFetcherTest {
     public void testResetOffsetsAuthorizationFailure() {
         buildFetcher();
         assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         // First request gets a disconnect
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP,
@@ -637,7 +660,7 @@ public class OffsetFetcherTest {
         buildFetcher();
         assignFromUser(singleton(tp0));
         subscriptions.pause(tp0); // paused partition does not have a valid position
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP,
             validLeaderEpoch), listOffsetResponse(Errors.NONE, 1L, 10L));
@@ -716,7 +739,7 @@ public class OffsetFetcherTest {
         subscriptions.assignFromUser(singleton(tp0));
         client.updateMetadata(initialUpdateResponse);
 
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         client.prepareResponse(listOffsetResponse(Errors.FENCED_LEADER_EPOCH, 1L, 5L));
         offsetFetcher.resetPositionsIfNeeded();
@@ -745,7 +768,7 @@ public class OffsetFetcherTest {
         for (Errors retriableError : retriableErrors) {
             buildFetcher();
 
-            subscriptions.assignFromUser(mkSet(tp0, tp1));
+            subscriptions.assignFromUser(Set.of(tp0, tp1));
             client.updateMetadata(initialUpdateResponse);
 
             final long fetchTimestamp = 10L;
@@ -845,7 +868,7 @@ public class OffsetFetcherTest {
     public void testGetOffsetsUnknownLeaderEpoch() {
         buildFetcher();
         subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
 
         client.prepareResponse(listOffsetResponse(Errors.UNKNOWN_LEADER_EPOCH, 1L, 5L));
         offsetFetcher.resetPositionsIfNeeded();
@@ -895,7 +918,7 @@ public class OffsetFetcherTest {
     public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersNotKnownInitially() {
         buildFetcher();
 
-        subscriptions.assignFromUser(mkSet(tp0, tp1));
+        subscriptions.assignFromUser(Set.of(tp0, tp1));
         final String anotherTopic = "another-topic";
         final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
 
@@ -942,7 +965,7 @@ public class OffsetFetcherTest {
         buildFetcher();
         final String anotherTopic = "another-topic";
         final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
-        subscriptions.assignFromUser(mkSet(tp0, t2p0));
+        subscriptions.assignFromUser(Set.of(tp0, t2p0));
 
         client.reset();
 
@@ -1130,7 +1153,7 @@ public class OffsetFetcherTest {
     @Test
     public void testOffsetValidationRequestGrouping() {
         buildFetcher();
-        assignFromUser(mkSet(tp0, tp1, tp2, tp3));
+        assignFromUser(Set.of(tp0, tp1, tp2, tp3));
 
         metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 3,
             Collections.emptyMap(), singletonMap(topicName, 4),
@@ -1235,7 +1258,7 @@ public class OffsetFetcherTest {
         IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         int maxPollRecords = Integer.MAX_VALUE;
         long metadataExpireMs = Long.MAX_VALUE;
-        OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.EARLIEST;
+        AutoOffsetResetStrategy offsetResetStrategy = AutoOffsetResetStrategy.EARLIEST;
         int minBytes = 1;
         int maxBytes = Integer.MAX_VALUE;
         int maxWaitMs = 0;
@@ -1354,36 +1377,36 @@ public class OffsetFetcherTest {
     @Test
     public void testOffsetValidationresetPositionForUndefinedEpochWithDefinedResetPolicy() {
         testOffsetValidationWithGivenEpochOffset(
-            UNDEFINED_EPOCH, 0L, OffsetResetStrategy.EARLIEST);
+            UNDEFINED_EPOCH, 0L, AutoOffsetResetStrategy.EARLIEST);
     }
 
     @Test
     public void testOffsetValidationresetPositionForUndefinedOffsetWithDefinedResetPolicy() {
         testOffsetValidationWithGivenEpochOffset(
-            2, UNDEFINED_EPOCH_OFFSET, OffsetResetStrategy.EARLIEST);
+            2, UNDEFINED_EPOCH_OFFSET, AutoOffsetResetStrategy.EARLIEST);
     }
 
     @Test
     public void testOffsetValidationresetPositionForUndefinedEpochWithUndefinedResetPolicy() {
         testOffsetValidationWithGivenEpochOffset(
-            UNDEFINED_EPOCH, 0L, OffsetResetStrategy.NONE);
+            UNDEFINED_EPOCH, 0L, AutoOffsetResetStrategy.NONE);
     }
 
     @Test
     public void testOffsetValidationresetPositionForUndefinedOffsetWithUndefinedResetPolicy() {
         testOffsetValidationWithGivenEpochOffset(
-            2, UNDEFINED_EPOCH_OFFSET, OffsetResetStrategy.NONE);
+            2, UNDEFINED_EPOCH_OFFSET, AutoOffsetResetStrategy.NONE);
     }
 
     @Test
     public void testOffsetValidationTriggerLogTruncationForBadOffsetWithUndefinedResetPolicy() {
         testOffsetValidationWithGivenEpochOffset(
-            1, 1L, OffsetResetStrategy.NONE);
+            1, 1L, AutoOffsetResetStrategy.NONE);
     }
 
     private void testOffsetValidationWithGivenEpochOffset(int leaderEpoch,
                                                           long endOffset,
-                                                          OffsetResetStrategy offsetResetStrategy) {
+                                                          AutoOffsetResetStrategy offsetResetStrategy) {
         buildFetcher(offsetResetStrategy);
         assignFromUser(singleton(tp0));
 
@@ -1414,7 +1437,7 @@ public class OffsetFetcherTest {
             prepareOffsetsForLeaderEpochResponse(tp0, leaderEpoch, endOffset));
         consumerClient.poll(time.timer(Duration.ZERO));
 
-        if (offsetResetStrategy == OffsetResetStrategy.NONE) {
+        if (offsetResetStrategy == AutoOffsetResetStrategy.NONE) {
             LogTruncationException thrown =
                 assertThrows(LogTruncationException.class, () -> offsetFetcher.validatePositionsIfNeeded());
             assertEquals(singletonMap(tp0, initialOffset), thrown.offsetOutOfRangePartitions());
@@ -1641,6 +1664,7 @@ public class OffsetFetcherTest {
             ListOffsetsRequest req = (ListOffsetsRequest) body;
             ListOffsetsTopic topic = req.topics().get(0);
             ListOffsetsPartition partition = topic.partitions().get(0);
+            assertEquals(requestTimeoutMs, req.timeoutMs());
             return tp0.topic().equals(topic.name())
                     && tp0.partition() == partition.partitionIndex()
                     && timestamp == partition.timestamp()
@@ -1688,16 +1712,16 @@ public class OffsetFetcherTest {
         buildFetcher(IsolationLevel.READ_UNCOMMITTED);
     }
 
-    private void buildFetcher(OffsetResetStrategy offsetResetStrategy) {
+    private void buildFetcher(AutoOffsetResetStrategy offsetResetStrategy) {
         buildFetcher(new MetricConfig(), offsetResetStrategy, IsolationLevel.READ_UNCOMMITTED);
     }
 
     private void buildFetcher(IsolationLevel isolationLevel) {
-        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, isolationLevel);
+        buildFetcher(new MetricConfig(), AutoOffsetResetStrategy.EARLIEST, isolationLevel);
     }
 
     private void buildFetcher(MetricConfig metricConfig,
-                              OffsetResetStrategy offsetResetStrategy,
+                              AutoOffsetResetStrategy offsetResetStrategy,
                               IsolationLevel isolationLevel) {
         long metadataExpireMs = Long.MAX_VALUE;
         LogContext logContext = new LogContext();
@@ -1712,7 +1736,6 @@ public class OffsetFetcherTest {
                               SubscriptionState subscriptionState,
                               LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        long requestTimeoutMs = 30000;
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerClient,
                 metadata,

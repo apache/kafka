@@ -18,7 +18,6 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.TopologyTestDriver.KeyValueStoreFacade;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -46,16 +45,6 @@ public class KeyValueStoreFacadeTest {
     @BeforeEach
     public void setup() {
         keyValueStoreFacade = new KeyValueStoreFacade<>(mockedKeyValueTimestampStore);
-    }
-
-    @SuppressWarnings("deprecation") // test of deprecated method
-    @Test
-    public void shouldForwardDeprecatedInit() {
-        final ProcessorContext context = mock(ProcessorContext.class);
-        final StateStore store = mock(StateStore.class);
-
-        keyValueStoreFacade.init(context, store);
-        verify(mockedKeyValueTimestampStore).init(context, store);
     }
 
     @Test

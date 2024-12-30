@@ -40,7 +40,7 @@ import java.io.File;
 import java.util.Collections;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -103,7 +103,7 @@ public class ListValueStoreTest {
 
         assertEquals(
             asList(zero, zeroAgain, one, two),
-            toList(listStore.all())
+            toListAndCloseIterator(listStore.all())
         );
     }
 
@@ -130,7 +130,7 @@ public class ListValueStoreTest {
 
         assertEquals(
             asList(zero, two, four),
-            toList(listStore.all())
+            toListAndCloseIterator(listStore.all())
         );
     }
 
@@ -158,7 +158,7 @@ public class ListValueStoreTest {
 
         assertEquals(
             asList(zero, one, two1, two2, three, four),
-            toList(listStore.all())
+            toListAndCloseIterator(listStore.all())
         );
     }
 
@@ -185,7 +185,7 @@ public class ListValueStoreTest {
         it.close();
 
         // A new all() iterator after a previous all() iterator was closed should not return deleted records.
-        assertEquals(Collections.singletonList(one), toList(listStore.all()));
+        assertEquals(Collections.singletonList(one), toListAndCloseIterator(listStore.all()));
     }
 
     @ParameterizedTest
@@ -201,6 +201,10 @@ public class ListValueStoreTest {
         it.close();
 
         // A new all() iterator after a previous all() iterator was closed should not return deleted records.
-        assertThrows(InvalidStateStoreException.class, it::next);
+        if (storeType == StoreType.InMemory) {
+            assertThrows(IllegalStateException.class, it::next);
+        } else {
+            assertThrows(InvalidStateStoreException.class, it::next);
+        }
     }
 }

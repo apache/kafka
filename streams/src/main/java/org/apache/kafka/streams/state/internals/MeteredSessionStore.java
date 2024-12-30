@@ -24,7 +24,6 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -47,6 +46,7 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
@@ -74,7 +74,7 @@ public class MeteredSessionStore<K, V>
     private InternalProcessorContext<?, ?> context;
     private TaskId taskId;
 
-    private LongAdder numOpenIterators = new LongAdder();
+    private final LongAdder numOpenIterators = new LongAdder();
     private final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
 
     @SuppressWarnings("rawtypes")
@@ -97,23 +97,6 @@ public class MeteredSessionStore<K, V>
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.time = time;
-    }
-
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext<?, ?>) context : null;
-        taskId = context.taskId();
-        initStoreSerde(context);
-        streamsMetrics = (StreamsMetricsImpl) context.metrics();
-
-        registerMetrics();
-        final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
-
-        // register and possibly restore the state from the logs
-        maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
     }
 
     @Override
@@ -142,16 +125,14 @@ public class MeteredSessionStore<K, V>
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> numOpenIterators.sum());
         StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
-                (config, now) -> openIterators.isEmpty() ? null : openIterators.first().startTimestamp()
+                (config, now) -> {
+                    try {
+                        return openIterators.isEmpty() ? null : openIterators.first().startTimestamp();
+                    } catch (final NoSuchElementException ignored) {
+                        return null;
+                    }
+                }
         );
-    }
-
-
-    private void initStoreSerde(final ProcessorContext context) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, valueSerde, WrappingNullableUtils::prepareValueSerde);
     }
 
     private void initStoreSerde(final StateStoreContext context) {
@@ -481,7 +462,7 @@ public class MeteredSessionStore<K, V>
                         iteratorDurationSensor,
                         streamsMetrics,
                         serdes::keyFrom,
-                        StoreQueryUtils.getDeserializeValue(serdes, wrapped()),
+                        StoreQueryUtils.deserializeValue(serdes, wrapped()),
                         time,
                         numOpenIterators,
                         openIterators

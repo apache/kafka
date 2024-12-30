@@ -1,0 +1,121 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: CI Complete
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types:
+      - completed
+
+run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
+
+# This workflow runs after the completion of the CI workflow triggered on a "pull_request" event.
+# The "pull_request" event type is run in an unprivileged context without access to the repository
+# secrets. This means that PRs from public forks cannot publish Gradle Build Scans or modify the
+# PR contents.
+#
+# This "workflow_run" triggered workflow is run in a privileged context and so does have access to
+# the repository secrets. Here we can download the build scan files produced by a PR and publish
+# them to ge.apache.org.
+#
+# If we need to do things like comment on, label, or otherwise modify PRs from public forks. This
+# workflow is the place to do it. PR number is ${{ github.event.workflow_run.pull_requests[0].number }}
+
+jobs:
+  upload-build-scan:
+    # Skip this workflow if the CI run was skipped or cancelled
+    if: (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ 23, 17 ]
+        artifact-prefix: [ "build-scan-test-", "build-scan-quarantined-test-"]
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials:
+            false
+      - name: Setup Gradle
+        uses: ./.github/actions/setup-gradle
+        with:
+          java-version: ${{ matrix.java }}
+          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+      - name: Download build scan archive
+        id: download-build-scan
+        uses: actions/download-artifact@v4
+        continue-on-error: true  # Don't want this step to fail the overall workflow
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: ${{ matrix.artifact-prefix }}${{ matrix.java }}
+          path: ~/.gradle/build-scan-data  # This is where Gradle buffers unpublished build scan data when --no-scan is given
+      - name: Handle missing scan
+        if: ${{ steps.download-build-scan.outcome == 'failure' }}
+        uses: ./.github/actions/gh-api-update-status
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          commit_sha: ${{ github.event.workflow_run.head_sha }}
+          url: '${{ github.event.workflow_run.html_url }}'
+          description: 'Could not find build scan'
+          context: 'Gradle Build Scan / Java ${{ matrix.java }}'
+          state: 'error'
+      - name: Publish Scan
+        id: publish-build-scan
+        if: ${{ steps.download-build-scan.outcome == 'success' }}
+        run: |
+          set +e
+          ./gradlew --info buildScanPublishPrevious > gradle.out
+          exitcode="$?"
+          if [ $exitcode -ne 0 ]; then
+            cat gradle.out
+            echo "Failed to publish build scan" >> $GITHUB_STEP_SUMMARY
+            exit $exitcode
+          else
+            SCAN_URL=$(grep '^https://.*$' gradle.out)
+            cat gradle.out
+            echo "Published build scan to $SCAN_URL" >> $GITHUB_STEP_SUMMARY
+            echo "build-scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
+          fi
+      - name: Handle failed publish
+        if: ${{ failure() && steps.publish-build-scan.outcome == 'failure' }}
+        uses: ./.github/actions/gh-api-update-status
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          commit_sha: ${{ github.event.workflow_run.head_sha }}
+          url: '${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}'
+          description: 'The build scan failed to be published'
+          context: 'Gradle Build Scan / Java ${{ matrix.java }}'
+          state: 'error'
+      - name: Update Status Check
+        if: ${{ steps.publish-build-scan.outcome == 'success' }}
+        uses: ./.github/actions/gh-api-update-status
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          commit_sha: ${{ github.event.workflow_run.head_sha }}
+          url: ${{ steps.publish-build-scan.outputs.build-scan-url }}
+          description: 'The build scan was successfully published'
+          context: 'Gradle Build Scan / Java ${{ matrix.java }}'
+          state: 'success'

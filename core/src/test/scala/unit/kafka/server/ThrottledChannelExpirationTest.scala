@@ -19,10 +19,11 @@ package kafka.server
 
 
 import java.util.Collections
-import java.util.concurrent.{DelayQueue, TimeUnit}
+import java.util.concurrent.DelayQueue
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
+import org.apache.kafka.server.quota.{QuotaType, ThrottleCallback, ThrottledChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
@@ -51,7 +52,7 @@ class ThrottledChannelExpirationTest {
 
   @Test
   def testCallbackInvocationAfterExpiration(): Unit = {
-    val clientMetrics = new ClientQuotaManager(new ClientQuotaManagerConfig(), metrics, QuotaType.Produce, time, "")
+    val clientMetrics = new ClientQuotaManager(new ClientQuotaManagerConfig(), metrics, QuotaType.PRODUCE, time, "")
 
     val delayQueue = new DelayQueue[ThrottledChannel]()
     val reaper = new clientMetrics.ThrottledChannelReaper(delayQueue, "")
@@ -81,22 +82,4 @@ class ThrottledChannelExpirationTest {
       clientMetrics.shutdown()
     }
   }
-
-  @Test
-  def testThrottledChannelDelay(): Unit = {
-    val t1: ThrottledChannel = new ThrottledChannel(time, 10, callback)
-    val t2: ThrottledChannel = new ThrottledChannel(time, 20, callback)
-    val t3: ThrottledChannel = new ThrottledChannel(time, 20, callback)
-    assertEquals(10, t1.throttleTimeMs)
-    assertEquals(20, t2.throttleTimeMs)
-    assertEquals(20, t3.throttleTimeMs)
-
-    for (itr <- 0 to 2) {
-      assertEquals(10 - 10*itr, t1.getDelay(TimeUnit.MILLISECONDS))
-      assertEquals(20 - 10*itr, t2.getDelay(TimeUnit.MILLISECONDS))
-      assertEquals(20 - 10*itr, t3.getDelay(TimeUnit.MILLISECONDS))
-      time.sleep(10)
-    }
-  }
-
 }

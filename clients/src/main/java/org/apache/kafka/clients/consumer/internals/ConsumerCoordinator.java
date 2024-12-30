@@ -1031,7 +1031,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // the same order that they were added. Note also that AbstractCoordinator prevents
             // multiple concurrent coordinator lookup requests.
             pendingAsyncCommits.incrementAndGet();
-            lookupCoordinator().addListener(new RequestFutureListener<Void>() {
+            lookupCoordinator().addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(Void value) {
                     pendingAsyncCommits.decrementAndGet();
@@ -1059,7 +1059,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
         inFlightAsyncCommits.incrementAndGet();
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
-        future.addListener(new RequestFutureListener<Void>() {
+        future.addListener(new RequestFutureListener<>() {
             @Override
             public void onSuccess(Void value) {
                 inFlightAsyncCommits.decrementAndGet();
@@ -1457,15 +1457,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (responseError != Errors.NONE) {
                 log.debug("Offset fetch failed: {}", responseError.message());
 
-                if (responseError == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-                    // just retry
-                    future.raise(responseError);
-                } else if (responseError == Errors.NOT_COORDINATOR) {
+                if (responseError == Errors.COORDINATOR_NOT_AVAILABLE ||
+                    responseError == Errors.NOT_COORDINATOR) {
                     // re-discover the coordinator and retry
                     markCoordinatorUnknown(responseError);
                     future.raise(responseError);
                 } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
+                } else if (responseError.exception() instanceof RetriableException) {
+                    // retry
+                    future.raise(responseError);
                 } else {
                     future.raise(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
                 }

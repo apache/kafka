@@ -378,7 +378,7 @@ public class ShareHeartbeatRequestManagerTest {
 
         switch (error) {
             case NONE:
-                verify(membershipManager).onHeartbeatSuccess(mockResponse.data());
+                verify(membershipManager).onHeartbeatSuccess(mockResponse);
                 assertNextHeartbeatTiming(DEFAULT_HEARTBEAT_INTERVAL_MS);
                 break;
 
@@ -485,7 +485,7 @@ public class ShareHeartbeatRequestManagerTest {
                 .setMemberEpoch(DEFAULT_MEMBER_EPOCH)
                 .setAssignment(assignmentTopic1));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
-        membershipManager.onHeartbeatSuccess(rs1.data());
+        membershipManager.onHeartbeatSuccess(rs1);
     }
 
     @Test
@@ -615,7 +615,7 @@ public class ShareHeartbeatRequestManagerTest {
                 Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, true),
                 Arguments.of(Errors.INVALID_REQUEST, true),
                 Arguments.of(Errors.UNKNOWN_MEMBER_ID, false),
-                Arguments.of(Errors.FENCED_MEMBER_EPOCH, true),
+                Arguments.of(Errors.FENCED_MEMBER_EPOCH, false),
                 Arguments.of(Errors.UNSUPPORTED_ASSIGNOR, true),
                 Arguments.of(Errors.UNSUPPORTED_VERSION, true),
                 Arguments.of(Errors.UNRELEASED_INSTANCE_ID, true),
@@ -655,7 +655,6 @@ public class ShareHeartbeatRequestManagerTest {
         prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS));
         prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MS));
         prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MAX_MS));
-        prop.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_HEARTBEAT_INTERVAL_MS));
         return new ConsumerConfig(prop);
     }
 

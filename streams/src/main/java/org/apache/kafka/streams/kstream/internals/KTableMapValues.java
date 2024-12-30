@@ -117,7 +117,7 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
             if (queryableName != null) {
                 store = new KeyValueStoreWrapper<>(context, queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store.getStore(),
+                    store.store(),
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);

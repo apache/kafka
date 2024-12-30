@@ -37,7 +37,6 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.emptySortedSet;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
@@ -58,7 +57,7 @@ public class TaskMovementTest {
     @Test
     public void shouldAssignTasksToClientsAndReturnFalseWhenAllClientsCaughtUp() {
         final int maxWarmupReplicas = Integer.MAX_VALUE;
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
 
         final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients = new HashMap<>();
         final Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag = new HashMap<>();
@@ -67,9 +66,9 @@ public class TaskMovementTest {
             tasksToClientByLag.put(task, mkOrderedSet(PID_1, PID_2, PID_3));
         }
 
-        final ClientState client1 = getClientStateWithActiveAssignment(mkSet(TASK_0_0, TASK_1_0), allTasks, allTasks);
-        final ClientState client2 = getClientStateWithActiveAssignment(mkSet(TASK_0_1, TASK_1_1), allTasks, allTasks);
-        final ClientState client3 = getClientStateWithActiveAssignment(mkSet(TASK_0_2, TASK_1_2), allTasks, allTasks);
+        final ClientState client1 = getClientStateWithActiveAssignment(Set.of(TASK_0_0, TASK_1_0), allTasks, allTasks);
+        final ClientState client2 = getClientStateWithActiveAssignment(Set.of(TASK_0_1, TASK_1_1), allTasks, allTasks);
+        final ClientState client3 = getClientStateWithActiveAssignment(Set.of(TASK_0_2, TASK_1_2), allTasks, allTasks);
 
         assertThat(
             assignActiveTaskMovements(
@@ -86,11 +85,11 @@ public class TaskMovementTest {
     @Test
     public void shouldAssignAllTasksToClientsAndReturnFalseIfNoClientsAreCaughtUp() {
         final int maxWarmupReplicas = Integer.MAX_VALUE;
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
 
-        final ClientState client1 = getClientStateWithActiveAssignment(mkSet(TASK_0_0, TASK_1_0), mkSet(), allTasks);
-        final ClientState client2 = getClientStateWithActiveAssignment(mkSet(TASK_0_1, TASK_1_1), mkSet(), allTasks);
-        final ClientState client3 = getClientStateWithActiveAssignment(mkSet(TASK_0_2, TASK_1_2), mkSet(), allTasks);
+        final ClientState client1 = getClientStateWithActiveAssignment(Set.of(TASK_0_0, TASK_1_0), Set.of(), allTasks);
+        final ClientState client2 = getClientStateWithActiveAssignment(Set.of(TASK_0_1, TASK_1_1), Set.of(), allTasks);
+        final ClientState client3 = getClientStateWithActiveAssignment(Set.of(TASK_0_2, TASK_1_2), Set.of(), allTasks);
 
         final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients = mkMap(
             mkEntry(TASK_0_0, emptySortedSet()),
@@ -123,10 +122,10 @@ public class TaskMovementTest {
     @Test
     public void shouldMoveTasksToCaughtUpClientsAndAssignWarmupReplicasInTheirPlace() {
         final int maxWarmupReplicas = Integer.MAX_VALUE;
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
-        final ClientState client1 = getClientStateWithActiveAssignment(mkSet(TASK_0_0), mkSet(TASK_0_0), allTasks);
-        final ClientState client2 = getClientStateWithActiveAssignment(mkSet(TASK_0_1), mkSet(TASK_0_2), allTasks);
-        final ClientState client3 = getClientStateWithActiveAssignment(mkSet(TASK_0_2), mkSet(TASK_0_1), allTasks);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
+        final ClientState client1 = getClientStateWithActiveAssignment(Set.of(TASK_0_0), Set.of(TASK_0_0), allTasks);
+        final ClientState client2 = getClientStateWithActiveAssignment(Set.of(TASK_0_1), Set.of(TASK_0_2), allTasks);
+        final ClientState client3 = getClientStateWithActiveAssignment(Set.of(TASK_0_2), Set.of(TASK_0_1), allTasks);
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients = mkMap(
@@ -152,14 +151,14 @@ public class TaskMovementTest {
             is(2)
         );
         // The active tasks have changed to the ones that each client is caught up on
-        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_0)));
-        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_2)));
-        assertThat(client3, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_1)));
+        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_0)));
+        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_2)));
+        assertThat(client3, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_1)));
 
         // we assigned warmups to migrate to the input active assignment
-        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet()));
-        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet(TASK_0_1)));
-        assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet(TASK_0_2)));
+        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of()));
+        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_1)));
+        assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_2)));
     }
 
     @Test
@@ -169,9 +168,9 @@ public class TaskMovementTest {
         final Map<TaskId, Long> client2Lags = mkMap(mkEntry(TASK_0_2, 10000L), mkEntry(TASK_0_0, 20000L), mkEntry(TASK_0_1, 30000L));
         final Map<TaskId, Long> client3Lags = mkMap(mkEntry(TASK_0_1, 10000L), mkEntry(TASK_0_2, 20000L), mkEntry(TASK_0_0, 30000L));
 
-        final ClientState client1 = getClientStateWithLags(mkSet(TASK_0_0), client1Lags);
-        final ClientState client2 = getClientStateWithLags(mkSet(TASK_0_1), client2Lags);
-        final ClientState client3 = getClientStateWithLags(mkSet(TASK_0_2), client3Lags);
+        final ClientState client1 = getClientStateWithLags(Set.of(TASK_0_0), client1Lags);
+        final ClientState client2 = getClientStateWithLags(Set.of(TASK_0_1), client2Lags);
+        final ClientState client3 = getClientStateWithLags(Set.of(TASK_0_2), client3Lags);
         // To test when the task is already a standby on the most caught up node
         client3.assignStandby(TASK_0_1);
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
@@ -199,23 +198,23 @@ public class TaskMovementTest {
                 is(2)
         );
         // The active tasks have changed to the ones that each client is most caught up on
-        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_0)));
-        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_2)));
-        assertThat(client3, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_1)));
+        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_0)));
+        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_2)));
+        assertThat(client3, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_1)));
 
         // we assigned warmups to migrate to the input active assignment
-        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet()));
-        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet(TASK_0_1)));
-        assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet(TASK_0_2)));
+        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of()));
+        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_1)));
+        assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_2)));
     }
 
     @Test
     public void shouldOnlyGetUpToMaxWarmupReplicasAndReturnTrue() {
         final int maxWarmupReplicas = 1;
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
-        final ClientState client1 = getClientStateWithActiveAssignment(mkSet(TASK_0_0), mkSet(TASK_0_0), allTasks);
-        final ClientState client2 = getClientStateWithActiveAssignment(mkSet(TASK_0_1), mkSet(TASK_0_2), allTasks);
-        final ClientState client3 = getClientStateWithActiveAssignment(mkSet(TASK_0_2), mkSet(TASK_0_1), allTasks);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
+        final ClientState client1 = getClientStateWithActiveAssignment(Set.of(TASK_0_0), Set.of(TASK_0_0), allTasks);
+        final ClientState client2 = getClientStateWithActiveAssignment(Set.of(TASK_0_1), Set.of(TASK_0_2), allTasks);
+        final ClientState client3 = getClientStateWithActiveAssignment(Set.of(TASK_0_2), Set.of(TASK_0_1), allTasks);
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients = mkMap(
@@ -241,23 +240,23 @@ public class TaskMovementTest {
             is(2)
         );
         // The active tasks have changed to the ones that each client is caught up on
-        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_0)));
-        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_2)));
-        assertThat(client3, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_1)));
+        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_0)));
+        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_2)));
+        assertThat(client3, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_1)));
 
         // we should only assign one warmup, and the task movement should have the highest priority
-        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet()));
-        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet(TASK_0_1)));
-        assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet()));
+        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of()));
+        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_1)));
+        assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of()));
     }
 
     @Test
     public void shouldNotCountPreviousStandbyTasksTowardsMaxWarmupReplicas() {
         final int maxWarmupReplicas = 0;
-        final Set<TaskId> allTasks = mkSet(TASK_0_0);
-        final ClientState client1 = getClientStateWithActiveAssignment(mkSet(), mkSet(TASK_0_0), allTasks);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0);
+        final ClientState client1 = getClientStateWithActiveAssignment(Set.of(), Set.of(TASK_0_0), allTasks);
         client1.assignStandby(TASK_0_0);
-        final ClientState client2 = getClientStateWithActiveAssignment(mkSet(TASK_0_0), mkSet(), allTasks);
+        final ClientState client2 = getClientStateWithActiveAssignment(Set.of(TASK_0_0), Set.of(), allTasks);
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients = mkMap(
@@ -284,11 +283,11 @@ public class TaskMovementTest {
 
         // I.e., when you have a caught-up standby and a not-caught-up active, you can just swap their roles
         // and not call it a "warmup".
-        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_0)));
-        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, mkSet()));
+        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_0)));
+        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, Set.of()));
 
-        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet()));
-        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet(TASK_0_0)));
+        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of()));
+        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_0)));
 
     }
 

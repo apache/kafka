@@ -103,7 +103,7 @@ public class RangeAssignorTest {
         assertTrue(assignment.get(consumer1).isEmpty());
     }
 
-    @ParameterizedTest(name = "rackConfig = {0}")
+    @ParameterizedTest(name = "{displayName}.rackConfig = {0}")
     @EnumSource(RackConfig.class)
     public void testOneConsumerOneTopic(RackConfig rackConfig) {
         initializeRacks(rackConfig);

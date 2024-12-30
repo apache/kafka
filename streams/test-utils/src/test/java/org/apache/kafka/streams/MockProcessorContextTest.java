@@ -17,12 +17,18 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -31,7 +37,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,6 +47,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("deprecation") // this is a test of a deprecated API
 public class MockProcessorContextTest {
@@ -197,8 +210,6 @@ public class MockProcessorContextTest {
             }
         };
 
-        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
-
         final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.inMemoryKeyValueStore("my-state"),
                 Serdes.String(),
@@ -206,9 +217,29 @@ public class MockProcessorContextTest {
 
         final KeyValueStore<String, Long> store = storeBuilder.build();
 
-        store.init(context, store);
+        final InternalProcessorContext<?, ?> mockInternalProcessorContext = mock(InternalProcessorContext.class);
+        final Map<String, StateStore> stateStores = new HashMap<>();
+        doAnswer(invocation -> {
+            final StateStore stateStore = invocation.getArgument(0);
+            stateStores.put(stateStore.name(), stateStore);
+            return null;
+        }).when(mockInternalProcessorContext).register(any(), any());
+        when(mockInternalProcessorContext.getStateStore(anyString())).thenAnswer(invocation -> {
+                final String name = invocation.getArgument(0);
+                return stateStores.get(name);
+            }
+        );
+        when(mockInternalProcessorContext.metrics()).thenReturn(new StreamsMetricsImpl(
+            new Metrics(new MetricConfig()),
+            Thread.currentThread().getName(),
+            "processId",
+            Time.SYSTEM
+        ));
+        when(mockInternalProcessorContext.taskId()).thenReturn(new TaskId(1, 1));
 
-        processor.init(context);
+        store.init(mockInternalProcessorContext, store);
+
+        processor.init(mockInternalProcessorContext);
 
         processor.process("foo", 5L);
         processor.process("bar", 50L);

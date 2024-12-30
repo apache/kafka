@@ -17,16 +17,18 @@
 
 package kafka.api
 
-import java.util.Properties
+import kafka.security.JaasTestUtils
 
-import kafka.utils.TestUtils
+import java.util.Properties
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
-import org.apache.kafka.common.utils.Java
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
+
+import java.util.Optional
+import scala.jdk.javaapi.OptionConverters
 
 object SslEndToEndAuthorizationTest {
   val superuserCn = "super-user"
@@ -55,7 +57,7 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
   override protected def securityProtocol = SecurityProtocol.SSL
   // Since there are other E2E tests that enable SSL, running this test with TLSv1.3 if supported
-  private  val tlsProtocol = if (Java.IS_JAVA11_COMPATIBLE) "TLSv1.3" else "TLSv1.2"
+  private  val tlsProtocol = "TLSv1.3"
 
   this.serverConfig.setProperty(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
@@ -73,21 +75,21 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(List.empty, None, ZkSasl))
+    startSasl(jaasSections(List.empty, None, KafkaSasl))
     super.setUp(testInfo)
   }
 
   override def clientSecurityProps(certAlias: String): Properties = {
-    val props = TestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile,
-      certAlias, clientCn, clientSaslProperties, tlsProtocol)
+    val props = JaasTestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile),
+      certAlias, clientCn, OptionConverters.toJava(clientSaslProperties), tlsProtocol, Optional.empty())
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
   }
   // This test doesn't really care about matching the SSL certificate to a particular principal
   // We can override the CN and create a principal based on it or on the server SSL
   override def superuserSecurityProps(certAlias: String): Properties = {
-    val props = TestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile,
-      certAlias, superuserCn, clientSaslProperties, tlsProtocol)
+    val props = JaasTestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile),
+      certAlias, superuserCn, OptionConverters.toJava(clientSaslProperties), tlsProtocol, Optional.empty())
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
   }

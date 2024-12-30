@@ -28,7 +28,6 @@ public class OffsetConfig {
     public final short offsetsTopicReplicationFactor;
     public final CompressionType offsetsTopicCompressionType;
     public final int offsetCommitTimeoutMs;
-    public final short offsetCommitRequiredAcks;
 
     /**
      * Configuration settings for in-built offset management
@@ -50,8 +49,6 @@ public class OffsetConfig {
      *                                        order to achieve "atomic" commits.
      * @param offsetCommitTimeoutMs           The offset commit will be delayed until all replicas for the offsets topic receive the
      *                                        commit or this timeout is reached. (Similar to the producer request timeout.)
-     * @param offsetCommitRequiredAcks        The required acks before the commit can be accepted. In general, the default (-1)
-     *                                        should not be overridden.
      */
     public OffsetConfig(int maxMetadataSize,
                         int loadBufferSize,
@@ -61,8 +58,7 @@ public class OffsetConfig {
                         int offsetsTopicSegmentBytes,
                         short offsetsTopicReplicationFactor,
                         CompressionType offsetsTopicCompressionType,
-                        int offsetCommitTimeoutMs,
-                        short offsetCommitRequiredAcks
+                        int offsetCommitTimeoutMs
     ) {
         this.maxMetadataSize = maxMetadataSize;
         this.loadBufferSize = loadBufferSize;
@@ -73,6 +69,5 @@ public class OffsetConfig {
         this.offsetsTopicReplicationFactor = offsetsTopicReplicationFactor;
         this.offsetsTopicCompressionType = offsetsTopicCompressionType;
         this.offsetCommitTimeoutMs = offsetCommitTimeoutMs;
-        this.offsetCommitRequiredAcks = offsetCommitRequiredAcks;
     }
 }

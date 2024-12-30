@@ -64,6 +64,11 @@ import java.util.function.IntSupplier;
 public interface GroupCoordinator {
 
     /**
+     * @return True if the new coordinator; False otherwise.
+     */
+    boolean isNewGroupCoordinator();
+
+    /**
      * Heartbeat to a Consumer Group.
      *
      * @param context           The request context.
@@ -415,7 +420,6 @@ public interface GroupCoordinator {
      *
      * @param groupId           The group id.
      * @param newGroupConfig    The new group config
-     * @return void
      */
     void updateGroupConfig(String groupId, Properties newGroupConfig);
 

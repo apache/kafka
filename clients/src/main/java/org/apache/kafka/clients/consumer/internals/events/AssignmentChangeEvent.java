@@ -16,33 +16,32 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.Collections;
-import java.util.Map;
+import java.util.Collection;
+import java.util.Set;
 
-public class AssignmentChangeEvent extends ApplicationEvent {
+public class AssignmentChangeEvent extends CompletableApplicationEvent<Void> {
 
-    private final Map<TopicPartition, OffsetAndMetadata> offsets;
     private final long currentTimeMs;
+    private final Collection<TopicPartition> partitions;
 
-    public AssignmentChangeEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final long currentTimeMs) {
-        super(Type.ASSIGNMENT_CHANGE);
-        this.offsets = Collections.unmodifiableMap(offsets);
+    public AssignmentChangeEvent(final long currentTimeMs, final long deadlineMs, final Collection<TopicPartition> partitions) {
+        super(Type.ASSIGNMENT_CHANGE, deadlineMs);
         this.currentTimeMs = currentTimeMs;
-    }
-
-    public Map<TopicPartition, OffsetAndMetadata> offsets() {
-        return offsets;
+        this.partitions = Set.copyOf(partitions);
     }
 
     public long currentTimeMs() {
         return currentTimeMs;
     }
 
+    public Collection<TopicPartition> partitions() {
+        return partitions;
+    }
+
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", offsets=" + offsets + ", currentTimeMs=" + currentTimeMs;
+        return super.toStringBase() + ", currentTimeMs=" + currentTimeMs + ", partitions=" + partitions;
     }
 }

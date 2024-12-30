@@ -471,6 +471,11 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     private final EventQueue eventQueue;
 
     /**
+     * The latest kraft version used by this local log manager.
+     */
+    private final KRaftVersion lastKRaftVersion;
+
+    /**
      * Whether this LocalLogManager has been shut down.
      */
     private boolean shutdown = false;
@@ -499,13 +504,15 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     public LocalLogManager(LogContext logContext,
                            int nodeId,
                            SharedLogData shared,
-                           String threadNamePrefix) {
+                           String threadNamePrefix,
+                           KRaftVersion lastKRaftVersion) {
         this.log = logContext.logger(LocalLogManager.class);
         this.nodeId = nodeId;
         this.shared = shared;
         this.maxReadOffset = shared.initialMaxReadOffset();
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext,
                 threadNamePrefix, new ShutdownEvent());
+        this.lastKRaftVersion = lastKRaftVersion;
         shared.registerLogManager(this);
     }
 
@@ -556,10 +563,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             if (batch.newLeader.equals(sharedLeader)) {
                                 log.debug("Node {}: Executing handleLeaderChange {}",
                                     nodeId, sharedLeader);
-                                listenerData.handleLeaderChange(entryOffset, batch.newLeader);
                                 if (batch.newLeader.epoch() > leader.epoch()) {
                                     leader = batch.newLeader;
                                 }
+                                listenerData.handleLeaderChange(entryOffset, batch.newLeader);
                             } else {
                                 log.debug("Node {}: Ignoring {} since it doesn't match the latest known leader {}",
                                         nodeId, batch.newLeader, sharedLeader);
@@ -726,7 +733,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             throw new BufferAllocationException("Test asked to fail the next prepareAppend");
         }
 
-        return shared.tryAppend(nodeId, leader.epoch(), batch);
+        return shared.tryAppend(nodeId, epoch, batch);
     }
 
     @Override
@@ -840,6 +847,6 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     @Override
     public KRaftVersion kraftVersion() {
-        return KRaftVersion.KRAFT_VERSION_0;
+        return lastKRaftVersion;
     }
 }

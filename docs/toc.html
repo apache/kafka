@@ -34,7 +34,7 @@
             <ul>
                 <li><a href="#producerapi">2.1 Producer API</a>
                 <li><a href="#consumerapi">2.2 Consumer API</a>
-                <li><a href="/{{version}}/documentation/streams">2.3 Streams API</a>
+                <li><a href="#streamsapi">2.3 Streams API</a>
                 <li><a href="#connectapi">2.4 Connect API</a>
                 <li><a href="#adminapi">2.5 Admin API</a>
             </ul>
@@ -131,14 +131,8 @@
                         <li><a href="#multitenancy-more">Further considerations</a>
                     </ul>
                 
-                <li><a href="#config">6.5 Important Configs</a>
-                    <ul>
-                        <li><a href="#clientconfig">Important Client Configs</a>
-                        <li><a href="#prodconfig">A Production Server Configs</a>
-                    </ul>
-                
-                <li><a href="#java">6.6 Java Version</a>
-                <li><a href="#hwandos">6.7 Hardware and OS</a>
+                <li><a href="#java">6.5 Java Version</a>
+                <li><a href="#hwandos">6.6 Hardware and OS</a>
                     <ul>
                         <li><a href="#os">OS</a>
                         <li><a href="#diskandfs">Disks and Filesystems</a>
@@ -148,7 +142,7 @@
                         <li><a href="#replace_disk">Replace KRaft Controller Disk</a>
                     </ul>
                 
-                <li><a href="#monitoring">6.8 Monitoring</a>
+                <li><a href="#monitoring">6.7 Monitoring</a>
                     <ul>
                         <li><a href="#remote_jmx">Security Considerations for Remote Monitoring using JMX</a>
                         <li><a href="#tiered_storage_monitoring">Tiered Storage Monitoring</a>
@@ -162,14 +156,7 @@
                         <li><a href="#others_monitoring">Others</a>
                     </ul>
                 
-                <li><a href="#zk">6.9 ZooKeeper</a>
-                    <ul>
-                        <li><a href="#zkversion">Stable Version</a>
-                        <li><a href="#zk_depr">ZooKeeper Deprecation</a>
-                        <li><a href="#zkops">Operationalization</a>
-                    </ul>
-                
-                <li><a href="#kraft">6.10 KRaft</a>
+                <li><a href="#kraft">6.8 KRaft</a>
                     <ul>
                         <li><a href="#kraft_config">Configuration</a>
                         <li><a href="#kraft_storage">Storage Tool</a>
@@ -179,7 +166,7 @@
                         <li><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a>
                     </ul>
                 
-                <li><a href="#tiered_storage">6.11 Tiered Storage</a>
+                <li><a href="#tiered_storage">6.9 Tiered Storage</a>
                     <ul>
                         <li><a href="#tiered_storage_overview">Tiered Storage Overview</a>
                         <li><a href="#tiered_storage_config">Configuration</a>
@@ -197,20 +184,6 @@
                 <li><a href="#security_sasl">7.4 Authentication using SASL</a>
                 <li><a href="#security_authz">7.5 Authorization and ACLs</a>
                 <li><a href="#security_rolling_upgrade">7.6 Incorporating Security Features in a Running Cluster</a>
-                <li><a href="#zk_authz">7.7 ZooKeeper Authentication</a>
-                    <ul>
-                        <li><a href="#zk_authz_new">New Clusters</a>
-                            <ul>
-                                <li><a href="#zk_authz_new_sasl">ZooKeeper SASL Authentication</a>
-                                <li><a href="#zk_authz_new_mtls">ZooKeeper Mutual TLS Authentication</a>
-                            </ul>
-                        
-                        <li><a href="#zk_authz_migration">Migrating Clusters</a>
-                        <li><a href="#zk_authz_ensemble">Migrating the ZooKeeper Ensemble</a>
-                        <li><a href="#zk_authz_quorum">ZooKeeper Quorum Mutual TLS Authentication</a>
-                    </ul>
-                
-                <li><a href="#zk_encryption">7.8 ZooKeeper Encryption</a>
             </ul>
         
         <li><a href="#connect">8. Kafka Connect</a>
@@ -239,7 +212,7 @@
                 <li><a href="#connect_administration">8.4 Administration</a>
             </ul>
         
-        <li><a href="/{{version}}/documentation/streams">9. Kafka Streams</a>
+        <li><a href="#streams">9. Kafka Streams</a>
             <ul>
                 <li><a href="/{{version}}/documentation/streams/quickstart">9.1 Play with a Streams Application</a>
                 <li><a href="/{{version}}/documentation/streams/tutorial">9.2 Write your own Streams Applications</a>

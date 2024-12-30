@@ -140,7 +140,7 @@ public class QuorumState {
         ElectionState election = readElectionState();
 
         final EpochState initialState;
-        if (election.hasVoted() && !localId.isPresent()) {
+        if (election.hasVoted() && localId.isEmpty()) {
             throw new IllegalStateException(
                 String.format(
                     "Initialized quorum state (%s) with a voted candidate but without a local id",
@@ -332,7 +332,7 @@ public class QuorumState {
     }
 
     public boolean isVoter() {
-        if (!localId.isPresent()) {
+        if (localId.isEmpty()) {
             return false;
         }
 
@@ -425,7 +425,7 @@ public class QuorumState {
                     epoch
                 )
             );
-        } else if (!localId.isPresent()) {
+        } else if (localId.isEmpty()) {
             throw new IllegalStateException("Cannot transition to voted without a replica id");
         } else if (epoch < currentEpoch) {
             throw new IllegalStateException(
@@ -470,15 +470,53 @@ public class QuorumState {
      */
     public void transitionToFollower(int epoch, int leaderId, Endpoints endpoints) {
         int currentEpoch = state.epoch();
-        if (localId.isPresent() && leaderId == localId.getAsInt()) {
-            throw new IllegalStateException("Cannot transition to Follower with leader " + leaderId +
-                " and epoch " + epoch + " since it matches the local broker.id " + localId);
+        if (endpoints.isEmpty()) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Cannot transition to Follower with leader %s and epoch %s without a leader endpoint",
+                    leaderId,
+                    epoch
+                )
+            );
+        } else if (localId.isPresent() && leaderId == localId.getAsInt()) {
+            throw new IllegalStateException(
+                String.format(
+                    "Cannot transition to Follower with leader %s and epoch %s since it matches the local node.id %s",
+                    leaderId,
+                    epoch,
+                    localId
+                )
+            );
         } else if (epoch < currentEpoch) {
-            throw new IllegalStateException("Cannot transition to Follower with leader " + leaderId +
-                " and epoch " + epoch + " since the current epoch " + currentEpoch + " is larger");
-        } else if (epoch == currentEpoch && (isFollower() || isLeader())) {
-            throw new IllegalStateException("Cannot transition to Follower with leader " + leaderId +
-                " and epoch " + epoch + " from state " + state);
+            throw new IllegalStateException(
+                String.format(
+                    "Cannot transition to Follower with leader %s and epoch %s since the current epoch %s is larger",
+                    leaderId,
+                    epoch,
+                    currentEpoch
+                )
+            );
+        } else if (epoch == currentEpoch) {
+            if (isFollower() && state.leaderEndpoints().size() >= endpoints.size()) {
+                throw new IllegalStateException(
+                    String.format(
+                        "Cannot transition to Follower with leader %s, epoch %s and endpoints %s from state %s",
+                        leaderId,
+                        epoch,
+                        endpoints,
+                        state
+                    )
+                );
+            } else if (isLeader()) {
+                throw new IllegalStateException(
+                    String.format(
+                        "Cannot transition to Follower with leader %s and epoch %s from state %s",
+                        leaderId,
+                        epoch,
+                        state
+                    )
+                );
+            }
         }
 
         durableTransitionTo(
@@ -577,6 +615,7 @@ public class QuorumState {
     }
 
     private void durableTransitionTo(EpochState newState) {
+        log.info("Attempting durable transition to {} from {}", newState, state);
         store.writeElectionState(newState.election(), partitionState.lastKraftVersion());
         memoryTransitionTo(newState);
     }
@@ -668,7 +707,7 @@ public class QuorumState {
     }
 
     public boolean isUnattachedNotVoted() {
-        return maybeUnattachedState().filter(unattached -> !unattached.votedKey().isPresent()).isPresent();
+        return maybeUnattachedState().filter(unattached -> unattached.votedKey().isEmpty()).isPresent();
     }
 
     public boolean isUnattachedAndVoted() {

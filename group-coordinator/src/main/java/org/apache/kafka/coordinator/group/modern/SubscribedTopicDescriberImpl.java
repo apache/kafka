@@ -72,8 +72,7 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
-        TopicMetadata topic = this.topicMetadata.get(topicId);
-        return topic == null ? Collections.emptySet() : topic.partitionRacks().getOrDefault(partition, Collections.emptySet());
+        return Collections.emptySet();
     }
 
     @Override

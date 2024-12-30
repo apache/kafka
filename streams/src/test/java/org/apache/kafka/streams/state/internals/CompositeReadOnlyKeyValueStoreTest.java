@@ -43,7 +43,7 @@ import java.util.NoSuchElementException;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -276,7 +276,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         stubOneUnderlying.put("b", "b");
         stubOneUnderlying.put("c", "c");
 
-        final List<KeyValue<String, String>> results = toList(theStore.range("a", "b"));
+        final List<KeyValue<String, String>> results = toListAndCloseIterator(theStore.range("a", "b"));
         assertTrue(results.contains(new KeyValue<>("a", "a")));
         assertTrue(results.contains(new KeyValue<>("b", "b")));
         assertEquals(2, results.size());
@@ -288,7 +288,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         stubOneUnderlying.put("b", "b");
         stubOneUnderlying.put("c", "c");
 
-        final List<KeyValue<String, String>> results = toList(theStore.reverseRange("a", "b"));
+        final List<KeyValue<String, String>> results = toListAndCloseIterator(theStore.reverseRange("a", "b"));
         assertArrayEquals(
             asList(
                 new KeyValue<>("b", "b"),
@@ -303,7 +303,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         stubOneUnderlying.put("abcd", "b");
         stubOneUnderlying.put("abce", "c");
 
-        final List<KeyValue<String, String>> results = toList(theStore.prefixScan("abcd", new StringSerializer()));
+        final List<KeyValue<String, String>> results = toListAndCloseIterator(theStore.prefixScan("abcd", new StringSerializer()));
         assertTrue(results.contains(new KeyValue<>("abcd", "b")));
         assertEquals(1, results.size());
     }
@@ -314,7 +314,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         stubOneUnderlying.put("aa", "b");
         stubOneUnderlying.put("b", "c");
 
-        final List<KeyValue<String, String>> results = toList(theStore.prefixScan("a", new StringSerializer()));
+        final List<KeyValue<String, String>> results = toListAndCloseIterator(theStore.prefixScan("a", new StringSerializer()));
         assertTrue(results.contains(new KeyValue<>("a", "a")));
         assertTrue(results.contains(new KeyValue<>("aa", "b")));
         assertEquals(2, results.size());
@@ -333,7 +333,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         cache.put("d", "d");
         cache.put("x", "x");
 
-        final List<KeyValue<String, String>> results = toList(theStore.range("a", "e"));
+        final List<KeyValue<String, String>> results = toListAndCloseIterator(theStore.range("a", "e"));
         assertArrayEquals(
             asList(
                 new KeyValue<>("a", "a"),
@@ -357,7 +357,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         cache.put("ab", "d");
         cache.put("x", "x");
 
-        final List<KeyValue<String, String>> results = toList(theStore.prefixScan("a", new StringSerializer()));
+        final List<KeyValue<String, String>> results = toListAndCloseIterator(theStore.prefixScan("a", new StringSerializer()));
         assertArrayEquals(
             asList(
                 new KeyValue<>("a", "a"),
@@ -380,7 +380,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         cache.put("d", "d");
         cache.put("x", "x");
 
-        final List<KeyValue<String, String>> results = toList(theStore.reverseRange("a", "e"));
+        final List<KeyValue<String, String>> results = toListAndCloseIterator(theStore.reverseRange("a", "e"));
         assertTrue(results.contains(new KeyValue<>("a", "a")));
         assertTrue(results.contains(new KeyValue<>("b", "b")));
         assertTrue(results.contains(new KeyValue<>("c", "c")));
@@ -401,7 +401,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         cache.put("d", "d");
         cache.put("x", "x");
 
-        final List<KeyValue<String, String>> results = toList(theStore.all());
+        final List<KeyValue<String, String>> results = toListAndCloseIterator(theStore.all());
         assertTrue(results.contains(new KeyValue<>("a", "a")));
         assertTrue(results.contains(new KeyValue<>("b", "b")));
         assertTrue(results.contains(new KeyValue<>("c", "c")));
@@ -424,7 +424,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         cache.put("d", "d");
         cache.put("x", "x");
 
-        final List<KeyValue<String, String>> results = toList(theStore.reverseAll());
+        final List<KeyValue<String, String>> results = toListAndCloseIterator(theStore.reverseAll());
         assertTrue(results.contains(new KeyValue<>("a", "a")));
         assertTrue(results.contains(new KeyValue<>("b", "b")));
         assertTrue(results.contains(new KeyValue<>("c", "c")));

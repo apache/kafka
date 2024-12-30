@@ -17,7 +17,9 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -29,6 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -167,5 +170,26 @@ public class NodeApiVersionsTest {
             assertEquals(apiVersionKey.minVersion(), apiVersion.minVersion());
             assertEquals(apiVersionKey.maxVersion(), apiVersion.maxVersion());
         }
+    }
+
+    @Test
+    public void testFeatures() {
+        NodeApiVersions versions = new NodeApiVersions(
+            Collections.emptyList(),
+            Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersion((short) 2)
+                .setMinVersion((short) 0)),
+            false,
+            Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersionLevel((short) 2)
+                .setMinVersionLevel((short) 2)),
+            0);
+        SupportedVersionRange supportedVersionRange = versions.supportedFeatures().get("transaction.version");
+        assertEquals(0, supportedVersionRange.min());
+        assertEquals(2, supportedVersionRange.max());
+        assertEquals((short) 2, versions.finalizedFeatures().get("transaction.version"));
+        assertEquals(0L, versions.finalizedFeaturesEpoch());
     }
 }

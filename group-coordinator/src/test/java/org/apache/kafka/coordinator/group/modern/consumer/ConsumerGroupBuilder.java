@@ -17,15 +17,14 @@
 package org.apache.kafka.coordinator.group.modern.consumer;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +37,7 @@ public class ConsumerGroupBuilder {
     private final Map<String, ConsumerGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
     private Map<String, TopicMetadata> subscriptionMetadata;
+    private final Map<String, ResolvedRegularExpression> resolvedRegularExpressions = new HashMap<>();
 
     public ConsumerGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
@@ -47,6 +47,14 @@ public class ConsumerGroupBuilder {
 
     public ConsumerGroupBuilder withMember(ConsumerGroupMember member) {
         this.members.put(member.memberId(), member);
+        return this;
+    }
+
+    public ConsumerGroupBuilder withResolvedRegularExpression(
+        String regex,
+        ResolvedRegularExpression resolvedRegularExpression
+    ) {
+        this.resolvedRegularExpressions.put(regex, resolvedRegularExpression);
         return this;
     }
 
@@ -70,7 +78,12 @@ public class ConsumerGroupBuilder {
 
         // Add subscription records for members.
         members.forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, member))
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, member))
+        );
+
+        // Add resolved regular expressions.
+        resolvedRegularExpressions.forEach((regex, resolvedRegularExpression) ->
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(groupId, regex, resolvedRegularExpression))
         );
 
         // Add subscription metadata.
@@ -83,8 +96,7 @@ public class ConsumerGroupBuilder {
                         subscriptionMetadata.put(topicName, new TopicMetadata(
                             topicImage.id(),
                             topicImage.name(),
-                            topicImage.partitions().size(),
-                            Collections.emptyMap()
+                            topicImage.partitions().size()
                         ));
                     }
                 })
@@ -92,23 +104,23 @@ public class ConsumerGroupBuilder {
         }
 
         if (!subscriptionMetadata.isEmpty()) {
-            records.add(CoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
         }
 
         // Add group epoch record.
-        records.add(CoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, assignment.partitions()))
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, assignment.partitions()))
         );
 
         // Add target assignment epoch.
-        records.add(CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member))
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member))
         );
 
         return records;

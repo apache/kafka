@@ -67,6 +67,12 @@
     <p>For a table that shows Streams API compatibility with Kafka broker versions, see <a href="#streams_api_broker_compat">Broker Compatibility</a>.</p>
 
     <h3 class="anchor-heading"><a id="streams_notable_changes" class="anchor-link"></a><a href="#streams_notable_changes">Notable compatibility changes in past releases</a></h3>
+
+    <p>
+        Starting in version 4.0.0, Kafka Streams will only be compatible when running against brokers on version 2.1
+        or higher. Additionally, exactly-once semantics (EOS) will require brokers to be at least version 2.5.
+    </p>
+
     <p>
         Downgrading from 3.5.x or newer version to 3.4.x or older version needs special attention:
         Since 3.5.0 release, Kafka Streams uses a new serialization format for repartition topics.
@@ -127,13 +133,25 @@
         In deprecated <code>KStreamBuilder</code> class, when a <code>KTable</code> is created from a source topic via <code>KStreamBuilder.table()</code>, its materialized state store
         will reuse the source topic as its changelog topic for restoring, and will disable logging to avoid appending new updates to the source topic; in the <code>StreamsBuilder</code> class introduced in 1.0, this behavior was changed
         accidentally: we still reuse the source topic as the changelog topic for restoring, but will also create a separate changelog topic to append the update records from source topic to. In the 2.0 release, we have fixed this issue and now users
-        can choose whether or not to reuse the source topic based on the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>: if you are upgrading from the old <code>KStreamBuilder</code> class and hence you need to change your code to use
+        can choose whether or not to reuse the source topic based on the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG</code>: if you are upgrading from the old <code>KStreamBuilder</code> class and hence you need to change your code to use
         the new <code>StreamsBuilder</code>, you should set this config value to <code>StreamsConfig#OPTIMIZE</code> to continue reusing the source topic; if you are upgrading from 1.0 or 1.1 where you are already using <code>StreamsBuilder</code> and hence have already
         created a separate changelog topic, you should set this config value to <code>StreamsConfig#NO_OPTIMIZATION</code> when upgrading to {{fullDotVersion}} in order to use that changelog topic for restoring the state store.
-        More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
+        More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
     <h3><a id="streams_api_changes_400" href="#streams_api_changes_400">Streams API changes in 4.0.0</a></h3>
+
+    <p>
+        In this release the <code>ClientInstanceIds</code> instance stores the global consumer<code>Uuid</code> for the
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-714%3A+Client+metrics+and+observability#KIP714:Clientmetricsandobservability-Clientidentificationandtheclientinstanceid">KIP-714</a>
+        id with a key of global stream-thread name appended with <code>"-global-consumer"</code> where before it was only the global stream-thread name.
+    </p>
+
+    <p>
+        In this release two configs <code>default.deserialization.exception.handler</code> and <code>default.production.exception.handler</code> are deprecated, as they don't have any overwrites, which is described in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1056%3A+Remove+%60default.%60+prefix+for+exception+handler+StreamsConfig">KIP-1056</a>
+        You can refer to new configs via <code>deserialization.exception.handler</code> and <code>production.exception.handler</code>.
+    </p>
 
     <p>
         In previous release, a new version of the Processor API was introduced and the old Processor API was
@@ -141,6 +159,18 @@
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1070%3A+deprecate+MockProcessorContext">KIP-1070</a>
         follow this path by deprecating <code>MockProcessorContext</code>, <code>Transformer</code>,
         <code>TransformerSupplier</code>, <code>ValueTransformer</code>, and <code>ValueTransformerSupplier</code>.
+    </p>
+
+    <p>
+      You can now configure your topology with a <code>ProcessorWrapper</code>, which allows you to access and optionally wrap/replace
+      any processor in the topology by injecting an alternative <code>ProcessorSupplier</code> in its place. This can be used to peek
+      records and access the processor context even for DSL operators, for example to implement a logging or tracing framework, or to
+      aid in testing or debugging scenarios. You must implement the <code>ProcessorWrapper</code> interface and then pass the class
+      or class name into the configs via the new <code>StreamsConfig#PROCESSOR_WRAPPER_CLASS_CONFIG</code> config. NOTE: this config is
+      applied during the topology building phase, and therefore will not take effect unless the config is passed in when creating
+      the StreamsBuilder (DSL) or Topology(PAPI) objects. You MUST use the StreamsBuilder/Topology constructor overload that
+      accepts a TopologyConfig parameter for the <code>StreamsConfig#PROCESSOR_WRAPPER_CLASS_CONFIG</code> to be picked up.
+      See <a href="https://cwiki.apache.org/confluence/x/TZCMEw">KIP-1112</a> for more details.
     </p>
 
     <h3><a id="streams_api_changes_390" href="#streams_api_changes_390">Streams API changes in 3.9.0</a></h3>
@@ -928,7 +958,7 @@
 
     <p>
         As of 2.3.0 we've updated how to turn on optimizations. Now to enable optimizations, you need to do two things.
-        First add this line to your properties <code>properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);</code>, as you have done before.
+        First add this line to your properties <code>properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);</code>, as you have done before.
         Second, when constructing your <code>KafkaStreams</code> instance, you'll need to pass your configuration properties when building your
         topology by using the overloaded <code>StreamsBuilder.build(Properties)</code> method.
         For example <code>KafkaStreams myStream = new KafkaStreams(streamsBuilder.build(properties), properties)</code>.
@@ -1085,9 +1115,9 @@
 
     <p>
         We've added an overloaded <code>StreamsBuilder#build</code> method that accepts an instance of <code>java.util.Properties</code> with the intent of using the
-        <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> config added in Kafka Streams 2.0. Before 2.1, when building a topology with
+        <code>StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG</code> config added in Kafka Streams 2.0. Before 2.1, when building a topology with
         the DSL, Kafka Streams writes the physical plan as the user makes calls on the DSL.  Now by providing a <code>java.util.Properties</code> instance when
-        executing a <code>StreamsBuilder#build</code> call, Kafka Streams can optimize the physical plan of the topology, provided the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>
+        executing a <code>StreamsBuilder#build</code> call, Kafka Streams can optimize the physical plan of the topology, provided the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG</code>
         config is set to <code>StreamsConfig#OPTIMIZE</code>.  By setting <code>StreamsConfig#OPTIMIZE</code> in addition to the <code>KTable</code> optimization of
         reusing the source topic as the changelog topic, the topology may be optimized to merge redundant repartition topics into one
         repartition topic.  The original no parameter version of <code>StreamsBuilder#build</code> is still available for those who wish to not
@@ -1622,7 +1652,7 @@
         <thead>
           <tr>
             <th></th>
-            <th colspan="3">Kafka Broker (columns)</th>
+            <th colspan="5">Kafka Broker (columns)</th>
           </tr>
         </thead>
         <tbody>
@@ -1630,37 +1660,56 @@
             <td>Kafka Streams API (rows)</td>
             <td>0.10.0.x</td>
             <td>0.10.1.x and 0.10.2.x</td>
-            <td>0.11.0.x and<br>1.0.x and<br>1.1.x and<br>2.0.x and<br>2.1.x and<br>2.2.x and<br>2.3.x and<br>2.4.x and<br>2.5.x and<br>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x and<br>3.6.x and<br>3.7.x</td>
+            <td>0.11.0.x and<br>1.0.x and<br>1.1.x and<br>2.0.x</td>
+            <td>2.1.x and<br>2.2.x and<br>2.3.x and<br>2.4.x and<br>2.5.x and<br>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x and<br>3.6.x and<br>3.7.x and<br>3.8.x and<br>3.9.x</td>
+            <td>4.0.x</td>
           </tr>
           <tr>
             <td>0.10.0.x</td>
             <td>compatible</td>
             <td>compatible</td>
             <td>compatible</td>
+            <td>compatible</td>
+            <td></td>
           </tr>
           <tr>
             <td>0.10.1.x and 0.10.2.x</td>
             <td></td>
             <td>compatible</td>
             <td>compatible</td>
+            <td>compatible</td>
+            <td></td>
           </tr>
           <tr>
             <td>0.11.0.x</td>
             <td></td>
             <td>compatible with exactly-once turned off<br>(requires broker version 0.11.0.x or higher)</td>
             <td>compatible</td>
+            <td></td>
           </tr>
           <tr>
             <td>1.0.x and<br>1.1.x and<br>2.0.x and<br>2.1.x and<br>2.2.0 and<br>2.2.0</td>
             <td></td>
             <td>compatible with exactly-once turned off<br>(requires broker version 0.11.0.x or higher);<br>requires message format 0.10 or higher;<br>message headers are not supported<br>(requires broker version 0.11.0.x or higher<br>with message format 0.11 or higher)</td>
             <td>compatible; requires message format 0.10 or higher;<br>if message headers are used, message format 0.11<br>or higher required</td>
+            <td>compatible</td>
+            <td></td>
           </tr>
           <tr>
-            <td>2.2.1 and<br>2.3.x and<br>2.4.x and<br>2.5.x and<br>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x and<br>3.6.x and<br>3.7.x</td>
+            <td>2.2.1 and<br>2.3.x and<br>2.4.x and<br>2.5.x and<br>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x and<br>3.6.x and<br>3.7.x and<br>3.8.x and<br>3.9.x</td>
             <td></td>
             <td></td>
-            <td>compatible; requires message format 0.11 or higher;<br>enabling exactly-once v2 requires 2.4.x or higher</td>
+            <td>compatible; requires message format 0.11 or higher;<br>enabling exactly-once v2 requires 2.5.x or higher</td>
+            <td>compatible</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>4.0.x</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>compatible; enabling exactly-once v2 requires broker version 2.5.x or higher</td>
+            <td>compatible</td>
           </tr>
         </tbody>
         </table>

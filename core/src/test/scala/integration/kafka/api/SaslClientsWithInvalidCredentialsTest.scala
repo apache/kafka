@@ -13,6 +13,7 @@
 package kafka.api
 
 import kafka.security.JaasTestUtils
+
 import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
@@ -22,15 +23,20 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import kafka.utils.TestUtils
-import kafka.zk.ConfigEntityChangeNotificationZNode
+import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.metadata.storage.Formatter
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
+
+import scala.jdk.javaapi.OptionConverters
+import scala.util.Using
+
 
 class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -43,8 +49,8 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   val brokerCount = 1
 
   this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
-  this.serverConfig.setProperty(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
-  this.serverConfig.setProperty(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, "1")
+  this.serverConfig.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+  this.serverConfig.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, "1")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
   val topic = "topic"
@@ -53,9 +59,11 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
 
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
     super.configureSecurityBeforeServersStart(testInfo)
-    zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
-    // Create broker credentials before starting brokers
-    createScramCredentials(zkConnect, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
+  }
+
+  override def addFormatterSettings(formatter: Formatter): Unit = {
+    formatter.setScramArguments(
+      List(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]").asJava)
   }
 
   override def createPrivilegedAdminClient() = {
@@ -67,8 +75,14 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
       JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    val superuserLoginContext = jaasAdminLoginModule(kafkaClientSaslMechanism)
+    superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, superuserLoginContext)
     super.setUp(testInfo)
-    createTopic(topic, numPartitions, brokerCount)
+    Using.resource(createPrivilegedAdminClient()) { superuserAdminClient =>
+      TestUtils.createTopicWithAdmin(
+        superuserAdminClient, topic, brokers, controllerServers, numPartitions
+      )
+    }
   }
 
   @AfterEach
@@ -77,7 +91,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     closeSasl()
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name="{displayName}.quorum=kraft.isIdempotenceEnabled={0}")
   @ValueSource(booleans = Array(true, false))
   def testProducerWithAuthenticationFailure(isIdempotenceEnabled: Boolean): Unit = {
     val prop = new Properties()
@@ -97,8 +111,9 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     verifyWithRetry(sendOneRecord(producer2))
   }
 
-  @Test
-  def testTransactionalProducerWithAuthenticationFailure(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testTransactionalProducerWithAuthenticationFailure(quorum: String, groupProtocol: String): Unit = {
     val txProducer = createTransactionalProducer()
     verifyAuthenticationException(txProducer.initTransactions())
 
@@ -106,22 +121,25 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     assertThrows(classOf[KafkaException], () => txProducer.initTransactions())
   }
 
-  @Test
-  def testConsumerWithAuthenticationFailure(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testConsumerWithAuthenticationFailure(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
-  @Test
-  def testManualAssignmentConsumerWithAuthenticationFailure(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testManualAssignmentConsumerWithAuthenticationFailure(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
-  @Test
-  def testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -139,9 +157,10 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     verifyWithRetry(assertEquals(1, consumer.poll(Duration.ofMillis(1000)).count))
   }
 
-  @Test
-  def testKafkaAdminClientWithAuthenticationFailure(): Unit = {
-    val props = TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testKafkaAdminClientWithAuthenticationFailure(quorum: String, groupProtocol: String): Unit = {
+    val props = JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val adminClient = Admin.create(props)
 

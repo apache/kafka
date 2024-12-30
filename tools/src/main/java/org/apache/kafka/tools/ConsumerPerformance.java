@@ -245,15 +245,12 @@ public class ConsumerPerformance {
     }
 
     protected static class ConsumerPerfOptions extends CommandDefaultOptions {
-        private final OptionSpec<String> brokerListOpt;
         private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpec<String> topicOpt;
         private final OptionSpec<String> groupIdOpt;
         private final OptionSpec<Integer> fetchSizeOpt;
         private final OptionSpec<Void> resetBeginningOffsetOpt;
         private final OptionSpec<Integer> socketBufferSizeOpt;
-        private final OptionSpec<Integer> numThreadsOpt;
-        private final OptionSpec<Integer> numFetchersOpt;
         private final OptionSpec<String> consumerConfigOpt;
         private final OptionSpec<Void> printMetricsOpt;
         private final OptionSpec<Void> showDetailedStatsOpt;
@@ -265,12 +262,7 @@ public class ConsumerPerformance {
 
         public ConsumerPerfOptions(String[] args) {
             super(args);
-            brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
-                .withRequiredArg()
-                .describedAs("broker-list")
-                .ofType(String.class);
-            bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED unless --broker-list(deprecated) is specified. The server(s) to connect to.")
-                .requiredUnless("broker-list")
+            bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
                 .withRequiredArg()
                 .describedAs("server to connect to")
                 .ofType(String.class);
@@ -295,16 +287,6 @@ public class ConsumerPerformance {
                 .describedAs("size")
                 .ofType(Integer.class)
                 .defaultsTo(2 * 1024 * 1024);
-            numThreadsOpt = parser.accepts("threads", "DEPRECATED AND IGNORED: Number of processing threads.")
-                .withRequiredArg()
-                .describedAs("count")
-                .ofType(Integer.class)
-                .defaultsTo(10);
-            numFetchersOpt = parser.accepts("num-fetch-threads", "DEPRECATED AND IGNORED: Number of fetcher threads.")
-                .withRequiredArg()
-                .describedAs("count")
-                .ofType(Integer.class)
-                .defaultsTo(1);
             consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
                 .withRequiredArg()
                 .describedAs("config file")
@@ -341,8 +323,6 @@ public class ConsumerPerformance {
                 return;
             }
             if (options != null) {
-                if (options.has(numThreadsOpt) || options.has(numFetchersOpt))
-                    System.out.println("WARNING: option [threads] and [num-fetch-threads] have been deprecated and will be ignored by the test");
                 CommandLineUtils.maybePrintHelpOrVersion(this, "This tool is used to verify the consumer performance.");
                 CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt);
             }
@@ -353,7 +333,7 @@ public class ConsumerPerformance {
         }
 
         public String brokerHostsAndPorts() {
-            return options.valueOf(options.has(bootstrapServerOpt) ? bootstrapServerOpt : brokerListOpt);
+            return options.valueOf(bootstrapServerOpt);
         }
 
         public Properties props() throws IOException {

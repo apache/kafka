@@ -16,13 +16,21 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
+
+import java.util.Collections;
+import java.util.Set;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
@@ -31,13 +39,17 @@ import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_
 public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, K, V> {
 
     private final String storeName;
+    private final StoreFactory storeFactory;
     private final Reducer<V> addReducer;
     private final Reducer<V> removeReducer;
 
     private boolean sendOldValues = false;
 
-    KTableReduce(final String storeName, final Reducer<V> addReducer, final Reducer<V> removeReducer) {
-        this.storeName = storeName;
+    KTableReduce(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized,
+                 final Reducer<V> addReducer,
+                 final Reducer<V> removeReducer) {
+        this.storeFactory = new KeyValueStoreMaterializer<>(materialized);
+        this.storeName = materialized.storeName();
         this.addReducer = addReducer;
         this.removeReducer = removeReducer;
     }
@@ -47,6 +59,11 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, K, V> {
         // Reduce is always materialized:
         sendOldValues = true;
         return true;
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
     }
 
     @Override
@@ -64,7 +81,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, K, V> {
         public void init(final ProcessorContext<K, Change<V>> context) {
             store = new KeyValueStoreWrapper<>(context, storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
-                store.getStore(),
+                store.store(),
                 context,
                 new TimestampedCacheFlushListener<>(context),
                 sendOldValues);

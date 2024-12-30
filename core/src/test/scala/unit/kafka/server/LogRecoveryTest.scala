@@ -16,7 +16,6 @@
 */
 package kafka.server
 
-import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.Admin
@@ -26,6 +25,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
 import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -62,8 +62,8 @@ class LogRecoveryTest extends QuorumTestHarness {
 
   var admin: Admin = _
   var producer: KafkaProducer[Integer, String] = _
-  def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.head, ReplicaManager.HighWatermarkFilename))
-  def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.head, ReplicaManager.HighWatermarkFilename))
+  def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.head, ReplicaManager.HighWatermarkFilename), null)
+  def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.head, ReplicaManager.HighWatermarkFilename), null)
   var servers = Seq.empty[KafkaBroker]
 
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
@@ -105,7 +105,7 @@ class LogRecoveryTest extends QuorumTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointNoFailuresSingleLogSegment(quorum: String): Unit = {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
@@ -116,18 +116,18 @@ class LogRecoveryTest extends QuorumTestHarness {
       "Failed to update high watermark for follower after timeout")
 
     servers.foreach(_.replicaManager.checkpointHighWatermarks())
-    val leaderHW = hwFile1.read().getOrElse(topicPartition, 0L)
+    val leaderHW = hwFile1.read().getOrDefault(topicPartition, 0L)
     assertEquals(numMessages, leaderHW)
-    val followerHW = hwFile2.read().getOrElse(topicPartition, 0L)
+    val followerHW = hwFile2.read().getOrDefault(topicPartition, 0L)
     assertEquals(numMessages, followerHW)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointWithFailuresSingleLogSegment(quorum: String): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 
-    assertEquals(0L, hwFile1.read().getOrElse(topicPartition, 0L))
+    assertEquals(0L, hwFile1.read().getOrDefault(topicPartition, 0L))
 
     sendMessages(1)
     Thread.sleep(1000)
@@ -135,7 +135,7 @@ class LogRecoveryTest extends QuorumTestHarness {
 
     // kill the server hosting the preferred replica
     server1.shutdown()
-    assertEquals(hw, hwFile1.read().getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile1.read().getOrDefault(topicPartition, 0L))
 
     // check if leader moves to the other server
     leader = awaitLeaderChange(servers, topicPartition, oldLeaderOpt = Some(leader))
@@ -150,7 +150,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertTrue(leader == 0 || leader == 1,
       "Leader must remain on broker 1, in case of ZooKeeper session expiration it can move to broker 0")
 
-    assertEquals(hw, hwFile1.read().getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile1.read().getOrDefault(topicPartition, 0L))
     /** We plan to shutdown server2 and transfer the leadership to server1.
       * With unclean leader election turned off, a prerequisite for the successful leadership transition
       * is that server1 has caught up on the topicPartition, and has joined the ISR.
@@ -162,7 +162,7 @@ class LogRecoveryTest extends QuorumTestHarness {
 
     // since server 2 was never shut down, the hw value of 30 is probably not checkpointed to disk yet
     server2.shutdown()
-    assertEquals(hw, hwFile2.read().getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile2.read().getOrDefault(topicPartition, 0L))
 
     server2.startup()
     updateProducer()
@@ -179,12 +179,12 @@ class LogRecoveryTest extends QuorumTestHarness {
       "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(_.shutdown())
-    assertEquals(hw, hwFile1.read().getOrElse(topicPartition, 0L))
-    assertEquals(hw, hwFile2.read().getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile1.read().getOrDefault(topicPartition, 0L))
+    assertEquals(hw, hwFile2.read().getOrDefault(topicPartition, 0L))
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointNoFailuresMultipleLogSegments(quorum: String): Unit = {
     sendMessages(20)
     val hw = 20L
@@ -194,14 +194,14 @@ class LogRecoveryTest extends QuorumTestHarness {
       "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(_.shutdown())
-    val leaderHW = hwFile1.read().getOrElse(topicPartition, 0L)
+    val leaderHW = hwFile1.read().getOrDefault(topicPartition, 0L)
     assertEquals(hw, leaderHW)
-    val followerHW = hwFile2.read().getOrElse(topicPartition, 0L)
+    val followerHW = hwFile2.read().getOrDefault(topicPartition, 0L)
     assertEquals(hw, followerHW)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointWithFailuresMultipleLogSegments(quorum: String): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 
@@ -215,8 +215,8 @@ class LogRecoveryTest extends QuorumTestHarness {
     // kill the server hosting the preferred replica
     server1.shutdown()
     server2.shutdown()
-    assertEquals(hw, hwFile1.read().getOrElse(topicPartition, 0L))
-    assertEquals(hw, hwFile2.read().getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile1.read().getOrDefault(topicPartition, 0L))
+    assertEquals(hw, hwFile2.read().getOrDefault(topicPartition, 0L))
 
     server2.startup()
     updateProducer()
@@ -224,14 +224,14 @@ class LogRecoveryTest extends QuorumTestHarness {
     leader = awaitLeaderChange(servers, topicPartition, oldLeaderOpt = Some(leader))
     assertEquals(1, leader, "Leader must move to broker 1")
 
-    assertEquals(hw, hwFile1.read().getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile1.read().getOrDefault(topicPartition, 0L))
 
     // bring the preferred replica back
     server1.startup()
     updateProducer()
 
-    assertEquals(hw, hwFile1.read().getOrElse(topicPartition, 0L))
-    assertEquals(hw, hwFile2.read().getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile1.read().getOrDefault(topicPartition, 0L))
+    assertEquals(hw, hwFile2.read().getOrDefault(topicPartition, 0L))
 
     sendMessages(2)
     hw += 2
@@ -245,8 +245,8 @@ class LogRecoveryTest extends QuorumTestHarness {
       "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(_.shutdown())
-    assertEquals(hw, hwFile1.read().getOrElse(topicPartition, 0L))
-    assertEquals(hw, hwFile2.read().getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile1.read().getOrDefault(topicPartition, 0L))
+    assertEquals(hw, hwFile2.read().getOrDefault(topicPartition, 0L))
   }
 
   private def sendMessages(n: Int): Unit = {

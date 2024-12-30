@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
@@ -49,7 +50,9 @@ import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.TestFeatureVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
@@ -62,10 +65,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -532,6 +538,135 @@ public class ClusterControlManagerTest {
     }
 
     @Test
+    public void testRegistrationWithUnsupportedFeature() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        Map<String, VersionRange> supportedFeatures = new HashMap<>();
+        supportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
+            MetadataVersion.IBP_3_1_IV0.featureLevel(),
+            MetadataVersion.IBP_3_7_IV0.featureLevel()));
+        supportedFeatures.put(TestFeatureVersion.FEATURE_NAME, VersionRange.of(
+            TestFeatureVersion.TEST_0.featureLevel(),
+            TestFeatureVersion.TEST_1.featureLevel()));
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, Collections.singletonList(0))).
+            setMetadataVersion(MetadataVersion.IBP_3_7_IV0).
+            build();
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+            setTime(new MockTime(0, 0, 0)).
+            setSnapshotRegistry(snapshotRegistry).
+            setFeatureControlManager(featureControl).
+            setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
+            build();
+        clusterControl.activate();
+        FeatureLevelRecord testFeatureRecord = new FeatureLevelRecord().
+            setName(TestFeatureVersion.FEATURE_NAME).setFeatureLevel((short) 1);
+        featureControl.replay(testFeatureRecord);
+
+        List<Uuid> logDirs = asList(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"), Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"));
+        BrokerRegistrationRequestData baseRequest = new BrokerRegistrationRequestData().
+            setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+            setBrokerId(0).
+            setRack(null).
+            setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")).
+            setLogDirs(logDirs);
+
+        assertEquals("Unable to register because the broker does not support finalized version 1 of " +
+                "test.feature.version. The broker wants a version between 0 and 0, inclusive.",
+            assertThrows(UnsupportedVersionException.class,
+                () -> clusterControl.registerBroker(
+                    baseRequest.setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
+                        Collections.singleton(new BrokerRegistrationRequestData.Feature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.IBP_3_1_IV0.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
+                    123L,
+                    featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
+    }
+
+    @Test
+    public void testRegistrationWithUnsupportedKraftVersion() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        Map<String, VersionRange> supportedFeatures = new HashMap<>();
+        supportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
+            MetadataVersion.IBP_3_1_IV0.featureLevel(),
+            MetadataVersion.IBP_3_9_IV0.featureLevel()));
+        supportedFeatures.put(KRaftVersion.FEATURE_NAME, VersionRange.of(
+            KRaftVersion.KRAFT_VERSION_1.featureLevel(),
+            KRaftVersion.KRAFT_VERSION_1.featureLevel()));
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, Collections.singletonList(0))).
+            setMetadataVersion(MetadataVersion.IBP_3_9_IV0).
+            build();
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+            setTime(new MockTime(0, 0, 0)).
+            setSnapshotRegistry(snapshotRegistry).
+            setFeatureControlManager(featureControl).
+            setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
+            build();
+        clusterControl.activate();
+
+        List<Uuid> logDirs = asList(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"), Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"));
+        BrokerRegistrationRequestData baseRequest = new BrokerRegistrationRequestData().
+            setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+            setBrokerId(0).
+            setRack(null).
+            setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")).
+            setLogDirs(logDirs);
+
+        // quorum controller passes in the latest kraft version to populate finalized features
+        Map<String, Short> updatedFeaturesMap = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
+        updatedFeaturesMap.put(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel());
+        FinalizedControllerFeatures updatedFinalizedFeatures = new FinalizedControllerFeatures(updatedFeaturesMap, Long.MAX_VALUE);
+
+        assertEquals("Unable to register because the broker does not support finalized version 1 of " +
+                "kraft.version. The broker wants a version between 0 and 0, inclusive.",
+            assertThrows(UnsupportedVersionException.class,
+                () -> clusterControl.registerBroker(
+                    baseRequest.setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
+                        Collections.singleton(new BrokerRegistrationRequestData.Feature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.IBP_3_9_IV0.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_9_IV0.featureLevel())).iterator())),
+                    123L,
+                    updatedFinalizedFeatures)).getMessage());
+
+        assertEquals("Unable to register because the broker does not support finalized version 1 of " +
+                "kraft.version. The broker wants a version between 0 and 0, inclusive.",
+            assertThrows(UnsupportedVersionException.class,
+                () -> clusterControl.registerBroker(
+                    baseRequest.setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
+                        Arrays.asList(
+                            new BrokerRegistrationRequestData.Feature().
+                                setName(MetadataVersion.FEATURE_NAME).
+                                setMinSupportedVersion(MetadataVersion.IBP_3_9_IV0.featureLevel()).
+                                setMaxSupportedVersion(MetadataVersion.IBP_3_9_IV0.featureLevel()),
+                            new BrokerRegistrationRequestData.Feature().
+                                setName(KRaftVersion.FEATURE_NAME).
+                                setMinSupportedVersion(KRaftVersion.KRAFT_VERSION_0.featureLevel()).
+                                setMaxSupportedVersion(KRaftVersion.KRAFT_VERSION_0.featureLevel())).iterator())),
+                    123L,
+                    updatedFinalizedFeatures)).getMessage());
+
+        clusterControl.registerBroker(
+            baseRequest.setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
+                Arrays.asList(
+                    new BrokerRegistrationRequestData.Feature().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setMinSupportedVersion(MetadataVersion.IBP_3_9_IV0.featureLevel()).
+                        setMaxSupportedVersion(MetadataVersion.IBP_3_9_IV0.featureLevel()),
+                    new BrokerRegistrationRequestData.Feature().
+                        setName(KRaftVersion.FEATURE_NAME).
+                        setMinSupportedVersion(KRaftVersion.KRAFT_VERSION_1.featureLevel()).
+                        setMaxSupportedVersion(KRaftVersion.KRAFT_VERSION_1.featureLevel())).iterator())),
+            123L,
+            updatedFinalizedFeatures);
+    }
+
+    @Test
     public void testRegistrationWithUnsupportedMetadataVersion() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
@@ -552,8 +687,8 @@ public class ClusterControlManagerTest {
                 build();
         clusterControl.activate();
 
-        assertEquals("Unable to register because the broker does not support version 4 of " +
-            "metadata.version. It wants a version between 1 and 1, inclusive.",
+        assertEquals("Unable to register because the broker does not support finalized version 4 of " +
+            "metadata.version. The broker wants a version between 1 and 1, inclusive.",
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     new BrokerRegistrationRequestData().
@@ -564,8 +699,8 @@ public class ClusterControlManagerTest {
                     123L,
                     featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
 
-        assertEquals("Unable to register because the broker does not support version 4 of " +
-            "metadata.version. It wants a version between 7 and 7, inclusive.",
+        assertEquals("Unable to register because the broker does not support finalized version 4 of " +
+            "metadata.version. The broker wants a version between 7 and 7, inclusive.",
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     new BrokerRegistrationRequestData().
@@ -634,7 +769,8 @@ public class ClusterControlManagerTest {
     void registerNewBrokerWithDirs(ClusterControlManager clusterControl, int brokerId, List<Uuid> dirs) {
         BrokerRegistrationRequestData data = new BrokerRegistrationRequestData().setBrokerId(brokerId)
                 .setClusterId(clusterControl.clusterId())
-                .setIncarnationId(Uuid.randomUuid()).setLogDirs(dirs);
+                .setIncarnationId(new Uuid(brokerId, brokerId))
+                .setLogDirs(dirs);
         FinalizedControllerFeatures finalizedFeatures = new FinalizedControllerFeatures(Collections.emptyMap(), 456L);
         ControllerResult<BrokerRegistrationReply> result = clusterControl.registerBroker(data, 123L, finalizedFeatures);
         RecordTestUtils.replayAll(clusterControl, result.records());
@@ -717,5 +853,33 @@ public class ClusterControlManagerTest {
             assertEquals(100,
                     clusterControl.brokerRegistrations().get(1).epoch());
         }
+    }
+
+    @Test
+    public void testBrokerContactTimesAreUpdatedOnClusterControlActivation() {
+        MockTime time = new MockTime(0L, 20L, 1000L);
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
+            setFeatureControlManager(new FeatureControlManager.Builder().build()).
+            setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
+            setTime(time).
+            build();
+        clusterControl.replay(new RegisterBrokerRecord().
+            setBrokerEpoch(100).
+            setBrokerId(0).
+            setLogDirs(asList(Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"))), 10002);
+        clusterControl.replay(new RegisterBrokerRecord().
+            setBrokerEpoch(123).
+            setBrokerId(1).
+            setLogDirs(asList(Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg"))), 10005);
+        clusterControl.activate();
+        assertEquals(OptionalLong.of(1000L), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(0, 100)));
+        assertEquals(OptionalLong.of(1000L), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(1, 123)));
+        assertEquals(OptionalLong.empty(), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(1, 124)));
+        assertEquals(OptionalLong.empty(), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(2, 100)));
     }
 }

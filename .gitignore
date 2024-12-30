@@ -56,12 +56,8 @@ jmh-benchmarks/src/main/generated
 **/.jqwik-database
 **/src/generated
 **/src/generated-test
-
 storage/kafka-tiered-storage/
 
 docker/test/report_*.html
 kafka.Kafka
 __pycache__
-/connect/runtime/src/main/java/org/apache/kafka/connect/testing/
-/connect/file/
-/connect/json/

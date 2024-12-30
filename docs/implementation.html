@@ -55,6 +55,7 @@ maxTimestamp: int64
 producerId: int64
 producerEpoch: int16
 baseSequence: int32
+recordsCount: int32
 records: [Record]</code></pre>
     <p> Note that when compression is enabled, the compressed record data is serialized directly following the count of the number of records. </p>
 
@@ -88,8 +89,9 @@ timestampDelta: varlong
 offsetDelta: varint
 keyLength: varint
 key: byte[]
-valueLen: varint
+valueLength: varint
 value: byte[]
+headersCount: varint
 Headers => [Header]</code></pre>
 	<h5 class="anchor-heading"><a id="recordheader" class="anchor-link"></a><a href="#recordheader">5.3.2.1 Record Header</a></h5>
 	<pre><code class="language-text">headerKeyLength: varint
@@ -253,45 +255,6 @@ messageSetSend n</code></pre>
         CoordinatorLoadInProgressException and the consumer may retry the OffsetFetchRequest after backing off.
     </p>
 
-    <h4 class="anchor-heading"><a id="impl_zookeeper" class="anchor-link"></a><a href="#impl_zookeeper">ZooKeeper Directories</a></h4>
-    <p>
-    The following gives the ZooKeeper structures and algorithms used for co-ordination between consumers and brokers.
-    </p>
-
-    <h4 class="anchor-heading"><a id="impl_zknotation" class="anchor-link"></a><a href="#impl_zknotation">Notation</a></h4>
-    <p>
-    When an element in a path is denoted <code>[xyz]</code>, that means that the value of xyz is not fixed and there is in fact a ZooKeeper znode for each possible value of xyz. For example <code>/topics/[topic]</code> would be a directory named /topics containing a sub-directory for each topic name. Numerical ranges are also given such as <code>[0...5]</code> to indicate the subdirectories 0, 1, 2, 3, 4. An arrow <code>-></code> is used to indicate the contents of a znode. For example <code>/hello -> world</code> would indicate a znode /hello containing the value "world".
-    </p>
-
-    <h4 class="anchor-heading"><a id="impl_zkbroker" class="anchor-link"></a><a href="#impl_zkbroker">Broker Node Registry</a></h4>
-    <pre><code class="language-json">/brokers/ids/[0...N] --> {"jmx_port":...,"timestamp":...,"endpoints":[...],"host":...,"version":...,"port":...} (ephemeral node)</code></pre>
-    <p>
-    This is a list of all present broker nodes, each of which provides a unique logical broker id which identifies it to consumers (which must be given as part of its configuration). On startup, a broker node registers itself by creating a znode with the logical broker id under /brokers/ids. The purpose of the logical broker id is to allow a broker to be moved to a different physical machine without affecting consumers. An attempt to register a broker id that is already in use (say because two servers are configured with the same broker id) results in an error.
-    </p>
-    <p>
-    Since the broker registers itself in ZooKeeper using ephemeral znodes, this registration is dynamic and will disappear if the broker is shutdown or dies (thus notifying consumers it is no longer available).
-    </p>
-    <h4 class="anchor-heading"><a id="impl_zktopic" class="anchor-link"></a><a href="#impl_zktopic">Broker Topic Registry</a></h4>
-    <pre><code class="language-json">/brokers/topics/[topic]/partitions/[0...N]/state --> {"controller_epoch":...,"leader":...,"version":...,"leader_epoch":...,"isr":[...]} (ephemeral node)</code></pre>
-
-    <p>
-    Each broker registers itself under the topics it maintains and stores the number of partitions for that topic.
-    </p>
-
-    <h4 class="anchor-heading"><a id="impl_clusterid" class="anchor-link"></a><a href="#impl_clusterid">Cluster Id</a></h4>
-
-    <p>
-        The cluster id is a unique and immutable identifier assigned to a Kafka cluster. The cluster id can have a maximum of 22 characters and the allowed characters are defined by the regular expression [a-zA-Z0-9_\-]+, which corresponds to the characters used by the URL-safe Base64 variant with no padding. Conceptually, it is auto-generated when a cluster is started for the first time.
-    </p>
-    <p>
-        Implementation-wise, it is generated when a broker with version 0.10.1 or later is successfully started for the first time. The broker tries to get the cluster id from the <code>/cluster/id</code> znode during startup. If the znode does not exist, the broker generates a new cluster id and creates the znode with this cluster id.
-    </p>
-
-    <h4 class="anchor-heading"><a id="impl_brokerregistration" class="anchor-link"></a><a href="#impl_brokerregistration">Broker node registration</a></h4>
-
-    <p>
-    The broker nodes are basically independent, so they only publish information about what they have. When a broker joins, it registers itself under the broker node registry directory and writes information about its host name and port. The broker also register the list of existing topics and their logical partitions in the broker topic registry. New topics are registered dynamically when they are created on the broker.
-    </p>
 </script>
 
 <div class="p-implementation"></div>

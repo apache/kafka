@@ -56,7 +56,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     props.foreach(p => p.putAll(overrideProps()))
   }
 
-  override protected def kraftControllerConfigs(): Seq[Properties] = {
+  override protected def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     Seq(overrideProps())
   }
 
@@ -74,7 +74,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithValidRetentionTime(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
@@ -86,7 +86,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithValidRetentionSize(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
@@ -98,7 +98,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithInheritedLocalRetentionTime(quorum: String): Unit = {
     // inherited local retention ms is 1000
     val topicConfig = new Properties()
@@ -110,7 +110,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithInheritedLocalRetentionSize(quorum: String): Unit = {
     // inherited local retention bytes is 1024
     val topicConfig = new Properties()
@@ -122,7 +122,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithInvalidRetentionTime(quorum: String): Unit = {
     // inherited local retention ms is 1000
     val topicConfig = new Properties()
@@ -134,7 +134,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithInvalidRetentionSize(quorum: String): Unit = {
     // inherited local retention bytes is 1024
     val topicConfig = new Properties()
@@ -146,7 +146,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateCompactedRemoteStorage(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
@@ -301,7 +301,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testEnableRemoteLogOnExistingTopicTest(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
@@ -319,7 +319,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testEnableRemoteLogWhenSystemRemoteStorageIsDisabled(quorum: String): Unit = {
     val admin = createAdminClient()
 
@@ -343,7 +343,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testUpdateTopicConfigWithValidRetentionTimeTest(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
@@ -364,7 +364,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testUpdateTopicConfigWithValidRetentionSizeTest(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
@@ -385,7 +385,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testUpdateTopicConfigWithInheritedLocalRetentionTime(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
@@ -405,7 +405,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testUpdateTopicConfigWithInheritedLocalRetentionSize(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
@@ -445,36 +445,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testUpdateInvalidRemoteStorageConfigUnderZK(quorum: String): Unit = {
-    val admin = createAdminClient()
-    val errorMsg = "It is invalid to set `remote.log.delete.on.disable` or `remote.log.copy.disable` under Zookeeper's mode."
-    val topicConfig = new Properties
-    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
-      topicConfig = topicConfig)
-
-    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
-    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      util.Arrays.asList(
-        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
-          AlterConfigOp.OpType.SET),
-      ))
-    assertThrowsException(classOf[InvalidConfigurationException],
-      () => admin.incrementalAlterConfigs(configs).all().get(), errorMsg)
-
-    configs.clear()
-    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      util.Arrays.asList(
-        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, "true"),
-          AlterConfigOp.OpType.SET),
-      ))
-    assertThrowsException(classOf[InvalidConfigurationException],
-      () => admin.incrementalAlterConfigs(configs).all().get(), errorMsg)
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testTopicDeletion(quorum: String): Unit = {
     MyRemoteStorageManager.deleteSegmentEventCounter.set(0)
     val numPartitions = 2
@@ -493,7 +464,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testClusterWideDisablementOfTieredStorageWithEnabledTieredTopic(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
@@ -501,21 +472,17 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
       topicConfig = topicConfig)
 
-    val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1, null).head
     instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
 
-    if (isKRaftTest()) {
-      recreateBrokers(startup = true)
-      assertTrue(faultHandler.firstException().getCause.isInstanceOf[ConfigException])
-      // Normally the exception is thrown as part of the TearDown method of the parent class(es). We would like to not do this.
-      faultHandler.setIgnore(true)
-    } else {
-      assertThrows(classOf[ConfigException], () => recreateBrokers(startup = true))
-    }
+    recreateBrokers(startup = true)
+    assertTrue(faultHandler.firstException().getCause.isInstanceOf[ConfigException])
+    // Normally the exception is thrown as part of the TearDown method of the parent class(es). We would like to not do this.
+    faultHandler.setIgnore(true)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testClusterWithoutTieredStorageStartsSuccessfullyIfTopicWithTieringDisabled(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, false.toString)
@@ -523,7 +490,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
       topicConfig = topicConfig)
 
-    val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1, null).head
     instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
 
     recreateBrokers(startup = true)

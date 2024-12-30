@@ -18,7 +18,7 @@ import kafka.api.GroupedUserPrincipalBuilder._
 import kafka.api.GroupedUserQuotaCallback._
 import kafka.security.{JaasModule, JaasTestUtils}
 import kafka.server._
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
@@ -28,10 +28,12 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.{Cluster, Reconfigurable}
-import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs}
+import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.quota._
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
@@ -63,7 +65,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some("SCRAM-SHA-256"), KafkaSasl, JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
-    this.serverConfig.setProperty(QuotaConfigs.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, classOf[GroupedUserQuotaCallback].getName)
+    this.serverConfig.setProperty(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, classOf[GroupedUserQuotaCallback].getName)
     this.serverConfig.setProperty(s"${listenerName.configPrefix}${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG}",
       classOf[GroupedUserPrincipalBuilder].getName)
     this.serverConfig.setProperty(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "true")
@@ -88,8 +90,9 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     createScramCredentials(zkConnect, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
-  @Test
-  def testCustomQuotaCallback(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit"))
+  def testCustomQuotaCallback(quorum: String, groupProtocol: String): Unit = {
     // Large quota override, should not throttle
     var brokerId = 0
     var user = createGroupWithOneUser("group0_user1", brokerId)
@@ -232,7 +235,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
       createProducer(), createConsumer(), adminClient)
   }
 
-  case class GroupedUser(user: String, userGroup: String, topic: String, leaderNode: KafkaServer,
+  case class GroupedUser(user: String, userGroup: String, topic: String, leaderNode: KafkaBroker,
                          producerClientId: String, consumerClientId: String,
                          override val producer: KafkaProducer[Array[Byte], Array[Byte]],
                          override val consumer: Consumer[Array[Byte], Array[Byte]],
@@ -294,10 +297,10 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
         leaderNode.metrics.removeSensor(s"${quotaType}ThrottleTime-$sensorSuffix")
         leaderNode.metrics.removeSensor(s"$quotaType-$sensorSuffix")
       }
-      removeSensors(QuotaType.Produce, producerClientId)
-      removeSensors(QuotaType.Fetch, consumerClientId)
-      removeSensors(QuotaType.Request, producerClientId)
-      removeSensors(QuotaType.Request, consumerClientId)
+      removeSensors(QuotaType.PRODUCE, producerClientId)
+      removeSensors(QuotaType.FETCH, consumerClientId)
+      removeSensors(QuotaType.REQUEST, producerClientId)
+      removeSensors(QuotaType.REQUEST, consumerClientId)
     }
 
     private def quotaEntityName(userGroup: String): String = s"${userGroup}_"

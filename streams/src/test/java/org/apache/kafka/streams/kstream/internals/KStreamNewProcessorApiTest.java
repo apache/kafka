@@ -34,7 +34,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -50,13 +49,11 @@ import static java.util.Arrays.asList;
 public class KStreamNewProcessorApiTest {
 
     @Test
-    @DisplayName("Should attach the state store using ConnectedStoreProvider")
     void shouldGetStateStoreWithConnectedStoreProvider() {
         runTest(false);
     }
 
     @Test
-    @DisplayName("Should attach the state store StreamBuilder.addStateStore")
     void shouldGetStateStoreWithStreamBuilder() {
         runTest(true);
     }

@@ -51,7 +51,7 @@ public class QueryableStoreProvider {
      * @param <T>                The expected type of the returned store
      * @return A composite object that wraps the store instances.
      */
-    public <T> T getStore(final StoreQueryParameters<T> storeQueryParameters) {
+    public <T> T store(final StoreQueryParameters<T> storeQueryParameters) {
         final String storeName = storeQueryParameters.storeName();
         final QueryableStoreType<T> queryableStoreType = storeQueryParameters.queryableStoreType();
         final List<T> globalStore = globalStoreProvider.stores(storeName, queryableStoreType);

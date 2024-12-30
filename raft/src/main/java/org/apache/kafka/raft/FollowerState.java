@@ -131,7 +131,7 @@ public class FollowerState implements EpochState {
     private long updateVoterPeriodMs() {
         // Allow for a few rounds of fetch request before attempting to update
         // the voter state
-        return fetchTimeoutMs * 3;
+        return fetchTimeoutMs * 3L;
     }
 
     public boolean hasUpdateVoterPeriodExpired(long currentTimeMs) {
@@ -150,7 +150,7 @@ public class FollowerState implements EpochState {
     }
 
     public boolean updateHighWatermark(OptionalLong newHighWatermark) {
-        if (!newHighWatermark.isPresent() && highWatermark.isPresent()) {
+        if (newHighWatermark.isEmpty() && highWatermark.isPresent()) {
             throw new IllegalArgumentException(
                 String.format("Attempt to overwrite current high watermark %s with unknown value", highWatermark)
             );

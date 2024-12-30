@@ -41,14 +41,10 @@
             <li><a href="#protocol_types">Protocol Primitive Types</a>
             <li><a href="#protocol_grammar">Notes on reading the request format grammars</a>
             <li><a href="#protocol_common">Common Request and Response Structure</a>
+            <li><a href="#protocol_headers">Request and Response Headers</a>
             <li><a href="#protocol_recordbatch">Record Batch</a>
         </ul>
     </li>
-    <li><a href="#protocol_evolution">Evolving the Protocol</a>
-        <ul>
-            <li><a href="#protocol_versioning">The Request Header</a>
-            <li><a href="#protocol_versioning">Versioning</a>
-        </ul>
     <li><a href="#protocol_constants">Constants</a>
         <ul>
             <li><a href="#protocol_error_codes">Error Codes</a>
@@ -124,7 +120,7 @@
 
 <p>The intention is that clients will support a range of API versions. When communicating with a particular broker, a given client should use the highest API version supported by both and indicate this version in their requests.</p>
 
-<p>The server will reject requests with a version it does not support, and will always respond to the client with exactly the protocol format it expects based on the version it included in its request. The intended upgrade path is that new features would first be rolled out on the server (with the older clients not making use of them) and then as newer clients are deployed these new features would gradually be taken advantage of.</p>
+<p>The server will reject requests with a version it does not support, and will always respond to the client with exactly the protocol format it expects based on the version it included in its request. The intended upgrade path is that new features would first be rolled out on the server (with the older clients not making use of them) and then as newer clients are deployed these new features would gradually be taken advantage of. Note there is an exceptional case while <a href="#api_versions">retrieving supported API versions</a> where the server can respond with a different version.</p>
 
 <p>Note that <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-482%3A+The+Kafka+Protocol+should+Support+Optional+Tagged+Fields">KIP-482 tagged fields</a> can be added to a request without incrementing the version number.  This offers an additional way of evolving the message schema without breaking compatibility.  Tagged fields do not take up any space when the field is not set.  Therefore, if a field is rarely used, it is more efficient to make it a tagged field than to put it in the mandatory schema.  However, tagged fields are ignored by recipients that don't know about them, which could pose a challenge if this is not the behavior that the sender wants.  In such cases, a version bump may be more appropriate.
 
@@ -142,7 +138,13 @@
         Kafka protocol requests may take place on an SSL listener before the SSL handshake is finished). If this is considered to
         leak information about the broker version a workaround is to use SSL with client authentication which is performed at an
         earlier stage of the connection where the <code>ApiVersionRequest</code> is not available. Also, note that broker versions older
-        than 0.10.0.0 do not support this API and will either ignore the request or close connection in response to the request.</li>
+        than 0.10.0.0 do not support this API and will either ignore the request or close connection in response to the request. Also
+        note that if the client <code>ApiVersionsRequest</code> version is unsupported by the broker (client is ahead), and the broker
+        version is 2.4.0 or greater, then the broker will respond with a version 0 <a href="#The_Messages_ApiVersions">ApiVersionsResponse</a>
+        with the <a href="#protocol_error_codes">error code</a> set to <code>UNSUPPORTED_VERSION</code> and the <code>api_versions</code>
+        field populated with the supported version of the <code>ApiVersionsRequest</code>. It is then up to the client to retry, making
+        another <code>ApiVersionsRequest</code> using the highest version supported by the client and broker.
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-511%3A+Collect+and+Expose+Client%27s+Name+and+Version+in+the+Brokers">KIP-511: Collect and Expose Client's Name and Version in the Brokers</a></li>
     <li>If multiple versions of an API are supported by broker and client, clients are recommended to use the latest version supported
         by the broker and itself.</li>
     <li>Deprecation of a protocol version is done by marking an API version as deprecated in the protocol documentation.</li>
@@ -190,6 +192,9 @@ Kafka request. SASL/GSSAPI authentication is performed starting with this packet
 <tr><td>message_size</td><td>The message_size field gives the size of the subsequent request or response message in bytes. The client can read requests by first reading this 4 byte size as an integer N, and then reading and parsing the subsequent N bytes of the request.</td></tr>
 </table>
 
+<h5 class="anchor-heading"><a id="protocol_headers" class="anchor-link"></a><a href="#protocol_headers">Request and Response Headers</a></h5>
+<p>Different request and response versions require different versions of the corresponding headers. These header versions are specified below together with API message descriptions.</p>
+
 <h5 class="anchor-heading"><a id="protocol_recordbatch" class="anchor-link"></a><a href="#protocol_recordbatch">Record Batch</a></h5>
 <p>A description of the record batch format can be found <a href="/documentation/#recordbatch">here</a>.</p>
 
@@ -206,6 +211,14 @@ Kafka request. SASL/GSSAPI authentication is performed starting with this packet
 <h4 class="anchor-heading"><a id="protocol_messages" class="anchor-link"></a><a href="#protocol_messages">The Messages</a></h4>
 
 <p>This section gives details on each of the individual API Messages, their usage, their binary format, and the meaning of their fields.</p>
+
+<p>The message consists of the header and body:</p>
+<pre>
+Message => RequestOrResponseHeader Body
+</pre>
+
+<p><code>RequestOrResponseHeader</code> is the versioned request or response header. <code>Body</code> is the message-specific body.</p>
+
 <!--#include virtual="generated/protocol_messages.html" -->
 
 <h4 class="anchor-heading"><a id="protocol_philosophy" class="anchor-link"></a><a href="#protocol_philosophy">Some Common Philosophical Questions</a></h4>

@@ -46,8 +46,10 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MetadataBatchLoaderTest {
 
@@ -159,11 +161,12 @@ public class MetadataBatchLoaderTest {
         assertEquals(0, updater.updates);
         batchLoader.loadBatch(batch3, LEADER_AND_EPOCH);
         assertEquals(0, updater.updates);
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
         assertEquals(1, updater.updates);
         assertNotNull(updater.latestImage.topics().getTopic("foo"));
         assertEquals(18, updater.latestImage.provenance().lastContainedOffset());
         assertEquals(2, updater.latestImage.provenance().lastContainedEpoch());
+        assertTrue(updater.latestImage.provenance().isOffsetBatchAligned());
     }
 
     @Test
@@ -191,14 +194,16 @@ public class MetadataBatchLoaderTest {
         batchLoader.resetToImage(MetadataImage.EMPTY);
         batchLoader.loadBatch(batch1, LEADER_AND_EPOCH);
         assertEquals(0, updater.updates);
+        // batch1 is flushed in this loadBatch call
         batchLoader.loadBatch(batch2, LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
+        assertTrue(updater.latestImage.provenance().isOffsetBatchAligned());
         assertNull(updater.latestImage.topics().getTopic("bar"));
         batchLoader.loadBatch(batch3, LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
         batchLoader.loadBatch(batch4, LEADER_AND_EPOCH);
         assertEquals(1, updater.updates);
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
         assertNotNull(updater.latestImage.topics().getTopic("bar"));
         assertEquals(20, updater.latestImage.provenance().lastContainedOffset());
         assertEquals(4, updater.latestImage.provenance().lastContainedEpoch());
@@ -207,19 +212,19 @@ public class MetadataBatchLoaderTest {
         updater.reset();
         batchLoader.resetToImage(MetadataImage.EMPTY);
         batchLoader.loadBatch(batch1, LEADER_AND_EPOCH);
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
         assertEquals(1, updater.updates);
 
         batchLoader.loadBatch(batch2, LEADER_AND_EPOCH);
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
         assertEquals(1, updater.updates);
 
         batchLoader.loadBatch(batch3, LEADER_AND_EPOCH);
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
         assertEquals(1, updater.updates);
 
         batchLoader.loadBatch(batch4, LEADER_AND_EPOCH);
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
         assertEquals(2, updater.updates);
     }
 
@@ -249,7 +254,7 @@ public class MetadataBatchLoaderTest {
             "Encountered BeginTransactionRecord while already in a transaction",
             faultHandler.firstException().getCause().getMessage()
         );
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
         assertEquals(0, updater.updates);
     }
 
@@ -281,7 +286,7 @@ public class MetadataBatchLoaderTest {
             "Encountered EndTransactionRecord without having seen a BeginTransactionRecord",
             faultHandler.firstException().getCause().getMessage()
         );
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
         assertEquals(1, updater.updates);
         assertNotNull(updater.latestImage.topics().getTopic("bar"));
     }
@@ -314,7 +319,7 @@ public class MetadataBatchLoaderTest {
             "Encountered AbortTransactionRecord without having seen a BeginTransactionRecord",
             faultHandler.firstException().getCause().getMessage()
         );
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
         assertEquals(1, updater.updates);
         assertNotNull(updater.latestImage.topics().getTopic("bar"));
     }
@@ -355,15 +360,18 @@ public class MetadataBatchLoaderTest {
         assertEquals(1, updater.updates);
         assertEquals(0, updater.latestManifest.numBytes());
         assertEquals(15, updater.latestImage.provenance().lastContainedOffset());
+        // The first transaction is flushed in the middle of the batch, the offset flushed is not batch-aligned
+        assertFalse(updater.latestImage.provenance().isOffsetBatchAligned());
         assertEquals(42, updater.latestImage.provenance().lastContainedEpoch());
 
         assertNotNull(updater.latestImage.topics().getTopic("foo"));
         assertNull(updater.latestImage.topics().getTopic("bar"));
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
         assertEquals(2, updater.updates);
         assertEquals(100, updater.latestManifest.numBytes());
         assertEquals(20, updater.latestImage.provenance().lastContainedOffset());
         assertEquals(42, updater.latestImage.provenance().lastContainedEpoch());
+        assertTrue(updater.latestImage.provenance().isOffsetBatchAligned());
         assertNotNull(updater.latestImage.topics().getTopic("foo"));
         assertNotNull(updater.latestImage.topics().getTopic("bar"));
     }
@@ -392,9 +400,10 @@ public class MetadataBatchLoaderTest {
         assertEquals(0, updater.latestManifest.numBytes());
         assertEquals(18, updater.latestImage.provenance().lastContainedOffset());
         assertEquals(42, updater.latestImage.provenance().lastContainedEpoch());
+        assertFalse(updater.latestImage.provenance().isOffsetBatchAligned());
         assertNotNull(updater.latestImage.topics().getTopic("foo"));
         assertNull(updater.latestImage.topics().getTopic("bar"));
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
         assertEquals(3, updater.updates);
         assertEquals(100, updater.latestManifest.numBytes());
         assertEquals(26, updater.latestImage.provenance().lastContainedOffset());
@@ -429,7 +438,7 @@ public class MetadataBatchLoaderTest {
                 20, 4, 0, 10, TXN_END_SINGLETON), LEADER_AND_EPOCH);
         }
         assertEquals(0, updater.updates);
-        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
 
         // Regardless of end/abort, we should publish an updated MetadataProvenance and manifest
         assertEquals(50, updater.latestManifest.numBytes());
@@ -441,5 +450,30 @@ public class MetadataBatchLoaderTest {
         } else {
             assertNotNull(updater.latestImage.topics().getTopic("bar"));
         }
+    }
+
+    @Test
+    public void testTransactionAlignmentOnBatchBoundary() {
+        List<ApiMessageAndVersion> batchRecords = new ArrayList<>();
+        batchRecords.addAll(noOpRecords(3));
+        batchRecords.addAll(TOPIC_TXN_BATCH_1);
+        batchRecords.addAll(TOPIC_TXN_BATCH_2);
+        batchRecords.addAll(noOpRecords(3));
+
+        MockMetadataUpdater updater = new MockMetadataUpdater();
+        MockFaultHandler faultHandler = new MockFaultHandler("testMultipleTransactionsInOneBatch");
+        MetadataBatchLoader batchLoader = loadSingleBatch(updater, faultHandler, batchRecords);
+
+        assertEquals(1, updater.updates);
+        assertEquals(0, updater.latestManifest.numBytes());
+        assertEquals(12, updater.latestImage.provenance().lastContainedOffset());
+        assertFalse(updater.latestImage.provenance().isOffsetBatchAligned());
+
+        batchLoader.loadBatch(Batch.data(
+                22, 42, 0, 10, TXN_BEGIN_SINGLETON), LEADER_AND_EPOCH);
+        assertEquals(2, updater.updates);
+        assertEquals(100, updater.latestManifest.numBytes());
+        assertEquals(21, updater.latestImage.provenance().lastContainedOffset());
+        assertTrue(updater.latestImage.provenance().isOffsetBatchAligned());
     }
 }

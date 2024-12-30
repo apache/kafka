@@ -17,9 +17,11 @@
 
 package kafka.server
 
-import kafka.api.LeaderAndIsr
+import kafka.utils.Logging
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
+import org.apache.kafka.metadata.LeaderAndIsr
+import org.apache.kafka.server.purgatory.DelayedOperation
 
 import scala.collection._
 
@@ -49,7 +51,7 @@ class DelayedCreatePartitions(delayMs: Long,
                               createMetadata: Seq[CreatePartitionsMetadata],
                               adminManager: ZkAdminManager,
                               responseCallback: Map[String, ApiError] => Unit)
-  extends DelayedOperation(delayMs) {
+  extends DelayedOperation(delayMs) with Logging {
 
   /**
     * The operation can be completed if all of the topics that do not have an error exist and every partition has a
@@ -97,6 +99,6 @@ class DelayedCreatePartitions(delayMs: Long,
 
   private def isMissingLeader(topic: String, partition: Int): Boolean = {
     val partitionInfo = adminManager.metadataCache.getPartitionInfo(topic, partition)
-    partitionInfo.forall(_.leader == LeaderAndIsr.NoLeader)
+    partitionInfo.forall(_.leader == LeaderAndIsr.NO_LEADER)
   }
 }

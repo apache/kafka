@@ -29,6 +29,7 @@
   // Version 5 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   //
   // Version 6 adds support for share groups (KIP-932).
+  // For key type SHARE (2), the coordinator key format is "groupId:topicId:partition".
   "validVersions": "0-6",
   "deprecatedVersions": "0",
   "flexibleVersions": "3+",
@@ -36,7 +37,7 @@
     { "name": "Key", "type": "string", "versions": "0-3",
       "about": "The coordinator key." },
     { "name": "KeyType", "type": "int8", "versions": "1+", "default": "0", "ignorable": false,
-      "about": "The coordinator key type. (Group, transaction, etc.)" },
+      "about": "The coordinator key type. (group, transaction, share)." },
     { "name": "CoordinatorKeys", "type": "[]string", "versions": "4+",
       "about": "The coordinator keys." }
   ]

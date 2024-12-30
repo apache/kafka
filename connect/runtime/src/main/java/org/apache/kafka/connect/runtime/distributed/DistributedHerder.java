@@ -112,8 +112,9 @@ import java.util.stream.Collectors;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
+
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriBuilder;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
@@ -255,6 +256,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      * @param uponShutdown       any {@link AutoCloseable} objects that should be closed when this herder is {@link #stop() stopped},
      *                           after all services and resources owned by this herder are stopped
      */
+    @SuppressWarnings("this-escape")
     public DistributedHerder(DistributedConfig config,
                              Time time,
                              Worker worker,
@@ -272,6 +274,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     // visible for testing
+    @SuppressWarnings("this-escape")
     DistributedHerder(DistributedConfig config,
                       Worker worker,
                       String workerId,
@@ -905,26 +908,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public void tasksConfig(String connName, final Callback<Map<ConnectorTaskId, Map<String, String>>> callback) {
-        log.trace("Submitting tasks config request {}", connName);
-
-        addRequest(
-            () -> {
-                if (checkRebalanceNeeded(callback))
-                    return null;
-
-                if (!configState.contains(connName)) {
-                    callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
-                } else {
-                    callback.onCompletion(null, buildTasksConfig(connName));
-                }
-                return null;
-            },
-            forwardErrorAndTickThreadStages(callback)
-        );
-    }
-
-    @Override
     protected Map<String, String> rawConfig(String connName) {
         return configState.rawConnectorConfig(connName);
     }
@@ -1528,7 +1511,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         }
                         // Compute and send the response that this was accepted
                         Optional<RestartPlan> plan = buildRestartPlan(request);
-                        if (!plan.isPresent()) {
+                        if (plan.isEmpty()) {
                             callback.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
                         } else {
                             callback.onCompletion(null, plan.get().restartConnectorStateInfo());
@@ -1576,7 +1559,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     protected synchronized void doRestartConnectorAndTasks(RestartRequest request) {
         String connectorName = request.connectorName();
         Optional<RestartPlan> maybePlan = buildRestartPlan(request);
-        if (!maybePlan.isPresent()) {
+        if (maybePlan.isEmpty()) {
             log.debug("Skipping restart of connector '{}' since no status is available: {}", connectorName, request);
             return;
         }
