@@ -101,7 +101,6 @@ import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
 
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
-import org.apache.maven.artifact.versioning.VersionRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1834,7 +1833,7 @@ public final class Worker {
 
             ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
 
-            Connector connector = instantiateConnector(connectorConfig.originalsStrings());
+            final Connector connector = instantiateConnector(connectorConfig.originalsStrings());
 
             RetryWithToleranceOperator<T> retryWithToleranceOperator = new RetryWithToleranceOperator<>(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
@@ -1848,9 +1847,6 @@ public final class Worker {
                     connectorConfig, keyConverter, valueConverter, headerConverter, classLoader,
                     retryWithToleranceOperator, transformationChain,
                     errorHandlingMetrics, connector.getClass());
-
-            workerTask.addPluginsMetrics(requiredPluginsMetadata);
-            return workerTask;
         }
 
         abstract WorkerTask<T, R> doBuild(

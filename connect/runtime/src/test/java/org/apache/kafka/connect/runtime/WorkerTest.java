@@ -603,7 +603,7 @@ public class WorkerTest {
     public void testAddRemoveSourceTask(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
-        mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, task);
+        mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, sourceConnector, task);
         mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, taskKeyConverter);
         mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
         mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
@@ -659,7 +659,7 @@ public class WorkerTest {
         // Most of the other cases use source tasks; we make sure to get code coverage for sink tasks here as well
         SinkTask task = mock(TestSinkTask.class);
         mockKafkaClusterId();
-        mockVersionedTaskIsolation(SampleSinkConnector.class, TestSinkTask.class, null, task);
+        mockVersionedTaskIsolation(SampleSinkConnector.class, TestSinkTask.class, null, sinkConnector, task);
         mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, taskKeyConverter);
         mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
         mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
@@ -731,7 +731,7 @@ public class WorkerTest {
         config = new DistributedConfig(workerProps);
 
         mockKafkaClusterId();
-        mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, task);
+        mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, sourceConnector, task);
         mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, taskKeyConverter);
         mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
         mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
@@ -796,7 +796,7 @@ public class WorkerTest {
         TaskConfig taskConfig = new TaskConfig(origProps);
 
         mockKafkaClusterId();
-        mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, task);
+        mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, sourceConnector, task);
         mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, taskKeyConverter);
         mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
         mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
@@ -937,7 +937,7 @@ public class WorkerTest {
         mockFileConfigProvider();
 
         mockKafkaClusterId();
-        mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, task);
+        mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, sourceConnector, task);
         // Expect that the worker will create converters and will not initially find them using the current classloader ...
         mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, null);
         mockVersionedTaskConverterFromWorker(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, WorkerConfig.KEY_CONVERTER_VERSION, taskKeyConverter);
@@ -993,7 +993,7 @@ public class WorkerTest {
         TaskConfig taskConfig = new TaskConfig(origProps);
 
         mockKafkaClusterId();
-        mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, task);
+        mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, sourceConnector, task);
         // Expect that the worker will create converters and will not initially find them using the current classloader ...
         mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, null);
         mockVersionedTaskConverterFromWorker(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, WorkerConfig.KEY_CONVERTER_VERSION, taskKeyConverter);
@@ -2869,7 +2869,7 @@ public class WorkerTest {
 
                 tasksMaxExceededMessage = failureCaptor.getValue().getMessage();
             } else {
-                mockVersionedTaskIsolation(SampleSinkConnector.class, TestSinkTask.class, null, task);
+                mockVersionedTaskIsolation(SampleSinkConnector.class, TestSinkTask.class, null, sinkConnector, task);
                 mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, taskKeyConverter);
                 mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
                 mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
@@ -3067,11 +3067,10 @@ public class WorkerTest {
         when(task.version()).thenReturn("1.0");
     }
 
-    @SuppressWarnings("unchecked, rawtypes")
-    private void mockVersionedTaskIsolation(Class<? extends Connector> connectorClass, Class<? extends Task> taskClass, VersionRange range, Task task) {
+    private void mockVersionedTaskIsolation(Class<? extends Connector> connectorClass, Class<? extends Task> taskClass, VersionRange range, Connector connector, Task task) {
         mockGenericIsolation();
         when(plugins.pluginLoader(connectorClass.getName(), range)).thenReturn(pluginLoader);
-        when(plugins.connectorClass(connectorClass.getName(), range)).thenReturn((Class) connectorClass);
+        when(plugins.newConnector(connectorClass.getName(), range)).thenReturn(connector);
         when(plugins.newTask(taskClass)).thenReturn(task);
         when(task.version()).thenReturn(range == null ? "unknown" : range.toString());
     }
@@ -3086,7 +3085,7 @@ public class WorkerTest {
     private void verifyVersionedTaskIsolation(Class<? extends Connector> connectorClass, Class<? extends Task> taskClass, VersionRange range, Task task) {
         verifyGenericIsolation();
         verify(plugins).pluginLoader(connectorClass.getName(), range);
-        verify(plugins).connectorClass(connectorClass.getName(), range);
+        verify(plugins).newConnector(connectorClass.getName(), range);
         verify(plugins).newTask(taskClass);
         verify(task).version();
     }
