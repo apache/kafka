@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.controller.{ControllerContext, KafkaController}
+import kafka.controller.KafkaController
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.UnifiedLog
 import kafka.network.RequestChannel
@@ -34,7 +34,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, UnsupportedVersionException}
-import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
@@ -62,7 +62,6 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
-import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
@@ -78,7 +77,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.metadata.LeaderAndIsr
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
@@ -168,16 +167,12 @@ class KafkaApisTest extends Logging {
                       raftSupport: Boolean = false,
                       overrideProperties: Map[String, String] = Map.empty,
                       featureVersions: Seq[FeatureVersion] = Seq.empty): KafkaApis = {
-    val properties = if (raftSupport) {
-      val properties = TestUtils.createBrokerConfig(brokerId)
-      properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
-      properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
-      val voterId = brokerId + 1
-      properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
-      properties
-    } else {
-      TestUtils.createBrokerConfig(brokerId)
-    }
+    val properties = TestUtils.createBrokerConfig(brokerId)
+    properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
+    properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
+    properties.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://:9092,CONTROLLER://:9093")
+
     overrideProperties.foreach( p => properties.put(p._1, p._2))
     TestUtils.setIbpVersion(properties, interBrokerProtocolVersion)
     val config = new KafkaConfig(properties)
@@ -195,9 +190,9 @@ class KafkaApisTest extends Logging {
       enabledApis,
       BrokerFeatures.defaultSupportedFeatures(true),
       true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
+      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
 
-    val clientMetricsManagerOpt = if (raftSupport) Some(clientMetricsManager) else None
+    val clientMetricsManagerOpt = Some(clientMetricsManager)
 
     when(groupCoordinator.isNewGroupCoordinator).thenReturn(config.isNewGroupCoordinatorEnabled)
     setupFeatures(featureVersions)
@@ -615,122 +610,9 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testAlterClientQuotasWithAuthorizer(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.CLUSTER,
-      Resource.CLUSTER_NAME, AuthorizationResult.DENIED)
-
-    val quotaEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"))
-    val quotas = Seq(new ClientQuotaAlteration(quotaEntity, Seq.empty.asJavaCollection))
-
-    val requestHeader = new RequestHeader(ApiKeys.ALTER_CLIENT_QUOTAS, ApiKeys.ALTER_CLIENT_QUOTAS.latestVersion, clientId, 0)
-
-    val alterClientQuotasRequest = new AlterClientQuotasRequest.Builder(quotas.asJavaCollection, false)
-      .build(requestHeader.apiVersion)
-    val request = buildRequest(alterClientQuotasRequest,
-      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
-
-    when(controller.isActive).thenReturn(true)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      anyLong)).thenReturn(0)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleAlterClientQuotasRequest(request)
-
-    val capturedResponse = verifyNoThrottling[AlterClientQuotasResponse](request)
-    verifyAlterClientQuotaResult(capturedResponse, Map(quotaEntity -> Errors.CLUSTER_AUTHORIZATION_FAILED))
-
-    verify(authorizer).authorize(any(), any())
-    verify(clientRequestQuotaManager).maybeRecordAndGetThrottleTimeMs(any(), anyLong)
-  }
-
-  @Test
   def testAlterClientQuotasWithForwarding(): Unit = {
     val requestBuilder = new AlterClientQuotasRequest.Builder(List.empty.asJava, false)
     testForwardableApi(ApiKeys.ALTER_CLIENT_QUOTAS, requestBuilder)
-  }
-
-  private def verifyAlterClientQuotaResult(response: AlterClientQuotasResponse,
-                                           expected: Map[ClientQuotaEntity, Errors]): Unit = {
-    val futures = expected.keys.map(quotaEntity => quotaEntity -> new KafkaFutureImpl[Void]()).toMap
-    response.complete(futures.asJava)
-    futures.foreach {
-      case (entity, future) =>
-        future.whenComplete((_, thrown) =>
-          assertEquals(thrown, expected(entity).exception())
-        ).isDone
-    }
-  }
-
-  @Test
-  def testCreateTopicsWithAuthorizer(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    val authorizedTopic = "authorized-topic"
-    val unauthorizedTopic = "unauthorized-topic"
-
-    authorizeResource(authorizer, AclOperation.CREATE, ResourceType.CLUSTER,
-      Resource.CLUSTER_NAME, AuthorizationResult.DENIED, logIfDenied = false)
-
-    createCombinedTopicAuthorization(authorizer, AclOperation.CREATE,
-      authorizedTopic, unauthorizedTopic)
-
-    createCombinedTopicAuthorization(authorizer, AclOperation.DESCRIBE_CONFIGS,
-      authorizedTopic, unauthorizedTopic, logIfDenied = false)
-
-    val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS, ApiKeys.CREATE_TOPICS.latestVersion, clientId, 0)
-
-    when(controller.isActive).thenReturn(true)
-
-    val topics = new CreateTopicsRequestData.CreatableTopicCollection(3)
-    val topicToCreate = new CreateTopicsRequestData.CreatableTopic()
-      .setName(authorizedTopic)
-    topics.add(topicToCreate)
-
-    val topicToFilter = new CreateTopicsRequestData.CreatableTopic()
-      .setName(unauthorizedTopic)
-    topics.add(topicToFilter)
-
-    val topicToProhibited = new CreateTopicsRequestData.CreatableTopic()
-      .setName(Topic.CLUSTER_METADATA_TOPIC_NAME)
-    topics.add(topicToProhibited)
-
-    val timeout = 10
-    val createTopicsRequest = new CreateTopicsRequest.Builder(
-      new CreateTopicsRequestData()
-        .setTimeoutMs(timeout)
-        .setValidateOnly(false)
-        .setTopics(topics))
-      .build(requestHeader.apiVersion)
-    val request = buildRequest(createTopicsRequest,
-      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
-
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    when(clientControllerQuotaManager.newQuotaFor(
-      ArgumentMatchers.eq(request), ArgumentMatchers.eq(6))).thenReturn(UnboundedControllerMutationQuota)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleCreateTopicsRequest(request)
-
-    val capturedCallback: ArgumentCaptor[Map[String, ApiError] => Unit] = ArgumentCaptor.forClass(classOf[Map[String, ApiError] => Unit])
-
-    verify(adminManager).createTopics(
-      ArgumentMatchers.eq(timeout),
-      ArgumentMatchers.eq(false),
-      ArgumentMatchers.eq(Map(authorizedTopic -> topicToCreate)),
-      any(),
-      ArgumentMatchers.eq(UnboundedControllerMutationQuota),
-      capturedCallback.capture())
-    capturedCallback.getValue.apply(Map(authorizedTopic -> ApiError.NONE))
-
-    val capturedResponse = verifyNoThrottling[CreateTopicsResponse](request)
-    verifyCreateTopicsResult(capturedResponse,
-      Map(authorizedTopic -> Errors.NONE,
-        unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED,
-        Topic.CLUSTER_METADATA_TOPIC_NAME -> Errors.INVALID_REQUEST),
-      Map(authorizedTopic -> Errors.NONE,
-        unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED,
-        Topic.CLUSTER_METADATA_TOPIC_NAME -> Errors.NONE))
   }
 
   @Test
@@ -863,49 +745,6 @@ class KafkaApisTest extends Logging {
       authorizedTopic, AuthorizationResult.ALLOWED, logIfAllowed, logIfDenied)
     authorizeResource(authorizer, operation, ResourceType.TOPIC,
       unauthorizedTopic, AuthorizationResult.DENIED, logIfAllowed, logIfDenied)
-  }
-
-  private def createCombinedTopicAuthorization(authorizer: Authorizer,
-                                               operation: AclOperation,
-                                               authorizedTopic: String,
-                                               unauthorizedTopic: String,
-                                               logIfAllowed: Boolean = true,
-                                               logIfDenied: Boolean = true): Unit = {
-    val expectedAuthorizedActions = Seq(
-      new Action(operation,
-        new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL),
-        1, logIfAllowed, logIfDenied),
-      new Action(operation,
-        new ResourcePattern(ResourceType.TOPIC, unauthorizedTopic, PatternType.LITERAL),
-        1, logIfAllowed, logIfDenied))
-
-    when(authorizer.authorize(
-      any[RequestContext], argThat((t: java.util.List[Action]) => t != null && t.containsAll(expectedAuthorizedActions.asJava))
-    )).thenAnswer { invocation =>
-      val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]]
-      actions.asScala.map { action =>
-        if (action.resourcePattern().name().equals(authorizedTopic))
-          AuthorizationResult.ALLOWED
-        else
-          AuthorizationResult.DENIED
-      }.asJava
-    }
-  }
-
-  private def verifyCreateTopicsResult(response: CreateTopicsResponse,
-                                       expectedErrorCodes: Map[String, Errors],
-                                       expectedTopicConfigErrorCodes: Map[String, Errors]): Unit = {
-    val actualErrorCodes = response.data.topics().asScala.map { topicResponse =>
-      topicResponse.name() -> Errors.forCode(topicResponse.errorCode)
-    }.toMap
-
-    assertEquals(expectedErrorCodes, actualErrorCodes)
-
-    val actualTopicConfigErrorCodes = response.data.topics().asScala.map { topicResponse =>
-      topicResponse.name() -> Errors.forCode(topicResponse.topicConfigErrorCode())
-    }.toMap
-
-    assertEquals(expectedTopicConfigErrorCodes, actualTopicConfigErrorCodes)
   }
 
   @Test
@@ -2682,30 +2521,6 @@ class KafkaApisTest extends Logging {
     )
     val markersResponse = capturedResponse.getValue
     assertEquals(2, markersResponse.errorsByProducerId.size())
-  }
-
-  @Test
-  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndLeaderEpoch(): Unit = {
-    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.INITIAL_LEADER_EPOCH + 2, deletePartition = true)
-  }
-
-  @Test
-  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndDeleteSentinel(): Unit = {
-    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.EPOCH_DURING_DELETE, deletePartition = true)
-  }
-
-  @Test
-  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndNoEpochSentinel(): Unit = {
-    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.NO_EPOCH, deletePartition = true)
-  }
-
-  @Test
-  def shouldNotResignCoordinatorsIfStopReplicaReceivedWithoutDeleteFlag(): Unit = {
-    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.INITIAL_LEADER_EPOCH + 2, deletePartition = false)
   }
 
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(leaderEpoch: Int,
@@ -9070,24 +8885,6 @@ class KafkaApisTest extends Logging {
     assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesOutRate.get.count())
   }
 
-  @Test
-  def testUpdateMetadataRequestWithCurrentBrokerEpoch(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testUpdateMetadataRequest(currentBrokerEpoch, currentBrokerEpoch, Errors.NONE)
-  }
-
-  @Test
-  def testUpdateMetadataRequestWithNewerBrokerEpochIsValid(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testUpdateMetadataRequest(currentBrokerEpoch, currentBrokerEpoch + 1, Errors.NONE)
-  }
-
-  @Test
-  def testUpdateMetadataRequestWithStaleBrokerEpochIsRejected(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testUpdateMetadataRequest(currentBrokerEpoch, currentBrokerEpoch - 1, Errors.STALE_BROKER_EPOCH)
-  }
-
   def testUpdateMetadataRequest(currentBrokerEpoch: Long, brokerEpochInRequest: Long, expectedError: Errors): Unit = {
     val updateMetadataRequest = createBasicMetadataRequest("topicA", 1, brokerEpochInRequest, 1)
     val request = buildRequest(updateMetadataRequest)
@@ -9116,24 +8913,6 @@ class KafkaApisTest extends Logging {
         any()
       )
     }
-  }
-
-  @Test
-  def testLeaderAndIsrRequestWithCurrentBrokerEpoch(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testLeaderAndIsrRequest(currentBrokerEpoch, currentBrokerEpoch, Errors.NONE)
-  }
-
-  @Test
-  def testLeaderAndIsrRequestWithNewerBrokerEpochIsValid(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testLeaderAndIsrRequest(currentBrokerEpoch, currentBrokerEpoch + 1, Errors.NONE)
-  }
-
-  @Test
-  def testLeaderAndIsrRequestWithStaleBrokerEpochIsRejected(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testLeaderAndIsrRequest(currentBrokerEpoch, currentBrokerEpoch - 1, Errors.STALE_BROKER_EPOCH)
   }
 
   def testLeaderAndIsrRequest(currentBrokerEpoch: Long, brokerEpochInRequest: Long, expectedError: Errors): Unit = {
@@ -9183,24 +8962,6 @@ class KafkaApisTest extends Logging {
     )
     val leaderAndIsrResponse = capturedResponse.getValue
     assertEquals(expectedError, leaderAndIsrResponse.error())
-  }
-
-  @Test
-  def testStopReplicaRequestWithCurrentBrokerEpoch(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testStopReplicaRequest(currentBrokerEpoch, currentBrokerEpoch, Errors.NONE)
-  }
-
-  @Test
-  def testStopReplicaRequestWithNewerBrokerEpochIsValid(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testStopReplicaRequest(currentBrokerEpoch, currentBrokerEpoch + 1, Errors.NONE)
-  }
-
-  @Test
-  def testStopReplicaRequestWithStaleBrokerEpochIsRejected(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testStopReplicaRequest(currentBrokerEpoch, currentBrokerEpoch - 1, Errors.STALE_BROKER_EPOCH)
   }
 
   def testStopReplicaRequest(currentBrokerEpoch: Long, brokerEpochInRequest: Long, expectedError: Errors): Unit = {
@@ -10104,156 +9865,6 @@ class KafkaApisTest extends Logging {
     assertEquals("foo", transactionState.transactionalId)
     assertEquals(12345L, transactionState.producerId)
     assertEquals("Ongoing", transactionState.transactionState)
-  }
-
-  @Test
-  def testDeleteTopicsByIdAuthorization(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    val controllerContext: ControllerContext = mock(classOf[ControllerContext])
-
-    when(clientControllerQuotaManager.newQuotaFor(
-      any[RequestChannel.Request],
-      anyShort
-    )).thenReturn(UnboundedControllerMutationQuota)
-    when(controller.isActive).thenReturn(true)
-    when(controller.controllerContext).thenReturn(controllerContext)
-
-    val topicResults = Map(
-      AclOperation.DESCRIBE -> Map(
-        "foo" -> AuthorizationResult.DENIED,
-        "bar" -> AuthorizationResult.ALLOWED
-      ),
-      AclOperation.DELETE -> Map(
-        "foo" -> AuthorizationResult.DENIED,
-        "bar" -> AuthorizationResult.DENIED
-      )
-    )
-    when(authorizer.authorize(any[RequestContext], isNotNull[util.List[Action]])).thenAnswer(invocation => {
-      val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]]
-      actions.asScala.map { action =>
-        val topic = action.resourcePattern.name
-        val ops = action.operation()
-        topicResults(ops)(topic)
-      }.asJava
-    })
-
-    // Try to delete three topics:
-    // 1. One without describe permission
-    // 2. One without delete permission
-    // 3. One which is authorized, but doesn't exist
-    val topicIdsMap = Map(
-      Uuid.randomUuid() -> Some("foo"),
-      Uuid.randomUuid() -> Some("bar"),
-      Uuid.randomUuid() -> None
-    )
-
-    topicIdsMap.foreach { case (topicId, topicNameOpt) =>
-      when(controllerContext.topicName(topicId)).thenReturn(topicNameOpt)
-    }
-
-    val topicDatas = topicIdsMap.keys.map { topicId =>
-      new DeleteTopicsRequestData.DeleteTopicState().setTopicId(topicId)
-    }.toList
-    val deleteRequest = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-      .setTopics(topicDatas.asJava))
-      .build(ApiKeys.DELETE_TOPICS.latestVersion)
-
-    val request = buildRequest(deleteRequest)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleDeleteTopicsRequest(request)
-    verify(authorizer, times(2)).authorize(any(), any())
-
-    val deleteResponse = verifyNoThrottling[DeleteTopicsResponse](request)
-
-    topicIdsMap.foreach { case (topicId, nameOpt) =>
-      val response = deleteResponse.data.responses.asScala.find(_.topicId == topicId).get
-      nameOpt match {
-        case Some("foo") =>
-          assertNull(response.name)
-          assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(response.errorCode))
-        case Some("bar") =>
-          assertEquals("bar", response.name)
-          assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(response.errorCode))
-        case None =>
-          assertNull(response.name)
-          assertEquals(Errors.UNKNOWN_TOPIC_ID, Errors.forCode(response.errorCode))
-        case _ =>
-          fail("Unexpected topic id/name mapping")
-      }
-    }
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testDeleteTopicsByNameAuthorization(usePrimitiveTopicNameArray: Boolean): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    when(clientControllerQuotaManager.newQuotaFor(
-      any[RequestChannel.Request],
-      anyShort
-    )).thenReturn(UnboundedControllerMutationQuota)
-    when(controller.isActive).thenReturn(true)
-
-    // Try to delete three topics:
-    // 1. One without describe permission
-    // 2. One without delete permission
-    // 3. One which is authorized, but doesn't exist
-
-    val topicResults = Map(
-      AclOperation.DESCRIBE -> Map(
-        "foo" -> AuthorizationResult.DENIED,
-        "bar" -> AuthorizationResult.ALLOWED,
-        "baz" -> AuthorizationResult.ALLOWED
-      ),
-      AclOperation.DELETE -> Map(
-        "foo" -> AuthorizationResult.DENIED,
-        "bar" -> AuthorizationResult.DENIED,
-        "baz" -> AuthorizationResult.ALLOWED
-      )
-    )
-    when(authorizer.authorize(any[RequestContext], isNotNull[util.List[Action]])).thenAnswer(invocation => {
-      val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]]
-      actions.asScala.map { action =>
-        val topic = action.resourcePattern.name
-        val ops = action.operation()
-        topicResults(ops)(topic)
-      }.asJava
-    })
-
-    val deleteRequest = if (usePrimitiveTopicNameArray) {
-      new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-        .setTopicNames(List("foo", "bar", "baz").asJava))
-        .build(5.toShort)
-    } else {
-      val topicDatas = List(
-        new DeleteTopicsRequestData.DeleteTopicState().setName("foo"),
-        new DeleteTopicsRequestData.DeleteTopicState().setName("bar"),
-        new DeleteTopicsRequestData.DeleteTopicState().setName("baz")
-      )
-      new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-        .setTopics(topicDatas.asJava))
-        .build(ApiKeys.DELETE_TOPICS.latestVersion)
-    }
-
-    val request = buildRequest(deleteRequest)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleDeleteTopicsRequest(request)
-    verify(authorizer, times(2)).authorize(any(), any())
-
-    val deleteResponse = verifyNoThrottling[DeleteTopicsResponse](request)
-
-    def lookupErrorCode(topic: String): Option[Errors] = {
-      Option(deleteResponse.data.responses().find(topic))
-        .map(result => Errors.forCode(result.errorCode))
-    }
-
-    assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), lookupErrorCode("foo"))
-    assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), lookupErrorCode("bar"))
-    assertEquals(Some(Errors.UNKNOWN_TOPIC_OR_PARTITION), lookupErrorCode("baz"))
   }
 
   private def createMockRequest(): RequestChannel.Request = {
