@@ -18,7 +18,9 @@ import kafka.api.GroupedUserPrincipalBuilder._
 import kafka.api.GroupedUserQuotaCallback._
 import kafka.security.{JaasModule, JaasTestUtils}
 import kafka.server._
+import kafka.utils.TestUtils.{waitForAllPartitionsMetadata, waitUntilTrue}
 import kafka.utils.{Logging, TestInfoUtils, TestUtils}
+import kafka.zk.AdminZkClient
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
@@ -26,9 +28,10 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
-import org.apache.kafka.common.{Cluster, Reconfigurable}
+import org.apache.kafka.common.{Cluster, Reconfigurable, TopicPartition}
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.quota._
+import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -38,6 +41,7 @@ import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.{lang, util}
+import scala.collection.Seq
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
@@ -179,7 +183,26 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   private def createTopic(topic: String, numPartitions: Int, leader: Int): Unit = {
     val assignment = (0 until numPartitions).map { i => i -> Seq(leader) }.toMap
-    TestUtils.createTopic(null, topic, assignment, servers)
+    val adminZkClient = new AdminZkClient(null)
+    // create topic
+    waitUntilTrue( () => {
+      var hasSessionExpirationException = false
+      try {
+        adminZkClient.createTopicWithAssignment(topic, new Properties(), assignment)
+      } catch {
+        case _: SessionExpiredException => hasSessionExpirationException = true
+        case e: Throwable => throw e // let other exceptions propagate
+      }
+      !hasSessionExpirationException},
+      s"Can't create topic $topic")
+
+    // wait until we've propagated all partitions metadata to all servers
+    val allPartitionsMetadata = waitForAllPartitionsMetadata(servers, topic, assignment.size)
+
+    assignment.keySet.map { i =>
+      i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
+        throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
+    }.toMap
   }
 
   private def createAdminClient(): Admin = {

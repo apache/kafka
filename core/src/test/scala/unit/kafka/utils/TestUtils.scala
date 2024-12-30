@@ -503,50 +503,6 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Create a topic in ZooKeeper using a customized replica assignment.
-   * Wait until the leader is elected and the metadata is propagated to all brokers.
-   * Return the leader for each partition.
-   */
-  def createTopic[B <: KafkaBroker](zkClient: KafkaZkClient,
-                  topic: String,
-                  partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
-                  servers: Seq[B]): scala.collection.immutable.Map[Int, Int] = {
-    createTopic(zkClient, topic, partitionReplicaAssignment, servers, new Properties())
-  }
-
-  /**
-   * Create a topic in ZooKeeper using a customized replica assignment.
-   * Wait until the leader is elected and the metadata is propagated to all brokers.
-   * Return the leader for each partition.
-   */
-  def createTopic(zkClient: KafkaZkClient,
-                  topic: String,
-                  partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
-                  servers: Seq[KafkaBroker],
-                  topicConfig: Properties): scala.collection.immutable.Map[Int, Int] = {
-    val adminZkClient = new AdminZkClient(zkClient)
-    // create topic
-    waitUntilTrue( () => {
-      var hasSessionExpirationException = false
-      try {
-        adminZkClient.createTopicWithAssignment(topic, topicConfig, partitionReplicaAssignment)
-      } catch {
-        case _: SessionExpiredException => hasSessionExpirationException = true
-        case e: Throwable => throw e // let other exceptions propagate
-      }
-      !hasSessionExpirationException},
-      s"Can't create topic $topic")
-
-    // wait until we've propagated all partitions metadata to all servers
-    val allPartitionsMetadata = waitForAllPartitionsMetadata(servers, topic, partitionReplicaAssignment.size)
-
-    partitionReplicaAssignment.keySet.map { i =>
-      i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
-        throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
-    }.toMap
-  }
-
-  /**
    * Wrap a single record log buffer.
    */
   def singletonRecords(value: Array[Byte],
