@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime.rest.entities;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import java.util.List;
 import java.util.Objects;
@@ -109,7 +108,7 @@ public class ConnectorStateInfo {
             super(state, worker, msg, version);
         }
 
-        public ConnectorState(String state, String worker,String trace) {
+        public ConnectorState(String state, String worker, String trace) {
             super(state, worker, trace, null);
         }
     }
