@@ -173,12 +173,11 @@ class KafkaApisTest extends Logging {
                       overrideProperties: Map[String, String] = Map.empty,
                       featureVersions: Seq[FeatureVersion] = Seq.empty): KafkaApis = {
     val properties = if (raftSupport) {
-      val properties = TestUtils.createBrokerConfig(brokerId, "")
+      val properties = TestUtils.createBrokerConfig(brokerId, null)
       properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
       properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
       val voterId = brokerId + 1
       properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
-      properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
       properties
     } else {
       TestUtils.createBrokerConfig(brokerId, "zk")
@@ -737,22 +736,6 @@ class KafkaApisTest extends Logging {
     assertEquals(subscriptionName, describeConfigsResult.resourceName)
     val configs = describeConfigsResult.configs
     assertEquals(cmConfigs.size, configs.size)
-  }
-
-  @Test
-  def testDescribeQuorumNotAllowedForZkClusters(): Unit = {
-    val requestData = DescribeQuorumRequest.singletonRequest(KafkaRaftServer.MetadataPartition)
-    val requestBuilder = new DescribeQuorumRequest.Builder(requestData)
-    val request = buildRequest(requestBuilder.build(DescribeQuorumRequestData.HIGHEST_SUPPORTED_VERSION))
-
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(enableForwarding = true)
-    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[DescribeQuorumResponse](request)
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR.message(), response.data.errorMessage)
   }
 
   @Test
@@ -11427,18 +11410,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testGetTelemetrySubscriptionsNotAllowedForZkClusters(): Unit = {
-    val data = new GetTelemetrySubscriptionsRequestData()
-
-    val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(data, true).build())
-    kafkaApis = createKafkaApis(enableForwarding = true)
-    kafkaApis.handle(request, RequestLocal.noCaching)
-
-    val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
-  }
-
-  @Test
   def testGetTelemetrySubscriptions(): Unit = {
     val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(
       new GetTelemetrySubscriptionsRequestData(), true).build())
@@ -11478,18 +11449,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testPushTelemetryNotAllowedForZkClusters(): Unit = {
-    val data = new PushTelemetryRequestData()
-
-    val request = buildRequest(new PushTelemetryRequest.Builder(data, true).build())
-    kafkaApis = createKafkaApis(enableForwarding = true)
-    kafkaApis.handle(request, RequestLocal.noCaching)
-
-    val response = verifyNoThrottling[PushTelemetryResponse](request)
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
-  }
-
-  @Test
   def testPushTelemetry(): Unit = {
     val request = buildRequest(new PushTelemetryRequest.Builder(new PushTelemetryRequestData(), true).build())
 
@@ -11521,16 +11480,6 @@ class KafkaApisTest extends Logging {
 
     val expectedResponse = new PushTelemetryResponseData().setErrorCode(Errors.INVALID_REQUEST.code)
     assertEquals(expectedResponse, response.data)
-  }
-
-  @Test
-  def testListClientMetricsResourcesNotAllowedForZkClusters(): Unit = {
-    val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
-    kafkaApis = createKafkaApis(enableForwarding = true)
-    kafkaApis.handle(request, RequestLocal.noCaching)
-
-    val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
   }
 
   @Test
