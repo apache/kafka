@@ -21,7 +21,6 @@ import java.{lang, util}
 import java.util.{Optional, Properties, Map => JMap}
 import java.util.concurrent.{CompletionStage, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
-import kafka.controller.KafkaController
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
@@ -96,37 +95,6 @@ class DynamicBrokerConfigTest {
       assertEquals(oldKeystore, config.originalsFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
       assertEquals(oldKeystore, config.valuesFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
     }
-  }
-
-  @Test
-  def testEnableDefaultUncleanLeaderElection(): Unit = {
-    val origProps = TestUtils.createBrokerConfig(0, null, port = 8181)
-    origProps.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
-
-    val config = KafkaConfig(origProps)
-    val serverMock = Mockito.mock(classOf[KafkaServer])
-    val controllerMock = Mockito.mock(classOf[KafkaController])
-    val logManagerMock = Mockito.mock(classOf[LogManager])
-
-    Mockito.when(serverMock.config).thenReturn(config)
-    Mockito.when(serverMock.kafkaController).thenReturn(controllerMock)
-    Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
-    Mockito.when(logManagerMock.allLogs).thenReturn(Iterable.empty)
-
-    val currentDefaultLogConfig = new AtomicReference(new LogConfig(new Properties))
-    Mockito.when(logManagerMock.currentDefaultConfig).thenAnswer(_ => currentDefaultLogConfig.get())
-    Mockito.when(logManagerMock.reconfigureDefaultLogConfig(ArgumentMatchers.any(classOf[LogConfig])))
-      .thenAnswer(invocation => currentDefaultLogConfig.set(invocation.getArgument(0)))
-
-    config.dynamicConfig.initialize(None, None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicLogConfig(logManagerMock, serverMock))
-
-    val props = new Properties()
-
-    props.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
-    config.dynamicConfig.updateDefaultConfig(props)
-    assertTrue(config.uncleanLeaderElectionEnable)
-    Mockito.verify(controllerMock).enableDefaultUncleanLeaderElection()
   }
 
   @Test
@@ -434,7 +402,7 @@ class DynamicBrokerConfigTest {
     validProps.foreach { case (k, v) => props.put(k, v) }
     invalidProps.foreach { case (k, v) => props.put(k, v) }
 
-    // DynamicBrokerConfig#validate is used by AdminClient to validate the configs provided in
+    // DynamicBrokerConfig#validate is used by AdminClient to validate the configs provided
     // in an AlterConfigs request. Validation should fail with an exception if any of the configs are invalid.
     assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = true))
 
@@ -513,7 +481,7 @@ class DynamicBrokerConfigTest {
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://hostname:9092")
     new DynamicListenerConfig(kafkaServer).validateReconfiguration(KafkaConfig(props))
 
-    // it is illegal to update non-reconfiguable configs of existent listeners
+    // it is illegal to update non-reconfigurable configs of existent listeners
     props.put("listener.name.plaintext.you.should.not.pass", "failure")
     val dynamicListenerConfig = new DynamicListenerConfig(kafkaServer)
     assertThrows(classOf[ConfigException], () => dynamicListenerConfig.validateReconfiguration(KafkaConfig(props)))
@@ -1114,7 +1082,7 @@ class DynamicBrokerConfigTest {
   }
 }
 
-class TestDynamicThreadPool() extends BrokerReconfigurable {
+class TestDynamicThreadPool extends BrokerReconfigurable {
 
   override def reconfigurableConfigs: Set[String] = {
     DynamicThreadPool.ReconfigurableConfigs
