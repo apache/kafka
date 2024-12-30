@@ -17,6 +17,7 @@
 
 package test.plugins;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +27,8 @@ import java.util.HashMap;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceConnector;
 
 /**
@@ -62,7 +65,7 @@ public class VersionedSamplingSourceConnector extends SourceConnector implements
     @Override
     public Class<? extends Task> taskClass() {
         logMethodCall(samples);
-        return null;
+        return VersionedSamplingSourceConnectorTask.class;
     }
 
     @Override
@@ -110,5 +113,25 @@ public class VersionedSamplingSourceConnector extends SourceConnector implements
     @Override
     public List<SamplingTestPlugin> allInstances() {
         return instances;
+    }
+
+    public static class VersionedSamplingSourceConnectorTask extends SinkTask {
+
+        @Override
+        public String version() {
+            return "PLACEHOLDER_FOR_VERSION";
+        }
+
+        @Override
+        public void start(Map<String, String> props) {
+        }
+
+        @Override
+        public void put(Collection<SinkRecord> records) {
+        }
+
+        @Override
+        public void stop() {
+        }
     }
 }
