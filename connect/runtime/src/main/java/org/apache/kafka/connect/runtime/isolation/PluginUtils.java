@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.slf4j.Logger;
@@ -516,5 +517,17 @@ public class PluginUtils {
         // now if the version is not enclosed we consider it as a hard requirement and enclose it in []
         version = "[" + version + "]";
         return VersionRange.createFromVersionSpec(version);
+    }
+
+    public static <T> String getVersionOrUndefined(T obj, Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
+        if (obj == null) {
+            return PluginDesc.UNDEFINED_VERSION;
+        }
+        try (LoaderSwap swap = pluginLoaderSwapper.apply(obj.getClass().getClassLoader())) {
+            if (obj instanceof Versioned) {
+                return ((Versioned) obj).version();
+            }
+        }
+        return PluginDesc.UNDEFINED_VERSION;
     }
 }

@@ -679,7 +679,6 @@ public final class Worker {
 
             final ClassLoader connectorLoader;
             try {
-                connector = instantiateConnector(connProps);
                 connectorLoader = instantiateConnectorClassLoader(connProps);
                 try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
                     final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
@@ -727,7 +726,6 @@ public final class Worker {
                         .withKeyConverter(keyConverter)
                         .withValueConverter(valueConverter)
                         .withHeaderConverter(headerConverter)
-                        .withConnector(connector)
                         .withClassLoader(connectorLoader)
                         .build();
 
@@ -1784,7 +1782,6 @@ public final class Worker {
         private Converter valueConverter = null;
         private HeaderConverter headerConverter = null;
         private ClassLoader classLoader = null;
-        private Connector connector = null;
 
         public TaskBuilder(ConnectorTaskId id,
                            ClusterConfigState configState,
@@ -1821,11 +1818,6 @@ public final class Worker {
             return this;
         }
 
-        public TaskBuilder<T, R> withConnector(Connector connector) {
-            this.connector = connector;
-            return this;
-        }
-
         public TaskBuilder<T, R> withClassLoader(ClassLoader classLoader) {
             this.classLoader = classLoader;
             return this;
@@ -1833,7 +1825,6 @@ public final class Worker {
 
 
         public WorkerTask<T, R> build() {
-            Objects.requireNonNull(connector, "Connector cannot be null");
             Objects.requireNonNull(task, "Task cannot be null");
             Objects.requireNonNull(connectorConfig, "Connector config used by task cannot be null");
             Objects.requireNonNull(keyConverter, "Key converter used by task cannot be null");
@@ -1842,13 +1833,8 @@ public final class Worker {
             Objects.requireNonNull(classLoader, "Classloader used by task cannot be null");
 
             ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
-            VersionRange connectorVersion = null;
-            try {
-                connectorVersion = PluginUtils.connectorVersionRequirement(connectorConfig.getString(ConnectorConfig.CONNECTOR_VERSION));
-            } catch (InvalidVersionSpecificationException e) {
-                // this will be captured in validation itself
-            }
-            final Class<? extends Connector> connectorClass = plugins.connectorClass(connectorConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG), connectorVersion);
+
+            Connector connector = instantiateConnector(connectorConfig.originalsStrings());
 
             RetryWithToleranceOperator<T> retryWithToleranceOperator = new RetryWithToleranceOperator<>(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
@@ -1856,12 +1842,12 @@ public final class Worker {
             TransformationChain<T, R> transformationChain = new TransformationChain<>(connectorConfig.<R>transformationStages(plugins), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
 
-            RequiredPluginsMetadata requiredPluginsMetadata = new RequiredPluginsMetadata(
+            TaskPluginsMetadata requiredPluginsMetadata = new TaskPluginsMetadata(
                     connector, task, keyConverter, valueConverter, headerConverter, transformationChain.transformationStageInfo(), plugins.safeLoaderSwapper());
             WorkerTask<T, R> workerTask = doBuild(task, id, configState, statusListener, initialState,
                     connectorConfig, keyConverter, valueConverter, headerConverter, classLoader,
                     retryWithToleranceOperator, transformationChain,
-                    errorHandlingMetrics, connectorClass);
+                    errorHandlingMetrics, connector.getClass());
 
             workerTask.addPluginsMetrics(requiredPluginsMetadata);
             return workerTask;

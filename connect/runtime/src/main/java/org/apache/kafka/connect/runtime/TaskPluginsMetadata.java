@@ -1,18 +1,14 @@
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.connect.components.Versioned;
-import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.transforms.Transformation;
-import org.apache.kafka.connect.util.PluginVersionUtils;
 
 import java.util.List;
 import java.util.Objects;
@@ -20,7 +16,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class RequiredPluginsMetadata {
+public class TaskPluginsMetadata {
 
     private final String connectorClass;
     private final String connectorVersion;
@@ -36,7 +32,7 @@ public class RequiredPluginsMetadata {
     private final Set<TransformationStage.AliasedPluginInfo> transformations;
     private final Set<TransformationStage.AliasedPluginInfo> predicates;
 
-    public RequiredPluginsMetadata(
+    public TaskPluginsMetadata(
             Connector connector,
             Task task,
             Converter keyConverter,
@@ -54,16 +50,16 @@ public class RequiredPluginsMetadata {
         assert transformationStageInfo != null;
 
         this.connectorClass = connector.getClass().getName();
-        this.connectorVersion = PluginVersionUtils.getVersionOrUndefined(connector, pluginLoaderSwapper);
+        this.connectorVersion = PluginUtils.getVersionOrUndefined(connector, pluginLoaderSwapper);
         this.connectorType = getConnectorType(connector);
         this.taskClass = task.getClass().getName();
         this.taskVersion = task.version();
         this.keyConverterClass = keyConverter.getClass().getName();
-        this.keyConverterVersion = PluginVersionUtils.getVersionOrUndefined(keyConverter, pluginLoaderSwapper);
+        this.keyConverterVersion = PluginUtils.getVersionOrUndefined(keyConverter, pluginLoaderSwapper);
         this.valueConverterClass = valueConverter.getClass().getName();
-        this.valueConverterVersion = PluginVersionUtils.getVersionOrUndefined(valueConverter, pluginLoaderSwapper);
+        this.valueConverterVersion = PluginUtils.getVersionOrUndefined(valueConverter, pluginLoaderSwapper);
         this.headerConverterClass = headerConverter.getClass().getName();
-        this.headerConverterVersion = PluginVersionUtils.getVersionOrUndefined(headerConverter, pluginLoaderSwapper);
+        this.headerConverterVersion = PluginUtils.getVersionOrUndefined(headerConverter, pluginLoaderSwapper);
         this.transformations = transformationStageInfo.stream().map(TransformationStage.StageInfo::transform).collect(Collectors.toSet());
         this.predicates = transformationStageInfo.stream().map(TransformationStage.StageInfo::predicate).filter(Objects::nonNull).collect(Collectors.toSet());
     }

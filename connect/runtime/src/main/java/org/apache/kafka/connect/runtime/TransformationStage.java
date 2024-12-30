@@ -23,7 +23,6 @@ import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-import org.apache.kafka.connect.util.PluginVersionUtils;
 
 import java.util.Objects;
 
@@ -167,9 +166,9 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
 
     public StageInfo info() {
         AliasedPluginInfo transformInfo = new AliasedPluginInfo(transformAlias,
-                transformation.getClass().getName(), PluginVersionUtils.getVersionOrUndefined(transformation, pluginLoaderSwapper));
+                transformation.getClass().getName(), PluginUtils.getVersionOrUndefined(transformation, pluginLoaderSwapper));
         AliasedPluginInfo predicateInfo = predicate != null ? new AliasedPluginInfo(predicateAlias,
-                predicate.getClass().getName(), PluginVersionUtils.getVersionOrUndefined(predicate, pluginLoaderSwapper)) : null;
+                predicate.getClass().getName(), PluginUtils.getVersionOrUndefined(predicate, pluginLoaderSwapper)) : null;
         return new StageInfo(transformInfo, predicateInfo);
     }
 }

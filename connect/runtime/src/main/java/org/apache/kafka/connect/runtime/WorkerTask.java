@@ -167,7 +167,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         }
     }
 
-    public void addPluginsMetrics(RequiredPluginsMetadata pluginsMetadata) {
+    public void addPluginsMetrics(TaskPluginsMetadata pluginsMetadata) {
         taskMetricsGroup.addPluginInfoMetric(pluginsMetadata);
     }
 
@@ -448,7 +448,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
                     taskStateTimer.durationRatio(matchingState, now));
         }
 
-        public void addPluginInfoMetric(RequiredPluginsMetadata pluginsMetadata) {
+        public void addPluginInfoMetric(TaskPluginsMetadata pluginsMetadata) {
             ConnectMetricsRegistry registry = connectMetrics.registry();
             metricGroup.addValueMetric(registry.taskConnectorClass, now -> pluginsMetadata.connectorClass());
             metricGroup.addValueMetric(registry.taskConnectorClassVersion, now -> pluginsMetadata.connectorVersion());
