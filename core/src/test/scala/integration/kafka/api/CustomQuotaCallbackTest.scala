@@ -182,27 +182,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def createTopic(topic: String, numPartitions: Int, leader: Int): Unit = {
-    val assignment = (0 until numPartitions).map { i => i -> Seq(leader) }.toMap
-    val adminZkClient = new AdminZkClient(null)
-    // create topic
-    waitUntilTrue( () => {
-      var hasSessionExpirationException = false
-      try {
-        adminZkClient.createTopicWithAssignment(topic, new Properties(), assignment)
-      } catch {
-        case _: SessionExpiredException => hasSessionExpirationException = true
-        case e: Throwable => throw e // let other exceptions propagate
-      }
-      !hasSessionExpirationException},
-      s"Can't create topic $topic")
-
-    // wait until we've propagated all partitions metadata to all servers
-    val allPartitionsMetadata = waitForAllPartitionsMetadata(servers, topic, assignment.size)
-
-    assignment.keySet.map { i =>
-      i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
-        throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
-    }.toMap
+    // TODO createTopic 
   }
 
   private def createAdminClient(): Admin = {
