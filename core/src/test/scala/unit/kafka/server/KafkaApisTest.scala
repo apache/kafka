@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.cluster.{Broker, Partition}
+import kafka.cluster.Partition
 import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.UnifiedLog
@@ -86,7 +86,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.{BrokerFeatures, ClientMetricsManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, TransactionVersion}
-import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData}
 import org.apache.kafka.server.quota.ThrottleCallback
@@ -266,62 +266,6 @@ class KafkaApisTest extends Logging {
 
       case _ => throw new IllegalStateException("Test must set an instance of KRaftMetadataCache")
     }
-  }
-
-  @Test
-  def testDescribeConfigsWithAuthorizer(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    val operation = AclOperation.DESCRIBE_CONFIGS
-    val resourceType = ResourceType.TOPIC
-    val resourceName = "topic-1"
-    val requestHeader = new RequestHeader(ApiKeys.DESCRIBE_CONFIGS, ApiKeys.DESCRIBE_CONFIGS.latestVersion,
-      clientId, 0)
-
-    val expectedActions = Seq(
-      new Action(operation, new ResourcePattern(resourceType, resourceName, PatternType.LITERAL),
-        1, true, true)
-    )
-
-    // Verify that authorize is only called once
-    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(expectedActions.asJava)))
-      .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava)
-
-    val configRepository: ConfigRepository = mock(classOf[ConfigRepository])
-    val topicConfigs = new Properties()
-    val propName = "min.insync.replicas"
-    val propValue = "3"
-    topicConfigs.put(propName, propValue)
-    when(configRepository.topicConfig(resourceName)).thenReturn(topicConfigs)
-
-    metadataCache = mock(classOf[ZkMetadataCache])
-    when(metadataCache.contains(resourceName)).thenReturn(true)
-
-    val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
-      .setIncludeSynonyms(true)
-      .setResources(List(new DescribeConfigsRequestData.DescribeConfigsResource()
-        .setResourceName(resourceName)
-        .setResourceType(ConfigResource.Type.TOPIC.id)).asJava))
-      .build(requestHeader.apiVersion)
-    val request = buildRequest(describeConfigsRequest,
-      requestHeader = Option(requestHeader))
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository)
-    kafkaApis.handleDescribeConfigsRequest(request)
-
-    verify(authorizer).authorize(any(), ArgumentMatchers.eq(expectedActions.asJava))
-    val response = verifyNoThrottling[DescribeConfigsResponse](request)
-    val results = response.data.results
-    assertEquals(1, results.size)
-    val describeConfigsResult = results.get(0)
-    assertEquals(ConfigResource.Type.TOPIC.id, describeConfigsResult.resourceType)
-    assertEquals(resourceName, describeConfigsResult.resourceName)
-    val configs = describeConfigsResult.configs.asScala.filter(_.name == propName)
-    assertEquals(1, configs.length)
-    val describeConfigsResponseData = configs.head
-    assertEquals(propName, describeConfigsResponseData.name)
-    assertEquals(propValue, describeConfigsResponseData.value)
   }
 
   @Test
@@ -524,56 +468,6 @@ class KafkaApisTest extends Logging {
       configResource -> Set(new AlterConfigOp(entryToBeModified, OpType.SET)).asJavaCollection
     }).toMap.asJava
     new IncrementalAlterConfigsRequest.Builder(resourceMap, false)
-  }
-
-  @Test
-  def testDescribeConfigsClientMetrics(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    val operation = AclOperation.DESCRIBE_CONFIGS
-    val resourceType = ResourceType.CLUSTER
-    val subscriptionName = "client_metric_subscription_1"
-    val requestHeader =
-      new RequestHeader(ApiKeys.DESCRIBE_CONFIGS, ApiKeys.DESCRIBE_CONFIGS.latestVersion, clientId, 0)
-    val expectedActions = Seq(
-      new Action(operation, new ResourcePattern(resourceType, Resource.CLUSTER_NAME, PatternType.LITERAL),
-        1, true, true)
-    )
-
-    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(expectedActions.asJava)))
-      .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava)
-
-    val resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
-    val configRepository: ConfigRepository = mock(classOf[ConfigRepository])
-    val cmConfigs = ClientMetricsTestUtils.defaultProperties
-    when(configRepository.config(resource)).thenReturn(cmConfigs)
-
-    metadataCache = mock(classOf[ZkMetadataCache])
-    when(metadataCache.contains(subscriptionName)).thenReturn(true)
-
-    val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
-      .setIncludeSynonyms(true)
-      .setResources(List(new DescribeConfigsRequestData.DescribeConfigsResource()
-        .setResourceName(subscriptionName)
-        .setResourceType(ConfigResource.Type.CLIENT_METRICS.id)).asJava))
-      .build(requestHeader.apiVersion)
-    val request = buildRequest(describeConfigsRequest,
-      requestHeader = Option(requestHeader))
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository)
-    kafkaApis.handleDescribeConfigsRequest(request)
-
-    val response = verifyNoThrottling[DescribeConfigsResponse](request)
-    // Verify that authorize is only called once
-    verify(authorizer, times(1)).authorize(any(), any())
-    val results = response.data.results
-    assertEquals(1, results.size)
-    val describeConfigsResult = results.get(0)
-
-    assertEquals(ConfigResource.Type.CLIENT_METRICS.id, describeConfigsResult.resourceType)
-    assertEquals(subscriptionName, describeConfigsResult.resourceName)
-    val configs = describeConfigsResult.configs
-    assertEquals(cmConfigs.size, configs.size)
   }
 
   @Test
@@ -2651,69 +2545,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testProduceResponseMetadataLookupErrorOnNotLeaderOrFollower(): Unit = {
-    val topic = "topic"
-    metadataCache = mock(classOf[ZkMetadataCache])
-
-    for (version <- 10 to ApiKeys.PRODUCE.latestVersion) {
-
-      reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
-
-      val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-
-      val tp = new TopicPartition(topic, 0)
-
-      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
-        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-          Collections.singletonList(new ProduceRequestData.TopicProduceData()
-            .setName(tp.topic).setPartitionData(Collections.singletonList(
-            new ProduceRequestData.PartitionProduceData()
-              .setIndex(tp.partition)
-              .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
-            .iterator))
-        .setAcks(1.toShort)
-        .setTimeoutMs(5000))
-        .build(version.toShort)
-      val request = buildRequest(produceRequest)
-
-      when(replicaManager.handleProduceAppend(anyLong,
-        anyShort,
-        ArgumentMatchers.eq(false),
-        any(),
-        any(),
-        responseCallback.capture(),
-        any(),
-        any(),
-        any(),
-        any())
-      ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER))))
-
-      when(replicaManager.getPartitionOrError(tp)).thenAnswer(_ => Left(Errors.UNKNOWN_TOPIC_OR_PARTITION))
-
-      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-        any[Long])).thenReturn(0)
-      when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-        any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
-      when(metadataCache.contains(tp)).thenAnswer(_ => true)
-      when(metadataCache.getPartitionInfo(tp.topic(), tp.partition())).thenAnswer(_ => Option.empty)
-      when(metadataCache.getAliveBrokerNode(any(), any())).thenReturn(Option.empty)
-      kafkaApis = createKafkaApis()
-      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
-
-      val response = verifyNoThrottling[ProduceResponse](request)
-
-      assertEquals(1, response.data.responses.size)
-      val topicProduceResponse = response.data.responses.asScala.head
-      assertEquals(1, topicProduceResponse.partitionResponses.size)
-      val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
-      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionProduceResponse.errorCode))
-      assertEquals(-1, partitionProduceResponse.currentLeader.leaderId())
-      assertEquals(-1, partitionProduceResponse.currentLeader.leaderEpoch())
-      assertEquals(0, response.data.nodeEndpoints.size)
-    }
-  }
-
-  @Test
   def testTransactionalParametersSetCorrectly(): Unit = {
     val topic = "topic"
     val transactionalId = "txn1"
@@ -4116,66 +3947,6 @@ class KafkaApisTest extends Logging {
     val (_, anotherListener) = updateMetadataCacheWithInconsistentListeners()
     val response = sendMetadataRequestWithInconsistentListeners(anotherListener)
     assertEquals(Set(0), response.brokers.asScala.map(_.id).toSet)
-  }
-
-
-  /**
-   * Metadata request to fetch all topics should not result in the followings:
-   * 1) Auto topic creation
-   * 2) UNKNOWN_TOPIC_OR_PARTITION
-   *
-   * This case is testing the case that a topic is being deleted from MetadataCache right after
-   * authorization but before checking in MetadataCache.
-   */
-  @Test
-  def testGetAllTopicMetadataShouldNotCreateTopicOrReturnUnknownTopicPartition(): Unit = {
-    // Setup: authorizer authorizes 2 topics, but one got deleted in metadata cache
-    metadataCache = mock(classOf[ZkMetadataCache])
-    when(metadataCache.getAliveBrokerNodes(any())).thenReturn(List(new Node(brokerId,"localhost", 0)))
-    when(metadataCache.getControllerId).thenReturn(None)
-
-    // 2 topics returned for authorization in during handle
-    val topicsReturnedFromMetadataCacheForAuthorization = Set("remaining-topic", "later-deleted-topic")
-    when(metadataCache.getAllTopics()).thenReturn(topicsReturnedFromMetadataCacheForAuthorization)
-    // 1 topic is deleted from metadata right at the time between authorization and the next getTopicMetadata() call
-    when(metadataCache.getTopicMetadata(
-      ArgumentMatchers.eq(topicsReturnedFromMetadataCacheForAuthorization),
-      any[ListenerName],
-      anyBoolean,
-      anyBoolean
-    )).thenReturn(Seq(
-      new MetadataResponseTopic()
-        .setErrorCode(Errors.NONE.code)
-        .setName("remaining-topic")
-        .setIsInternal(false)
-    ))
-
-
-    var createTopicIsCalled: Boolean = false
-    // Specific mock on zkClient for this use case
-    // Expect it's never called to do auto topic creation
-    when(zkClient.setOrCreateEntityConfigs(
-      ArgumentMatchers.eq(ConfigType.TOPIC),
-      anyString,
-      any[Properties]
-    )).thenAnswer(_ => {
-      createTopicIsCalled = true
-    })
-    // No need to use
-    when(zkClient.getAllBrokersInCluster)
-      .thenReturn(Seq(new Broker(
-        brokerId, "localhost", 9902,
-        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT
-      )))
-
-
-    val (requestListener, _) = updateMetadataCacheWithInconsistentListeners()
-    val response = sendMetadataRequestWithInconsistentListeners(requestListener)
-
-    assertFalse(createTopicIsCalled)
-    val responseTopics = response.topicMetadata().asScala.map { metadata => metadata.topic() }
-    assertEquals(List("remaining-topic"), responseTopics)
-    assertTrue(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION).isEmpty)
   }
 
   @Test
