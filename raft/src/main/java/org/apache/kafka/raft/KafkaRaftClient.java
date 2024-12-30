@@ -3014,14 +3014,18 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // until either the shutdown expires or an election bumps the epoch
             stateTimeoutMs = shutdown.remainingTimeMs();
         } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
-            if (quorum.isVoter()) {
-                transitionToProspective(currentTimeMs);
-            } else {
+//            if (quorum.isVoter()) {
+                // canElectNewLeaderAfterOldLeaderPartitioned fails if we do not bump epoch since it is possible
+                // that the replica ends up as follower in the same epoch.
+                // resigned(leaderId=local) -> prospective(leaderId=local) -> follower(leaderId=local) which is illegal
+//                transitionToProspective(quorum.epoch() + 1, currentTimeMs);
+//                transitionToCandidate(currentTimeMs);
+//            } else {
                 // It is possible that the old leader is not a voter in the new voter set.
                 // In that case increase the epoch and transition to unattached. The epoch needs
                 // to be increased to avoid FETCH responses with the leader being this replica.
-                transitionToUnattached(quorum.epoch() + 1, OptionalInt.empty());
-            }
+            transitionToUnattached(quorum.epoch() + 1, OptionalInt.empty());
+//            }
             stateTimeoutMs = 0L;
         } else {
             stateTimeoutMs = state.remainingElectionTimeMs(currentTimeMs);

@@ -651,13 +651,13 @@ public class RaftEventSimulationTest {
                 return false;
 
             RaftNode first = iter.next();
-            ElectionState election = first.store.readElectionState().get();
-            if (!election.hasLeader())
+            OptionalInt leaderId = first.store.readElectionState().get().optionalLeaderId();
+            if (leaderId.isEmpty())
                 return false;
 
             while (iter.hasNext()) {
                 RaftNode next = iter.next();
-                if (!election.equals(next.store.readElectionState().get()))
+                if (!leaderId.equals(next.store.readElectionState().get().optionalLeaderId()))
                     return false;
             }
 
