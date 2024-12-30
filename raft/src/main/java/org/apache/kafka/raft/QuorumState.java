@@ -395,6 +395,8 @@ public class QuorumState {
             electionTimeoutMs = unattachedStateOrThrow().remainingElectionTimeMs(time.milliseconds());
         } else if (isProspective() && !prospectiveStateOrThrow().epochElection().isVoteRejected()) {
             electionTimeoutMs = prospectiveStateOrThrow().remainingElectionTimeMs(time.milliseconds());
+        } else if (isResigned()) {
+            electionTimeoutMs = resignedStateOrThrow().remainingElectionTimeMs(time.milliseconds());
         } else {
             electionTimeoutMs = randomElectionTimeoutMs();
         }

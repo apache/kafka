@@ -2504,6 +2504,42 @@ public class QuorumStateTest {
     }
 
     /**
+     * Test transitions from Resigned
+     */
+    // KAFKA-18379 to fill in the rest of the cases
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void testResignedToFollowerInSameEpoch(KRaftVersion kraftVersion) {
+        int node1 = 1;
+        int node2 = 2;
+        int epoch = 5;
+        VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
+        ElectionState election = ElectionState.withElectedLeader(epoch, localId, voters.voterIds());
+        store.writeElectionState(election, kraftVersion);
+        QuorumState state = buildQuorumState(OptionalInt.of(localId), voters, kraftVersion);
+        state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
+        assertTrue(state.isResigned());
+        assertThrows(IllegalStateException.class, () -> state.transitionToFollower(epoch, localId, voters.listeners(localId)));
+        // KAFKA-18379 will fix this
+        state.transitionToFollower(epoch, node1, voters.listeners(node1));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void testResignedToUnattachedInHigherEpoch(KRaftVersion kraftVersion) {
+        int node1 = 1;
+        int node2 = 2;
+        int epoch = 5;
+        VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
+        ElectionState election = ElectionState.withElectedLeader(epoch, localId, voters.voterIds());
+        store.writeElectionState(election, kraftVersion);
+        QuorumState state = buildQuorumState(OptionalInt.of(localId), voters, kraftVersion);
+        state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
+        assertTrue(state.isResigned());
+        state.transitionToUnattached(epoch + 1, OptionalInt.empty());
+    }
+
+    /**
      * Test transitions from Observer as Unattached
      */
     @ParameterizedTest

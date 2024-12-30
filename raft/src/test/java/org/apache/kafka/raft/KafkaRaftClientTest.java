@@ -305,7 +305,7 @@ public class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    public void testInitializeAsResignedAndBecomeProspective(boolean withKip853Rpc) throws Exception {
+    public void testInitializeAsResignedAndBecomeUnattached(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
         Set<Integer> voters = Set.of(localId, remoteId);
@@ -326,8 +326,46 @@ public class KafkaRaftClientTest {
         context.time.sleep(context.electionTimeoutMs());
         context.client.poll();
 
+        // Become unattached with expired election timeout
+        assertTrue(context.client.quorum().isUnattached());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testInitializeAsResignedAndUnableToContactQuorum(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int remoteId = localId + 1;
+        Set<Integer> voters = Set.of(localId, remoteId);
+        int epoch = 2;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
+            .withElectedLeader(epoch, localId)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        // Resign from leader, will restart in resigned state
+        assertTrue(context.client.quorum().isResigned());
+        assertEquals(0L, context.log.endOffset().offset());
+        context.assertElectedLeader(epoch, localId);
+
+        // Election timeout
+        context.time.sleep(context.electionTimeoutMs());
+        context.client.poll();
+
+        // Become unattached with expired election timeout
+        assertTrue(context.client.quorum().isUnattached());
+
         // Become prospective
+        context.time.sleep(1);
+        context.client.poll();
         assertTrue(context.client.quorum().isProspective());
+
+        // Become unattached again after election timeout
+        ProspectiveState prospectiveState = context.client.quorum().prospectiveStateOrThrow();
+        context.time.sleep(prospectiveState.remainingElectionTimeMs(context.time.milliseconds()));
+        context.client.poll();
+        assertTrue(context.client.quorum().isUnattached());
     }
 
     @ParameterizedTest
@@ -734,7 +772,7 @@ public class KafkaRaftClientTest {
         context.deliverResponse(request.correlationId(), request.destination(), response);
         context.client.poll();
 
-        // We do not resend `EndQuorumRequest` once the other voter has acknowledged it.
+        // Local does not resend `EndQuorumRequest` once the other voter has acknowledged it.
         context.time.sleep(context.retryBackoffMs);
         context.client.poll();
         assertFalse(context.channel.hasSentRequests());
@@ -749,12 +787,18 @@ public class KafkaRaftClientTest {
             OptionalInt.of(localId)
         );
 
-        // After the election timer, we should become a prospective.
+        // After the election timer, local should become unattached.
         context.time.sleep(2L * context.electionTimeoutMs());
-        context.pollUntil(context.client.quorum()::isProspective);
-        assertEquals(resignedEpoch, context.currentEpoch());
-        assertEquals(new LeaderAndEpoch(OptionalInt.of(localId), resignedEpoch),
+        context.pollUntil(context.client.quorum()::isUnattached);
+        assertEquals(resignedEpoch + 1, context.currentEpoch());
+        assertEquals(new LeaderAndEpoch(OptionalInt.empty(), resignedEpoch + 1),
             context.listener.currentLeaderAndEpoch());
+
+        // Local will become prospective right away
+        assertEquals(0, context.client.quorum().unattachedStateOrThrow().electionTimeoutMs());
+        context.time.sleep(1);
+        context.client.poll();
+        assertTrue(context.client.quorum().isProspective());
     }
 
     @ParameterizedTest
