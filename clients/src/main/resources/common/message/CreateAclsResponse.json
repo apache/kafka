@@ -17,10 +17,11 @@
   "apiKey": 30,
   "type": "response",
   "name": "CreateAclsResponse",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   // Version 2 enables flexible versions.
   // Version 3 adds user resource type.
-  "validVersions": "0-3",
+  "validVersions": "1-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

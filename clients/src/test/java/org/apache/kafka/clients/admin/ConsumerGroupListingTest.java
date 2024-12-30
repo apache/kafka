@@ -14,8 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/**
- * This package is deprecated.
- * See {@link org.apache.kafka.common.security.oauthbearer}
- */
-package org.apache.kafka.common.security.oauthbearer.secured;
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.ConsumerGroupState;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class ConsumerGroupListingTest {
+    @Test
+    public void testState() {
+        for (ConsumerGroupState consumerGroupState : ConsumerGroupState.values()) {
+            ConsumerGroupListing listing = new ConsumerGroupListing(
+                "groupId",
+                false,
+                Optional.of(consumerGroupState)
+            );
+            assertEquals(consumerGroupState, listing.state().get());
+        }
+    }
+}

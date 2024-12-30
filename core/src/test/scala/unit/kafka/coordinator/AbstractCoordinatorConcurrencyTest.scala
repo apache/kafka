@@ -22,6 +22,7 @@ import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
+import kafka.cluster.Partition
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.{KafkaConfig, _}
@@ -253,8 +254,8 @@ object AbstractCoordinatorConcurrencyTest {
       producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys.toList.asJava)
     }
 
-    override def getMagic(topicPartition: TopicPartition): Option[Byte] = {
-      Some(RecordBatch.MAGIC_VALUE_V2)
+    override def onlinePartition(topicPartition: TopicPartition): Option[Partition] = {
+      Some(mock(classOf[Partition]))
     }
 
     def getOrCreateLogs(): mutable.Map[TopicPartition, (UnifiedLog, Long)] = {

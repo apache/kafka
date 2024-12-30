@@ -14,14 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.admin;
 
-package org.apache.kafka.common.security.oauthbearer.secured;
+import org.apache.kafka.common.ConsumerGroupState;
 
-/**
- * @deprecated See org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler
- */
+import org.junit.jupiter.api.Test;
 
-@Deprecated
-public class OAuthBearerValidatorCallbackHandler extends org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler {
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+public class ConsumerGroupDescriptionTest {
+    @Test
+    public void testState() {
+        for (ConsumerGroupState consumerGroupState : ConsumerGroupState.values()) {
+            ConsumerGroupDescription description = new ConsumerGroupDescription(
+                "groupId",
+                false,
+                null,
+                "assignor",
+                consumerGroupState,
+                null
+            );
+            assertEquals(consumerGroupState, description.state());
+        }
+    }
 }

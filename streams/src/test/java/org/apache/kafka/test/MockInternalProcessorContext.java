@@ -46,7 +46,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 
-public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorContext<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
+public class MockInternalProcessorContext<KOut, VOut> extends MockProcessorContext<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
 
     private ProcessorNode<?, ?, ?, ?> currentNode;
     private RecordCollector recordCollector;
@@ -58,11 +58,11 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     private Headers headers = new RecordHeaders();
     private ProcessorMetadata processorMetadata;
 
-    public MockInternalNewProcessorContext() {
+    public MockInternalProcessorContext() {
         processorMetadata = new ProcessorMetadata();
     }
 
-    public MockInternalNewProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
+    public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         super(config, taskId, stateDir);
         processorMetadata = new ProcessorMetadata();
     }

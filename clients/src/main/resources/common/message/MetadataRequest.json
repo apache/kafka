@@ -18,14 +18,14 @@
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "MetadataRequest",
-  "validVersions": "0-13",
-  "deprecatedVersions": "0-3",
+  "validVersions": "4-13",
   "flexibleVersions": "9+",
   "fields": [
+    // Versions 0-3 were removed in Apache Kafka 4.0, Version 4 is the new baseline.
+    //
     // In version 0, an empty array indicates "request metadata for all topics."  In version 1 and
     // higher, an empty array indicates "request metadata for no topics," and a null array is used to
     // indicate "request metadata for all topics."
-    //
     // Version 2 and 3 are the same as version 1.
     //
     // Version 4 adds AllowAutoTopicCreation.

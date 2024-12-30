@@ -18,12 +18,11 @@
   "type": "request",
   "listeners": ["zkBroker", "broker", "controller"],
   "name": "FetchRequest",
+  // Versions 0-3 were removed in Apache Kafka 4.0, Version 4 is the new baseline.
   //
   // Version 1 is the same as version 0.
-  //
   // Starting in Version 2, the requester must be able to handle Kafka Log
   // Message format version 1.
-  //
   // Version 3 adds MaxBytes.  Starting in version 3, the partition ordering in
   // the request is now relevant.  Partitions will be processed in the order
   // they appear in the request.
@@ -57,8 +56,7 @@
   // Version 16 is the same as version 15 (KIP-951).
   //
   // Version 17 adds directory id support from KIP-853
-  "validVersions": "0-17",
-  "deprecatedVersions": "0-3",
+  "validVersions": "4-17",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
