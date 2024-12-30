@@ -266,7 +266,7 @@ class SocketServer(
       if (acceptor != null) {
         acceptor.localPort
       } else {
-        throw new KafkaException("Could not find listenerName : " + listenerName + " in data-plane or control-plane")
+        throw new KafkaException("Could not find listenerName : " + listenerName + " in data-plane.")
       }
     } catch {
       case e: Exception =>
