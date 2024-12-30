@@ -101,7 +101,6 @@ import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
 
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
-import org.apache.maven.artifact.versioning.VersionRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1818,13 +1817,8 @@ public final class Worker {
             Objects.requireNonNull(classLoader, "Classloader used by task cannot be null");
 
             ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
-            VersionRange connectorVersion = null;
-            try {
-                connectorVersion = PluginUtils.connectorVersionRequirement(connectorConfig.getString(ConnectorConfig.CONNECTOR_VERSION));
-            } catch (InvalidVersionSpecificationException e) {
-                // this will be captured in validation itself
-            }
-            final Class<? extends Connector> connectorClass = plugins.connectorClass(connectorConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG), connectorVersion);
+
+            final Connector connector = instantiateConnector(connectorConfig.originalsStrings());
 
             RetryWithToleranceOperator<T> retryWithToleranceOperator = new RetryWithToleranceOperator<>(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
@@ -1835,7 +1829,7 @@ public final class Worker {
             return doBuild(task, id, configState, statusListener, initialState,
                     connectorConfig, keyConverter, valueConverter, headerConverter, classLoader,
                     retryWithToleranceOperator, transformationChain,
-                    errorHandlingMetrics, connectorClass);
+                    errorHandlingMetrics, connector.getClass());
         }
 
         abstract WorkerTask<T, R> doBuild(
