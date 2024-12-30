@@ -23,10 +23,9 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.log.UnifiedLog
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
+import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository}
 import kafka.server.share.SharePartitionManager
 import kafka.utils.{CoreUtils, Log4jController, Logging, TestUtils}
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common._
@@ -133,12 +132,10 @@ class KafkaApisTest extends Logging {
     override def serialize(principal: KafkaPrincipal): Array[Byte] = Utils.utf8(principal.toString)
     override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
   }
-  private val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
   private val brokerId = 1
   // KRaft tests should override this with a KRaftMetadataCache
-  private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId, MetadataVersion.latestTesting())
-  private val brokerEpochManager: ZkBrokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
+  private var metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
@@ -185,25 +182,7 @@ class KafkaApisTest extends Logging {
     TestUtils.setIbpVersion(properties, interBrokerProtocolVersion)
     val config = new KafkaConfig(properties)
 
-    val forwardingManagerOpt = if (enableForwarding)
-      Some(this.forwardingManager)
-    else
-      None
-
-    val metadataSupport = if (raftSupport) {
-      // it will be up to the test to replace the default ZkMetadataCache implementation
-      // with a KRaftMetadataCache instance
-      metadataCache match {
-        case cache: KRaftMetadataCache => RaftSupport(forwardingManager, cache)
-        case _ => throw new IllegalStateException("Test must set an instance of KRaftMetadataCache")
-      }
-    } else {
-      metadataCache match {
-        case zkMetadataCache: ZkMetadataCache =>
-          ZkSupport(adminManager, controller, zkClient, forwardingManagerOpt, zkMetadataCache, brokerEpochManager)
-        case _ => throw new IllegalStateException("Test must set an instance of ZkMetadataCache")
-      }
-    }
+    val metadataSupport = RaftSupport(forwardingManager, metadataCache)
 
     val listenerType = ListenerType.BROKER
     val enabledApis = if (enableForwarding) {
@@ -3947,115 +3926,6 @@ class KafkaApisTest extends Logging {
     val (_, anotherListener) = updateMetadataCacheWithInconsistentListeners()
     val response = sendMetadataRequestWithInconsistentListeners(anotherListener)
     assertEquals(Set(0), response.brokers.asScala.map(_.id).toSet)
-  }
-
-  @Test
-  def testUnauthorizedTopicMetadataRequest(): Unit = {
-    // 1. Set up broker information
-    val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val broker = new UpdateMetadataBroker()
-      .setId(0)
-      .setRack("rack")
-      .setEndpoints(Seq(
-        new UpdateMetadataEndpoint()
-          .setHost("broker0")
-          .setPort(9092)
-          .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-          .setListener(plaintextListener.value)
-      ).asJava)
-
-    // 2. Set up authorizer
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    val unauthorizedTopic = "unauthorized-topic"
-    val authorizedTopic = "authorized-topic"
-
-    val expectedActions = Seq(
-      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, unauthorizedTopic, PatternType.LITERAL), 1, true, true),
-      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true)
-    )
-
-    when(authorizer.authorize(any[RequestContext], argThat((t: java.util.List[Action]) => t.containsAll(expectedActions.asJava))))
-      .thenAnswer { invocation =>
-      val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]].asScala
-      actions.map { action =>
-        if (action.resourcePattern().name().equals(authorizedTopic))
-          AuthorizationResult.ALLOWED
-        else
-          AuthorizationResult.DENIED
-      }.asJava
-    }
-
-    // 3. Set up MetadataCache
-    val authorizedTopicId = Uuid.randomUuid()
-    val unauthorizedTopicId = Uuid.randomUuid()
-
-    val topicIds = new util.HashMap[String, Uuid]()
-    topicIds.put(authorizedTopic, authorizedTopicId)
-    topicIds.put(unauthorizedTopic, unauthorizedTopicId)
-
-    def createDummyPartitionStates(topic: String) = {
-      new UpdateMetadataPartitionState()
-        .setTopicName(topic)
-        .setPartitionIndex(0)
-        .setControllerEpoch(0)
-        .setLeader(0)
-        .setLeaderEpoch(0)
-        .setReplicas(Collections.singletonList(0))
-        .setZkVersion(0)
-        .setIsr(Collections.singletonList(0))
-    }
-
-    // Send UpdateMetadataReq to update MetadataCache
-    val partitionStates = Seq(unauthorizedTopic, authorizedTopic).map(createDummyPartitionStates)
-
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, partitionStates.asJava, Seq(broker).asJava, topicIds).build()
-    metadataCache.asInstanceOf[ZkMetadataCache].updateMetadata(correlationId = 0, updateMetadataRequest)
-
-    // 4. Send TopicMetadataReq using topicId
-    val metadataReqByTopicId = new MetadataRequest.Builder(util.Arrays.asList(authorizedTopicId, unauthorizedTopicId)).build()
-    val repByTopicId = buildRequest(metadataReqByTopicId, plaintextListener)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleTopicMetadataRequest(repByTopicId)
-    val metadataByTopicIdResp = verifyNoThrottling[MetadataResponse](repByTopicId)
-
-    val metadataByTopicId = metadataByTopicIdResp.data().topics().asScala.groupBy(_.topicId()).map(kv => (kv._1, kv._2.head))
-
-    metadataByTopicId.foreach { case (topicId, metadataResponseTopic) =>
-      if (topicId == unauthorizedTopicId) {
-        // Return an TOPIC_AUTHORIZATION_FAILED on unauthorized error regardless of leaking the existence of topic id
-        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), metadataResponseTopic.errorCode())
-        // Do not return topic information on unauthorized error
-        assertNull(metadataResponseTopic.name())
-      } else {
-        assertEquals(Errors.NONE.code(), metadataResponseTopic.errorCode())
-        assertEquals(authorizedTopic, metadataResponseTopic.name())
-      }
-    }
-    kafkaApis.close()
-
-    // 4. Send TopicMetadataReq using topic name
-    reset(clientRequestQuotaManager, requestChannel)
-    val metadataReqByTopicName = new MetadataRequest.Builder(util.Arrays.asList(authorizedTopic, unauthorizedTopic), false).build()
-    val repByTopicName = buildRequest(metadataReqByTopicName, plaintextListener)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleTopicMetadataRequest(repByTopicName)
-    val metadataByTopicNameResp = verifyNoThrottling[MetadataResponse](repByTopicName)
-
-    val metadataByTopicName = metadataByTopicNameResp.data().topics().asScala.groupBy(_.name()).map(kv => (kv._1, kv._2.head))
-
-    metadataByTopicName.foreach { case (topicName, metadataResponseTopic) =>
-      if (topicName == unauthorizedTopic) {
-        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), metadataResponseTopic.errorCode())
-        // Do not return topic Id on unauthorized error
-        assertEquals(Uuid.ZERO_UUID, metadataResponseTopic.topicId())
-      } else {
-        assertEquals(Errors.NONE.code(), metadataResponseTopic.errorCode())
-        assertEquals(authorizedTopicId, metadataResponseTopic.topicId())
-      }
-    }
   }
 
     /**
