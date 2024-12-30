@@ -2952,52 +2952,7 @@ class KafkaApisTest extends Logging {
     checkInvalidPartition(-1)
     checkInvalidPartition(1) // topic has only one partition
   }
-
-  @Test
-  def shouldThrowUnsupportedVersionExceptionOnHandleAddOffsetToTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
-    assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleAddOffsetsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
-  }
-
-  @Test
-  def shouldThrowUnsupportedVersionExceptionOnHandleAddPartitionsToTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
-    assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleAddPartitionsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
-  }
-
-  @Test
-  def shouldThrowUnsupportedVersionExceptionOnHandleTxnOffsetCommitRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
-    assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleAddPartitionsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
-  }
-
-  @Test
-  def shouldThrowUnsupportedVersionExceptionOnHandleEndTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
-    assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleEndTxnRequest(null, RequestLocal.withThreadConfinedCaching))
-  }
-
-  @Test
-  def shouldThrowUnsupportedVersionExceptionOnHandleWriteTxnMarkersRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
-    assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleWriteTxnMarkersRequest(null, RequestLocal.withThreadConfinedCaching))
-  }
-
+  
   @Test
   def requiredAclsNotPresentWriteTxnMarkersThrowsAuthorizationException(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
@@ -8903,86 +8858,6 @@ class KafkaApisTest extends Logging {
     assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
   }
 
-  @Test
-  def rejectSyncGroupRequestWhenStaticMembershipNotSupported(): Unit = {
-    val syncGroupRequest = new SyncGroupRequest.Builder(
-      new SyncGroupRequestData()
-        .setGroupId("test")
-        .setMemberId("test")
-        .setGroupInstanceId("instanceId")
-        .setGenerationId(1)
-    ).build()
-
-    val requestChannelRequest = buildRequest(syncGroupRequest)
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleSyncGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[SyncGroupResponse](requestChannelRequest)
-    assertEquals(Errors.UNSUPPORTED_VERSION, response.error)
-  }
-
-  @Test
-  def rejectHeartbeatRequestWhenStaticMembershipNotSupported(): Unit = {
-    val heartbeatRequest = new HeartbeatRequest.Builder(
-      new HeartbeatRequestData()
-        .setGroupId("test")
-        .setMemberId("test")
-        .setGroupInstanceId("instanceId")
-        .setGenerationId(1)
-    ).build()
-    val requestChannelRequest = buildRequest(heartbeatRequest)
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleHeartbeatRequest(requestChannelRequest)
-
-    val response = verifyNoThrottling[HeartbeatResponse](requestChannelRequest)
-    assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
-  }
-
-  @Test
-  def rejectOffsetCommitRequestWhenStaticMembershipNotSupported(): Unit = {
-    val offsetCommitRequest = new OffsetCommitRequest.Builder(
-      new OffsetCommitRequestData()
-        .setGroupId("test")
-        .setMemberId("test")
-        .setGroupInstanceId("instanceId")
-        .setGenerationIdOrMemberEpoch(100)
-        .setTopics(Collections.singletonList(
-          new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setName("test")
-            .setPartitions(Collections.singletonList(
-              new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                .setPartitionIndex(0)
-                .setCommittedOffset(100)
-                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                .setCommittedMetadata("")
-            ))
-        ))
-    ).build()
-
-    val requestChannelRequest = buildRequest(offsetCommitRequest)
-
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleOffsetCommitRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    val expectedTopicErrors = Collections.singletonList(
-      new OffsetCommitResponseData.OffsetCommitResponseTopic()
-        .setName("test")
-        .setPartitions(Collections.singletonList(
-          new OffsetCommitResponseData.OffsetCommitResponsePartition()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-        ))
-    )
-    val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
-    assertEquals(expectedTopicErrors, response.data.topics())
-  }
-
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
   def testHandleLeaveGroupWithMultipleMembers(version: Short): Unit = {
@@ -9735,41 +9610,6 @@ class KafkaApisTest extends Logging {
     else
       assertEquals(0, brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count())
     assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesOutRate.get.count())
-  }
-
-  @Test
-  def rejectInitProducerIdWhenIdButNotEpochProvided(): Unit = {
-    val initProducerIdRequest = new InitProducerIdRequest.Builder(
-      new InitProducerIdRequestData()
-        .setTransactionalId("known")
-        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
-        .setProducerId(10)
-        .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
-    ).build()
-
-    val requestChannelRequest = buildRequest(initProducerIdRequest)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleInitProducerIdRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[InitProducerIdResponse](requestChannelRequest)
-    assertEquals(Errors.INVALID_REQUEST, response.error)
-  }
-
-  @Test
-  def rejectInitProducerIdWhenEpochButNotIdProvided(): Unit = {
-    val initProducerIdRequest = new InitProducerIdRequest.Builder(
-      new InitProducerIdRequestData()
-        .setTransactionalId("known")
-        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
-        .setProducerId(RecordBatch.NO_PRODUCER_ID)
-        .setProducerEpoch(2)
-    ).build()
-    val requestChannelRequest = buildRequest(initProducerIdRequest)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleInitProducerIdRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[InitProducerIdResponse](requestChannelRequest)
-    assertEquals(Errors.INVALID_REQUEST, response.error)
   }
 
   @Test
