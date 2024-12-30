@@ -21,7 +21,10 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -54,6 +57,16 @@ public final class VersionedSamplingSinkConnector extends SamplingConnector {
   public Class<? extends SinkTask> taskClass() {
     super.taskClass();
     return VersionedSamplingSinkConnectorTask.class;
+  }
+
+  @Override
+  public List<Map<String, String>> taskConfigs(int maxTasks) {
+    logMethodCall(samples);
+    List<Map<String, String>> configs = new ArrayList<>();
+    for (int i = 0; i < maxTasks; i++) {
+      configs.add(Collections.singletonMap("task-config-version", "PLACEHOLDER_FOR_VERSION"));
+    }
+    return configs;
   }
 
   public static class VersionedSamplingSinkConnectorTask extends SinkTask {
