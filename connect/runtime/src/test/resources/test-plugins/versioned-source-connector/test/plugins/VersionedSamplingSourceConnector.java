@@ -71,7 +71,11 @@ public class VersionedSamplingSourceConnector extends SourceConnector implements
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         logMethodCall(samples);
-        return null;
+        List<Map<String, String>> configs = new ArrayList<>();
+        for (int i = 0; i < maxTasks; i++) {
+            configs.add(Collections.singletonMap("task-config-version", "PLACEHOLDER_FOR_VERSION"));
+        }
+        return configs;
     }
 
     @Override
