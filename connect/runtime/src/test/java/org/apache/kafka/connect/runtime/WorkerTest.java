@@ -61,6 +61,7 @@ import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
+import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.runtime.rest.RestServer;
@@ -3072,6 +3073,7 @@ public class WorkerTest {
         when(plugins.pluginLoader(connectorClass.getName(), range)).thenReturn(pluginLoader);
         when(plugins.newConnector(connectorClass.getName(), range)).thenReturn(connector);
         when(plugins.newTask(taskClass)).thenReturn(task);
+        when(plugins.safeLoaderSwapper()).thenReturn(PluginUtils.noOpLoaderSwap());
         when(task.version()).thenReturn(range == null ? "unknown" : range.toString());
     }
 
@@ -3087,7 +3089,7 @@ public class WorkerTest {
         verify(plugins).pluginLoader(connectorClass.getName(), range);
         verify(plugins).newConnector(connectorClass.getName(), range);
         verify(plugins).newTask(taskClass);
-        verify(task).version();
+        verify(task, times(2)).version();
     }
 
     private void mockExecutorRealSubmit(Class<? extends Runnable> runnableClass) {
