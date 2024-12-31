@@ -31,12 +31,9 @@ import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.management.AttributeNotFoundException;
-import javax.management.InstanceNotFoundException;
-import javax.management.MBeanException;
-import javax.management.MalformedObjectNameException;
+
+import javax.management.MBeanServer;
 import javax.management.ObjectName;
-import javax.management.ReflectionException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -112,11 +109,11 @@ public class MultiVersionIntegrationTest {
             if (type == ConnectorType.SOURCE) {
                 this.className = VersionedPluginBuilder.VersionedTestPlugin.SOURCE_CONNECTOR.className();
                 connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, this.className);
-                connectorProps.put(SinkConnectorConfig.TOPICS_CONFIG, "versioned-topic");
                 return this;
             }
             this.className = VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className();
             connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className());
+            connectorProps.put(SinkConnectorConfig.TOPICS_CONFIG, "versioned-topic");
             return this;
         }
 
@@ -153,7 +150,7 @@ public class MultiVersionIntegrationTest {
         }
 
         public VersionedConnectorConfig headerConverter(String version) {
-            connectorProps.put(ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+            connectorProps.put(ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
             maybeAddConfig(ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG, version);
             this.headerConverterVersion = version;
             return this;
@@ -191,17 +188,45 @@ public class MultiVersionIntegrationTest {
         }
     }
 
-    private void assertCorrectVersions(VersionedConnectorConfig config) throws MalformedObjectNameException, ReflectionException, AttributeNotFoundException, InstanceNotFoundException, MBeanException {
+    private void assertCorrectVersions(VersionedConnectorConfig config) throws Exception {
+
         ConnectorStateInfo state = connect.connectorStatus(config.name);
         assertEquals(config.version, state.connector().version());
         assertEquals(config.taskCount, state.tasks().size());
         state.tasks().forEach(task -> assertEquals(config.version, task.version()));
-        ConnectMetricsRegistry registry = new ConnectMetricsRegistry();
-        //kafka.connect:type=connector-task-metrics,connector=versioned-connector-2,task=0
-//        Set<ObjectInstance> mbeans = ManagementFactory.getPlatformMBeanServer().queryMBeans(new ObjectName("kafka.connect:type=connector-task-metrics,connector=versioned-connector-2,task=0"), null);
-        ObjectName connectorTaskMetrics = new ObjectName("kafka.connect:type=connector-task-metrics,connector=" + config.name + ",task=0");
-        Object taskVersion = ManagementFactory.getPlatformMBeanServer().getAttribute(connectorTaskMetrics, registry.taskVersion.name());
 
+        ConnectMetricsRegistry registry = new ConnectMetricsRegistry();
+        ObjectName connectorTaskMetrics = new ObjectName("kafka.connect:type=connector-task-metrics,connector=" + config.name + ",task=0");
+        MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+
+        assertEquals(config.version, mBeanServer.getAttribute(connectorTaskMetrics, registry.taskConnectorClassVersion.name()));
+        assertEquals(config.version, mBeanServer.getAttribute(connectorTaskMetrics, registry.taskVersion.name()));
+        assertEquals(config.className, mBeanServer.getAttribute(connectorTaskMetrics, registry.taskConnectorClass.name()));
+
+        if (config.keyConverterVersion != null) {
+            assertEquals(config.keyConverterVersion, mBeanServer.getAttribute(connectorTaskMetrics, registry.taskKeyConverterVersion.name()));
+            assertEquals(VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className(), mBeanServer.getAttribute(connectorTaskMetrics, registry.taskKeyConverterClass.name()));
+        }
+        if (config.valueConverterVersion != null) {
+            assertEquals(config.valueConverterVersion, mBeanServer.getAttribute(connectorTaskMetrics, registry.taskValueConverterVersion.name()));
+            assertEquals(VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className(), mBeanServer.getAttribute(connectorTaskMetrics, registry.taskValueConverterClass.name()));
+        }
+        if (config.headerConverterVersion != null) {
+            assertEquals(config.headerConverterVersion, mBeanServer.getAttribute(connectorTaskMetrics, registry.taskHeaderConverterVersion.name()));
+            assertEquals(VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className(), mBeanServer.getAttribute(connectorTaskMetrics, registry.taskHeaderConverterClass.name()));
+        }
+
+        for (Map.Entry<String, String> transform : config.transforms.entrySet()) {
+            ObjectName transformMetrics = new ObjectName("kafka.connect:type=connector-transform-metrics,connector=" + config.name + ",task=0,transform=" + transform.getKey());
+            assertEquals(transform.getValue(), mBeanServer.getAttribute(transformMetrics, registry.transformVersion.name()));
+            assertEquals(VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className(), mBeanServer.getAttribute(transformMetrics, registry.transformClass.name()));
+        }
+
+        for (Map.Entry<String, String> predicate : config.predicates.entrySet()) {
+            ObjectName predicateMetrics = new ObjectName("kafka.connect:type=connector-predicate-metrics,connector=" + config.name + ",task=0,predicate=" + predicate.getKey());
+            assertEquals(predicate.getValue(), mBeanServer.getAttribute(predicateMetrics, registry.predicateVersion.name()));
+            assertEquals(VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className(), mBeanServer.getAttribute(predicateMetrics, registry.predicateClass.name()));
+        }
     }
 
     @Test
@@ -215,28 +240,66 @@ public class MultiVersionIntegrationTest {
         String version = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_VERSIONS.toArray()[versionIndex].toString();
 
         VersionedConnectorConfig connector1 = new VersionedConnectorConfig().name("versioned-connector-1")
-            .type(ConnectorType.SOURCE)
-            .version(version)
+            .type(ConnectorType.SOURCE).version(version).keyConverter(version).valueConverter(version).headerConverter(version)
+            .addOrUpdateTransform("t1", version).addOrUpdatePredicate("t1", "p1", version)
             .taskCount(1);
 
         version = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_VERSIONS.toArray()[(versionIndex + 1) % versions].toString();
         VersionedConnectorConfig connector2 = new VersionedConnectorConfig().name("versioned-connector-2")
-            .type(ConnectorType.SOURCE)
-            .version(version)
-            .taskCount(1);
+            .type(ConnectorType.SOURCE).version(version).keyConverter(version).valueConverter(version).headerConverter(version)
+            .addOrUpdateTransform("t1", version).addOrUpdatePredicate("t1", "p1", version)
+            .taskCount(3);
 
+        version = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_VERSIONS.toArray()[(versionIndex + 2) % versions].toString();
+        VersionedConnectorConfig connector3 = new VersionedConnectorConfig().name("versioned-connector-3")
+            .type(ConnectorType.SINK).version(version).keyConverter(version).valueConverter(version).headerConverter(version)
+            .addOrUpdateTransform("t1", version).addOrUpdatePredicate("t1", "p1", version)
+            .taskCount(2);
+
+        version = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_VERSIONS.toArray()[(versionIndex + 3) % versions].toString();
+        VersionedConnectorConfig connector4 = new VersionedConnectorConfig().name("versioned-connector-4")
+            .type(ConnectorType.SINK).version(version).keyConverter(version).valueConverter(version).headerConverter(version)
+            .addOrUpdateTransform("t1", version).addOrUpdatePredicate("t1", "p1", version)
+            .taskCount(4);
 
         connect.configureConnector(connector1.name, connector1.connectorProps());
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connector1.name, connector1.taskCount,
             "Connector tasks did not start in time.");
-
         connect.configureConnector(connector2.name, connector2.connectorProps());
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connector2.name, connector2.taskCount,
+            "Connector tasks did not start in time.");
+        connect.configureConnector(connector3.name, connector3.connectorProps());
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connector3.name, connector3.taskCount,
+            "Connector tasks did not start in time.");
+        connect.configureConnector(connector4.name, connector4.connectorProps());
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connector4.name, connector4.taskCount,
             "Connector tasks did not start in time.");
 
         assertCorrectVersions(connector1);
         assertCorrectVersions(connector2);
+        assertCorrectVersions(connector3);
+        assertCorrectVersions(connector4);
         // stop the clusters
+        connect.stop();
+    }
+
+    @Test
+    public void testUpgradeVersion() throws Exception {
+        connect.start();
+
+        VersionedConnectorConfig config = new VersionedConnectorConfig().name("versioned-connector").type(ConnectorType.SOURCE);
+        int taskCount = 1;
+        for (String version: MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_VERSIONS.stream().toList()) {
+            config.version(version).keyConverter(version).valueConverter(version).headerConverter(version)
+                .addOrUpdateTransform("t1", version).addOrUpdatePredicate("t1", "p1", version)
+                .taskCount(taskCount);
+            connect.configureConnector(config.name, config.connectorProps());
+            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(config.name, config.taskCount,
+                "Connector tasks did not start in time.");
+            assertCorrectVersions(config);
+            taskCount++;
+        }
+
         connect.stop();
     }
 }
