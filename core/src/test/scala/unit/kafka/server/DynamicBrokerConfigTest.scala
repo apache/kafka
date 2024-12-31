@@ -96,37 +96,6 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
-  def testEnableDefaultUncleanLeaderElection(): Unit = {
-    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
-    origProps.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
-
-    val config = KafkaConfig(origProps)
-    val serverMock = Mockito.mock(classOf[KafkaServer])
-    val controllerMock = Mockito.mock(classOf[KafkaController])
-    val logManagerMock = Mockito.mock(classOf[LogManager])
-
-    Mockito.when(serverMock.config).thenReturn(config)
-    Mockito.when(serverMock.kafkaController).thenReturn(controllerMock)
-    Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
-    Mockito.when(logManagerMock.allLogs).thenReturn(Iterable.empty)
-
-    val currentDefaultLogConfig = new AtomicReference(new LogConfig(new Properties))
-    Mockito.when(logManagerMock.currentDefaultConfig).thenAnswer(_ => currentDefaultLogConfig.get())
-    Mockito.when(logManagerMock.reconfigureDefaultLogConfig(ArgumentMatchers.any(classOf[LogConfig])))
-      .thenAnswer(invocation => currentDefaultLogConfig.set(invocation.getArgument(0)))
-
-    config.dynamicConfig.initialize(None, None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicLogConfig(logManagerMock, serverMock))
-
-    val props = new Properties()
-
-    props.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
-    config.dynamicConfig.updateDefaultConfig(props)
-    assertTrue(config.uncleanLeaderElectionEnable)
-    Mockito.verify(controllerMock).enableDefaultUncleanLeaderElection()
-  }
-
-  @Test
   def testUpdateDynamicThreadPool(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, port = 8181)
     origProps.put(ServerConfigs.NUM_IO_THREADS_CONFIG, "4")
