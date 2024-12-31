@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.connect.health.ConnectorType;
+import org.apache.kafka.connect.runtime.ConnectMetricsRegistry;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -30,6 +31,13 @@ import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.management.AttributeNotFoundException;
+import javax.management.InstanceNotFoundException;
+import javax.management.MBeanException;
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
+import javax.management.ReflectionException;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -82,6 +90,7 @@ public class MultiVersionIntegrationTest {
 
         private Map<String, String> connectorProps = new HashMap<>();
         private String name;
+        private String className;
         private String version;
         private int taskCount;
         private String keyConverterVersion;
@@ -101,9 +110,12 @@ public class MultiVersionIntegrationTest {
 
         public VersionedConnectorConfig type(ConnectorType type) {
             if (type == ConnectorType.SOURCE) {
-                connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SOURCE_CONNECTOR.className());
+                this.className = VersionedPluginBuilder.VersionedTestPlugin.SOURCE_CONNECTOR.className();
+                connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, this.className);
                 connectorProps.put(SinkConnectorConfig.TOPICS_CONFIG, "versioned-topic");
+                return this;
             }
+            this.className = VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className();
             connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className());
             return this;
         }
@@ -179,30 +191,51 @@ public class MultiVersionIntegrationTest {
         }
     }
 
-    private void assertConnectorVersion(VersionedConnectorConfig config) {
+    private void assertCorrectVersions(VersionedConnectorConfig config) throws MalformedObjectNameException, ReflectionException, AttributeNotFoundException, InstanceNotFoundException, MBeanException {
         ConnectorStateInfo state = connect.connectorStatus(config.name);
         assertEquals(config.version, state.connector().version());
         assertEquals(config.taskCount, state.tasks().size());
         state.tasks().forEach(task -> assertEquals(config.version, task.version()));
+        ConnectMetricsRegistry registry = new ConnectMetricsRegistry();
+        //kafka.connect:type=connector-task-metrics,connector=versioned-connector-2,task=0
+//        Set<ObjectInstance> mbeans = ManagementFactory.getPlatformMBeanServer().queryMBeans(new ObjectName("kafka.connect:type=connector-task-metrics,connector=versioned-connector-2,task=0"), null);
+        ObjectName connectorTaskMetrics = new ObjectName("kafka.connect:type=connector-task-metrics,connector=" + config.name + ",task=0");
+        Object taskVersion = ManagementFactory.getPlatformMBeanServer().getAttribute(connectorTaskMetrics, registry.taskVersion.name());
+
     }
 
     @Test
-    public void testVersionedConnectorStart() throws Exception {
+    public void testMultipleVersionedConnector() throws Exception {
         // start the clusters
         connect.start();
 
         Random random = new Random();
-        int versionIndex = random.nextInt(MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_VERSIONS.size());
+        int versions = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_VERSIONS.size();
+        int versionIndex = random.nextInt(versions);
         String version = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_VERSIONS.toArray()[versionIndex].toString();
 
-        VersionedConnectorConfig connector1 = new VersionedConnectorConfig().name("versioned-connector")
+        VersionedConnectorConfig connector1 = new VersionedConnectorConfig().name("versioned-connector-1")
             .type(ConnectorType.SOURCE)
             .version(version)
             .taskCount(1);
 
-        connect.configureConnector(connector1.name, connector1.connectorProps());
+        version = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_VERSIONS.toArray()[(versionIndex + 1) % versions].toString();
+        VersionedConnectorConfig connector2 = new VersionedConnectorConfig().name("versioned-connector-2")
+            .type(ConnectorType.SOURCE)
+            .version(version)
+            .taskCount(1);
 
-        assertConnectorVersion(connector1);
+
+        connect.configureConnector(connector1.name, connector1.connectorProps());
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connector1.name, connector1.taskCount,
+            "Connector tasks did not start in time.");
+
+        connect.configureConnector(connector2.name, connector2.connectorProps());
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connector2.name, connector2.taskCount,
+            "Connector tasks did not start in time.");
+
+        assertCorrectVersions(connector1);
+        assertCorrectVersions(connector2);
         // stop the clusters
         connect.stop();
     }
