@@ -47,20 +47,20 @@ class KafkaConfigTest {
 
     // We should load configuration file without any arguments
     val config1 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
-    assertEquals(1, config1.brokerId)
+    assertEquals(1, config1.nodeId)
 
     // We should be able to override given property on command line
     val config2 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "node.id=2")))
-    assertEquals(2, config2.brokerId)
+    assertEquals(2, config2.nodeId)
 
     // We should be also able to set completely new property
     val config3 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact")))
-    assertEquals(1, config3.brokerId)
+    assertEquals(1, config3.nodeId)
     assertEquals(util.Arrays.asList("compact"), config3.logCleanupPolicy)
 
     // We should be also able to set several properties
     val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "node.id=2")))
-    assertEquals(2, config4.brokerId)
+    assertEquals(2, config4.nodeId)
     assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
   }
 
