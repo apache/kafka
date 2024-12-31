@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 
 /**
@@ -132,7 +133,8 @@ public class VersionedSamplingSourceConnector extends SourceConnector implements
         }
 
         @Override
-        public void put(Collection<SinkRecord> records) {
+        public List<SourceRecord> poll() {
+            return Collections.emptyList();
         }
 
         @Override
