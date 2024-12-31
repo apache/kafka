@@ -57,6 +57,20 @@ jobs:
                       issue_number: pull.number,
                       name: "triage"
                     });
+                    try {
+                      github.rest.issues.removeLabel({
+                        owner: "apache",
+                        repo: "kafka",
+                        issue_number: pull.number,
+                        name: "needs-attention"
+                      });
+                    } catch (error) {
+                      if (error.status === 404) {
+                        console.log("PR did not have needs-attention label");
+                      } else {
+                        console.error(error);
+                      }
+                    }
                   }
                 });
               });
