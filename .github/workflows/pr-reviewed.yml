@@ -64,6 +64,7 @@ jobs:
                         issue_number: pull.number,
                         name: "needs-attention"
                       });
+                      console.log("Removing 'needs-attention' label from PR " + pull.number + " : " + pull.title);
                     } catch (error) {
                       if (error.status === 404) {
                         console.log("PR did not have needs-attention label");
