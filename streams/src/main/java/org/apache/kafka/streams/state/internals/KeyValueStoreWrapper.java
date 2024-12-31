@@ -47,7 +47,7 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
 
     // same as either timestampedStore or versionedStore above. kept merely as a convenience
     // to simplify implementation for methods which do not depend on store type.
-    private StateStore store = null;
+    private StateStore store;
 
     public KeyValueStoreWrapper(final ProcessorContext<?, ?> context, final String storeName) {
         try {
@@ -122,8 +122,8 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        store.init(context, root);
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        store.init(stateStoreContext, root);
     }
 
     @Override

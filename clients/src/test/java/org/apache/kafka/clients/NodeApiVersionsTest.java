@@ -102,16 +102,16 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testLatestUsableVersion() {
-        NodeApiVersions apiVersions = NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 1, (short) 3);
-        assertEquals(3, apiVersions.latestUsableVersion(ApiKeys.PRODUCE));
-        assertEquals(1, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 0, (short) 1));
-        assertEquals(1, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 1, (short) 1));
-        assertEquals(2, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 1, (short) 2));
-        assertEquals(3, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 1, (short) 3));
-        assertEquals(2, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 2, (short) 2));
-        assertEquals(3, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 2, (short) 3));
-        assertEquals(3, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 3, (short) 3));
-        assertEquals(3, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 3, (short) 4));
+        NodeApiVersions apiVersions = NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 8, (short) 10);
+        assertEquals(10, apiVersions.latestUsableVersion(ApiKeys.PRODUCE));
+        assertEquals(8, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 7, (short) 8));
+        assertEquals(8, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 8, (short) 8));
+        assertEquals(9, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 8, (short) 9));
+        assertEquals(10, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 8, (short) 10));
+        assertEquals(9, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 9, (short) 9));
+        assertEquals(10, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 9, (short) 10));
+        assertEquals(10, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 10, (short) 10));
+        assertEquals(10, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 10, (short) 11));
     }
 
     @Test

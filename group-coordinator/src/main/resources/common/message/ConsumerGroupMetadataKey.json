@@ -14,12 +14,13 @@
 // limitations under the License.
 
 {
-  "type": "data",
+  "apiKey": 3,
+  "type": "coordinator-key",
   "name": "ConsumerGroupMetadataKey",
-  "validVersions": "3",
+  "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "3",
+    { "name": "GroupId", "type": "string", "versions": "0",
       "about": "The group id." }
   ]
 }

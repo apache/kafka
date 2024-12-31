@@ -14,31 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.clients.admin;
 
-/**
- * This server is not the leader for the given partition.
- * @deprecated since 2.6. Use {@link NotLeaderOrFollowerException}.
- */
-@Deprecated
-public class NotLeaderForPartitionException extends InvalidMetadataException {
+import org.apache.kafka.common.ConsumerGroupState;
 
-    private static final long serialVersionUID = 1L;
+import org.junit.jupiter.api.Test;
 
-    public NotLeaderForPartitionException() {
-        super();
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class ConsumerGroupListingTest {
+    @Test
+    public void testState() {
+        for (ConsumerGroupState consumerGroupState : ConsumerGroupState.values()) {
+            ConsumerGroupListing listing = new ConsumerGroupListing(
+                "groupId",
+                false,
+                Optional.of(consumerGroupState)
+            );
+            assertEquals(consumerGroupState, listing.state().get());
+        }
     }
-
-    public NotLeaderForPartitionException(String message) {
-        super(message);
-    }
-
-    public NotLeaderForPartitionException(Throwable cause) {
-        super(cause);
-    }
-
-    public NotLeaderForPartitionException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

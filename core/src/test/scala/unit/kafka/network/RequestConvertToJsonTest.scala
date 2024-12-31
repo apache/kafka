@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 
-import java.util.Collections
 import scala.jdk.OptionConverters.RichOption
 
 class RequestConvertToJsonTest {
@@ -45,21 +44,6 @@ class RequestConvertToJsonTest {
 
     val expectedNode = RequestHeaderDataJsonConverter.write(header.data, header.headerVersion, false).asInstanceOf[ObjectNode]
     expectedNode.set("requestApiKeyName", new TextNode(header.apiKey.toString))
-
-    val actualNode = RequestConvertToJson.requestHeaderNode(header)
-
-    assertEquals(expectedNode, actualNode)
-  }
-
-  @Test
-  def testRequestHeaderNodeWithDeprecatedApiVersion(): Unit = {
-    val fetchRequest = FetchRequest.Builder.forConsumer(0, 0, 0, Collections.emptyMap()).build(0)
-    val req = request(fetchRequest)
-    val header = req.header
-
-    val expectedNode = RequestHeaderDataJsonConverter.write(header.data, header.headerVersion, false).asInstanceOf[ObjectNode]
-    expectedNode.set("requestApiKeyName", new TextNode(header.apiKey.toString))
-    expectedNode.set("requestApiVersionDeprecated", BooleanNode.TRUE)
 
     val actualNode = RequestConvertToJson.requestHeaderNode(header)
 

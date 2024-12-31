@@ -469,7 +469,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             VersionRange range = PluginUtils.connectorVersionRequirement(pluginVersion);
             pluginInstance = (T) plugins().newPlugin(pluginClass, range, connectorLoader);
         } catch (VersionedPluginLoadingException e) {
-            log.error("Failed to load {} class {} with version {}: {}", pluginName, pluginClass, pluginVersion, e);
+            log.error("Failed to load {} class {} with version {}", pluginName, pluginClass, pluginVersion, e);
             pluginConfigValue.addErrorMessage(e.getMessage());
             pluginVersionValue.addErrorMessage(e.getMessage());
             return null;
@@ -479,7 +479,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             return null;
         } catch (InvalidVersionSpecificationException e) {
             // this should have been caught by prior validation logic
-            log.error("Invalid version range for {} class {}: {}", pluginName, pluginClass, pluginVersion, e);
+            log.error("Invalid version range for {} class {} with version {}", pluginName, pluginClass, pluginVersion, e);
             pluginVersionValue.addErrorMessage(e.getMessage());
             return null;
         }

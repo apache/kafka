@@ -29,7 +29,7 @@ import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs, TopicConfig}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
@@ -213,11 +213,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val lock = new ReentrantReadWriteLock
   private var metricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin] = _
   private var currentConfig: KafkaConfig = _
-  private val dynamicConfigPasswordEncoder = if (kafkaConfig.processRoles.isEmpty) {
-    maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
-  } else {
-    Some(PasswordEncoder.NOOP)
-  }
+  private val dynamicConfigPasswordEncoder = Some(PasswordEncoder.NOOP)
 
   private[server] def initialize(zkClientOpt: Option[KafkaZkClient], clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
@@ -373,16 +369,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     })
   }
 
-  private def maybeCreatePasswordEncoder(secret: Option[Password]): Option[PasswordEncoder] = {
-   secret.map { secret =>
-     PasswordEncoder.encrypting(secret,
-        kafkaConfig.passwordEncoderKeyFactoryAlgorithm,
-        kafkaConfig.passwordEncoderCipherAlgorithm,
-        kafkaConfig.passwordEncoderKeyLength,
-        kafkaConfig.passwordEncoderIterations)
-    }
-  }
-
   private def passwordEncoder: PasswordEncoder = {
     dynamicConfigPasswordEncoder.getOrElse(throw new ConfigException("Password encoder secret not configured"))
   }
@@ -446,25 +432,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   // encoded using the current secret. Ignore any errors during decoding since old secret may not
   // have been removed during broker restart.
   private def maybeReEncodePasswords(persistentProps: Properties, adminZkClient: AdminZkClient): Properties = {
-    val props = persistentProps.clone().asInstanceOf[Properties]
-    if (props.asScala.keySet.exists(isPasswordConfig)) {
-      maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderOldSecret).foreach { passwordDecoder =>
-        persistentProps.asScala.foreachEntry { (configName, value) =>
-          if (isPasswordConfig(configName) && value != null) {
-            val decoded = try {
-              Some(passwordDecoder.decode(value).value)
-            } catch {
-              case _: Exception =>
-                debug(s"Dynamic password config $configName could not be decoded using old secret, new secret will be used.")
-                None
-            }
-            decoded.foreach(value => props.put(configName, passwordEncoder.encode(new Password(value))))
-          }
-        }
-        adminZkClient.changeBrokerConfig(Some(kafkaConfig.brokerId), props)
-      }
-    }
-    props
+    persistentProps.clone().asInstanceOf[Properties]
   }
 
   /**
@@ -663,23 +631,12 @@ trait BrokerReconfigurable {
 
 object DynamicLogConfig {
   /**
-   * The log configurations that are non-reconfigurable. This set contains the names you
-   * would use when setting a dynamic configuration on a topic, which are different than the
-   * corresponding broker configuration names.
-   *
-   * For now, message.format.version is not reconfigurable, since we need to check that
-   * the version is supported on all brokers in the cluster.
-   */
-  val NonReconfigrableLogConfigs: Set[String] = Set(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-
-  /**
    * The broker configurations pertaining to logs that are reconfigurable. This set contains
    * the names you would use when setting a static or dynamic broker configuration (not topic
    * configuration).
    */
   val ReconfigurableConfigs: Set[String] =
-    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.
-      filterNot(s => NonReconfigrableLogConfigs.contains(s._1)).values.toSet
+    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.values.toSet
 }
 
 class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends BrokerReconfigurable with Logging {
@@ -745,13 +702,6 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
     val originalLogConfig = logManager.currentDefaultConfig
     val originalUncleanLeaderElectionEnable = originalLogConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
-    val originalLogConfigMap = originalLogConfig.originals()
-    DynamicLogConfig.NonReconfigrableLogConfigs.foreach(k => {
-      Option(originalLogConfigMap.get(k)) match {
-        case None => newBrokerDefaults.remove(k)
-        case Some(v) => newBrokerDefaults.put(k, v)
-      }
-    })
 
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
 

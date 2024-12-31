@@ -225,6 +225,13 @@ if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   (( WINDOWS_OS_FORMAT )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
   KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
 else
+  if echo "$KAFKA_LOG4J_OPTS" | grep -E "log4j\.[^[:space:]]+(\.properties|\.xml)$"; then
+      # Enable Log4j 1.x configuration compatibility mode for Log4j 2
+      export LOG4J_COMPATIBILITY=true
+      echo DEPRECATED: A Log4j 1.x configuration file has been detected, which is no longer recommended. >&2
+      echo To use a Log4j 2.x configuration, please see https://logging.apache.org/log4j/2.x/migrate-from-log4j1.html#Log4j2ConfigurationFormat for details about Log4j configuration file migration. >&2
+      echo You can also use the \$KAFKA_HOME/config/tools-log4j2.yaml file as a starting point. Make sure to remove the Log4j 1.x configuration after completing the migration. >&2
+  fi
   # create logs directory
   if [ ! -d "$LOG_DIR" ]; then
     mkdir -p "$LOG_DIR"
