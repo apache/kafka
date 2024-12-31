@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.source.SourceTask;
 
 /**
  * VersionedSamplingSourceConnector is a test connector that extends SamplingConnector and overrides the version method.
@@ -119,7 +120,7 @@ public class VersionedSamplingSourceConnector extends SourceConnector implements
         return instances;
     }
 
-    public static class VersionedSamplingSourceConnectorTask extends SinkTask {
+    public static class VersionedSamplingSourceConnectorTask extends SourceTask {
 
         @Override
         public String version() {
