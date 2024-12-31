@@ -359,20 +359,17 @@ class KafkaServer(
         socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
         // Start alter partition manager based on the IBP version
-        alterPartitionManager = if (config.interBrokerProtocolVersion.isAlterPartitionSupported) {
-          AlterPartitionManager(
-            config = config,
-            metadataCache = metadataCache,
-            scheduler = kafkaScheduler,
-            controllerNodeProvider,
-            time = time,
-            metrics = metrics,
-            s"zk-broker-${config.nodeId}-",
-            brokerEpochSupplier = brokerEpochSupplier
-          )
-        } else {
-          AlterPartitionManager(kafkaScheduler, time, zkClient)
-        }
+        alterPartitionManager = AlterPartitionManager(
+          config = config,
+          metadataCache = metadataCache,
+          scheduler = kafkaScheduler,
+          controllerNodeProvider,
+          time = time,
+          metrics = metrics,
+          s"zk-broker-${config.nodeId}-",
+          brokerEpochSupplier = brokerEpochSupplier
+        )
+        
         alterPartitionManager.start()
 
         // Start replica manager

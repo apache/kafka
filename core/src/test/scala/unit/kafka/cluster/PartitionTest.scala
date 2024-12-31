@@ -21,7 +21,6 @@ import com.yammer.metrics.core.Metric
 import kafka.log._
 import kafka.server._
 import kafka.utils._
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, InvalidTxnStateException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
 import org.apache.kafka.common.message.{AlterPartitionResponseData, FetchResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -36,7 +35,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers
-import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong, anyString}
+import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 
@@ -55,7 +54,6 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion, NodeToControllerChannelManager, RequestLocal}
-import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
@@ -2696,71 +2694,6 @@ class PartitionTest extends AbstractPartitionTest {
     time.sleep(partition.replicaLagTimeMaxMs + 1)
     partition.maybeShrinkIsr()
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
-  }
-
-  @Test
-  def testZkIsrManagerAsyncCallback(): Unit = {
-    // We need a real scheduler here so that the ISR write lock works properly
-    val scheduler = new KafkaScheduler(1, true, "zk-isr-test")
-    scheduler.startup()
-    val kafkaZkClient = mock(classOf[KafkaZkClient])
-
-    doAnswer(_ => (true, 2))
-      .when(kafkaZkClient)
-      .conditionalUpdatePath(anyString(), any(), ArgumentMatchers.eq(1), any())
-
-    val zkIsrManager = AlterPartitionManager(scheduler, time, kafkaZkClient)
-    zkIsrManager.start()
-
-    val partition = new Partition(topicPartition,
-      replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = IBP_2_6_IV0, // shouldn't matter, but set this to a ZK isr version
-      localBrokerId = brokerId,
-      () => defaultBrokerEpoch(brokerId),
-      time,
-      alterPartitionListener,
-      delayedOperations,
-      metadataCache,
-      logManager,
-      zkIsrManager)
-
-    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
-    seedLogData(log, numRecords = 10, leaderEpoch = 4)
-
-    val controllerEpoch = 0
-    val leaderEpoch = 5
-    val follower1 = brokerId + 1
-    val follower2 = brokerId + 2
-    val follower3 = brokerId + 3
-    val replicas = Seq(brokerId, follower1, follower2, follower3)
-    val isr = Seq(brokerId, follower1, follower2)
-
-    doNothing().when(delayedOperations).checkAndCompleteAll()
-
-    assertTrue(makeLeader(
-      partition = partition,
-      topicId = None,
-      controllerEpoch = controllerEpoch,
-      leaderEpoch = leaderEpoch,
-      isr = isr,
-      replicas = replicas,
-      partitionEpoch = 1,
-      isNew = true
-    ))
-    assertEquals(0L, partition.localLogOrException.highWatermark)
-
-    // Expand ISR
-    fetchFollower(partition, replicaId = follower3, fetchOffset = 10L)
-
-    // Try avoiding a race
-    TestUtils.waitUntilTrue(() => !partition.partitionState.isInflight, "Expected ISR state to be committed", 100)
-
-    partition.partitionState match {
-      case CommittedPartitionState(isr, _) => assertEquals(Set(brokerId, follower1, follower2, follower3), isr)
-      case _ => fail("Expected a committed ISR following Zk expansion")
-    }
-
-    scheduler.shutdown()
   }
 
   @Test
