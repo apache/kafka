@@ -593,6 +593,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def start_minikdc_if_necessary(self, add_principals=""):
         has_sasl = self.security_config.has_sasl
+        # Since KafkaService is utilized by both controller and broker, we do not set miniKDC to None.
+        # This avoids the creation of an additional miniKDC, which could result in a mismatch
+        # between client and server tokens if two miniKDC instances are running concurrently.
         if has_sasl:
             if self.minikdc is None:
                 other_service = self.isolated_kafka if self.isolated_kafka else self.controller_quorum if self.quorum_info.using_kraft else None
