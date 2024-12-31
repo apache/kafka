@@ -28,6 +28,12 @@
             taken when it comes to kafka clients that are not part of Apache Kafka, please see
             <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896%3A+Remove+old+client+protocol+API+versions+in+Kafka+4.0">KIP-896</a> for the details.
         </li>
+        <li>
+            Before updating your Kafka cluster which build on Zookeeper to Kafka 4.0, you must understand what the updates and changes 
+            are between Zookeeper mode and Kraft mode. See the following page to learn about some of the significant changes in 
+            latest Kafka releases.
+            <a href="zk2kraft.html">Zookeeper migrate Kraft</a>
+        </li>
         <li>A number of deprecated classes, methods, configurations and tools have been removed.
             <ul>
                 <li><b>Common</b>

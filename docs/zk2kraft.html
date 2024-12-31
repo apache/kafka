@@ -1,0 +1,45 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<script><!--#include virtual="js/templateData.js" --></script>
+
+<h3 class="anchor-heading">Significant Changes in Kafka 4.0 Release</h3>
+The following are some of the updates in Kafka 4.0 release:
+<h4 class="anchor-heading">Removal Zookeeper configs</h4>
+<ul>
+    <li>
+        The password encoder-related configurations have been removed. These configurations
+        (<code>password.encoder.secret</code>, <code>password.encoder.old.secret</code>,
+        <code>password.encoder.keyfactory.algorithm</code>, <code>password.encoder.cipher.algorithm</code>,
+        <code>password.encoder.key.length</code>, <code>password.encoder.iterations</code>) were used in ZooKeeper mode
+        to define the key and backup key for encrypting sensitive data (e.g., passwords), specify the algorithm and key
+        generation method for password encryption (e.g., AES, RSA), and control the key length and encryption strength.
+        <br>
+        In Kraft mode, Kafka adopts standardized security configurations. Most sensitive data encryption is handled by
+        the security framework (e.g., SASL, SSL), making the password encoder-related configurations obsolete. Sensitive
+        data can now be encrypted in two ways: SASL and SSL/TLS.
+        <br>
+        Using **SASL/SCRAM**, you can encrypt communication between clients and brokers with mechanisms such as SCRAM or GSSAPI.
+        To configure SASL, use <code>sasl.enabled.mechanisms</code> and
+        <code>sasl.mechanism.inter.broker.protocol</code> to specify the desired SASL mechanism.
+        <br>
+        Using **SSL/TLS**, you can encrypt communication between clients and brokers by specifying the SSL keystore and truststore
+        configurations. Use the following parameters:
+        (<code>ssl.keystore.location</code>, <code>ssl.keystore.password</code>, <code>ssl.key.password</code>, 
+        <code>ssl.truststore.location</code>, <code>ssl.truststore.password</code>)
+    </li>
+</ul>
