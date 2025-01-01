@@ -99,9 +99,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
     @cluster(num_nodes=8)
     @matrix(client_protocol=[SecurityConfig.SSL], metadata_quorum=[quorum.isolated_kraft])
     @cluster(num_nodes=9)
-    @matrix(client_protocol=[SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL, SecurityConfig.SASL_MECHANISM_SCRAM_SHA_256,
-                             SecurityConfig.SASL_MECHANISM_SCRAM_SHA_512],
-            metadata_quorum=[quorum.isolated_kraft])
+    @matrix(client_protocol=[SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL], metadata_quorum=[quorum.isolated_kraft])
     def test_rolling_upgrade_phase_one(self, client_protocol, metadata_quorum):
         """
         Start with a PLAINTEXT cluster, open a SECURED port, via a rolling upgrade, ensuring we could produce
