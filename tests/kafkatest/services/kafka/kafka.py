@@ -842,8 +842,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     self.close_port(controller_listener)
 
         self.security_config.setup_node(node)
-        if self.quorum_info.using_zk or self.quorum_info.has_brokers: # TODO: SCRAM currently unsupported for controller quorum
-            self.maybe_setup_broker_scram_credentials(node)
+        self.maybe_setup_broker_scram_credentials(node)
 
         if self.quorum_info.using_kraft:
             # define controller.quorum.bootstrap.servers or controller.quorum.voters text
