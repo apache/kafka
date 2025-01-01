@@ -12,10 +12,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+Configuration:
+  Properties:
+    Property:
+      - name: "logPattern"
+        value: "[%d] %p %m (%c)%n"
 
-log4j.rootLogger=WARN, stderr
+  Appenders:
+    Console:
+      name: STDERR
+      target: SYSTEM_ERR
+      PatternLayout:
+        pattern: "${logPattern}"
+  Loggers:
+    Root:
+      level: WARN
+      AppenderRef:
+        - ref: STDERR
 
-log4j.appender.stderr=org.apache.log4j.ConsoleAppender
-log4j.appender.stderr.layout=org.apache.log4j.PatternLayout
-log4j.appender.stderr.layout.ConversionPattern=[%d] %p %m (%c)%n
-log4j.appender.stderr.Target=System.err
