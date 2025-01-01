@@ -117,7 +117,7 @@ public class DirectoryConfigProvider implements ConfigProvider {
 
     private static String read(Path path) {
         try {
-            return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+            return Files.readString(path);
         } catch (IOException e) {
             log.error("Could not read file {} for property {}", path, path.getFileName(), e);
             throw new ConfigException("Could not read file " + path + " for property " + path.getFileName());

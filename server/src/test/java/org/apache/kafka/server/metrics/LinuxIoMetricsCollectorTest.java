@@ -87,7 +87,7 @@ public class LinuxIoMetricsCollectorTest {
                          "read_bytes: " + readBytes + "\n" +
                          "write_bytes: " + writeBytes + "\n" +
                          "cancelled_write_bytes: 0\n";
-            Files.write(selfDir.resolve("io"), bld.getBytes(StandardCharsets.UTF_8));
+            Files.writeString(selfDir.resolve("io"), bld);
         }
     }
 }
