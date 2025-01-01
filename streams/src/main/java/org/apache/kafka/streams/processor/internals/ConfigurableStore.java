@@ -14,18 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.streams.processor.internals;
 
-import org.junit.jupiter.api.Test;
+import org.apache.kafka.streams.StreamsConfig;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+public interface ConfigurableStore {
 
-public class Crc32CTest {
-
-    @Test
-    public void testValue() {
-        final byte[] bytes = "Some String".getBytes();
-        assertEquals(608512271, Crc32C.compute(bytes, 0, bytes.length));
-    }
+    void configure(final StreamsConfig config);
 
 }
