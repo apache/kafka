@@ -110,8 +110,7 @@ public final class HistoryCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof HistoryCommandHandler)) return false;
-        HistoryCommandHandler o = (HistoryCommandHandler) other;
+        if (!(other instanceof HistoryCommandHandler o)) return false;
         return o.numEntriesToShow == numEntriesToShow;
     }
 }
