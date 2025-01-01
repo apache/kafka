@@ -1651,15 +1651,12 @@ public class RemoteLogManagerTest {
                             metadata.startOffset(), maxEntries * 8);
                     TimeIndex timeIdx = new TimeIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.TimeIndexFileSuffix()),
                             metadata.startOffset(), maxEntries * 12);
-                    switch (indexType) {
-                        case OFFSET:
-                            return Files.newInputStream(offsetIdx.file().toPath());
-                        case TIMESTAMP:
-                            return Files.newInputStream(timeIdx.file().toPath());
-                        case TRANSACTION:
-                            return Files.newInputStream(txnIdxFile.toPath());
-                    }
-                    return null;
+                    return switch (indexType) {
+                        case OFFSET -> Files.newInputStream(offsetIdx.file().toPath());
+                        case TIMESTAMP -> Files.newInputStream(timeIdx.file().toPath());
+                        case TRANSACTION -> Files.newInputStream(txnIdxFile.toPath());
+                        default -> null;
+                    };
                 });
 
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))

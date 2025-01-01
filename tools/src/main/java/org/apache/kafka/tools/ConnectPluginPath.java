@@ -149,14 +149,12 @@ public class ConnectPluginPath {
         if (subcommand == null) {
             throw new ArgumentParserException("No subcommand specified", parser);
         }
-        switch (subcommand) {
-            case "list":
-                return new Config(Command.LIST, locations, false, false, out, err);
-            case "sync-manifests":
-                return new Config(Command.SYNC_MANIFESTS, locations, namespace.getBoolean("dry_run"), namespace.getBoolean("keep_not_found"), out, err);
-            default:
-                throw new ArgumentParserException("Unrecognized subcommand: '" + subcommand + "'", parser);
-        }
+        return switch (subcommand) {
+            case "list" -> new Config(Command.LIST, locations, false, false, out, err);
+            case "sync-manifests" ->
+                    new Config(Command.SYNC_MANIFESTS, locations, namespace.getBoolean("dry_run"), namespace.getBoolean("keep_not_found"), out, err);
+            default -> throw new ArgumentParserException("Unrecognized subcommand: '" + subcommand + "'", parser);
+        };
     }
 
     private static Set<Path> parseLocations(ArgumentParser parser, Namespace namespace) throws ArgumentParserException, TerseException {

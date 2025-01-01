@@ -295,22 +295,20 @@ public class LogValidator {
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
             maxTimestamp = now;
             // those checks should be equal to MemoryRecordsBuilder#info
-            switch (toMagic) {
-                case RecordBatch.MAGIC_VALUE_V0:
+            shallowOffsetOfMaxTimestamp = switch (toMagic) {
+                case RecordBatch.MAGIC_VALUE_V0 -> {
                     maxTimestamp = RecordBatch.NO_TIMESTAMP;
                     // value will be the default value: -1
-                    shallowOffsetOfMaxTimestamp = -1;
-                    break;
-                case RecordBatch.MAGIC_VALUE_V1:
+                    yield -1;
+                }
+                case RecordBatch.MAGIC_VALUE_V1 ->
                     // Those single-record batches have same max timestamp, so the initial offset is equal with
                     // the last offset of earliest batch
-                    shallowOffsetOfMaxTimestamp = initialOffset;
-                    break;
-                default:
+                        initialOffset;
+                default ->
                     // there is only one batch so use the last offset
-                    shallowOffsetOfMaxTimestamp = offsetCounter.value - 1;
-                    break;
-            }
+                        offsetCounter.value - 1;
+            };
         }
 
         return new ValidationResult(

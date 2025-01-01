@@ -70,13 +70,10 @@ public enum GroupVersion implements FeatureVersion {
     }
 
     public static GroupVersion fromFeatureLevel(short version) {
-        switch (version) {
-            case 0:
-                return GV_0;
-            case 1:
-                return GV_1;
-            default:
-                throw new RuntimeException("Unknown group feature level: " + (int) version);
-        }
+        return switch (version) {
+            case 0 -> GV_0;
+            case 1 -> GV_1;
+            default -> throw new RuntimeException("Unknown group feature level: " + (int) version);
+        };
     }
 }

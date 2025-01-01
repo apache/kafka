@@ -99,16 +99,12 @@ public enum ConnectProtocolCompatibility {
      * @return the enum that corresponds to the protocol compatibility mode
      */
     public static ConnectProtocolCompatibility fromProtocolVersion(short protocolVersion) {
-        switch (protocolVersion) {
-            case CONNECT_PROTOCOL_V0:
-                return EAGER;
-            case CONNECT_PROTOCOL_V1:
-                return COMPATIBLE;
-            case CONNECT_PROTOCOL_V2:
-                return SESSIONED;
-            default:
-                throw new IllegalArgumentException("Unknown Connect protocol version: " + protocolVersion);
-        }
+        return switch (protocolVersion) {
+            case CONNECT_PROTOCOL_V0 -> EAGER;
+            case CONNECT_PROTOCOL_V1 -> COMPATIBLE;
+            case CONNECT_PROTOCOL_V2 -> SESSIONED;
+            default -> throw new IllegalArgumentException("Unknown Connect protocol version: " + protocolVersion);
+        };
     }
 
     @Override

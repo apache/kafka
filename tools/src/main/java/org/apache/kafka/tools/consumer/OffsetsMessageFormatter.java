@@ -37,18 +37,14 @@ public class OffsetsMessageFormatter extends ApiMessageFormatter {
     @Override
     protected JsonNode readToKeyJson(ByteBuffer byteBuffer) {
         try {
-            switch (CoordinatorRecordType.fromId(byteBuffer.getShort())) {
+            return switch (CoordinatorRecordType.fromId(byteBuffer.getShort())) {
                 // We can read both record types with the offset commit one.
-                case LEGACY_OFFSET_COMMIT:
-                case OFFSET_COMMIT:
-                    return OffsetCommitKeyJsonConverter.write(
+                case LEGACY_OFFSET_COMMIT, OFFSET_COMMIT -> OffsetCommitKeyJsonConverter.write(
                         new OffsetCommitKey(new ByteBufferAccessor(byteBuffer), (short) 0),
                         (short) 0
-                    );
-
-                default:
-                    return NullNode.getInstance();
-            }
+                );
+                default -> NullNode.getInstance();
+            };
         } catch (UnsupportedVersionException ex) {
             return NullNode.getInstance();
         }

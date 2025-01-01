@@ -26,22 +26,17 @@ public class TransactionCoordinatorRecordSerde extends CoordinatorRecordSerde {
 
     @Override
     protected ApiMessage apiMessageKeyFor(short recordVersion) {
-        switch (recordVersion) {
-            case 0:
-                return new TransactionLogKey();
-            default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
-        }
+        return switch (recordVersion) {
+            case 0 -> new TransactionLogKey();
+            default -> throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+        };
     }
 
     @Override
     protected ApiMessage apiMessageValueFor(short recordVersion) {
-        switch (recordVersion) {
-            case 0:
-            case 1:
-                return new TransactionLogValue();
-            default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
-        }
+        return switch (recordVersion) {
+            case 0, 1 -> new TransactionLogValue();
+            default -> throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+        };
     }
 }

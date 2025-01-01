@@ -47,14 +47,11 @@ public enum KRaftVersion implements FeatureVersion {
     }
 
     public static KRaftVersion fromFeatureLevel(short version) {
-        switch (version) {
-            case 0:
-                return KRAFT_VERSION_0;
-            case 1:
-                return KRAFT_VERSION_1;
-            default:
-                throw new RuntimeException("Unknown KRaft feature level: " + (int) version);
-        }
+        return switch (version) {
+            case 0 -> KRAFT_VERSION_0;
+            case 1 -> KRAFT_VERSION_1;
+            default -> throw new RuntimeException("Unknown KRaft feature level: " + (int) version);
+        };
     }
 
     public boolean isReconfigSupported() {
@@ -82,28 +79,23 @@ public enum KRaftVersion implements FeatureVersion {
     }
 
     public short quorumStateVersion() {
-        switch (this) {
-            case KRAFT_VERSION_0:
-                return (short) 0;
-            case KRAFT_VERSION_1:
-                return (short) 1;
-        }
-        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
+        return switch (this) {
+            case KRAFT_VERSION_0 -> (short) 0;
+            case KRAFT_VERSION_1 -> (short) 1;
+        };
     }
 
     public short kraftVersionRecordVersion() {
-        switch (this) {
-            case KRAFT_VERSION_1:
-                return (short) 0;
-        }
-        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
+        return switch (this) {
+            case KRAFT_VERSION_1 -> (short) 0;
+            default -> throw new IllegalStateException("Unsupported KRaft feature level: " + this);
+        };
     }
 
     public short votersRecordVersion() {
-        switch (this) {
-            case KRAFT_VERSION_1:
-                return (short) 0;
-        }
-        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
+        return switch (this) {
+            case KRAFT_VERSION_1 -> (short) 0;
+            default -> throw new IllegalStateException("Unsupported KRaft feature level: " + this);
+        };
     }
 }

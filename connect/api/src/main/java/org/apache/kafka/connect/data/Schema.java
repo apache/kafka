@@ -117,19 +117,10 @@ public interface Schema {
         }
 
         public boolean isPrimitive() {
-            switch (this) {
-                case INT8:
-                case INT16:
-                case INT32:
-                case INT64:
-                case FLOAT32:
-                case FLOAT64:
-                case BOOLEAN:
-                case STRING:
-                case BYTES:
-                    return true;
-            }
-            return false;
+            return switch (this) {
+                case INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, BOOLEAN, STRING, BYTES -> true;
+                default -> false;
+            };
         }
     }
 

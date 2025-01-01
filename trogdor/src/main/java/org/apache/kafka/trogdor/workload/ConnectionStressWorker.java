@@ -129,13 +129,10 @@ public class ConnectionStressWorker implements TaskWorker {
 
     interface Stressor extends AutoCloseable {
         static Stressor fromSpec(ConnectionStressSpec spec) {
-            switch (spec.action()) {
-                case CONNECT:
-                    return new ConnectStressor(spec);
-                case FETCH_METADATA:
-                    return new FetchMetadataStressor(spec);
-            }
-            throw new RuntimeException("invalid spec.action " + spec.action());
+            return switch (spec.action()) {
+                case CONNECT -> new ConnectStressor(spec);
+                case FETCH_METADATA -> new FetchMetadataStressor(spec);
+            };
         }
 
         boolean tryConnect();

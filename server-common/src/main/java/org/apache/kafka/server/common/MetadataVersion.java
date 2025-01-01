@@ -604,16 +604,12 @@ public enum MetadataVersion {
      * Return the minimum `MetadataVersion` that supports `RecordVersion`.
      */
     public static MetadataVersion minSupportedFor(RecordVersion recordVersion) {
-        switch (recordVersion) {
-            case V0:
-                return IBP_0_8_0;
-            case V1:
-                return IBP_0_10_0_IV0;
-            case V2:
-                return IBP_0_11_0_IV0;
-            default:
-                throw new IllegalArgumentException("Invalid message format version " + recordVersion);
-        }
+        return switch (recordVersion) {
+            case V0 -> IBP_0_8_0;
+            case V1 -> IBP_0_10_0_IV0;
+            case V2 -> IBP_0_11_0_IV0;
+            default -> throw new IllegalArgumentException("Invalid message format version " + recordVersion);
+        };
     }
 
     // Testing only

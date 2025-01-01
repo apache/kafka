@@ -270,18 +270,12 @@ public final class WorkerManager {
         }
 
         WorkerState state() {
-            switch (state) {
-                case STARTING:
-                    return new WorkerStarting(taskId, spec);
-                case RUNNING:
-                    return new WorkerRunning(taskId, spec, startedMs, status.get());
-                case CANCELLING:
-                case STOPPING:
-                    return new WorkerStopping(taskId, spec, startedMs, status.get());
-                case DONE:
-                    return new WorkerDone(taskId, spec, startedMs, doneMs, status.get(), error);
-            }
-            throw new RuntimeException("unreachable");
+            return switch (state) {
+                case STARTING -> new WorkerStarting(taskId, spec);
+                case RUNNING -> new WorkerRunning(taskId, spec, startedMs, status.get());
+                case CANCELLING, STOPPING -> new WorkerStopping(taskId, spec, startedMs, status.get());
+                case DONE -> new WorkerDone(taskId, spec, startedMs, doneMs, status.get(), error);
+            };
         }
 
         void transitionToRunning() {

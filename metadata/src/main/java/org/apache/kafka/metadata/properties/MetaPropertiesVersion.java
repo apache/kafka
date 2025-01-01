@@ -47,11 +47,11 @@ public enum MetaPropertiesVersion {
     }
 
     public static MetaPropertiesVersion fromNumber(int number) {
-        switch (number) {
-            case 0: return V0;
-            case 1: return V1;
-            default: throw new RuntimeException("Unknown meta.properties version number " + number);
-        }
+        return switch (number) {
+            case 0 -> V0;
+            case 1 -> V1;
+            default -> throw new RuntimeException("Unknown meta.properties version number " + number);
+        };
     }
 
     MetaPropertiesVersion(int number) {

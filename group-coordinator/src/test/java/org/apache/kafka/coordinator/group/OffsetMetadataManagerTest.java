@@ -196,20 +196,17 @@ public class OffsetMetadataManagerTest {
             Group.GroupType groupType,
             String groupId
         ) {
-            switch (groupType) {
-                case CLASSIC:
-                    return groupMetadataManager.getOrMaybeCreateClassicGroup(
+            return switch (groupType) {
+                case CLASSIC -> groupMetadataManager.getOrMaybeCreateClassicGroup(
                         groupId,
                         true
-                    );
-                case CONSUMER:
-                    return groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
+                );
+                case CONSUMER -> groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
                         groupId,
                         true
-                    );
-                default:
-                    throw new IllegalArgumentException("Invalid group type: " + groupType);
-            }
+                );
+                default -> throw new IllegalArgumentException("Invalid group type: " + groupType);
+            };
         }
 
         public void commit() {

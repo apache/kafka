@@ -34,16 +34,13 @@ public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
     @Override
     protected JsonNode readToKeyJson(ByteBuffer byteBuffer) {
         try {
-            switch (CoordinatorRecordType.fromId(byteBuffer.getShort())) {
-                case GROUP_METADATA:
-                    return GroupMetadataKeyJsonConverter.write(
+            return switch (CoordinatorRecordType.fromId(byteBuffer.getShort())) {
+                case GROUP_METADATA -> GroupMetadataKeyJsonConverter.write(
                         new GroupMetadataKey(new ByteBufferAccessor(byteBuffer), (short) 0),
                         (short) 0
-                    );
-
-                default:
-                    return NullNode.getInstance();
-            }
+                );
+                default -> NullNode.getInstance();
+            };
         } catch (UnsupportedVersionException ex) {
             return NullNode.getInstance();
         }

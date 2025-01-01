@@ -71,83 +71,47 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
 
     @Override
     protected ApiMessage apiMessageKeyFor(short recordVersion) {
-        switch (recordVersion) {
-            case 0:
-            case 1:
-                return new OffsetCommitKey();
-            case 2:
-                return new GroupMetadataKey();
-            case 3:
-                return new ConsumerGroupMetadataKey();
-            case 4:
-                return new ConsumerGroupPartitionMetadataKey();
-            case 5:
-                return new ConsumerGroupMemberMetadataKey();
-            case 6:
-                return new ConsumerGroupTargetAssignmentMetadataKey();
-            case 7:
-                return new ConsumerGroupTargetAssignmentMemberKey();
-            case 8:
-                return new ConsumerGroupCurrentMemberAssignmentKey();
-            case 9:
-                return new ShareGroupPartitionMetadataKey();
-            case 10:
-                return new ShareGroupMemberMetadataKey();
-            case 11:
-                return new ShareGroupMetadataKey();
-            case 12:
-                return new ShareGroupTargetAssignmentMetadataKey();
-            case 13:
-                return new ShareGroupTargetAssignmentMemberKey();
-            case 14:
-                return new ShareGroupCurrentMemberAssignmentKey();
-            case 15:
-                return new ShareGroupStatePartitionMetadataKey();
-            case 16:
-                return new ConsumerGroupRegularExpressionKey();
-            default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
-        }
+        return switch (recordVersion) {
+            case 0, 1 -> new OffsetCommitKey();
+            case 2 -> new GroupMetadataKey();
+            case 3 -> new ConsumerGroupMetadataKey();
+            case 4 -> new ConsumerGroupPartitionMetadataKey();
+            case 5 -> new ConsumerGroupMemberMetadataKey();
+            case 6 -> new ConsumerGroupTargetAssignmentMetadataKey();
+            case 7 -> new ConsumerGroupTargetAssignmentMemberKey();
+            case 8 -> new ConsumerGroupCurrentMemberAssignmentKey();
+            case 9 -> new ShareGroupPartitionMetadataKey();
+            case 10 -> new ShareGroupMemberMetadataKey();
+            case 11 -> new ShareGroupMetadataKey();
+            case 12 -> new ShareGroupTargetAssignmentMetadataKey();
+            case 13 -> new ShareGroupTargetAssignmentMemberKey();
+            case 14 -> new ShareGroupCurrentMemberAssignmentKey();
+            case 15 -> new ShareGroupStatePartitionMetadataKey();
+            case 16 -> new ConsumerGroupRegularExpressionKey();
+            default -> throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+        };
     }
 
     @Override
     protected ApiMessage apiMessageValueFor(short recordVersion) {
-        switch (recordVersion) {
-            case 0:
-            case 1:
-                return new OffsetCommitValue();
-            case 2:
-                return new GroupMetadataValue();
-            case 3:
-                return new ConsumerGroupMetadataValue();
-            case 4:
-                return new ConsumerGroupPartitionMetadataValue();
-            case 5:
-                return new ConsumerGroupMemberMetadataValue();
-            case 6:
-                return new ConsumerGroupTargetAssignmentMetadataValue();
-            case 7:
-                return new ConsumerGroupTargetAssignmentMemberValue();
-            case 8:
-                return new ConsumerGroupCurrentMemberAssignmentValue();
-            case 9:
-                return new ShareGroupPartitionMetadataValue();
-            case 10:
-                return new ShareGroupMemberMetadataValue();
-            case 11:
-                return new ShareGroupMetadataValue();
-            case 12:
-                return new ShareGroupTargetAssignmentMetadataValue();
-            case 13:
-                return new ShareGroupTargetAssignmentMemberValue();
-            case 14:
-                return new ShareGroupCurrentMemberAssignmentValue();
-            case 15:
-                return new ShareGroupStatePartitionMetadataValue();
-            case 16:
-                return new ConsumerGroupRegularExpressionValue();
-            default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
-        }
+        return switch (recordVersion) {
+            case 0, 1 -> new OffsetCommitValue();
+            case 2 -> new GroupMetadataValue();
+            case 3 -> new ConsumerGroupMetadataValue();
+            case 4 -> new ConsumerGroupPartitionMetadataValue();
+            case 5 -> new ConsumerGroupMemberMetadataValue();
+            case 6 -> new ConsumerGroupTargetAssignmentMetadataValue();
+            case 7 -> new ConsumerGroupTargetAssignmentMemberValue();
+            case 8 -> new ConsumerGroupCurrentMemberAssignmentValue();
+            case 9 -> new ShareGroupPartitionMetadataValue();
+            case 10 -> new ShareGroupMemberMetadataValue();
+            case 11 -> new ShareGroupMetadataValue();
+            case 12 -> new ShareGroupTargetAssignmentMetadataValue();
+            case 13 -> new ShareGroupTargetAssignmentMemberValue();
+            case 14 -> new ShareGroupCurrentMemberAssignmentValue();
+            case 15 -> new ShareGroupStatePartitionMetadataValue();
+            case 16 -> new ConsumerGroupRegularExpressionValue();
+            default -> throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+        };
     }
 }

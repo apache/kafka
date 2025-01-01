@@ -2075,18 +2075,11 @@ public class LogValidatorTest {
 
         assertFalse(validatedResults.messageSizeMaybeChanged, "Message size should not have been changed");
 
-        int expectedMaxTimestampOffset;
-        switch (magic) {
-            case RecordBatch.MAGIC_VALUE_V0:
-                expectedMaxTimestampOffset = -1;
-                break;
-            case RecordBatch.MAGIC_VALUE_V1:
-                expectedMaxTimestampOffset = 0;
-                break;
-            default:
-                expectedMaxTimestampOffset = 2;
-                break;
-        }
+        int expectedMaxTimestampOffset = switch (magic) {
+            case RecordBatch.MAGIC_VALUE_V0 -> -1;
+            case RecordBatch.MAGIC_VALUE_V1 -> 0;
+            default -> 2;
+        };
         assertEquals(expectedMaxTimestampOffset, validatedResults.shallowOffsetOfMaxTimestamp);
         verifyRecordValidationStats(validatedResults.recordValidationStats, 0, records, false);
     }

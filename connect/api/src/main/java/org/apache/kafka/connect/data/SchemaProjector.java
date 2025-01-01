@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+
 /**
  * <p>
  *     SchemaProjector is a utility to project a value between compatible schemas and throw exceptions
@@ -78,25 +79,13 @@ public class SchemaProjector {
     }
 
     private static Object projectRequiredSchema(Schema source, Object record, Schema target) throws SchemaProjectorException {
-        switch (target.type()) {
-            case INT8:
-            case INT16:
-            case INT32:
-            case INT64:
-            case FLOAT32:
-            case FLOAT64:
-            case BOOLEAN:
-            case BYTES:
-            case STRING:
-                return projectPrimitive(source, record, target);
-            case STRUCT:
-                return projectStruct(source, (Struct) record, target);
-            case ARRAY:
-                return projectArray(source, record, target);
-            case MAP:
-                return projectMap(source, record, target);
-        }
-        return null;
+        return switch (target.type()) {
+            case INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, BOOLEAN, BYTES, STRING ->
+                    projectPrimitive(source, record, target);
+            case STRUCT -> projectStruct(source, (Struct) record, target);
+            case ARRAY -> projectArray(source, record, target);
+            case MAP -> projectMap(source, record, target);
+        };
     }
 
     private static Object projectStruct(Schema source, Struct sourceStruct, Schema target) throws SchemaProjectorException {
@@ -159,35 +148,19 @@ public class SchemaProjector {
     private static Object projectPrimitive(Schema source, Object record, Schema target) throws SchemaProjectorException {
         assert source.type().isPrimitive();
         assert target.type().isPrimitive();
-        Object result;
         if (isPromotable(source.type(), target.type()) && record instanceof Number) {
             Number numberRecord = (Number) record;
-            switch (target.type()) {
-                case INT8:
-                    result = numberRecord.byteValue();
-                    break;
-                case INT16:
-                    result = numberRecord.shortValue();
-                    break;
-                case INT32:
-                    result = numberRecord.intValue();
-                    break;
-                case INT64:
-                    result = numberRecord.longValue();
-                    break;
-                case FLOAT32:
-                    result = numberRecord.floatValue();
-                    break;
-                case FLOAT64:
-                    result = numberRecord.doubleValue();
-                    break;
-                default:
-                    throw new SchemaProjectorException("Not promotable type.");
-            }
-        } else {
-            result = record;
+            return switch (target.type()) {
+                case INT8 -> numberRecord.byteValue();
+                case INT16 -> numberRecord.shortValue();
+                case INT32 -> numberRecord.intValue();
+                case INT64 -> numberRecord.longValue();
+                case FLOAT32 -> numberRecord.floatValue();
+                case FLOAT64 -> numberRecord.doubleValue();
+                default -> throw new SchemaProjectorException("Not promotable type.");
+            };
         }
-        return result;
+        return record;
     }
 
     private static boolean isPromotable(Type sourceType, Type targetType) {

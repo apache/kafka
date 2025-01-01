@@ -167,17 +167,15 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                 if (!(orig instanceof Long))
                     throw new DataException("Expected Unix timestamp to be a Long, but found " + orig.getClass());
                 Long unixTime = (Long) orig;
-                switch (config.unixPrecision) {
-                    case UNIX_PRECISION_SECONDS:
-                        return Timestamp.toLogical(Timestamp.SCHEMA, TimeUnit.SECONDS.toMillis(unixTime));
-                    case UNIX_PRECISION_MICROS:
-                        return Timestamp.toLogical(Timestamp.SCHEMA, TimeUnit.MICROSECONDS.toMillis(unixTime));
-                    case UNIX_PRECISION_NANOS:
-                        return Timestamp.toLogical(Timestamp.SCHEMA, TimeUnit.NANOSECONDS.toMillis(unixTime));
-                    case UNIX_PRECISION_MILLIS:
-                    default:
-                        return Timestamp.toLogical(Timestamp.SCHEMA, unixTime);
-                }
+                return switch (config.unixPrecision) {
+                    case UNIX_PRECISION_SECONDS ->
+                            Timestamp.toLogical(Timestamp.SCHEMA, TimeUnit.SECONDS.toMillis(unixTime));
+                    case UNIX_PRECISION_MICROS ->
+                            Timestamp.toLogical(Timestamp.SCHEMA, TimeUnit.MICROSECONDS.toMillis(unixTime));
+                    case UNIX_PRECISION_NANOS ->
+                            Timestamp.toLogical(Timestamp.SCHEMA, TimeUnit.NANOSECONDS.toMillis(unixTime));
+                    default -> Timestamp.toLogical(Timestamp.SCHEMA, unixTime);
+                };
             }
 
             @Override
@@ -188,17 +186,12 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             @Override
             public Long toType(Config config, Date orig) {
                 Long unixTimeMillis = Timestamp.fromLogical(Timestamp.SCHEMA, orig);
-                switch (config.unixPrecision) {
-                    case UNIX_PRECISION_SECONDS:
-                        return TimeUnit.MILLISECONDS.toSeconds(unixTimeMillis);
-                    case UNIX_PRECISION_MICROS:
-                        return TimeUnit.MILLISECONDS.toMicros(unixTimeMillis);
-                    case UNIX_PRECISION_NANOS:
-                        return TimeUnit.MILLISECONDS.toNanos(unixTimeMillis);
-                    case UNIX_PRECISION_MILLIS:
-                    default:
-                        return unixTimeMillis;
-                }
+                return switch (config.unixPrecision) {
+                    case UNIX_PRECISION_SECONDS -> TimeUnit.MILLISECONDS.toSeconds(unixTimeMillis);
+                    case UNIX_PRECISION_MICROS -> TimeUnit.MILLISECONDS.toMicros(unixTimeMillis);
+                    case UNIX_PRECISION_NANOS -> TimeUnit.MILLISECONDS.toNanos(unixTimeMillis);
+                    default -> unixTimeMillis;
+                };
             }
         });
 

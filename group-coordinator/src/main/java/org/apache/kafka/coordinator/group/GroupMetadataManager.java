@@ -5380,12 +5380,11 @@ public class GroupMetadataManager {
      * @return whether the group can accept a joining member.
      */
     private boolean acceptJoiningMember(ClassicGroup group, String memberId) {
-        switch (group.currentState()) {
-            case EMPTY:
-            case DEAD:
+        return switch (group.currentState()) {
+            case EMPTY, DEAD ->
                 // Always accept the request when the group is empty or dead
-                return true;
-            case PREPARING_REBALANCE:
+                    true;
+            case PREPARING_REBALANCE ->
                 // An existing member is accepted if it is already awaiting. New members are accepted
                 // up to the max group size. Note that the number of awaiting members is used here
                 // for two reasons:
@@ -5393,17 +5392,15 @@ public class GroupMetadataManager {
                 //    if the max group size was reduced.
                 // 2) using the number of awaiting members allows to kick out the last rejoining
                 //    members of the group.
-                return (group.hasMember(memberId) && group.member(memberId).isAwaitingJoin()) ||
-                    group.numAwaitingJoinResponse() < config.classicGroupMaxSize();
-            case COMPLETING_REBALANCE:
-            case STABLE:
+                    (group.hasMember(memberId) && group.member(memberId).isAwaitingJoin()) ||
+                            group.numAwaitingJoinResponse() < config.classicGroupMaxSize();
+            case COMPLETING_REBALANCE, STABLE ->
                 // An existing member is accepted. New members are accepted up to the max group size.
                 // Note that the group size is used here. When the group transitions to CompletingRebalance,
                 // members who haven't rejoined are removed.
-                return group.hasMember(memberId) || group.numMembers() < config.classicGroupMaxSize();
-            default:
-                throw new IllegalStateException("Unknown group state: " + group.stateAsString());
-        }
+                    group.hasMember(memberId) || group.numMembers() < config.classicGroupMaxSize();
+            default -> throw new IllegalStateException("Unknown group state: " + group.stateAsString());
+        };
     }
 
     /**
@@ -5738,24 +5735,12 @@ public class GroupMetadataManager {
 
     // Visible for testing
     static Errors appendGroupMetadataErrorToResponseError(Errors appendError) {
-        switch (appendError) {
-            case UNKNOWN_TOPIC_OR_PARTITION:
-            case NOT_ENOUGH_REPLICAS:
-            case REQUEST_TIMED_OUT:
-                return COORDINATOR_NOT_AVAILABLE;
-
-            case NOT_LEADER_OR_FOLLOWER:
-            case KAFKA_STORAGE_ERROR:
-                return NOT_COORDINATOR;
-
-            case MESSAGE_TOO_LARGE:
-            case RECORD_LIST_TOO_LARGE:
-            case INVALID_FETCH_SIZE:
-                return UNKNOWN_SERVER_ERROR;
-
-            default:
-                return appendError;
-        }
+        return switch (appendError) {
+            case UNKNOWN_TOPIC_OR_PARTITION, NOT_ENOUGH_REPLICAS, REQUEST_TIMED_OUT -> COORDINATOR_NOT_AVAILABLE;
+            case NOT_LEADER_OR_FOLLOWER, KAFKA_STORAGE_ERROR -> NOT_COORDINATOR;
+            case MESSAGE_TOO_LARGE, RECORD_LIST_TOO_LARGE, INVALID_FETCH_SIZE -> UNKNOWN_SERVER_ERROR;
+            default -> appendError;
+        };
     }
 
     private Optional<Errors> validateSyncGroup(
@@ -5861,35 +5846,31 @@ public class GroupMetadataManager {
     ) {
         validateClassicGroupHeartbeat(group, request.memberId(), request.groupInstanceId(), request.generationId());
 
-        switch (group.currentState()) {
-            case EMPTY:
-                return new CoordinatorResult<>(
+        return switch (group.currentState()) {
+            case EMPTY -> new CoordinatorResult<>(
                     Collections.emptyList(),
                     new HeartbeatResponseData().setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
-                );
-
-            case PREPARING_REBALANCE:
+            );
+            case PREPARING_REBALANCE -> {
                 rescheduleClassicGroupMemberHeartbeat(group, group.member(request.memberId()));
-                return new CoordinatorResult<>(
-                    Collections.emptyList(),
-                    new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
+                yield new CoordinatorResult<>(
+                        Collections.emptyList(),
+                        new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
                 );
-
-            case COMPLETING_REBALANCE:
-            case STABLE:
+            }
+            case COMPLETING_REBALANCE, STABLE -> {
                 // Consumers may start sending heartbeats after join-group response, while the group
                 // is in CompletingRebalance state. In this case, we should treat them as
                 // normal heartbeat requests and reset the timer
                 rescheduleClassicGroupMemberHeartbeat(group, group.member(request.memberId()));
-                return new CoordinatorResult<>(
-                    Collections.emptyList(),
-                    new HeartbeatResponseData()
+                yield new CoordinatorResult<>(
+                        Collections.emptyList(),
+                        new HeartbeatResponseData()
                 );
-
-            default:
-                throw new IllegalStateException("Reached unexpected state " +
+            }
+            default -> throw new IllegalStateException("Reached unexpected state " +
                     group.currentState() + " for group " + group.groupId());
-        }
+        };
     }
 
     /**

@@ -87,16 +87,12 @@ public class CreateConnectorRequest {
         }
 
         public TargetState toTargetState() {
-            switch (this) {
-                case RUNNING:
-                    return TargetState.STARTED;
-                case PAUSED:
-                    return TargetState.PAUSED;
-                case STOPPED:
-                    return TargetState.STOPPED;
-                default:
-                    throw new IllegalArgumentException("Unknown initial state: " + this);
-            }
+            return switch (this) {
+                case RUNNING -> TargetState.STARTED;
+                case PAUSED -> TargetState.PAUSED;
+                case STOPPED -> TargetState.STOPPED;
+                default -> throw new IllegalArgumentException("Unknown initial state: " + this);
+            };
         }
     }
 }

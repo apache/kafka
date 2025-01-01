@@ -324,30 +324,13 @@ public class SmokeTestDriver extends SmokeTestUtil {
     public static class NumberDeserializer implements Deserializer<Number> {
         @Override
         public Number deserialize(final String topic, final byte[] data) {
-            final Number value;
-            switch (topic) {
-                case "data":
-                case "echo":
-                case "min":
-                case "min-raw":
-                case "min-suppressed":
-                case "sws-raw":
-                case "sws-suppressed":
-                case "max":
-                case "dif":
-                    value = intSerde.deserializer().deserialize(topic, data);
-                    break;
-                case "sum":
-                case "cnt":
-                case "tagg":
-                    value = longSerde.deserializer().deserialize(topic, data);
-                    break;
-                case "avg":
-                    value = doubleSerde.deserializer().deserialize(topic, data);
-                    break;
-                default:
-                    throw new RuntimeException("unknown topic: " + topic);
-            }
+            final Number value = switch (topic) {
+                case "data", "echo", "min", "min-raw", "min-suppressed", "sws-raw", "sws-suppressed", "max", "dif" ->
+                        intSerde.deserializer().deserialize(topic, data);
+                case "sum", "cnt", "tagg" -> longSerde.deserializer().deserialize(topic, data);
+                case "avg" -> doubleSerde.deserializer().deserialize(topic, data);
+                default -> throw new RuntimeException("unknown topic: " + topic);
+            };
             return value;
         }
     }

@@ -129,23 +129,13 @@ public final class ConsumeAction implements TieredStorageTestAction {
 
         // (B) Assessment of the interactions between the source broker and the second-tier storage.
         for (LocalTieredStorageEvent.EventType eventType : Arrays.asList(FETCH_SEGMENT, FETCH_OFFSET_INDEX, FETCH_TIME_INDEX, FETCH_TRANSACTION_INDEX)) {
-            Optional<LocalTieredStorageEvent> latestEvent;
-            switch (eventType) {
-                case FETCH_SEGMENT:
-                    latestEvent = latestEventSoFar;
-                    break;
-                case FETCH_OFFSET_INDEX:
-                    latestEvent = latestOffsetIdxEventSoFar;
-                    break;
-                case FETCH_TIME_INDEX:
-                    latestEvent = latestTimeIdxEventSoFar;
-                    break;
-                case FETCH_TRANSACTION_INDEX:
-                    latestEvent = latestTxnIdxEventSoFar;
-                    break;
-                default:
-                    latestEvent = Optional.empty();
-            }
+            Optional<LocalTieredStorageEvent> latestEvent = switch (eventType) {
+                case FETCH_SEGMENT -> latestEventSoFar;
+                case FETCH_OFFSET_INDEX -> latestOffsetIdxEventSoFar;
+                case FETCH_TIME_INDEX -> latestTimeIdxEventSoFar;
+                case FETCH_TRANSACTION_INDEX -> latestTxnIdxEventSoFar;
+                default -> Optional.empty();
+            };
 
             List<LocalTieredStorageEvent> events = history.getEvents(eventType, topicPartition);
             List<LocalTieredStorageEvent> eventsInScope = latestEvent
@@ -153,23 +143,13 @@ public final class ConsumeAction implements TieredStorageTestAction {
                     .orElse(events);
 
             RemoteFetchCount remoteFetchCount = remoteFetchSpec.getRemoteFetchCount();
-            RemoteFetchCount.FetchCountAndOp expectedCountAndOp;
-            switch (eventType) {
-                case FETCH_SEGMENT:
-                    expectedCountAndOp = remoteFetchCount.getSegmentFetchCountAndOp();
-                    break;
-                case FETCH_OFFSET_INDEX:
-                    expectedCountAndOp = remoteFetchCount.getOffsetIdxFetchCountAndOp();
-                    break;
-                case FETCH_TIME_INDEX:
-                    expectedCountAndOp = remoteFetchCount.getTimeIdxFetchCountAndOp();
-                    break;
-                case FETCH_TRANSACTION_INDEX:
-                    expectedCountAndOp = remoteFetchCount.getTxnIdxFetchCountAndOp();
-                    break;
-                default:
-                    expectedCountAndOp = new RemoteFetchCount.FetchCountAndOp(-1, RemoteFetchCount.OperationType.EQUALS_TO);
-            }
+            RemoteFetchCount.FetchCountAndOp expectedCountAndOp = switch (eventType) {
+                case FETCH_SEGMENT -> remoteFetchCount.getSegmentFetchCountAndOp();
+                case FETCH_OFFSET_INDEX -> remoteFetchCount.getOffsetIdxFetchCountAndOp();
+                case FETCH_TIME_INDEX -> remoteFetchCount.getTimeIdxFetchCountAndOp();
+                case FETCH_TRANSACTION_INDEX -> remoteFetchCount.getTxnIdxFetchCountAndOp();
+                default -> new RemoteFetchCount.FetchCountAndOp(-1, RemoteFetchCount.OperationType.EQUALS_TO);
+            };
 
             String message = String.format("Number of %s requests from broker %d to the tier storage does not match the expected value for topic-partition %s",
                     eventType, remoteFetchSpec.getSourceBrokerId(), remoteFetchSpec.getTopicPartition());

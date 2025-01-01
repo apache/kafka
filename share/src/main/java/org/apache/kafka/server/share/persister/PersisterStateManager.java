@@ -907,14 +907,11 @@ public class PersisterStateManager {
      */
     private static class RequestCoalescerHelper {
         public static AbstractRequest.Builder<? extends AbstractRequest> coalesceRequests(String groupId, RPCType rpcType, List<? extends PersisterStateManagerHandler> handlers) {
-            switch (rpcType) {
-                case WRITE:
-                    return coalesceWrites(groupId, handlers);
-                case READ:
-                    return coalesceReads(groupId, handlers);
-                default:
-                    throw new RuntimeException("Unknown rpc type: " + rpcType);
-            }
+            return switch (rpcType) {
+                case WRITE -> coalesceWrites(groupId, handlers);
+                case READ -> coalesceReads(groupId, handlers);
+                default -> throw new RuntimeException("Unknown rpc type: " + rpcType);
+            };
         }
 
         private static AbstractRequest.Builder<? extends AbstractRequest> coalesceWrites(String groupId, List<? extends PersisterStateManagerHandler> handlers) {

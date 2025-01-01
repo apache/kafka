@@ -473,36 +473,24 @@ public final class RecordsIteratorTest {
     }
 
     private static ApiMessage defaultControlRecord(ControlRecordType type) {
-        switch (type) {
-            case LEADER_CHANGE:
-                return new LeaderChangeMessage();
-            case SNAPSHOT_HEADER:
-                return new SnapshotHeaderRecord();
-            case SNAPSHOT_FOOTER:
-                return new SnapshotFooterRecord();
-            case KRAFT_VERSION:
-                return new KRaftVersionRecord();
-            case KRAFT_VOTERS:
-                return new VotersRecord();
-            default:
-                throw new RuntimeException("Should not happen. Poorly configured test");
-        }
+        return switch (type) {
+            case LEADER_CHANGE -> new LeaderChangeMessage();
+            case SNAPSHOT_HEADER -> new SnapshotHeaderRecord();
+            case SNAPSHOT_FOOTER -> new SnapshotFooterRecord();
+            case KRAFT_VERSION -> new KRaftVersionRecord();
+            case KRAFT_VOTERS -> new VotersRecord();
+            default -> throw new RuntimeException("Should not happen. Poorly configured test");
+        };
     }
 
     private static short defaultControlRecordVersion(ControlRecordType type) {
-        switch (type) {
-            case LEADER_CHANGE:
-                return ControlRecordUtils.LEADER_CHANGE_CURRENT_VERSION;
-            case SNAPSHOT_HEADER:
-                return ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION;
-            case SNAPSHOT_FOOTER:
-                return ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION;
-            case KRAFT_VERSION:
-                return ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION;
-            case KRAFT_VOTERS:
-                return ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION;
-            default:
-                throw new RuntimeException("Should not happen. Poorly configured test");
-        }
+        return switch (type) {
+            case LEADER_CHANGE -> ControlRecordUtils.LEADER_CHANGE_CURRENT_VERSION;
+            case SNAPSHOT_HEADER -> ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION;
+            case SNAPSHOT_FOOTER -> ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION;
+            case KRAFT_VERSION -> ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION;
+            case KRAFT_VOTERS -> ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION;
+            default -> throw new RuntimeException("Should not happen. Poorly configured test");
+        };
     }
 }

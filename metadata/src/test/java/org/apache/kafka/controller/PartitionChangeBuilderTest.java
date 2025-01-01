@@ -119,16 +119,12 @@ public class PartitionChangeBuilderTest {
     private static final Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
     private static MetadataVersion metadataVersionForPartitionChangeRecordVersion(short version) {
-        switch (version) {
-            case (short) 0:
-                return MetadataVersion.IBP_3_7_IV0;
-            case (short) 1:
-                return MetadataVersion.IBP_3_7_IV2;
-            case (short) 2:
-                return MetadataVersion.IBP_4_0_IV1;
-            default:
-                throw new RuntimeException("Unknown PartitionChangeRecord version " + version);
-        }
+        return switch (version) {
+            case (short) 0 -> MetadataVersion.IBP_3_7_IV0;
+            case (short) 1 -> MetadataVersion.IBP_3_7_IV2;
+            case (short) 2 -> MetadataVersion.IBP_4_0_IV1;
+            default -> throw new RuntimeException("Unknown PartitionChangeRecord version " + version);
+        };
     }
 
     private static PartitionChangeBuilder createFooBuilder(MetadataVersion metadataVersion) {

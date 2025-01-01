@@ -1248,10 +1248,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) {
         ApiError apiError = ApiError.fromThrowable(exception);
 
-        switch (apiError.error()) {
-            case UNKNOWN_TOPIC_OR_PARTITION:
-            case NOT_ENOUGH_REPLICAS:
-            case REQUEST_TIMED_OUT:
+        return switch (apiError.error()) {
+            case UNKNOWN_TOPIC_OR_PARTITION, NOT_ENOUGH_REPLICAS, REQUEST_TIMED_OUT ->
                 // Remap REQUEST_TIMED_OUT to NOT_COORDINATOR, since consumers on versions prior
                 // to 3.9 do not expect the error and won't retry the request. NOT_COORDINATOR
                 // additionally triggers coordinator re-lookup, which is necessary if the client is
@@ -1261,20 +1259,18 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 // NOT_ENOUGH_REPLICAS and REQUEST_TIMED_OUT to COORDINATOR_NOT_AVAILABLE,
                 // COORDINATOR_NOT_AVAILABLE is also not handled by consumers on versions prior to
                 // 3.9.
-                return new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                    .setGroupId(request.groupId())
-                    .setErrorCode(Errors.NOT_COORDINATOR.code());
-
-            default:
-                return handleOperationException(
+                    new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                            .setGroupId(request.groupId())
+                            .setErrorCode(Errors.NOT_COORDINATOR.code());
+            default -> handleOperationException(
                     operationName,
                     request,
                     exception,
                     (error, __) -> new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                        .setGroupId(request.groupId())
-                        .setErrorCode(error.code()),
+                            .setGroupId(request.groupId())
+                            .setErrorCode(error.code()),
                     log
-                );
-        }
+            );
+        };
     }
 }

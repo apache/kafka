@@ -70,13 +70,10 @@ public enum EligibleLeaderReplicasVersion implements FeatureVersion {
     }
 
     public static EligibleLeaderReplicasVersion fromFeatureLevel(short version) {
-        switch (version) {
-            case 0:
-                return ELRV_0;
-            case 1:
-                return ELRV_1;
-            default:
-                throw new RuntimeException("Unknown eligible leader replicas feature level: " + (int) version);
-        }
+        return switch (version) {
+            case 0 -> ELRV_0;
+            case 1 -> ELRV_1;
+            default -> throw new RuntimeException("Unknown eligible leader replicas feature level: " + (int) version);
+        };
     }
 }
