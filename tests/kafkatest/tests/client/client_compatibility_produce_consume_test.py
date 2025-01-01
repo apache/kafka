@@ -27,12 +27,6 @@ from kafkatest.version import DEV_BRANCH, \
     LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
     LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, KafkaVersion
 
-def for_test(test_context):
-    default_version = 'dev'
-    arg_name = 'broker_version'
-    version_string = default_version if not test_context.injected_args else test_context.injected_args.get(arg_name, default_version)
-    return KafkaVersion(version_string)
-
 class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     """
     These tests validate that we can use a new client to produce and consume from older brokers.
@@ -54,7 +48,6 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
                     "replication-factor": 2
                 }
             },
-            version=for_test(test_context)
         )
         self.num_partitions = 10
         self.timeout_sec = 60
@@ -93,6 +86,10 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     @parametrize(broker_version=str(LATEST_3_9), metadata_quorum=quorum.isolated_kraft)
     def test_produce_consume(self, broker_version, metadata_quorum=quorum.zk):
         print("running producer_consumer_compat with broker_version = %s" % broker_version, flush=True)
+        self.kafka.set_version(KafkaVersion(broker_version))
+        if metadata_quorum == quorum.isolated_kraft:
+            for node in self.kafka.controller_quorum.nodes:
+                node.version = KafkaVersion(broker_version)
         self.kafka.security_protocol = "PLAINTEXT"
         self.kafka.interbroker_security_protocol = self.kafka.security_protocol
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,

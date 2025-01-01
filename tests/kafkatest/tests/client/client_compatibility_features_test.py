@@ -53,12 +53,6 @@ def run_command(node, cmd, ssh_log_file):
             print(e, flush=True)
             raise
 
-def for_test(test_context):
-    default_version = 'dev'
-    arg_name = 'broker_version'
-    version_string = default_version if not test_context.injected_args else test_context.injected_args.get(arg_name, default_version)
-    return KafkaVersion(version_string)
-
 class ClientCompatibilityFeaturesTest(Test):
     """
     Tests clients for the presence or absence of specific features when communicating with brokers with various
@@ -77,7 +71,7 @@ class ClientCompatibilityFeaturesTest(Test):
             "partitions": 1, # Use only one partition to avoid worrying about ordering
             "replication-factor": 3
             }}
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics=self.topics, version=for_test(test_context))
+        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics=self.topics)
         # Always use the latest version of org.apache.kafka.tools.ClientCompatibilityTest
         # so store away the path to the DEV version before we set the Kafka version
         self.dev_script_path = self.kafka.path.script("kafka-run-class.sh", self.kafka.nodes[0])
@@ -133,6 +127,10 @@ class ClientCompatibilityFeaturesTest(Test):
     def run_compatibility_test(self, broker_version, metadata_quorum=quorum.zk):
         if self.zk:
             self.zk.start()
+        self.kafka.set_version(KafkaVersion(broker_version))
+        if metadata_quorum == quorum.isolated_kraft:
+            for node in self.kafka.controller_quorum.nodes:
+                node.version = KafkaVersion(broker_version)
         self.kafka.start()
         features = get_broker_features(broker_version)
         self.invoke_compatibility_program(features)
