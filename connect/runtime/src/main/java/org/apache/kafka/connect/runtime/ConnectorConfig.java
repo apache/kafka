@@ -584,11 +584,10 @@ public class ConnectorConfig extends AbstractConfig {
 
             LinkedHashSet<?> uniqueAliases = new LinkedHashSet<>((List<?>) aliases);
             for (Object o : uniqueAliases) {
-                if (!(o instanceof String)) {
+                if (!(o instanceof String alias)) {
                     throw new ConfigException("Item in " + aliasConfig + " property is not of "
                             + "type String");
                 }
-                String alias = (String) o;
                 final String prefix = aliasConfig + "." + alias + ".";
                 final String group = aliasGroup + ": " + alias;
                 int orderInGroup = 0;

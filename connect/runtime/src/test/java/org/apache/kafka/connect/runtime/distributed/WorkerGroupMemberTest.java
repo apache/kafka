@@ -78,9 +78,8 @@ public class WorkerGroupMemberTest {
         boolean foundJmxReporter = false;
         assertEquals(2, member.metrics().reporters().size());
         for (MetricsReporter reporter : member.metrics().reporters()) {
-            if (reporter instanceof MockConnectMetrics.MockMetricsReporter) {
+            if (reporter instanceof MockConnectMetrics.MockMetricsReporter mockMetricsReporter) {
                 foundMockReporter = true;
-                MockConnectMetrics.MockMetricsReporter mockMetricsReporter = (MockConnectMetrics.MockMetricsReporter) reporter;
                 assertEquals("cluster-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
                 assertEquals("group-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_GROUP_ID));
             }

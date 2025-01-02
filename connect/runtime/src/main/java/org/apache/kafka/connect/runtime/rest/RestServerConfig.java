@@ -307,11 +307,10 @@ public abstract class RestServerConfig extends AbstractConfig {
     private static class ListenersValidator implements ConfigDef.Validator {
         @Override
         public void ensureValid(String name, Object value) {
-            if (!(value instanceof List)) {
+            if (!(value instanceof List<?> items)) {
                 throw new ConfigException("Invalid value type for listeners (expected list of URLs , ex: http://localhost:8080,https://localhost:8443).");
             }
 
-            List<?> items = (List<?>) value;
             if (items.isEmpty()) {
                 throw new ConfigException("Invalid value for listeners, at least one URL is expected, ex: http://localhost:8080,https://localhost:8443.");
             }
@@ -339,11 +338,10 @@ public abstract class RestServerConfig extends AbstractConfig {
                 return;
             }
 
-            if (!(value instanceof List)) {
+            if (!(value instanceof List<?> items)) {
                 throw new ConfigException("Invalid value type for admin.listeners (expected list).");
             }
 
-            List<?> items = (List<?>) value;
             if (items.isEmpty()) {
                 return;
             }
