@@ -857,14 +857,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         ) {
             if (currentBatch == null) {
                 LogConfig logConfig = partitionWriter.config(tp);
-                byte magic = logConfig.recordVersion().value;
                 int maxBatchSize = logConfig.maxMessageSize();
                 long prevLastWrittenOffset = coordinator.lastWrittenOffset();
                 ByteBuffer buffer = bufferSupplier.get(maxBatchSize);
 
                 MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                     buffer,
-                    magic,
+                    RecordBatch.CURRENT_MAGIC_VALUE,
                     compression,
                     TimestampType.CREATE_TIME,
                     0L,

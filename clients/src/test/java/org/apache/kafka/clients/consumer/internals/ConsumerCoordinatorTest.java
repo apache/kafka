@@ -677,7 +677,6 @@ public abstract class ConsumerCoordinatorTest {
                                                 .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
                                                 .setCommittedMetadata("")
                                                 .setCommittedOffset(13L)
-                                                .setCommitTimestamp(0)
                                 ))
                         )
                 );

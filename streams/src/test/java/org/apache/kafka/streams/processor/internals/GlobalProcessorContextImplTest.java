@@ -20,7 +20,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
@@ -122,7 +121,7 @@ public class GlobalProcessorContextImplTest {
         when(stateManager.globalStore(GLOBAL_KEY_VALUE_STORE_NAME)).thenReturn(mock(KeyValueStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_KEY_VALUE_STORE_NAME);
         try {
-            store.init((StateStoreContext) null, null);
+            store.init(null, null);
             fail("Should have thrown UnsupportedOperationException.");
         } catch (final UnsupportedOperationException expected) { }
     }
@@ -132,7 +131,7 @@ public class GlobalProcessorContextImplTest {
         when(stateManager.globalStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME)).thenReturn(mock(TimestampedKeyValueStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME);
         try {
-            store.init((StateStoreContext) null, null);
+            store.init(null, null);
             fail("Should have thrown UnsupportedOperationException.");
         } catch (final UnsupportedOperationException expected) { }
     }
@@ -142,7 +141,7 @@ public class GlobalProcessorContextImplTest {
         when(stateManager.globalStore(GLOBAL_WINDOW_STORE_NAME)).thenReturn(mock(WindowStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_WINDOW_STORE_NAME);
         try {
-            store.init((StateStoreContext) null, null);
+            store.init(null, null);
             fail("Should have thrown UnsupportedOperationException.");
         } catch (final UnsupportedOperationException expected) { }
     }
@@ -152,7 +151,7 @@ public class GlobalProcessorContextImplTest {
         when(stateManager.globalStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME)).thenReturn(mock(TimestampedWindowStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME);
         try {
-            store.init((StateStoreContext) null, null);
+            store.init(null, null);
             fail("Should have thrown UnsupportedOperationException.");
         } catch (final UnsupportedOperationException expected) { }
     }
@@ -162,7 +161,7 @@ public class GlobalProcessorContextImplTest {
         when(stateManager.globalStore(GLOBAL_SESSION_STORE_NAME)).thenReturn(mock(SessionStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_SESSION_STORE_NAME);
         try {
-            store.init((StateStoreContext) null, null);
+            store.init(null, null);
             fail("Should have thrown UnsupportedOperationException.");
         } catch (final UnsupportedOperationException expected) { }
     }

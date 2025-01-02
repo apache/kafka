@@ -678,7 +678,6 @@ class GroupCoordinatorAdapterTest {
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
               .setCommittedOffset(100)
-              .setCommitTimestamp(now)
               .setCommittedLeaderEpoch(1)
           ).asJava)
       ).asJava)

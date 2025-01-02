@@ -90,7 +90,7 @@ public class ConsumerGroupDescription {
         this.members = members == null ? Collections.emptyList() : List.copyOf(members);
         this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
         this.type = type;
-        this.groupState = GroupState.parse(state.name());
+        this.groupState = GroupState.parse(state.toString());
         this.coordinator = coordinator;
         this.authorizedOperations = authorizedOperations;
         this.groupEpoch = Optional.empty();
@@ -184,7 +184,7 @@ public class ConsumerGroupDescription {
      */
     @Deprecated
     public ConsumerGroupState state() {
-        return ConsumerGroupState.parse(groupState.name());
+        return ConsumerGroupState.parse(groupState.toString());
     }
 
     /**

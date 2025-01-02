@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,7 +54,7 @@ public class StoreSerdeInitializerTest {
         final Serde<String> keySerde = new Serdes.StringSerde();
         final Serde<String> valueSerde = new Serdes.StringSerde();
 
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
 
         utilsMock.when(() -> WrappingNullableUtils.prepareKeySerde(any(), any())).thenReturn(keySerde);
         utilsMock.when(() -> WrappingNullableUtils.prepareValueSerde(any(), any())).thenReturn(valueSerde);
@@ -69,7 +69,7 @@ public class StoreSerdeInitializerTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnUndefinedKeySerdeForProcessorContext() {
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
 
         utilsMock.when(() -> WrappingNullableUtils.prepareKeySerde(any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
@@ -84,7 +84,7 @@ public class StoreSerdeInitializerTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnUndefinedValueSerdeForProcessorContext() {
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
 
         utilsMock.when(() -> WrappingNullableUtils.prepareValueSerde(any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
@@ -99,7 +99,7 @@ public class StoreSerdeInitializerTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnUndefinedKeySerdeForStateStoreContext() {
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
 
         utilsMock.when(() -> WrappingNullableUtils.prepareKeySerde(any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
@@ -114,7 +114,7 @@ public class StoreSerdeInitializerTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnUndefinedValueSerdeForStateStoreContext() {
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
 
         utilsMock.when(() -> WrappingNullableUtils.prepareValueSerde(any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
@@ -129,7 +129,7 @@ public class StoreSerdeInitializerTest {
 
     @Test
     public void shouldThrowStreamsExceptionWithExplicitErrorMessageForProcessorContext() {
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
 
         utilsMock.when(() -> WrappingNullableUtils.prepareKeySerde(any(), any())).thenThrow(new StreamsException(""));
 
@@ -142,7 +142,7 @@ public class StoreSerdeInitializerTest {
 
     @Test
     public void shouldThrowStreamsExceptionWithExplicitErrorMessageForStateStoreContext() {
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
 
         utilsMock.when(() -> WrappingNullableUtils.prepareValueSerde(any(), any())).thenThrow(new StreamsException(""));
 

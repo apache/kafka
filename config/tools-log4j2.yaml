@@ -12,10 +12,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-log4j.rootLogger=INFO, stdout
+Configuration:
+  Properties:
+    Property:
+      - name: "logPattern"
+        value: "[%d] %p %m (%c)%n"
 
-log4j.appender.stdout=org.apache.log4j.ConsoleAppender
-log4j.appender.stdout.layout=org.apache.log4j.PatternLayout
-log4j.appender.stdout.layout.ConversionPattern=[%d] %p %m (%c:%L)%n
+  Appenders:
+    Console:
+      name: STDERR
+      target: SYSTEM_ERR
+      PatternLayout:
+        pattern: "${logPattern}"
+  Loggers:
+    Root:
+      level: WARN
+      AppenderRef:
+        - ref: STDERR
 
-log4j.logger.org.apache.kafka=INFO

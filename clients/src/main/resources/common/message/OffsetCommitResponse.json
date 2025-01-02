@@ -17,6 +17,8 @@
   "apiKey": 8,
   "type": "response",
   "name": "OffsetCommitResponse",
+  // Versions 0-1 were removed in Apache Kafka 4.0, Version 2 is the new baseline.
+  //
   // Versions 1 and 2 are the same as version 0.
   //
   // Version 3 adds the throttle time to the response.
@@ -32,7 +34,7 @@
   // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). The response is
   // the same as version 8 but can return STALE_MEMBER_EPOCH when the new consumer group protocol is used and
   // GROUP_ID_NOT_FOUND when the group does not exist for both protocols.
-  "validVersions": "0-9",
+  "validVersions": "2-9",
   "flexibleVersions": "8+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)

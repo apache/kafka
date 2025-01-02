@@ -137,7 +137,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         throw new UnsupportedOperationException("cannot initialize a logical segment");
     }
 

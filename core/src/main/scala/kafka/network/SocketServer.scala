@@ -33,7 +33,7 @@ import kafka.server.{ApiVersionManager, BrokerReconfigurable, KafkaConfig}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import kafka.utils._
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Meter, Rate}
@@ -888,6 +888,17 @@ private[kafka] object Processor {
   val NetworkProcessorMetricTag = "networkProcessor"
   val ListenerMetricTag = "listener"
   val ConnectionQueueSize = 20
+
+  private[network] def parseRequestHeader(apiVersionManager: ApiVersionManager, buffer: ByteBuffer): RequestHeader = {
+    val header = RequestHeader.parse(buffer)
+    if (apiVersionManager.isApiEnabled(header.apiKey, header.apiVersion)) {
+      header
+    } else if (header.isApiVersionSupported()) {
+      throw new InvalidRequestException(s"Received request api key ${header.apiKey} with version ${header.apiVersion} which is not enabled")
+    } else {
+      throw new UnsupportedVersionException(s"Received request api key ${header.apiKey} with version ${header.apiVersion} which is not supported")
+    }
+  }
 }
 
 /**
@@ -1103,21 +1114,12 @@ private[kafka] class Processor(
     }
   }
 
-  private def parseRequestHeader(buffer: ByteBuffer): RequestHeader = {
-    val header = RequestHeader.parse(buffer)
-    if (apiVersionManager.isApiEnabled(header.apiKey, header.apiVersion)) {
-      header
-    } else {
-      throw new InvalidRequestException(s"Received request api key ${header.apiKey} with version ${header.apiVersion} which is not enabled")
-    }
-  }
-
   private def processCompletedReceives(): Unit = {
     selector.completedReceives.forEach { receive =>
       try {
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
-            val header = parseRequestHeader(receive.payload)
+            val header = parseRequestHeader(apiVersionManager, receive.payload)
             if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
               () => time.nanoseconds()))
               trace(s"Begin re-authentication: $channel")

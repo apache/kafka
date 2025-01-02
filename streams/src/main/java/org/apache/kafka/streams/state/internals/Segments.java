@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 
 import java.util.List;
 
@@ -28,11 +28,11 @@ interface Segments<S extends Segment> {
 
     S segmentForTimestamp(final long timestamp);
 
-    S getOrCreateSegmentIfLive(final long segmentId, final ProcessorContext context, final long streamTime);
+    S getOrCreateSegmentIfLive(final long segmentId, final StateStoreContext context, final long streamTime);
 
-    S getOrCreateSegment(final long segmentId, final ProcessorContext context);
+    S getOrCreateSegment(final long segmentId, final StateStoreContext context);
 
-    void openExisting(final ProcessorContext context, final long streamTime);
+    void openExisting(final StateStoreContext context, final long streamTime);
 
     List<S> segments(final long timeFrom, final long timeTo, final boolean forward);
 

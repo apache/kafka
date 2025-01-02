@@ -54,7 +54,7 @@ import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.common.NodeToControllerChannelManager
-import org.apache.kafka.server.config.{ConfigType, ZkConfigs}
+import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
@@ -140,8 +140,6 @@ class KafkaServer(
   var adminManager: ZkAdminManager = _
   var tokenManager: DelegationTokenManager = _
 
-  var dynamicConfigHandlers: Map[String, ConfigHandler] = _
-  private var dynamicConfigManager: ZkConfigManager = _
   var credentialProvider: CredentialProvider = _
   var tokenCache: DelegationTokenCache = _
 
@@ -519,17 +517,6 @@ class KafkaServer(
         config.dynamicConfig.addReconfigurables(this)
         Option(logManager.cleaner).foreach(config.dynamicConfig.addBrokerReconfigurable)
 
-        /* start dynamic config manager */
-        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers, Some(kafkaController)),
-                                                           ConfigType.CLIENT -> new ClientIdConfigHandler(quotaManagers),
-                                                           ConfigType.USER -> new UserConfigHandler(quotaManagers, credentialProvider),
-                                                           ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
-                                                           ConfigType.IP -> new IpConfigHandler(socketServer.connectionQuotas))
-
-        // Create the config manager. start listening to notifications
-        dynamicConfigManager = new ZkConfigManager(zkClient, dynamicConfigHandlers)
-        dynamicConfigManager.startup()
-
         val enableRequestProcessingFuture = socketServer.enableRequestProcessing(authorizerFutures)
         // Block here until all the authorizer futures are complete
         try {
@@ -858,9 +845,6 @@ class KafkaServer(
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown(), this)
         _brokerState = BrokerState.SHUTTING_DOWN
-
-        if (dynamicConfigManager != null)
-          CoreUtils.swallow(dynamicConfigManager.shutdown(), this)
 
         // Stop socket server to stop accepting any more connections and requests.
         // Socket server will be shutdown towards the end of the sequence.
