@@ -680,8 +680,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * those offsets as part of the current transaction. These offsets will be considered
      * committed only if the transaction is committed successfully. The committed offset should
      * be the next message your application will consume, i.e. {@code nextRecordToBeProcessed.offset()}
-     * (or {@link ConsumerRecords#nextOffsets()}). You should also add the {@link ConsumerRecord#leaderEpoch()}
-     * (or {@code nextOffsets().get(...).leaderEpoch()}) as commit metadata.
+     * (or {@link ConsumerRecords#nextOffsets()}). You should also add the leader epoch as commit metadata,
+     * which can be obtained from {@link ConsumerRecord#leaderEpoch()} or {@link ConsumerRecords#nextOffsets()}.
      * <p>
      * This method should be used when you need to batch consumed and produced messages
      * together, typically in a consume-transform-produce pattern. Thus, the specified
