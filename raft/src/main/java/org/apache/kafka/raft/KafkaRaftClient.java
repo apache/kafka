@@ -1028,7 +1028,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             }
         } else {
             throw new IllegalStateException(
-                "Expected to be a NomineeState (Prospective or Candidate), but quorum state is " + state
+                "Expected to be a NomineeState (Prospective or Candidate), but current state is " + state
             );
         }
     }

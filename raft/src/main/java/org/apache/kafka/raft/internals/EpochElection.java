@@ -42,6 +42,7 @@ public class EpochElection {
 
     /**
      * Record a vote from a voter.
+     *
      * @param voterId The id of the voter
      * @param isGranted true if the vote is granted, false if it is rejected
      * @return true if the voter had not been previously recorded
@@ -59,6 +60,7 @@ public class EpochElection {
 
     /**
      * Returns if a voter has granted the vote.
+     *
      * @param voterId The id of the voter
      * @throws IllegalArgumentException if the voter is not in the set of voters
      */
@@ -68,6 +70,7 @@ public class EpochElection {
 
     /**
      * Returns if a voter has rejected the vote.
+     * 
      * @param voterId The id of the voter
      * @throws IllegalArgumentException if the voter is not in the set of voters
      */
