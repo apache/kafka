@@ -398,9 +398,13 @@ public class KafkaRaftClientTest {
         );
         context.client.poll();
 
+        // The node will transition to unattached with epoch + 1 after election timeout passes
         context.time.sleep(context.electionTimeoutMs());
         context.client.poll();
-        assertTrue(context.client.quorum().isProspective());
+        assertTrue(context.client.quorum().isUnattached());
+        assertEquals(epoch + 1, context.currentEpoch());
+        UnattachedState unattached = context.client.quorum().unattachedStateOrThrow();
+        assertEquals(0, unattached.remainingElectionTimeMs(context.time.milliseconds()));
     }
 
     @ParameterizedTest
@@ -998,6 +1002,42 @@ public class KafkaRaftClientTest {
         assertEquals(electionTimestamp, record.timestamp());
         RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, firstNodeId, secondNodeId),
             Arrays.asList(voterId, localId), record.key(), record.value());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testInitializeAsOnlyVoterWithEmptyElectionState(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+        context.assertElectedLeader(1, localId);
+        assertEquals(0L, context.log.endOffset().offset());
+        assertTrue(context.client.quorum().isLeader());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testInitializeAsCandidateAndOnlyVoter(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
+            .withKip853Rpc(withKip853Rpc)
+            .withVotedCandidate(2, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
+            .build();
+        context.assertElectedLeader(2, localId);
+        assertTrue(context.client.quorum().isLeader());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testInitializeAsResignedAndOnlyVoter(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
+            .withKip853Rpc(withKip853Rpc)
+            .withElectedLeader(2, localId)
+            .build();
+        context.assertElectedLeader(3, localId);
+        assertTrue(context.client.quorum().isLeader());
     }
 
     @ParameterizedTest

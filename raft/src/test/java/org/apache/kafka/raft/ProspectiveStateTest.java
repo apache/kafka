@@ -309,7 +309,7 @@ public class ProspectiveStateTest {
             ElectionState.withElectedLeader(
                 epoch,
                 1,
-                voters.voterIds()
+                Optional.empty(), voters.voterIds()
             ),
             state.election()
         );

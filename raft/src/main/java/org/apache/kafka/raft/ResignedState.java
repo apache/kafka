@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -75,7 +76,7 @@ public class ResignedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withElectedLeader(epoch, localId, voters);
+        return ElectionState.withElectedLeader(epoch, localId, Optional.empty(), voters);
     }
 
     @Override

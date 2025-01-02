@@ -59,17 +59,17 @@ public class FileQuorumStateStoreTest {
         Set<Integer> voters = Set.of(voter1, voter2, voter3);
 
         stateStore.writeElectionState(
-            ElectionState.withElectedLeader(epoch, voter1, voters),
+            ElectionState.withElectedLeader(epoch, voter1, Optional.empty(), voters),
             kraftVersion
         );
 
         final Optional<ElectionState> expected;
         if (kraftVersion.isReconfigSupported()) {
             expected = Optional.of(
-                ElectionState.withElectedLeader(epoch, voter1, Collections.emptySet())
+                ElectionState.withElectedLeader(epoch, voter1, Optional.empty(), Collections.emptySet())
             );
         } else {
-            expected = Optional.of(ElectionState.withElectedLeader(epoch, voter1, voters));
+            expected = Optional.of(ElectionState.withElectedLeader(epoch, voter1, Optional.empty(), voters));
         }
 
         assertEquals(expected, stateStore.readElectionState());

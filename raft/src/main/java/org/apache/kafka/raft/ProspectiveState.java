@@ -80,10 +80,6 @@ public class ProspectiveState implements NomineeState {
         epochElection.recordVote(localId, true);
     }
 
-    public int localId() {
-        return localId;
-    }
-
     public Optional<ReplicaKey> votedKey() {
         return votedKey;
     }
@@ -137,7 +133,13 @@ public class ProspectiveState implements NomineeState {
 
     @Override
     public ElectionState election() {
-        return new ElectionState(epoch, leaderId, votedKey, voters.voterIds());
+        if (leaderId.isPresent()) {
+            return ElectionState.withElectedLeader(epoch, leaderId.getAsInt(), votedKey, voters.voterIds());
+        } else if (votedKey.isPresent()) {
+            return ElectionState.withVotedCandidate(epoch, votedKey.get(), voters.voterIds());
+        } else {
+            return ElectionState.withUnknownLeader(epoch, voters.voterIds());
+        }
     }
 
     @Override

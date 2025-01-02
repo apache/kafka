@@ -130,7 +130,7 @@ public class UnattachedStateTest {
         UnattachedState state = newUnattachedState(OptionalInt.of(leaderId), Optional.empty());
 
         // Check that the leader is persisted if the leader is known
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), state.election());
+        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, Optional.empty(), voters), state.election());
 
         // Check that the replica can grant PreVotes if the log is up-to-date, even if the last leader is known
         // This is because nodes in Unattached have not successfully fetched from the leader yet

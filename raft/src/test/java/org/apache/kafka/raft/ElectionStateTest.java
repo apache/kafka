@@ -26,6 +26,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -70,7 +71,7 @@ final class ElectionStateTest {
         ReplicaKey votedKey = ReplicaKey.of(1, Uuid.randomUuid());
         List<ElectionState> electionStates = Arrays.asList(
             ElectionState.withUnknownLeader(5, Set.of(1, 2, 3)),
-            ElectionState.withElectedLeader(5, 1, Set.of(1, 2, 3)),
+            ElectionState.withElectedLeader(5, 1, Optional.empty(), Set.of(1, 2, 3)),
             ElectionState.withVotedCandidate(5, votedKey, Set.of(1, 2, 3))
         );
 
@@ -78,7 +79,7 @@ final class ElectionStateTest {
         if (version == 0) {
             expected = Arrays.asList(
                 ElectionState.withUnknownLeader(5, Set.of(1, 2, 3)),
-                ElectionState.withElectedLeader(5, 1, Set.of(1, 2, 3)),
+                ElectionState.withElectedLeader(5, 1, Optional.empty(), Set.of(1, 2, 3)),
                 ElectionState.withVotedCandidate(
                     5,
                     ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID),
@@ -88,7 +89,7 @@ final class ElectionStateTest {
         } else {
             expected = Arrays.asList(
                 ElectionState.withUnknownLeader(5, Collections.emptySet()),
-                ElectionState.withElectedLeader(5, 1, Collections.emptySet()),
+                ElectionState.withElectedLeader(5, 1, Optional.empty(), Collections.emptySet()),
                 ElectionState.withVotedCandidate(5, votedKey, Collections.emptySet())
             );
         }

@@ -18,7 +18,6 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.raft.ReplicaKey;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
@@ -48,11 +47,8 @@ public class EpochElection {
      * @return true if the voter had not been previously recorded
      */
     public boolean recordVote(int voterId, boolean isGranted) {
-        boolean wasUnrecorded = false;
         VoterState voterState = getVoterStateOrThrow(voterId);
-        if (voterState.state == VoterState.State.UNRECORDED) {
-            wasUnrecorded = true;
-        }
+        boolean wasUnrecorded = voterState.state == VoterState.State.UNRECORDED;
         if (isGranted) {
             voterState.setState(VoterState.State.GRANTED);
         } else {
@@ -84,13 +80,6 @@ public class EpochElection {
      */
     public Set<Integer> voterIds() {
         return Collections.unmodifiableSet(voterStates.keySet());
-    }
-
-    /**
-     * Get the collection of voter states.
-     */
-    public Collection<VoterState> voterStates() {
-        return Collections.unmodifiableCollection(voterStates.values());
     }
 
     /**
@@ -170,11 +159,8 @@ public class EpochElection {
     @Override
     public String toString() {
         return String.format(
-            "EpochElection(%s)",
-            voterStates.values().stream()
-                .map(VoterState::toString)
-                .collect(
-                    Collectors.joining(", "))
+            "EpochElection(voterStates=%s)",
+            voterStates
         );
     }
 

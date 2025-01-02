@@ -550,9 +550,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             onBecomeFollower(currentTimeMs);
         }
 
-        // When there is only a single voter, become candidate immediately
-        if (quorum.isOnlyVoter() && !quorum.isCandidate()) {
-            transitionToCandidate(currentTimeMs);
+        // When there is only a single voter, become prospective immediately.
+        // transitionToProspective will handle short-circuiting voter to candidate state
+        if (quorum.isOnlyVoter() && !quorum.isNomineeState() && !quorum.isLeader()) {
+            transitionToProspective(currentTimeMs);
         }
 
         // Specialized add voter handler
@@ -667,7 +668,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private boolean maybeTransitionToCandidate(ProspectiveState state, long currentTimeMs) {
-        if (state.epochElection().isVoteGranted()) {
+        // If replica is the only voter, it should transition to candidate immediately
+        if (state.epochElection().isVoteGranted() || quorum.isOnlyVoter()) {
             transitionToCandidate(currentTimeMs);
             return true;
         } else {
@@ -716,7 +718,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void transitionToProspective(long currentTimeMs) {
         quorum.transitionToProspective();
-        maybeFireLeaderChange();
         onBecomeProspective(currentTimeMs);
     }
 
@@ -1007,9 +1008,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             CandidateState candidate = quorum.candidateStateOrThrow();
             if (candidate.epochElection().isVoteRejected() && !candidate.isBackingOff()) {
                 logger.info(
-                    "Insufficient remaining votes to become leader (rejected by {}). " +
-                    "We will backoff before retrying election again",
-                    candidate.epochElection().rejectingVoters()
+                    "Insufficient remaining votes to become leader. We will backoff before retrying election again. " +
+                    "Current epoch election state is {}.",
+                    candidate.epochElection()
                 );
                 // Go immediately to a random, exponential backoff. The backoff starts low to prevent
                 // needing to wait the entire election timeout when the vote result has already been
@@ -1025,11 +1026,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             ProspectiveState prospective = quorum.prospectiveStateOrThrow();
             if (prospective.epochElection().isVoteRejected()) {
                 logger.info(
-                    "Insufficient remaining votes to become candidate (rejected by {}). ",
-                    prospective.epochElection().rejectingVoters()
+                    "Insufficient remaining votes to become candidate. Current epoch election state is {}. ",
+                    prospective.epochElection()
                 );
                 prospectiveTransitionAfterElectionLoss(prospective, currentTimeMs);
             }
+        } else {
+            throw new IllegalStateException(
+                "Expected to be a NomineeState (Prospective or Candidate), but quorum state is " + quorum
+            );
         }
     }
 
@@ -2830,7 +2835,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private VoteRequestData buildVoteRequest(ReplicaKey remoteVoter, boolean preVote) {
         OffsetAndEpoch endOffset = endOffset();
-//        boolean isPreVote = quorum.isProspective();
         return RaftUtil.singletonVoteRequest(
             log.topicPartition(),
             clusterId,
@@ -3010,10 +3014,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         GracefulShutdown shutdown = this.shutdown.get();
         final long stateTimeoutMs;
         if (shutdown != null) {
-            // If we are shutting down, then we will remain in the resigned state
+            // If the replica is shutting down, it will remain in the resigned state
             // until either the shutdown expires or an election bumps the epoch
             stateTimeoutMs = shutdown.remainingTimeMs();
         } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
+            // The replica stays in resigned state for an election timeout period to allow end quorum requests
+            // to be processed, and to give other replicas a chance to become leader. When transitioning out
+            // of resigned state, the epoch must be increased to avoid FETCH responses with the leader
+            // being this replica, and to avoid this replica attempting to transition into follower state with
+            // itself as the leader.
             transitionToUnattached(quorum.epoch() + 1, OptionalInt.empty());
             stateTimeoutMs = 0L;
         } else {
@@ -3122,7 +3131,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             long minRequestBackoffMs = maybeSendVoteRequests(state, currentTimeMs);
             return Math.min(shutdown.remainingTimeMs(), minRequestBackoffMs);
         } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
-            logger.info("Election timed out before receiving sufficient vote responses to become candidate");
+            logger.info(
+                "Election timed out before receiving sufficient vote responses to become candidate. " +
+                "Current epoch election state: {}",
+                state.epochElection()
+            );
             prospectiveTransitionAfterElectionLoss(state, currentTimeMs);
             return 0L;
         } else {
@@ -3132,17 +3145,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void prospectiveTransitionAfterElectionLoss(ProspectiveState prospective, long currentTimeMs) {
+        // If the replica knows of a leader, it transitions to follower. Otherwise, it transitions to unattached.
         if (prospective.election().hasLeader() && !prospective.leaderEndpoints().isEmpty()) {
-            logger.info(
-                "Transitioning to Follower of leader {}",
-                prospective.election().leaderId());
             transitionToFollower(
                 quorum().epoch(),
                 prospective.election().leaderId(),
                 prospective.leaderEndpoints(),
-                currentTimeMs);
+                currentTimeMs
+            );
         } else {
-            logger.info("Transitioning to Unattached to attempt rediscovering leader");
             transitionToUnattached(quorum().epoch(), prospective.election().optionalLeaderId());
         }
     }

@@ -220,7 +220,7 @@ public final class RaftClientTestContext {
 
         Builder withElectedLeader(int epoch, int leaderId) {
             quorumStateStore.writeElectionState(
-                ElectionState.withElectedLeader(epoch, leaderId, startingVoters.voterIds()),
+                ElectionState.withElectedLeader(epoch, leaderId, Optional.empty(), startingVoters.voterIds()),
                 kraftVersion
             );
             return this;
@@ -703,7 +703,7 @@ public final class RaftClientTestContext {
 
     public void assertElectedLeader(int epoch, int leaderId) {
         assertEquals(
-            ElectionState.withElectedLeader(epoch, leaderId, expectedVoters()),
+            ElectionState.withElectedLeader(epoch, leaderId, Optional.empty(), expectedVoters()),
             quorumStateStore.readElectionState().get()
         );
     }
@@ -737,7 +737,7 @@ public final class RaftClientTestContext {
     void assertResignedLeader(int epoch, int leaderId) {
         assertTrue(client.quorum().isResigned());
         assertEquals(
-            ElectionState.withElectedLeader(epoch, leaderId, expectedVoters()),
+            ElectionState.withElectedLeader(epoch, leaderId, Optional.empty(), expectedVoters()),
             quorumStateStore.readElectionState().get()
         );
     }

@@ -84,10 +84,6 @@ public class CandidateState implements NomineeState {
         epochElection.recordVote(localId, true);
     }
 
-    public int localId() {
-        return localId;
-    }
-
     /**
      * Check if the candidate is backing off for the next election
      */

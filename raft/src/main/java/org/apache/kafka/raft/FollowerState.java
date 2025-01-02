@@ -26,7 +26,6 @@ import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.slf4j.Logger;
 
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
@@ -79,7 +78,7 @@ public class FollowerState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return new ElectionState(epoch, OptionalInt.of(leaderId), votedKey, voters);
+        return ElectionState.withElectedLeader(epoch, leaderId, votedKey, voters);
     }
 
     @Override

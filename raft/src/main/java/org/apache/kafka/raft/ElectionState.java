@@ -185,12 +185,17 @@ public final class ElectionState {
         return new ElectionState(epoch, OptionalInt.empty(), Optional.of(votedKey), voters);
     }
 
-    public static ElectionState withElectedLeader(int epoch, int leaderId, Set<Integer> voters) {
+    public static ElectionState withElectedLeader(
+        int epoch,
+        int leaderId,
+        Optional<ReplicaKey> votedKey,
+        Set<Integer> voters
+    ) {
         if (leaderId < 0) {
             throw new IllegalArgumentException("Illegal leader Id " + leaderId + ": must be non-negative");
         }
 
-        return new ElectionState(epoch, OptionalInt.of(leaderId), Optional.empty(), voters);
+        return new ElectionState(epoch, OptionalInt.of(leaderId), votedKey, voters);
     }
 
     public static ElectionState withUnknownLeader(int epoch, Set<Integer> voters) {

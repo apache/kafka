@@ -39,9 +39,8 @@ import java.util.Random;
  * how they are triggered:
  *
  * Resigned transitions to:
- *    Unattached:  After learning of a new election with a higher epoch
- *    Prospective: After expiration of the election timeout
- *    Follower:    After discovering a leader with an equal or larger epoch
+ *    Unattached:  After learning of a new election with a higher epoch, or expiration of the election timeout
+ *    Follower:    After discovering a leader with a larger epoch
  *
  * Unattached transitions to:
  *    Unattached:  After learning of a new election with a higher epoch or after giving a binding vote
@@ -369,8 +368,10 @@ public class QuorumState {
     }
 
     /**
-     * Transition to the "unattached" state. This means the replica has found an epoch greater than the current epoch,
-     * or the replica has transitioned from Prospective with the same epoch.
+     * Transition to the "unattached" state. This means one of the following
+     * 1. the replica has found an epoch greater than the current epoch.
+     * 2. the replica has transitioned from Prospective with the same epoch.
+     * 3. the replica has transitioned from Resigned with current epoch + 1.
      * Note, if the replica is transitioning from unattached to add voted state and there is no epoch change,
      * it takes the route of unattachedAddVotedState instead.
      */
@@ -379,7 +380,7 @@ public class QuorumState {
         if (epoch < currentEpoch || (epoch == currentEpoch && !isProspective())) {
             throw new IllegalStateException(
                 String.format(
-                    "Cannot transition to Unattached with epoch= %d from current state %s",
+                    "Cannot transition to Unattached with epoch %d from current state %s",
                     epoch,
                     state
                 )
@@ -464,7 +465,6 @@ public class QuorumState {
                 logContext
             )
         );
-        log.debug("Voted for candidate {} in epoch {}", candidateKey, epoch);
     }
 
     /**
@@ -518,7 +518,6 @@ public class QuorumState {
                 logContext
             )
         );
-        log.debug("Voted for candidate {} in epoch {}", candidateKey, epoch);
     }
 
     /**
@@ -526,7 +525,6 @@ public class QuorumState {
      */
     public void transitionToFollower(int epoch, int leaderId, Endpoints endpoints) {
         int currentEpoch = state.epoch();
-        boolean retainVotedKey = false;
         if (endpoints.isEmpty()) {
             throw new IllegalArgumentException(
                 String.format(
@@ -554,7 +552,6 @@ public class QuorumState {
                 )
             );
         } else if (epoch == currentEpoch) {
-            retainVotedKey = true;
             if (isFollower() && state.leaderEndpoints().size() >= endpoints.size()) {
                 throw new IllegalStateException(
                     String.format(
@@ -577,13 +574,18 @@ public class QuorumState {
             }
         }
 
+        // State transitions within the same epoch should preserve voted key if it exists. This prevents
+        // replicas from voting multiple times in the same epoch, which could violate the Raft invariant of
+        // at most one leader elected in an epoch.
+        Optional<ReplicaKey> votedKey = epoch == currentEpoch ? votedKey() : Optional.empty();
+
         durableTransitionTo(
             new FollowerState(
                 time,
                 epoch,
                 leaderId,
                 endpoints,
-                retainVotedKey ? votedKey() : Optional.empty(),
+                votedKey,
                 partitionState.lastVoterSet().voterIds(),
                 state.highWatermark(),
                 fetchTimeoutMs,
@@ -615,7 +617,8 @@ public class QuorumState {
 
         int retries = isCandidate() ? candidateStateOrThrow().retries() + 1 : 1;
 
-        durableTransitionTo(
+        // Durable transition is not necessary since there is no change to the persisted electionState
+        memoryTransitionTo(
             new ProspectiveState(
                 time,
                 localIdOrThrow(),
@@ -665,9 +668,8 @@ public class QuorumState {
                 )
             );
         }
-        // Leader state can never transition to Candidate state
-        // Only Prospective is allowed to transition to Candidate, unless the local replica is the only voter
-        if (isLeader() || (!isProspective() && !isOnlyVoter())) {
+        // Only Prospective is allowed to transition to Candidate
+        if (!isProspective()) {
             throw new IllegalStateException("Cannot transition to Candidate since the local broker.id=" + localId +
                 " is state " + state);
         }
@@ -768,9 +770,9 @@ public class QuorumState {
     }
 
     public UnattachedState unattachedStateOrThrow() {
-        if (isUnattached())
-            return (UnattachedState) state;
-        throw new IllegalStateException("Expected to be Unattached, but current state is " + state);
+        return maybeUnattachedState().orElseThrow(
+            () -> new IllegalStateException("Expected to be Unattached, but current state is " + state)
+        );
     }
 
     public <T> LeaderState<T> leaderStateOrThrow() {
@@ -804,9 +806,9 @@ public class QuorumState {
     }
 
     public ProspectiveState prospectiveStateOrThrow() {
-        if (isProspective())
-            return (ProspectiveState) state;
-        throw new IllegalStateException("Expected to be Prospective, but current state is " + state);
+        return maybeProspectiveState().orElseThrow(
+            () -> new IllegalStateException("Expected to be Prospective, but current state is " + state)
+        );
     }
 
     public boolean isProspectiveNotVoted() {
@@ -873,6 +875,7 @@ public class QuorumState {
 
     /**
      * Determines if replica in unattached or prospective state can grant a vote request.
+     *
      * @param leaderId local replica's optional leader id.
      * @param votedKey local replica's optional voted key.
      * @param epoch local replica's epoch
