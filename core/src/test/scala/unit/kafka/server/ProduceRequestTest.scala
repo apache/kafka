@@ -103,7 +103,7 @@ class ProduceRequestTest extends BaseRequestTest {
     }).toMap
   }
 
-  @ParameterizedTest(name = "quorum=kraft")
+  @ParameterizedTest
   @MethodSource(Array("timestampConfigProvider"))
   def testProduceWithInvalidTimestamp(messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
     val topic = "topic"
