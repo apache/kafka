@@ -8703,7 +8703,8 @@ public class KafkaAdminClientTest {
         return new ShareMemberDescription(member.memberId(),
                                           member.clientId(),
                                           member.clientHost(),
-                                          assignment);
+                                          assignment,
+                                          member.memberEpoch());
     }
 
     @Test
