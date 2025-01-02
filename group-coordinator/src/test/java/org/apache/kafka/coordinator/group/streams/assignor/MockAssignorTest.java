@@ -30,12 +30,65 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class MockAssignorTest {
 
     private final MockAssignor assignor = new MockAssignor();
+
+    @Test
+    public void testZeroMembers() {
+
+        TaskAssignorException ex = assertThrows(TaskAssignorException.class, () -> assignor.assign(
+            new GroupSpecImpl(
+                Collections.emptyMap(),
+                new HashMap<>()
+            ),
+            new TopologyDescriberImpl(5, Collections.singletonList("test-subtopology"))
+        ));
+
+        assertEquals("No member available to assign task 0 of subtopology test-subtopology", ex.getMessage());
+    }
+
+    @Test
+    public void testDoubleAssignment() {
+
+        final AssignmentMemberSpec memberSpec1 = new AssignmentMemberSpec(
+            Optional.empty(),
+            Optional.empty(),
+            Collections.singletonMap("test-subtopology", new HashSet<>(List.of(0))),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            "test-process",
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap()
+        );
+
+        final AssignmentMemberSpec memberSpec2 = new AssignmentMemberSpec(
+            Optional.empty(),
+            Optional.empty(),
+            Collections.singletonMap("test-subtopology", new HashSet<>(List.of(0))),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            "test-process",
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap()
+        );
+
+        TaskAssignorException ex = assertThrows(TaskAssignorException.class, () -> assignor.assign(
+            new GroupSpecImpl(
+                Map.of("member1", memberSpec1, "member2", memberSpec2),
+                new HashMap<>()
+            ),
+            new TopologyDescriberImpl(5, Collections.singletonList("test-subtopology"))
+        ));
+
+        assertEquals("Task 0 of subtopology test-subtopology is assigned to multiple members", ex.getMessage());
+    }
 
     @Test
     public void testBasicScenario() {

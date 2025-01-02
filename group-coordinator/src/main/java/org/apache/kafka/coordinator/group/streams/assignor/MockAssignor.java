@@ -65,7 +65,7 @@ public class MockAssignor implements TaskAssignor {
                 for (int taskId : taskIds) {
                     if (activeMembers[taskId] != null) {
                         throw new TaskAssignorException(
-                            "Task " + taskId + " of subtopology " + subtopologyId + " is assigned to multiple members.");
+                            "Task " + taskId + " of subtopology " + subtopologyId + " is assigned to multiple members");
                     }
                     activeMembers[taskId] = memberId;
                 }
