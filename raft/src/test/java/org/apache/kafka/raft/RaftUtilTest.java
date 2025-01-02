@@ -342,15 +342,17 @@ public class RaftUtilTest {
     @ParameterizedTest
     @MethodSource("singletonFetchRequestTestCases")
     public void testFetchRequestV17Compatibility(final FetchRequestTestCase testCase) {
-        FetchRequestData fetchRequestData = RaftUtil.singletonFetchRequest(topicPartition, Uuid.ONE_UUID,
-                partition -> partition
-                        .setPartitionMaxBytes(10)
-                        .setCurrentLeaderEpoch(5)
-                        .setFetchOffset(333)
-                        .setLastFetchedEpoch(testCase.lastFetchedEpoch)
-                        .setPartition(2)
-                        .setReplicaDirectoryId(Uuid.ONE_UUID)
-                        .setLogStartOffset(0)
+        FetchRequestData fetchRequestData = RaftUtil.singletonFetchRequest(
+            topicPartition,
+            Uuid.ONE_UUID,
+            partition -> partition
+                .setPartitionMaxBytes(10)
+                .setCurrentLeaderEpoch(5)
+                .setFetchOffset(333)
+                .setLastFetchedEpoch(testCase.lastFetchedEpoch)
+                .setPartition(2)
+                .setReplicaDirectoryId(Uuid.ONE_UUID)
+                .setLogStartOffset(0)
         );
         JsonNode json = FetchRequestDataJsonConverter.write(fetchRequestData, testCase.version);
         assertEquals(testCase.expectedJson, json.toString());
@@ -438,21 +440,23 @@ public class RaftUtilTest {
 
     @ParameterizedTest
     @MethodSource("fetchSnapshotRequestTestCases")
-    public void testSingletonFetchSnapshotRequestForAllVersion(final short version,
-                                                               final Uuid directoryId,
-                                                               final String expectedJson) {
+    public void testSingletonFetchSnapshotRequestForAllVersion(
+        short version,
+        Uuid directoryId,
+        String expectedJson
+    ) {
         int epoch = 1;
         int maxBytes = 1000;
         int position = 10;
 
         FetchSnapshotRequestData fetchSnapshotRequestData = RaftUtil.singletonFetchSnapshotRequest(
-                clusterId,
-                ReplicaKey.of(1, directoryId),
-                topicPartition,
-                epoch,
-                new OffsetAndEpoch(10, epoch),
-                maxBytes,
-                position
+            clusterId,
+            ReplicaKey.of(1, directoryId),
+            topicPartition,
+            epoch,
+            new OffsetAndEpoch(10, epoch),
+            maxBytes,
+            position
         );
         JsonNode json = FetchSnapshotRequestDataJsonConverter.write(fetchSnapshotRequestData, version);
         assertEquals(expectedJson, json.toString());
