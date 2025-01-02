@@ -1018,6 +1018,19 @@ public class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
+    public void testInitializeAsFollowerAndOnlyVoter(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
+            .withKip853Rpc(withKip853Rpc)
+            .withElectedLeader(2, localId + 1)
+            .build();
+        context.assertElectedLeader(3, localId);
+        assertEquals(0L, context.log.endOffset().offset());
+        assertTrue(context.client.quorum().isLeader());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     public void testInitializeAsCandidateAndOnlyVoter(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))

@@ -544,16 +544,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs = time.milliseconds();
         if (quorum.isLeader()) {
             throw new IllegalStateException("Voter cannot initialize as a Leader");
+        } else if (quorum.isOnlyVoter() && (quorum.isUnattached() || quorum.isFollower())) {
+            // When there is only a single voter, become leader immediately.
+            // transitionToProspective will handle short-circuiting voter to candidate state
+            // and transitionToCandidate will handle short-circuiting voter to leader state
+            transitionToProspective(currentTimeMs);
         } else if (quorum.isCandidate()) {
             onBecomeCandidate(currentTimeMs);
         } else if (quorum.isFollower()) {
             onBecomeFollower(currentTimeMs);
-        }
-
-        // When there is only a single voter, become prospective immediately.
-        // transitionToProspective will handle short-circuiting voter to candidate state
-        if (quorum.isOnlyVoter() && !quorum.isNomineeState() && !quorum.isLeader()) {
-            transitionToProspective(currentTimeMs);
         }
 
         // Specialized add voter handler
@@ -668,8 +667,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private boolean maybeTransitionToCandidate(ProspectiveState state, long currentTimeMs) {
-        // If replica is the only voter, it should transition to candidate immediately
-        if (state.epochElection().isVoteGranted() || quorum.isOnlyVoter()) {
+        if (state.epochElection().isVoteGranted()) {
             transitionToCandidate(currentTimeMs);
             return true;
         } else {
@@ -681,15 +679,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * Only applies to NomineeStates (Prospective or Candidate). If enough votes were granted
      * then this method is called to transition the state forward - either from Prospective to Candidate
      * or from Candidate to Leader.
-     * @return true if the state transitioned forward, false otherwise
      */
     private void maybeTransitionForward(NomineeState state, long currentTimeMs) {
-        if (quorum.isProspective()) {
-            maybeTransitionToCandidate(quorum.prospectiveStateOrThrow(), currentTimeMs);
-        } else if (quorum.isCandidate()) {
-            maybeTransitionToLeader(quorum.candidateStateOrThrow(), currentTimeMs);
+        if (state instanceof ProspectiveState prospective) {
+            maybeTransitionToCandidate(prospective, currentTimeMs);
+        } else if (state instanceof CandidateState candidate) {
+            maybeTransitionToLeader(candidate, currentTimeMs);
         } else {
-            throw new IllegalStateException("Expected to be a VotingState (Prospective or Candidate), " +
+            throw new IllegalStateException("Expected to be a NomineeState (Prospective or Candidate), " +
                 "but current state is " + state);
         }
     }
@@ -983,7 +980,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     maybeTransitionForward(state, currentTimeMs);
                 } else {
                     state.recordRejectedVote(remoteNodeId);
-                    maybeHandleElectionLoss(currentTimeMs);
+                    maybeHandleElectionLoss(state, currentTimeMs);
                 }
             } else {
                 logger.debug(
@@ -1003,9 +1000,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * On election loss, if replica is prospective it will transition to unattached or follower state.
      * If replica is candidate, it will start backing off.
      */
-    private void maybeHandleElectionLoss(long currentTimeMs) {
-        if (quorum.isCandidate()) {
-            CandidateState candidate = quorum.candidateStateOrThrow();
+    private void maybeHandleElectionLoss(NomineeState state, long currentTimeMs) {
+        if (state instanceof CandidateState candidate) {
             if (candidate.epochElection().isVoteRejected() && !candidate.isBackingOff()) {
                 logger.info(
                     "Insufficient remaining votes to become leader. We will backoff before retrying election again. " +
@@ -1022,8 +1018,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     binaryExponentialElectionBackoffMs(candidate.retries())
                 );
             }
-        } else if (quorum.isProspective()) {
-            ProspectiveState prospective = quorum.prospectiveStateOrThrow();
+        } else if (state instanceof ProspectiveState prospective) {
             if (prospective.epochElection().isVoteRejected()) {
                 logger.info(
                     "Insufficient remaining votes to become candidate. Current epoch election state is {}. ",
@@ -1033,7 +1028,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             }
         } else {
             throw new IllegalStateException(
-                "Expected to be a NomineeState (Prospective or Candidate), but quorum state is " + quorum
+                "Expected to be a NomineeState (Prospective or Candidate), but quorum state is " + state
             );
         }
     }

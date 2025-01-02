@@ -193,7 +193,7 @@ public class EpochElection {
         @Override
         public String toString() {
             return String.format(
-                "VoterState(%s, state=%s)",
+                "VoterState(replicaKey=%s, state=%s)",
                 replicaKey,
                 state
             );
