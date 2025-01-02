@@ -51,8 +51,9 @@ ARG build_date
 LABEL org.label-schema.name="kafka" \
       org.label-schema.description="Apache Kafka" \
       org.label-schema.build-date="${build_date}" \
-      org.label-schema.vcs-url="https://github.com/apache/kafka" \
-      maintainer="Apache Kafka"
+      org.label-schema.vcs-url="https://github.com/apache/kafka"
+      
+MAINTAINER Apache Kafka
 
 RUN apk update ; \
     apk add --no-cache gcompat ; \
@@ -64,8 +65,8 @@ RUN apk update ; \
 
 COPY --chown=appuser:root --from=build-native-image /app/kafka/kafka.Kafka /opt/kafka/
 COPY --chown=appuser:root --from=build-native-image /app/kafka/config/kraft/reconfig-server.properties /etc/kafka/docker/
-COPY --chown=appuser:root --from=build-native-image /app/kafka/config/log4j.properties /etc/kafka/docker/
-COPY --chown=appuser:root --from=build-native-image /app/kafka/config/tools-log4j.properties /etc/kafka/docker/
+COPY --chown=appuser:root --from=build-native-image /app/kafka/config/log4j2.yaml /etc/kafka/docker/
+COPY --chown=appuser:root --from=build-native-image /app/kafka/config/tools-log4j2.yaml /etc/kafka/docker/
 COPY --chown=appuser:root resources/common-scripts /etc/kafka/docker/
 COPY --chown=appuser:root launch /etc/kafka/docker/
 
