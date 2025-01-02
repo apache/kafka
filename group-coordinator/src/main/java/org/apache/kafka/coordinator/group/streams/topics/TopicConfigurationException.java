@@ -19,8 +19,6 @@ package org.apache.kafka.coordinator.group.streams.topics;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 
-import java.util.Objects;
-
 public class TopicConfigurationException extends RuntimeException {
 
     private final Status status;
@@ -32,31 +30,6 @@ public class TopicConfigurationException extends RuntimeException {
 
     public Status status() {
         return status;
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        final TopicConfigurationException that = (TopicConfigurationException) o;
-        return status == that.status && Objects.equals(getMessage(), that.getMessage());
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(status, getMessage());
-    }
-
-    @Override
-    public String toString() {
-        return "TopicConfigurationException{" +
-            "status=" + status +
-            ", getMessage='" + getMessage() + '\'' +
-            '}';
     }
 
     public static TopicConfigurationException incorrectlyPartitionedTopics(String message) {
