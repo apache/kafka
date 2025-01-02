@@ -474,6 +474,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             VoterSet.empty() :
             VoterSet.fromInetSocketAddresses(channel.listenerName(), voterAddresses);
 
+        kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft");
+
         partitionState = new KRaftControlRecordStateMachine(
             staticVoters,
             log,
@@ -534,10 +536,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             quorumStateStore,
             time,
             logContext,
-            random
+            random,
+            kafkaRaftMetrics
         );
 
-        kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft", quorum);
+        kafkaRaftMetrics.initialize(quorum);
         // All Raft voters are statically configured and known at startup
         // so there are no unknown voter connections. Report this metric as 0.
         kafkaRaftMetrics.updateNumUnknownVoterConnections(0);

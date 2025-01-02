@@ -92,7 +92,8 @@ public class KafkaRaftMetricsTest {
             new MockQuorumStateStore(),
             time,
             new LogContext("kafka-raft-metrics-test"),
-            random
+            random,
+            raftMetrics
         );
     }
 
@@ -129,7 +130,8 @@ public class KafkaRaftMetricsTest {
         QuorumState state = buildQuorumState(voters, kraftVersion);
 
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.initialize(state);
 
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
@@ -218,7 +220,8 @@ public class KafkaRaftMetricsTest {
         );
         QuorumState state = buildQuorumState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.initialize(state);
 
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
@@ -261,7 +264,8 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordLogEnd(KRaftVersion kraftVersion) {
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.initialize(state);
 
         assertEquals((double) 0L, getMetric(metrics, "log-end-offset").metricValue());
         assertEquals((double) 0, getMetric(metrics, "log-end-epoch").metricValue());
@@ -277,7 +281,8 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordNumUnknownVoterConnections(KRaftVersion kraftVersion) {
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.initialize(state);
 
         assertEquals((double) 0, getMetric(metrics, "number-unknown-voter-connections").metricValue());
 
@@ -291,7 +296,8 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordPollIdleRatio(KRaftVersion kraftVersion) {
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.initialize(state);
 
         // First recording is discarded (in order to align the interval of measurement)
         raftMetrics.updatePollStart(time.milliseconds());
@@ -364,7 +370,8 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordLatency(KRaftVersion kraftVersion) {
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.initialize(state);
 
         raftMetrics.updateElectionStartMs(time.milliseconds());
         time.sleep(1000L);
@@ -396,7 +403,8 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordRate(KRaftVersion kraftVersion) {
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.initialize(state);
 
         raftMetrics.updateAppendRecords(12);
         assertEquals(0.4, getMetric(metrics, "append-records-rate").metricValue());

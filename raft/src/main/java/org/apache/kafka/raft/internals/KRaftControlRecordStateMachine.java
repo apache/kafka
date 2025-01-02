@@ -73,7 +73,7 @@ public final class KRaftControlRecordStateMachine {
     private final KafkaRaftMetrics kafkaRaftMetrics;
     private final ExternalKRaftMetrics externalKRaftMetrics;
     private final Optional<VoterSet> staticVoterSet;
-    private volatile boolean ignoredStaticVoterSet = false;
+    private boolean ignoredStaticVoterSet = false;
 
     /**
      * Constructs an internal log listener
@@ -104,6 +104,10 @@ public final class KRaftControlRecordStateMachine {
         this.kafkaRaftMetrics = kafkaRaftMetrics;
         this.externalKRaftMetrics = externalKRaftMetrics;
         this.staticVoterSet = staticVoterSet != null ? Optional.of(staticVoterSet) : Optional.empty();
+
+        if (staticVoterSet != null) {
+            kafkaRaftMetrics.updateNumVoters(staticVoterSet.size());
+        }
     }
 
     /**

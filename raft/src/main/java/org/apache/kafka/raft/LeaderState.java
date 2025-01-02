@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.RemoveVoterHandlerState;
 import org.apache.kafka.server.common.KRaftVersion;
 
@@ -81,6 +82,7 @@ public class LeaderState<T> implements EpochState {
     private final int checkQuorumTimeoutMs;
     private final Timer beginQuorumEpochTimer;
     private final int beginQuorumEpochTimeoutMs;
+    private final KafkaRaftMetrics kafkaRaftMetrics;
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
@@ -97,7 +99,8 @@ public class LeaderState<T> implements EpochState {
         BatchAccumulator<T> accumulator,
         Endpoints localListeners,
         int fetchTimeoutMs,
-        LogContext logContext
+        LogContext logContext,
+        KafkaRaftMetrics kafkaRaftMetrics
     ) {
         this.localReplicaKey = localReplicaKey;
         this.epoch = epoch;
@@ -122,6 +125,7 @@ public class LeaderState<T> implements EpochState {
         this.voterSetAtEpochStart =  voterSetAtEpochStart;
         this.offsetOfVotersAtEpochStart = offsetOfVotersAtEpochStart;
         this.kraftVersionAtEpochStart = kraftVersionAtEpochStart;
+        this.kafkaRaftMetrics = kafkaRaftMetrics;
     }
 
     public long timeUntilBeginQuorumEpochTimerExpires(long currentTimeMs) {
@@ -217,6 +221,12 @@ public class LeaderState<T> implements EpochState {
                 .complete(RaftUtil.addVoterResponse(error, message))
         );
         addVoterHandlerState = state;
+        if (addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent()) {
+            kafkaRaftMetrics.updateUncommittedVoterChange(1);
+        } else {
+            kafkaRaftMetrics.updateUncommittedVoterChange(0);
+        }
+
     }
 
     public Optional<RemoveVoterHandlerState> removeVoterHandlerState() {
@@ -234,6 +244,11 @@ public class LeaderState<T> implements EpochState {
                 .complete(RaftUtil.removeVoterResponse(error, message))
         );
         removeVoterHandlerState = state;
+        if (addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent()) {
+            kafkaRaftMetrics.updateUncommittedVoterChange(1);
+        } else {
+            kafkaRaftMetrics.updateUncommittedVoterChange(0);
+        }
     }
 
     public long maybeExpirePendingOperation(long currentTimeMs) {
@@ -426,10 +441,6 @@ public class LeaderState<T> implements EpochState {
     Map<ReplicaKey, ReplicaState> observerStates(final long currentTimeMs) {
         clearInactiveObservers(currentTimeMs);
         return observerStates;
-    }
-
-    public int numObservers() {
-        return observerStates.size();
     }
 
     public Set<Integer> grantingVoters() {
@@ -636,7 +647,10 @@ public class LeaderState<T> implements EpochState {
     private ReplicaState getOrCreateReplicaState(ReplicaKey replicaKey) {
         ReplicaState state = voterStates.get(replicaKey.id());
         if (state == null || !state.matchesKey(replicaKey)) {
-            observerStates.putIfAbsent(replicaKey, new ReplicaState(replicaKey, false, Endpoints.empty()));
+            LeaderState.ReplicaState previous = observerStates.putIfAbsent(replicaKey, new ReplicaState(replicaKey, false, Endpoints.empty()));
+            if (previous == null) {
+                kafkaRaftMetrics.updateNumObservers(observerStates.size());
+            }
             return observerStates.get(replicaKey);
         }
         return state;
@@ -659,6 +673,7 @@ public class LeaderState<T> implements EpochState {
             currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS &&
             !integerReplicaStateEntry.getKey().equals(localReplicaKey)
         );
+        kafkaRaftMetrics.updateNumObservers(observerStates.size());
     }
 
     private boolean isVoter(ReplicaKey remoteReplicaKey) {
@@ -678,6 +693,7 @@ public class LeaderState<T> implements EpochState {
             // Remove the voter from the previous data structures
             oldVoterStates.remove(voterNode.voterKey().id());
             observerStates.remove(voterNode.voterKey());
+            kafkaRaftMetrics.updateNumObservers(observerStates.size());
 
             // Make sure that the replica key in the replica state matches the voter's
             state.setReplicaKey(voterNode.voterKey());
@@ -692,6 +708,7 @@ public class LeaderState<T> implements EpochState {
         for (ReplicaState replicaStateEntry : oldVoterStates.values()) {
             replicaStateEntry.clearListeners();
             observerStates.putIfAbsent(replicaStateEntry.replicaKey, replicaStateEntry);
+            kafkaRaftMetrics.updateNumObservers(observerStates.size());
         }
     }
 
