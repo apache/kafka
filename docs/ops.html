@@ -3753,7 +3753,7 @@ Feature: metadata.version       SupportedMinVersion: 3.0-IV1    SupportedMaxVers
   this flag when formatting brokers -- only when formatting controllers.)<p>
 
 <pre><code class="language-bash">
-  $ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller_static.properties
+  $ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller.properties
   Cannot set kraft.version to 1 unless KIP-853 configuration is present. Try removing the --feature flag for kraft.version.
 </code></pre><p>
 
