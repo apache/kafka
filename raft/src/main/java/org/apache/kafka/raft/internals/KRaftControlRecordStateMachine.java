@@ -70,6 +70,10 @@ public final class KRaftControlRecordStateMachine {
     // 2. The read operations lastVoterSet, voterSetAtOffset and kraftVersionAtOffset read
     // the nextOffset first before reading voterSetHistory or kraftVersionHistory
     private volatile long nextOffset = STARTING_NEXT_OFFSET;
+    private final KafkaRaftMetrics kafkaRaftMetrics;
+    private final ExternalKRaftMetrics externalKRaftMetrics;
+    private final Optional<VoterSet> staticVoterSet;
+    private volatile boolean ignoredStaticVoterSet = false;
 
     /**
      * Constructs an internal log listener
@@ -87,7 +91,9 @@ public final class KRaftControlRecordStateMachine {
         RecordSerde<?> serde,
         BufferSupplier bufferSupplier,
         int maxBatchSizeBytes,
-        LogContext logContext
+        LogContext logContext,
+        KafkaRaftMetrics kafkaRaftMetrics,
+        ExternalKRaftMetrics externalKRaftMetrics
     ) {
         this.log = log;
         this.voterSetHistory = new VoterSetHistory(staticVoterSet);
@@ -95,6 +101,9 @@ public final class KRaftControlRecordStateMachine {
         this.bufferSupplier = bufferSupplier;
         this.maxBatchSizeBytes = maxBatchSizeBytes;
         this.logger = logContext.logger(this.getClass());
+        this.kafkaRaftMetrics = kafkaRaftMetrics;
+        this.externalKRaftMetrics = externalKRaftMetrics;
+        this.staticVoterSet = staticVoterSet != null ? Optional.of(staticVoterSet) : Optional.empty();
     }
 
     /**
@@ -281,6 +290,11 @@ public final class KRaftControlRecordStateMachine {
             switch (record.type()) {
                 case KRAFT_VOTERS:
                     VoterSet voters = VoterSet.fromVotersRecord((VotersRecord) record.message());
+                    kafkaRaftMetrics.updateNumVoters(voters.size());
+                    if (staticVoterSet.isPresent() && !ignoredStaticVoterSet) {
+                        ignoredStaticVoterSet = true;
+                        externalKRaftMetrics.switchIgnoredStaticVoters();
+                    }
                     logger.info("Latest set of voters is {} at offset {}", voters, currentOffset);
                     synchronized (voterSetHistory) {
                         voterSetHistory.addAt(currentOffset, voters);

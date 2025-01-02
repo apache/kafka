@@ -72,6 +72,7 @@ import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.BlockingMessageQueue;
 import org.apache.kafka.raft.internals.CloseListener;
 import org.apache.kafka.raft.internals.DefaultRequestSender;
+import org.apache.kafka.raft.internals.ExternalKRaftMetrics;
 import org.apache.kafka.raft.internals.FuturePurgatory;
 import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
@@ -466,7 +467,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     public void initialize(
         Map<Integer, InetSocketAddress> voterAddresses,
         QuorumStateStore quorumStateStore,
-        Metrics metrics
+        Metrics metrics,
+        ExternalKRaftMetrics externalKRaftMetrics
     ) {
         VoterSet staticVoters = voterAddresses.isEmpty() ?
             VoterSet.empty() :
@@ -478,7 +480,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             serde,
             BufferSupplier.create(),
             MAX_BATCH_SIZE_BYTES,
-            logContext
+            logContext,
+            kafkaRaftMetrics,
+            externalKRaftMetrics
         );
         // Read the entire log
         logger.info("Reading KRaft snapshot and log as part of the initialization");
@@ -648,7 +652,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         resetConnections();
         kafkaRaftMetrics.maybeUpdateElectionLatency(currentTimeMs);
-        kafkaRaftMetrics.addLeaderMetrics(state);
+        kafkaRaftMetrics.addLeaderMetrics();
     }
 
     private void flushLeaderLog(LeaderState<T> state, long currentTimeMs) {
@@ -3517,14 +3521,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     public Optional<Node> voterNode(int id, ListenerName listenerName) {
         return partitionState.lastVoterSet().voterNode(id, listenerName);
-    }
-
-    public int ignoredStaticVoters() {
-        return partitionState.lastVoterSetOffset().isPresent() ? 1 : 0;
-    }
-
-    public int isObserver() {
-        return quorum.isObserver() ? 1 : 0;
     }
 
     // Visible only for test

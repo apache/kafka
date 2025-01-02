@@ -43,6 +43,7 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
+import org.apache.kafka.raft.internals.ExternalKRaftMetrics
 import org.apache.kafka.raft.{Endpoints, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
@@ -153,7 +154,8 @@ class KafkaRaftManager[T](
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
   bootstrapServers: JCollection[InetSocketAddress],
   localListeners: Endpoints,
-  fatalFaultHandler: FaultHandler
+  fatalFaultHandler: FaultHandler,
+  externalKRaftMetrics: ExternalKRaftMetrics
 ) extends RaftManager[T] with Logging {
 
   val apiVersions = new ApiVersions()
@@ -192,7 +194,8 @@ class KafkaRaftManager[T](
     client.initialize(
       controllerQuorumVotersFuture.get(),
       new FileQuorumStateStore(new File(dataDir, FileQuorumStateStore.DEFAULT_FILE_NAME)),
-      metrics
+      metrics,
+      externalKRaftMetrics
     )
     netChannel.start()
     clientDriver.start()

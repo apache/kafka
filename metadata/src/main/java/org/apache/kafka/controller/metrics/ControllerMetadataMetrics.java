@@ -17,7 +17,7 @@
 
 package org.apache.kafka.controller.metrics;
 
-import org.apache.kafka.raft.KafkaRaftClient;
+import org.apache.kafka.raft.internals.ExternalKRaftMetricIgnoredStaticVoters;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import com.yammer.metrics.core.Gauge;
@@ -28,6 +28,7 @@ import com.yammer.metrics.core.MetricsRegistry;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -38,7 +39,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * IMPORTANT: Metrics which are managed by the QuorumController class itself should go in
  * {@link org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
  */
-public final class ControllerMetadataMetrics implements AutoCloseable {
+public final class ControllerMetadataMetrics implements AutoCloseable, ExternalKRaftMetricIgnoredStaticVoters {
     private static final MetricName FENCED_BROKER_COUNT = getMetricName(
         "KafkaController", "FencedBrokerCount");
     private static final MetricName ACTIVE_BROKER_COUNT = getMetricName(
@@ -63,9 +64,6 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private static final MetricName IGNORED_STATIC_VOTERS = getMetricName(
         "KafkaController", "IgnoredStaticVoters");
 
-    private static final MetricName IS_OBSERVER = getMetricName(
-        "KafkaController", "IsObserver");
-
     private final Optional<MetricsRegistry> registry;
     private final AtomicInteger fencedBrokerCount = new AtomicInteger(0);
     private final AtomicInteger activeBrokerCount = new AtomicInteger(0);
@@ -77,6 +75,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private final AtomicInteger metadataErrorCount = new AtomicInteger(0);
     private final AtomicInteger zkMigrationState = new AtomicInteger(-1);
     private Optional<Meter> uncleanLeaderElectionMeter = Optional.empty();
+
+    private final AtomicBoolean ignoredStaticVoters = new AtomicBoolean(false);
 
 
     /**
@@ -144,20 +144,11 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
 
         registry.ifPresent(r -> uncleanLeaderElectionMeter =
                 Optional.of(registry.get().newMeter(UNCLEAN_LEADER_ELECTIONS_PER_SEC, "elections", TimeUnit.SECONDS)));
-    }
 
-    public <T> void addRaftMetrics(KafkaRaftClient<T> client) {
-        registry.ifPresent(r -> r.newGauge(IGNORED_STATIC_VOTERS, new Gauge<Integer>() {
+        registry.ifPresent(r -> r.newGauge(IGNORED_STATIC_VOTERS, new Gauge<Boolean>() {
             @Override
-            public Integer value() {
-                return client.ignoredStaticVoters();
-            }
-        }));
-
-        registry.ifPresent(r -> r.newGauge(IS_OBSERVER, new Gauge<Integer>() {
-            @Override
-            public Integer value() {
-                return client.isObserver();
+            public Boolean value() {
+                return ignoredStaticVoters();
             }
         }));
     }
@@ -266,6 +257,13 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         this.uncleanLeaderElectionMeter.ifPresent(m -> m.mark(count));
     }
 
+    public void switchIgnoredStaticVoters() {
+        ignoredStaticVoters.compareAndSet(false, true);
+    }
+    public boolean ignoredStaticVoters() {
+        return this.ignoredStaticVoters.get();
+    }
+
     @Override
     public void close() {
         registry.ifPresent(r -> Arrays.asList(
@@ -279,8 +277,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             METADATA_ERROR_COUNT,
             ZK_MIGRATION_STATE,
             UNCLEAN_LEADER_ELECTIONS_PER_SEC,
-            IGNORED_STATIC_VOTERS,
-            IS_OBSERVER
+            IGNORED_STATIC_VOTERS
         ).forEach(r::removeMetric));
     }
 

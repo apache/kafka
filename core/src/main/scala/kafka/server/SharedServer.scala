@@ -34,6 +34,7 @@ import org.apache.kafka.metadata.ListenerInfo
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
 import org.apache.kafka.raft.Endpoints
+import org.apache.kafka.raft.internals.ExternalKRaftMetrics
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
@@ -277,6 +278,8 @@ class SharedServer(
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
 
+        val externalKRaftMetrics = new ExternalKRaftMetrics(brokerMetrics, controllerServerMetrics)
+
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           clusterId,
           sharedServerConfig,
@@ -290,17 +293,11 @@ class SharedServer(
           controllerQuorumVotersFuture,
           bootstrapServers,
           listenerEndpoints,
-          raftManagerFaultHandler
+          raftManagerFaultHandler,
+          externalKRaftMetrics
         )
         raftManager = _raftManager
         _raftManager.startup()
-
-        if (sharedServerConfig.processRoles.contains(ProcessRole.BrokerRole)) {
-          brokerMetrics.addRaftMetrics(raftManager.client)
-        }
-        if (sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole)) {
-          controllerServerMetrics.addRaftMetrics(raftManager.client)
-        }
 
         metadataLoaderMetrics = if (brokerMetrics != null) {
           new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),

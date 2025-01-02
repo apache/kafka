@@ -25,7 +25,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
-import org.apache.kafka.raft.LeaderState;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
@@ -43,6 +42,9 @@ public class KafkaRaftMetrics implements AutoCloseable {
     private volatile int numUnknownVoterConnections;
     private volatile OptionalLong electionStartMs;
     private volatile OptionalLong pollStartMs;
+    private volatile int numVoters;
+    private volatile int numObservers;
+    private volatile boolean uncommittedVoterChange;
 
     private final MetricName currentLeaderIdMetricName;
     private final MetricName currentVotedIdMetricName;
@@ -143,7 +145,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
         metrics.addMetric(this.numUnknownVoterConnectionsMetricName, (mConfig, currentTimeMs) -> numUnknownVoterConnections);
 
         this.numVotersMetricName = metrics.metricName("number-of-voters", metricGroupName, "Number of voters for a KRaft topic partition.");
-        metrics.addMetric(this.numVotersMetricName, (Gauge<Integer>) (mConfig, currentTimestamp) -> state.numVoters());
+        metrics.addMetric(this.numVotersMetricName, (Gauge<Integer>) (mConfig, currentTimestamp) -> numVoters);
 
         // These metrics should only be present on the leader, otherwise they do not make sense.
         // They should be added when a replica becomes leader and removed when it is no longer leader.
@@ -220,6 +222,18 @@ public class KafkaRaftMetrics implements AutoCloseable {
         electionStartMs = OptionalLong.of(currentTimeMs);
     }
 
+    public void updateNumVoters(int numVoters) {
+        this.numVoters = numVoters;
+    }
+
+    public void updateNumObservers(int numObservers) {
+        this.numObservers = numObservers;
+    }
+
+    public void updateUncommittedVoterChange(boolean uncommittedVoterChange) {
+        this.uncommittedVoterChange = uncommittedVoterChange;
+    }
+
     public void maybeUpdateElectionLatency(long currentTimeMs) {
         if (electionStartMs.isPresent()) {
             electionTimeSensor.record(currentTimeMs - electionStartMs.getAsLong(), currentTimeMs);
@@ -227,15 +241,9 @@ public class KafkaRaftMetrics implements AutoCloseable {
         }
     }
 
-    public <T> void addLeaderMetrics(LeaderState<T> leaderState) {
-        metrics.addMetric(numObserversMetricName, (Gauge<Integer>) (config, now) -> leaderState.numObservers());
-        metrics.addMetric(uncommittedVoterChangeMetricName, (Gauge<Integer>) (config, now) -> {
-            if (leaderState.addVoterHandlerState().isEmpty() && leaderState.removeVoterHandlerState().isEmpty()) {
-                return 0;
-            } else {
-                return 1;
-            }
-        });
+    public void addLeaderMetrics() {
+        metrics.addMetric(numObserversMetricName, (Gauge<Integer>) (config, now) -> numObservers);
+        metrics.addMetric(uncommittedVoterChangeMetricName, (Gauge<Boolean>) (config, now) -> uncommittedVoterChange);
     }
 
     public void removeLeaderMetrics() {

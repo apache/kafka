@@ -64,6 +64,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
+import org.apache.kafka.raft.internals.ExternalKRaftMetrics;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -430,7 +431,8 @@ public final class RaftClientTestContext {
             client.initialize(
                 staticVoterAddressMap,
                 quorumStateStore,
-                metrics
+                metrics,
+                new ExternalKRaftMetrics(null, null)
             );
 
             RaftClientTestContext context = new RaftClientTestContext(

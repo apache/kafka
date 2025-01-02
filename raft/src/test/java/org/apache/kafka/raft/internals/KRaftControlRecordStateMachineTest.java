@@ -19,29 +19,67 @@ package org.apache.kafka.raft.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.KRaftVersionRecord;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.MockLog;
+import org.apache.kafka.raft.MockQuorumStateStore;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.raft.QuorumState;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.VoterSetTest;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.Random;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 final class KRaftControlRecordStateMachineTest {
+    private static final int LOCAL_ID = 0;
+    private static final Uuid LOCAL_DIRECTORY_ID = Uuid.randomUuid();
+    private static final int ELECTION_TIMEOUT_MS = 5000;
+    private static final int FETCH_TIMEOUT_MS = 10000;
+
+    private static final Time TIME = new MockTime();
+    private static final Random RANDOM = new Random(1);
     private static final RecordSerde<String> STRING_SERDE = new StringSerde();
 
     private static MockLog buildLog() {
         return new MockLog(new TopicPartition("partition", 0), Uuid.randomUuid(), new LogContext());
+    }
+
+    private static QuorumState buildQuorumState(VoterSet voterSet) {
+        KRaftControlRecordStateMachine mockPartitionState = Mockito.mock(KRaftControlRecordStateMachine.class);
+
+        Mockito
+            .when(mockPartitionState.lastVoterSet())
+            .thenReturn(voterSet);
+
+        return new QuorumState(
+            OptionalInt.of(LOCAL_ID),
+            LOCAL_DIRECTORY_ID,
+            mockPartitionState,
+            voterSet.listeners(LOCAL_ID),
+            Feature.KRAFT_VERSION.supportedVersionRange(),
+            ELECTION_TIMEOUT_MS,
+            FETCH_TIMEOUT_MS,
+            new MockQuorumStateStore(),
+            TIME,
+            new LogContext("kafka-raft-metrics-test"),
+            RANDOM
+        );
     }
 
     private static KRaftControlRecordStateMachine buildPartitionListener(MockLog log, VoterSet staticVoterSet) {
@@ -51,7 +89,9 @@ final class KRaftControlRecordStateMachineTest {
             STRING_SERDE,
             BufferSupplier.NO_CACHING,
             1024,
-            new LogContext()
+            new LogContext(),
+            new KafkaRaftMetrics(new Metrics(), "raft", buildQuorumState(staticVoterSet)),
+            new ExternalKRaftMetrics(null, null)
         );
     }
 
