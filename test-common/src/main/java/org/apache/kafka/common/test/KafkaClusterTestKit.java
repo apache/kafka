@@ -235,6 +235,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 for (TestKitNode node : nodes.controllerNodes().values()) {
                     socketFactoryManager.getOrCreatePortForListener(node.id(), controllerListenerName);
                 }
+                for (TestKitNode node : nodes.brokerNodes().values()) {
+                    socketFactoryManager.getOrCreatePortForListener(node.id(), brokerListenerName);
+                }
                 for (TestKitNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
                     KafkaConfig config = createNodeConfig(node);

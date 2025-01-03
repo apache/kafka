@@ -30,7 +30,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
@@ -60,6 +62,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -360,6 +363,30 @@ public class ClusterTestExtensionsTest {
             controller.startup();
 
             assertEquals(1, admin.describeMetadataQuorum().quorumInfo().get().nodes().size());
+        }
+    }
+
+    @ClusterTest(types = {Type.KRAFT}, brokers = 1)
+    public void testBrokerRestart(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+        final String topicName = "topic";
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (Admin admin = cluster.admin();
+             Producer<String, String> producer = cluster.producer(Utils.propsToMap(producerProps))) {
+            admin.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
+
+            cluster.waitForTopic(topicName, 1);
+
+            cluster.brokers().values().forEach(broker -> {
+                broker.shutdown();
+                broker.awaitShutdown();
+                broker.startup();
+            });
+
+            RecordMetadata recordMetadata0 = producer.send(new ProducerRecord<>(topicName, 0, "key 0", "value 0")).get();
+            assertEquals(0, recordMetadata0.offset());
         }
     }
 
