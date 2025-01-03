@@ -41,7 +41,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -484,7 +483,7 @@ public class BatchAccumulator<T> implements Closeable {
      * This call will not block, but the drain may require multiple attempts before
      * it can be completed if the thread responsible for appending is holding the
      * append lock. In the worst case, the append will be completed on the next
-     * call to {@link #append(int, List, OptionalLong, boolean)} following the
+     * call to {@link #append(int, List, boolean)} following the
      * initial call to this method.
      *
      * The caller should respect the time to the next flush as indicated by

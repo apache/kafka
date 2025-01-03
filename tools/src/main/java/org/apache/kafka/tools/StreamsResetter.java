@@ -687,7 +687,9 @@ public class StreamsResetter {
         }
 
         public List<String> intermediateTopicsOption() {
-            System.out.println("intermediateTopicsOption is deprecated and will be removed in a future release");
+            if (options.has(intermediateTopicsOption)) {
+                System.out.println("WARN: `--intermediate-topics` is deprecated and will be removed in a future release");
+            }
             return options.valuesOf(intermediateTopicsOption);
         }
 

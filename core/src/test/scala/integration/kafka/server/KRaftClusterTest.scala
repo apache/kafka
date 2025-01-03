@@ -31,7 +31,6 @@ import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.errors.{InvalidPartitionsException, PolicyViolationException, UnsupportedVersionException}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.metadata.{ConfigRecord, FeatureLevelRecord}
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.quota.ClientQuotaAlteration.Op
@@ -122,8 +121,6 @@ class KRaftClusterTest {
       val config = controller.sharedServer.controllerConfig.props
       config.asInstanceOf[util.HashMap[String,String]].put(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:$port")
       controller.sharedServer.controllerConfig.updateCurrentConfig(new KafkaConfig(config))
-      //  metrics will be set to null when closing a controller, so we should recreate it for testing
-      controller.sharedServer.metrics = new Metrics()
 
       // restart controller
       controller.startup()

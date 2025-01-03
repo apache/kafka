@@ -624,9 +624,8 @@ public final class StandaloneHerder extends AbstractHerder {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof StandaloneHerderRequest))
+            if (!(o instanceof StandaloneHerderRequest other))
                 return false;
-            StandaloneHerderRequest other = (StandaloneHerderRequest) o;
             return seq == other.seq;
         }
 

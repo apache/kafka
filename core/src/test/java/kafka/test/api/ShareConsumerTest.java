@@ -39,6 +39,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -275,7 +276,6 @@ public class ShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testAcknowledgementSentOnSubscriptionChange(String persister) throws ExecutionException, InterruptedException {
@@ -599,7 +599,6 @@ public class ShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testExplicitAcknowledgementCommitAsync(String persister) throws InterruptedException {
@@ -656,7 +655,6 @@ public class ShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testExplicitAcknowledgementCommitAsyncPartialBatch(String persister) {
@@ -763,7 +761,6 @@ public class ShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testExplicitAcknowledgeReleaseClose(String persister) {
@@ -1188,7 +1185,6 @@ public class ShareConsumerTest {
         assertEquals(producerCount * messagesPerProducer, totalSuccessResult);
     }
 
-    @Flaky("KAFKA-18025")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testAcquisitionLockTimeoutOnConsumer(String persister) throws InterruptedException {
@@ -1296,7 +1292,6 @@ public class ShareConsumerTest {
      * Test to verify that the acknowledgement commit callback can invoke KafkaShareConsumer.wakeup() and it
      * wakes up the enclosing poll.
      */
-    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testAcknowledgementCommitCallbackCallsShareConsumerWakeup(String persister) throws InterruptedException {
@@ -1349,7 +1344,6 @@ public class ShareConsumerTest {
      * Test to verify that the acknowledgement commit callback can throw an exception, and it is propagated
      * to the caller of poll().
      */
-    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testAcknowledgementCommitCallbackThrowsException(String persister) throws InterruptedException {
@@ -1680,6 +1674,79 @@ public class ShareConsumerTest {
             // The next record should also be consumed successfully by group2
             assertEquals(1, records2.count());
         }
+    }
+
+    @ParameterizedTest(name = "{displayName}.persister={0}")
+    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
+    public void testShareAutoOffsetResetByDuration(String persister) throws Exception {
+        // Set auto offset reset to 1 hour before current time
+        alterShareAutoOffsetReset("group1", "by_duration:PT1H");
+        
+        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
+             KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+
+            long currentTime = System.currentTimeMillis();
+            long twoHoursAgo = currentTime - TimeUnit.HOURS.toMillis(2);
+            long thirtyMinsAgo = currentTime - TimeUnit.MINUTES.toMillis(30);
+            
+            // Produce messages with different timestamps
+            ProducerRecord<byte[], byte[]> oldRecord = new ProducerRecord<>(tp.topic(), tp.partition(), 
+                twoHoursAgo, "old_key".getBytes(), "old_value".getBytes());
+            ProducerRecord<byte[], byte[]> recentRecord = new ProducerRecord<>(tp.topic(), tp.partition(),
+                thirtyMinsAgo, "recent_key".getBytes(), "recent_value".getBytes());
+            ProducerRecord<byte[], byte[]> currentRecord = new ProducerRecord<>(tp.topic(), tp.partition(),
+                currentTime, "current_key".getBytes(), "current_value".getBytes());
+
+            producer.send(oldRecord).get();
+            producer.send(recentRecord).get();
+            producer.send(currentRecord).get();
+            producer.flush();
+
+            shareConsumer.subscribe(Collections.singleton(tp.topic()));
+            
+            // Should only receive messages from last hour (recent and current)
+            List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 2);
+            assertEquals(2, records.size());
+            
+            // Verify timestamps and order
+            assertEquals(thirtyMinsAgo, records.get(0).timestamp());
+            assertEquals("recent_key", new String(records.get(0).key()));
+            assertEquals(currentTime, records.get(1).timestamp());
+            assertEquals("current_key", new String(records.get(1).key()));
+        }
+
+        // Set the auto offset reset to 3 hours before current time
+        // so the consumer should consume all messages (3 records)
+        alterShareAutoOffsetReset("group2", "by_duration:PT3H");
+        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group2");
+             KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+
+            shareConsumer.subscribe(Collections.singleton(tp.topic()));
+            List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 3);
+            assertEquals(3, records.size());
+        }
+    }
+
+    @ParameterizedTest(name = "{displayName}.persister={0}")
+    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
+    public void testShareAutoOffsetResetByDurationInvalidFormat(String persister) throws Exception {
+        // Test invalid duration format
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
+        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
+        
+        // Test invalid duration format
+        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
+            GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:1h"), AlterConfigOp.OpType.SET)));
+        ExecutionException e1 = assertThrows(ExecutionException.class, () -> 
+            adminClient.incrementalAlterConfigs(alterEntries).all().get());
+        assertTrue(e1.getCause() instanceof InvalidConfigurationException);
+
+        // Test negative duration
+        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
+            GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:-PT1H"), AlterConfigOp.OpType.SET)));
+        ExecutionException e2 = assertThrows(ExecutionException.class, () -> 
+            adminClient.incrementalAlterConfigs(alterEntries).all().get());
+        assertTrue(e2.getCause() instanceof InvalidConfigurationException);
     }
 
     private int produceMessages(int messageCount) {

@@ -67,13 +67,11 @@ Unlike trunk, the PR builds _will_ utilize the Gradle cache.
 ### PR Triage
 
 In order to get the attention of committers, we have a triage workflow for Pull Requests
-opened by non-committers. This workflow consists of three files:
+opened by non-committers. This workflow consists of two files:
 
-* [pr-update.yml](pr-update.yml) When a PR is created add the `triage` label if the PR
+* [pr-update.yml](pr-update.yml) When a PR is created, add the `triage` label if the PR
   was opened by a non-committer.
-* [pr-reviewed-trigger.yml](pr-reviewed-trigger.yml) Runs when any PR is reviewed. 
-  Used as a trigger for the next workflow
-* [pr-reviewed.yml](pr-reviewed.yml) Remove the `triage` label after a PR has been reviewed
+* [pr-reviewed.yml](pr-reviewed.yml) Cron job to remove the `triage` label from PRs which have been reviewed
 
 _The pr-update.yml workflow includes pull_request_target!_
 
@@ -100,7 +98,7 @@ There are two files related to this workflow:
 
 * [pr-labeled.yml](pr-labeled.yml) approves a pending approval for PRs that have
 been labeled with `ci-approved`
-* [ci-requested.yml](ci-requested.yml) approves future CI requests automatically
+* [ci-requested.yml](ci-requested.yml) approves future workflow requests automatically
 if the PR has the `ci-approved` label
 
 _The pr-labeled.yml workflow includes pull_request_target!_

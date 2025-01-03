@@ -43,8 +43,7 @@ public class TopicAssignment {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof TopicAssignment)) return false;
-        TopicAssignment other = (TopicAssignment) o;
+        if (!(o instanceof TopicAssignment other)) return false;
         return assignments.equals(other.assignments);
     }
 

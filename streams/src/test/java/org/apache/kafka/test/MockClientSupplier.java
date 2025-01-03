@@ -76,7 +76,7 @@ public class MockClientSupplier implements KafkaClientSupplier {
 
         final MockProducer<byte[], byte[]> producer;
         if (preparedProducers.isEmpty()) {
-            producer = new MockProducer<>(cluster, true, BYTE_ARRAY_SERIALIZER, BYTE_ARRAY_SERIALIZER);
+            producer = new MockProducer<>(cluster, true, null, BYTE_ARRAY_SERIALIZER, BYTE_ARRAY_SERIALIZER);
         } else {
             producer = preparedProducers.remove(0);
         }

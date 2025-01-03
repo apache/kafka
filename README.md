@@ -8,8 +8,10 @@ See our [web site](https://kafka.apache.org) for details on the project.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with 17 and 23. The `release` parameter in javac and scalac is set to `11` for the clients 
-and streams modules, and `17` for the broker and tools, ensuring compatibility with their respective minimum Java versions. 
+We build and test Apache Kafka with 17 and 23. The `release` parameter in javac is set to `11` for the clients 
+and streams modules, and `17` for the rest, ensuring compatibility with their respective
+minimum Java versions. Similarly, the `release` parameter in scalac is set to `11` for the streams modules and `17`
+for the rest.
 
 Scala 2.13 is the only supported version in Apache Kafka.
 
@@ -96,7 +98,7 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
-### Running a Kafka broker in KRaft mode
+### Running a Kafka broker
 
 Using compiled files:
 
@@ -127,19 +129,16 @@ Streams has multiple sub-projects, but you can run all the tests:
 ### Building IDE project ####
 *Note Please ensure that JDK17 is used when developing Kafka.*
 
-*Note that this is not strictly necessary (IntelliJ IDEA has good built-in support for Gradle projects, for example).*
+IntelliJ supports Gradle natively and it will automatically check Java syntax and compatibility for each module, even if
+the Java version shown in the `Structure > Project Settings > Modules` may not be the correct one.
+
+When it comes to Eclipse, run:
 
     ./gradlew eclipse
-    ./gradlew idea
 
 The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
 build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
 to avoid known issues with this configuration.
-
-IntelliJ Language Level awareness:
-
-IntelliJ will automatically check Java syntax and compatibility for each module, even if the Java version is not 
-explicitly set in the Structure > Project Settings > Modules.
 
 ### Publishing the streams quickstart archetype artifact to maven ###
 For the Streams archetype project, one cannot use gradle to upload to maven; instead the `mvn deploy` command needs to be called at the quickstart folder:
@@ -169,6 +168,10 @@ Please note for this to work you should create/update user maven settings (typic
         ...
      </servers>
      ...
+
+### Installing all projects to the local Maven repository ###
+
+    ./gradlew -PskipSigning=true publishToMavenLocal
 
 ### Installing specific projects to the local Maven repository ###
 

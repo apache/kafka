@@ -25,8 +25,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -43,17 +41,14 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link Processor},
- * {@link org.apache.kafka.streams.kstream.Transformer}, and {@link org.apache.kafka.streams.kstream.ValueTransformer}
- * implementations.
+ * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their
+ * {@link org.apache.kafka.streams.kstream.ValueTransformer} implementations.
  * <p>
  * The tests for this class (org.apache.kafka.streams.MockProcessorContextTest) include several behavioral
  * tests that serve as example usage.
  * <p>
  * Note that this class does not take any automated actions (such as firing scheduled punctuators).
  * It simply captures any data it witnesses.
- * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
- * {@link Topology} and using the {@link TopologyTestDriver}.
  *
  * @deprecated Since 4.0. Use {@link org.apache.kafka.streams.processor.api.MockProcessorContext} instead.
  */
@@ -426,8 +421,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * <p> Note, that headers should never be {@code null} in the actual Kafka Streams runtime,
      * even if they could be empty. However, this mock does not guarantee non-{@code null} headers.
      * Thus, you either need to add a {@code null} check to your production code to use this mock
-     * for testing or you always need to set headers manually via {@link #setHeaders(Headers)} to
-     * avoid a {@link NullPointerException} from your {@link Processor} implementation.
+     * for testing, or you always need to set headers manually via {@link #setHeaders(Headers)} to
+     * avoid a {@link NullPointerException} from your {@link org.apache.kafka.streams.kstream.ValueTransformer}implementation.
      *
      * @return the headers
      */

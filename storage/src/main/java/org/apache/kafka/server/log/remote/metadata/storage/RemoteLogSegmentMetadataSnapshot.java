@@ -242,8 +242,7 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof RemoteLogSegmentMetadataSnapshot)) return false;
-        RemoteLogSegmentMetadataSnapshot that = (RemoteLogSegmentMetadataSnapshot) o;
+        if (!(o instanceof RemoteLogSegmentMetadataSnapshot that)) return false;
         return startOffset == that.startOffset
                 && endOffset == that.endOffset
                 && maxTimestampMs == that.maxTimestampMs

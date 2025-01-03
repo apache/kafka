@@ -31,6 +31,7 @@ import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
@@ -50,7 +51,8 @@ class StorageToolTest {
     properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9092")
-    properties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT")
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    properties.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
     properties
   }
 

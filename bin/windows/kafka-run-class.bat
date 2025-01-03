@@ -116,8 +116,17 @@ IF ["%LOG_DIR%"] EQU [""] (
 
 rem Log4j settings
 IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
-	set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%BASE_DIR%/config/tools-log4j.properties
+	set KAFKA_LOG4J_OPTS=-Dlog4j2.configurationFile=file:%BASE_DIR%/config/tools-log4j2.yaml
 ) ELSE (
+    rem Check if Log4j 1.x configuration options are present in KAFKA_LOG4J_OPTS
+    echo %KAFKA_LOG4J_OPTS% | findstr /r /c:"log4j\.[^ ]*(\.properties|\.xml)$" >nul
+    IF %ERRORLEVEL% == 0 (
+        rem Enable Log4j 1.x configuration compatibility mode for Log4j 2
+        set LOG4J_COMPATIBILITY=true
+        echo DEPRECATED: A Log4j 1.x configuration file has been detected, which is no longer recommended. >&2
+        echo To use a Log4j 2.x configuration, please see https://logging.apache.org/log4j/2.x/migrate-from-log4j1.html#Log4j2ConfigurationFormat for details about Log4j configuration file migration. >&2
+        echo You can also use the %BASE_DIR%/config/tool-log4j2.yaml file as a starting point. Make sure to remove the Log4j 1.x configuration after completing the migration. >&2
+    )
   rem create logs directory
   IF not exist "%LOG_DIR%" (
       mkdir "%LOG_DIR%"

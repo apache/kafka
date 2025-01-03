@@ -813,8 +813,8 @@ public class VersionedKeyValueStoreIntegrationTest {
             }
 
             @Override
-            public void init(final StateStoreContext context, final StateStore root) {
-                context.register(
+            public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+                stateStoreContext.register(
                     root,
                     (key, value) -> { }
                 );
