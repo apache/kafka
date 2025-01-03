@@ -270,7 +270,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *                 for (ConsumerRecord&lt;String, String&gt; record : partitionRecords) {
  *                     System.out.println(record.offset() + &quot;: &quot; + record.value());
  *                 }
- *                 consumer.commitSync(Collections.singletonMap(partition, partitionRecords.nextOffsets().get(partition)));
+ *                 consumer.commitSync(Collections.singletonMap(partition, records.nextOffsets().get(partition)));
  *             }
  *         }
  *     } finally {
