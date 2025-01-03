@@ -2216,7 +2216,9 @@ KTable&lt;String, String&gt; joined = left.outerJoin(right,
                                 <pre class="line-numbers"><code class="language-java">KTable&lt;String, Long&gt; left = ...;
                 KTable&lt;Long, Double&gt; right = ...;
 //This foreignKeyExtractor simply uses the left-value to map to the right-key.
-Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
+Function&lt;Long, Long&gt; foreignKeyExtractor = (v) -&gt; v;
+//Alternative: with access to left table key
+BiFunction&lt;String, Long, Long&gt; foreignKeyExtractor = (k, v) -&gt; v;
 
                 KTable&lt;String, String&gt; joined = left.join(right, foreignKeyExtractor,
                     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
@@ -2278,7 +2280,9 @@ Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
                                 <pre class="line-numbers"><code class="language-java">KTable&lt;String, Long&gt; left = ...;
                 KTable&lt;Long, Double&gt; right = ...;
 //This foreignKeyExtractor simply uses the left-value to map to the right-key.
-Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
+Function&lt;Long, Long&gt; foreignKeyExtractor = (v) -&gt; v;
+//Alternative: with access to left table key
+BiFunction&lt;String, Long, Long&gt; foreignKeyExtractor = (k, v) -&gt; v;
 
                 KTable&lt;String, String&gt; joined = left.leftJoin(right, foreignKeyExtractor,
                     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
