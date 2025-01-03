@@ -36,18 +36,14 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QuorumFeaturesTest {
-    private static final Map<String, VersionRange> LOCAL;
+    private static final Map<String, VersionRange> LOCAL = Map.of(
+        "foo", VersionRange.of(0, 3),
+        "bar", VersionRange.of(0, 4),
+        "baz", VersionRange.of(2, 2)
+    );
 
-    private static final QuorumFeatures QUORUM_FEATURES;
-
-    static {
-        LOCAL = Map.of(
-            "foo", VersionRange.of(0, 3),
-            "bar", VersionRange.of(0, 4),
-            "baz", VersionRange.of(2, 2)
-        );
-        QUORUM_FEATURES = new QuorumFeatures(0, LOCAL, Arrays.asList(0, 1, 2));
-    }
+    private static final QuorumFeatures QUORUM_FEATURES = new QuorumFeatures(0, LOCAL,
+        Arrays.asList(0, 1, 2));
 
     @Test
     public void testDefaultFeatureMap() {
