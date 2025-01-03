@@ -2492,7 +2492,7 @@ public class SenderTest {
             FutureRecordMetadata future = futureEntry.getValue();
             assertTrue(future.isDone());
 
-            KafkaException exception = TestUtils.assertFutureThrows(future, KafkaException.class);
+            KafkaException exception = TestUtils.assertFutureThrows(future, InvalidRecordException.class);
             Integer index = futureEntry.getKey();
             if (index == 0 || index == 2) {
                 assertInstanceOf(InvalidRecordException.class, exception);
@@ -2501,7 +2501,7 @@ public class SenderTest {
                 assertInstanceOf(InvalidRecordException.class, exception);
                 assertEquals(Errors.INVALID_RECORD.message(), exception.getMessage());
             } else {
-                assertEquals(KafkaException.class, exception.getClass());
+                assertEquals(InvalidRecordException.class, exception.getClass());
             }
         }
     }

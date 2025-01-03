@@ -2658,7 +2658,7 @@ public class KafkaAdminClientTest {
             DeleteRecordsResult results = env.adminClient().deleteRecords(recordsToDelete);
 
             assertEquals(3L, results.lowWatermarks().get(tp0).get().lowWatermark());
-            TestUtils.assertFutureThrows(results.lowWatermarks().get(tp1), AuthenticationException.class);
+            TestUtils.assertFutureThrows(results.lowWatermarks().get(tp1), SaslAuthenticationException.class);
         }
     }
 
@@ -7754,7 +7754,7 @@ public class KafkaAdminClientTest {
             // Advance time past the default api timeout to time out the inflight request
             time.sleep(defaultApiTimeout + 1);
 
-            TestUtils.assertFutureThrows(result.values().get(tpr1), ApiException.class);
+            TestUtils.assertFutureThrows(result.values().get(tpr1), TimeoutException.class);
             assertNull(result.values().get(tpr2).get());
         }
     }
@@ -7942,7 +7942,7 @@ public class KafkaAdminClientTest {
             // Advance time past the default api timeout to time out the inflight request
             time.sleep(defaultApiTimeout + 1);
 
-            TestUtils.assertFutureThrows(result.descriptions().get(0), ApiException.class);
+            TestUtils.assertFutureThrows(result.descriptions().get(0), TimeoutException.class);
             assertNotNull(result.descriptions().get(1).get());
         }
     }
