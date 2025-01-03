@@ -73,7 +73,6 @@ tools:
     - 'trogdor/**'
     - 'vagrant/**'
     - 'committer-tools/**'
-    - 'log4j-appender/**'
     - 'shell/**'
 
 docs:
@@ -125,3 +124,15 @@ kraft:
     - any-glob-to-any-file:
       - 'metadata/**'
       - 'raft/**'
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "grade/dependencies.gradle"
+      - "LICENSE-binary"
+
+tiered-storage:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '*/src/*/java/org/apache/kafka/server/log/remote/**'
+      - '*/src/*/java/kafka/log/remote/**'

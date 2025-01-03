@@ -90,16 +90,6 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         }
     }
 
-    /**
-     * @see KafkaFutureImpl#thenApply(BaseFunction)
-     * @deprecated Since Kafka 3.0.
-     */
-    @Deprecated
-    @Override
-    public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
-        return thenApply((BaseFunction<T, R>) function);
-    }
-
     @Override
     public KafkaFuture<T> whenComplete(final BiConsumer<? super T, ? super Throwable> biConsumer) {
         CompletableFuture<T> tCompletableFuture = completableFuture.whenComplete((java.util.function.BiConsumer<? super T, ? super Throwable>) (a, b) -> {

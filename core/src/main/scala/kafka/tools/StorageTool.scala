@@ -27,10 +27,10 @@ import net.sourceforge.argparse4j.inf.{ArgumentParserException, Namespace, Subpa
 import net.sourceforge.argparse4j.internal.HelpScreenException
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.{Exit, Utils}
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
-import org.apache.kafka.raft.DynamicVoters
+import org.apache.kafka.raft.{DynamicVoters, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.ReplicationConfigs
 
@@ -88,11 +88,11 @@ object StorageTool extends Logging {
         0
 
       case "version-mapping" =>
-        runVersionMappingCommand(namespace, printStream, Features.PRODUCTION_FEATURES)
+        runVersionMappingCommand(namespace, printStream, Feature.PRODUCTION_FEATURES)
         0
 
       case "feature-dependencies" =>
-        runFeatureDependenciesCommand(namespace, printStream, Features.PRODUCTION_FEATURES)
+        runFeatureDependenciesCommand(namespace, printStream, Feature.PRODUCTION_FEATURES)
         0
 
       case "random-uuid" =>
@@ -134,10 +134,25 @@ object StorageTool extends Logging {
       case None => Option(config.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).
         foreach(v => formatter.setReleaseVersion(MetadataVersion.fromVersionString(v.toString)))
     }
+    Option(namespace.getList[String]("feature")).foreach(
+      featureNamesAndLevels(_).foreachEntry {
+        (k, v) => formatter.setFeatureLevel(k, v)
+      })
     Option(namespace.getString("initial_controllers")).
-      foreach(v => formatter.setInitialVoters(DynamicVoters.parse(v)))
+      foreach(v => formatter.setInitialControllers(DynamicVoters.parse(v)))
     if (namespace.getBoolean("standalone")) {
-      formatter.setInitialVoters(createStandaloneDynamicVoters(config))
+      formatter.setInitialControllers(createStandaloneDynamicVoters(config))
+    }
+    if (namespace.getBoolean("no_initial_controllers")) {
+      formatter.setNoInitialControllersFlag(true)
+    } else {
+      if (config.processRoles.contains(ProcessRole.ControllerRole)) {
+        if (config.quorumConfig.voters().isEmpty && formatter.initialVoters().isEmpty) {
+          throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG +
+            " is not set on this controller, you must specify one of the following: " +
+            "--standalone, --initial-controllers, or --no-initial-controllers.");
+        }
+      }
     }
     Option(namespace.getList("add_scram")).
       foreach(scramArgs => formatter.setScramArguments(scramArgs.asInstanceOf[util.List[String]]))
@@ -156,7 +171,7 @@ object StorageTool extends Logging {
   def runVersionMappingCommand(
     namespace: Namespace,
     printStream: PrintStream,
-    validFeatures: java.util.List[Features]
+    validFeatures: java.util.List[Feature]
   ): Unit = {
     val releaseVersion = Option(namespace.getString("release_version")).getOrElse(MetadataVersion.LATEST_PRODUCTION.toString)
     try {
@@ -166,7 +181,7 @@ object StorageTool extends Logging {
       printStream.print(f"metadata.version=$metadataVersionLevel%d ($releaseVersion%s)%n")
 
       for (feature <- validFeatures.asScala) {
-        val featureLevel = feature.defaultValue(metadataVersion)
+        val featureLevel = feature.defaultLevel(metadataVersion)
         printStream.print(f"${feature.featureName}%s=$featureLevel%d%n")
       }
     } catch {
@@ -179,7 +194,7 @@ object StorageTool extends Logging {
   def runFeatureDependenciesCommand(
     namespace: Namespace,
     printStream: PrintStream,
-    validFeatures: java.util.List[Features]
+    validFeatures: java.util.List[Feature]
   ): Unit = {
     val featureArgs = Option(namespace.getList[String]("feature")).map(_.asScala.toList).getOrElse(List.empty)
 
@@ -238,7 +253,7 @@ object StorageTool extends Logging {
     config: KafkaConfig
   ): DynamicVoters = {
     if (!config.processRoles.contains(ProcessRole.ControllerRole)) {
-      throw new TerseFailure("You cannot use --standalone on a broker node.")
+      throw new TerseFailure("You can only use --standalone on a controller.")
     }
     if (config.effectiveAdvertisedControllerListeners.isEmpty) {
       throw new RuntimeException("No controller listeners found.")
@@ -293,6 +308,7 @@ object StorageTool extends Logging {
               |'SCRAM-SHA-512=[name=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
 
     formatParser.addArgument("--ignore-formatted", "-g")
+      .help("When this option is passed, the format command will skip over already formatted directories rather than failing.")
       .action(storeTrue())
 
     formatParser.addArgument("--release-version", "-r")
@@ -306,12 +322,18 @@ object StorageTool extends Logging {
 
     val reconfigurableQuorumOptions = formatParser.addMutuallyExclusiveGroup()
     reconfigurableQuorumOptions.addArgument("--standalone", "-s")
-      .help("Used to initialize a single-node quorum controller quorum.")
+      .help("Used to initialize a controller as a single-node dynamic quorum.")
+      .action(storeTrue())
+
+    reconfigurableQuorumOptions.addArgument("--no-initial-controllers", "-N")
+      .help("Used to initialize a server without a dynamic quorum topology.")
       .action(storeTrue())
 
     reconfigurableQuorumOptions.addArgument("--initial-controllers", "-I")
-      .help("The initial controllers, as a comma-separated list of id@hostname:port:directory. The same values must be used to format all nodes. For example:\n" +
-        "0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n")
+      .help("Used to initialize a server with a specific dynamic quorum topology. The argument " +
+        "is a comma-separated list of id@hostname:port:directory. The same values must be used to " +
+        "format all nodes. For example:\n0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:" +
+        "MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n")
       .action(store())
   }
 
@@ -447,5 +469,27 @@ object StorageTool extends Logging {
         0
       }
     }
+  }
+
+  def parseNameAndLevel(input: String): (String, java.lang.Short) = {
+    val equalsIndex = input.indexOf("=")
+    if (equalsIndex < 0)
+      throw new RuntimeException("Can't parse feature=level string " + input + ": equals sign not found.")
+    val name = input.substring(0, equalsIndex).trim
+    val levelString = input.substring(equalsIndex + 1).trim
+    try {
+      (name, levelString.toShort)
+    } catch {
+      case _: Throwable =>
+        throw new RuntimeException("Can't parse feature=level string " + input + ": " + "unable to parse " + levelString + " as a short.")
+    }
+  }
+
+  def featureNamesAndLevels(features: java.util.List[String]): Map[String, java.lang.Short] = {
+    features.asScala.map { (feature: String) =>
+      // Ensure the feature exists
+      val nameAndLevel = parseNameAndLevel(feature)
+      (nameAndLevel._1, nameAndLevel._2)
+    }.toMap
   }
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
@@ -73,8 +74,6 @@ import org.mockito.quality.Strictness;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -407,15 +406,6 @@ public class ErrorHandlingTaskTest {
         assertEquals(expected, measured, 0.001d);
     }
 
-    private void verifyCloseSource() throws IOException {
-        verify(producer).close(any(Duration.class));
-        verify(admin).close(any(Duration.class));
-        verify(offsetReader).close();
-        verify(offsetStore).stop();
-        // headerConverter.close() can throw IOException
-        verify(headerConverter).close();
-    }
-
     private void expectTopicCreation(String topic) {
         if (enableTopicCreation) {
             when(admin.describeTopics(topic)).thenReturn(Collections.emptyMap());
@@ -482,8 +472,8 @@ public class ErrorHandlingTaskTest {
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {
-        return new ConsumerRecords<>(Collections.singletonMap(
-                new TopicPartition(record.topic(), record.partition()), singletonList(record)));
+        final TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+        return new ConsumerRecords<>(Map.of(tp, List.of(record)), Map.of(tp, new OffsetAndMetadata(record.offset() + 1, record.leaderEpoch(), "")));
     }
 
     private abstract static class TestSinkTask extends SinkTask {

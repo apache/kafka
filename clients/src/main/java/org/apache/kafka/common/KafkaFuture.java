@@ -48,14 +48,6 @@ public abstract class KafkaFuture<T> implements Future<T> {
     }
 
     /**
-     * A function which takes objects of type A and returns objects of type B.
-     *
-     * @deprecated Since Kafka 3.0. Use the {@link BaseFunction} functional interface.
-     */
-    @Deprecated
-    public abstract static class Function<A, B> implements BaseFunction<A, B> { }
-
-    /**
      * A consumer of two different types of object.
      */
     @FunctionalInterface
@@ -125,12 +117,6 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * completes the future.
      */
     public abstract <R> KafkaFuture<R> thenApply(BaseFunction<T, R> function);
-
-    /**
-     * Prefer {@link KafkaFuture#thenApply(BaseFunction)} as this function is here for backwards compatibility reasons
-     * and might be deprecated/removed in a future release.
-     */
-    public abstract <R> KafkaFuture<R> thenApply(Function<T, R> function);
 
     /**
      * Returns a new KafkaFuture with the same result or exception as this future, that executes the given action

@@ -29,6 +29,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.{KafkaException, requests}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.QuotaConfig
@@ -81,8 +82,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
+  @Flaky("KAFKA-17999")
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDynamicConnectionQuota(quorum: String): Unit = {
     val maxConnectionsPerIP = 5
 
@@ -110,7 +112,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDynamicListenerConnectionQuota(quorum: String): Unit = {
     val initialConnectionCount = connectionCount
 
@@ -183,7 +185,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDynamicListenerConnectionCreationRateQuota(quorum: String): Unit = {
     // Create another listener. PLAINTEXT is an inter-broker listener
     // keep default limits
@@ -245,7 +247,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDynamicIpConnectionRateQuota(quorum: String): Unit = {
     val connRateLimit = 10
     val initialConnectionCount = connectionCount
@@ -303,7 +305,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   private def produceRequest: ProduceRequest =
-    requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+    requests.ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
         Collections.singletonList(new ProduceRequestData.TopicProduceData()
           .setName(topic)

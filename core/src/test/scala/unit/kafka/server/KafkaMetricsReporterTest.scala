@@ -71,7 +71,7 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    val props = TestUtils.createBrokerConfig(1, zkConnectOrNull)
+    val props = TestUtils.createBrokerConfig(1, null)
     props.setProperty(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, "kafka.server.KafkaMetricsReporterTest$MockMetricsReporter")
     props.setProperty(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG, "true")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
@@ -81,16 +81,11 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testMetricsContextNamespacePresent(quorum: String): Unit = {
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.CLUSTERID.get())
-    if (isKRaftTest()) {
-      assertNull(KafkaMetricsReporterTest.MockMetricsReporter.BROKERID.get())
-      assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.NODEID.get())
-    } else {
-      assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.BROKERID.get())
-      assertNull(KafkaMetricsReporterTest.MockMetricsReporter.NODEID.get())
-    }
+    assertNull(KafkaMetricsReporterTest.MockMetricsReporter.BROKERID.get())
+    assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.NODEID.get())
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.JMXPREFIX.get())
 
     broker.shutdown()

@@ -17,10 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.List;
 
 /**
  * Options for {@link Admin#listConsumerGroupOffsets(java.util.Map)} and {@link Admin#listConsumerGroupOffsets(String)}.
@@ -30,25 +28,7 @@ import java.util.List;
 @InterfaceStability.Evolving
 public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsumerGroupOffsetsOptions> {
 
-    private List<TopicPartition> topicPartitions;
     private boolean requireStable = false;
-
-    /**
-     * Set the topic partitions to list as part of the result.
-     * {@code null} includes all topic partitions.
-     * <p>
-     * @deprecated Since 3.3.
-     * Use {@link Admin#listConsumerGroupOffsets(java.util.Map, ListConsumerGroupOffsetsOptions)}
-     * to specify topic partitions.
-     *
-     * @param topicPartitions List of topic partitions to include
-     * @return This ListGroupOffsetsOptions
-     */
-    @Deprecated
-    public ListConsumerGroupOffsetsOptions topicPartitions(List<TopicPartition> topicPartitions) {
-        this.topicPartitions = topicPartitions;
-        return this;
-    }
 
     /**
      * Sets an optional requireStable flag.
@@ -56,18 +36,6 @@ public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsume
     public ListConsumerGroupOffsetsOptions requireStable(final boolean requireStable) {
         this.requireStable = requireStable;
         return this;
-    }
-
-    /**
-     * Returns a list of topic partitions to add as part of the result.
-     * <p>
-     * @deprecated Since 3.3.
-     * Use {@link Admin#listConsumerGroupOffsets(java.util.Map, ListConsumerGroupOffsetsOptions)}
-     * to specify topic partitions.
-     */
-    @Deprecated
-    public List<TopicPartition> topicPartitions() {
-        return topicPartitions;
     }
 
     public boolean requireStable() {

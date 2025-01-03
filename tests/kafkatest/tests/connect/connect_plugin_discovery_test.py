@@ -18,6 +18,7 @@ from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.directory_layout.kafka_path import CONNECT_FILE_JAR
 from kafkatest.version import LATEST_3_5
 from kafkatest.services.connect import ConnectStandaloneService, ConnectServiceBase
+from kafkatest.services.kafka import quorum
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
@@ -41,8 +42,9 @@ class ConnectPluginDiscoveryTest(KafkaTest):
 
     @cluster(num_nodes=3)
     @matrix(plugin_discovery=['only_scan', 'hybrid_warn', 'hybrid_fail', 'service_load'],
-            command=[('sync-manifests', '--dry-run'), ('sync-manifests',)])
-    def test_plugin_discovery_migration(self, plugin_discovery, command):
+            command=[('sync-manifests', '--dry-run'), ('sync-manifests',)],
+            metadata_quorum=[quorum.isolated_kraft])
+    def test_plugin_discovery_migration(self, plugin_discovery, command, metadata_quorum):
         # Template parameters
         self.PLUGIN_DISCOVERY = plugin_discovery
 

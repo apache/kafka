@@ -69,5 +69,4 @@ public class RoundRobinPartitioner implements Partitioner {
     }
 
     public void close() {}
-
 }

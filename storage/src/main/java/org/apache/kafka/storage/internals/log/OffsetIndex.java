@@ -51,7 +51,7 @@ import java.util.Optional;
  * All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal
  * storage format.
  */
-public class OffsetIndex extends AbstractIndex {
+public final class OffsetIndex extends AbstractIndex {
     private static final Logger log = LoggerFactory.getLogger(OffsetIndex.class);
     private static final int ENTRY_SIZE = 8;
 
@@ -66,7 +66,6 @@ public class OffsetIndex extends AbstractIndex {
         this(file, baseOffset, maxIndexSize, true);
     }
 
-    @SuppressWarnings("this-escape")
     public OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
         super(file, baseOffset, maxIndexSize, writable);
 

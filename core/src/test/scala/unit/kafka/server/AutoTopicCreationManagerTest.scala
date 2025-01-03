@@ -40,7 +40,7 @@ import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorCon
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.server.config.{ServerConfigs, ShareCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -339,8 +339,8 @@ class AutoTopicCreationManagerTest {
     topicsCollection.add(getNewTopic(topicName))
     val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
       .setApiKey(ApiKeys.CREATE_TOPICS.id)
-      .setMinVersion(0)
-      .setMaxVersion(0)
+      .setMinVersion(2)
+      .setMaxVersion(2)
     Mockito.when(brokerToController.controllerApiVersions())
       .thenReturn(Optional.of(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))))
 

@@ -712,10 +712,6 @@
   "queryAllPublicMethods":true
 },
 {
-  "name":"kafka.security.authorizer.AclAuthorizer",
-  "methods":[{"name":"<init>","parameterTypes":[] }]
-},
-{
   "name":"org.apache.kafka.tools.LineMessageReader",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },

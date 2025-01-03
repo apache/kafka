@@ -17,7 +17,9 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -27,6 +29,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -50,7 +54,21 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
 
+/**
+ * Please ensure any new record added here stays in sync with DumpLogSegments.
+ */
 public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
+    // This method is temporary until the share coordinator is converted to
+    // using the new coordinator records.
+    @Override
+    public byte[] serializeKey(CoordinatorRecord record) {
+        // Record does not accept a null key.
+        return MessageUtil.toCoordinatorTypePrefixedBytes(
+            record.key().version(),
+            record.key().message()
+        );
+    }
+
     @Override
     protected ApiMessage apiMessageKeyFor(short recordVersion) {
         switch (recordVersion) {
@@ -85,6 +103,8 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
                 return new ShareGroupCurrentMemberAssignmentKey();
             case 15:
                 return new ShareGroupStatePartitionMetadataKey();
+            case 16:
+                return new ConsumerGroupRegularExpressionKey();
             default:
                 throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
         }
@@ -124,6 +144,8 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
                 return new ShareGroupCurrentMemberAssignmentValue();
             case 15:
                 return new ShareGroupStatePartitionMetadataValue();
+            case 16:
+                return new ConsumerGroupRegularExpressionValue();
             default:
                 throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
         }

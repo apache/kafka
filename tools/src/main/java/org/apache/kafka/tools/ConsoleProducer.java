@@ -83,8 +83,7 @@ public class ConsoleProducer {
     RecordReader messageReader(ConsoleProducerOptions opts) throws Exception {
         Object objReader = Class.forName(opts.readerClass()).getDeclaredConstructor().newInstance();
 
-        if (objReader instanceof RecordReader) {
-            RecordReader reader = (RecordReader) objReader;
+        if (objReader instanceof RecordReader reader) {
             reader.configure(opts.readerProps());
 
             return reader;

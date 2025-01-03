@@ -21,8 +21,10 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
@@ -31,7 +33,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
@@ -93,7 +94,7 @@ public abstract class AbstractSessionBytesStoreTest {
 
     private MockRecordCollector recordCollector;
 
-    InternalMockProcessorContext context;
+    InternalMockProcessorContext<?, ?> context;
 
     <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
                                                          final Serde<K> keySerde,
@@ -159,7 +160,7 @@ public abstract class AbstractSessionBytesStoreTest {
                 new MockStreamsMetrics(new Metrics())));
         context.setTime(1L);
 
-        sessionStore.init((StateStoreContext) context, sessionStore);
+        sessionStore.init(context, sessionStore);
     }
 
     @AfterEach
@@ -240,6 +241,7 @@ public abstract class AbstractSessionBytesStoreTest {
         }
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldFindSessionsForTimeRange() {
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 5L);
@@ -552,7 +554,7 @@ public abstract class AbstractSessionBytesStoreTest {
     public void shouldFetchExactKeys() {
         sessionStore.close();
         sessionStore = buildSessionStore(0x7a00000000000000L, Serdes.String(), Serdes.Long());
-        sessionStore.init((StateStoreContext) context, sessionStore);
+        sessionStore.init(context, sessionStore);
 
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
@@ -582,7 +584,7 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.findSessions("a", "aa", 10, 0)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L))));
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
@@ -608,7 +610,7 @@ public abstract class AbstractSessionBytesStoreTest {
     public void shouldBackwardFetchExactKeys() {
         sessionStore.close();
         sessionStore = buildSessionStore(0x7a00000000000000L, Serdes.String(), Serdes.Long());
-        sessionStore.init((StateStoreContext) context, sessionStore);
+        sessionStore.init(context, sessionStore);
 
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
@@ -638,7 +640,7 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.backwardFindSessions("a", "aa", 10, 0)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L))));
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
@@ -665,7 +667,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final SessionStore<Bytes, String> sessionStore =
             buildSessionStore(RETENTION_PERIOD, Serdes.Bytes(), Serdes.String());
 
-        sessionStore.init((StateStoreContext) context, sessionStore);
+        sessionStore.init(context, sessionStore);
 
         final Bytes key1 = Bytes.wrap(new byte[] {0});
         final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
@@ -704,7 +706,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final SessionStore<Bytes, String> sessionStore =
             buildSessionStore(RETENTION_PERIOD, Serdes.Bytes(), Serdes.String());
 
-        sessionStore.init((StateStoreContext) context, sessionStore);
+        sessionStore.init(context, sessionStore);
 
         final Bytes key1 = Bytes.wrap(new byte[] {0});
         final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
@@ -747,10 +749,11 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", 0L, 20)) {
-
-            assertEquals(iterator.peekNextKey(), new Windowed<>("a", new SessionWindow(0L, 0L)));
-            assertEquals(iterator.peekNextKey(), iterator.next().key);
-            assertEquals(iterator.peekNextKey(), iterator.next().key);
+            assertEquals(new Windowed<>("a", new SessionWindow(0L, 0L)), iterator.peekNextKey());
+            final Windowed<String> k1 = iterator.peekNextKey();
+            assertEquals(iterator.next().key, k1);
+            final Windowed<String> k2 = iterator.peekNextKey();
+            assertEquals(iterator.next().key, k2);
             assertFalse(iterator.hasNext());
         }
     }
@@ -763,15 +766,15 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.backwardFindSessions("a", 0L, 20)) {
-
-            assertEquals(iterator.peekNextKey(), new Windowed<>("a", new SessionWindow(10L, 20L)));
-            assertEquals(iterator.peekNextKey(), iterator.next().key);
-            assertEquals(iterator.peekNextKey(), iterator.next().key);
+            assertEquals(new Windowed<>("a", new SessionWindow(10L, 20L)), iterator.peekNextKey());
+            final Windowed<String> k1 = iterator.peekNextKey();
+            assertEquals(iterator.next().key, k1);
+            final Windowed<String> k2 = iterator.peekNextKey();
+            assertEquals(iterator.next().key, k2);
             assertFalse(iterator.hasNext());
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldRestore() {
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
@@ -842,7 +845,7 @@ public abstract class AbstractSessionBytesStoreTest {
     public void shouldMeasureExpiredRecords() {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext<?, ?> context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig),
             recordCollector
@@ -850,7 +853,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final Time time = Time.SYSTEM;
         context.setTime(1L);
         context.setSystemTimeMs(time.milliseconds());
-        sessionStore.init((StateStoreContext) context, sessionStore);
+        sessionStore.init(context, sessionStore);
 
         // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
         // Note that rocksdb will only expire segments at a time (where segment interval = 60,000 for this retention period)
@@ -894,11 +897,13 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.remove(new Windowed<>("a", new SessionWindow(0, 1)));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() {
         assertThrows(NullPointerException.class, () -> sessionStore.findSessions(null, 1L, 2L));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerExceptionOnFetchNullKey() {
         assertThrows(NullPointerException.class, () -> sessionStore.fetch(null));
@@ -914,12 +919,11 @@ public abstract class AbstractSessionBytesStoreTest {
         assertThrows(NullPointerException.class, () -> sessionStore.put(null, 1L));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
-        final String keyFrom = Serdes.String().deserializer()
-            .deserialize("", Serdes.Integer().serializer().serialize("", -1));
-        final String keyTo = Serdes.String().deserializer()
-            .deserialize("", Serdes.Integer().serializer().serialize("", 1));
+        final String keyFrom = new StringDeserializer().deserialize("", new IntegerSerializer().serialize("", -1));
+        final String keyTo = new StringDeserializer().deserialize("", new IntegerSerializer().serialize("", 1));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
              final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L)) {
@@ -968,16 +972,12 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldMatchPositionAfterPut() {
-        final MeteredSessionStore<String, Long> meteredSessionStore = (MeteredSessionStore<String, Long>) sessionStore;
-        final ChangeLoggingSessionBytesStore changeLoggingSessionBytesStore = (ChangeLoggingSessionBytesStore) meteredSessionStore.wrapped();
-        final SessionStore wrapped = (SessionStore) changeLoggingSessionBytesStore.wrapped();
-
         context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
-        sessionStore.put(new Windowed<String>("a", new SessionWindow(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "", new RecordHeaders()));
-        sessionStore.put(new Windowed<String>("aa", new SessionWindow(0, 10)), 2L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
         context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
-        sessionStore.put(new Windowed<String>("a", new SessionWindow(10, 20)), 3L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
 
         final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
         final Position actual = sessionStore.getPosition();

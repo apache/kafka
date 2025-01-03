@@ -177,23 +177,4 @@ public class JmxReporterTest {
             metrics.close();
         }
     }
-
-    @Test
-    public void testDeprecatedJmxPrefixWithDefaultMetrics() throws Exception {
-        @SuppressWarnings("deprecation")
-        JmxReporter reporter = new JmxReporter("my-prefix");
-
-        // for backwards compatibility, ensure prefix does not get overridden by the default empty namespace in metricscontext
-        MetricConfig metricConfig = new MetricConfig();
-        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Collections.singletonList(reporter)), Time.SYSTEM);
-
-        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        try {
-            Sensor sensor = metrics.sensor("my-sensor");
-            sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
-            assertEquals("my-prefix", server.getObjectInstance(new ObjectName("my-prefix:type=grp1")).getObjectName().getDomain());
-        } finally {
-            metrics.close();
-        }
-    }
 }

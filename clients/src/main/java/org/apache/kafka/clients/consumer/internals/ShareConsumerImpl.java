@@ -47,6 +47,7 @@ import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCo
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -160,6 +161,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
     private final KafkaShareConsumerMetrics kafkaShareConsumerMetrics;
+    private final AsyncConsumerMetrics asyncConsumerMetrics;
     private Logger log;
     private final String clientId;
     private final String groupId;
@@ -252,6 +254,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
+            this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
 
             this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
             this.currentFetch = ShareFetch.empty();
@@ -266,7 +269,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             ShareFetchMetricsManager shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
-            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
+                backgroundEventQueue, time, asyncConsumerMetrics);
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new ShareFetchBuffer(logContext);
@@ -279,7 +283,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     metrics,
                     shareFetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
-                    backgroundEventHandler
+                    backgroundEventHandler,
+                    true,
+                    asyncConsumerMetrics
             );
             this.completedAcknowledgements = new LinkedList<>();
 
@@ -310,7 +316,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     new CompletableEventReaper(logContext),
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
-                    requestManagersSupplier);
+                    requestManagersSupplier,
+                    asyncConsumerMetrics);
 
             this.backgroundEventProcessor = new BackgroundEventProcessor();
             this.backgroundEventReaper = backgroundEventReaperFactory.build(logContext);
@@ -372,13 +379,15 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 new FetchConfig(config),
                 deserializers);
         this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
+        this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
 
         final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         final BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+        final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
+            backgroundEventQueue, time, asyncConsumerMetrics);
 
         final Supplier<NetworkClientDelegate> networkClientDelegateSupplier =
-                () -> new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler);
+                () -> new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, true, asyncConsumerMetrics);
 
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 config,
@@ -411,7 +420,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 new CompletableEventReaper(logContext),
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
-                requestManagersSupplier);
+                requestManagersSupplier,
+                asyncConsumerMetrics);
 
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventProcessor = new BackgroundEventProcessor();
@@ -457,6 +467,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
         this.clientTelemetryReporter = Optional.empty();
         this.completedAcknowledgements = Collections.emptyList();
+        this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
     }
 
     // auxiliary interface for testing
@@ -469,7 +480,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 final CompletableEventReaper applicationEventReaper,
                 final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                 final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                final Supplier<RequestManagers> requestManagersSupplier
+                final Supplier<RequestManagers> requestManagersSupplier,
+                final AsyncConsumerMetrics asyncConsumerMetrics
         );
     }
 
@@ -580,7 +592,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 final ShareFetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     currentFetch = fetch;
-                    return new ConsumerRecords<>(fetch.records());
+                    return new ConsumerRecords<>(fetch.records(), Map.of());
                 }
 
                 metadata.maybeThrowAnyException();
@@ -785,7 +797,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     @Override
     public Uuid clientInstanceId(final Duration timeout) {
-        if (!clientTelemetryReporter.isPresent()) {
+        if (clientTelemetryReporter.isEmpty()) {
             throw new IllegalStateException("Telemetry is not enabled. Set config `" + ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
         }
 
@@ -854,6 +866,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             backgroundEventReaper.reap(backgroundEventQueue);
 
         closeQuietly(kafkaShareConsumerMetrics, "kafka share consumer metrics", firstException);
+        closeQuietly(asyncConsumerMetrics, "kafka async consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);
         clientTelemetryReporter.ifPresent(reporter -> closeQuietly(reporter, "consumer telemetry reporter", firstException));

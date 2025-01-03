@@ -52,7 +52,11 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
         assertFalse(iterator.hasNext());
 
         iterator.close();
-        assertFalse(sessionStore.findSessions("a", "b", 0L, 20L).hasNext());
+
+        try (final KeyValueIterator<Windowed<String>, Long> it =
+             sessionStore.findSessions("a", "b", 0L, 20L)) {
+            assertFalse(it.hasNext());
+        }
     }
 
 }

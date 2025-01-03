@@ -32,6 +32,7 @@ public class StreamsNotStartedException extends InvalidStateStoreException {
         super(message);
     }
 
+    @SuppressWarnings("unused")
     public StreamsNotStartedException(final String message, final Throwable throwable) {
         super(message, throwable);
     }

@@ -36,6 +36,7 @@ class EndToEndTest(Test):
 
     def __init__(self, test_context, topic="test_topic", topic_config=DEFAULT_TOPIC_CONFIG):
         super(EndToEndTest, self).__init__(test_context=test_context)
+        self.zk = None
         self.topic = topic
         self.topic_config = topic_config
         self.records_consumed = []

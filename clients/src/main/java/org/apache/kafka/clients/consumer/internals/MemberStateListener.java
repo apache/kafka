@@ -17,21 +17,34 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.TopicPartition;
+
 import java.util.Optional;
+import java.util.Set;
 
 /**
- * Listener for getting notified of member ID and epoch changes.
+ * Listener for getting notified of membership state changes.
  */
 public interface MemberStateListener {
 
     /**
-     * Called whenever member ID or epoch change with new values received from the broker or
+     * Called whenever epoch changes with new values received from the broker or
      * cleared if the member is not part of the group anymore (when it gets fenced, leaves the
      * group or fails).
      *
      * @param memberEpoch New member epoch received from the broker. Empty if the member is
      *                    not part of the group anymore.
-     * @param memberId    Current member ID. Empty if the member is not part of the group.
+     * @param memberId    Current member ID. It won't change until the process is terminated.
      */
-    void onMemberEpochUpdated(Optional<Integer> memberEpoch, Optional<String> memberId);
+    void onMemberEpochUpdated(Optional<Integer> memberEpoch, String memberId);
+
+    /**
+     * This callback is invoked when a group member's assigned set of partitions changes. Assignments can change via
+     * group coordinator partition assignment changes, unsubscribing, and when leaving the group.
+     *
+     * @param partitions New assignment, can be empty, but not {@code null}
+     */
+    default void onGroupAssignmentUpdated(Set<TopicPartition> partitions) {
+
+    }
 }

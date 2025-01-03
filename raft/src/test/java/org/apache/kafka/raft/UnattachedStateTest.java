@@ -82,15 +82,28 @@ public class UnattachedStateTest {
 
         assertEquals(
             isLogUpToDate,
-            state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+            state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true)
         );
         assertEquals(
             isLogUpToDate,
-            state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+            state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true)
         );
         assertEquals(
             isLogUpToDate,
-            state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+            state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true)
+        );
+
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false)
         );
     }
 
@@ -112,9 +125,24 @@ public class UnattachedStateTest {
         // Check that the leader is persisted if the leader is known
         assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), state.election());
 
-        // Check that the replica rejects all votes request if the leader is known
-        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
+        // Check that the replica can grant PreVotes if the log is up-to-date, even if the last leader is known
+        // This is because nodes in Unattached have not successfully fetched from the leader yet
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true)
+        );
+
+        // Check that the replica rejects all standard votes request if the leader is known
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
     }
 }

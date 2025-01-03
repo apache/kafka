@@ -42,6 +42,7 @@ public final class MessageSpec {
     private final boolean latestVersionUnstable;
 
     @JsonCreator
+    @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
     public MessageSpec(@JsonProperty("name") String name,
                        @JsonProperty("validVersions") String validVersions,
                        @JsonProperty("deprecatedVersions") String deprecatedVersions,
@@ -81,6 +82,24 @@ public final class MessageSpec {
                 "messages with type `request`");
         }
         this.latestVersionUnstable = latestVersionUnstable;
+
+        if (type == MessageSpecType.COORDINATOR_KEY) {
+            if (this.apiKey.isEmpty()) {
+                throw new RuntimeException("The ApiKey must be set for messages " + name + " with type `coordinator-key`");
+            }
+            if (!this.validVersions().equals(new Versions((short) 0, ((short) 0)))) {
+                throw new RuntimeException("The Versions must be set to `0` for messages " + name + " with type `coordinator-key`");
+            }
+            if (!this.flexibleVersions.empty()) {
+                throw new RuntimeException("The FlexibleVersions are not supported for messages " + name + "  with type `coordinator-key`");
+            }
+        }
+
+        if (type == MessageSpecType.COORDINATOR_VALUE) {
+            if (this.apiKey.isEmpty()) {
+                throw new RuntimeException("The ApiKey must be set for messages with type `coordinator-value`");
+            }
+        }
     }
 
     public StructSpec struct() {

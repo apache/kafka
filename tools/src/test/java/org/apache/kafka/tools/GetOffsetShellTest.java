@@ -107,7 +107,7 @@ public class GetOffsetShellTest {
     }
 
     private void setupTopics(Function<Integer, String> topicName, Map<String, String> configs) {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
             List<NewTopic> topics = new ArrayList<>();
 
             IntStream.range(0, topicCount + 1).forEach(i ->
@@ -187,9 +187,7 @@ public class GetOffsetShellTest {
         public boolean equals(Object o) {
             if (o == this) return true;
 
-            if (!(o instanceof Row)) return false;
-
-            Row r = (Row) o;
+            if (!(o instanceof Row r)) return false;
 
             return name.equals(r.name) && partition == r.partition && Objects.equals(offset, r.offset);
         }
@@ -205,11 +203,7 @@ public class GetOffsetShellTest {
         setUp();
 
         List<Row> output = executeAndParse();
-        if (!cluster.isKRaftTest()) {
-            assertEquals(expectedOffsetsWithInternal(), output);
-        } else {
-            assertEquals(expectedTestTopicOffsets(), output);
-        }
+        assertEquals(expectedTestTopicOffsets(), output);
     }
 
     @ClusterTest
@@ -247,11 +241,7 @@ public class GetOffsetShellTest {
         setUp();
 
         List<Row> offsets = executeAndParse("--partitions", "0,1");
-        if (!cluster.isKRaftTest()) {
-            assertEquals(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
-        } else {
-            assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
-        }
+        assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
     }
 
     @ClusterTest

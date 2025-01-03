@@ -84,6 +84,7 @@ settings.put(... , ...);</code></pre>
               <li><a class="reference internal" href="#probing-rebalance-interval-ms" id="id30">probing.rebalance.interval.ms</a></li>
               <li><a class="reference internal" href="#processing-exception-handler" id="id41">processing.exception.handler</a></li>
               <li><a class="reference internal" href="#processing-guarantee" id="id25">processing.guarantee</a></li>
+              <li><a class="reference internal" href="#processor-wrapper-class" id="id42">processor.wrapper.class</a></li>
               <li><a class="reference internal" href="#production-exception-handler" id="id24">production.exception.handler</a></li>
               <li><a class="reference internal" href="#rack-aware-assignment-non-overlap-cost" id="id37">rack.aware.assignment.non_overlap_cost</a></li>
               <li><a class="reference internal" href="#rack-aware-assignment-strategy" id="id35">rack.aware.assignment.strategy</a></li>
@@ -231,9 +232,9 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
         <p>Here are the optional <a href="/{{version}}/javadoc/org/apache/kafka/streams/StreamsConfig.html">Streams</a> javadocs, sorted by level of importance:</p>
         <blockquote>
           <div><ul class="simple">
-            <li>High: These parameters can have a significant impact on performance. Take care when deciding the values of these parameters.</li>
-            <li>Medium: These parameters can have some impact on performance. Your specific environment will determine how much tuning effort should be focused on these parameters.</li>
-            <li>Low: These parameters have a less general or less significant impact on performance.</li>
+            <li>High: These are parameters with a default value which is most likely not a good fit for production use. It's highly recommended to revisit these parameters for production usage.</li>
+            <li>Medium: The default values of these parameters should work for production for many cases, but it's not uncommon that they are changed, for example to tune performance.</li>
+            <li>Low: It should rarely be necessary to change the value for these parameters. It's only recommended to change them if there is a very specific issue you want to address.</li>
           </ul>
           </div></blockquote>
         <table border="1" class="non-scrolling-table docutils">
@@ -265,12 +266,12 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-odd"><td>statestore.cache.max.bytes</td>
             <td>Medium</td>
             <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads.</td>
-            <td>10485760</td>
+            <td><code class="docutils literal"><span class="pre">10485760</span></code></td>
           </tr>
           <tr class="row-even"><td>cache.max.bytes.buffering (Deprecated. Use statestore.cache.max.bytes instead.)</td>
             <td>Medium</td>
             <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads.</td>
-            <td>10485760 bytes</td>
+            <td><code class="docutils literal"><span class="pre">10485760</span></code></td>
           </tr>
           <tr class="row-odd"><td>client.id</td>
             <td>Medium</td>
@@ -281,7 +282,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-even"><td>commit.interval.ms</td>
             <td>Low</td>
             <td colspan="2">The frequency in milliseconds with which to save the position (offsets in source topics) of tasks.</td>
-            <td>30000 milliseconds (30 seconds)</td>
+            <td><code class="docutils literal"><span class="pre">30000</span></code> (30 seconds)</td>
           </tr>
           <tr class="row-odd"><td>default.deserialization.exception.handler (Deprecated. Use deserialization.exception.handler instead.)</td>
             <td>Medium</td>
@@ -301,8 +302,9 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           </tr>
           <tr class="row-even"><td>default.timestamp.extractor</td>
             <td>Medium</td>
-            <td colspan="2">Timestamp extractor class that implements the <code class="docutils literal"><span class="pre">TimestampExtractor</span></code> interface.</td>
-            <td>See <a class="reference internal" href="#streams-developer-guide-timestamp-extractor"><span class="std std-ref">Timestamp Extractor</span></a></td>
+            <td colspan="2">Timestamp extractor class that implements the <code class="docutils literal"><span class="pre">TimestampExtractor</span></code> interface.
+              See <a class="reference internal" href="#streams-developer-guide-timestamp-extractor"><span class="std std-ref">Timestamp Extractor</span></a></td>
+            <td><code class="docutils literal"><span class="pre">FailOnInvalidTimestamp</span></code></td>
           </tr>
           <tr class="row-odd"><td>default.value.serde</td>
             <td>Medium</td>
@@ -316,7 +318,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               [DEPRECATED] The default state store type used by DSL operators. Deprecated in
               favor of <code>dsl.store.suppliers.class</code>
               </td>
-            <td><code>ROCKS_DB</code></td>
+            <td><code class="docutils literal"><span class="pre">"ROCKS_DB"</span></code></td>
           </tr>
           <tr class="row-odd"><td>deserialization.exception.handler</td>
             <td>Medium</td>
@@ -335,7 +337,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-odd"><td>log.summary.interval.ms</td>
             <td>Low</td>
             <td colspan="2">The output interval in milliseconds for logging summary information (disabled if negative).</td>
-            <td>120000 milliseconds (2 minutes)</td>
+            <td><code class="docutils literal"><span class="pre">120000</span></code> (2 minutes)</td>
           </tr>
           <tr class="row-even"><td>max.task.idle.ms</td>
             <td>Medium</td>
@@ -354,7 +356,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
                 even though doing so may produce out-of-order processing.
               </p>
             </td>
-            <td>0 milliseconds</td>
+            <td><code class="docutils literal"><span class="pre">0</span></code></td>
           </tr>
           <tr class="row-odd"><td>max.warmup.replicas</td>
             <td>Medium</td>
@@ -379,7 +381,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-odd"><td>metrics.sample.window.ms</td>
             <td>Low</td>
             <td colspan="2">The window of time in milliseconds a metrics sample is computed over.</td>
-            <td>30000 milliseconds (30 seconds)</td>
+            <td><code class="docutils literal"><span class="pre">30000</span></code> (30 seconds)</td>
           </tr>
           <tr class="row-even"><td>num.standby.replicas</td>
             <td>High</td>
@@ -394,7 +396,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-even"><td>probing.rebalance.interval.ms</td>
             <td>Low</td>
             <td colspan="2">The maximum time in milliseconds to wait before triggering a rebalance to probe for warmup replicas that have sufficiently caught up.</td>
-            <td>600000 milliseconds (10 minutes)</td>
+            <td><code class="docutils literal"><span class="pre">600000</span></code> (10 minutes)</td>
           </tr>
           <tr class="row-odd"><td>processing.exception.handler</td>
             <td>Medium</td>
@@ -403,48 +405,77 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           </tr>
           <tr class="row-even"><td>processing.guarantee</td>
             <td>Medium</td>
-            <td colspan="2">The processing mode. Can be either <code class="docutils literal"><span class="pre">"at_least_once"</span></code> (default)
-              or <code class="docutils literal"><span class="pre">"exactly_once_v2"</span></code> (for EOS version 2, requires broker version 2.5+). Deprecated config options are
-              <code class="docutils literal"><span class="pre">"exactly_once"</span></code> (for EOS version 1) and <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code> (for EOS version 2, requires broker version 2.5+)</td>.
-            <td>See <a class="reference internal" href="#streams-developer-guide-processing-guarantee"><span class="std std-ref">Processing Guarantee</span></a></td>
+            <td colspan="2">The processing mode. Can be either <code class="docutils literal"><span class="pre">"at_least_once"</span></code>
+              or <code class="docutils literal"><span class="pre">"exactly_once_v2"</span></code> (for EOS version 2, requires broker version 2.5+).
+              See <a class="reference internal" href="#streams-developer-guide-processing-guarantee"><span class="std std-ref">Processing Guarantee</span></a>.</td>.
+            <td><code class="docutils literal"><span class="pre">"at_least_once"</span></code></td>
           </tr>
-          <tr class="row-odd"><td>production.exception.handler</td>
+          <tr class="row-odd"><td>processor.wrapper.class</td>
+            <td>Medium</td>
+            <td colspan="2">A class or class name implementing the <code class="docutils literal"><span class="pre">ProcessorWrapper</span></code> interface.
+              Must be passed in when creating the topology, and will not be applied unless passed in to the appropriate constructor as a TopologyConfig. You should
+              use the <code class="docutils literal"><span class="pre">StreamsBuilder#new(TopologyConfig)</span></code> constructor for DSL applications, and the
+              <code class="docutils literal"><span class="pre">Topology#new(TopologyConfig)</span></code> constructor for PAPI applications.</td>
+          </tr>
+          <tr class="row-even"><td>production.exception.handler</td>
             <td>Medium</td>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">ProductionExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">DefaultProductionExceptionHandler</span></code></td>
           </tr>
-          <tr class="row-even"><td>poll.ms</td>
+          <tr class="row-odd"><td>poll.ms</td>
             <td>Low</td>
             <td colspan="2">The amount of time in milliseconds to block waiting for input.</td>
-            <td>100 milliseconds</td>
+            <td><code class="docutils literal"><span class="pre">100</span></code></td>
           </tr>
-          <tr class="row-odd"><td>rack.aware.assignment.tags</td>
-            <td>Medium</td>
+          <tr class="row-evem"><td>rack.aware.assignment.strategy</td>
+            <td>Low</td>
+            <td colspan="2">The strategy used for rack aware assignment. Acceptable value are
+              <code class="docutils literal"><span class="pre">"none"</span></code> (default),
+              <code class="docutils literal"><span class="pre">"min_traffic"</span></code>, and
+              <code class="docutils literal"><span class="pre">"balance_suttopology"</span></code>.
+              See <a class="reference internal" href="#rack-aware-assignment-strategy"><span class="std std-ref">Rack Aware Assignment Strategy</span></a>.</td>
+            <td><code class="docutils literal"><span class="pre">"none"</span></code></td>
+          </tr>
+          <tr class="odd"><td>rack.aware.assignment.tags</td>
+            <td>Low</td>
             <td colspan="2">List of tag keys used to distribute standby replicas across Kafka Streams
               clients. When configured, Kafka Streams will make a best-effort to distribute the standby tasks over
-              clients with different tag values.</td>
+              clients with different tag values.
+              See <a class="reference internal" href="#rack-aware-assignment-tags"><span class="std std-ref">Rack Aware Assignment Tags</span></a>.</td>
             <td>the empty list</td>
           </tr>
-          <tr class="row-even"><td>replication.factor</td>
+          <tr class="row-even"><td>rack.aware.assignment.non_overlap_cost</td>
+            <td>Low</td>
+            <td colspan="2">Cost associated with moving tasks from existing assignment.
+              See <a class="reference internal" href="#rack-aware-assignment-non-overlap-cost"><span class="std std-ref">Rack Aware Assignment Non-Overlap-Cost</span></a>.</td>
+            <td><code class="docutils literal"><span class="pre">null</span></code></td>
+          </tr>
+          <tr class="odd"><td>rack.aware.assignment.non_overlap_cost</td>
+            <td>Low</td>
+            <td colspan="2">Cost associated with cross rack traffic.
+              See <a class="reference internal" href="#rack-aware-assignment-traffic-cost"><span class="std std-ref">Rack Aware Assignment Traffic-Cost</span></a>.</td>
+            <td><code class="docutils literal"><span class="pre">null</span></code></td>
+          </tr>
+          <tr class="even"><td>replication.factor</td>
             <td>Medium</td>
             <td colspan="2">The replication factor for changelog topics and repartition topics created by the application.
               The default of <code>-1</code> (meaning: use broker default replication factor) requires broker version 2.4 or newer.</td>
             <td><code class="docutils literal"><span class="pre">-1</span></code></td>
           </tr>
-          <tr class="row-odd"><td>retry.backoff.ms</td>
-            <td>Medium</td>
+          <tr class="odd"><td>retry.backoff.ms</td>
+            <td>Low</td>
             <td colspan="2">The amount of time in milliseconds, before a request is retried.</td>
             <td><code class="docutils literal"><span class="pre">100</span></code></td>
           </tr>
           <tr class="row-even"><td>rocksdb.config.setter</td>
             <td>Medium</td>
             <td colspan="2">The RocksDB configuration.</td>
-            <td></td>
+            <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
           <tr class="row-odd"><td>state.cleanup.delay.ms</td>
             <td>Low</td>
             <td colspan="2">The amount of time in milliseconds to wait before deleting state when a partition has migrated.</td>
-            <td>600000 milliseconds (10 minutes)</td>
+            <td><code class="docutils literal"><span class="pre">600000</span></code></td> (10 minutes)</td>
           </tr>
           <tr class="row-even"><td>state.dir</td>
             <td>High</td>
@@ -459,23 +490,24 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-even"><td>task.timeout.ms</td>
             <td>Medium</td>
             <td colspan="2">The maximum amount of time in milliseconds a task might stall due to internal errors and retries until an error is raised. For a timeout of <code>0 ms</code>, a task would raise an error for the first internal error. For any timeout larger than <code>0 ms</code>, a task will retry at least once before an error is raised.</td>
-            <td>300000 milliseconds (5 minutes)</td>
+            <td><code class="docutils literal"><span class="pre">300000</span></code></td> (5 minutes)</td>
           </tr>
           <tr class="row-odd"><td>topology.optimization</td>
             <td>Medium</td>
             <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology and what optimizations to apply. Acceptable values are: <code>StreamsConfig.NO_OPTIMIZATION</code> (<code>none</code>), <code>StreamsConfig.OPTIMIZE</code> (<code>all</code>) or a comma separated list of specific optimizations: <code>StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS</code> (<code>reuse.ktable.source.topics</code>), <code>StreamsConfig.MERGE_REPARTITION_TOPICS</code> (<code>merge.repartition.topics</code>),
               <code>StreamsConfig.SINGLE_STORE_SELF_JOIN</code> (<code>single.store.self.join</code>). </td>
-            <td><code>NO_OPTIMIZATION</code></td>
+            <td><code class="docutils literal"><span class="pre">"NO_OPTIMIZATION"</span></code></td>
           </tr>
           <tr class="row-even"><td>upgrade.from</td>
             <td>Medium</td>
-            <td colspan="2">The version you are upgrading from during a rolling upgrade.</td>
-            <td>See <a class="reference internal" href="#streams-developer-guide-upgrade-from"><span class="std std-ref">Upgrade From</span></a></td>
+            <td colspan="2">The version you are upgrading from during a rolling upgrade.
+              See <a class="reference internal" href="#streams-developer-guide-upgrade-from"><span class="std std-ref">Upgrade From</span></a></td>
+            <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
           <tr class="row-odd"><td>windowstore.changelog.additional.retention.ms</td>
             <td>Low</td>
             <td colspan="2">Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift.</td>
-            <td>86400000 milliseconds (1 day)</td>
+            <td><code class="docutils literal"><span class="pre">86400000</span></code></td> (1 day)</td>
           </tr>
           <tr class="row-even"><td>window.size.ms</td>
             <td>Low</td>
@@ -997,6 +1029,23 @@ rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cl
                   <code>__consumer_offsets</code>, Kafka Streams internal topics, and user topics).</dd>
               </dl>
 	          </div></blockquote>
+        </div>
+        <div class="section" id="processor-wrapper-class">
+          <span id="streams-developer-guide-processor-wrapper-class"></span><h4><a class="toc-backref" href="#id42">processor.wrapper.class</a><a class="headerlink" href="#processor-wrapper-class" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>
+              <p>
+                A class or class name implementing the <code class="docutils literal"><span class="pre">ProcessorWrapper</span></code> interface. This feature allows you to wrap any of the
+                processors in the compiled topology, including both custom processor implementations and those created by Streams for DSL operators. This can be useful for logging or tracing
+                implementations since it allows access to the otherwise-hidden processor context for DSL operators, and also allows for injecting additional debugging information to an entire
+                application topology with just a single config.
+              </p>
+              <p>
+                IMPORTANT: This MUST be passed in when creating the topology, and will not be applied unless passed in to the appropriate topology-building constructor. You should
+                use the <code class="docutils literal"><span class="pre">StreamsBuilder#new(TopologyConfig)</span></code> constructor for DSL applications, and the
+                <code class="docutils literal"><span class="pre">Topology#new(TopologyConfig)</span></code> constructor for PAPI applications.
+              </p>
+            </div></blockquote>
         </div>
         <div class="section" id="replication-factor">
           <span id="replication-factor-parm"></span><h4><a class="toc-backref" href="#id13">replication.factor</a><a class="headerlink" href="#replication-factor" title="Permalink to this headline"></a></h4>

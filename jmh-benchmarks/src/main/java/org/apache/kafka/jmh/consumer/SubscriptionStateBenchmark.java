@@ -18,7 +18,7 @@
 package org.apache.kafka.jmh.consumer;
 
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -66,7 +66,7 @@ public class SubscriptionStateBenchmark {
                 assignment.add(new TopicPartition(String.format("topic-%04d", topicId), partitionId))
             )
         );
-        subscriptionState = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         subscriptionState.assignFromUser(assignment);
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
             0L,

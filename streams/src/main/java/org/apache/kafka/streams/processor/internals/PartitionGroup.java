@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -249,10 +250,11 @@ class PartitionGroup extends AbstractPartitionGroup {
 
         if (queue != null) {
             // get the first record from this queue.
+            final int oldSize = queue.size();
             record = queue.poll(wallClockTime);
 
             if (record != null) {
-                --totalBuffered;
+                totalBuffered -= oldSize - queue.size();
 
                 if (queue.isEmpty()) {
                     // if a certain queue has been drained, reset the flag
@@ -321,6 +323,18 @@ class PartitionGroup extends AbstractPartitionGroup {
 
         return recordQueue.headRecordOffset();
     }
+
+    @Override
+    Optional<Integer> headRecordLeaderEpoch(final TopicPartition partition) {
+        final RecordQueue recordQueue = partitionQueues.get(partition);
+
+        if (recordQueue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+
+        return recordQueue.headRecordLeaderEpoch();
+    }
+
 
     /**
      * @throws IllegalStateException if the record's partition does not belong to this partition group

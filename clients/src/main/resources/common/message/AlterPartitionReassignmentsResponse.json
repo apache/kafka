@@ -29,9 +29,9 @@
     { "name": "Responses", "type": "[]ReassignableTopicResponse", "versions": "0+",
       "about": "The responses to topics to reassign.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name" },
+        "about": "The topic name." },
       { "name": "Partitions", "type": "[]ReassignablePartitionResponse", "versions": "0+",
-        "about": "The responses to partitions to reassign", "fields": [
+        "about": "The responses to partitions to reassign.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",

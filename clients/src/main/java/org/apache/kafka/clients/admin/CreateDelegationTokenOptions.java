@@ -31,7 +31,7 @@ import java.util.Optional;
  */
 @InterfaceStability.Evolving
 public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegationTokenOptions> {
-    private long maxLifeTimeMs = -1;
+    private long maxLifetimeMs = -1;
     private List<KafkaPrincipal> renewers =  new LinkedList<>();
     private KafkaPrincipal owner = null;
 
@@ -53,12 +53,29 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
         return Optional.ofNullable(owner);
     }
 
-    public CreateDelegationTokenOptions maxlifeTimeMs(long maxLifeTimeMs) {
-        this.maxLifeTimeMs = maxLifeTimeMs;
+    /**
+     * @deprecated since 4.0 and should not be used any longer.
+     */
+    @Deprecated
+    public CreateDelegationTokenOptions maxlifeTimeMs(long maxLifetimeMs) {
+        this.maxLifetimeMs = maxLifetimeMs;
         return this;
     }
 
+    public CreateDelegationTokenOptions maxLifetimeMs(long maxLifetimeMs) {
+        this.maxLifetimeMs = maxLifetimeMs;
+        return this;
+    }
+
+    /**
+     * @deprecated since 4.0 and should not be used any longer.
+     */
+    @Deprecated
     public long maxlifeTimeMs() {
-        return maxLifeTimeMs;
+        return maxLifetimeMs;
+    }
+
+    public long maxLifetimeMs() {
+        return maxLifetimeMs;
     }
 }

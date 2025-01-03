@@ -18,10 +18,12 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
+import kafka.utils.Logging
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.purgatory.DelayedOperation
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
 import org.apache.kafka.storage.internals.log.{LogOffsetMetadata, RemoteLogReadResult, RemoteStorageFetchInfo}
 
@@ -42,7 +44,7 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
                          localReadResults: Seq[(TopicIdPartition, LogReadResult)],
                          replicaManager: ReplicaManager,
                          responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit)
-  extends DelayedOperation(remoteFetchMaxWaitMs) {
+  extends DelayedOperation(remoteFetchMaxWaitMs) with Logging {
 
   if (fetchParams.isFromFollower) {
     throw new IllegalStateException(s"The follower should not invoke remote fetch. Fetch params are: $fetchParams")

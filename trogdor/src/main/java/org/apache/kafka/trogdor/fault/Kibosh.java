@@ -41,8 +41,8 @@ public final class Kibosh {
 
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
     @JsonSubTypes({
-            @JsonSubTypes.Type(value = KiboshFilesUnreadableFaultSpec.class, name = "unreadable"),
-        })
+        @JsonSubTypes.Type(value = KiboshFilesUnreadableFaultSpec.class, name = "unreadable"),
+    })
     public abstract static class KiboshFaultSpec {
         @Override
         public final boolean equals(Object o) {

@@ -152,14 +152,6 @@ public abstract class SinkTask implements Task {
      *                   partitions previously assigned to the task)
      */
     public void open(Collection<TopicPartition> partitions) {
-        this.onPartitionsAssigned(partitions);
-    }
-
-    /**
-     * @deprecated Use {@link #open(Collection)} for partition initialization.
-     */
-    @Deprecated
-    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
     }
 
     /**
@@ -175,14 +167,6 @@ public abstract class SinkTask implements Task {
      * @param partitions The list of partitions that should be closed
      */
     public void close(Collection<TopicPartition> partitions) {
-        this.onPartitionsRevoked(partitions);
-    }
-
-    /**
-     * @deprecated Use {@link #close(Collection)} instead for partition cleanup.
-     */
-    @Deprecated
-    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
     }
 
     /**

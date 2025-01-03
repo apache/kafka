@@ -22,7 +22,6 @@ import java.util.{Collections, Properties}
 import java.util.Map.Entry
 import kafka.server.KafkaConfig.fromProps
 import kafka.utils.TestUtils._
-import kafka.utils.CoreUtils._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, NewTopic}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -34,7 +33,7 @@ import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, 
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT
 import org.apache.kafka.controller.ControllerRequestContextUtil
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
@@ -69,13 +68,13 @@ class ReplicationQuotasTest extends QuorumTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def shouldBootstrapTwoBrokersWithLeaderThrottle(quorum: String): Unit = {
     shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(true)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def shouldBootstrapTwoBrokersWithFollowerThrottle(quorum: String): Unit = {
     shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(false)
   }
@@ -89,7 +88,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       * regular replication works as expected.
       */
 
-    brokers = (100 to 105).map { id => createBroker(fromProps(createBrokerConfig(id, zkConnectOrNull))) }
+    brokers = (100 to 105).map { id => createBroker(fromProps(createBrokerConfig(id, null))) }
 
     //Given six partitions, led on nodes 0,1,2,3,4,5 but with followers on node 6,7 (not started yet)
     //And two extra partitions 6,7, which we don't intend on throttling.
@@ -112,31 +111,21 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     //replicate for each of the two follower brokers.
     if (!leaderThrottle) throttle = throttle * 3
 
-    Using(createAdminClient(brokers, listenerName)) { admin =>
-      if (isKRaftTest()) {
-        (106 to 107).foreach(registerBroker)
-      }
+    Using.resource(createAdminClient(brokers, listenerName)) { admin =>
+      (106 to 107).foreach(registerBroker)
       admin.createTopics(List(new NewTopic(topic, assignment.map(a => a._1.asInstanceOf[Integer] ->
         a._2.map(_.asInstanceOf[Integer]).toList.asJava).asJava)).asJava).all().get()
       //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers
       (100 to 107).foreach { brokerId =>
-        if (isKRaftTest()) {
-          val entry = new SimpleImmutableEntry[AlterConfigOp.OpType, String](SET, throttle.toString)
-            .asInstanceOf[Entry[AlterConfigOp.OpType, String]]
-          controllerServer.controller.incrementalAlterConfigs(
-            ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
-            Map(new ConfigResource(BROKER, String.valueOf(brokerId)) -> Map(
-              QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG -> entry,
-              QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
-            false
-          ).get()
-        } else {
-          adminZkClient.changeBrokerConfig(Seq(brokerId),
-            propsWith(
-              (QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString),
-              (QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString)
-            ))
-        }
+        val entry = new SimpleImmutableEntry[AlterConfigOp.OpType, String](SET, throttle.toString)
+          .asInstanceOf[Entry[AlterConfigOp.OpType, String]]
+        controllerServer.controller.incrementalAlterConfigs(
+          ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
+          Map(new ConfigResource(BROKER, String.valueOf(brokerId)) -> Map(
+            QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG -> entry,
+            QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
+          false
+        ).get()
       }
       //Either throttle the six leaders or the two followers
       val configEntry = if (leaderThrottle)
@@ -206,14 +195,14 @@ class ReplicationQuotasTest extends QuorumTestHarness {
   def tp(partition: Int): TopicPartition = new TopicPartition(topic, partition)
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def shouldThrottleOldSegments(quorum: String): Unit = {
     /**
       * Simple test which ensures throttled replication works when the dataset spans many segments
       */
 
     //2 brokers with 1MB Segment Size & 1 partition
-    val config: Properties = createBrokerConfig(100, zkConnectOrNull)
+    val config: Properties = createBrokerConfig(100, null)
     config.put("log.segment.bytes", (1024 * 1024).toString)
     brokers = Seq(createBroker(fromProps(config)))
 
@@ -223,10 +212,8 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     val expectedDuration = 4
     val throttle: Long = msg.length * msgCount / expectedDuration
 
-    Using(createAdminClient(brokers, listenerName)) { admin =>
-      if (isKRaftTest()) {
-        registerBroker(101)
-      }
+    Using.resource(createAdminClient(brokers, listenerName)) { admin =>
+      registerBroker(101)
       admin.createTopics(
         List(new NewTopic(topic, Collections.singletonMap(0, List(100, 101).map(_.asInstanceOf[Integer]).asJava))).asJava
       ).all().get()
@@ -244,7 +231,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
     //Start the new broker (and hence start replicating)
     debug("Starting new broker")
-    brokers = brokers :+ createBroker(fromProps(createBrokerConfig(101, zkConnectOrNull)))
+    brokers = brokers :+ createBroker(fromProps(createBrokerConfig(101, null)))
     val start = System.currentTimeMillis()
 
     waitForOffsetsToMatch(msgCount, 0, 101)
@@ -274,7 +261,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
   def createBrokers(brokerIds: Seq[Int]): Unit = {
     brokerIds.foreach { id =>
-      brokers = brokers :+ createBroker(fromProps(createBrokerConfig(id, zkConnectOrNull)))
+      brokers = brokers :+ createBroker(fromProps(createBrokerConfig(id, null)))
     }
   }
 
@@ -295,7 +282,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       .setName(MetadataVersion.FEATURE_NAME)
       .setMinSupportedVersion(MetadataVersion.latestProduction().featureLevel())
       .setMaxSupportedVersion(MetadataVersion.latestTesting().featureLevel()))
-    Features.PRODUCTION_FEATURES.forEach { feature =>
+    Feature.PRODUCTION_FEATURES.forEach { feature =>
       features.add(new BrokerRegistrationRequestData.Feature()
         .setName(feature.featureName())
         .setMinSupportedVersion(feature.minimumProduction())

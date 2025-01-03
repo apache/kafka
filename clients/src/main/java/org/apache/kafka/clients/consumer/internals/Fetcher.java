@@ -192,7 +192,7 @@ public class Fetcher<K, V> extends AbstractFetch {
             final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
             final RequestFuture<ClientResponse> responseFuture = client.send(fetchTarget, request);
 
-            responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
+            responseFuture.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(ClientResponse resp) {
                     successHandler.handle(fetchTarget, data, resp);

@@ -16,13 +16,15 @@
   */
 package kafka.api
 
+import kafka.utils.TestInfoUtils
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
 import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 
 import scala.jdk.CollectionConverters._
 
@@ -56,10 +58,11 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     * the second one connects ok, but fails to consume messages due to the ACL.
     */
   @Timeout(15)
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testTwoConsumersWithDifferentSaslCredentials(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testTwoConsumersWithDifferentSaslCredentials(quorum: String, groupProtocol: String): Unit = {
     setAclsAndProduce(tp)
+    consumerConfig.putIfAbsent(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer1 = createConsumer()
 
     // consumer2 retrieves its credentials from the static JAAS configuration, so we test also this path

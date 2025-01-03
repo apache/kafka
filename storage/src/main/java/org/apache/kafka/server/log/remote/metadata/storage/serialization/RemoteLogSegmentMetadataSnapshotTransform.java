@@ -40,7 +40,8 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                 .setMaxTimestampMs(segmentMetadata.maxTimestampMs())
                 .setSegmentSizeInBytes(segmentMetadata.segmentSizeInBytes())
                 .setSegmentLeaderEpochs(createSegmentLeaderEpochsEntry(segmentMetadata.segmentLeaderEpochs()))
-                .setRemoteLogSegmentState(segmentMetadata.state().id());
+                .setRemoteLogSegmentState(segmentMetadata.state().id())
+                .setTxnIndexEmpty(segmentMetadata.isTxnIdxEmpty());
         segmentMetadata.customMetadata().ifPresent(md -> record.setCustomMetadata(md.value()));
 
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
@@ -72,7 +73,8 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                                                     record.segmentSizeInBytes(),
                                                     customMetadata,
                                                     RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
-                                                    segmentLeaderEpochs);
+                                                    segmentLeaderEpochs,
+                                                    record.txnIndexEmpty());
     }
 
 }

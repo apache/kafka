@@ -21,14 +21,12 @@ from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.trogdor.produce_bench_workload import ProduceBenchWorkloadService, ProduceBenchWorkloadSpec
 from kafkatest.services.trogdor.task_spec import TaskSpec
 from kafkatest.services.trogdor.trogdor import TrogdorService
-from kafkatest.services.zookeeper import ZookeeperService
 
 class ProduceBenchTest(Test):
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
         super(ProduceBenchTest, self).__init__(test_context)
-        self.zk = ZookeeperService(test_context, num_nodes=3) if quorum.for_test(test_context) == quorum.zk else None
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk)
+        self.kafka = KafkaService(test_context, num_nodes=3, zk=None)
         self.workload_service = ProduceBenchWorkloadService(test_context, self.kafka)
         self.trogdor = TrogdorService(context=self.test_context,
                                       client_services=[self.kafka, self.workload_service])
@@ -37,19 +35,15 @@ class ProduceBenchTest(Test):
 
     def setUp(self):
         self.trogdor.start()
-        if self.zk:
-            self.zk.start()
         self.kafka.start()
 
     def teardown(self):
         self.trogdor.stop()
         self.kafka.stop()
-        if self.zk:
-            self.zk.stop()
 
     @cluster(num_nodes=8)
     @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_produce_bench(self, metadata_quorum=quorum.zk):
+    def test_produce_bench(self, metadata_quorum):
         spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                         self.workload_service.producer_node,
                                         self.workload_service.bootstrap_servers,
@@ -66,7 +60,8 @@ class ProduceBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=8)
-    def test_produce_bench_transactions(self, metadata_quorum=quorum.zk):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_produce_bench_transactions(self, metadata_quorum):
         spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                         self.workload_service.producer_node,
                                         self.workload_service.bootstrap_servers,

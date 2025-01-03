@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
@@ -31,32 +32,37 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class Fetch<K, V> {
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
+    private final Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata;
     private boolean positionAdvanced;
     private int numRecords;
 
     public static <K, V> Fetch<K, V> empty() {
-        return new Fetch<>(new HashMap<>(), false, 0);
+        return new Fetch<>(new HashMap<>(), false, 0, new HashMap<>());
     }
 
     public static <K, V> Fetch<K, V> forPartition(
             TopicPartition partition,
             List<ConsumerRecord<K, V>> records,
-            boolean positionAdvanced
+            boolean positionAdvanced,
+            OffsetAndMetadata nextOffsetAndMetadata
     ) {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> recordsMap = records.isEmpty()
                 ? new HashMap<>()
                 : mkMap(mkEntry(partition, records));
-        return new Fetch<>(recordsMap, positionAdvanced, records.size());
+        Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadataMap = mkMap(mkEntry(partition, nextOffsetAndMetadata));
+        return new Fetch<>(recordsMap, positionAdvanced, records.size(), nextOffsetAndMetadataMap);
     }
 
     private Fetch(
             Map<TopicPartition, List<ConsumerRecord<K, V>>> records,
             boolean positionAdvanced,
-            int numRecords
+            int numRecords,
+            Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata
     ) {
         this.records = records;
         this.positionAdvanced = positionAdvanced;
         this.numRecords = numRecords;
+        this.nextOffsetAndMetadata = nextOffsetAndMetadata;
     }
 
     /**
@@ -70,6 +76,7 @@ public class Fetch<K, V> {
         Objects.requireNonNull(fetch);
         addRecords(fetch.records);
         this.positionAdvanced |= fetch.positionAdvanced;
+        this.nextOffsetAndMetadata.putAll(fetch.nextOffsetAndMetadata);
     }
 
     /**
@@ -93,6 +100,13 @@ public class Fetch<K, V> {
      */
     public int numRecords() {
         return numRecords;
+    }
+
+    /**
+     * @return the next offsets and metadata that the consumer will consume (last epoch is included)
+     */
+    public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
+        return Map.copyOf(nextOffsetAndMetadata);
     }
 
     /**

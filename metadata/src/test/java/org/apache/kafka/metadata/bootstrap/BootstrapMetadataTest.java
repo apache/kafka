@@ -24,6 +24,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -71,10 +72,57 @@ public class BootstrapMetadataTest {
                 () -> BootstrapMetadata.fromRecords(emptyList(), "quux")).getMessage());
     }
 
+    private static final ApiMessageAndVersion MV_10 =
+        new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName(FEATURE_NAME).
+            setFeatureLevel((short) 10), (short) 0);
+
+    private static final ApiMessageAndVersion MV_11 =
+        new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName(FEATURE_NAME).
+            setFeatureLevel((short) 11), (short) 0);
+
+    private static final ApiMessageAndVersion FOO_1 =
+        new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("foo").
+            setFeatureLevel((short) 1), (short) 0);
+
+    private static final ApiMessageAndVersion FOO_2 =
+        new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("foo").
+            setFeatureLevel((short) 2), (short) 0);
+
     @Test
-    public void testCopyWithOnlyVersion() {
-        assertEquals(new BootstrapMetadata(SAMPLE_RECORDS1.subList(2, 3), IBP_3_3_IV2, "baz"),
-                BootstrapMetadata.fromRecords(SAMPLE_RECORDS1, "baz").copyWithOnlyVersion());
+    public void testCopyWithNewFeatureRecord() {
+        assertEquals(BootstrapMetadata.fromRecords(Arrays.asList(MV_10, FOO_1), "src"),
+            BootstrapMetadata.fromRecords(Arrays.asList(MV_10), "src").
+                copyWithFeatureRecord("foo", (short) 1));
+    }
+
+    @Test
+    public void testFeatureLevelForMetadataVersion() {
+        assertEquals((short) 11, BootstrapMetadata.
+            fromRecords(Arrays.asList(MV_10, MV_11), "src").
+                featureLevel(FEATURE_NAME));
+    }
+
+    @Test
+    public void testCopyWithModifiedFeatureRecord() {
+        assertEquals(BootstrapMetadata.fromRecords(Arrays.asList(MV_10, FOO_2), "src"),
+            BootstrapMetadata.fromRecords(Arrays.asList(MV_10, FOO_1), "src").
+                copyWithFeatureRecord("foo", (short) 2));
+    }
+
+    @Test
+    public void testFeatureLevelForFeatureThatIsNotSet() {
+        assertEquals((short) 0, BootstrapMetadata.
+            fromRecords(Arrays.asList(MV_10), "src").featureLevel("foo"));
+    }
+
+    @Test
+    public void testFeatureLevelForFeature() {
+        assertEquals((short) 2, BootstrapMetadata.
+            fromRecords(Arrays.asList(MV_10, FOO_2), "src").featureLevel("foo"));
     }
 
     static final List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = Collections.singletonList(

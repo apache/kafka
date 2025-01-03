@@ -31,9 +31,6 @@ public class StreamsConfigUtils {
     public enum ProcessingMode {
         AT_LEAST_ONCE(StreamsConfig.AT_LEAST_ONCE),
 
-        // TODO cleanup
-        EXACTLY_ONCE_ALPHA("exactly_once"),
-
         EXACTLY_ONCE_V2(StreamsConfig.EXACTLY_ONCE_V2);
 
         public final String name;
@@ -41,38 +38,23 @@ public class StreamsConfigUtils {
         ProcessingMode(final String name) {
             this.name = name;
         }
+
+        @Override
+        public String toString() {
+            return name;
+        }
     }
 
-    // TODO cleanup
     public static ProcessingMode processingMode(final StreamsConfig config) {
-        if ("exactly_once".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if ("exactly_once_beta".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return ProcessingMode.EXACTLY_ONCE_V2;
-        } else if (StreamsConfig.EXACTLY_ONCE_V2.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+        if (StreamsConfig.EXACTLY_ONCE_V2.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
             return ProcessingMode.EXACTLY_ONCE_V2;
         } else {
             return ProcessingMode.AT_LEAST_ONCE;
         }
     }
 
-    // TODO cleanup
-    public static String processingModeString(final ProcessingMode processingMode) {
-        if (processingMode == ProcessingMode.EXACTLY_ONCE_V2) {
-            return StreamsConfig.EXACTLY_ONCE_V2;
-        } else if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA) {
-            return "exactly_once";
-        } else {
-            return StreamsConfig.AT_LEAST_ONCE;
-        }
-    }
-
     public static boolean eosEnabled(final StreamsConfig config) {
-        return eosEnabled(processingMode(config));
-    }
-
-    public static boolean eosEnabled(final ProcessingMode processingMode) {
-        return processingMode == ProcessingMode.EXACTLY_ONCE_V2;
+        return processingMode(config) == ProcessingMode.EXACTLY_ONCE_V2;
     }
 
     @SuppressWarnings("deprecation")

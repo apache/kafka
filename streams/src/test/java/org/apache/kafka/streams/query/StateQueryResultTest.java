@@ -19,7 +19,6 @@ package org.apache.kafka.streams.query;
 import org.apache.kafka.streams.query.internals.SucceededQueryResult;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -40,26 +39,24 @@ class StateQueryResultTest {
     }
 
     @Test
-    @DisplayName("Zero query results shouldn't error")
     void getOnlyPartitionResultNoResultsTest() {
         stringStateQueryResult.addResult(0, noResultsFound);
         final QueryResult<String> result = stringStateQueryResult.getOnlyPartitionResult();
-        assertThat(result, nullValue());
+        assertThat("Zero query results shouldn't error", result, nullValue());
     }
 
     @Test
-    @DisplayName("Valid query results still works")
     void getOnlyPartitionResultWithSingleResultTest() {
         stringStateQueryResult.addResult(0, validResult);
         final QueryResult<String> result = stringStateQueryResult.getOnlyPartitionResult();
-        assertThat(result.getResult(), is("Foo"));
+        assertThat("Valid query results still works", result.getResult(), is("Foo"));
     }
 
     @Test
-    @DisplayName("More than one query result throws IllegalArgumentException ")
     void getOnlyPartitionResultMultipleResults() {
         stringStateQueryResult.addResult(0, validResult);
         stringStateQueryResult.addResult(1, validResult);
-        assertThrows(IllegalArgumentException.class, () -> stringStateQueryResult.getOnlyPartitionResult());
+        assertThrows(IllegalArgumentException.class, () -> stringStateQueryResult.getOnlyPartitionResult(),
+            "More than one query result throws IllegalArgumentException");
     }
 }

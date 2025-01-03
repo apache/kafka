@@ -192,7 +192,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         }
 
         public <T> RecordsSnapshotWriter<T> build(RecordSerde<T> serde) {
-            if (!rawSnapshotWriter.isPresent()) {
+            if (rawSnapshotWriter.isEmpty()) {
                 throw new IllegalStateException("Builder::build called without a RawSnapshotWriter");
             } else if (rawSnapshotWriter.get().sizeInBytes() != 0) {
                 throw new IllegalStateException(

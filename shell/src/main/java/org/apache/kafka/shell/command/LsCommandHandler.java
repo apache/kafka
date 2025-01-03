@@ -268,8 +268,7 @@ public final class LsCommandHandler implements Commands.Handler {
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof ColumnSchema)) return false;
-            ColumnSchema other = (ColumnSchema) o;
+            if (!(o instanceof ColumnSchema other)) return false;
             if (entriesPerColumn != other.entriesPerColumn) return false;
             return Arrays.equals(columnWidths, other.columnWidths);
         }
@@ -295,8 +294,7 @@ public final class LsCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof LsCommandHandler)) return false;
-        LsCommandHandler o = (LsCommandHandler) other;
+        if (!(other instanceof LsCommandHandler o)) return false;
         return Objects.equals(o.targets, targets);
     }
 }

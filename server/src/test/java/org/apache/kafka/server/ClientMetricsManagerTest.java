@@ -47,6 +47,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -364,7 +365,7 @@ public class ClientMetricsManagerTest {
                             .setClientInstanceId(response.data().clientInstanceId())
                             .setSubscriptionId(response.data().subscriptionId())
                             .setCompressionType(CompressionType.NONE.id)
-                            .setMetrics("test-data".getBytes(StandardCharsets.UTF_8)), true).build();
+                            .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
             PushTelemetryResponse pushResponse = newClientMetricsManager.processPushTelemetryRequest(
                     pushRequest, ClientMetricsTestUtils.requestContext());
@@ -559,7 +560,7 @@ public class ClientMetricsManagerTest {
                 .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
                 .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
                 .setCompressionType(CompressionType.NONE.id)
-                .setMetrics("test-data".getBytes(StandardCharsets.UTF_8)), true).build();
+                .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
         PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
             request, ClientMetricsTestUtils.requestContext());
@@ -603,7 +604,7 @@ public class ClientMetricsManagerTest {
                     new PushTelemetryRequestData()
                             .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
                             .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
-                            .setMetrics("test-data".getBytes(StandardCharsets.UTF_8)), true).build();
+                            .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
             PushTelemetryResponse response = newClientMetricsManager.processPushTelemetryRequest(
                     request, ClientMetricsTestUtils.requestContext());
@@ -640,7 +641,7 @@ public class ClientMetricsManagerTest {
                 .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
                 .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
                 .setCompressionType(CompressionType.NONE.id)
-                .setMetrics("test-data".getBytes(StandardCharsets.UTF_8)), true).build();
+                .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
         PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
             request, ClientMetricsTestUtils.requestContext());
@@ -688,7 +689,7 @@ public class ClientMetricsManagerTest {
             new PushTelemetryRequestData()
                 .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
                 .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
-                .setMetrics("test-data".getBytes(StandardCharsets.UTF_8)), true).build();
+                .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
         PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
             request, ClientMetricsTestUtils.requestContext());
@@ -726,7 +727,7 @@ public class ClientMetricsManagerTest {
             new PushTelemetryRequestData()
                 .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
                 .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
-                .setMetrics("test-data".getBytes(StandardCharsets.UTF_8)), true).build();
+                .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
         PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
             request, ClientMetricsTestUtils.requestContext());
@@ -738,7 +739,7 @@ public class ClientMetricsManagerTest {
             new PushTelemetryRequestData()
                 .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
                 .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
-                .setMetrics("test-data".getBytes(StandardCharsets.UTF_8))
+                .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8)))
                 .setTerminating(true), true).build();
 
         response = clientMetricsManager.processPushTelemetryRequest(
@@ -810,7 +811,7 @@ public class ClientMetricsManagerTest {
         PushTelemetryRequest request = new PushTelemetryRequest.Builder(
             new PushTelemetryRequestData()
                 .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
-                .setMetrics("test-data".getBytes(StandardCharsets.UTF_8))
+                .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8)))
                 .setSubscriptionId(1234), true).build();
 
         PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
@@ -908,7 +909,7 @@ public class ClientMetricsManagerTest {
                     new PushTelemetryRequestData()
                             .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
                             .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
-                            .setMetrics(metrics), true).build();
+                            .setMetrics(ByteBuffer.wrap(metrics)), true).build();
 
             // Set the max bytes 1 to force the error.
             PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
@@ -937,7 +938,7 @@ public class ClientMetricsManagerTest {
                 .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
                 .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
                 .setCompressionType(CompressionType.NONE.id)
-                .setMetrics("test-data".getBytes(StandardCharsets.UTF_8)), true).build();
+                .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
         CountDownLatch lock = new CountDownLatch(2);
         List<PushTelemetryResponse> responses = Collections.synchronizedList(new ArrayList<>());
@@ -1013,7 +1014,7 @@ public class ClientMetricsManagerTest {
                 .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
                 .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
                 .setCompressionType(CompressionType.NONE.id)
-                .setMetrics("test-data".getBytes(StandardCharsets.UTF_8)), true).build();
+                .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
         clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultProperties());
         assertEquals(1, clientMetricsManager.subscriptions().size());
@@ -1103,7 +1104,7 @@ public class ClientMetricsManagerTest {
                             .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
                             .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
                             .setCompressionType(CompressionType.NONE.id)
-                            .setMetrics("test-data".getBytes(StandardCharsets.UTF_8)), true).build();
+                            .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
             PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
                     request, ClientMetricsTestUtils.requestContext());

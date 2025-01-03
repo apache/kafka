@@ -115,34 +115,6 @@ public class KafkaBasedLog<K, V> {
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
      * {@link #start()} is invoked.
      *
-     * @param topic the topic to treat as a log
-     * @param producerConfigs configuration options to use when creating the internal producer. At a minimum this must
-     *                        contain compatible serializer settings for the generic types used on this class. Some
-     *                        setting, such as the number of acks, will be overridden to ensure correct behavior of this
-     *                        class.
-     * @param consumerConfigs configuration options to use when creating the internal consumer. At a minimum this must
-     *                        contain compatible serializer settings for the generic types used on this class. Some
-     *                        setting, such as the auto offset reset policy, will be overridden to ensure correct
-     *                        behavior of this class.
-     * @param consumedCallback callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
-     * @param time Time interface
-     * @param initializer the component that should be run when this log is {@link #start() started}; may be null
-     * @deprecated Replaced by {@link #KafkaBasedLog(String, Map, Map, Supplier, Callback, Time, java.util.function.Consumer)}
-     */
-    @Deprecated
-    public KafkaBasedLog(String topic,
-                         Map<String, Object> producerConfigs,
-                         Map<String, Object> consumerConfigs,
-                         Callback<ConsumerRecord<K, V>> consumedCallback,
-                         Time time,
-                         Runnable initializer) {
-        this(topic, producerConfigs, consumerConfigs, () -> null, consumedCallback, time, initializer != null ? admin -> initializer.run() : null);
-    }
-
-    /**
-     * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
-     * {@link #start()} is invoked.
-     *
      * @param topic              the topic to treat as a log
      * @param producerConfigs    configuration options to use when creating the internal producer. At a minimum this must
      *                           contain compatible serializer settings for the generic types used on this class. Some
@@ -159,12 +131,12 @@ public class KafkaBasedLog<K, V> {
      * @param initializer        the function that should be run when this log is {@link #start() started}; may be null
      */
     public KafkaBasedLog(String topic,
-            Map<String, Object> producerConfigs,
-            Map<String, Object> consumerConfigs,
-            Supplier<TopicAdmin> topicAdminSupplier,
-            Callback<ConsumerRecord<K, V>> consumedCallback,
-            Time time,
-            java.util.function.Consumer<TopicAdmin> initializer) {
+                         Map<String, Object> producerConfigs,
+                         Map<String, Object> consumerConfigs,
+                         Supplier<TopicAdmin> topicAdminSupplier,
+                         Callback<ConsumerRecord<K, V>> consumedCallback,
+                         Time time,
+                         java.util.function.Consumer<TopicAdmin> initializer) {
         this.topic = topic;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
@@ -212,7 +184,7 @@ public class KafkaBasedLog<K, V> {
     ) {
         Objects.requireNonNull(topicAdmin);
         Objects.requireNonNull(readTopicPartition);
-        return new KafkaBasedLog<K, V>(topic,
+        return new KafkaBasedLog<>(topic,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 () -> topicAdmin,
@@ -266,8 +238,8 @@ public class KafkaBasedLog<K, V> {
 
         // Then create the producer and consumer
         producer = Optional.ofNullable(createProducer());
-        if (!producer.isPresent())
-            log.trace("Creating read-only KafkaBasedLog for topic " + topic);
+        if (producer.isEmpty())
+            log.trace("Creating read-only KafkaBasedLog for topic {}", topic);
         consumer = createConsumer();
 
         List<TopicPartition> partitions = new ArrayList<>();
@@ -308,13 +280,13 @@ public class KafkaBasedLog<K, V> {
         thread = new WorkThread();
         thread.start();
 
-        log.info("Finished reading KafkaBasedLog for topic " + topic);
+        log.info("Finished reading KafkaBasedLog for topic {}", topic);
 
-        log.info("Started KafkaBasedLog for topic " + topic);
+        log.info("Started KafkaBasedLog for topic {}", topic);
     }
 
     public void stop() {
-        log.info("Stopping KafkaBasedLog for topic " + topic);
+        log.info("Stopping KafkaBasedLog for topic {}", topic);
 
         synchronized (this) {
             stopRequested = true;
@@ -338,7 +310,7 @@ public class KafkaBasedLog<K, V> {
         // do not close the admin client, since we don't own it
         admin = null;
 
-        log.info("Stopped KafkaBasedLog for topic " + topic);
+        log.info("Stopped KafkaBasedLog for topic {}", topic);
     }
 
     /**
@@ -466,16 +438,16 @@ public class KafkaBasedLog<K, V> {
         return true;
     }
 
-    private void poll(long timeoutMs) {
+    private void poll() {
         try {
-            ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(timeoutMs));
+            ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(Integer.MAX_VALUE));
             for (ConsumerRecord<K, V> record : records)
                 consumedCallback.onCompletion(null, record);
         } catch (WakeupException e) {
             // Expected on get() or stop(). The calling code should handle this
             throw e;
         } catch (KafkaException e) {
-            log.error("Error polling: " + e);
+            log.error("Error polling: ", e);
             if (reportErrorsToCallback) {
                 consumedCallback.onCompletion(e, null);
             }
@@ -507,7 +479,7 @@ public class KafkaBasedLog<K, V> {
                 } else {
                     log.trace("Behind end offset {} for {}; last-read offset is {}",
                             endOffset, topicPartition, lastConsumedOffset);
-                    poll(Integer.MAX_VALUE);
+                    poll();
                     break;
                 }
             }
@@ -609,7 +581,7 @@ public class KafkaBasedLog<K, V> {
                     }
 
                     try {
-                        poll(Integer.MAX_VALUE);
+                        poll();
                     } catch (WakeupException e) {
                         // See previous comment, both possible causes of this wakeup are handled by starting this loop again
                         continue;

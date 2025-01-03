@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class StreamsResetterTest {
     private static final String TOPIC = "topic1";
     private final StreamsResetter streamsResetter = new StreamsResetter();
-    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
     private final TopicPartition topicPartition = new TopicPartition(TOPIC, 0);
     private final Set<TopicPartition> inputTopicPartitions = new HashSet<>(Collections.singletonList(topicPartition));
 
@@ -81,7 +81,7 @@ public class StreamsResetterTest {
     public void testResetOffsetToSpecificOffsetWhenAfterEndOffset() {
         final long beginningOffset = 5L;
         final long endOffset = 10L;
-        final MockConsumer<byte[], byte[]> emptyConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        final MockConsumer<byte[], byte[]> emptyConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
         emptyConsumer.assign(Collections.singletonList(topicPartition));
 
         final Map<TopicPartition, Long> beginningOffsetsMap = new HashMap<>();
@@ -273,7 +273,7 @@ public class StreamsResetterTest {
     @Test
     public void testResetToDatetimeWhenPartitionIsEmptyResetsToLatestOffset() {
         final long beginningAndEndOffset = 5L; // Empty partition implies beginning offset == end offset
-        final MockConsumer<byte[], byte[]> emptyConsumer = new EmptyPartitionConsumer<>(OffsetResetStrategy.EARLIEST);
+        final MockConsumer<byte[], byte[]> emptyConsumer = new EmptyPartitionConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
         emptyConsumer.assign(Collections.singletonList(topicPartition));
 
         final Map<TopicPartition, Long> beginningOffsetsMap = new HashMap<>();
@@ -304,7 +304,7 @@ public class StreamsResetterTest {
     }
 
     private static class EmptyPartitionConsumer<K, V> extends MockConsumer<K, V> {
-        public EmptyPartitionConsumer(final OffsetResetStrategy offsetResetStrategy) {
+        public EmptyPartitionConsumer(final String offsetResetStrategy) {
             super(offsetResetStrategy);
         }
 

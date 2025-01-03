@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.errors;
 
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
@@ -32,16 +31,21 @@ import java.util.Map;
 public class LogAndContinueExceptionHandler implements DeserializationExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(LogAndContinueExceptionHandler.class);
 
+    @SuppressWarnings("deprecation")
     @Deprecated
     @Override
     public DeserializationHandlerResponse handle(final ProcessorContext context,
                                                  final ConsumerRecord<byte[], byte[]> record,
                                                  final Exception exception) {
 
-        log.warn("Exception caught during Deserialization, " +
-                 "taskId: {}, topic: {}, partition: {}, offset: {}",
-                 context.taskId(), record.topic(), record.partition(), record.offset(),
-                 exception);
+        log.warn(
+            "Exception caught during Deserialization, taskId: {}, topic: {}, partition: {}, offset: {}",
+            context.taskId(),
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            exception
+        );
 
         return DeserializationHandlerResponse.CONTINUE;
     }
@@ -51,10 +55,14 @@ public class LogAndContinueExceptionHandler implements DeserializationExceptionH
                                                  final ConsumerRecord<byte[], byte[]> record,
                                                  final Exception exception) {
 
-        log.warn("Exception caught during Deserialization, " +
-                 "taskId: {}, topic: {}, partition: {}, offset: {}",
-                 context.taskId(), record.topic(), record.partition(), record.offset(),
-                 exception);
+        log.warn(
+            "Exception caught during Deserialization, taskId: {}, topic: {}, partition: {}, offset: {}",
+            context.taskId(),
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            exception
+        );
 
         return DeserializationHandlerResponse.CONTINUE;
     }

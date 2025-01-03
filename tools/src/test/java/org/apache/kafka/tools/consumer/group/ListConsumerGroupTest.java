@@ -24,7 +24,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RangeAssignor;
-import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -98,7 +98,7 @@ public class ListConsumerGroupTest {
             try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
                  AutoCloseable topicConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, topicGroup, topic);
                  AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
-                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"});
+                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"})
             ) {
                 Set<String> expectedGroups = set(Arrays.asList(topicPartitionsGroup, topicGroup, protocolGroup));
                 final AtomicReference<Set> foundGroups = new AtomicReference<>();
@@ -131,50 +131,50 @@ public class ListConsumerGroupTest {
 
             try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
                  AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
-                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"});
+                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
             ) {
                 Set<ConsumerGroupListing> expectedListing = Set.of(
                         new ConsumerGroupListing(
                                 topicPartitionsGroup,
-                                true,
-                                Optional.of(ConsumerGroupState.EMPTY),
-                                Optional.of(GroupType.CLASSIC)
+                                Optional.of(GroupState.EMPTY),
+                                Optional.of(GroupType.CLASSIC),
+                                true
                         ),
                         new ConsumerGroupListing(
                                 protocolGroup,
-                                false,
-                                Optional.of(ConsumerGroupState.STABLE),
-                                Optional.of(GroupType.parse(groupProtocol.name()))
+                                Optional.of(GroupState.STABLE),
+                                Optional.of(GroupType.parse(groupProtocol.name())),
+                                false
                         )
                 );
 
                 assertGroupListing(
                         service,
                         Collections.emptySet(),
-                        EnumSet.allOf(ConsumerGroupState.class),
+                        EnumSet.allOf(GroupState.class),
                         expectedListing
                 );
 
                 expectedListing = Set.of(
                         new ConsumerGroupListing(
                                 protocolGroup,
-                                false,
-                                Optional.of(ConsumerGroupState.STABLE),
-                                Optional.of(GroupType.parse(groupProtocol.name()))
+                                Optional.of(GroupState.STABLE),
+                                Optional.of(GroupType.parse(groupProtocol.name())),
+                                false
                         )
                 );
 
                 assertGroupListing(
                         service,
                         Collections.emptySet(),
-                        Set.of(ConsumerGroupState.STABLE),
+                        Set.of(GroupState.STABLE),
                         expectedListing
                 );
 
                 assertGroupListing(
                         service,
                         Collections.emptySet(),
-                        Set.of(ConsumerGroupState.PREPARING_REBALANCE),
+                        Set.of(GroupState.PREPARING_REBALANCE),
                         Collections.emptySet()
                 );
             }
@@ -194,20 +194,20 @@ public class ListConsumerGroupTest {
 
         try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
-             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"});
+             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
         ) {
             Set<ConsumerGroupListing> expectedListing = Set.of(
                     new ConsumerGroupListing(
                             topicPartitionsGroup,
-                            true,
-                            Optional.of(ConsumerGroupState.EMPTY),
-                            Optional.of(GroupType.CLASSIC)
+                            Optional.of(GroupState.EMPTY),
+                            Optional.of(GroupType.CLASSIC),
+                            true
                     ),
                     new ConsumerGroupListing(
                             protocolGroup,
-                            false,
-                            Optional.of(ConsumerGroupState.STABLE),
-                            Optional.of(GroupType.CLASSIC)
+                            Optional.of(GroupState.STABLE),
+                            Optional.of(GroupType.CLASSIC),
+                            false
                     )
             );
 
@@ -250,7 +250,7 @@ public class ListConsumerGroupTest {
         try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
              AutoCloseable topicConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, topicGroup, topic);
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
-             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"});
+             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"})
         ) {
 
 
@@ -258,21 +258,21 @@ public class ListConsumerGroupTest {
             Set<ConsumerGroupListing> expectedListing = Set.of(
                     new ConsumerGroupListing(
                             topicPartitionsGroup,
-                            true,
-                            Optional.of(ConsumerGroupState.EMPTY),
-                            Optional.of(GroupType.CLASSIC)
+                            Optional.of(GroupState.EMPTY),
+                            Optional.of(GroupType.CLASSIC),
+                            true
                     ),
                     new ConsumerGroupListing(
                             topicGroup,
-                            false,
-                            Optional.of(ConsumerGroupState.STABLE),
-                            Optional.of(GroupType.CLASSIC)
+                            Optional.of(GroupState.STABLE),
+                            Optional.of(GroupType.CLASSIC),
+                            false
                     ),
                     new ConsumerGroupListing(
                             protocolGroup,
-                            false,
-                            Optional.of(ConsumerGroupState.STABLE),
-                            Optional.of(GroupType.CONSUMER)
+                            Optional.of(GroupState.STABLE),
+                            Optional.of(GroupType.CONSUMER),
+                            false
                     )
             );
 
@@ -288,9 +288,9 @@ public class ListConsumerGroupTest {
             expectedListing = Set.of(
                     new ConsumerGroupListing(
                             protocolGroup,
-                            false,
-                            Optional.of(ConsumerGroupState.STABLE),
-                            Optional.of(GroupType.CONSUMER)
+                            Optional.of(GroupState.STABLE),
+                            Optional.of(GroupType.CONSUMER),
+                            false
                     )
             );
 
@@ -304,15 +304,15 @@ public class ListConsumerGroupTest {
             expectedListing = Set.of(
                     new ConsumerGroupListing(
                             topicPartitionsGroup,
-                            true,
-                            Optional.of(ConsumerGroupState.EMPTY),
-                            Optional.of(GroupType.CLASSIC)
+                            Optional.of(GroupState.EMPTY),
+                            Optional.of(GroupType.CLASSIC),
+                            true
                     ),
                     new ConsumerGroupListing(
                             topicGroup,
-                            false,
-                            Optional.of(ConsumerGroupState.STABLE),
-                            Optional.of(GroupType.CLASSIC)
+                            Optional.of(GroupState.STABLE),
+                            Optional.of(GroupType.CLASSIC),
+                            false
                     )
             );
 
@@ -511,7 +511,9 @@ public class ListConsumerGroupTest {
         configs.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(GROUP_PROTOCOL_CONFIG, groupProtocol);
-        configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+        if (GroupProtocol.CLASSIC.name.equalsIgnoreCase(groupProtocol)) {
+            configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+        }
 
         configs.putAll(customConfigs);
         return configs;
@@ -548,20 +550,20 @@ public class ListConsumerGroupTest {
     /**
      * Validates the consumer group listings returned against expected values using specified filters.
      *
-     * @param service           The service to list consumer groups.
-     * @param typeFilterSet     Filters for group types, empty for no filter.
-     * @param stateFilterSet    Filters for group states, empty for no filter.
-     * @param expectedListing   Expected consumer group listings.
+     * @param service                The service to list consumer groups.
+     * @param typeFilterSet          Filters for group types, empty for no filter.
+     * @param groupStateFilterSet    Filters for group states, empty for no filter.
+     * @param expectedListing        Expected consumer group listings.
      */
     private static void assertGroupListing(
         ConsumerGroupCommand.ConsumerGroupService service,
         Set<GroupType> typeFilterSet,
-        Set<ConsumerGroupState> stateFilterSet,
+        Set<GroupState> groupStateFilterSet,
         Set<ConsumerGroupListing> expectedListing
     ) throws Exception {
         final AtomicReference<Set<ConsumerGroupListing>> foundListing = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
-            foundListing.set(set(service.listConsumerGroupsWithFilters(set(typeFilterSet), set(stateFilterSet))));
+            foundListing.set(set(service.listConsumerGroupsWithFilters(set(typeFilterSet), set(groupStateFilterSet))));
             return Objects.equals(set(expectedListing), foundListing.get());
         }, () -> "Expected to show groups " + expectedListing + ", but found " + foundListing.get() + ".");
     }
@@ -614,29 +616,29 @@ public class ListConsumerGroupTest {
 class ListConsumerGroupUnitTest {
     @Test
     public void testConsumerGroupStatesFromString() {
-        Set<ConsumerGroupState> result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Collections.singleton(ConsumerGroupState.STABLE)), result);
+        Set<GroupState> result = ConsumerGroupCommand.groupStatesFromString("Stable");
+        Assertions.assertEquals(ListConsumerGroupTest.set(Collections.singleton(GroupState.STABLE)), result);
 
-        result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable, PreparingRebalance");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(ConsumerGroupState.STABLE, ConsumerGroupState.PREPARING_REBALANCE)), result);
+        result = ConsumerGroupCommand.groupStatesFromString("Stable, PreparingRebalance");
+        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(GroupState.STABLE, GroupState.PREPARING_REBALANCE)), result);
 
-        result = ConsumerGroupCommand.consumerGroupStatesFromString("Dead,CompletingRebalance,");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE)), result);
+        result = ConsumerGroupCommand.groupStatesFromString("Dead,CompletingRebalance,");
+        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(GroupState.DEAD, GroupState.COMPLETING_REBALANCE)), result);
 
-        result = ConsumerGroupCommand.consumerGroupStatesFromString("stable");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Collections.singletonList(ConsumerGroupState.STABLE)), result);
+        result = ConsumerGroupCommand.groupStatesFromString("stable");
+        Assertions.assertEquals(ListConsumerGroupTest.set(Collections.singletonList(GroupState.STABLE)), result);
 
-        result = ConsumerGroupCommand.consumerGroupStatesFromString("stable, assigning");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(ConsumerGroupState.STABLE, ConsumerGroupState.ASSIGNING)), result);
+        result = ConsumerGroupCommand.groupStatesFromString("stable, assigning");
+        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(GroupState.STABLE, GroupState.ASSIGNING)), result);
 
-        result = ConsumerGroupCommand.consumerGroupStatesFromString("dead,reconciling,");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(ConsumerGroupState.DEAD, ConsumerGroupState.RECONCILING)), result);
+        result = ConsumerGroupCommand.groupStatesFromString("dead,reconciling,");
+        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(GroupState.DEAD, GroupState.RECONCILING)), result);
 
-        Assertions.assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong"));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.groupStatesFromString("bad, wrong"));
 
-        Assertions.assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupStatesFromString("  bad, Stable"));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.groupStatesFromString("  bad, Stable"));
 
-        Assertions.assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,"));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.groupStatesFromString("   ,   ,"));
     }
 
     @Test

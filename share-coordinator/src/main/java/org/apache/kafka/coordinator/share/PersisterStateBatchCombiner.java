@@ -21,6 +21,7 @@ import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
@@ -179,7 +180,7 @@ public class PersisterStateBatchCombiner {
         }
         Iterator<PersisterStateBatch> iter = sortedBatches.iterator();
         PersisterStateBatch prev = iter.next();
-        List<PersisterStateBatch> nonOverlapping = new ArrayList<>(sortedBatches.size());
+        List<PersisterStateBatch> nonOverlapping = new LinkedList<>();
         while (iter.hasNext()) {
             PersisterStateBatch candidate = iter.next();
             if (candidate.firstOffset() <= prev.lastOffset() || // overlap
@@ -389,8 +390,7 @@ public class PersisterStateBatchCombiner {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof MergeCandidatePair)) return false;
-            MergeCandidatePair that = (MergeCandidatePair) o;
+            if (!(o instanceof MergeCandidatePair that)) return false;
             return Objects.equals(prev, that.prev) && Objects.equals(candidate, that.candidate);
         }
 

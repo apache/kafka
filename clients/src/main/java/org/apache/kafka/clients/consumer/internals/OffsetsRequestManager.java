@@ -77,7 +77,7 @@ import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.reg
  * {@link ConsumerMetadata}, so this implements {@link ClusterResourceListener} to get notified
  * when the cluster metadata is updated.
  */
-public class OffsetsRequestManager implements RequestManager, ClusterResourceListener {
+public final class OffsetsRequestManager implements RequestManager, ClusterResourceListener {
 
     private final ConsumerMetadata metadata;
     private final IsolationLevel isolationLevel;
@@ -109,7 +109,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      */
     private PendingFetchCommittedRequest pendingOffsetFetchEvent;
 
-    @SuppressWarnings("this-escape")
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
                                  final ConsumerMetadata metadata,
                                  final IsolationLevel isolationLevel,
@@ -473,20 +472,20 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * this function (ex. {@link org.apache.kafka.common.errors.TopicAuthorizationException})
      */
     CompletableFuture<Void> resetPositionsIfNeeded() {
-        Map<TopicPartition, Long> offsetResetTimestamps;
+        Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap;
 
         try {
-            offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
+            partitionAutoOffsetResetStrategyMap = offsetFetcherUtils.getOffsetResetStrategyForPartitions();
         } catch (Exception e) {
             CompletableFuture<Void> result = new CompletableFuture<>();
             result.completeExceptionally(e);
             return result;
         }
 
-        if (offsetResetTimestamps.isEmpty())
+        if (partitionAutoOffsetResetStrategyMap.isEmpty())
             return CompletableFuture.completedFuture(null);
 
-        return sendListOffsetsRequestsAndResetPositions(offsetResetTimestamps);
+        return sendListOffsetsRequestsAndResetPositions(partitionAutoOffsetResetStrategyMap);
     }
 
     /**
@@ -653,12 +652,14 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * partitions. Use the retrieved offsets to reset positions in the subscription state.
      * This also adds the request to the list of unsentRequests.
      *
-     * @param timestampsToSearch the mapping between partitions and target time
+     * @param partitionAutoOffsetResetStrategyMap the mapping between partitions and AutoOffsetResetStrategy
      * @return A {@link CompletableFuture} which completes when the requests are
      * complete.
      */
     private CompletableFuture<Void> sendListOffsetsRequestsAndResetPositions(
-            final Map<TopicPartition, Long> timestampsToSearch) {
+            final Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap) {
+        Map<TopicPartition, Long> timestampsToSearch = partitionAutoOffsetResetStrategyMap.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().timestamp().get()));
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(timestampsToSearch, Optional.empty());
 
@@ -678,8 +679,8 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
             partialResult.whenComplete((result, error) -> {
                 if (error == null) {
-                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(resetTimestamps,
-                            result);
+                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(result,
+                            partitionAutoOffsetResetStrategyMap);
                 } else {
                     RuntimeException e;
                     if (error instanceof RuntimeException) {
@@ -895,7 +896,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             Long offset = entry.getValue();
             Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
 
-            if (!leaderAndEpoch.leader.isPresent()) {
+            if (leaderAndEpoch.leader.isEmpty()) {
                 log.debug("Leader for partition {} is unknown for fetching offset {}", tp, offset);
                 metadata.requestUpdate(true);
                 listOffsetsRequestState.ifPresent(offsetsRequestState -> offsetsRequestState.remainingToSearch.put(tp, offset));

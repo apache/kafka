@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.slf4j.Logger;
 
 import java.util.Objects;
-import java.util.Optional;
 
 import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
@@ -69,9 +68,12 @@ public class RecordDeserializer {
                 sourceNode.deserializeKey(rawRecord.topic(), rawRecord.headers(), rawRecord.key()),
                 sourceNode.deserializeValue(rawRecord.topic(), rawRecord.headers(), rawRecord.value()),
                 rawRecord.headers(),
-                Optional.empty()
+                rawRecord.leaderEpoch()
             );
-        } catch (final RuntimeException deserializationException) {
+        } catch (final Exception deserializationException) {
+            // while Java distinguishes checked vs unchecked exceptions, other languages
+            // like Scala or Kotlin do not, and thus we need to catch `Exception`
+            // (instead of `RuntimeException`) to work well with those languages
             handleDeserializationFailure(deserializationExceptionHandler, processorContext, deserializationException, rawRecord, log, droppedRecordsSensor, sourceNode().name());
             return null; //  'handleDeserializationFailure' would either throw or swallow -- if we swallow we need to skip the record by returning 'null'
         }
@@ -79,7 +81,7 @@ public class RecordDeserializer {
 
     public static void handleDeserializationFailure(final DeserializationExceptionHandler deserializationExceptionHandler,
                                                     final ProcessorContext<?, ?> processorContext,
-                                                    final RuntimeException deserializationException,
+                                                    final Exception deserializationException,
                                                     final ConsumerRecord<byte[], byte[]> rawRecord,
                                                     final Logger log,
                                                     final Sensor droppedRecordsSensor,
@@ -101,7 +103,10 @@ public class RecordDeserializer {
                 deserializationExceptionHandler.handle(errorHandlerContext, rawRecord, deserializationException),
                 "Invalid DeserializationExceptionHandler response."
             );
-        } catch (final RuntimeException fatalUserException) {
+        } catch (final Exception fatalUserException) {
+            // while Java distinguishes checked vs unchecked exceptions, other languages
+            // like Scala or Kotlin do not, and thus we need to catch `Exception`
+            // (instead of `RuntimeException`) to work well with those languages
             log.error(
                 "Deserialization error callback failed after deserialization error for record {}",
                 rawRecord,

@@ -34,7 +34,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._

@@ -20,8 +20,13 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
+
+import java.util.Collections;
+import java.util.Set;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
@@ -33,18 +38,29 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
     private final ValueMapperWithKey<? super KIn, ? super VIn, ? extends VOut> mapper;
     private final String queryableName;
     private boolean sendOldValues = false;
+    private final StoreFactory storeFactory;
 
     KTableMapValues(final KTableImpl<KIn, ?, VIn> parent,
                     final ValueMapperWithKey<? super KIn, ? super VIn, ? extends VOut> mapper,
-                    final String queryableName) {
+                    final String queryableName,
+                    final StoreFactory storeFactory) {
         this.parent = parent;
         this.mapper = mapper;
         this.queryableName = queryableName;
+        this.storeFactory = storeFactory;
     }
 
     @Override
     public Processor<KIn, Change<VIn>, KIn, Change<VOut>> get() {
         return new KTableMapValuesProcessor();
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        if (storeFactory == null) {
+            return null;
+        }
+        return Collections.singleton(new StoreFactory.FactoryWrappingStoreBuilder<>(storeFactory));
     }
 
     @Override

@@ -36,6 +36,7 @@ import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetr
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.EVENT_PURGATORY_TIME_METRIC_NAME;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.EVENT_QUEUE_TIME_METRIC_NAME;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.NUM_PARTITIONS_METRIC_NAME;
+import static org.apache.kafka.coordinator.common.runtime.KafkaMetricHistogram.MAX_LATENCY_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -202,6 +203,23 @@ public class CoordinatorRuntimeMetricsImplTest {
         metricName = kafkaMetricName(metrics, metricNamePrefix + "-p999");
         metric = metrics.metrics().get(metricName);
         assertEquals(999.0, metric.metricValue());
+    }
+
+    @Test
+    public void testRecordEventPurgatoryTimeLimit() {
+        Time time = new MockTime();
+        Metrics metrics = new Metrics(time);
+
+        CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP);
+
+        IntStream.range(1, 1001).forEach(__ -> runtimeMetrics.recordEventPurgatoryTime(MAX_LATENCY_MS + 1000L));
+
+        MetricName metricName = kafkaMetricName(metrics, EVENT_PURGATORY_TIME_METRIC_NAME + "-max");
+        KafkaMetric metric = metrics.metrics().get(metricName);
+        long value = ((Double) metric.metricValue()).longValue();
+
+        // 3 sigfigs in HdrHistogram is not precise enough.
+        assertTrue(value >= MAX_LATENCY_MS && value < MAX_LATENCY_MS + 1000L);
     }
 
     private static void assertMetricGauge(Metrics metrics, org.apache.kafka.common.MetricName metricName, long count) {

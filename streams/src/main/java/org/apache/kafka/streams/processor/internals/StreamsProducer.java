@@ -39,7 +39,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 
 import org.slf4j.Logger;
@@ -71,20 +70,21 @@ public class StreamsProducer {
     private Producer<byte[], byte[]> producer;
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
+    private boolean closed = false;
     private double oldProducerTotalBlockedTime = 0;
     // we have a single `StreamsProducer` per thread, and thus a single `sendException` instance,
     // which we share across all tasks, ie, all `RecordCollectorImpl`
     private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
-    public StreamsProducer(final ProcessingMode processingMode,
-                           final Producer<byte[], byte[]> producer,
-                           final LogContext logContext,
-                           final Time time) {
-        this.processingMode = Objects.requireNonNull(processingMode, "processingMode cannot be null");
+    public StreamsProducer(final Producer<byte[], byte[]> producer,
+                           final ProcessingMode processingMode,
+                           final Time time,
+                           final LogContext logContext) {
         this.producer = Objects.requireNonNull(producer, "producer cannot be null");
+        this.processingMode = Objects.requireNonNull(processingMode, "processingMode cannot be null");
+        this.time = Objects.requireNonNull(time, "time cannot be null");
         log = Objects.requireNonNull(logContext, "logContext cannot be null").logger(getClass());
         logPrefix = logContext.logPrefix().trim();
-        this.time = Objects.requireNonNull(time, "time cannot be null");
     }
 
     private String formatException(final String message) {
@@ -92,11 +92,15 @@ public class StreamsProducer {
     }
 
     boolean eosEnabled() {
-        return StreamsConfigUtils.eosEnabled(processingMode);
+        return processingMode == EXACTLY_ONCE_V2;
     }
 
     boolean transactionInFlight() {
         return transactionInFlight;
+    }
+
+    boolean isClosed() {
+        return closed;
     }
 
     /**
@@ -135,8 +139,8 @@ public class StreamsProducer {
     }
 
     public void resetProducer(final Producer<byte[], byte[]> producer) {
-        if (processingMode != EXACTLY_ONCE_V2) {
-            throw new IllegalStateException("Expected eos-v2 to be enabled, but the processing mode was " + processingMode);
+        if (!eosEnabled()) {
+            throw new IllegalStateException("Expected EOS to be enabled, but processing mode is " + processingMode);
         }
 
         oldProducerTotalBlockedTime += totalBlockedTime(this.producer);
@@ -240,7 +244,7 @@ public class StreamsProducer {
      * @throws IllegalStateException if EOS is disabled
      * @throws TaskMigratedException
      */
-    protected void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
+    public void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                      final ConsumerGroupMetadata consumerGroupMetadata) {
         if (!eosEnabled()) {
             throw new IllegalStateException(formatException("Exactly-once is not enabled"));
@@ -321,6 +325,7 @@ public class StreamsProducer {
 
     void close() {
         producer.close();
+        closed = true;
         transactionInFlight = false;
         transactionInitialized = false;
     }

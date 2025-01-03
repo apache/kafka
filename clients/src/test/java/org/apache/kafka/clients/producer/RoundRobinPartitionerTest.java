@@ -96,35 +96,4 @@ public class RoundRobinPartitionerTest {
         assertEquals(10, partitionCount.get(1).intValue());
         assertEquals(10, partitionCount.get(2).intValue());
     }
-    
-    @Test
-    public void testRoundRobinWithNullKeyBytes() {
-        final String topicA = "topicA";
-        final String topicB = "topicB";
-
-        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
-                new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
-                new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
-        Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.emptySet(), Collections.emptySet());
-
-        final Map<Integer, Integer> partitionCount = new HashMap<>();
-
-        Partitioner partitioner = new RoundRobinPartitioner();
-        for (int i = 0; i < 30; ++i) {
-            int partition = partitioner.partition(topicA, null, null, null, null, testCluster);
-            Integer count = partitionCount.get(partition);
-            if (null == count)
-                count = 0;
-            partitionCount.put(partition, count + 1);
-
-            if (i % 5 == 0) {
-                partitioner.partition(topicB, null, null, null, null, testCluster);
-            }
-        }
-
-        assertEquals(10, partitionCount.get(0).intValue());
-        assertEquals(10, partitionCount.get(1).intValue());
-        assertEquals(10, partitionCount.get(2).intValue());
-    }    
 }

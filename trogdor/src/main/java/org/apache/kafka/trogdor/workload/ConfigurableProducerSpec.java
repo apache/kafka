@@ -108,7 +108,7 @@ import java.util.Optional;
  *   * The average throughput was 500 messages/second, with a window of 100ms and a deviation of 50 messages/second.
  */
 
-public class ConfigurableProducerSpec extends TaskSpec {
+public final class ConfigurableProducerSpec extends TaskSpec {
     private final String producerNode;
     private final String bootstrapServers;
     private final Optional<FlushGenerator> flushGenerator;
@@ -121,7 +121,6 @@ public class ConfigurableProducerSpec extends TaskSpec {
     private final TopicsSpec activeTopic;
     private final int activePartition;
 
-    @SuppressWarnings("this-escape")
     @JsonCreator
     public ConfigurableProducerSpec(@JsonProperty("startMs") long startMs,
                                     @JsonProperty("durationMs") long durationMs,

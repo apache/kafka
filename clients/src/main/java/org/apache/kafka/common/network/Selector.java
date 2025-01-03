@@ -234,22 +234,6 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     /**
-     * Generates a unique connection ID for the given socket.
-     *
-     * @param socket The socket for which the connection ID is to be generated.
-     * @param processorId The ID of the server processor that will handle this connection.
-     * @param connectionIndex The index to be used in the connection ID to ensure uniqueness.
-     * @return A string representing the unique connection ID.
-     */
-    public static String generateConnectionId(Socket socket, int processorId, int connectionIndex) {
-        String localHost = socket.getLocalAddress().getHostAddress();
-        int localPort = socket.getLocalPort();
-        String remoteHost = socket.getInetAddress().getHostAddress();
-        int remotePort = socket.getPort();
-        return localHost + ":" + localPort + "-" + remoteHost + ":" + remotePort + "-" + processorId + "-" + connectionIndex;
-    }
-
-    /**
      * Begin connecting to the given address and add the connection to this nioSelector associated with the given id
      * number.
      * <p>
@@ -1247,13 +1231,11 @@ public class Selector implements Selectable, AutoCloseable {
                     new WindowedCount(), "select", "times the I/O layer checked for new I/O to perform"));
             metricName = metrics.metricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricTags);
             this.selectTime.add(metricName, new Avg());
-            this.selectTime.add(createIOThreadRatioMeterLegacy(metrics, metricGrpName, metricTags, "io-wait", "waiting"));
             this.selectTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io-wait", "waiting"));
 
             this.ioTime = sensor("io-time:" + tagsSuffix);
             metricName = metrics.metricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
-            this.ioTime.add(createIOThreadRatioMeterLegacy(metrics, metricGrpName, metricTags, "io", "doing I/O"));
             this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
 
             this.connectionsByCipher = new IntGaugeSuite<>(log, "sslCiphers", metrics,
@@ -1294,23 +1276,6 @@ public class Selector implements Selectable, AutoCloseable {
         private Meter createMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
                 String baseName, String descriptiveName) {
             return createMeter(metrics, groupName, metricTags, null, baseName, descriptiveName);
-        }
-
-        /**
-         * This method generates `time-total` metrics but has a couple of deficiencies: no `-ns` suffix and no dash between basename
-         * and `time-total` suffix.
-         * @deprecated use {{@link #createIOThreadRatioMeter(Metrics, String, Map, String, String)}} for new metrics instead
-         */
-        @Deprecated
-        private Meter createIOThreadRatioMeterLegacy(Metrics metrics, String groupName,  Map<String, String> metricTags,
-                String baseName, String action) {
-            // this name remains relevant, non-deprecated descendant method uses the same 
-            MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
-                    String.format("The fraction of time the I/O thread spent %s", action), metricTags);
-            // this name is deprecated
-            MetricName totalMetricName = metrics.metricName(baseName + "time-total", groupName,
-                    String.format("*Deprecated* The total time the I/O thread spent %s", action), metricTags);
-            return new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName);
         }
 
         private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,

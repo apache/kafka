@@ -19,8 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
+import java.util.Set;
 
 public class AssignmentChangeEvent extends CompletableApplicationEvent<Void> {
 
@@ -30,7 +29,7 @@ public class AssignmentChangeEvent extends CompletableApplicationEvent<Void> {
     public AssignmentChangeEvent(final long currentTimeMs, final long deadlineMs, final Collection<TopicPartition> partitions) {
         super(Type.ASSIGNMENT_CHANGE, deadlineMs);
         this.currentTimeMs = currentTimeMs;
-        this.partitions = Collections.unmodifiableSet(new HashSet<>(partitions));
+        this.partitions = Set.copyOf(partitions);
     }
 
     public long currentTimeMs() {

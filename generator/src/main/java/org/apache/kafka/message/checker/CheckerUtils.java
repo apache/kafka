@@ -22,8 +22,22 @@ import org.apache.kafka.message.MessageGenerator;
 import org.apache.kafka.message.MessageSpec;
 import org.apache.kafka.message.Versions;
 
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectLoader;
+import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevTree;
+import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.treewalk.filter.PathFilter;
+
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
@@ -89,6 +103,52 @@ class CheckerUtils {
             return MessageGenerator.JSON_SERDE.readValue(new File(schemaPath), MessageSpec.class);
         } catch (Exception e) {
             throw new RuntimeException("Unable to parse file as MessageSpec: " + schemaPath, e);
+        }
+    }
+
+    /**
+     * Return a MessageSpec file give file contents.
+     *
+     * @param contents      The path to read the file from.
+     * @return              The MessageSpec.
+     */
+    static MessageSpec readMessageSpecFromString(String contents) {
+        try {
+            return MessageGenerator.JSON_SERDE.readValue(contents, MessageSpec.class);
+        } catch (Exception e) {
+            throw new RuntimeException("Unable to parse string as MessageSpec: " + contents, e);
+        }
+    }
+
+    /**
+     * Read a MessageSpec file from remote git repo.
+     *
+     * @param filePath The file to read from remote git repo.
+     * @param ref The specific git reference to be used for testing.
+     * @return The file contents.
+     */
+    static String getDataFromGit(String filePath, Path gitPath, String ref) throws IOException {
+        Git git = Git.open(new File(gitPath + "/.git"));
+        Repository repository = git.getRepository();
+        Ref head = repository.getRefDatabase().findRef(ref);
+        if (head == null) {
+            throw new IllegalStateException("Cannot find " + ref + " in the repository.");
+        }
+
+        try (RevWalk revWalk = new RevWalk(repository)) {
+            RevCommit commit = revWalk.parseCommit(head.getObjectId());
+            RevTree tree = commit.getTree();
+            try (TreeWalk treeWalk = new TreeWalk(repository)) {
+                treeWalk.addTree(tree);
+                treeWalk.setRecursive(true);
+                treeWalk.setFilter(PathFilter.create(String.valueOf(Paths.get(filePath.substring(1)))));
+                if (!treeWalk.next()) {
+                    throw new IllegalStateException("Did not find expected file " + filePath.substring(1));
+                }
+                ObjectId objectId = treeWalk.getObjectId(0);
+                ObjectLoader loader = repository.open(objectId);
+                return new String(loader.getBytes(), StandardCharsets.UTF_8);
+            }
         }
     }
 }

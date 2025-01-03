@@ -75,7 +75,7 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(List.empty, None, ZkSasl))
+    startSasl(jaasSections(List.empty, None, KafkaSasl))
     super.setUp(testInfo)
   }
 
@@ -89,7 +89,7 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testListenerName(quorum: String): Unit = {
     // To check the client listener name, establish a session on the server by sending any request eg sendRecords
     val producer = createProducer()

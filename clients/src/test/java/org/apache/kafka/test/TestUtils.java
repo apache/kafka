@@ -279,6 +279,23 @@ public class TestUtils {
         return file;
     }
 
+    /**
+     * Create a random log directory in the format <string>-<int> used for Kafka partition logs.
+     * It is the responsibility of the caller to set up a shutdown hook for deletion of the directory.
+     */
+    public static File randomPartitionLogDir(File parentDir) {
+        int attempts = 1000;
+        while (attempts > 0) {
+            File f = new File(parentDir, "kafka-" + RANDOM.nextInt(1000000));
+            if (f.mkdir()) {
+                f.deleteOnExit();
+                return f;
+            }
+            attempts--;
+        }
+        throw new RuntimeException("Failed to create directory after 1000 attempts");
+    }
+
     public static Properties producerConfig(final String bootstrapServers,
                                             final Class<?> keySerializer,
                                             final Class<?> valueSerializer,

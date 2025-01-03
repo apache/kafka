@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class ConsumerRebalanceMetricsManager extends RebalanceMetricsManager {
+public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManager {
     private final Sensor successfulRebalanceSensor;
     private final Sensor failedRebalanceSensor;
 
@@ -47,7 +47,6 @@ public class ConsumerRebalanceMetricsManager extends RebalanceMetricsManager {
     private long lastRebalanceEndMs = -1L;
     private long lastRebalanceStartMs = -1L;
 
-    @SuppressWarnings("this-escape")
     public ConsumerRebalanceMetricsManager(Metrics metrics) {
         super(CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 

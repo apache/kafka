@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -79,7 +79,7 @@ public class QuorumStateTest {
             localDirectoryId,
             mockPartitionState,
             localId.isPresent() ? voterSet.listeners(localId.getAsInt()) : Endpoints.empty(),
-            Features.KRAFT_VERSION.supportedVersionRange(),
+            Feature.KRAFT_VERSION.supportedVersionRange(),
             electionTimeoutMs,
             fetchTimeoutMs,
             store,

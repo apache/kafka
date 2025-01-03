@@ -18,7 +18,6 @@ package kafka.cluster
 
 import java.net.InetAddress
 import com.yammer.metrics.core.Metric
-import kafka.common.UnexpectedAppendOffsetException
 import kafka.log._
 import kafka.server._
 import kafka.utils._
@@ -46,7 +45,7 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
-import kafka.server.share.{DelayedShareFetch, DelayedShareFetchPartitionKey}
+import kafka.server.share.DelayedShareFetch
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -55,15 +54,16 @@ import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion, NodeToControllerChannelManager, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
+import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
+import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, UnexpectedAppendOffsetException}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, LogAppendInfo, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, LocalLog, LogAppendInfo, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -76,6 +76,7 @@ object PartitionTest {
     private var highWatermark: Long = -1L
     private var failed: Boolean = false
     private var deleted: Boolean = false
+    private var follower: Boolean = false
 
     override def onHighWatermarkUpdated(partition: TopicPartition, offset: Long): Unit = {
       highWatermark = offset
@@ -89,10 +90,15 @@ object PartitionTest {
       deleted = true
     }
 
+    override def onBecomingFollower(partition: TopicPartition): Unit = {
+      follower = true
+    }
+
     private def clear(): Unit = {
       highWatermark = -1L
       failed = false
       deleted = false
+      follower = false
     }
 
     /**
@@ -103,7 +109,8 @@ object PartitionTest {
     def verify(
       expectedHighWatermark: Long = -1L,
       expectedFailed: Boolean = false,
-      expectedDeleted: Boolean = false
+      expectedDeleted: Boolean = false,
+      expectedFollower: Boolean = false
     ): Unit = {
       assertEquals(expectedHighWatermark, highWatermark,
         "Unexpected high watermark")
@@ -111,6 +118,8 @@ object PartitionTest {
         "Unexpected failed")
       assertEquals(expectedDeleted, deleted,
         "Unexpected deleted")
+      assertEquals(expectedFollower, follower,
+        "Unexpected follower")
       clear()
     }
   }
@@ -439,7 +448,7 @@ class PartitionTest extends AbstractPartitionTest {
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-          log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "", None, time.scheduler)
+          log.dir, log.topicPartition, logDirFailureChannel, "", None, time.scheduler)
         val maxTransactionTimeoutMs = 5 * 60 * 1000
         val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, true)
         val producerStateManager = new ProducerStateManager(
@@ -755,7 +764,7 @@ class PartitionTest extends AbstractPartitionTest {
       currentLeaderEpoch = Optional.empty(),
       fetchOnlyFromLeader = true).timestampAndOffsetOpt
 
-    assertTrue(timestampAndOffsetOpt.isDefined)
+    assertTrue(timestampAndOffsetOpt.isPresent)
 
     val timestampAndOffset = timestampAndOffsetOpt.get
     assertEquals(leaderEpoch, timestampAndOffset.leaderEpoch.get)
@@ -814,11 +823,11 @@ class PartitionTest extends AbstractPartitionTest {
           fetchOnlyFromLeader = true
         )
         val timestampAndOffsetOpt = offsetResultHolder.timestampAndOffsetOpt
-        if (timestampAndOffsetOpt.isEmpty || offsetResultHolder.lastFetchableOffset.isDefined &&
+        if (timestampAndOffsetOpt.isEmpty || offsetResultHolder.lastFetchableOffset.isPresent &&
           timestampAndOffsetOpt.get.offset >= offsetResultHolder.lastFetchableOffset.get) {
           offsetResultHolder.maybeOffsetsError.map(e => throw e)
         }
-        Right(timestampAndOffsetOpt)
+        Right(if (timestampAndOffsetOpt.isPresent) Some(timestampAndOffsetOpt.get) else None)
       } catch {
         case e: ApiException => Left(e)
       }
@@ -1024,7 +1033,7 @@ class PartitionTest extends AbstractPartitionTest {
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
         fetchOnlyFromLeader = true).timestampAndOffsetOpt
-      assertTrue(res.isDefined)
+      assertTrue(res.isPresent)
       res.get
     }
 
@@ -1150,8 +1159,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     // let the follower in ISR move leader's HW to move further but below LEO
     fetchFollower(partition, replicaId = follower2, fetchOffset = 0)
-    fetchFollower(partition, replicaId = follower2, fetchOffset = lastOffsetOfFirstBatch)
-    assertEquals(lastOffsetOfFirstBatch, partition.log.get.highWatermark, "Expected leader's HW")
+    fetchFollower(partition, replicaId = follower2, fetchOffset = lastOffsetOfFirstBatch + 1)
+    assertEquals(lastOffsetOfFirstBatch + 1, partition.log.get.highWatermark, "Expected leader's HW")
 
     // current leader becomes follower and then leader again (without any new records appended)
     val followerState = new LeaderAndIsrPartitionState()
@@ -1671,7 +1680,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testIsrNotExpandedIfReplicaIsFencedOrShutdown(quorum: String): Unit = {
     val kraft = quorum == "kraft"
 
@@ -4100,7 +4109,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def tryCompleteDelayedRequestsCatchesExceptions(): Unit = {
-    val requestKey = TopicPartitionOperationKey(topicPartition)
+    val requestKey = new TopicPartitionOperationKey(topicPartition)
 
     val produce = mock(classOf[DelayedOperationPurgatory[DelayedProduce]])
     when(produce.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))

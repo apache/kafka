@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Utility class that tracks the current state and the duration of time spent in each state.
- * This class is threadsafe.
+ * This class is thread-safe.
  */
 public class StateTracker {
 
@@ -60,7 +60,7 @@ public class StateTracker {
 
     /**
      * An immutable record of the accumulated times at the most recent state change. This class is required to
-     * efficiently make {@link StateTracker} threadsafe.
+     * efficiently make {@link StateTracker} thread-safe.
      */
     private static final class StateChange {
 

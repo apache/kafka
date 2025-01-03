@@ -23,7 +23,7 @@ import scala.util.Random
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 import kafka.server.{KafkaBroker, KafkaConfig, MetadataCache, QuorumTestHarness}
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -34,13 +34,14 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.log4j.{Level, Logger}
+import org.apache.logging.log4j.{Level, LogManager}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.metadata.LeaderConstants
+import org.apache.logging.log4j.core.config.Configurator
 
 class UncleanLeaderElectionTest extends QuorumTestHarness {
   val brokerId1 = 0
@@ -63,15 +64,15 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   val partitionId = 0
   val topicPartition = new TopicPartition(topic, partitionId)
 
-  val kafkaApisLogger = Logger.getLogger(classOf[kafka.server.KafkaApis])
-  val networkProcessorLogger = Logger.getLogger(classOf[kafka.network.Processor])
+  val kafkaApisLogger = LogManager.getLogger(classOf[kafka.server.KafkaApis])
+  val networkProcessorLogger = LogManager.getLogger(classOf[kafka.network.Processor])
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
 
-    configProps1 = createBrokerConfig(brokerId1, zkConnectOrNull)
-    configProps2 = createBrokerConfig(brokerId2, zkConnectOrNull)
+    configProps1 = createBrokerConfig(brokerId1, null)
+    configProps2 = createBrokerConfig(brokerId2, null)
 
     for (configProps <- List(configProps1, configProps2)) {
       configProps.put("controlled.shutdown.enable", enableControlledShutdown.toString)
@@ -80,8 +81,8 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     }
 
     // temporarily set loggers to a higher level so that tests run quietly
-    kafkaApisLogger.setLevel(Level.FATAL)
-    networkProcessorLogger.setLevel(Level.FATAL)
+    Configurator.setLevel(kafkaApisLogger.getName, Level.FATAL)
+    Configurator.setLevel(networkProcessorLogger.getName, Level.FATAL)
   }
 
   @AfterEach
@@ -90,8 +91,8 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     brokers.foreach(broker => CoreUtils.delete(broker.config.logDirs))
 
     // restore log levels
-    kafkaApisLogger.setLevel(Level.ERROR)
-    networkProcessorLogger.setLevel(Level.ERROR)
+    Configurator.setLevel(kafkaApisLogger.getName, Level.ERROR)
+    Configurator.setLevel(networkProcessorLogger.getName, Level.ERROR)
 
     admin.close()
 
@@ -119,9 +120,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     admin = TestUtils.createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), adminConfigs)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testUncleanLeaderElectionEnabled(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionEnabled(quorum: String, groupProtocol: String): Unit = {
     // enable unclean leader election
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
@@ -132,9 +133,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionEnabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testUncleanLeaderElectionDisabled(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionDisabled(quorum: String, groupProtocol: String): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
 
@@ -144,9 +145,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionDisabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testUncleanLeaderElectionEnabledByTopicOverride(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionEnabledByTopicOverride(quorum: String, groupProtocol: String): Unit = {
     // disable unclean leader election globally, but enable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "false")
     configProps2.put("unclean.leader.election.enable", "false")
@@ -160,9 +161,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionEnabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testUncleanLeaderElectionDisabledByTopicOverride(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionDisabledByTopicOverride(quorum: String, groupProtocol: String): Unit = {
     // enable unclean leader election globally, but disable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
@@ -176,9 +177,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionDisabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testUncleanLeaderElectionInvalidTopicOverride(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionInvalidTopicOverride(quorum: String, groupProtocol: String): Unit = {
     startBrokers(Seq(configProps1))
 
     // create topic with an invalid value for unclean leader election
@@ -311,6 +312,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     val brokerList = TestUtils.plaintextBootstrapServers(brokers)
     // Don't rely on coordinator as it may be down when this method is called
     val consumer = TestUtils.createConsumer(brokerList,
+      groupProtocolFromTestParameters(),
       groupId = "group" + random.nextLong(),
       enableAutoCommit = false,
       valueDeserializer = new StringDeserializer)
@@ -322,9 +324,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     } finally consumer.close()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testTopicUncleanLeaderElectionEnableWithAlterTopicConfigs(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testTopicUncleanLeaderElectionEnableWithAlterTopicConfigs(quorum: String, groupProtocol: String): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
 

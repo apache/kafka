@@ -142,7 +142,7 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
         this.refreshRetryBackoffMs = refreshRetryBackoffMs;
         this.refreshRetryBackoffMaxMs = refreshRetryBackoffMaxMs;
         this.executorService = executorService;
-        this.missingKeyIds = new LinkedHashMap<String, Long>(MISSING_KEY_ID_CACHE_MAX_ENTRIES, .75f, true) {
+        this.missingKeyIds = new LinkedHashMap<>(MISSING_KEY_ID_CACHE_MAX_ENTRIES, .75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
                 return this.size() > MISSING_KEY_ID_CACHE_MAX_ENTRIES;

@@ -39,6 +39,6 @@ public class MockKeyValueStoreBuilder extends AbstractStoreBuilder<Integer, byte
     }
 
     public StoreFactory asFactory() {
-        return new StoreBuilderWrapper(this);
+        return StoreBuilderWrapper.wrapStoreBuilder(this);
     }
 }

@@ -12,19 +12,18 @@
  */
 package integration.kafka.api
 
-import kafka.api.{AbstractConsumerTest, BaseConsumerTest}
+import kafka.api.AbstractConsumerTest
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerRebalanceListener}
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
 import java.util.Arrays.asList
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.stream.Stream
 
 /**
  * Integration tests for the consumer that cover interaction with the consumer from within callbacks
@@ -161,11 +160,3 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
     assertTrue(partitionsRevoked.get())
   }
 }
-
-object PlaintextConsumerCallbackTest {
-
-  def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
-}
-
-

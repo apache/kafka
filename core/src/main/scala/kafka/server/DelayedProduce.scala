@@ -21,14 +21,16 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.Lock
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
-import kafka.utils.Pool
+import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.purgatory.DelayedOperation
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 case class ProducePartitionStatus(requiredOffset: Long, responseStatus: PartitionResponse) {
   @volatile var acksPending = false
@@ -58,8 +60,8 @@ class DelayedProduce(delayMs: Long,
                      produceMetadata: ProduceMetadata,
                      replicaManager: ReplicaManager,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                     lockOpt: Option[Lock] = None)
-  extends DelayedOperation(delayMs, lockOpt) {
+                     lockOpt: Option[Lock])
+  extends DelayedOperation(delayMs, lockOpt.toJava) with Logging {
 
   override lazy val logger: Logger = DelayedProduce.logger
 

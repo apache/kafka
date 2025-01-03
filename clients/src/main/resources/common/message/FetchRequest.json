@@ -18,12 +18,11 @@
   "type": "request",
   "listeners": ["zkBroker", "broker", "controller"],
   "name": "FetchRequest",
+  // Versions 0-3 were removed in Apache Kafka 4.0, Version 4 is the new baseline.
   //
   // Version 1 is the same as version 0.
-  //
   // Starting in Version 2, the requester must be able to handle Kafka Log
   // Message format version 1.
-  //
   // Version 3 adds MaxBytes.  Starting in version 3, the partition ordering in
   // the request is now relevant.  Partitions will be processed in the order
   // they appear in the request.
@@ -57,8 +56,7 @@
   // Version 16 is the same as version 15 (KIP-951).
   //
   // Version 17 adds directory id support from KIP-853
-  "validVersions": "0-17",
-  "deprecatedVersions": "0-3",
+  "validVersions": "4-17",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
@@ -66,7 +64,8 @@
       "about": "The clusterId if known. This is used to validate metadata fetches prior to broker registration." },
     { "name": "ReplicaId", "type": "int32", "versions": "0-14", "default": "-1", "entityType": "brokerId",
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
-    { "name": "ReplicaState", "type": "ReplicaState", "versions": "15+", "taggedVersions": "15+", "tag": 1, "fields": [
+    { "name": "ReplicaState", "type": "ReplicaState", "versions": "15+", "taggedVersions": "15+", "tag": 1,
+      "about": "The state of the replica in the follower.", "fields": [
       { "name": "ReplicaId", "type": "int32", "versions": "15+", "default": "-1", "entityType": "brokerId",
         "about": "The replica ID of the follower, or -1 if this request is from a consumer." },
       { "name": "ReplicaEpoch", "type": "int64", "versions": "15+", "default": "-1",
@@ -79,7 +78,7 @@
     { "name": "MaxBytes", "type": "int32", "versions": "3+", "default": "0x7fffffff", "ignorable": true,
       "about": "The maximum bytes to fetch.  See KIP-74 for cases where this limit may not be honored." },
     { "name": "IsolationLevel", "type": "int8", "versions": "4+", "default": "0", "ignorable": true,
-      "about": "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), non-transactional and COMMITTED transactional records are visible. To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the result, which allows consumers to discard ABORTED transactional records" },
+      "about": "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), non-transactional and COMMITTED transactional records are visible. To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the result, which allows consumers to discard ABORTED transactional records." },
     { "name": "SessionId", "type": "int32", "versions": "7+", "default": "0", "ignorable": true,
       "about": "The fetch session ID." },
     { "name": "SessionEpoch", "type": "int32", "versions": "7+", "default": "-1", "ignorable": true,
@@ -88,7 +87,7 @@
       "about": "The topics to fetch.", "fields": [
       { "name": "Topic", "type": "string", "versions": "0-12", "entityType": "topicName", "ignorable": true,
         "about": "The name of the topic to fetch." },
-      { "name": "TopicId", "type": "uuid", "versions": "13+", "ignorable": true, "about": "The unique topic ID"},
+      { "name": "TopicId", "type": "uuid", "versions": "13+", "ignorable": true, "about": "The unique topic ID."},
       { "name": "Partitions", "type": "[]FetchPartition", "versions": "0+",
         "about": "The partitions to fetch.", "fields": [
         { "name": "Partition", "type": "int32", "versions": "0+",
@@ -98,24 +97,24 @@
         { "name": "FetchOffset", "type": "int64", "versions": "0+",
           "about": "The message offset." },
         { "name": "LastFetchedEpoch", "type": "int32", "versions": "12+", "default": "-1", "ignorable": false,
-          "about": "The epoch of the last fetched record or -1 if there is none"},
+          "about": "The epoch of the last fetched record or -1 if there is none."},
         { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
           "about": "The earliest available offset of the follower replica.  The field is only used when the request is sent by the follower."},
         { "name": "PartitionMaxBytes", "type": "int32", "versions": "0+",
           "about": "The maximum bytes to fetch from this partition.  See KIP-74 for cases where this limit may not be honored." },
         { "name": "ReplicaDirectoryId", "type": "uuid", "versions": "17+", "taggedVersions": "17+", "tag": 0, "ignorable": true,
-          "about": "The directory id of the follower fetching" }
+          "about": "The directory id of the follower fetching." }
       ]}
     ]},
     { "name": "ForgottenTopicsData", "type": "[]ForgottenTopic", "versions": "7+", "ignorable": false,
       "about": "In an incremental fetch request, the partitions to remove.", "fields": [
       { "name": "Topic", "type": "string", "versions": "7-12", "entityType": "topicName", "ignorable": true,
         "about": "The topic name." },
-      { "name": "TopicId", "type": "uuid", "versions": "13+", "ignorable": true, "about": "The unique topic ID"},
+      { "name": "TopicId", "type": "uuid", "versions": "13+", "ignorable": true, "about": "The unique topic ID."},
       { "name": "Partitions", "type": "[]int32", "versions": "7+",
         "about": "The partitions indexes to forget." }
     ]},
     { "name": "RackId", "type":  "string", "versions": "11+", "default": "", "ignorable": true,
-      "about": "Rack ID of the consumer making this request"}
+      "about": "Rack ID of the consumer making this request."}
   ]
 }

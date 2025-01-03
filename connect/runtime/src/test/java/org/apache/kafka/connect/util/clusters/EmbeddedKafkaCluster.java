@@ -33,6 +33,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -463,6 +464,7 @@ public class EmbeddedKafkaCluster {
      */
     public ConsumerRecords<byte[], byte[]> consume(int n, long maxDuration, Map<String, Object> consumerProps, String... topics) {
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
+        Map<TopicPartition, OffsetAndMetadata> nextOffsets = new HashMap<>();
         int consumedRecords = 0;
         try (KafkaConsumer<byte[], byte[]> consumer = createConsumerAndSubscribeTo(consumerProps, topics)) {
             final long startMillis = System.currentTimeMillis();
@@ -477,10 +479,12 @@ public class EmbeddedKafkaCluster {
                 for (TopicPartition partition: rec.partitions()) {
                     final List<ConsumerRecord<byte[], byte[]>> r = rec.records(partition);
                     records.computeIfAbsent(partition, t -> new ArrayList<>()).addAll(r);
+                    final ConsumerRecord<byte[], byte[]> lastRecord = r.get(r.size() - 1);
+                    nextOffsets.put(partition, new OffsetAndMetadata(lastRecord.offset() + 1, lastRecord.leaderEpoch(), ""));
                     consumedRecords += r.size();
                 }
                 if (consumedRecords >= n) {
-                    return new ConsumerRecords<>(records);
+                    return new ConsumerRecords<>(records, nextOffsets);
                 }
                 allowedDuration = maxDuration - (System.currentTimeMillis() - startMillis);
             }
@@ -535,6 +539,7 @@ public class EmbeddedKafkaCluster {
                         Function.identity(),
                         tp -> new ArrayList<>()
                 ));
+        Map<TopicPartition, OffsetAndMetadata> nextOffsets = new HashMap<>();
         try (Consumer<byte[], byte[]> consumer = createConsumer(consumerProps != null ? consumerProps : Collections.emptyMap())) {
             consumer.assign(topicPartitions);
 
@@ -558,12 +563,13 @@ public class EmbeddedKafkaCluster {
                         recordBatch.partitions().forEach(tp -> records.get(tp)
                                 .addAll(recordBatch.records(tp))
                         );
+                        nextOffsets.putAll(recordBatch.nextOffsets());
                     }
                 }
             }
         }
 
-        return new ConsumerRecords<>(records);
+        return new ConsumerRecords<>(records, nextOffsets);
     }
 
     public long endOffset(TopicPartition topicPartition) throws TimeoutException, InterruptedException, ExecutionException {

@@ -44,7 +44,8 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
                 .setMaxTimestampMs(segmentMetadata.maxTimestampMs())
                 .setSegmentSizeInBytes(segmentMetadata.segmentSizeInBytes())
                 .setSegmentLeaderEpochs(createSegmentLeaderEpochsEntry(segmentMetadata))
-                .setRemoteLogSegmentState(segmentMetadata.state().id());
+                .setRemoteLogSegmentState(segmentMetadata.state().id())
+                .setTxnIndexEmpty(segmentMetadata.isTxnIdxEmpty());
         segmentMetadata.customMetadata().ifPresent(md -> record.setCustomMetadata(md.value()));
 
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
@@ -83,7 +84,7 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
                 new RemoteLogSegmentMetadata(remoteLogSegmentId, record.startOffset(), record.endOffset(),
                                              record.maxTimestampMs(), record.brokerId(),
                                              record.eventTimestampMs(), record.segmentSizeInBytes(),
-                                             segmentLeaderEpochs);
+                                             segmentLeaderEpochs, record.txnIndexEmpty());
         RemoteLogSegmentMetadataUpdate rlsmUpdate
                 = new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, record.eventTimestampMs(),
                                                      customMetadata,

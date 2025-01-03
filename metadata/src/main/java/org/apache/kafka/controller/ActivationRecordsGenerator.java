@@ -21,7 +21,6 @@ import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
-import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -29,8 +28,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-import static org.apache.kafka.metadata.migration.ZkMigrationState.NONE;
-import static org.apache.kafka.metadata.migration.ZkMigrationState.POST_MIGRATION;
 
 public class ActivationRecordsGenerator {
 
@@ -90,12 +87,6 @@ public class ActivationRecordsGenerator {
         // initialization, etc.
         records.addAll(bootstrapMetadata.records());
 
-        if (metadataVersion.isMigrationSupported()) {
-            logMessageBuilder.append("Setting the ZK migration state to NONE since this is a de-novo " +
-                "KRaft cluster. ");
-            records.add(NONE.toRecord());
-        }
-
         activationMessageConsumer.accept(logMessageBuilder.toString().trim());
         if (metadataVersion.isMetadataTransactionSupported()) {
             records.add(new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
@@ -108,7 +99,6 @@ public class ActivationRecordsGenerator {
     static ControllerResult<Void> recordsForNonEmptyLog(
         Consumer<String> activationMessageConsumer,
         long transactionStartOffset,
-        ZkMigrationState zkMigrationState,
         MetadataVersion curMetadataVersion
     ) {
         StringBuilder logMessageBuilder = new StringBuilder("Performing controller activation. ");
@@ -139,24 +129,6 @@ public class ActivationRecordsGenerator {
                 .append(". ");
         }
 
-        if (curMetadataVersion.isMigrationSupported()) {
-            if (zkMigrationState == NONE || zkMigrationState == POST_MIGRATION) {
-                logMessageBuilder
-                    .append("Loaded ZK migration state of ")
-                    .append(zkMigrationState)
-                    .append(". ");
-                if (zkMigrationState == NONE) {
-                    logMessageBuilder.append("This is expected because this is a de-novo KRaft cluster.");
-                }
-            } else {
-                throw new RuntimeException("Cannot load ZkMigrationState." + zkMigrationState +
-                        " because ZK migration is no longer supported.");
-            }
-        } else if (zkMigrationState != NONE) {
-            throw new RuntimeException("Should not have ZkMigrationState." + zkMigrationState +
-                    " on a cluster running metadata version " + curMetadataVersion + ".");
-        }
-
         activationMessageConsumer.accept(logMessageBuilder.toString().trim());
         return ControllerResult.atomicOf(records, null);
     }
@@ -176,15 +148,13 @@ public class ActivationRecordsGenerator {
         boolean isEmpty,
         long transactionStartOffset,
         BootstrapMetadata bootstrapMetadata,
-        ZkMigrationState zkMigrationState,
         MetadataVersion curMetadataVersion
     ) {
         if (isEmpty) {
             return recordsForEmptyLog(activationMessageConsumer, transactionStartOffset,
                     bootstrapMetadata, bootstrapMetadata.metadataVersion());
         } else {
-            return recordsForNonEmptyLog(activationMessageConsumer, transactionStartOffset,
-                    zkMigrationState, curMetadataVersion);
+            return recordsForNonEmptyLog(activationMessageConsumer, transactionStartOffset, curMetadataVersion);
         }
     }
 }

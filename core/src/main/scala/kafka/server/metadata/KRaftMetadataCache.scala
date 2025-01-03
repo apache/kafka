@@ -381,6 +381,10 @@ class KRaftMetadataCache(
       flatMap(_.node(listenerName.value()).toScala).toSeq
   }
 
+  override def getBrokerNodes(listenerName: ListenerName): Seq[Node] = {
+    _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).asScala).toSeq
+  }
+
   // Does NOT include offline replica metadata
   override def getPartitionInfo(topicName: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
     Option(_currentImage.topics().getTopic(topicName)).
@@ -550,8 +554,10 @@ class KRaftMetadataCache(
   override def features(): FinalizedFeatures = {
     val image = _currentImage
     val finalizedFeatures = new java.util.HashMap[String, java.lang.Short](image.features().finalizedVersions())
-    finalizedFeatures.put(KRaftVersion.FEATURE_NAME, kraftVersionSupplier.get().featureLevel())
-
+    val kraftVersionLevel = kraftVersionSupplier.get().featureLevel()
+    if (kraftVersionLevel > 0) {
+      finalizedFeatures.put(KRaftVersion.FEATURE_NAME, kraftVersionLevel)
+    }
     new FinalizedFeatures(image.features().metadataVersion(),
       finalizedFeatures,
       image.highestOffsetAndEpoch().offset,

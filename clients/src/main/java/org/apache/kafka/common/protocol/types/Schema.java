@@ -24,7 +24,7 @@ import java.util.Objects;
 /**
  * The schema for a compound record definition
  */
-public class Schema extends Type {
+public final class Schema extends Type {
     private static final Object[] NO_VALUES = new Object[0];
 
     private final BoundField[] fields;
@@ -53,7 +53,6 @@ public class Schema extends Type {
      *
      * @throws SchemaException If the given list have duplicate fields
      */
-    @SuppressWarnings("this-escape")
     public Schema(boolean tolerateMissingFieldsWithDefaults, Field... fs) {
         this.fields = new BoundField[fs.length];
         this.fieldsByName = new HashMap<>();

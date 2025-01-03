@@ -134,14 +134,14 @@ import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CON
  * Since each task has a dedicated thread, this is mainly just a container for them.
  * </p>
  */
-public class Worker {
+public final class Worker {
 
     public static final long CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5);
     public static final long EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
 
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
 
-    protected Herder herder;
+    Herder herder;
     private final ExecutorService executor;
     private final Time time;
     private final String workerId;
@@ -173,7 +173,6 @@ public class Worker {
         this(workerId, time, plugins, config, globalOffsetBackingStore, Executors.newCachedThreadPool(), connectorClientConfigOverridePolicy, Admin::create);
     }
 
-    @SuppressWarnings("this-escape")
     Worker(
             String workerId,
             Time time,
@@ -222,7 +221,7 @@ public class Worker {
         return workerConfigTransformer;
     }
 
-    protected Herder herder() {
+    Herder herder() {
         return herder;
     }
 
@@ -277,6 +276,10 @@ public class Worker {
 
         workerConfigTransformer.close();
         ThreadUtils.shutdownExecutorServiceQuietly(executor, EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    }
+
+    public WorkerConfig config() {
+        return config;
     }
 
     /**

@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -88,7 +89,7 @@ class TransactionLogConfigTest {
 
         TransactionLogConfig transactionLogConfig = new TransactionLogConfig(config);
 
-        assertEquals(false, transactionLogConfig.transactionPartitionVerificationEnable());
+        assertFalse(transactionLogConfig.transactionPartitionVerificationEnable());
         assertEquals(88, transactionLogConfig.producerIdExpirationMs());
 
         // If the following calls are missing, we won’t be able to distinguish whether the value is set in the constructor or if

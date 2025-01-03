@@ -39,7 +39,7 @@ public final class LocalTieredStorageOutput<K, V> implements LocalTieredStorageT
         this.keyDe = keyDe;
         this.valueDe = valueDe;
         // Columns length + 5 column separators.
-        output += repeatString("-", 51 + 8 + 13 + 10 + (3 * 2)) + System.lineSeparator();
+        output += "-".repeat(51 + 8 + 13 + 10 + (3 * 2)) + System.lineSeparator();
     }
 
     private String row(String file, Object offset, String record, String ident) {
@@ -52,14 +52,6 @@ public final class LocalTieredStorageOutput<K, V> implements LocalTieredStorageT
 
     private String row() {
         return row("", "", "");
-    }
-
-    private String repeatString(String str, int times) {
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < times; i++) {
-            builder.append(str);
-        }
-        return builder.toString();
     }
 
     @Override

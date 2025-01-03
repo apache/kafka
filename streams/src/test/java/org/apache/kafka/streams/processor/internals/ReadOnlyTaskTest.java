@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TaskId;
@@ -27,6 +28,7 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -203,6 +205,9 @@ class ReadOnlyTaskTest {
                     break;
                 case "org.apache.kafka.common.TopicPartition":
                     parameters[i] = new TopicPartition("topic", 0);
+                    break;
+                case "org.apache.kafka.clients.consumer.OffsetAndMetadata":
+                    parameters[i] = new OffsetAndMetadata(0, Optional.empty(), "");
                     break;
                 case "java.lang.Exception":
                     parameters[i] = new IllegalStateException();

@@ -251,7 +251,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 final Optional<ApiVersion> brokerApiVersion = apiKey.toApiVersion(enableUnstableLastVersion);
-                if (!brokerApiVersion.isPresent()) {
+                if (brokerApiVersion.isEmpty()) {
                     // Broker does not support this API key.
                     continue;
                 }

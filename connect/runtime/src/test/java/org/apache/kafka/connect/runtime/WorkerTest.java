@@ -1777,8 +1777,7 @@ public class WorkerTest {
 
         List<MetricsReporter> list = worker.metrics().metrics().reporters();
         for (MetricsReporter reporter : list) {
-            if (reporter instanceof MockMetricsReporter) {
-                MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) reporter;
+            if (reporter instanceof MockMetricsReporter mockMetricsReporter) {
                 //verify connect cluster is set in MetricsContext
                 assertEquals(CLUSTER_ID, mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
             }
@@ -2149,7 +2148,7 @@ public class WorkerTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
-    public void testAlterOffsetsSourceConnectorError(boolean enableTopicCreation) throws Exception {
+    public void testAlterOffsetsSourceConnectorError(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
         mockInternalConverters();
@@ -2188,7 +2187,7 @@ public class WorkerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testNormalizeSourceConnectorOffsets(boolean enableTopicCreation) throws Exception {
+    public void testNormalizeSourceConnectorOffsets(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
                 Collections.singletonMap("filename", "/path/to/filename"),
@@ -2334,7 +2333,7 @@ public class WorkerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testAlterOffsetsSinkConnectorAlterOffsetsError(boolean enableTopicCreation) throws Exception {
+    public void testAlterOffsetsSinkConnectorAlterOffsetsError(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
         String connectorClass = SampleSinkConnector.class.getName();
@@ -2375,7 +2374,7 @@ public class WorkerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testAlterOffsetsSinkConnectorDeleteOffsetsError(boolean enableTopicCreation) throws Exception {
+    public void testAlterOffsetsSinkConnectorDeleteOffsetsError(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
         String connectorClass = SampleSinkConnector.class.getName();
@@ -2426,7 +2425,7 @@ public class WorkerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testAlterOffsetsSinkConnectorSynchronousError(boolean enableTopicCreation) throws Exception {
+    public void testAlterOffsetsSinkConnectorSynchronousError(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
         String connectorClass = SampleSinkConnector.class.getName();
@@ -2557,7 +2556,7 @@ public class WorkerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testResetOffsetsSinkConnectorDeleteConsumerGroupError(boolean enableTopicCreation) throws Exception {
+    public void testResetOffsetsSinkConnectorDeleteConsumerGroupError(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
         String connectorClass = SampleSinkConnector.class.getName();
@@ -2594,7 +2593,7 @@ public class WorkerTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
-    public void testModifySourceConnectorOffsetsTimeout(boolean enableTopicCreation) throws Exception {
+    public void testModifySourceConnectorOffsetsTimeout(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
         Time time = new MockTime();
@@ -2630,7 +2629,7 @@ public class WorkerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testModifyOffsetsSinkConnectorTimeout(boolean enableTopicCreation) throws Exception {
+    public void testModifyOffsetsSinkConnectorTimeout(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
         String connectorClass = SampleSinkConnector.class.getName();

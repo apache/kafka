@@ -18,13 +18,15 @@
 package kafka.server
 
 
-import java.util.concurrent.TimeUnit
+import kafka.utils.Logging
 
+import java.util.concurrent.TimeUnit
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteRecordsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.DeleteRecordsResponse
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.purgatory.DelayedOperation
 
 import scala.collection._
 
@@ -45,7 +47,7 @@ class DelayedDeleteRecords(delayMs: Long,
                            deleteRecordsStatus:  Map[TopicPartition, DeleteRecordsPartitionStatus],
                            replicaManager: ReplicaManager,
                            responseCallback: Map[TopicPartition, DeleteRecordsResponseData.DeleteRecordsPartitionResult] => Unit)
-  extends DelayedOperation(delayMs) {
+  extends DelayedOperation(delayMs) with Logging {
 
   // first update the acks pending variable according to the error code
   deleteRecordsStatus.foreachEntry { (topicPartition, status) =>
