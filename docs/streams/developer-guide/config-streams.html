@@ -598,7 +598,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               that always fails when these exceptions occur.</p>
 
               <p>An exception handler can return <code>FAIL</code>, <code>CONTINUE</code>, or <code>RETRY</code> depending on the record and the exception thrown. Returning <code>FAIL</code> will signal that Streams should shut down. <code>CONTINUE</code> will signal that Streams
-                should ignore the issue and continue processing. For <code>RetriableException</code> the handler may retyr <code>RETRY</code> to tell the runtime to retry sending the failed record (<b>Note:</b> If <code>RETRY</code> is returned for a non-<code>RetriableException</code>
+                should ignore the issue and continue processing. For <code>RetriableException</code> the handler may return <code>RETRY</code> to tell the runtime to retry sending the failed record (<b>Note:</b> If <code>RETRY</code> is returned for a non-<code>RetriableException</code>
                 it will be treated as <code>FAIL</code>.) If you want to provide an exception handler that always ignores records that are too large, you could implement something like the following:</p>
 
             <pre class="line-numbers"><code class="language-java">import java.util.Properties;
