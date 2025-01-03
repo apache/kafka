@@ -69,6 +69,8 @@ object KafkaBroker {
    * you do change it, be sure to make it match that regex or the system tests will fail.
    */
   val STARTED_MESSAGE = "Kafka Server started"
+
+  val MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS: Long = 120000
 }
 
 trait KafkaBroker extends Logging {
