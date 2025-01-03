@@ -325,6 +325,18 @@ public class ProspectiveStateTest {
             ),
             state.election()
         );
+
+        // with both
+        state = newProspectiveState(voters, OptionalInt.of(1), Optional.of(votedKey));
+        assertEquals(
+            ElectionState.withElectedLeader(
+                epoch,
+                1,
+                Optional.of(votedKey),
+                voters.voterIds()
+            ),
+            state.election()
+        );
     }
 
     @Test

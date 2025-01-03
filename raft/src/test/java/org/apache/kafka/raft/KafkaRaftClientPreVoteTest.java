@@ -333,7 +333,7 @@ public class KafkaRaftClientPreVoteTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
             localKey,
-            VoterSetTest.voterSet(Stream.of(localKey, leader, follower)),
+            VoterSetTest.voterSet(Stream.of(leader, follower)),
             kraftVersion
         )
             .withElectedLeader(epoch, leader.id())
@@ -999,6 +999,45 @@ public class KafkaRaftClientPreVoteTest {
         context.client.poll();
         assertTrue(context.client.quorum().isFollower());
         context.assertElectedLeader(epoch + 1, replica2.id());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void testProspectiveLosesElectionHasLeaderButMissingEndpoint(KRaftVersion kraftVersion) throws Exception {
+        int localId = randomReplicaId();
+        ReplicaKey local = replicaKey(localId, true);
+        ReplicaKey voter1 = replicaKey(localId + 1, true);
+        int electedLeaderId = localId + 3;
+        int epoch = 2;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            local,
+            VoterSetTest.voterSet(Stream.of(local, voter1)),
+            kraftVersion
+        )
+            .withElectedLeader(epoch, electedLeaderId)
+            .withRaftProtocol(KIP_996_PROTOCOL)
+            .build();
+        context.assertElectedLeader(epoch, electedLeaderId);
+        assertTrue(context.client.quorum().isUnattached());
+        // Sleep a little to ensure that we become a prospective
+        context.time.sleep(context.electionTimeoutMs() * 2L);
+        context.client.poll();
+        assertTrue(context.client.quorum().isProspective());
+
+        // Sleep past election timeout
+        context.time.sleep(context.electionTimeoutMs() * 2L);
+        context.client.poll();
+
+        // Prospective should transition to unattached
+        assertTrue(context.client.quorum().isUnattached());
+        assertTrue(context.client.quorum().hasLeader());
+
+        // If election timeout expires again, it should transition back to prospective
+        context.time.sleep(context.electionTimeoutMs() * 2L);
+        context.client.poll();
+        assertTrue(context.client.quorum().isProspective());
+        assertTrue(context.client.quorum().hasLeader());
     }
 
     @ParameterizedTest
