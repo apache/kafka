@@ -146,6 +146,20 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
          *
          * @param timestamp the timestamp to find
          * @param includeValue whether the value of the found record should be returned with the result
+         * @param ignoreTombstone whether the value of the found record should not be a tombstone
+         * @return the record that is found
+         * @throws IllegalArgumentException if the provided timestamp is not contained within this segment
+         */
+        SegmentSearchResult find(long timestamp, boolean includeValue, boolean ignoreTombstone);
+        
+        /**
+         * Finds the latest record in this segment row with (validFrom) timestamp not exceeding the
+         * provided timestamp bound. This method requires that the provided timestamp bound exists
+         * in this segment, i.e., that the provided timestamp bound is at least {@code minTimestamp}
+         * and is smaller than {@code nextTimestamp}.
+         *
+         * @param timestamp the timestamp to find
+         * @param includeValue whether the value of the found record should be returned with the result
          * @return the record that is found
          * @throws IllegalArgumentException if the provided timestamp is not contained within this segment
          */
@@ -282,9 +296,14 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             final byte[] valueOrNull, final long validFrom, final long validTo) {
             initializeWithRecord(new ValueAndValueSize(valueOrNull), validFrom, validTo);
         }
-
+        
         @Override
         public SegmentSearchResult find(final long timestamp, final boolean includeValue) {
+            return find(timestamp, includeValue, false);
+        }
+
+        @Override
+        public SegmentSearchResult find(final long timestamp, final boolean includeValue, final boolean ignoreTombstone) {
             if (timestamp < minTimestamp) {
                 throw new IllegalArgumentException("Timestamp is too small to be found in this segment.");
             }
@@ -301,7 +320,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             int cumValueSize = 0;
             while (currTimestamp != minTimestamp) {
                 if (currIndex <= deserIndex) {
-                    final TimestampAndValueSize curr = unpackedReversedTimestampAndValueSizes.get(currIndex);
+                                        final TimestampAndValueSize curr = unpackedReversedTimestampAndValueSizes.get(currIndex);
                     currTimestamp = curr.timestamp;
                     currValueSize = curr.valueSize;
                     cumValueSize = cumulativeValueSizes.get(currIndex);
@@ -317,17 +336,26 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 }
 
                 if (currTimestamp <= timestamp) {
-                    // found result
+                    // found potential result
                     if (includeValue) {
                         if (currValueSize >= 0) {
                             final byte[] value = new byte[currValueSize];
                             final int valueSegmentIndex = segmentValue.length - cumValueSize;
                             System.arraycopy(segmentValue, valueSegmentIndex, value, 0, currValueSize);
                             return new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, value);
-                        } else {
+                        } else if (!ignoreTombstone) {
                             return new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, null);
+                        } else {
+                            // we have a tombstone value, we skip and go to next iteration
+                            currIndex++;
+                            continue;
                         }
                     } else {
+                        if (ignoreTombstone && currValueSize < 0) {
+                            // we have a tombstone value, we skip and go to next iteration
+                            currIndex++;
+                            continue;
+                        }
                         return new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp);
                     }
                 }
@@ -335,6 +363,12 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 // prep for next iteration
                 currNextTimestamp = currTimestamp;
                 currIndex++;
+            }
+            
+            if (ignoreTombstone) {
+                // If we didn't find value in segment, it means that the value is in a previous segment
+                // REVIEW: Can we send a specific value maybe instead of putting index to -1 ?
+                return new SegmentSearchResult(-1, -1, currNextTimestamp);
             }
 
             throw new IllegalStateException("Search in segment expected to find result but did not.");

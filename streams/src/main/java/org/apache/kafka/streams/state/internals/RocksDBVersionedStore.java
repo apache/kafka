@@ -200,6 +200,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp) {
+        return get(key, asOfTimestamp, false);
+    }
+    
+    @Override
+    public VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp, final boolean ignoreTombstones) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
 
@@ -237,7 +242,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         // check segment stores
         final List<LogicalKeyValueSegment> segments = segmentStores.segments(asOfTimestamp, Long.MAX_VALUE, false);
-        for (final LogicalKeyValueSegment segment : segments) {
+        for (int segmentIndex = 0; segmentIndex < segments.size(); segmentIndex++) {
+            final LogicalKeyValueSegment segment = segments.get(segmentIndex);
             final byte[] rawSegmentValue = segment.get(key);
             if (rawSegmentValue != null) {
                 final long nextTs = RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(rawSegmentValue);
@@ -259,7 +265,13 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 final SegmentSearchResult searchResult =
                         RocksDBVersionedStoreSegmentValueFormatter
                                 .deserialize(rawSegmentValue)
-                                .find(asOfTimestamp, true);
+                                .find(asOfTimestamp, true, ignoreTombstones);
+                
+                // If we have a negative index, we need to take last value in previous segments
+                if (searchResult.index() == -1) {
+                    // TODO
+                }
+                
                 if (searchResult.value() != null) {
                     return new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo());
                 } else {

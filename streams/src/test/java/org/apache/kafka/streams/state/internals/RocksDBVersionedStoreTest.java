@@ -830,6 +830,26 @@ public class RocksDBVersionedStoreTest {
         verifyGetNullFromStore("k2");
         verifyExpiredRecordSensor(1);
     }
+    
+    @Test
+    public void shouldCorrectlyPropagateAfterDeletingVersion() {
+        // Insert three dummy values
+        putToStore("k", "v1", BASE_TIMESTAMP + 1, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        putToStore("k", "v2", BASE_TIMESTAMP + 3, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        putToStore("k", "v3", BASE_TIMESTAMP + 5, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        verifyGetValueFromStore("k", "v3", BASE_TIMESTAMP + 5);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 1, "v1", BASE_TIMESTAMP + 1, BASE_TIMESTAMP + 3);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 3, "v2", BASE_TIMESTAMP + 3, BASE_TIMESTAMP + 5);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 5, "v3", BASE_TIMESTAMP + 5, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+
+        // Delete the second value v2
+        deleteFromStore("k", BASE_TIMESTAMP + 3);
+        verifyTimestampedGetValueFromStoreWithoutTombtones("k", BASE_TIMESTAMP + 4, "v1", BASE_TIMESTAMP + 1, BASE_TIMESTAMP + 5);
+
+        // Insert new value between v1 and v3 (and expect validTo == PUT_RETURN_CODE_VALID_TO_UNDEFINED)
+        putToStore("k", "v4", BASE_TIMESTAMP + 2, BASE_TIMESTAMP + 3); // TODO: Make put return valid timestamp (in another "put" method) ?
+        verifyTimestampedGetValueFromStoreWithoutTombtones("k", BASE_TIMESTAMP + 4, "v4", BASE_TIMESTAMP + 2, BASE_TIMESTAMP + 5);
+    }
 
     private void putToStore(final String key, final String value, final long timestamp, final long expectedValidTo) {
         final long validTo = store.put(
@@ -855,6 +875,12 @@ public class RocksDBVersionedStoreTest {
     private VersionedRecord<String> getFromStore(final String key, final long asOfTimestamp) {
         final VersionedRecord<byte[]> versionedRecord
             = store.get(new Bytes(STRING_SERIALIZER.serialize(null, key)), asOfTimestamp);
+        return deserializedRecord(versionedRecord);
+    }
+    
+    private VersionedRecord<String> getFromStore(final String key, final long asOfTimestamp, final boolean ignoreTombstones) {
+        final VersionedRecord<byte[]> versionedRecord
+            = store.get(new Bytes(STRING_SERIALIZER.serialize(null, key)), asOfTimestamp, ignoreTombstones);
         return deserializedRecord(versionedRecord);
     }
 
@@ -889,6 +915,18 @@ public class RocksDBVersionedStoreTest {
             assertThat(latest.validTo().get(), equalTo(expectedValidTo));
         }
     }
+    
+    private void verifyTimestampedGetValueFromStoreWithoutTombtones(final String key, final long timestamp, final String expectedValue, final long expectedTimestamp, final long expectedValidTo) {
+        final VersionedRecord<String> latest = getFromStore(key, timestamp, true);
+        assertThat(latest.value(), equalTo(expectedValue));
+        assertThat(latest.timestamp(), equalTo(expectedTimestamp));
+        if (expectedValidTo == PUT_RETURN_CODE_VALID_TO_UNDEFINED) {
+            assertThat(latest.validTo().isPresent(), equalTo(false));
+        } else {
+            assertThat(latest.validTo().get(), equalTo(expectedValidTo));
+        }
+    }
+
 
     private void verifyTimestampedGetValueFromStore(final String key,
                                                     final long fromTime,

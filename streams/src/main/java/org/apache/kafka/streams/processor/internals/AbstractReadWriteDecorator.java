@@ -176,6 +176,11 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         public VersionedRecord<V> get(final K key, final long asOfTimestamp) {
             return wrapped().get(key, asOfTimestamp);
         }
+        
+        @Override
+        public VersionedRecord<V> get(final K key, final long asOfTimestamp, final boolean ignoreTombstones) {
+            return wrapped().get(key, asOfTimestamp, ignoreTombstones);
+        }
     }
 
     static class WindowStoreReadWriteDecorator<K, V>

@@ -121,6 +121,30 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
      * @param asOfTimestamp The timestamp bound. This bound is inclusive; if a record
      *                      (for the specified key) exists with this timestamp, then
      *                      this is the record that will be returned.
+     * @param ignoreTombstones If we need to ignore tombstones while searching
+     * @return The value and timestamp of the record associated with this key
+     *         as of the provided timestamp, or {@code null} if no such record exists
+     *         (including if the provided timestamp bound is older than this store's history
+     *         retention time, i.e., the store no longer contains data for the provided
+     *         timestamp). Note that the record timestamp {@code r.timestamp()} of the
+     *         returned {@link VersionedRecord} may be smaller than the provided timestamp
+     *         bound. Additionally, if the latest record version for the key is eligible
+     *         for the provided timestamp bound, then that record will be returned even if
+     *         the timestamp bound is older than the store's history retention.
+     * @throws NullPointerException       If null is used for key.
+     * @throws InvalidStateStoreException if the store is not initialized
+     */
+    VersionedRecord<V> get(K key, long asOfTimestamp, boolean ignoreTombstones);
+    
+    /**
+     * Get the record associated with this key as of the specified timestamp (i.e.,
+     * the existing record with the largest timestamp not exceeding the provided
+     * timestamp bound).
+     *
+     * @param key           The key to fetch
+     * @param asOfTimestamp The timestamp bound. This bound is inclusive; if a record
+     *                      (for the specified key) exists with this timestamp, then
+     *                      this is the record that will be returned.
      * @return The value and timestamp of the record associated with this key
      *         as of the provided timestamp, or {@code null} if no such record exists
      *         (including if the provided timestamp bound is older than this store's history

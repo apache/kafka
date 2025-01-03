@@ -160,6 +160,16 @@ public class MeteredVersionedKeyValueStore<K, V>
                 throw new ProcessorStateException(message, e);
             }
         }
+        
+        public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp, final boolean ignoreTombstones) {
+            Objects.requireNonNull(key, "key cannot be null");
+            try {
+                return maybeMeasureLatency(() -> outerValue(inner.get(keyBytes(key), asOfTimestamp, ignoreTombstones)), time, getSensor);
+            } catch (final ProcessorStateException e) {
+                final String message = String.format(e.getMessage(), key);
+                throw new ProcessorStateException(message, e);
+            }
+        }
 
         public ValueAndTimestamp<V> delete(final K key, final long timestamp) {
             Objects.requireNonNull(key, "key cannot be null");
@@ -331,6 +341,14 @@ public class MeteredVersionedKeyValueStore<K, V>
     @Override
     public VersionedRecord<V> get(final K key, final long asOfTimestamp) {
         final ValueAndTimestamp<V> valueAndTimestamp = internal.get(key, asOfTimestamp);
+        return valueAndTimestamp == null
+            ? null
+            : new VersionedRecord<>(valueAndTimestamp.value(), valueAndTimestamp.timestamp());
+    }
+    
+    @Override
+    public VersionedRecord<V> get(final K key, final long asOfTimestamp, final boolean ignoreTombstones) {
+        final ValueAndTimestamp<V> valueAndTimestamp = internal.get(key, asOfTimestamp, ignoreTombstones);
         return valueAndTimestamp == null
             ? null
             : new VersionedRecord<>(valueAndTimestamp.value(), valueAndTimestamp.timestamp());

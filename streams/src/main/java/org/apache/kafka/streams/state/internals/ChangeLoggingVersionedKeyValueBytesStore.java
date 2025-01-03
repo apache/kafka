@@ -47,6 +47,11 @@ public class ChangeLoggingVersionedKeyValueBytesStore extends ChangeLoggingKeyVa
     public byte[] get(final Bytes key, final long asOfTimestamp) {
         return inner.get(key, asOfTimestamp);
     }
+    
+    @Override
+    public byte[] get(final Bytes key, final long asOfTimestamp, final boolean ignoreTombstonesValues) {
+        return inner.get(key, asOfTimestamp, ignoreTombstonesValues);
+    }
 
     @Override
     public byte[] delete(final Bytes key, final long timestamp) {

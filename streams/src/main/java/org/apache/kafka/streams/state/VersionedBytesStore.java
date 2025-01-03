@@ -33,6 +33,12 @@ public interface VersionedBytesStore extends KeyValueStore<Bytes, byte[]>, Times
      * The analog of {@link VersionedKeyValueStore#get(Object, long)}.
      */
     byte[] get(Bytes key, long asOfTimestamp);
+    
+    /**
+     * The analog of {@link VersionedKeyValueStore#get(Object, long, boolean)}.
+     */
+    byte[] get(Bytes key, long asOfTimestamp, boolean ignoreTombstonesValues);
+
 
     /**
      * The analog of {@link VersionedKeyValueStore#delete(Object, long)}.
