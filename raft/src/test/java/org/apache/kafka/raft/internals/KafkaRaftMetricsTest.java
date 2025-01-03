@@ -127,11 +127,11 @@ public class KafkaRaftMetricsTest {
             )
         );
         VoterSet voters = VoterSetTest.voterSet(voterMap);
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         QuorumState state = buildQuorumState(voters, kraftVersion);
 
-        state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.initialize(state);
+        state.initialize(new OffsetAndEpoch(0L, 0));
 
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
@@ -218,10 +218,10 @@ public class KafkaRaftMetricsTest {
         VoterSet voters = VoterSetTest.voterSet(
             VoterSetTest.voterMap(IntStream.of(1, 2, 3), withDirectoryId)
         );
-        QuorumState state = buildQuorumState(voters, kraftVersion);
-        state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        QuorumState state = buildQuorumState(voters, kraftVersion);
         raftMetrics.initialize(state);
+        state.initialize(new OffsetAndEpoch(0L, 0));
 
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
@@ -262,10 +262,10 @@ public class KafkaRaftMetricsTest {
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void shouldRecordLogEnd(KRaftVersion kraftVersion) {
-        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
-        state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         raftMetrics.initialize(state);
+        state.initialize(new OffsetAndEpoch(0L, 0));
 
         assertEquals((double) 0L, getMetric(metrics, "log-end-offset").metricValue());
         assertEquals((double) 0, getMetric(metrics, "log-end-epoch").metricValue());
@@ -279,10 +279,10 @@ public class KafkaRaftMetricsTest {
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void shouldRecordNumUnknownVoterConnections(KRaftVersion kraftVersion) {
-        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
-        state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         raftMetrics.initialize(state);
+        state.initialize(new OffsetAndEpoch(0L, 0));
 
         assertEquals((double) 0, getMetric(metrics, "number-unknown-voter-connections").metricValue());
 
@@ -294,10 +294,10 @@ public class KafkaRaftMetricsTest {
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void shouldRecordPollIdleRatio(KRaftVersion kraftVersion) {
-        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
-        state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         raftMetrics.initialize(state);
+        state.initialize(new OffsetAndEpoch(0L, 0));
 
         // First recording is discarded (in order to align the interval of measurement)
         raftMetrics.updatePollStart(time.milliseconds());
@@ -368,10 +368,10 @@ public class KafkaRaftMetricsTest {
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void shouldRecordLatency(KRaftVersion kraftVersion) {
-        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
-        state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         raftMetrics.initialize(state);
+        state.initialize(new OffsetAndEpoch(0L, 0));
 
         raftMetrics.updateElectionStartMs(time.milliseconds());
         time.sleep(1000L);
@@ -401,10 +401,10 @@ public class KafkaRaftMetricsTest {
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void shouldRecordRate(KRaftVersion kraftVersion) {
-        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
-        state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         raftMetrics.initialize(state);
+        state.initialize(new OffsetAndEpoch(0L, 0));
 
         raftMetrics.updateAppendRecords(12);
         assertEquals(0.4, getMetric(metrics, "append-records-rate").metricValue());

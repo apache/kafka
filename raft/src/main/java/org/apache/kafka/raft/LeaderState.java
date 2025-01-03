@@ -669,11 +669,13 @@ public class LeaderState<T> implements EpochState {
      * Clear observer states that have not been active for a while and are not the leader.
      */
     private void clearInactiveObservers(final long currentTimeMs) {
-        observerStates.entrySet().removeIf(integerReplicaStateEntry ->
+        boolean removed = observerStates.entrySet().removeIf(integerReplicaStateEntry ->
             currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS &&
             !integerReplicaStateEntry.getKey().equals(localReplicaKey)
         );
-        kafkaRaftMetrics.updateNumObservers(observerStates.size());
+        if (removed) {
+            kafkaRaftMetrics.updateNumObservers(observerStates.size());
+        }
     }
 
     private boolean isVoter(ReplicaKey remoteReplicaKey) {
@@ -692,8 +694,10 @@ public class LeaderState<T> implements EpochState {
 
             // Remove the voter from the previous data structures
             oldVoterStates.remove(voterNode.voterKey().id());
-            observerStates.remove(voterNode.voterKey());
-            kafkaRaftMetrics.updateNumObservers(observerStates.size());
+            LeaderState.ReplicaState previous = observerStates.remove(voterNode.voterKey());
+            if (previous != null) {
+                kafkaRaftMetrics.updateNumObservers(observerStates.size());
+            }
 
             // Make sure that the replica key in the replica state matches the voter's
             state.setReplicaKey(voterNode.voterKey());
@@ -707,8 +711,10 @@ public class LeaderState<T> implements EpochState {
         // Move any of the remaining old voters to observerStates
         for (ReplicaState replicaStateEntry : oldVoterStates.values()) {
             replicaStateEntry.clearListeners();
-            observerStates.putIfAbsent(replicaStateEntry.replicaKey, replicaStateEntry);
-            kafkaRaftMetrics.updateNumObservers(observerStates.size());
+            LeaderState.ReplicaState previous = observerStates.putIfAbsent(replicaStateEntry.replicaKey, replicaStateEntry);
+            if (previous == null) {
+                kafkaRaftMetrics.updateNumObservers(observerStates.size());
+            }
         }
     }
 
