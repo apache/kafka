@@ -199,22 +199,17 @@ public final class RaftClientTestContext {
         }
 
         public Builder(
-            Optional<ReplicaKey> localKey,
-            Optional<VoterSet> voters,
+            ReplicaKey localKey,
+            VoterSet voters,
             KRaftVersion kraftVersion
         ) {
-            this.localId = localKey.map(replicaKey ->
-                OptionalInt.of(replicaKey.id())).orElseGet(OptionalInt::empty);
-            this.localDirectoryId = localKey.map(replicaKey ->
-                replicaKey.directoryId().orElse(Uuid.randomUuid())).orElse(Uuid.randomUuid());
+            this.localId = OptionalInt.of(localKey.id());
+            this.localDirectoryId = localKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID);
             this.kraftVersion = kraftVersion;
             if (kraftVersion == KRaftVersion.KRAFT_VERSION_0) {
-                withStaticVoters(
-                    voters.orElseThrow(() ->
-                            new IllegalArgumentException("Static voters must be provided for KRaft version 0"))
-                        .voterIds());
+                withStaticVoters(voters.voterIds());
             } else {
-                withBootstrapSnapshot(voters);
+                withBootstrapSnapshot(Optional.of(voters));
             }
         }
 

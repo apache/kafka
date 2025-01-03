@@ -32,9 +32,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.randomReplicaId;
@@ -46,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class KafkaRaftClientPreVoteTest {
     @ParameterizedTest
     @MethodSource("kraftVersionHasFetchedCombinations")
-    public void testHandlePreVoteRequestAsFollowerWithElectedLeader(
+    public void testHandlePreVoteRequestAsFollower(
         KRaftVersion kraftVersion,
         boolean hasFetchedFromLeader
     ) throws Exception {
@@ -58,8 +56,8 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(local),
-            Optional.of(VoterSetTest.voterSet(Stream.of(local, otherNodeKey, electedLeader))),
+            local,
+            VoterSetTest.voterSet(Stream.of(local, otherNodeKey, electedLeader)),
             kraftVersion
         )
             .withElectedLeader(epoch, electedLeader.id())
@@ -78,19 +76,18 @@ public class KafkaRaftClientPreVoteTest {
             );
         }
 
-        // follower should reject pre-vote requests with the same epoch if it has successfully fetched from the leader
         context.deliverRequest(context.preVoteRequest(epoch, otherNodeKey, epoch, 1));
         context.pollUntilResponse();
 
-        boolean voteGranted = !hasFetchedFromLeader;
-        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(electedLeader.id()), voteGranted);
+        // follower should reject pre-vote requests if it has successfully fetched from the leader
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(electedLeader.id()), !hasFetchedFromLeader);
         context.assertElectedLeader(epoch, electedLeader.id());
 
         // same with observers
         context.deliverRequest(context.preVoteRequest(epoch, observer, epoch, 1));
         context.pollUntilResponse();
 
-        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(electedLeader.id()), voteGranted);
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(electedLeader.id()), !hasFetchedFromLeader);
         context.assertElectedLeader(epoch, electedLeader.id());
 
         // follower will transition to unattached if pre-vote request has a higher epoch
@@ -112,11 +109,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey votedCandidateKey = replicaKey(localId + 2, true);
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey, votedCandidateKey));
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(localKey),
-            Optional.of(voters),
-            kraftVersion
-        )
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localKey, voters, kraftVersion)
             .withVotedCandidate(epoch, votedCandidateKey)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -155,39 +148,39 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
         ReplicaKey observer = replicaKey(localId + 2, true);
-        int leaderEpoch = 2;
+        int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(localKey),
-            Optional.of(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey))),
+            localKey,
+            VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
             kraftVersion
         )
-            .withVotedCandidate(leaderEpoch, ReplicaKey.of(localId, localKey.directoryId().get()))
+            .withVotedCandidate(epoch, ReplicaKey.of(localId, localKey.directoryId().get()))
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
         assertTrue(context.client.quorum().isCandidate());
 
         // candidate should grant pre-vote requests with the same epoch if log is up-to-date
-        context.deliverRequest(context.preVoteRequest(leaderEpoch, otherNodeKey, leaderEpoch, 1));
+        context.deliverRequest(context.preVoteRequest(epoch, otherNodeKey, epoch, 1));
         context.pollUntilResponse();
 
-        context.assertSentVoteResponse(Errors.NONE, leaderEpoch, OptionalInt.empty(), true);
-        context.assertVotedCandidate(leaderEpoch, localKey);
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
+        context.assertVotedCandidate(epoch, localKey);
         assertTrue(context.client.quorum().isCandidate());
 
-        // if an observer sends a pre-vote request for the same epoch, it should also be granted
-        context.deliverRequest(context.preVoteRequest(leaderEpoch, observer, leaderEpoch, 2));
+        // if an observer with up-to-date log sends a pre-vote request for the same epoch, it should also be granted
+        context.deliverRequest(context.preVoteRequest(epoch, observer, epoch, 2));
         context.pollUntilResponse();
 
-        context.assertSentVoteResponse(Errors.NONE, leaderEpoch, OptionalInt.empty(), true);
-        context.assertVotedCandidate(leaderEpoch, localKey);
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
+        context.assertVotedCandidate(epoch, localKey);
         assertTrue(context.client.quorum().isCandidate());
 
         // candidate will transition to unattached if pre-vote request has a higher epoch
-        context.deliverRequest(context.preVoteRequest(leaderEpoch + 1, otherNodeKey, leaderEpoch + 1, 2));
+        context.deliverRequest(context.preVoteRequest(epoch + 1, otherNodeKey, epoch + 1, 2));
         context.pollUntilResponse();
 
-        context.assertSentVoteResponse(Errors.NONE, leaderEpoch + 1, OptionalInt.of(-1), true);
+        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.of(-1), true);
         assertTrue(context.client.quorum().isUnattached());
     }
 
@@ -202,40 +195,39 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey observer = replicaKey(localId + 3, true);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(localKey),
-            Optional.of(VoterSetTest.voterSet(Stream.of(replica1, replica2))),
+            localKey,
+            VoterSetTest.voterSet(Stream.of(replica1, replica2)),
             kraftVersion
         )
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
+        assertTrue(context.client.quorum().isUnattached());
+        assertTrue(context.client.quorum().isObserver());
 
+        // if a voter with up-to-date log sends a pre-vote request, it should be granted
         context.deliverRequest(context.preVoteRequest(epoch, replica1, epoch, 1));
         context.pollUntilResponse();
-
-        assertTrue(context.client.quorum().isUnattached());
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
 
-        // if same replica sends another pre-vote request for the same epoch, it should be granted
+        // if same voter sends another pre-vote request, it can be granted if the sender's log is still up-to-date
         context.deliverRequest(context.preVoteRequest(epoch, replica1, epoch, 1));
         context.pollUntilResponse();
-
-        assertTrue(context.client.quorum().isUnattached());
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
 
-        // if different replica sends a pre-vote request for the same epoch, it should be granted
+        // if different voter with up-to-date log sends a pre-vote request for the same epoch, it will be granted
         context.deliverRequest(context.preVoteRequest(epoch, replica2, epoch, 1));
         context.pollUntilResponse();
-
-        assertTrue(context.client.quorum().isUnattached());
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
 
-        // if an observer sends a pre-vote request for the same epoch, it should also be granted
+        // if an observer with up-to-date log sends a pre-vote request for the same epoch, it will be granted
         context.deliverRequest(context.preVoteRequest(epoch, observer, epoch, 2));
         context.pollUntilResponse();
-
-        assertTrue(context.client.quorum().isUnattached());
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
+
+        assertEquals(epoch, context.currentEpoch());
+        assertTrue(context.client.quorum().isUnattached());
+        assertTrue(context.client.quorum().isObserver());
     }
 
     @ParameterizedTest
@@ -249,40 +241,37 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(localKey),
-            Optional.of(VoterSetTest.voterSet(Stream.of(replica1, replica2))),
+            localKey,
+            VoterSetTest.voterSet(Stream.of(replica1, replica2)),
             kraftVersion
         )
             .withVotedCandidate(epoch, replica2)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
-
-        context.deliverRequest(context.preVoteRequest(epoch, replica1, epoch, 1));
-        context.pollUntilResponse();
-
         assertTrue(context.client.quorum().isUnattachedAndVoted());
-        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
 
-        // if same replica sends another pre-vote request for the same epoch, it should be granted
+        // if a voter with up-to-date log sends a pre-vote request, it should be granted
         context.deliverRequest(context.preVoteRequest(epoch, replica1, epoch, 1));
         context.pollUntilResponse();
-
-        assertTrue(context.client.quorum().isUnattached());
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
 
-        // if different replica sends a pre-vote request for the same epoch, it should be granted
+        // if same voter sends another pre-vote request, it can be granted if the sender's log is still up-to-date
+        context.deliverRequest(context.preVoteRequest(epoch, replica1, epoch, 1));
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
+
+        // if different voter with up-to-date log sends a pre-vote request for the same epoch, it will be granted
         context.deliverRequest(context.preVoteRequest(epoch, replica2, epoch, 1));
         context.pollUntilResponse();
-
-        assertTrue(context.client.quorum().isUnattached());
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
 
-        // if an observer sends a pre-vote request for the same epoch, it should also be granted
+        // if an observer with up-to-date log sends a pre-vote request for the same epoch, it will be granted
         context.deliverRequest(context.preVoteRequest(epoch, observer, epoch, 2));
         context.pollUntilResponse();
-
-        assertTrue(context.client.quorum().isUnattached());
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
+
+        assertEquals(epoch, context.currentEpoch());
+        assertTrue(context.client.quorum().isUnattachedAndVoted());
     }
 
     @ParameterizedTest
@@ -297,45 +286,42 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(localKey),
-            Optional.of(VoterSetTest.voterSet(Stream.of(replica1, replica2))),
+            localKey,
+            VoterSetTest.voterSet(Stream.of(replica1, replica2)),
             kraftVersion
         )
             .withElectedLeader(epoch, leader.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
-
-        context.deliverRequest(context.preVoteRequest(epoch, replica1, epoch, 1));
-        context.pollUntilResponse();
-
         assertTrue(context.client.quorum().isUnattachedNotVoted());
-        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), true);
 
-        // if same replica sends another pre-vote request for the same epoch, it should be granted
+        // if a voter with up-to-date log sends a pre-vote request, it should be granted
         context.deliverRequest(context.preVoteRequest(epoch, replica1, epoch, 1));
         context.pollUntilResponse();
-
-        assertTrue(context.client.quorum().isUnattached());
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), true);
 
-        // if different replica sends a pre-vote request for the same epoch, it should be granted
+        // if same voter sends another pre-vote request, it can be granted if the sender's log is still up-to-date
+        context.deliverRequest(context.preVoteRequest(epoch, replica1, epoch, 1));
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), true);
+
+        // if different voter with up-to-date log sends a pre-vote request for the same epoch, it will be granted
         context.deliverRequest(context.preVoteRequest(epoch, replica2, epoch, 1));
         context.pollUntilResponse();
-
-        assertTrue(context.client.quorum().isUnattached());
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), true);
 
-        // if an observer sends a pre-vote request for the same epoch, it should also be granted
+        // if an observer with up-to-date log sends a pre-vote request for the same epoch, it will be granted
         context.deliverRequest(context.preVoteRequest(epoch, observer, epoch, 2));
         context.pollUntilResponse();
-
-        assertTrue(context.client.quorum().isUnattached());
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), true);
+
+        assertEquals(epoch, context.currentEpoch());
+        assertTrue(context.client.quorum().isUnattachedNotVoted());
     }
 
     @ParameterizedTest
     @MethodSource("kraftVersionHasFetchedCombinations")
-    public void testHandlePreVoteRequestAsFollowerObserverThatHasNotFetched(
+    public void testHandlePreVoteRequestAsFollowerObserver(
         KRaftVersion kraftVersion,
         boolean hasFetchedFromLeader
     ) throws Exception {
@@ -346,14 +332,16 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(localKey),
-            Optional.of(VoterSetTest.voterSet(Stream.of(localKey, leader, follower))),
+            localKey,
+            VoterSetTest.voterSet(Stream.of(localKey, leader, follower)),
             kraftVersion
         )
             .withElectedLeader(epoch, leader.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
         context.assertElectedLeader(epoch, leader.id());
+        assertTrue(context.client.quorum().isFollower());
+        assertTrue(context.client.quorum().isObserver());
 
         if (hasFetchedFromLeader) {
             context.pollUntilRequest();
@@ -370,20 +358,24 @@ public class KafkaRaftClientPreVoteTest {
         context.deliverRequest(context.preVoteRequest(epoch, follower, epoch, 1));
         context.pollUntilResponse();
 
-        boolean voteGranted = !hasFetchedFromLeader;
-        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), voteGranted);
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), !hasFetchedFromLeader);
         assertTrue(context.client.quorum().isFollower());
+        assertTrue(context.client.quorum().isObserver());
     }
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
-    public void testHandleInvalidPreVoteRequestWithOlderEpoch() throws Exception {
+    public void testHandleInvalidPreVoteRequestWithOlderEpoch(KRaftVersion kraftVersion) throws Exception {
         int localId = randomReplicaId();
-        int epoch = 2;
+        ReplicaKey local = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
-        Set<Integer> voters = Set.of(localId, otherNodeKey.id());
+        int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            local,
+            VoterSetTest.voterSet(Stream.of(local, otherNodeKey)),
+            kraftVersion
+        )
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -397,15 +389,18 @@ public class KafkaRaftClientPreVoteTest {
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
-    public void testLeaderRejectPreVoteRequestOnSameEpoch() throws Exception {
+    public void testLeaderRejectPreVoteRequestOnSameEpoch(KRaftVersion kraftVersion) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, localKey.directoryId().get())
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            localKey,
+            VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
+            kraftVersion
+        )
             .withUnknownLeader(2)
             .withRaftProtocol(KIP_996_PROTOCOL)
-            .withBootstrapSnapshot(Optional.of(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey))))
             .build();
 
         context.unattachedToLeader();
@@ -421,14 +416,17 @@ public class KafkaRaftClientPreVoteTest {
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
-    public void testPreVoteRequestClusterIdValidation() throws Exception {
+    public void testPreVoteRequestClusterIdValidation(KRaftVersion kraftVersion) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, localKey.directoryId().get())
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            localKey,
+            VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
+            kraftVersion
+        )
             .withRaftProtocol(KIP_996_PROTOCOL)
-            .withBootstrapSnapshot(Optional.of(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey))))
             .build();
 
         context.unattachedToLeader();
@@ -457,14 +455,17 @@ public class KafkaRaftClientPreVoteTest {
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
-    public void testInvalidVoterReplicaPreVoteRequest() throws Exception {
+    public void testInvalidVoterReplicaPreVoteRequest(KRaftVersion kraftVersion) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, localKey.directoryId().get())
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            localKey,
+            VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
+            kraftVersion
+        )
             .withRaftProtocol(KIP_996_PROTOCOL)
-            .withBootstrapSnapshot(Optional.of(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey))))
             .build();
 
         context.unattachedToLeader();
@@ -503,15 +504,18 @@ public class KafkaRaftClientPreVoteTest {
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
-    public void testLeaderAcceptPreVoteFromObserver() throws Exception {
+    public void testLeaderAcceptPreVoteFromObserver(KRaftVersion kraftVersion) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, localKey.directoryId().get())
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            localKey,
+            VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
+            kraftVersion
+        )
             .withUnknownLeader(4)
             .withRaftProtocol(KIP_996_PROTOCOL)
-            .withBootstrapSnapshot(Optional.of(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey))))
             .build();
 
         context.unattachedToLeader();
@@ -529,12 +533,16 @@ public class KafkaRaftClientPreVoteTest {
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
-    public void testHandlePreVoteRequestAsResigned() throws Exception {
+    public void testHandlePreVoteRequestAsResigned(KRaftVersion kraftVersion) throws Exception {
         int localId = randomReplicaId();
+        ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
-        Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            localKey,
+            VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
+            kraftVersion
+        )
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
         context.unattachedToLeader();
@@ -543,12 +551,12 @@ public class KafkaRaftClientPreVoteTest {
 
         // resigned should grant pre-vote requests with the same epoch if log is up-to-date
         int epoch = context.currentEpoch();
-        context.deliverRequest(context.preVoteRequest(epoch, otherNodeKey, epoch, 1));
+        context.deliverRequest(context.preVoteRequest(epoch, otherNodeKey, epoch, 3));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), true);
 
         // resigned will transition to unattached if pre-vote request has a higher epoch
-        context.deliverRequest(context.preVoteRequest(epoch + 1, otherNodeKey, epoch + 1, 1));
+        context.deliverRequest(context.preVoteRequest(epoch + 1, otherNodeKey, epoch + 1, 3));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.of(-1), true);
         assertTrue(context.client.quorum().isUnattached());
@@ -556,13 +564,17 @@ public class KafkaRaftClientPreVoteTest {
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
-    public void testInvalidPreVoteRequest() throws Exception {
+    public void testInvalidPreVoteRequest(KRaftVersion kraftVersion) throws Exception {
         int localId = randomReplicaId();
+        ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
         int epoch = 5;
-        Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            localKey,
+            VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
+            kraftVersion
+        )
             .withElectedLeader(epoch, otherNodeKey.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -616,8 +628,8 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(local),
-            Optional.of(VoterSetTest.voterSet(Stream.of(replica1, replica2))),
+            local,
+            VoterSetTest.voterSet(Stream.of(replica1, replica2)),
             kraftVersion
         )
             .withElectedLeader(epoch, replica1.id())
@@ -663,8 +675,8 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey replica1 = replicaKey(localId + 1, true);
         ReplicaKey replica2 = replicaKey(localId + 2, true);
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(local),
-            Optional.of(VoterSetTest.voterSet(Stream.of(local, replica1, replica2))),
+            local,
+            VoterSetTest.voterSet(Stream.of(local, replica1, replica2)),
             kraftVersion
         )
             .withUnknownLeader(epoch)
@@ -699,8 +711,8 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 5;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(local),
-            Optional.of(VoterSetTest.voterSet(Stream.of(local, voter2, voter3))),
+            local,
+            VoterSetTest.voterSet(Stream.of(local, voter2, voter3)),
             kraftVersion
         )
             .withUnknownLeader(epoch)
@@ -752,8 +764,8 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 5;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(local),
-            Optional.of(VoterSetTest.voterSet(Stream.of(local, voter2Key, voter3Key))),
+            local,
+            VoterSetTest.voterSet(Stream.of(local, voter2Key, voter3Key)),
             kraftVersion
         )
             .withUnknownLeader(epoch)
@@ -837,8 +849,8 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 5;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(local),
-            Optional.of(VoterSetTest.voterSet(Stream.of(local, leader))),
+            local,
+            VoterSetTest.voterSet(Stream.of(local, leader)),
             kraftVersion
         )
             .withUnknownLeader(epoch)
@@ -872,8 +884,8 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 5;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(local),
-            Optional.of(VoterSetTest.voterSet(Stream.of(local, otherNode))),
+            local,
+            VoterSetTest.voterSet(Stream.of(local, otherNode)),
             kraftVersion
         )
             .withUnknownLeader(epoch)
@@ -924,8 +936,8 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 5;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(local),
-            Optional.of(VoterSetTest.voterSet(Stream.of(local, replica1, replica2))),
+            local,
+            VoterSetTest.voterSet(Stream.of(local, replica1, replica2)),
             kraftVersion
         )
             .withElectedLeader(epoch, replica1.id())
@@ -1001,8 +1013,8 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 5;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(local),
-            Optional.of(VoterSetTest.voterSet(Stream.of(local, leader, follower))),
+            local,
+            VoterSetTest.voterSet(Stream.of(local, leader, follower)),
             kraftVersion
         )
             .withUnknownLeader(epoch)
@@ -1042,8 +1054,8 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey local = replicaKey(localId, true);
         ReplicaKey otherNode = replicaKey(localId + 1, true);
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-            Optional.of(local),
-            Optional.of(VoterSetTest.voterSet(Stream.of(local, otherNode))),
+            local,
+            VoterSetTest.voterSet(Stream.of(local, otherNode)),
             kraftVersion
         )
             .withUnknownLeader(epoch)

@@ -72,7 +72,8 @@ final class ElectionStateTest {
         List<ElectionState> electionStates = Arrays.asList(
             ElectionState.withUnknownLeader(5, Set.of(1, 2, 3)),
             ElectionState.withElectedLeader(5, 1, Optional.empty(), Set.of(1, 2, 3)),
-            ElectionState.withVotedCandidate(5, votedKey, Set.of(1, 2, 3))
+            ElectionState.withVotedCandidate(5, votedKey, Set.of(1, 2, 3)),
+            ElectionState.withElectedLeader(5, 1, Optional.of(votedKey), Set.of(1, 2, 3))
         );
 
         final List<ElectionState> expected;
@@ -84,13 +85,20 @@ final class ElectionStateTest {
                     5,
                     ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID),
                     Set.of(1, 2, 3)
+                ),
+                ElectionState.withElectedLeader(
+                    5,
+                    1,
+                    Optional.of(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)),
+                    Set.of(1, 2, 3)
                 )
             );
         } else {
             expected = Arrays.asList(
                 ElectionState.withUnknownLeader(5, Collections.emptySet()),
                 ElectionState.withElectedLeader(5, 1, Optional.empty(), Collections.emptySet()),
-                ElectionState.withVotedCandidate(5, votedKey, Collections.emptySet())
+                ElectionState.withVotedCandidate(5, votedKey, Collections.emptySet()),
+                ElectionState.withElectedLeader(5, 1, Optional.of(votedKey), Collections.emptySet())
             );
         }
 

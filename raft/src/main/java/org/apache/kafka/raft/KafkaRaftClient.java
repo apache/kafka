@@ -544,7 +544,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs = time.milliseconds();
         if (quorum.isLeader()) {
             throw new IllegalStateException("Voter cannot initialize as a Leader");
-        } else if (quorum.isOnlyVoter() && (quorum.isUnattached() || quorum.isFollower())) {
+        } else if (quorum.isOnlyVoter() && (quorum.isUnattached() || quorum.isFollower() || quorum.isResigned())) {
             // When there is only a single voter, become leader immediately.
             // transitionToProspective will handle short-circuiting voter to candidate state
             // and transitionToCandidate will handle short-circuiting voter to leader state

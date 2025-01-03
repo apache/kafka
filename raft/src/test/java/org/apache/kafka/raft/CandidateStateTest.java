@@ -45,16 +45,15 @@ public class CandidateStateTest {
 
     private CandidateState newCandidateState(VoterSet voters) {
         return new CandidateState(
-                time,
-                localReplicaKey.id(),
-                localReplicaKey.directoryId().get(),
-                epoch,
-                voters,
-                Optional.empty(),
-                1,
-
+            time,
+            localReplicaKey.id(),
+            localReplicaKey.directoryId().get(),
+            epoch,
+            voters,
+            Optional.empty(),
+            1,
             electionTimeoutMs,
-                logContext
+            logContext
         );
     }
 

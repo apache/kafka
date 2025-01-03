@@ -70,7 +70,7 @@ public class EpochElection {
 
     /**
      * Returns if a voter has rejected the vote.
-     * 
+     *
      * @param voterId The id of the voter
      * @throws IllegalArgumentException if the voter is not in the set of voters
      */

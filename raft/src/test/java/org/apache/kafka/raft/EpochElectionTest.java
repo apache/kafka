@@ -29,111 +29,111 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class EpochElectionTest {
-    static final int VOTER_1_ID = randomReplicaId();
-    static final Set<ReplicaKey> VOTERS = Set.of(
-        ReplicaKey.of(VOTER_1_ID, Uuid.randomUuid()),
-        ReplicaKey.of(VOTER_1_ID + 1, Uuid.randomUuid()),
-        ReplicaKey.of(VOTER_1_ID + 2, Uuid.randomUuid())
+    private final int voter1 = randomReplicaId();
+    private final Set<ReplicaKey> voters = Set.of(
+        ReplicaKey.of(voter1, Uuid.randomUuid()),
+        ReplicaKey.of(voter1 + 1, Uuid.randomUuid()),
+        ReplicaKey.of(voter1 + 2, Uuid.randomUuid())
     );
     @Test
     public void testStateOnInitialization() {
-        EpochElection epochElection = new EpochElection(VOTERS);
+        EpochElection epochElection = new EpochElection(voters);
 
-        assertEquals(VOTERS, epochElection.unrecordedVoters());
+        assertEquals(voters, epochElection.unrecordedVoters());
         assertTrue(epochElection.grantingVoters().isEmpty());
         assertTrue(epochElection.rejectingVoters().isEmpty());
         assertFalse(epochElection.isVoteGranted());
         assertFalse(epochElection.isVoteRejected());
-        assertFalse(epochElection.isGrantedVoter(VOTER_1_ID));
-        assertFalse(epochElection.isRejectedVoter(VOTER_1_ID));
+        assertFalse(epochElection.isGrantedVoter(voter1));
+        assertFalse(epochElection.isRejectedVoter(voter1));
     }
 
     @Test
     public void testRecordGrantedVote() {
-        EpochElection epochElection = new EpochElection(VOTERS);
+        EpochElection epochElection = new EpochElection(voters);
 
-        assertTrue(epochElection.recordVote(VOTER_1_ID, true));
+        assertTrue(epochElection.recordVote(voter1, true));
         assertEquals(1, epochElection.grantingVoters().size());
-        assertTrue(epochElection.grantingVoters().contains(VOTER_1_ID));
+        assertTrue(epochElection.grantingVoters().contains(voter1));
         assertEquals(0, epochElection.rejectingVoters().size());
         assertEquals(2, epochElection.unrecordedVoters().size());
-        assertTrue(epochElection.isGrantedVoter(VOTER_1_ID));
-        assertFalse(epochElection.isRejectedVoter(VOTER_1_ID));
+        assertTrue(epochElection.isGrantedVoter(voter1));
+        assertFalse(epochElection.isRejectedVoter(voter1));
         assertFalse(epochElection.isVoteGranted());
         assertFalse(epochElection.isVoteRejected());
 
         // recording same id as granted
-        assertFalse(epochElection.recordVote(VOTER_1_ID, true));
-        assertTrue(epochElection.isGrantedVoter(VOTER_1_ID));
+        assertFalse(epochElection.recordVote(voter1, true));
+        assertTrue(epochElection.isGrantedVoter(voter1));
         assertFalse(epochElection.isVoteGranted());
 
         // recording majority as granted
-        assertTrue(epochElection.recordVote(VOTER_1_ID + 1, true));
+        assertTrue(epochElection.recordVote(voter1 + 1, true));
         assertEquals(2, epochElection.grantingVoters().size());
         assertEquals(0, epochElection.rejectingVoters().size());
         assertEquals(1, epochElection.unrecordedVoters().size());
-        assertTrue(epochElection.isGrantedVoter(VOTER_1_ID + 1));
-        assertFalse(epochElection.isRejectedVoter(VOTER_1_ID + 1));
+        assertTrue(epochElection.isGrantedVoter(voter1 + 1));
+        assertFalse(epochElection.isRejectedVoter(voter1 + 1));
         assertTrue(epochElection.isVoteGranted());
         assertFalse(epochElection.isVoteRejected());
     }
 
     @Test
     public void testRecordRejectedVote() {
-        EpochElection epochElection = new EpochElection(VOTERS);
+        EpochElection epochElection = new EpochElection(voters);
 
-        assertTrue(epochElection.recordVote(VOTER_1_ID, false));
+        assertTrue(epochElection.recordVote(voter1, false));
         assertEquals(0, epochElection.grantingVoters().size());
         assertEquals(1, epochElection.rejectingVoters().size());
-        assertTrue(epochElection.rejectingVoters().contains(VOTER_1_ID));
+        assertTrue(epochElection.rejectingVoters().contains(voter1));
         assertEquals(2, epochElection.unrecordedVoters().size());
-        assertFalse(epochElection.isGrantedVoter(VOTER_1_ID));
-        assertTrue(epochElection.isRejectedVoter(VOTER_1_ID));
+        assertFalse(epochElection.isGrantedVoter(voter1));
+        assertTrue(epochElection.isRejectedVoter(voter1));
         assertFalse(epochElection.isVoteGranted());
         assertFalse(epochElection.isVoteRejected());
 
         // recording same id as rejected
-        assertFalse(epochElection.recordVote(VOTER_1_ID, false));
-        assertFalse(epochElection.isGrantedVoter(VOTER_1_ID));
+        assertFalse(epochElection.recordVote(voter1, false));
+        assertFalse(epochElection.isGrantedVoter(voter1));
         assertFalse(epochElection.isVoteRejected());
 
         // recording majority as rejected
-        assertTrue(epochElection.recordVote(VOTER_1_ID + 1, false));
+        assertTrue(epochElection.recordVote(voter1 + 1, false));
         assertEquals(0, epochElection.grantingVoters().size());
         assertEquals(2, epochElection.rejectingVoters().size());
         assertEquals(1, epochElection.unrecordedVoters().size());
-        assertFalse(epochElection.isGrantedVoter(VOTER_1_ID + 1));
-        assertTrue(epochElection.isRejectedVoter(VOTER_1_ID + 1));
+        assertFalse(epochElection.isGrantedVoter(voter1 + 1));
+        assertTrue(epochElection.isRejectedVoter(voter1 + 1));
         assertFalse(epochElection.isVoteGranted());
         assertTrue(epochElection.isVoteRejected());
     }
 
     @Test
     public void testOverWritingVote() {
-        EpochElection epochElection = new EpochElection(VOTERS);
+        EpochElection epochElection = new EpochElection(voters);
 
-        assertTrue(epochElection.recordVote(VOTER_1_ID, true));
-        assertFalse(epochElection.recordVote(VOTER_1_ID, false));
+        assertTrue(epochElection.recordVote(voter1, true));
+        assertFalse(epochElection.recordVote(voter1, false));
         assertEquals(0, epochElection.grantingVoters().size());
         assertEquals(1, epochElection.rejectingVoters().size());
-        assertTrue(epochElection.rejectingVoters().contains(VOTER_1_ID));
-        assertFalse(epochElection.isGrantedVoter(VOTER_1_ID));
-        assertTrue(epochElection.isRejectedVoter(VOTER_1_ID));
+        assertTrue(epochElection.rejectingVoters().contains(voter1));
+        assertFalse(epochElection.isGrantedVoter(voter1));
+        assertTrue(epochElection.isRejectedVoter(voter1));
         assertFalse(epochElection.isVoteGranted());
         assertFalse(epochElection.isVoteRejected());
 
-        assertTrue(epochElection.recordVote(VOTER_1_ID + 2, false));
-        assertFalse(epochElection.recordVote(VOTER_1_ID + 2, true));
+        assertTrue(epochElection.recordVote(voter1 + 2, false));
+        assertFalse(epochElection.recordVote(voter1 + 2, true));
         assertEquals(1, epochElection.grantingVoters().size());
         assertEquals(1, epochElection.rejectingVoters().size());
-        assertTrue(epochElection.grantingVoters().contains(VOTER_1_ID + 2));
-        assertTrue(epochElection.isGrantedVoter(VOTER_1_ID + 2));
-        assertFalse(epochElection.isRejectedVoter(VOTER_1_ID + 2));
+        assertTrue(epochElection.grantingVoters().contains(voter1 + 2));
+        assertTrue(epochElection.isGrantedVoter(voter1 + 2));
+        assertFalse(epochElection.isRejectedVoter(voter1 + 2));
         assertFalse(epochElection.isVoteGranted());
         assertFalse(epochElection.isVoteRejected());
     }
 
-    static int randomReplicaId() {
+    private static int randomReplicaId() {
         return ThreadLocalRandom.current().nextInt(1025);
     }
 }
