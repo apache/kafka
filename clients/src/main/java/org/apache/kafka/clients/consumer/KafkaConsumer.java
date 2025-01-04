@@ -1095,7 +1095,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * should not be used.
      * <p>
      * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
-     * (if provided) or discarded.
+     * (if provided) or discarded. As the consumer does not wait for the response to underlying request in this call,
+     * the callback will only be invoked on future interaction with the broker (e.g. {@link #poll(Duration)}).
      * <p>
      * Offsets committed through multiple calls to this API are guaranteed to be sent in the same order as
      * the invocations. Corresponding commit callbacks are also invoked in the same order. Additionally note that
@@ -1121,7 +1122,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * then the committed offsets must belong to the currently auto-assigned partitions.
      * <p>
      * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
-     * (if provided) or discarded.
+     * (if provided) or discarded. As the consumer does not wait for the response to underlying request in this call,
+     * the callback will only be invoked on future interaction with the broker (e.g. {@link #poll(Duration)}).
      * <p>
      * Offsets committed through multiple calls to this API are guaranteed to be sent in the same order as
      * the invocations. Corresponding commit callbacks are also invoked in the same order. Additionally note that
