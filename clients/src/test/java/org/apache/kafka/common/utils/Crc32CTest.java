@@ -18,30 +18,9 @@ package org.apache.kafka.common.utils;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.zip.Checksum;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class Crc32CTest {
-
-    @Test
-    public void testUpdate() {
-        final byte[] bytes = "Any String you want".getBytes();
-        final int len = bytes.length;
-
-        Checksum crc1 = Crc32C.create();
-        Checksum crc2 = Crc32C.create();
-        Checksum crc3 = Crc32C.create();
-
-        crc1.update(bytes, 0, len);
-        for (byte b : bytes)
-            crc2.update(b);
-        crc3.update(bytes, 0, len / 2);
-        crc3.update(bytes, len / 2, len - len / 2);
-
-        assertEquals(crc1.getValue(), crc2.getValue(), "Crc values should be the same");
-        assertEquals(crc1.getValue(), crc3.getValue(), "Crc values should be the same");
-    }
 
     @Test
     public void testValue() {

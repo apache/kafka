@@ -47,7 +47,6 @@ import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils.formatAddress
-import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.LeaderAndIsr
@@ -149,22 +148,6 @@ object TestUtils extends Logging {
   def tempPropertiesFile(properties: Map[String, String]): File = {
     val content = properties.map{case (k, v) => k + "=" + v}.mkString(System.lineSeparator())
     JTestUtils.tempFile(content)
-  }
-
-  /**
-   * Create a kafka server instance with appropriate test settings
-   * USING THIS IS A SIGN YOU ARE NOT WRITING A REAL UNIT TEST
-   *
-   * @param config The configuration of the server
-   */
-  def createServer(config: KafkaConfig, time: Time = Time.SYSTEM): KafkaServer = {
-    createServer(config, time, None, startup = true)
-  }
-
-  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], startup: Boolean): KafkaServer = {
-    val server = new KafkaServer(config, time, threadNamePrefix)
-    if (startup) server.startup()
-    server
   }
 
   /**

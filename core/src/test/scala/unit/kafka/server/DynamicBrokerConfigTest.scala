@@ -21,20 +21,17 @@ import java.{lang, util}
 import java.util.{Optional, Properties, Map => JMap}
 import java.util.concurrent.{CompletionStage, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
-import kafka.controller.KafkaController
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
-import org.apache.kafka.common.config.types.Password
-import org.apache.kafka.common.config.{ConfigException, SaslConfigs, SslConfigs}
+import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.security.PasswordEncoderConfigs
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -96,37 +93,6 @@ class DynamicBrokerConfigTest {
       assertEquals(oldKeystore, config.originalsFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
       assertEquals(oldKeystore, config.valuesFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
     }
-  }
-
-  @Test
-  def testEnableDefaultUncleanLeaderElection(): Unit = {
-    val origProps = TestUtils.createBrokerConfig(0, null, port = 8181)
-    origProps.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
-
-    val config = KafkaConfig(origProps)
-    val serverMock = Mockito.mock(classOf[KafkaServer])
-    val controllerMock = Mockito.mock(classOf[KafkaController])
-    val logManagerMock = Mockito.mock(classOf[LogManager])
-
-    Mockito.when(serverMock.config).thenReturn(config)
-    Mockito.when(serverMock.kafkaController).thenReturn(controllerMock)
-    Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
-    Mockito.when(logManagerMock.allLogs).thenReturn(Iterable.empty)
-
-    val currentDefaultLogConfig = new AtomicReference(new LogConfig(new Properties))
-    Mockito.when(logManagerMock.currentDefaultConfig).thenAnswer(_ => currentDefaultLogConfig.get())
-    Mockito.when(logManagerMock.reconfigureDefaultLogConfig(ArgumentMatchers.any(classOf[LogConfig])))
-      .thenAnswer(invocation => currentDefaultLogConfig.set(invocation.getArgument(0)))
-
-    config.dynamicConfig.initialize(None, None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicLogConfig(logManagerMock, serverMock))
-
-    val props = new Properties()
-
-    props.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
-    config.dynamicConfig.updateDefaultConfig(props)
-    assertTrue(config.uncleanLeaderElectionEnable)
-    Mockito.verify(controllerMock).enableDefaultUncleanLeaderElection()
   }
 
   @Test
@@ -401,7 +367,6 @@ class DynamicBrokerConfigTest {
 
   private def verifyConfigUpdate(name: String, value: Object, perBrokerConfig: Boolean, expectFailure: Boolean): Unit = {
     val configProps = TestUtils.createBrokerConfig(0, null, port = 8181)
-    configProps.put(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, "broker.secret")
     val config = KafkaConfig(configProps)
     config.dynamicConfig.initialize(None, None)
 
@@ -434,7 +399,7 @@ class DynamicBrokerConfigTest {
     validProps.foreach { case (k, v) => props.put(k, v) }
     invalidProps.foreach { case (k, v) => props.put(k, v) }
 
-    // DynamicBrokerConfig#validate is used by AdminClient to validate the configs provided in
+    // DynamicBrokerConfig#validate is used by AdminClient to validate the configs provided
     // in an AlterConfigs request. Validation should fail with an exception if any of the configs are invalid.
     assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = true))
 
@@ -449,61 +414,6 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
-  def testPasswordConfigNotEncryption(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, null, port = 8181)
-    val configWithoutSecret = KafkaConfig(props)
-    props.put(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, "config-encoder-secret")
-    val configWithSecret = KafkaConfig(props)
-    val dynamicProps = new Properties
-    val password = "myLoginModule required;"
-    dynamicProps.put(SaslConfigs.SASL_JAAS_CONFIG, password)
-
-    try {
-      configWithoutSecret.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
-    } catch {
-      case _: ConfigException => // expected exception
-    }
-    val persistedProps = configWithSecret.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
-    assertEquals(password, persistedProps.getProperty(SaslConfigs.SASL_JAAS_CONFIG))
-  }
-
-  @Test
-  def testPasswordConfigEncoderSecretChange(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, null, port = 8181)
-    props.put(SaslConfigs.SASL_JAAS_CONFIG, "staticLoginModule required;")
-    props.put(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, "config-encoder-secret")
-    val config = KafkaConfig(props)
-    config.dynamicConfig.initialize(None, None)
-    val dynamicProps = new Properties
-    val password = "dynamicLoginModule required;"
-    dynamicProps.put(SaslConfigs.SASL_JAAS_CONFIG, password)
-
-    val persistedProps = config.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
-    assertEquals(password, persistedProps.getProperty(SaslConfigs.SASL_JAAS_CONFIG))
-    config.dynamicConfig.updateBrokerConfig(0, persistedProps)
-    assertEquals(password, config.values.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[Password].value)
-
-    // New config with same secret should use the dynamic password config
-    val newConfigWithSameSecret = KafkaConfig(props)
-    newConfigWithSameSecret.dynamicConfig.initialize(None, None)
-    newConfigWithSameSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
-    assertEquals(password, newConfigWithSameSecret.values.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[Password].value)
-
-    // New config with new secret should use the dynamic password config if new and old secrets are configured in KafkaConfig
-    props.put(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, "new-encoder-secret")
-    props.put(PasswordEncoderConfigs.PASSWORD_ENCODER_OLD_SECRET_CONFIG, "config-encoder-secret")
-    val newConfigWithNewAndOldSecret = KafkaConfig(props)
-    newConfigWithNewAndOldSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
-    assertEquals(password, newConfigWithSameSecret.values.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[Password].value)
-
-    // New config with new secret alone should revert to static password config since dynamic config cannot be decoded
-    props.put(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, "another-new-encoder-secret")
-    val newConfigWithNewSecret = KafkaConfig(props)
-    newConfigWithNewSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
-    assertEquals("staticLoginModule required;", newConfigWithNewSecret.values.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[Password].value)
-  }
-
-  @Test
   def testDynamicListenerConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, null, port = 9092)
     val oldConfig =  KafkaConfig.fromProps(props)
@@ -513,7 +423,7 @@ class DynamicBrokerConfigTest {
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://hostname:9092")
     new DynamicListenerConfig(kafkaServer).validateReconfiguration(KafkaConfig(props))
 
-    // it is illegal to update non-reconfiguable configs of existent listeners
+    // it is illegal to update non-reconfigurable configs of existent listeners
     props.put("listener.name.plaintext.you.should.not.pass", "failure")
     val dynamicListenerConfig = new DynamicListenerConfig(kafkaServer)
     assertThrows(classOf[ConfigException], () => dynamicListenerConfig.validateReconfiguration(KafkaConfig(props)))
@@ -1114,7 +1024,7 @@ class DynamicBrokerConfigTest {
   }
 }
 
-class TestDynamicThreadPool() extends BrokerReconfigurable {
+class TestDynamicThreadPool extends BrokerReconfigurable {
 
   override def reconfigurableConfigs: Set[String] = {
     DynamicThreadPool.ReconfigurableConfigs
