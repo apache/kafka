@@ -151,10 +151,22 @@ public class Uuid implements Comparable<Uuid> {
         return uuidBytes.array();
     }
 
+    /**
+     * Compares this Uuid with another given Uuid.
+     * <p>
+     * This implementation is taken from the compareTo method of the official java.util.UUID implementation.
+     *
+     * The ordering is intentionally set up so that the Uuids can simply be numerically compared as two numbers
+     *
+     * @param  other {@code Uuid} to which this {@code Uuid} is to be compared
+     *
+     * @return  -1, 0 or 1 as this {@code Uuid} is less than, equal to, or greater than {@code other}
+     *
+     */
     @Override
     public int compareTo(Uuid other) {
-        final int result = Long.compareUnsigned(mostSignificantBits, other.mostSignificantBits);
-        return (result != 0) ? result : Long.compareUnsigned(leastSignificantBits, other.leastSignificantBits);
+        int result = Long.compare(this.mostSignificantBits, other.mostSignificantBits);
+        return result != 0 ? result : Long.compare(this.leastSignificantBits, other.leastSignificantBits);
     }
 
     /**
