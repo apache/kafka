@@ -891,7 +891,7 @@ public class SelectorTest {
             .filter(entry ->
                 entry.getKey().name().equals(name) && entry.getKey().tags().equals(tags))
             .findFirst();
-        if (!metric.isPresent())
+        if (metric.isEmpty())
             throw new Exception(String.format("Could not find metric called %s with tags %s", name, tags.toString()));
 
         return metric.get().getValue();
@@ -1112,7 +1112,7 @@ public class SelectorTest {
         Optional<Map.Entry<MetricName, KafkaMetric>> metric = metrics.metrics().entrySet().stream()
                 .filter(entry -> entry.getKey().name().equals(name))
                 .findFirst();
-        if (!metric.isPresent())
+        if (metric.isEmpty())
             throw new Exception(String.format("Could not find metric called %s", name));
 
         return metric.get().getValue();

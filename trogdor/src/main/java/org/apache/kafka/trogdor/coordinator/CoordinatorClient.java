@@ -371,8 +371,7 @@ public class CoordinatorClient {
                     System.out.printf("Task %s of type %s is %s. %s%n", taskId,
                         taskState.spec().getClass().getCanonicalName(),
                         taskState.stateType(), prettyPrintTaskInfo(taskState, localOffset));
-                    if (taskState instanceof TaskDone) {
-                        TaskDone taskDone = (TaskDone) taskState;
+                    if (taskState instanceof TaskDone taskDone) {
                         if ((taskDone.error() != null) && (!taskDone.error().isEmpty())) {
                             System.out.printf("Error: %s%n", taskDone.error());
                         }
@@ -491,15 +490,12 @@ public class CoordinatorClient {
     static String prettyPrintTaskInfo(TaskState taskState, ZoneOffset zoneOffset) {
         if (taskState instanceof TaskPending) {
             return "Will start at " + dateString(taskState.spec().startMs(), zoneOffset);
-        } else if (taskState instanceof TaskRunning) {
-            TaskRunning runState = (TaskRunning) taskState;
+        } else if (taskState instanceof TaskRunning runState) {
             return "Started " + dateString(runState.startedMs(), zoneOffset) +
                 "; will stop after " + durationString(taskState.spec().durationMs());
-        } else if (taskState instanceof TaskStopping) {
-            TaskStopping stoppingState = (TaskStopping) taskState;
+        } else if (taskState instanceof TaskStopping stoppingState) {
             return "Started " + dateString(stoppingState.startedMs(), zoneOffset);
-        } else if (taskState instanceof TaskDone) {
-            TaskDone doneState = (TaskDone) taskState;
+        } else if (taskState instanceof TaskDone doneState) {
             String status;
             if (doneState.error() == null || doneState.error().isEmpty()) {
                 if (doneState.cancelled()) {

@@ -442,7 +442,7 @@ public class LogSegment implements Closeable {
         // return empty records in the fetch-data-info when:
         // 1. adjustedMaxSize is 0 (or)
         // 2. maxPosition to read is unavailable
-        if (adjustedMaxSize == 0 || !maxPositionOpt.isPresent())
+        if (adjustedMaxSize == 0 || maxPositionOpt.isEmpty())
             return new FetchDataInfo(offsetMetadata, MemoryRecords.EMPTY);
 
         // calculate the length of the message set to read based on whether or not they gave us a maxOffset
@@ -497,7 +497,7 @@ public class LogSegment implements Closeable {
                 if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
                     leaderEpochCache.ifPresent(cache -> {
                         if (batch.partitionLeaderEpoch() >= 0 &&
-                                (!cache.latestEpoch().isPresent() || batch.partitionLeaderEpoch() > cache.latestEpoch().getAsInt()))
+                                (cache.latestEpoch().isEmpty() || batch.partitionLeaderEpoch() > cache.latestEpoch().getAsInt()))
                             cache.assign(batch.partitionLeaderEpoch(), batch.baseOffset());
                     });
                     updateProducerState(producerStateManager, batch);
@@ -686,7 +686,7 @@ public class LogSegment implements Closeable {
      * load the timestamp of the first message into memory.
      */
     private void loadFirstBatchTimestamp() {
-        if (!rollingBasedTimestamp.isPresent()) {
+        if (rollingBasedTimestamp.isEmpty()) {
             Iterator<FileChannelRecordBatch> iter = log.batches().iterator();
             if (iter.hasNext())
                 rollingBasedTimestamp = OptionalLong.of(iter.next().maxTimestamp());
