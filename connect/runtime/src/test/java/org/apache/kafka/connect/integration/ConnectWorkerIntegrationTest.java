@@ -43,7 +43,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
-import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -57,8 +56,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
@@ -246,8 +243,6 @@ public class ConnectWorkerIntegrationTest {
     public void testBrokerCoordinator() throws Exception {
         ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
         workerProps.put(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, String.valueOf(5000));
-
-        useFixedBrokerPort();
 
         // start the clusters
         connect = connectBuilder.build();
@@ -812,8 +807,6 @@ public class ConnectWorkerIntegrationTest {
         // be spuriously triggered after the group coordinator for a Connect cluster is bounced
         workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "0");
         workerProps.put(METADATA_RECOVERY_STRATEGY_CONFIG, MetadataRecoveryStrategy.NONE.name);
-
-        useFixedBrokerPort();
 
         connect = connectBuilder
                 .numWorkers(1)
@@ -1429,23 +1422,6 @@ public class ConnectWorkerIntegrationTest {
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
         return props;
-    }
-
-    private void useFixedBrokerPort() throws IOException {
-        // Find a free port and use it in the Kafka broker's listeners config. We can't use port 0 in the listeners
-        // config to get a random free port because in this test we want to stop the Kafka broker and then bring it
-        // back up and listening on the same port in order to verify that the Connect cluster can re-connect to Kafka
-        // and continue functioning normally. If we were to use port 0 here, the Kafka broker would most likely listen
-        // on a different random free port the second time it is started. Note that we can only use the static port
-        // because we have a single broker setup in this test.
-        int listenerPort;
-        try (ServerSocket s = new ServerSocket(0)) {
-            listenerPort = s.getLocalPort();
-        }
-        brokerProps.put(SocketServerConfigs.LISTENERS_CONFIG, String.format("EXTERNAL://localhost:%d,CONTROLLER://localhost:0", listenerPort));
-        connectBuilder
-                .numBrokers(1)
-                .brokerProps(brokerProps);
     }
 
     public static class EmptyTaskConfigsConnector extends SinkConnector {
