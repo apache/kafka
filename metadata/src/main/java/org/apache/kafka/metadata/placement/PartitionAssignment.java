@@ -19,9 +19,6 @@ package org.apache.kafka.metadata.placement;
 
 import org.apache.kafka.common.Uuid;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -39,12 +36,8 @@ public class PartitionAssignment {
     private final List<Uuid> directories;
 
     public PartitionAssignment(List<Integer> replicas, DefaultDirProvider defaultDirProvider) {
-        this.replicas = Collections.unmodifiableList(new ArrayList<>(replicas));
-        Uuid[] directories = new Uuid[replicas.size()];
-        for (int i = 0; i < directories.length; i++) {
-            directories[i] = defaultDirProvider.defaultDir(replicas.get(i));
-        }
-        this.directories = Collections.unmodifiableList(Arrays.asList(directories));
+        this.replicas = List.copyOf(replicas);
+        this.directories = replicas.stream().map(replica -> defaultDirProvider.defaultDir(replica)).toList();
     }
 
     /**

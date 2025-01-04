@@ -23,10 +23,7 @@ import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -260,7 +257,7 @@ public class ClusterConfig {
         private Builder() {}
 
         public Builder setTypes(Set<Type> types) {
-            this.types = Collections.unmodifiableSet(new HashSet<>(types));
+            this.types = Set.copyOf(types);
             return this;
         }
 
@@ -315,44 +312,44 @@ public class ClusterConfig {
         }
 
         public Builder setServerProperties(Map<String, String> serverProperties) {
-            this.serverProperties = Collections.unmodifiableMap(new HashMap<>(serverProperties));
+            this.serverProperties = Map.copyOf(serverProperties);
             return this;
         }
 
         public Builder setConsumerProperties(Map<String, String> consumerProperties) {
-            this.consumerProperties = Collections.unmodifiableMap(new HashMap<>(consumerProperties));
+            this.consumerProperties = Map.copyOf(consumerProperties);
             return this;
         }
 
         public Builder setProducerProperties(Map<String, String> producerProperties) {
-            this.producerProperties = Collections.unmodifiableMap(new HashMap<>(producerProperties));
+            this.producerProperties = Map.copyOf(producerProperties);
             return this;
         }
 
         public Builder setAdminClientProperties(Map<String, String> adminClientProperties) {
-            this.adminClientProperties = Collections.unmodifiableMap(new HashMap<>(adminClientProperties));
+            this.adminClientProperties = Map.copyOf(adminClientProperties);
             return this;
         }
 
         public Builder setSaslServerProperties(Map<String, String> saslServerProperties) {
-            this.saslServerProperties = Collections.unmodifiableMap(new HashMap<>(saslServerProperties));
+            this.saslServerProperties = Map.copyOf(saslServerProperties);
             return this;
         }
 
         public Builder setSaslClientProperties(Map<String, String> saslClientProperties) {
-            this.saslClientProperties = Collections.unmodifiableMap(new HashMap<>(saslClientProperties));
+            this.saslClientProperties = Map.copyOf(saslClientProperties);
             return this;
         }
 
         public Builder setPerServerProperties(Map<Integer, Map<String, String>> perServerProperties) {
             this.perServerProperties = Collections.unmodifiableMap(
                     perServerProperties.entrySet().stream()
-                            .collect(Collectors.toMap(Map.Entry::getKey, e -> Collections.unmodifiableMap(new HashMap<>(e.getValue())))));
+                            .collect(Collectors.toMap(Map.Entry::getKey, e -> Map.copyOf(e.getValue()))));
             return this;
         }
 
         public Builder setTags(List<String> tags) {
-            this.tags = Collections.unmodifiableList(new ArrayList<>(tags));
+            this.tags = List.copyOf(tags);
             return this;
         }
 
