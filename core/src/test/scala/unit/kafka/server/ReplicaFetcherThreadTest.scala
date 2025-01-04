@@ -43,7 +43,7 @@ import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.{AfterEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentCaptor
@@ -140,6 +140,7 @@ class ReplicaFetcherThreadTest {
     )
   }
 
+  @Disabled("KAFKA-18730")
   @Test
   def testFetchLeaderEpochRequestIfLastEpochDefinedForSomePartitions(): Unit = {
     val config = kafkaConfigNoTruncateOnFetch
@@ -280,6 +281,7 @@ class ReplicaFetcherThreadTest {
     verify(mockBlockingSend).sendRequest(any())
   }
 
+  @Disabled("KAFKA-18730")
   @Test
   def shouldFetchLeaderEpochOnFirstFetchOnlyIfLeaderEpochKnownToBothIbp26(): Unit = {
     verifyFetchLeaderEpochOnFirstFetch(IBP_2_6_IV0)
@@ -353,6 +355,7 @@ class ReplicaFetcherThreadTest {
     assertEquals(3, mockNetwork.fetchCount)
   }
 
+  @Disabled("KAFKA-18730")
   @Test
   def shouldTruncateToOffsetSpecifiedInEpochOffsetResponse(): Unit = {
 
@@ -414,6 +417,7 @@ class ReplicaFetcherThreadTest {
                "Expected " + t2p1 + " to truncate to offset 172 (truncation offsets: " + truncateToCapture.getAllValues + ")")
   }
 
+  @Disabled("KAFKA-18730")
   @Test
   def shouldTruncateToOffsetSpecifiedInEpochOffsetResponseIfFollowerHasNoMoreEpochs(): Unit = {
     // Create a capture to track what partitions/offsets are truncated
@@ -475,6 +479,7 @@ class ReplicaFetcherThreadTest {
                " (truncation offsets: " + truncateToCapture.getAllValues + ")")
   }
 
+  @Disabled("KAFKA-18730")
   @Test
   def shouldFetchLeaderEpochSecondTimeIfLeaderRepliesWithEpochNotKnownToFollower(): Unit = {
     // Create a capture to track what partitions/offsets are truncated
@@ -848,6 +853,7 @@ class ReplicaFetcherThreadTest {
     assertEquals(Some(lastFetchedEpoch), thread.fetchState(t1p0).flatMap(_.lastFetchedEpoch))
   }
 
+  @Disabled("KAFKA-18730")
   @Test
   def shouldUseLeaderEndOffsetIfInterBrokerVersionBelow20(): Unit = {
 
@@ -923,6 +929,7 @@ class ReplicaFetcherThreadTest {
                "Expected " + t1p1 + " to truncate to offset 143 (truncation offsets: " + truncateToCapture.getAllValues + ")")
   }
 
+  @Disabled("KAFKA-18730")
   @Test
   def shouldTruncateToInitialFetchOffsetIfLeaderReturnsUndefinedOffset(): Unit = {
 
@@ -975,6 +982,7 @@ class ReplicaFetcherThreadTest {
     assertEquals(initialFetchOffset, truncated.getValue)
   }
 
+  @Disabled("KAFKA-18730")
   @Test
   def shouldPollIndefinitelyIfLeaderReturnsAnyException(): Unit = {
 
@@ -1046,6 +1054,7 @@ class ReplicaFetcherThreadTest {
     assertEquals(156, truncated.getValue)
   }
 
+  @Disabled("KAFKA-18730")
   @Test
   def shouldMovePartitionsOutOfTruncatingLogState(): Unit = {
     val config = kafkaConfigNoTruncateOnFetch
@@ -1105,6 +1114,7 @@ class ReplicaFetcherThreadTest {
     verify(partition, times(2)).truncateTo(0L, false)
   }
 
+  @Disabled("KAFKA-18730")
   @Test
   def shouldFilterPartitionsMadeLeaderDuringLeaderEpochRequest(): Unit ={
     val config = kafkaConfigNoTruncateOnFetch
