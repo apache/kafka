@@ -44,7 +44,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
     private volatile OptionalLong pollStartMs;
     private volatile int numVoters;
     private volatile int numObservers;
-    private volatile int uncommittedVoterChange;
+    private volatile boolean uncommittedVoterChange;
 
     private final MetricName currentLeaderIdMetricName;
     private final MetricName currentVotedIdMetricName;
@@ -238,7 +238,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
         this.numObservers = numObservers;
     }
 
-    public void updateUncommittedVoterChange(int uncommittedVoterChange) {
+    public void updateUncommittedVoterChange(boolean uncommittedVoterChange) {
         this.uncommittedVoterChange = uncommittedVoterChange;
     }
 
@@ -251,12 +251,14 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     public void addLeaderMetrics() {
         metrics.addMetric(numObserversMetricName, (Gauge<Integer>) (config, now) -> numObservers);
-        metrics.addMetric(uncommittedVoterChangeMetricName, (Gauge<Integer>) (config, now) -> uncommittedVoterChange);
+        metrics.addMetric(uncommittedVoterChangeMetricName, (Gauge<Boolean>) (config, now) -> uncommittedVoterChange);
     }
 
     public void removeLeaderMetrics() {
         metrics.removeMetric(numObserversMetricName);
         metrics.removeMetric(uncommittedVoterChangeMetricName);
+        numObservers = 0;
+        uncommittedVoterChange = false;
     }
 
     @Override

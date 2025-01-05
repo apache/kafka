@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.metrics.KafkaMetricsReporter
-import kafka.raft.KafkaRaftManager
+import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager}
 import kafka.server.Server.MetricsPrefix
 import kafka.utils.{CoreUtils, Logging, VerifiableProperties}
 import org.apache.kafka.common.metrics.Metrics
@@ -34,7 +34,6 @@ import org.apache.kafka.metadata.ListenerInfo
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
 import org.apache.kafka.raft.Endpoints
-import org.apache.kafka.raft.internals.ExternalKRaftMetrics
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
@@ -278,7 +277,7 @@ class SharedServer(
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
 
-        val externalKRaftMetrics = new ExternalKRaftMetrics(brokerMetrics, controllerServerMetrics)
+        val externalKRaftMetrics = new DefaultExternalKRaftMetrics(brokerMetrics, controllerServerMetrics)
 
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           clusterId,

@@ -3862,7 +3862,9 @@ public class KafkaRaftClientTest {
         assertEquals((double) 4L, getMetric(context.metrics, "log-end-offset").metricValue());
         assertEquals((double) epoch, getMetric(context.metrics, "log-end-epoch").metricValue());
 
+        // Need to close the external metrics object as well
         context.client.close();
+        context.brokerServerMetrics.close();
 
         // should only have total-metrics-count left
         assertEquals(1, context.metrics.metrics().size());

@@ -15,8 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.raft.internals;
+package org.apache.kafka.raft;
 
-public interface ExternalKRaftMetricIgnoredStaticVoters {
-    void switchIgnoredStaticVoters();
+/**
+ * Implementations of this interface store external metrics objects whose
+ * values are updated in the raft layer. They are not allowed to block.
+ */
+public interface ExternalKRaftMetrics {
+    void setIgnoredStaticVoters();
 }

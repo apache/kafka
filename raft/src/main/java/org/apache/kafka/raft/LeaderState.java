@@ -221,12 +221,9 @@ public class LeaderState<T> implements EpochState {
                 .complete(RaftUtil.addVoterResponse(error, message))
         );
         addVoterHandlerState = state;
-        if (addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent()) {
-            kafkaRaftMetrics.updateUncommittedVoterChange(1);
-        } else {
-            kafkaRaftMetrics.updateUncommittedVoterChange(0);
-        }
-
+        kafkaRaftMetrics.updateUncommittedVoterChange(
+            addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent()
+        );
     }
 
     public Optional<RemoveVoterHandlerState> removeVoterHandlerState() {
@@ -244,11 +241,9 @@ public class LeaderState<T> implements EpochState {
                 .complete(RaftUtil.removeVoterResponse(error, message))
         );
         removeVoterHandlerState = state;
-        if (addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent()) {
-            kafkaRaftMetrics.updateUncommittedVoterChange(1);
-        } else {
-            kafkaRaftMetrics.updateUncommittedVoterChange(0);
-        }
+        kafkaRaftMetrics.updateUncommittedVoterChange(
+            addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent()
+        );
     }
 
     public long maybeExpirePendingOperation(long currentTimeMs) {

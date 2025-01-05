@@ -17,7 +17,7 @@
 
 package org.apache.kafka.controller.metrics;
 
-import org.apache.kafka.raft.internals.ExternalKRaftMetricIgnoredStaticVoters;
+import org.apache.kafka.raft.ExternalKRaftMetrics;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import com.yammer.metrics.core.Gauge;
@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * IMPORTANT: Metrics which are managed by the QuorumController class itself should go in
  * {@link org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
  */
-public final class ControllerMetadataMetrics implements AutoCloseable, ExternalKRaftMetricIgnoredStaticVoters {
+public final class ControllerMetadataMetrics implements AutoCloseable {
     private static final MetricName FENCED_BROKER_COUNT = getMetricName(
         "KafkaController", "FencedBrokerCount");
     private static final MetricName ACTIVE_BROKER_COUNT = getMetricName(
@@ -257,11 +257,11 @@ public final class ControllerMetadataMetrics implements AutoCloseable, ExternalK
         this.uncleanLeaderElectionMeter.ifPresent(m -> m.mark(count));
     }
 
-    public void switchIgnoredStaticVoters() {
-        ignoredStaticVoters.compareAndSet(false, true);
+    public void setIgnoredStaticVoters() {
+        ignoredStaticVoters.set(true);
     }
     public boolean ignoredStaticVoters() {
-        return this.ignoredStaticVoters.get();
+        return ignoredStaticVoters.get();
     }
 
     @Override

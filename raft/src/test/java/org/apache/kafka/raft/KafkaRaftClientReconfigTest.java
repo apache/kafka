@@ -342,7 +342,7 @@ public class KafkaRaftClientReconfigTest {
         // Check expected metrics values for leader
         assertEquals(2, getMetric(context.metrics, "number-of-voters").metricValue());
         assertEquals(0, getMetric(context.metrics, "number-of-observers").metricValue());
-        assertEquals(0, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(false, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
         InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
@@ -395,7 +395,7 @@ public class KafkaRaftClientReconfigTest {
         context.client.poll();
         // The new voter is now a voter after writing the VotersRecord to the log
         assertTrue(context.client.quorum().isVoter(newVoter));
-        assertEquals(1, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(true, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
         assertEquals(3, getMetric(context.metrics, "number-of-voters").metricValue());
 
         // Send a FETCH to increase the HWM and commit the new voter set
@@ -409,7 +409,7 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilResponse();
         context.assertSentAddVoterResponse(Errors.NONE);
         assertEquals(0, getMetric(context.metrics, "number-of-observers").metricValue());
-        assertEquals(0, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(false, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
     }
 
     @Test
@@ -955,7 +955,7 @@ public class KafkaRaftClientReconfigTest {
         // Check expected metrics values for leader
         assertEquals(2, getMetric(context.metrics, "number-of-voters").metricValue());
         assertEquals(0, getMetric(context.metrics, "number-of-observers").metricValue());
-        assertEquals(0, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(false, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
         InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
@@ -1054,7 +1054,7 @@ public class KafkaRaftClientReconfigTest {
         // Check expected metrics values for leader
         assertEquals(3, getMetric(context.metrics, "number-of-voters").metricValue());
         assertEquals(0, getMetric(context.metrics, "number-of-observers").metricValue());
-        assertEquals(0, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(false, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
 
         // Establish a HWM and fence previous leaders
         context.deliverRequest(
@@ -1070,7 +1070,7 @@ public class KafkaRaftClientReconfigTest {
         context.client.poll();
         // Append the VotersRecord to the log
         context.client.poll();
-        assertEquals(1, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(true, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
 
         // follower2 should not be a voter in the latest voter set
         assertFalse(context.client.quorum().isVoter(follower2));
@@ -1087,7 +1087,7 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilResponse();
         context.assertSentRemoveVoterResponse(Errors.NONE);
         assertEquals(1, getMetric(context.metrics, "number-of-observers").metricValue());
-        assertEquals(0, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(false, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
     }
 
     @Test
@@ -1110,7 +1110,7 @@ public class KafkaRaftClientReconfigTest {
         // Check expected metrics values for leader
         assertEquals(3, getMetric(context.metrics, "number-of-voters").metricValue());
         assertEquals(0, getMetric(context.metrics, "number-of-observers").metricValue());
-        assertEquals(0, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(false, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
 
         // Establish a HWM and fence previous leaders
         context.deliverRequest(
@@ -1130,7 +1130,7 @@ public class KafkaRaftClientReconfigTest {
         // local should not be a voter in the latest voter set
         assertFalse(context.client.quorum().isVoter(local));
         assertEquals(2, getMetric(context.metrics, "number-of-voters").metricValue());
-        assertEquals(1, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(true, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
 
         // Send a FETCH request for follower1
         context.deliverRequest(
@@ -1146,7 +1146,7 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
         assertEquals(1, getMetric(context.metrics, "number-of-observers").metricValue());
-        assertEquals(0, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(false, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
 
         // Expect reply for RemoveVoter request
         context.pollUntilResponse();

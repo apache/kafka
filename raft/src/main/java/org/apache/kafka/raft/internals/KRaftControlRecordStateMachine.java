@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
+import org.apache.kafka.raft.ExternalKRaftMetrics;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.LogFetchInfo;
 import org.apache.kafka.raft.ReplicatedLog;
@@ -73,7 +74,6 @@ public final class KRaftControlRecordStateMachine {
     private final KafkaRaftMetrics kafkaRaftMetrics;
     private final ExternalKRaftMetrics externalKRaftMetrics;
     private final Optional<VoterSet> staticVoterSet;
-    private boolean ignoredStaticVoterSet = false;
 
     /**
      * Constructs an internal log listener
@@ -103,11 +103,9 @@ public final class KRaftControlRecordStateMachine {
         this.logger = logContext.logger(this.getClass());
         this.kafkaRaftMetrics = kafkaRaftMetrics;
         this.externalKRaftMetrics = externalKRaftMetrics;
-        this.staticVoterSet = staticVoterSet != null ? Optional.of(staticVoterSet) : Optional.empty();
+        this.staticVoterSet = Optional.ofNullable(staticVoterSet);
 
-        if (staticVoterSet != null) {
-            kafkaRaftMetrics.updateNumVoters(staticVoterSet.size());
-        }
+        this.staticVoterSet.ifPresent(voters -> kafkaRaftMetrics.updateNumVoters(voters.size()));
     }
 
     /**
@@ -295,9 +293,8 @@ public final class KRaftControlRecordStateMachine {
                 case KRAFT_VOTERS:
                     VoterSet voters = VoterSet.fromVotersRecord((VotersRecord) record.message());
                     kafkaRaftMetrics.updateNumVoters(voters.size());
-                    if (staticVoterSet.isPresent() && !ignoredStaticVoterSet) {
-                        ignoredStaticVoterSet = true;
-                        externalKRaftMetrics.switchIgnoredStaticVoters();
+                    if (staticVoterSet.isPresent()) {
+                        externalKRaftMetrics.setIgnoredStaticVoters();
                     }
                     logger.info("Latest set of voters is {} at offset {}", voters, currentOffset);
                     synchronized (voterSetHistory) {

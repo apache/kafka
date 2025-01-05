@@ -2063,6 +2063,7 @@ project(':raft') {
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
+    implementation libs.metrics
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
     implementation libs.jacksonDatabindYaml
@@ -2071,6 +2072,9 @@ project(':raft') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':server')
+    testImplementation project(':metadata')
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore

@@ -22,7 +22,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.image.MetadataProvenance;
 
 import com.yammer.metrics.core.Histogram;
-import org.apache.kafka.raft.internals.ExternalKRaftMetricIgnoredStaticVoters;
 
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,7 +31,7 @@ import java.util.stream.Stream;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
-public final class BrokerServerMetrics implements AutoCloseable, ExternalKRaftMetricIgnoredStaticVoters {
+public final class BrokerServerMetrics implements AutoCloseable {
     private static final String METRIC_GROUP_NAME = "broker-metadata-metrics";
 
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "BrokerMetadataListener");
@@ -176,7 +175,7 @@ public final class BrokerServerMetrics implements AutoCloseable, ExternalKRaftMe
         return lastAppliedImageProvenance.get().lastContainedLogTimeMs();
     }
 
-    public void switchIgnoredStaticVoters() {
+    public void setIgnoredStaticVoters() {
         ignoredStaticVoters.compareAndSet(false, true);
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import kafka.raft.DefaultExternalKRaftMetrics;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -35,7 +36,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
-import org.apache.kafka.raft.internals.ExternalKRaftMetrics;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
@@ -855,7 +855,7 @@ public class RaftEventSimulationTest {
                 voterAddresses,
                 store,
                 metrics,
-                new ExternalKRaftMetrics(null, null)
+                new DefaultExternalKRaftMetrics(null, null)
             );
         }
 

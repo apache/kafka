@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.raft.internals;
 
+import com.yammer.metrics.core.MetricsRegistry;
+
+import kafka.raft.DefaultExternalKRaftMetrics;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.KRaftVersionRecord;
@@ -23,12 +26,14 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.controller.metrics.ControllerMetadataMetrics;
 import org.apache.kafka.raft.MockLog;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.VoterSetTest;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+import org.apache.kafka.server.metrics.BrokerServerMetrics;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 
 import org.junit.jupiter.api.Test;
@@ -54,7 +59,10 @@ final class KRaftControlRecordStateMachineTest {
             1024,
             new LogContext(),
             new KafkaRaftMetrics(new Metrics(), "raft"),
-            new ExternalKRaftMetrics(null, null)
+            new DefaultExternalKRaftMetrics(
+                new BrokerServerMetrics(new Metrics()),
+                new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()))
+            )
         );
     }
 
