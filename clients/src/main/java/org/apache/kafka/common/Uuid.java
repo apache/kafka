@@ -17,10 +17,10 @@
 package org.apache.kafka.common;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -70,7 +70,7 @@ public class Uuid implements Comparable<Uuid> {
 
     /**
      * Static factory to retrieve a type 4 (pseudo randomly generated) UUID.
-     *
+     * <p>
      * This will not generate a UUID equal to 0, 1, or one whose string representation starts with a dash ("-")
      */
     public static Uuid randomUuid() {
@@ -130,14 +130,14 @@ public class Uuid implements Comparable<Uuid> {
     public static Uuid fromString(String str) {
         if (str.length() > 24) {
             throw new IllegalArgumentException("Input string with prefix `"
-                + str.substring(0, 24) + "` is too long to be decoded as a base64 UUID");
+                    + str.substring(0, 24) + "` is too long to be decoded as a base64 UUID");
         }
 
         ByteBuffer uuidBytes = ByteBuffer.wrap(Base64.getUrlDecoder().decode(str));
         if (uuidBytes.remaining() != 16) {
             throw new IllegalArgumentException("Input string `" + str + "` decoded as "
-                + uuidBytes.remaining() + " bytes, which is not equal to the expected 16 bytes "
-                + "of a base64-encoded UUID");
+                    + uuidBytes.remaining() + " bytes, which is not equal to the expected 16 bytes "
+                    + "of a base64-encoded UUID");
         }
 
         return new Uuid(uuidBytes.getLong(), uuidBytes.getLong());
@@ -153,15 +153,18 @@ public class Uuid implements Comparable<Uuid> {
 
     @Override
     public int compareTo(Uuid other) {
-        int result = Long.compare(this.mostSignificantBits, other.mostSignificantBits);
-        return result != 0 ? result : Long.compare(this.leastSignificantBits, other.leastSignificantBits);
+        Objects.requireNonNull(other, "Uuid to compare to cannot be null");
+        return Comparator
+                .comparingLong(Uuid::getMostSignificantBits)
+                .thenComparingLong(Uuid::getLeastSignificantBits)
+                .compare(this, other);
     }
 
     /**
      * Convert a list of Uuid to an array of Uuid.
      *
-     * @param list          The input list
-     * @return              The output array
+     * @param list The input list
+     * @return The output array
      */
     public static Uuid[] toArray(List<Uuid> list) {
         if (list == null) return null;
@@ -175,13 +178,11 @@ public class Uuid implements Comparable<Uuid> {
     /**
      * Convert an array of Uuids to a list of Uuid.
      *
-     * @param array         The input array
-     * @return              The output list
+     * @param array The input array
+     * @return The output list
      */
     public static List<Uuid> toList(Uuid[] array) {
         if (array == null) return null;
-        List<Uuid> list = new ArrayList<>(array.length);
-        list.addAll(Arrays.asList(array));
-        return list;
+        return List.of(array);
     }
 }
