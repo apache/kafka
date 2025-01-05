@@ -909,7 +909,6 @@ object DynamicListenerConfig {
    */
   val ReconfigurableConfigs = Set(
     // Listener configs
-    SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG,
     SocketServerConfigs.LISTENERS_CONFIG,
     SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
 
