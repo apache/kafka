@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
@@ -54,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 
 import static kafka.server.share.SharePartitionManagerTest.DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL;
 import static kafka.server.share.SharePartitionManagerTest.PARTITION_MAX_BYTES;
@@ -173,11 +175,13 @@ public class DelayedShareFetchTest {
         mockTopicIdPartitionFetchBytes(replicaManager, tp0, hwmOffsetMetadata);
 
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
 
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withSharePartitions(sharePartitions)
             .withReplicaManager(replicaManager)
+            .withExceptionHandler(exceptionHandler)
             .build());
         assertFalse(delayedShareFetch.isCompleted());
 
@@ -187,6 +191,7 @@ public class DelayedShareFetchTest {
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
+        Mockito.verify(exceptionHandler, times(1)).accept(any(), any());
     }
 
     @Test
@@ -226,11 +231,13 @@ public class DelayedShareFetchTest {
         when(hwmOffsetMetadata.positionDiff(any())).thenReturn(1);
         when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(mock(LogOffsetMetadata.class)));
         mockTopicIdPartitionFetchBytes(replicaManager, tp0, hwmOffsetMetadata);
+        BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
 
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withSharePartitions(sharePartitions)
             .withReplicaManager(replicaManager)
+            .withExceptionHandler(exceptionHandler)
             .build());
         assertFalse(delayedShareFetch.isCompleted());
 
@@ -240,6 +247,7 @@ public class DelayedShareFetchTest {
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
+        Mockito.verify(exceptionHandler, times(1)).accept(any(), any());
     }
 
     @Test
@@ -605,12 +613,12 @@ public class DelayedShareFetchTest {
         when(replicaManager.getPartitionOrException(tp0.topicPartition())).thenReturn(partition);
         when(partition.fetchOffsetSnapshot(any(), anyBoolean())).thenThrow(new RuntimeException("Exception thrown"));
 
-        SharePartitionManager sharePartitionManager = mock(SharePartitionManager.class);
+        BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withSharePartitions(sharePartitions)
             .withReplicaManager(replicaManager)
-            .withSharePartitionManager(sharePartitionManager)
+            .withExceptionHandler(exceptionHandler)
             .build());
 
         // Try complete should return false as the share partition has errored out.
@@ -620,7 +628,7 @@ public class DelayedShareFetchTest {
         // The request should be errored out as topic partition should get added as erroneous.
         assertTrue(shareFetch.errorInAllPartitions());
 
-        Mockito.verify(sharePartitionManager, times(1)).handleFencedSharePartitionException(any(), any());
+        Mockito.verify(exceptionHandler, times(1)).accept(any(), any());
         Mockito.verify(replicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
@@ -636,6 +644,7 @@ public class DelayedShareFetchTest {
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
+        Mockito.verify(exceptionHandler, times(1)).accept(any(), any());
     }
 
     @Test
@@ -717,10 +726,15 @@ public class DelayedShareFetchTest {
         when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition())).thenReturn(partition);
     }
 
+    @SuppressWarnings("unchecked")
+    private static BiConsumer<SharePartitionKey, Throwable> mockExceptionHandler() {
+        return mock(BiConsumer.class);
+    }
+
     static class DelayedShareFetchBuilder {
         ShareFetch shareFetch = mock(ShareFetch.class);
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
-        private SharePartitionManager sharePartitionManager = mock(SharePartitionManager.class);
+        private BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
         private LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = mock(LinkedHashMap.class);
 
         DelayedShareFetchBuilder withShareFetchData(ShareFetch shareFetch) {
@@ -733,8 +747,8 @@ public class DelayedShareFetchTest {
             return this;
         }
 
-        DelayedShareFetchBuilder withSharePartitionManager(SharePartitionManager sharePartitionManager) {
-            this.sharePartitionManager = sharePartitionManager;
+        DelayedShareFetchBuilder withExceptionHandler(BiConsumer<SharePartitionKey, Throwable> exceptionHandler) {
+            this.exceptionHandler = exceptionHandler;
             return this;
         }
 
@@ -751,7 +765,7 @@ public class DelayedShareFetchTest {
             return new DelayedShareFetch(
                 shareFetch,
                 replicaManager,
-                sharePartitionManager,
+                exceptionHandler,
                 sharePartitions);
         }
     }

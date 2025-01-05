@@ -25,7 +25,12 @@
   // Version 3 adds the member.id, group.instance.id and generation.id.
   //
   // Version 4 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
-  "validVersions": "0-4",
+  //
+  // Version 5 is the same as version 4 (KIP-890). Note when TxnOffsetCommit requests are used in transaction, if
+  // transaction V2 (KIP_890 part 2) is enabled, the TxnOffsetCommit request will also include the function for a
+  // AddOffsetsToTxn call. If V2 is disabled, the client can't use TxnOffsetCommit request version higher than 4 within
+  // a transaction.
+  "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",

@@ -320,7 +320,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
 
         private void handleRuntimeException(final RuntimeException runtimeException) {
-            log.error("An unexpected error occurred within the state updater thread: " + runtimeException);
+            log.error("An unexpected error occurred within the state updater thread: {}", String.valueOf(runtimeException));
             addToExceptionsAndFailedTasksThenClearUpdatingAndPausedTasks(runtimeException);
             isRunning.set(false);
         }

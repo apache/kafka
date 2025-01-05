@@ -123,12 +123,6 @@ public interface KafkaClient extends Closeable {
     void close(String nodeId);
 
     /**
-     * Closes connections to all nodes. All requests on the connections will be cleared.  ClientRequest
-     * callbacks will not be invoked for the cleared requests, nor will they be returned from poll().
-     */
-    void closeAll();
-
-    /**
      * Choose the node with the fewest outstanding requests. This method will prefer a node with an existing connection,
      * but will potentially choose a node for which we don't yet have a connection if all existing connections are in
      * use.

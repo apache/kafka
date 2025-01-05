@@ -1332,19 +1332,24 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         }).
                         generate(buffer);
                 } else if (field.type().isStruct()) {
-                    // Adding a byte if the field is nullable. A byte works for both regular and tagged struct fields.
-                    VersionConditional.forVersions(field.nullableVersions(), possibleVersions).
-                        ifMember(__ -> {
-                            buffer.printf("_size.addBytes(1);%n");
-                        }).
-                        generate(buffer);
-
                     if (tagged) {
                         buffer.printf("int _sizeBeforeStruct = _size.totalSize();%n", field.camelCaseName());
+                        // Add a byte if the field is nullable.
+                        VersionConditional.forVersions(field.nullableVersions(), possibleVersions).
+                            ifMember(__ -> {
+                                buffer.printf("_size.addBytes(1);%n");
+                            }).
+                            generate(buffer);
                         buffer.printf("this.%s.addSize(_size, _cache, _version);%n", field.camelCaseName());
                         buffer.printf("int _structSize = _size.totalSize() - _sizeBeforeStruct;%n", field.camelCaseName());
                         buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_structSize));%n");
                     } else {
+                        // Add a byte if the field is nullable.
+                        VersionConditional.forVersions(field.nullableVersions(), possibleVersions).
+                            ifMember(__ -> {
+                                buffer.printf("_size.addBytes(1);%n");
+                            }).
+                            generate(buffer);
                         buffer.printf("this.%s.addSize(_size, _cache, _version);%n", field.camelCaseName());
                     }
                 } else {

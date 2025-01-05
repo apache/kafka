@@ -18,13 +18,14 @@
   "type": "request",
   "listeners": ["zkBroker", "broker", "controller"],
   "name": "CreateDelegationTokenRequest",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
+  //
   // Version 1 is the same as version 0.
   //
   // Version 2 is the first flexible version.
   //
   // Version 3 adds owner principal
-  "validVersions": "0-3",
-  "deprecatedVersions": "0",
+  "validVersions": "1-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "OwnerPrincipalType", "type": "string", "versions": "3+", "nullableVersions": "3+",

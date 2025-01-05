@@ -123,6 +123,8 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
           List(new DescribedGroup()
             .setGroupId("grp")
             .setGroupState(ClassicGroupState.DEAD.toString)
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code)
+            .setErrorMessage("Group grp not found.")
           ),
           describeGroups(List("grp"))
         )

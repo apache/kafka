@@ -20,7 +20,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -119,7 +118,7 @@ public class CommitRequestManagerTest {
     public void setup() {
         this.logContext = new LogContext();
         this.time = new MockTime(0);
-        this.subscriptionState = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        this.subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         this.metadata = mock(ConsumerMetadata.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);

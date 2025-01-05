@@ -50,11 +50,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(serverProperties = {
-        @ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
-        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, value = "2000")
+    @ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
+    @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+    @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, value = "1"),
+    @ClusterConfigProperty(key = TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, value = "2000")
 })
 @ExtendWith(ClusterTestExtensions.class)
 public class AdminFenceProducersTest {
@@ -95,11 +95,16 @@ public class AdminFenceProducersTest {
             producer.beginTransaction();
             ExecutionException exceptionDuringSend = assertThrows(
                     ExecutionException.class,
-                    () -> producer.send(RECORD).get(), "expected ProducerFencedException"
+                    () -> producer.send(RECORD).get(), "expected InvalidProducerEpochException"
             );
-            assertInstanceOf(ProducerFencedException.class, exceptionDuringSend.getCause());
 
-            assertThrows(ProducerFencedException.class, producer::commitTransaction);
+            // In Transaction V2, the ProducerFencedException will be converted to InvalidProducerEpochException when
+            // coordinator handles AddPartitionRequest.
+            assertInstanceOf(InvalidProducerEpochException.class, exceptionDuringSend.getCause());
+
+            // InvalidProducerEpochException is treated as fatal error. The commitTransaction will return this last
+            // fatal error.
+            assertThrows(InvalidProducerEpochException.class, producer::commitTransaction);
         }
     }
 

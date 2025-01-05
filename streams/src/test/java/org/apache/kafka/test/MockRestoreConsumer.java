@@ -19,7 +19,7 @@ package org.apache.kafka.test;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -42,7 +42,7 @@ public final class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]
     private final ArrayList<ConsumerRecord<byte[], byte[]>> recordBuffer = new ArrayList<>();
 
     public MockRestoreConsumer(final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
-        super(OffsetResetStrategy.EARLIEST);
+        super(AutoOffsetResetStrategy.EARLIEST.name());
 
         reset();
         this.keySerializer = keySerializer;

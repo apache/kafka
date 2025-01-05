@@ -67,7 +67,7 @@ public class DefaultStatePersister implements Persister {
      * @param request InitializeShareGroupStateParameters
      * @return A completable future of InitializeShareGroupStateResult
      */
-    public CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request) throws IllegalArgumentException {
+    public CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request) {
         throw new RuntimeException("not implemented");
     }
 
@@ -78,8 +78,13 @@ public class DefaultStatePersister implements Persister {
      * @param request WriteShareGroupStateParameters
      * @return A completable future of WriteShareGroupStateResult
      */
-    public CompletableFuture<WriteShareGroupStateResult> writeState(WriteShareGroupStateParameters request) throws IllegalArgumentException {
-        validate(request);
+    public CompletableFuture<WriteShareGroupStateResult> writeState(WriteShareGroupStateParameters request) {
+        try {
+            validate(request);
+        } catch (Exception e) {
+            log.error("Unable to validate write state request", e);
+            return CompletableFuture.failedFuture(e);
+        }
         GroupTopicPartitionData<PartitionStateBatchData> gtp = request.groupTopicPartitionData();
         String groupId = gtp.groupId();
 
@@ -169,8 +174,13 @@ public class DefaultStatePersister implements Persister {
      * @param request ReadShareGroupStateParameters
      * @return A completable future of ReadShareGroupStateResult
      */
-    public CompletableFuture<ReadShareGroupStateResult> readState(ReadShareGroupStateParameters request) throws IllegalArgumentException {
-        validate(request);
+    public CompletableFuture<ReadShareGroupStateResult> readState(ReadShareGroupStateParameters request) {
+        try {
+            validate(request);
+        } catch (Exception e) {
+            log.error("Unable to validate read state request", e);
+            return CompletableFuture.failedFuture(e);
+        }
         GroupTopicPartitionData<PartitionIdLeaderEpochData> gtp = request.groupTopicPartitionData();
         String groupId = gtp.groupId();
         Map<Uuid, Map<Integer, CompletableFuture<ReadShareGroupStateResponse>>> futureMap = new HashMap<>();
@@ -266,7 +276,7 @@ public class DefaultStatePersister implements Persister {
      * @param request DeleteShareGroupStateParameters
      * @return A completable future of DeleteShareGroupStateResult
      */
-    public CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request) throws IllegalArgumentException {
+    public CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request) {
         throw new RuntimeException("not implemented");
     }
 
@@ -277,7 +287,7 @@ public class DefaultStatePersister implements Persister {
      * @param request ReadShareGroupStateSummaryParameters
      * @return A completable future of  ReadShareGroupStateSummaryResult
      */
-    public CompletableFuture<ReadShareGroupStateSummaryResult> readSummary(ReadShareGroupStateSummaryParameters request) throws IllegalArgumentException {
+    public CompletableFuture<ReadShareGroupStateSummaryResult> readSummary(ReadShareGroupStateSummaryParameters request) {
         throw new RuntimeException("not implemented");
     }
 

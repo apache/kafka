@@ -177,8 +177,8 @@ public class LogSegment implements Closeable {
     public void sanityCheck(boolean timeIndexFileNewlyCreated) throws IOException {
         if (offsetIndexFile().exists()) {
             // Resize the time index file to 0 if it is newly created.
-            if (timeIndexFileNewlyCreated)
-              timeIndex().resize(0);
+            if (timeIndexFileNewlyCreated) 
+                timeIndex().resize(0);
             // Sanity checks for time index and offset index are skipped because
             // we will recover the segments above the recovery point in recoverLog()
             // in any case so sanity checking them here is redundant.

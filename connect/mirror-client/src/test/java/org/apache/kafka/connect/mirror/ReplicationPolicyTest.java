@@ -38,15 +38,17 @@ public class ReplicationPolicyTest {
 
     @Test
     public void testInternalTopic() {
+        Map<String, Object> config =  new HashMap<>();
+        config.put(MirrorClientConfig.REPLICATION_POLICY_SEPARATOR, ".");
+        DEFAULT_REPLICATION_POLICY.configure(config);
+
         // starts with '__'
         assertTrue(DEFAULT_REPLICATION_POLICY.isInternalTopic("__consumer_offsets"));
         // starts with '.'
         assertTrue(DEFAULT_REPLICATION_POLICY.isInternalTopic(".hiddentopic"));
 
-        // ends with '.internal': default DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG in standalone mode.
+        // starts with 'mm2' and ends with '.internal': default DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG in standalone mode.
         assertTrue(DEFAULT_REPLICATION_POLICY.isInternalTopic("mm2-offsets.CLUSTER.internal"));
-        // ends with '-internal'
-        assertTrue(DEFAULT_REPLICATION_POLICY.isInternalTopic("mm2-offsets-CLUSTER-internal"));
         // non-internal topic.
         assertFalse(DEFAULT_REPLICATION_POLICY.isInternalTopic("mm2-offsets_CLUSTER_internal"));
     }

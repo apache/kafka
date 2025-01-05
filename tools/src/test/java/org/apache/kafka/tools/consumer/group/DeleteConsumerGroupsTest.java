@@ -100,7 +100,7 @@ public class DeleteConsumerGroupsTest {
             assertEquals(1, result.size());
             assertNotNull(result.get(missingGroupId));
             assertInstanceOf(GroupIdNotFoundException.class,
-                    result.get(missingGroupId).getCause(),
+                    result.get(missingGroupId),
                     "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
         }
     }
@@ -116,7 +116,7 @@ public class DeleteConsumerGroupsTest {
                     ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
             ) {
                 TestUtils.waitForCondition(
-                        () -> service.collectGroupMembers(groupId, false).getValue().get().size() == 1,
+                        () -> service.collectGroupMembers(groupId).getValue().get().size() == 1,
                         "The group did not initialize as expected."
                 );
 
@@ -132,7 +132,7 @@ public class DeleteConsumerGroupsTest {
                 assertEquals(1, result.size());
                 assertNotNull(result.get(groupId));
                 assertInstanceOf(GroupNotEmptyException.class,
-                        result.get(groupId).getCause(),
+                        result.get(groupId),
                         "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Result was:(" + result + ")");
             }
         }
@@ -337,8 +337,9 @@ public class DeleteConsumerGroupsTest {
         configs.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(GROUP_PROTOCOL_CONFIG, groupProtocol);
-        configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
-
+        if (GroupProtocol.CLASSIC.name.equalsIgnoreCase(groupProtocol)) {
+            configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+        }
         configs.putAll(customConfigs);
         return configs;
     }

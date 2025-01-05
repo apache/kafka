@@ -58,7 +58,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.MediaType;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -353,7 +353,6 @@ public class ConnectRestServerTest {
         server.stop();
 
         Collection<String> logMessages = restServerAppender.getMessages();
-        LogCaptureAppender.unregister(restServerAppender);
         restServerAppender.close();
         String expectedlogContent = "\"GET / HTTP/1.1\" " + response.getStatusLine().getStatusCode();
         assertTrue(logMessages.stream().anyMatch(logMessage -> logMessage.contains(expectedlogContent)));

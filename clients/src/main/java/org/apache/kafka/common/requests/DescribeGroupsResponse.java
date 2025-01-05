@@ -110,6 +110,14 @@ public class DescribeGroupsResponse extends AbstractResponse {
             DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), AUTHORIZED_OPERATIONS_OMITTED);
     }
 
+    public static DescribedGroup groupError(String groupId, Errors error, String errorMessage) {
+        return new DescribedGroup()
+            .setGroupId(groupId)
+            .setGroupState(DescribeGroupsResponse.UNKNOWN_STATE)
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage);
+    }
+
     @Override
     public DescribeGroupsResponseData data() {
         return data;

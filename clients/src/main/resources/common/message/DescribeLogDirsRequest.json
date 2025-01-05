@@ -18,18 +18,18 @@
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "DescribeLogDirsRequest",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   // Version 1 is the same as version 0.
   // Version 2 is the first flexible version.
   // Version 3 is the same as version 2 (new field in response).
   // Version 4 is the same as version 2 (new fields in response).
-  "validVersions": "0-4",
-  "deprecatedVersions": "0",
+  "validVersions": "1-4",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "Topics", "type": "[]DescribableLogDirTopic", "versions": "0+", "nullableVersions": "0+",
       "about": "Each topic that we want to describe log directories for, or null for all topics.", "fields": [
       { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
-        "about": "The topic name" },
+        "about": "The topic name." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partition indexes." }
     ]}

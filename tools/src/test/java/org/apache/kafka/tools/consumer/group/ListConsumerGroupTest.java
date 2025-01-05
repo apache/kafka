@@ -511,7 +511,9 @@ public class ListConsumerGroupTest {
         configs.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(GROUP_PROTOCOL_CONFIG, groupProtocol);
-        configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+        if (GroupProtocol.CLASSIC.name.equalsIgnoreCase(groupProtocol)) {
+            configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+        }
 
         configs.putAll(customConfigs);
         return configs;

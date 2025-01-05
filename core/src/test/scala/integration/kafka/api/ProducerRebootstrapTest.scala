@@ -18,11 +18,13 @@ package kafka.api
 
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 class ProducerRebootstrapTest extends RebootstrapTest {
-  @ParameterizedTest
+  @Disabled("KAFKA-17986")
+  @ParameterizedTest(name = "{displayName}.quorum=kraft.useRebootstrapTriggerMs={0}")
   @ValueSource(booleans = Array(false, true))
   def testRebootstrap(useRebootstrapTriggerMs: Boolean): Unit = {
     server1.shutdown()

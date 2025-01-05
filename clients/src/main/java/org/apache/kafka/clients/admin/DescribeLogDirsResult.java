@@ -19,15 +19,11 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 
 /**
@@ -45,52 +41,10 @@ public class DescribeLogDirsResult {
 
     /**
      * Return a map from brokerId to future which can be used to check the information of partitions on each individual broker.
-     * @deprecated Deprecated Since Kafka 2.7. Use {@link #descriptions()}.
-     */
-    @Deprecated
-    public Map<Integer, KafkaFuture<Map<String, DescribeLogDirsResponse.LogDirInfo>>> values() {
-        return descriptions().entrySet().stream()
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> entry.getValue().thenApply(this::convertMapValues)));
-    }
-
-    @SuppressWarnings("deprecation")
-    private Map<String, DescribeLogDirsResponse.LogDirInfo> convertMapValues(Map<String, LogDirDescription> map) {
-        Stream<Map.Entry<String, LogDirDescription>> stream = map.entrySet().stream();
-        return stream.collect(Collectors.toMap(
-            Map.Entry::getKey,
-            infoEntry -> {
-                LogDirDescription logDir = infoEntry.getValue();
-                return new DescribeLogDirsResponse.LogDirInfo(logDir.error() == null ? Errors.NONE : Errors.forException(logDir.error()),
-                    logDir.replicaInfos().entrySet().stream().collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        replicaEntry -> new DescribeLogDirsResponse.ReplicaInfo(
-                            replicaEntry.getValue().size(),
-                            replicaEntry.getValue().offsetLag(),
-                            replicaEntry.getValue().isFuture())
-                )));
-            }));
-    }
-
-    /**
-     * Return a map from brokerId to future which can be used to check the information of partitions on each individual broker.
      * The result of the future is a map from broker log directory path to a description of that log directory.
      */
     public Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> descriptions() {
         return futures;
-    }
-
-    /**
-     * Return a future which succeeds only if all the brokers have responded without error
-     * @deprecated Deprecated Since Kafka 2.7. Use {@link #allDescriptions()}.
-     */
-    @Deprecated
-    public KafkaFuture<Map<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>>> all() {
-        return allDescriptions().thenApply(map -> map.entrySet().stream().collect(Collectors.toMap(
-            Map.Entry::getKey,
-            entry -> convertMapValues(entry.getValue())
-        )));
     }
 
     /**

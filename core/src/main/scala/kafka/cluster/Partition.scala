@@ -19,7 +19,6 @@ package kafka.cluster
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
-import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.log.remote.RemoteLogManager
@@ -37,22 +36,23 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
-import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, UnexpectedAppendOffsetException}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.slf4j.event.Level
 
-import scala.collection.{Map, Seq}
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 /**
  * Listener receives notification from an Online Partition.
@@ -82,6 +82,11 @@ trait PartitionListener {
    * that the partition was deleted but only that this broker does not host a replica of it any more.
    */
   def onDeleted(partition: TopicPartition): Unit = {}
+
+  /**
+   * Called when the Partition on this broker is transitioned to follower.
+   */
+  def onBecomingFollower(partition: TopicPartition): Unit = {}
 }
 
 trait AlterPartitionListener {
@@ -701,6 +706,15 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
+  /**
+   * Invoke the partition listeners when the partition has been transitioned to follower.
+   */
+  def invokeOnBecomingFollowerListeners(): Unit = {
+    listeners.forEach { listener =>
+      listener.onBecomingFollower(topicPartition)
+    }
+  }
+
   private def clear(): Unit = {
     remoteReplicasMap.clear()
     assignmentState = SimpleAssignmentState(Seq.empty)
@@ -726,7 +740,7 @@ class Partition(val topicPartition: TopicPartition,
                  topicId: Option[Uuid],
                  targetDirectoryId: Option[Uuid] = None): Boolean = {
     val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock) {
-      // Partition state changes are expected to have an partition epoch larger or equal
+      // Partition state changes are expected to have a partition epoch larger or equal
       // to the current partition epoch. The latter is allowed because the partition epoch
       // is also updated by the AlterPartition response so the new epoch might be known
       // before a LeaderAndIsr request is received or before an update is received via
@@ -1614,7 +1628,7 @@ class Partition(val topicPartition: TopicPartition,
     def getOffsetByTimestamp: OffsetResultHolder = {
       logManager.getLog(topicPartition)
         .map(log => log.fetchOffsetByTimestamp(timestamp, remoteLogManager))
-        .getOrElse(OffsetResultHolder(timestampAndOffsetOpt = None))
+        .getOrElse(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()))
     }
 
     // If we're in the lagging HW state after a leader election, throw OffsetNotAvailable for "latest" offset
@@ -1622,13 +1636,13 @@ class Partition(val topicPartition: TopicPartition,
     timestamp match {
       case ListOffsetsRequest.LATEST_TIMESTAMP =>
         maybeOffsetsError.map(e => throw e)
-          .getOrElse(OffsetResultHolder(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch)))))
+          .getOrElse(new OffsetResultHolder(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch))))
       case ListOffsetsRequest.EARLIEST_TIMESTAMP | ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP =>
         getOffsetByTimestamp
       case _ =>
         val offsetResultHolder = getOffsetByTimestamp
-        offsetResultHolder.maybeOffsetsError = maybeOffsetsError
-        offsetResultHolder.lastFetchableOffset = Some(lastFetchableOffset)
+        offsetResultHolder.maybeOffsetsError(OptionConverters.toJava(maybeOffsetsError))
+        offsetResultHolder.lastFetchableOffset(Optional.of(lastFetchableOffset))
         offsetResultHolder
     }
   }
@@ -1811,7 +1825,7 @@ class Partition(val topicPartition: TopicPartition,
   ): PendingShrinkIsr = {
     // When shrinking the ISR, we cannot assume that the update will succeed as this could
     // erroneously advance the HW if the `AlterPartition` were to fail. Hence the "maximal ISR"
-    // for `PendingShrinkIsr` is the the current ISR.
+    // for `PendingShrinkIsr` is the current ISR.
     val isrToSend = partitionState.isr -- outOfSyncReplicaIds
     val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList).asJava
     val newLeaderAndIsr = new LeaderAndIsr(
@@ -1946,7 +1960,7 @@ class Partition(val topicPartition: TopicPartition,
         false
       case Errors.NEW_LEADER_ELECTED =>
         // The operation completed successfully but this replica got removed from the replica set by the controller
-        // while completing a ongoing reassignment. This replica is no longer the leader but it does not know it
+        // while completing an ongoing reassignment. This replica is no longer the leader but it does not know it
         // yet. It should remain in the current pending state until the metadata overrides it.
         // This is only raised in KRaft mode.
         debug(s"The alter partition request successfully updated the partition state to $proposedIsrState but " +

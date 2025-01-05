@@ -34,7 +34,6 @@ import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.Cluster;
@@ -828,7 +827,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             Collection<TopicPartition> parts = partitions.isEmpty() ? this.subscriptions.assignedPartitions() : partitions;
-            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.EARLIEST);
+            subscriptions.requestOffsetReset(parts, AutoOffsetResetStrategy.EARLIEST);
         } finally {
             release();
         }
@@ -842,7 +841,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             Collection<TopicPartition> parts = partitions.isEmpty() ? this.subscriptions.assignedPartitions() : partitions;
-            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.LATEST);
+            subscriptions.requestOffsetReset(parts, AutoOffsetResetStrategy.LATEST);
         } finally {
             release();
         }

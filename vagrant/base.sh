@@ -114,6 +114,16 @@ apt-get install -y iperf traceroute
 # We want to use the latest Scala version per Kafka version
 # Previously we could not pull in Scala 2.12 builds, because Scala 2.12 requires Java 8 and we were running the system
 # tests with Java 7. We have since switched to Java 8, so 2.0.0 and later use Scala 2.12.
+# The versions between 0.11.0.3 and 2.0.1 are used to run client code, because zookeeper in these versions is not compatible with JDK 17.
+# See KAFKA-17888 for more details.
+get_kafka 0.11.0.3 2.11
+chmod a+rw /opt/kafka-0.11.0.3
+get_kafka 1.0.2 2.11
+chmod a+rw /opt/kafka-1.0.2
+get_kafka 1.1.1 2.11
+chmod a+rw /opt/kafka-1.1.1
+get_kafka 2.0.1 2.12
+chmod a+rw /opt/kafka-2.0.1
 get_kafka 2.1.1 2.12
 chmod a+rw /opt/kafka-2.1.1
 get_kafka 2.2.2 2.12
@@ -144,8 +154,8 @@ get_kafka 3.5.2 2.12
 chmod a+rw /opt/kafka-3.5.2
 get_kafka 3.6.2 2.12
 chmod a+rw /opt/kafka-3.6.2
-get_kafka 3.7.1 2.12
-chmod a+rw /opt/kafka-3.7.1
+get_kafka 3.7.2 2.12
+chmod a+rw /opt/kafka-3.7.2
 get_kafka 3.8.1 2.12
 chmod a+rw /opt/kafka-3.8.1
 get_kafka 3.9.0 2.12

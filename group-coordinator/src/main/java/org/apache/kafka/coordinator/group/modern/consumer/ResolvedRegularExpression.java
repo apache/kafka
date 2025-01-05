@@ -24,6 +24,8 @@ import java.util.Set;
  * The metadata associated with a regular expression in a Consumer Group.
  */
 public class ResolvedRegularExpression {
+    public static final ResolvedRegularExpression EMPTY = new ResolvedRegularExpression(Collections.emptySet(), -1L, -1L);
+
     /**
      * The set of resolved topics.
      */

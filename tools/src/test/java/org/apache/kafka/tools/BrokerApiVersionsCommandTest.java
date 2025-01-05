@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(ClusterTestExtensions.class)
 @ClusterTestDefaults(serverProperties = {
-        @ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true"),
+    @ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true"),
 })
 public class BrokerApiVersionsCommandTest {
     @ClusterTest
@@ -54,7 +54,7 @@ public class BrokerApiVersionsCommandTest {
                 BrokerApiVersionsCommand.mainNoExit("--bootstrap-server", clusterInstance.bootstrapServers()));
         Iterator<String> lineIter = Arrays.stream(output.split("\n")).iterator();
         assertTrue(lineIter.hasNext());
-        assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null) -> (", lineIter.next());
+        assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null isFenced: false) -> (", lineIter.next());
 
         ApiMessageType.ListenerType listenerType = ApiMessageType.ListenerType.BROKER;
 

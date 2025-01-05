@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 23, 11 ]
+        java: [ 23, 17 ]
         artifact-prefix: [ "build-scan-test-", "build-scan-quarantined-test-"]
     steps:
       - name: Env

@@ -140,6 +140,16 @@ public class AdminMetadataManager {
         }
 
         @Override
+        public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
+            return AdminMetadataManager.this.needsRebootstrap(now, rebootstrapTriggerMs);
+        }
+
+        @Override
+        public void rebootstrap(long now) {
+            AdminMetadataManager.this.rebootstrap(now);
+        }
+
+        @Override
         public void close() {
         }
     }
@@ -312,7 +322,6 @@ public class AdminMetadataManager {
     }
 
     public void initiateRebootstrap() {
-        requestUpdate();
         this.metadataAttemptStartMs = Optional.of(0L);
     }
 

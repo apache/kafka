@@ -73,9 +73,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
-import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
+import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
 import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;

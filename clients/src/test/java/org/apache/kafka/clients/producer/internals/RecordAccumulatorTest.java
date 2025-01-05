@@ -21,7 +21,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -29,7 +28,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -80,7 +78,6 @@ import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -971,26 +968,6 @@ public class RecordAccumulatorTest {
     }
 
     @Test
-    public void testIdempotenceWithOldMagic() {
-        // Simulate talking to an older broker, ie. one which supports a lower magic.
-        ApiVersions apiVersions = new ApiVersions();
-        int batchSize = 1025;
-        int deliveryTimeoutMs = 3200;
-        int lingerMs = 10;
-        long retryBackoffMs = 100L;
-        long totalSize = 10 * batchSize;
-        String metricGrpName = "producer-metrics";
-
-        apiVersions.update("foobar", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
-        TransactionManager transactionManager = new TransactionManager(new LogContext(), null, 0, retryBackoffMs, apiVersions);
-        RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
-            Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
-            new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
-        assertThrows(UnsupportedVersionException.class,
-            () -> accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds(), cluster));
-    }
-
-    @Test
     public void testRecordsDrainedWhenTransactionCompleting() throws Exception {
         int batchSize = 1025;
         int deliveryTimeoutMs = 3200;
@@ -1004,7 +981,7 @@ public class RecordAccumulatorTest {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(12345L, (short) 5);
         Mockito.when(transactionManager.producerIdAndEpoch()).thenReturn(producerIdAndEpoch);
         Mockito.when(transactionManager.isSendToPartitionAllowed(tp1)).thenReturn(true);
-        Mockito.when(transactionManager.isPartitionAdded(tp1)).thenReturn(true);
+        Mockito.when(transactionManager.transactionContainsPartition(tp1)).thenReturn(true);
         Mockito.when(transactionManager.firstInFlightSequence(tp1)).thenReturn(0);
 
         // Initially, the transaction is still in progress, so we should respect the linger.
@@ -1211,79 +1188,6 @@ public class RecordAccumulatorTest {
             expiredBatches = accum.expiredBatches(time.milliseconds());
             assertEquals(mute ? 1 : 0, expiredBatches.size(), "RecordAccumulator has expired batches if the partition is not muted");
         }
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testStickyBatches() throws Exception {
-        long now = time.milliseconds();
-
-        // Test case assumes that the records do not fill the batch completely
-        int batchSize = 1025;
-
-        Partitioner partitioner = new DefaultPartitioner();
-        RecordAccumulator accum = createTestRecordAccumulator(3200,
-            batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10L * batchSize, Compression.NONE, 10);
-        int expectedAppends = expectedNumAppendsNoKey(batchSize);
-
-        // Create first batch
-        int partition = partitioner.partition(topic, null, null, "value", value, cluster);
-        accum.append(topic, partition, 0L, null, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
-        int appends = 1;
-
-        boolean switchPartition = false;
-        while (!switchPartition) {
-            // Append to the first batch
-            partition = partitioner.partition(topic, null, null, "value", value, cluster);
-            RecordAccumulator.RecordAppendResult result = accum.append(topic, partition, 0L, null,
-                value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, true, time.milliseconds(), cluster);
-            Deque<ProducerBatch> partitionBatches1 = accum.getDeque(tp1);
-            Deque<ProducerBatch> partitionBatches2 = accum.getDeque(tp2);
-            Deque<ProducerBatch> partitionBatches3 = accum.getDeque(tp3);
-            int numBatches = (partitionBatches1 == null ? 0 : partitionBatches1.size()) + (partitionBatches2 == null ? 0 : partitionBatches2.size()) + (partitionBatches3 == null ? 0 : partitionBatches3.size());
-            // Only one batch is created because the partition is sticky.
-            assertEquals(1, numBatches);
-
-            switchPartition = result.abortForNewBatch;
-            // We only appended if we do not retry.
-            if (!switchPartition) {
-                appends++;
-                assertEquals(0, accum.ready(metadataCache, now).readyNodes.size(), "No partitions should be ready.");
-            }
-        }
-
-        // Batch should be full.
-        assertEquals(1, accum.ready(metadataCache, time.milliseconds()).readyNodes.size());
-        assertEquals(appends, expectedAppends);
-        switchPartition = false;
-
-        // KafkaProducer would call this method in this case, make second batch
-        partitioner.onNewBatch(topic, cluster, partition);
-        partition = partitioner.partition(topic, null, null, "value", value, cluster);
-        accum.append(topic, partition, 0L, null, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
-        appends++;
-
-        // These appends all go into the second batch
-        while (!switchPartition) {
-            partition = partitioner.partition(topic, null, null, "value", value, cluster);
-            RecordAccumulator.RecordAppendResult result = accum.append(topic, partition, 0L, null, value,
-                Record.EMPTY_HEADERS, null, maxBlockTimeMs, true, time.milliseconds(), cluster);
-            Deque<ProducerBatch> partitionBatches1 = accum.getDeque(tp1);
-            Deque<ProducerBatch> partitionBatches2 = accum.getDeque(tp2);
-            Deque<ProducerBatch> partitionBatches3 = accum.getDeque(tp3);
-            int numBatches = (partitionBatches1 == null ? 0 : partitionBatches1.size()) + (partitionBatches2 == null ? 0 : partitionBatches2.size()) + (partitionBatches3 == null ? 0 : partitionBatches3.size());
-            // Only two batches because the new partition is also sticky.
-            assertEquals(2, numBatches);
-
-            switchPartition = result.abortForNewBatch;
-            // We only appended if we do not retry.
-            if (!switchPartition) {
-                appends++;
-            }
-        }
-
-        // There should be two full batches now.
-        assertEquals(appends, 2 * expectedAppends);
     }
 
     @Test

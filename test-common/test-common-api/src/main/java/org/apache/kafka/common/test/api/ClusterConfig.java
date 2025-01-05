@@ -19,7 +19,7 @@ package org.apache.kafka.common.test.api;
 
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.File;
@@ -66,7 +66,7 @@ public class ClusterConfig {
     private final Map<String, String> saslClientProperties;
     private final List<String> tags;
     private final Map<Integer, Map<String, String>> perServerProperties;
-    private final Map<Features, Short> features;
+    private final Map<Feature, Short> features;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     private ClusterConfig(Set<Type> types, int brokers, int controllers, int disksPerBroker, boolean autoStart,
@@ -75,7 +75,7 @@ public class ClusterConfig {
                   MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
                   Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
                   Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties, List<String> tags,
-                  Map<Features, Short> features) {
+                  Map<Feature, Short> features) {
         // do fail fast. the following values are invalid for kraft modes.
         if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
@@ -179,7 +179,7 @@ public class ClusterConfig {
         return tags;
     }
 
-    public Map<Features, Short> features() {
+    public Map<Feature, Short> features() {
         return features;
     }
 
@@ -255,7 +255,7 @@ public class ClusterConfig {
         private Map<String, String> saslClientProperties = Collections.emptyMap();
         private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
         private List<String> tags = Collections.emptyList();
-        private Map<Features, Short> features = Collections.emptyMap();
+        private Map<Feature, Short> features = Collections.emptyMap();
 
         private Builder() {}
 
@@ -356,7 +356,7 @@ public class ClusterConfig {
             return this;
         }
 
-        public Builder setFeatures(Map<Features, Short> features) {
+        public Builder setFeatures(Map<Feature, Short> features) {
             this.features = Collections.unmodifiableMap(features);
             return this;
         }

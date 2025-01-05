@@ -356,17 +356,16 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
      * @param duration the length of time in milliseconds for the commit attempt to complete
      */
     protected void recordCommitSuccess(long duration) {
-        taskMetricsGroup.recordCommit(duration, true, null);
+        taskMetricsGroup.recordCommit(duration, true);
     }
 
     /**
      * Record that offsets have been committed.
      *
      * @param duration the length of time in milliseconds for the commit attempt to complete
-     * @param error the unexpected error that occurred; may be null in the case of timeouts or interruptions
      */
-    protected void recordCommitFailure(long duration, Throwable error) {
-        taskMetricsGroup.recordCommit(duration, false, error);
+    protected void recordCommitFailure(long duration) {
+        taskMetricsGroup.recordCommit(duration, false);
     }
 
     /**
@@ -434,7 +433,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
             metricGroup.close();
         }
 
-        void recordCommit(long duration, boolean success, Throwable error) {
+        void recordCommit(long duration, boolean success) {
             if (success) {
                 commitTime.record(duration);
                 commitAttempts.record(1.0d);

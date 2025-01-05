@@ -42,6 +42,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -59,6 +60,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -68,7 +70,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 public class RangeQueryIntegrationTest {
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
     private static final Properties STREAMS_CONFIG = new Properties();
-    private static final String APP_ID = "range-query-integration-test";
     private static final Long COMMIT_INTERVAL = 100L;
     private static String inputStream;
     private static final String TABLE_NAME = "mytable";
@@ -136,7 +137,6 @@ public class RangeQueryIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
     }
 
@@ -158,16 +158,16 @@ public class RangeQueryIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void testStoreConfig(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) throws Exception {
+    public void testStoreConfig(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward, final TestInfo testInfo) throws Exception {
+        final String appID = safeUniqueTestName(testInfo);
         final StreamsBuilder builder = new StreamsBuilder();
         final Materialized<String, String, KeyValueStore<Bytes, byte[]>> stateStoreConfig = getStoreConfig(storeType, enableLogging, enableCaching);
         builder.table(inputStream, stateStoreConfig);
-
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
 
             writeInputData();
-
             final ReadOnlyKeyValueStore<String, String> stateStore = IntegrationTestUtils.getStore(1000_000L, TABLE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
 
             // wait for the store to populate

@@ -137,12 +137,10 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
-    if (isKRaftTest()) {
-      propsToChangeUponRestart.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "1000")
-      shutdownBroker()
-      shutdownKRaftController()
-      verifyCleanShutdownAfterFailedStartup[CancellationException]
-    }
+    propsToChangeUponRestart.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "1000")
+    shutdownBroker()
+    shutdownKRaftController()
+    verifyCleanShutdownAfterFailedStartup[CancellationException]
   }
 
   @ParameterizedTest
@@ -195,7 +193,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
         assertCause(exceptionClassTag.runtimeClass, e)
-        assertEquals(if (isKRaftTest()) BrokerState.SHUTTING_DOWN else BrokerState.NOT_RUNNING, brokers.head.brokerState)
+        assertEquals(BrokerState.SHUTTING_DOWN, brokers.head.brokerState)
     } finally {
       shutdownBroker()
     }

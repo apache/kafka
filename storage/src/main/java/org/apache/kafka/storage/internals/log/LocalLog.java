@@ -24,7 +24,6 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.record.FileLogInputStream;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -223,11 +222,6 @@ public class LocalLog {
     public void updateConfig(LogConfig newConfig) {
         LogConfig oldConfig = config;
         config = newConfig;
-        RecordVersion oldRecordVersion = oldConfig.recordVersion();
-        RecordVersion newRecordVersion = newConfig.recordVersion();
-        if (newRecordVersion.precedes(oldRecordVersion)) {
-            logger.warn("Record format version has been downgraded from {} to {}.", oldRecordVersion, newRecordVersion);
-        }
     }
 
     public void checkIfMemoryMappedBufferClosed() {

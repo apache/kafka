@@ -246,7 +246,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private def requestBuilder(apiKey: ApiKeys): AbstractRequest.Builder[_ <: AbstractRequest] = {
     apiKey match {
         case ApiKeys.PRODUCE =>
-          requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+          requests.ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
               Collections.singletonList(new ProduceRequestData.TopicProduceData()
                 .setName(tp.topic()).setPartitionData(Collections.singletonList(
@@ -487,7 +487,8 @@ class RequestQuotaTest extends BaseRequestTest {
             "test-txn-group",
             2,
             0,
-            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava
+            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava,
+            true
           )
 
         case ApiKeys.DESCRIBE_ACLS =>
@@ -683,10 +684,10 @@ class RequestQuotaTest extends BaseRequestTest {
           new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
 
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT =>
-          new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData(), true)
+          new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData())
 
         case ApiKeys.CONSUMER_GROUP_DESCRIBE =>
-          new ConsumerGroupDescribeRequest.Builder(new ConsumerGroupDescribeRequestData(), true)
+          new ConsumerGroupDescribeRequest.Builder(new ConsumerGroupDescribeRequestData())
 
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS =>
           new GetTelemetrySubscriptionsRequest.Builder(new GetTelemetrySubscriptionsRequestData())
@@ -738,6 +739,12 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY =>
           new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), true)
+          
+        case ApiKeys.STREAMS_GROUP_HEARTBEAT =>
+          new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData(), true)
+
+        case ApiKeys.STREAMS_GROUP_DESCRIBE =>
+          new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData(), true)
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)

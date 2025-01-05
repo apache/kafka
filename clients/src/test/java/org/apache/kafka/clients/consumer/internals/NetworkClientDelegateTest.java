@@ -23,11 +23,13 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -41,17 +43,20 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -78,7 +83,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     void testPollResultTimer() throws Exception {
-        try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
             NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                     new FindCoordinatorRequest.Builder(
                             new FindCoordinatorRequestData()
@@ -102,7 +107,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testSuccessfulResponse() throws Exception {
-        try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             prepareFindCoordinatorResponse(Errors.NONE);
 
@@ -116,7 +121,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testTimeoutBeforeSend() throws Exception {
-        try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
             client.setUnreachable(mockNode(), REQUEST_TIMEOUT_MS);
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             ncd.add(unsentRequest);
@@ -130,7 +135,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testTimeoutAfterSend() throws Exception {
-        try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             ncd.add(unsentRequest);
             ncd.poll(0, time.milliseconds());
@@ -164,7 +169,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testEnsureTimerSetOnAdd() {
-        NetworkClientDelegate ncd = newNetworkClientDelegate();
+        NetworkClientDelegate ncd = newNetworkClientDelegate(false);
         NetworkClientDelegate.UnsentRequest findCoordRequest = newUnsentFindCoordinatorRequest();
         assertNull(findCoordRequest.timer());
 
@@ -181,7 +186,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testHasAnyPendingRequests() throws Exception {
-        try (NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate()) {
+        try (NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(false)) {
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             networkClientDelegate.add(unsentRequest);
 
@@ -212,9 +217,24 @@ public class NetworkClientDelegateTest {
         AuthenticationException authException = new AuthenticationException("Test Auth Exception");
         doThrow(authException).when(metadata).maybeThrowAnyException();
 
-        LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
-        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
-        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate();
+        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(false);
+        assertTrue(networkClientDelegate.getAndClearMetadataError().isEmpty());
+        networkClientDelegate.poll(0, time.milliseconds());
+
+        Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
+        assertTrue(metadataError.isPresent());
+        assertInstanceOf(AuthenticationException.class, metadataError.get());
+        assertEquals(authException.getMessage(), metadataError.get().getMessage());
+    }
+
+    @Test
+    public void testPropagateMetadataErrorWithErrorEvent() {
+        AuthenticationException authException = new AuthenticationException("Test Auth Exception");
+        doThrow(authException).when(metadata).maybeThrowAnyException();
+
+        BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
+        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(true);
 
         assertEquals(0, backgroundEventQueue.size());
         networkClientDelegate.poll(0, time.milliseconds());
@@ -226,19 +246,59 @@ public class NetworkClientDelegateTest {
         assertEquals(authException, ((ErrorEvent) event).error());
     }
 
-    public NetworkClientDelegate newNetworkClientDelegate() {
+    @Test
+    public void testRecordUnsentRequestsQueueTime() throws Exception {
+        try (Metrics metrics = new Metrics();
+             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
+             NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(false, asyncConsumerMetrics)) {
+            NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
+            networkClientDelegate.add(unsentRequest);
+            asyncConsumerMetrics.recordUnsentRequestsQueueSize(1, time.milliseconds());
+
+            time.sleep(10);
+            long timeMs = time.milliseconds();
+            networkClientDelegate.poll(0, timeMs);
+            assertEquals(
+                0,
+                (double) metrics.metric(
+                    metrics.metricName("unsent-requests-queue-size", CONSUMER_METRIC_GROUP)
+                ).metricValue()
+            );
+            assertEquals(
+                10,
+                (double) metrics.metric(
+                    metrics.metricName("unsent-requests-queue-time-avg", CONSUMER_METRIC_GROUP)
+                ).metricValue()
+            );
+            assertEquals(
+                10,
+                (double) metrics.metric(
+                    metrics.metricName("unsent-requests-queue-time-max", CONSUMER_METRIC_GROUP)
+                ).metricValue()
+            );
+        }
+    }
+
+    public NetworkClientDelegate newNetworkClientDelegate(boolean notifyMetadataErrorsViaErrorQueue) {
+        return newNetworkClientDelegate(notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class));
+    }
+
+    public NetworkClientDelegate newNetworkClientDelegate(boolean notifyMetadataErrorsViaErrorQueue, AsyncConsumerMetrics asyncConsumerMetrics) {
         LogContext logContext = new LogContext();
         Properties properties = new Properties();
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(GROUP_ID_CONFIG, GROUP_ID);
         properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
-        return new NetworkClientDelegate(this.time,
+        return new NetworkClientDelegate(time,
                 new ConsumerConfig(properties),
                 logContext,
                 this.client,
                 this.metadata,
-                this.backgroundEventHandler);
+                this.backgroundEventHandler,
+                notifyMetadataErrorsViaErrorQueue,
+                asyncConsumerMetrics
+        );
     }
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {

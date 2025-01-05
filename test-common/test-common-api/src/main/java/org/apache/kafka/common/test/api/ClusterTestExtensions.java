@@ -17,7 +17,7 @@
 package org.apache.kafka.common.test.api;
 
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.util.timer.SystemTimer;
 
 import org.junit.jupiter.api.extension.AfterEachCallback;
@@ -240,7 +240,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .collect(Collectors.groupingBy(ClusterConfigProperty::id, Collectors.mapping(Function.identity(),
                 Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b))));
 
-        Map<Features, Short> features = Arrays.stream(clusterTest.features())
+        Map<Feature, Short> features = Arrays.stream(clusterTest.features())
             .collect(Collectors.toMap(ClusterFeature::feature, ClusterFeature::version));
 
         ClusterConfig config = ClusterConfig.builder()

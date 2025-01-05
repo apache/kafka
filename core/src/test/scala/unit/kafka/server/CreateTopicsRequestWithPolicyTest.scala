@@ -104,31 +104,19 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
       Map(existingTopic -> error(Errors.TOPIC_ALREADY_EXISTS,
         Some("Topic 'existing-topic' already exists."))))
 
-    var errorMsg = if (isKRaftTest()) {
-      "Unable to replicate the partition 4 time(s): The target replication factor of 4 cannot be reached because only 3 broker(s) are registered."
-    } else {
-      "Replication factor: 4 larger than available brokers: 3."
-    }
+    var errorMsg = "Unable to replicate the partition 4 time(s): The target replication factor of 4 cannot be reached because only 3 broker(s) are registered."
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-replication",
       numPartitions = 10, replicationFactor = brokerCount + 1)), validateOnly = true),
       Map("error-replication" -> error(Errors.INVALID_REPLICATION_FACTOR,
         Some(errorMsg))))
 
-    errorMsg = if (isKRaftTest()) {
-      "Replication factor must be larger than 0, or -1 to use the default value."
-    } else {
-      "Replication factor must be larger than 0."
-    }
+    errorMsg = "Replication factor must be larger than 0, or -1 to use the default value."
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-replication2",
       numPartitions = 10, replicationFactor = -2)), validateOnly = true),
       Map("error-replication2" -> error(Errors.INVALID_REPLICATION_FACTOR,
         Some(errorMsg))))
 
-    errorMsg = if (isKRaftTest()) {
-      "Number of partitions was set to an invalid non-positive value."
-    } else {
-      "Number of partitions must be larger than 0."
-    }
+    errorMsg = "Number of partitions was set to an invalid non-positive value."
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-partitions",
       numPartitions = -2, replicationFactor = 1)), validateOnly = true),
       Map("error-partitions" -> error(Errors.INVALID_PARTITIONS,

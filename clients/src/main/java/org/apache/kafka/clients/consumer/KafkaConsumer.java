@@ -878,7 +878,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.InvalidTopicException if the current subscription contains any invalid
      *             topic (per {@link org.apache.kafka.common.internals.Topic#validate(String)})
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the consumer attempts to fetch stable offsets
-     *             when the broker doesn't support this feature
+     *             when the broker doesn't support this feature. Also, if the consumer attempts to subscribe to a
+     *             SubscriptionPattern via {@link #subscribe(SubscriptionPattern)} or
+     *             {@link #subscribe(SubscriptionPattern, ConsumerRebalanceListener)} and the broker doesn't
+     *             support this feature.
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      */
     @Override

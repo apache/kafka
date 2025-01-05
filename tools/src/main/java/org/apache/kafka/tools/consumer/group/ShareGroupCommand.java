@@ -17,16 +17,15 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeShareGroupsResult;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
-import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
+import org.apache.kafka.clients.admin.ShareMemberDescription;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
@@ -37,7 +36,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -71,7 +69,7 @@ public class ShareGroupCommand {
     }
 
     public static void run(ShareGroupCommandOptions opts) {
-        try (ShareGroupService shareGroupService = new ShareGroupService(opts, Collections.emptyMap())) {
+        try (ShareGroupService shareGroupService = new ShareGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt)) {
                 shareGroupService.listGroups();
             } else if (opts.options.has(opts.describeOpt)) {
@@ -129,7 +127,7 @@ public class ShareGroupCommand {
             if (opts.options.has(opts.stateOpt)) {
                 String stateValue = opts.options.valueOf(opts.stateOpt);
                 Set<GroupState> states = (stateValue == null || stateValue.isEmpty())
-                    ? Collections.emptySet()
+                    ? Set.of()
                     : groupStatesFromString(stateValue);
                 List<GroupListing> listings = listShareGroupsInStates(states);
 
@@ -140,7 +138,9 @@ public class ShareGroupCommand {
 
         List<String> listShareGroups() {
             try {
-                ListGroupsResult result = adminClient.listGroups(withTimeoutMs(new ListGroupsOptions()).withTypes(Set.of(GroupType.SHARE)));
+                ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
+                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+                    .withTypes(Set.of(GroupType.SHARE)));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
             } catch (InterruptedException | ExecutionException e) {
@@ -149,10 +149,10 @@ public class ShareGroupCommand {
         }
 
         List<GroupListing> listShareGroupsInStates(Set<GroupState> states) throws ExecutionException, InterruptedException {
-            ListGroupsOptions listGroupsOptions = withTimeoutMs(new ListGroupsOptions());
-            listGroupsOptions.withTypes(Set.of(GroupType.SHARE));
-            listGroupsOptions.inGroupStates(states);
-            ListGroupsResult result = adminClient.listGroups(listGroupsOptions);
+            ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
+                .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+                .withTypes(Set.of(GroupType.SHARE))
+                .inGroupStates(states));
             return new ArrayList<>(result.all().get());
         }
 
@@ -200,7 +200,7 @@ public class ShareGroupCommand {
         }
 
         ShareGroupDescription getDescribeGroup(String group) throws ExecutionException, InterruptedException {
-            DescribeShareGroupsResult result = adminClient.describeShareGroups(Collections.singletonList(group));
+            DescribeShareGroupsResult result = adminClient.describeShareGroups(List.of(group));
             Map<String, ShareGroupDescription> descriptionMap = result.all().get();
             if (descriptionMap.containsKey(group)) {
                 return descriptionMap.get(group);
@@ -208,9 +208,9 @@ public class ShareGroupCommand {
             return null;
         }
 
-        Map<TopicPartition, Long> getOffsets(Collection<MemberDescription> members) throws ExecutionException, InterruptedException {
+        Map<TopicPartition, Long> getOffsets(Collection<ShareMemberDescription> members) throws ExecutionException, InterruptedException {
             Set<TopicPartition> allTp = new HashSet<>();
-            for (MemberDescription memberDescription : members) {
+            for (ShareMemberDescription memberDescription : members) {
                 allTp.addAll(memberDescription.assignment().topicPartitions());
             }
             // fetch latest and earliest offsets
@@ -268,9 +268,9 @@ public class ShareGroupCommand {
         private void printMembers(ShareGroupDescription description) {
             int groupLen = Math.max(15, description.groupId().length());
             int maxConsumerIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
-            Collection<MemberDescription> members = description.members();
+            Collection<ShareMemberDescription> members = description.members();
             if (maybePrintEmptyGroupState(description.groupId(), description.groupState(), description.members().size())) {
-                for (MemberDescription member : members) {
+                for (ShareMemberDescription member : members) {
                     maxConsumerIdLen = Math.max(maxConsumerIdLen, member.consumerId().length());
                     maxHostLen = Math.max(maxHostLen, member.host().length());
                     maxClientIdLen = Math.max(maxClientIdLen, member.clientId().length());
@@ -278,7 +278,7 @@ public class ShareGroupCommand {
 
                 String fmt = "%" + -groupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
                 System.out.printf(fmt, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "ASSIGNMENT");
-                for (MemberDescription member : members) {
+                for (ShareMemberDescription member : members) {
                     System.out.printf(fmt, description.groupId(), member.consumerId(), member.host(), member.clientId(),
                         member.assignment().topicPartitions().stream().map(part -> part.topic() + ":" + part.partition()).collect(Collectors.joining(",")));
                 }
@@ -294,11 +294,6 @@ public class ShareGroupCommand {
             props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
             props.putAll(configOverrides);
             return Admin.create(props);
-        }
-
-        private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
-            int t = opts.options.valueOf(opts.timeoutMsOpt).intValue();
-            return options.timeoutMs(t);
         }
     }
 }

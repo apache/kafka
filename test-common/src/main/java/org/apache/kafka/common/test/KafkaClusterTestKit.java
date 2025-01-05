@@ -111,7 +111,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
         private final String brokerSecurityProtocol;
         private final String controllerSecurityProtocol;
 
-
         public Builder(TestKitNodes nodes) {
             this.nodes = nodes;
             this.brokerListenerName = nodes.brokerListenerName().value();
@@ -169,13 +168,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     append("@").
                     append("localhost").
                     append(":").
-                    append(socketFactoryManager.getOrCreatePortForListener(nodeId, "CONTROLLER"));
+                    append(socketFactoryManager.getOrCreatePortForListener(nodeId, controllerListenerName));
                 prefix = ",";
             }
             props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, quorumVoterStringBuilder.toString());
 
             // reduce log cleaner offset map memory usage
-            props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
+            props.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
 
             // Add associated broker node property overrides
             if (brokerNode != null) {
@@ -199,7 +198,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             try {
                 baseDirectory = new File(nodes.baseDirectory());
                 for (TestKitNode node : nodes.controllerNodes().values()) {
-                    socketFactoryManager.getOrCreatePortForListener(node.id(), "CONTROLLER");
+                    socketFactoryManager.getOrCreatePortForListener(node.id(), controllerListenerName);
                 }
                 for (TestKitNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
@@ -316,6 +315,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final File baseDirectory;
     private final SimpleFaultHandlerFactory faultHandlerFactory;
     private final PreboundSocketFactoryManager socketFactoryManager;
+    private final String controllerListenerName;
 
     private KafkaClusterTestKit(
         TestKitNodes nodes,
@@ -338,6 +338,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         this.baseDirectory = baseDirectory;
         this.faultHandlerFactory = faultHandlerFactory;
         this.socketFactoryManager = socketFactoryManager;
+        this.controllerListenerName = nodes.controllerListenerName().value();
     }
 
     public void format() throws Exception {
@@ -389,7 +390,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 nodes.bootstrapMetadata().featureLevel(KRaftVersion.FEATURE_NAME));
             formatter.setUnstableFeatureVersionsEnabled(true);
             formatter.setIgnoreFormatted(false);
-            formatter.setControllerListenerName("CONTROLLER");
+            formatter.setControllerListenerName(controllerListenerName);
             if (writeMetadataDirectory) {
                 formatter.setMetadataLogDirectory(ensemble.metadataLogDir().get());
             } else {
@@ -400,7 +401,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 String prefix = "";
                 for (TestKitNode controllerNode : nodes.controllerNodes().values()) {
                     int port = socketFactoryManager.
-                        getOrCreatePortForListener(controllerNode.id(), "CONTROLLER");
+                        getOrCreatePortForListener(controllerNode.id(), controllerListenerName);
                     dynamicVotersBuilder.append(prefix);
                     prefix = ",";
                     dynamicVotersBuilder.append(String.format("%d@localhost:%d:%s",
@@ -538,15 +539,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public Controller waitForActiveController() throws InterruptedException {
         AtomicReference<Controller> active = new AtomicReference<>(null);
-        TestUtils.retryOnExceptionWithTimeout(() -> {
+        TestUtils.waitForCondition(() -> {
             for (ControllerServer controllerServer : controllers.values()) {
                 if (controllerServer.controller().isActive()) {
                     active.set(controllerServer.controller());
                 }
             }
-            if (active.get() == null)
-                throw new RuntimeException("Controller not active");
-        });
+            return active.get() != null;
+        }, 60_000, "Controller not active");
         return active.get();
     }
 

@@ -112,8 +112,9 @@ import java.util.stream.Collectors;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
+
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriBuilder;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
@@ -1510,7 +1511,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         }
                         // Compute and send the response that this was accepted
                         Optional<RestartPlan> plan = buildRestartPlan(request);
-                        if (!plan.isPresent()) {
+                        if (plan.isEmpty()) {
                             callback.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
                         } else {
                             callback.onCompletion(null, plan.get().restartConnectorStateInfo());
@@ -1558,7 +1559,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     protected synchronized void doRestartConnectorAndTasks(RestartRequest request) {
         String connectorName = request.connectorName();
         Optional<RestartPlan> maybePlan = buildRestartPlan(request);
-        if (!maybePlan.isPresent()) {
+        if (maybePlan.isEmpty()) {
             log.debug("Skipping restart of connector '{}' since no status is available: {}", connectorName, request);
             return;
         }

@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.GroupType;
+
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
 
 /**
- * A detailed description of a single group instance in the cluster.
+ * A detailed description of a single group member in the cluster.
  */
 public class MemberDescription {
     private final String memberId;
@@ -30,13 +32,18 @@ public class MemberDescription {
     private final String host;
     private final MemberAssignment assignment;
     private final Optional<MemberAssignment> targetAssignment;
+    private final Optional<Integer> memberEpoch;
+    private final Optional<Boolean> upgraded;
 
-    public MemberDescription(String memberId,
+    public MemberDescription(
+        String memberId,
         Optional<String> groupInstanceId,
         String clientId,
         String host,
         MemberAssignment assignment,
-        Optional<MemberAssignment> targetAssignment
+        Optional<MemberAssignment> targetAssignment,
+        Optional<Integer> memberEpoch,
+        Optional<Boolean> upgraded
     ) {
         this.memberId = memberId == null ? "" : memberId;
         this.groupInstanceId = groupInstanceId;
@@ -45,8 +52,38 @@ public class MemberDescription {
         this.assignment = assignment == null ?
             new MemberAssignment(Collections.emptySet()) : assignment;
         this.targetAssignment = targetAssignment;
+        this.memberEpoch = memberEpoch;
+        this.upgraded = upgraded;
     }
 
+    /**
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)}.
+     */
+    @Deprecated
+    public MemberDescription(
+        String memberId,
+        Optional<String> groupInstanceId,
+        String clientId,
+        String host,
+        MemberAssignment assignment,
+        Optional<MemberAssignment> targetAssignment
+    ) {
+        this(
+            memberId,
+            groupInstanceId,
+            clientId,
+            host,
+            assignment,
+            targetAssignment,
+            Optional.empty(),
+            Optional.empty()
+        );
+    }
+
+    /**
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)}.
+     */
+    @Deprecated
     public MemberDescription(
         String memberId,
         Optional<String> groupInstanceId,
@@ -64,6 +101,10 @@ public class MemberDescription {
         );
     }
 
+    /**
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)}.
+     */
+    @Deprecated
     public MemberDescription(String memberId,
                              String clientId,
                              String host,
@@ -81,12 +122,14 @@ public class MemberDescription {
             clientId.equals(that.clientId) &&
             host.equals(that.host) &&
             assignment.equals(that.assignment) &&
-            targetAssignment.equals(that.targetAssignment);
+            targetAssignment.equals(that.targetAssignment) &&
+            memberEpoch.equals(that.memberEpoch) &&
+            upgraded.equals(that.upgraded);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(memberId, groupInstanceId, clientId, host, assignment, targetAssignment);
+        return Objects.hash(memberId, groupInstanceId, clientId, host, assignment, targetAssignment, memberEpoch, upgraded);
     }
 
     /**
@@ -131,6 +174,25 @@ public class MemberDescription {
         return targetAssignment;
     }
 
+    /**
+     * The epoch of the group member.
+     * The optional is set to an integer if the member is in a {@link GroupType#CONSUMER} group, and to empty if it
+     * is in a {@link GroupType#CLASSIC} group.
+     */
+    public Optional<Integer> memberEpoch() {
+        return memberEpoch;
+    }
+
+    /**
+     * The flag indicating whether a member within a {@link GroupType#CONSUMER} group uses the
+     * {@link GroupType#CONSUMER} protocol.
+     * The optional is set to true if it does, to false if it does not, and to empty if it is unknown or if the group
+     * is a {@link GroupType#CLASSIC} group.
+     */
+    public Optional<Boolean> upgraded() {
+        return upgraded;
+    }
+
     @Override
     public String toString() {
         return "(memberId=" + memberId +
@@ -138,6 +200,9 @@ public class MemberDescription {
             ", clientId=" + clientId +
             ", host=" + host +
             ", assignment=" + assignment +
-            ", targetAssignment=" + targetAssignment + ")";
+            ", targetAssignment=" + targetAssignment +
+            ", memberEpoch=" + memberEpoch.orElse(null) +
+            ", upgraded=" + upgraded.orElse(null) +
+            ")";
     }
 }

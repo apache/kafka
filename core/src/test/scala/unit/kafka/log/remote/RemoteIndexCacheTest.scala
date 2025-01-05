@@ -377,7 +377,7 @@ class RemoteIndexCacheTest {
     // Simulate a concurrency situation where one thread is reading the entry already present in the cache (cache hit)
     // and the other thread is reading an entry which is not available in the cache (cache miss). The expected behaviour
     // is for the former thread to succeed while latter is fetching from rsm.
-    // In this this test we simulate the situation using latches. We perform the following operations:
+    // In this test we simulate the situation using latches. We perform the following operations:
     // 1. Start the CacheMiss thread and wait until it starts executing the rsm.fetchIndex
     // 2. Block the CacheMiss thread inside the call to rsm.fetchIndex.
     // 3. Start the CacheHit thread. Assert that it performs a successful read.
@@ -624,7 +624,7 @@ class RemoteIndexCacheTest {
     assertCacheSize(2)
     verifyEntryIsEvicted(metadataList(0), entry0)
 
-    // Reduce cache capacity to only store 1 entries
+    // Reduce cache capacity to only store 1 entry
     cache.resizeCacheSize(1 * estimateEntryBytesSize)
     assertCacheSize(1)
     verifyEntryIsEvicted(metadataList(1), entry1)

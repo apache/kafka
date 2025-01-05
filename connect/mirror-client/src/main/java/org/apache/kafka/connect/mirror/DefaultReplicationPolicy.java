@@ -115,6 +115,6 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
 
     @Override
     public boolean isMM2InternalTopic(String topic) {
-        return  topic.endsWith(internalSuffix());
+        return  topic.startsWith("mm2") && topic.endsWith(internalSuffix()) || isCheckpointsTopic(topic);
     }
 }

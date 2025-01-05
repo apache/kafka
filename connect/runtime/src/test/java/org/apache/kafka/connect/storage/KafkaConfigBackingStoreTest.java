@@ -164,7 +164,6 @@ public class KafkaConfigBackingStoreTest {
             new Struct(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(1)),
             new Struct(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(2))
     );
-    private static final Struct TARGET_STATE_STARTED = new Struct(KafkaConfigBackingStore.TARGET_STATE_V0).put("state", "STARTED");
     private static final Struct TARGET_STATE_PAUSED = new Struct(KafkaConfigBackingStore.TARGET_STATE_V1)
             .put("state", "PAUSED")
             .put("state.v2", "PAUSED");
@@ -1656,12 +1655,6 @@ public class KafkaConfigBackingStoreTest {
             when(converter.toConnectData(TOPIC, serializedValue))
                     .thenReturn(new SchemaAndValue(null, structToMap(deserializedValueEntry.getValue())));
         }
-    }
-
-    private void expectRead(final String key, final byte[] serializedValue, Struct deserializedValue) {
-        LinkedHashMap<String, byte[]> serializedData = new LinkedHashMap<>();
-        serializedData.put(key, serializedValue);
-        expectRead(serializedData, Collections.singletonMap(key, deserializedValue));
     }
 
     // This map needs to maintain ordering

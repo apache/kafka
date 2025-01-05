@@ -589,11 +589,6 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public void closeAll() {
-        connections.clear();
-    }
-
-    @Override
     public LeastLoadedNode leastLoadedNode(long now) {
         // Consistent with NetworkClient, we do not return nodes awaiting reconnect backoff
         for (Node node : metadataUpdater.fetchNodes()) {

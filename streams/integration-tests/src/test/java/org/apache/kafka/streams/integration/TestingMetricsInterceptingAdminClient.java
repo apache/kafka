@@ -37,7 +37,6 @@ import org.apache.kafka.clients.admin.AlterReplicaLogDirsOptions;
 import org.apache.kafka.clients.admin.AlterReplicaLogDirsResult;
 import org.apache.kafka.clients.admin.AlterUserScramCredentialsOptions;
 import org.apache.kafka.clients.admin.AlterUserScramCredentialsResult;
-import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.CreateAclsOptions;
 import org.apache.kafka.clients.admin.CreateAclsResult;
 import org.apache.kafka.clients.admin.CreateDelegationTokenOptions;
@@ -108,8 +107,6 @@ import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListPartitionReassignmentsOptions;
 import org.apache.kafka.clients.admin.ListPartitionReassignmentsResult;
-import org.apache.kafka.clients.admin.ListShareGroupsOptions;
-import org.apache.kafka.clients.admin.ListShareGroupsResult;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
@@ -214,12 +211,6 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     @Override
     public DescribeConfigsResult describeConfigs(final Collection<ConfigResource> resources, final DescribeConfigsOptions options) {
         return adminDelegate.describeConfigs(resources, options);
-    }
-
-    @Override
-    @SuppressWarnings("deprecation")
-    public AlterConfigsResult alterConfigs(final Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
-        return adminDelegate.alterConfigs(configs, options);
     }
 
     @Override
@@ -420,11 +411,6 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     @Override
     public DescribeShareGroupsResult describeShareGroups(final Collection<String> groupIds, final DescribeShareGroupsOptions options) {
         return adminDelegate.describeShareGroups(groupIds, options);
-    }
-
-    @Override
-    public ListShareGroupsResult listShareGroups(final ListShareGroupsOptions options) {
-        return adminDelegate.listShareGroups(options);
     }
 
     @Override

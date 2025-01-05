@@ -102,7 +102,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   this.serverConfig.setProperty(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockBrokerMetricsReporter].getName)
 
   override def generateConfigs = {
-    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnectOrNull, interBrokerSecurityProtocol = Some(securityProtocol),
+    val cfgs = TestUtils.createBrokerConfigs(serverCount, null, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
     cfgs.foreach(_ ++= serverConfig)
     cfgs.map(KafkaConfig.fromProps)

@@ -22,7 +22,7 @@ import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.ReplicaAlterLogDirsThread.ReassignmentState
 import kafka.server.metadata.ZkMetadataCache
-import kafka.utils.{DelayedItem, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -1168,7 +1168,7 @@ class ReplicaAlterLogDirsThreadTest {
     // one partition is ready and one is delayed
     val ResultWithPartitions(fetchRequest2Opt, partitionsWithError2) = thread.leader.buildFetch(Map(
         t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, state = Fetching, lastFetchedEpoch = None),
-        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None)))
+        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = None)))
 
     assertTrue(fetchRequest2Opt.isDefined)
     val fetchRequest2 = fetchRequest2Opt.get
@@ -1181,8 +1181,8 @@ class ReplicaAlterLogDirsThreadTest {
 
     // both partitions are delayed
     val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) = thread.leader.buildFetch(Map(
-        t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None),
-        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None)))
+        t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = None),
+        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = None)))
     assertTrue(fetchRequest3Opt.isEmpty, "Expected no fetch requests since all partitions are delayed")
     assertFalse(partitionsWithError3.nonEmpty)
   }

@@ -22,6 +22,12 @@
 <h4><a id="upgrade_4_0_0" href="#upgrade_4_0_0">Upgrading to 4.0.0 from any version 0.8.x through 3.9.x</a></h4>
     <h5><a id="upgrade_400_notable" href="#upgrade_400_notable">Notable changes in 4.0.0</a></h5>
     <ul>
+        <li>
+            Old protocol API versions have been removed. Users should ensure brokers are version 2.1 or higher before upgrading the Java clients to 4.0.
+            Similarly, users should ensure their Java clients version 2.1 or higher before upgrading the brokers to 4.0. Finally, care also needs to be
+            taken when it comes to kafka clients that are not part of Apache Kafka, please see
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896%3A+Remove+old+client+protocol+API+versions+in+Kafka+4.0">KIP-896</a> for the details.
+        </li>
         <li>A number of deprecated classes, methods, configurations and tools have been removed.
             <ul>
                 <li><b>Common</b>
@@ -32,8 +38,30 @@
                         <li>The <code>auto.include.jmx.reporter</code> configuration was removed. The <code>metric.reporters</code> configuration
                             is now set to <code>org.apache.kafka.common.metrics.JmxReporter</code> by default.
                         </li>
+                        <li>The constructor <code>org.apache.kafka.common.metrics.JmxReporter</code> with string argument was removed.
+                            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-606%3A+Add+Metadata+Context+to+MetricsReporter">KIP-606</a> for details.
+                        </li>
                         <li>The <code>bufferpool-wait-time-total</code>, <code>io-waittime-total</code>, and <code>iotime-total</code> metrics were removed.
                             Please use <code>bufferpool-wait-time-ns-total</code>, <code>io-wait-time-ns-total</code>, and <code>io-time-ns-total</code> metrics as replacements, respectively.
+                        </li>
+                        <li>The <code>kafka.common.requests.DescribeLogDirsResponse.LogDirInfo</code> class was removed. Please use the <code>kafka.clients.admin.DescribeLogDirsResult.descriptions()</code> class
+                            and <code>kafka.clients.admin.DescribeLogDirsResult.allDescriptions()</code>instead.
+                        </li>
+                        <li>The <code>kafka.common.requests.DescribeLogDirsResponse.ReplicaInfo</code> class was removed. Please use the <code>kafka.clients.admin.DescribeLogDirsResult.descriptions()</code> class
+                            and <code>kafka.clients.admin.DescribeLogDirsResult.allDescriptions()</code>instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler</code> class was removed.
+                            Please use the <code>org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler</code> class instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerValidatorCallbackHandler</code> class was removed.
+                            Please use the <code>org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler</code> class instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.common.errors.NotLeaderForPartitionException</code> class was removed. The <code>org.apache.kafka.common.errors.NotLeaderOrFollowerException</code> is returned
+                            if a request could not be processed because the broker is not the leader or follower for a topic partition.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code> and <code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code> class was removed.
+                        </li>
+                        <li>The <code>log.message.format.version</code> and <code>message.format.version</code> configs were removed.
                         </li>
                     </ul>
                 </li>
@@ -46,6 +74,24 @@
                             The <code>offsets.commit.required.acks</code> configuration was removed.
                             See <a href="https://cwiki.apache.org/confluence/x/9YobEg">KIP-1041</a> for details.
                         </li>
+                        <li>The <code>log.message.timestamp.difference.max.ms</code> configuration was removed.
+                            Please use <code>log.message.timestamp.before.max.ms</code> and <code>log.message.timestamp.after.max.ms</code> instead.
+                            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-937%3A+Improve+Message+Timestamp+Validation">KIP-937</a> for details.
+                        </li>
+                        <li>
+                            The <code>remote.log.manager.copier.thread.pool.size</code> configuration default value was changed to 10 from -1.
+                            Values of -1 are no longer valid. A minimum of 1 or higher is valid.
+                            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
+                        </li>
+                        <li>
+                            The <code>remote.log.manager.expiration.thread.pool.size</code> configuration default value was changed to 10 from -1.
+                            Values of -1 are no longer valid. A minimum of 1 or higher is valid.
+                            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
+                        </li>
+                        <li>
+                            The <code>remote.log.manager.thread.pool.size</code> configuration default value was changed to 2 from 10.
+                            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
+                        </li>
                     </ul>
                 </li>
                 <li><b>MirrorMaker</b>
@@ -53,7 +99,7 @@
                         <li>The original MirrorMaker (MM1) and related classes were removed. Please use the Connect-based
                             MirrorMaker (MM2), as described in the <a href="/{{version}}/documentation/#georeplication">Geo-Replication section.</a>.
                         </li>
-                        <li>The <code>use.incremental.alter.configs</code> configuration was removedfrom <code>MirrorSourceConnector</code>.
+                        <li>The <code>use.incremental.alter.configs</code> configuration was removed from <code>MirrorSourceConnector</code>.
                             The modified behavior is identical to the previous <code>required</code> configuration, therefore users should ensure that brokers in the target cluster are at least running 2.3.0.
                         </li>
                         <li>The <code>add.source.alias.to.metrics</code> configuration was removed from <code>MirrorSourceConnector</code>.
@@ -109,9 +155,15 @@
                         </li>
                         <li>The <code>--topic-white-list</code> option was removed from the <code>kafka-replica-verification</code> command line tool.
                             Please use <code>--topics-include</code> instead.
-                        </li>li>
+                        </li>
                         <li>The <code>--broker-list</code> option was removed from the <code>kafka-verifiable-consumer</code> command line tool.
                             Please use <code>--bootstrap-server</code> instead.
+                        </li>
+                        <li>kafka-configs.sh now uses incrementalAlterConfigs API to alter broker configurations instead of the deprecated alterConfigs API,
+                            and it will fall directly if the broker doesn't support incrementalAlterConfigs API, which means the broker version is prior to 2.3.x.
+                            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1011%3A+Use+incrementalAlterConfigs+when+updating+broker+configs+by+kafka-configs.sh">KIP-1011</a> for more details.
+                        </li>
+                        <li>The <code>kafka.admin.ZkSecurityMigrator</code> tool was removed.
                         </li>
                     </ul>
                 </li>
@@ -119,6 +171,11 @@
                     <ul>
                         <li>The <code>whitelist</code> and <code>blacklist</code> configurations were removed from the <code>org.apache.kafka.connect.transforms.ReplaceField</code> transformation.
                             Please use <code>include</code> and <code>exclude</code> respectively instead.
+                        </li>
+                        <li>The <code>onPartitionsRevoked(Collection&lt;TopicPartition&gt;)</code> and <code>onPartitionsAssigned(Collection&lt;TopicPartition&gt;)</code> methods
+                            were removed from <code>SinkTask</code>.
+                        </li>
+                        <li>The <code>commitRecord(SourceRecord)</code> method was removed from <code>SourceTask</code>.
                         </li>
                     </ul>
                 </li>
@@ -141,10 +198,60 @@
                         </li>
                     </ul>
                 </li>
+                <li><b>Admin client</b>
+                    <ul>
+                        <li>
+                            The <code>alterConfigs</code> method was removed from the <code>org.apache.kafka.clients.admin.Admin</code>.
+                            Please use <code>incrementalAlterConfigs</code> instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.common.ConsumerGroupState</code> enumeration and related methods have been deprecated. Please use <code>GroupState</code> instead
+                            which applies to all types of group.
+                        </li>
+                        <li>The <code>Admin.describeConsumerGroups</code> method used to return a <code>ConsumerGroupDescription</code> in state
+                            <code>DEAD</code> if the group ID was not found. In Apache Kafka 4.0, the <code>GroupIdNotFoundException</code>
+                            is thrown instead as part of the support for new types of group.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.admin.DeleteTopicsResult.values()</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.DeleteTopicsResult.topicNameValues()</code> instead.
+                        <li>The <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, boolean)</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, Uuid, boolean)</code> instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions.topicPartitions(List&lt;TopicPartition&gt;)</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.Admin.listConsumerGroupOffsets(Map&lt;String, ListConsumerGroupOffsetsSpec&gt;, ListConsumerGroupOffsetsOptions)</code> instead.
+                        </li>
+                        <li>
+                            The deprecated <code>dryRun</code> methods were removed from the <code>org.apache.kafka.clients.admin.UpdateFeaturesOptions</code>.
+                            Please use <code>validateOnly</code> instead.
+                        </li>
+                        <li>The constructor <code>org.apache.kafka.clients.admin.FeatureUpdate</code> with short and boolean arguments was removed.
+                            Please use the constructor that accepts short and the specified UpgradeType enum instead.
+                        </li>
+                        <li>
+                            The <code>allowDowngrade</code> method was removed from the <code>org.apache.kafka.clients.admin.FeatureUpdate</code>.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.admin.DescribeTopicsResult.DescribeTopicsResult(Map&lt;String, KafkaFuture&lt;TopicDescription&gt;&gt;)</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.DescribeTopicsResult.DescribeTopicsResult(Map&lt;Uuid, KafkaFuture&lt;TopicDescription&gt;&gt;, Map&lt;String, KafkaFuture&lt;TopicDescription&gt;&gt;)</code> instead.
+                        </li>
+                        <li>
+                            The <code>values()</code> method was removed from the <code>org.apache.kafka.clients.admin.DescribeTopicsResult</code>.
+                            Please use <code>topicNameValues()</code> instead.
+                        </li>
+                        <li>
+                            The <code>all()</code> method was removed from the <code>org.apache.kafka.clients.admin.DescribeTopicsResult</code>.
+                            Please use <code>allTopicNames()</code> instead.
+                        </li>
+                    </ul>
+                </li>
             </ul>
         </li>
         <li>Other changes:
             <ul>
+                <li>
+                    The minimum Java version required by clients and streams applications has been increased from Java 8 to Java 11
+                    while brokers, connect and tools now require Java 17.
+                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> and
+                    <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510">KIP-1013</a> for more details.
+                </li>
                 <li>
                     Java 23 support has been added in Apache Kafka 4.0
                 </li>
@@ -153,20 +260,22 @@
                     See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218">KIP-751</a> for more details
                 </li>
                 <li>
-                    Java 8 support has been removed in Apache Kafka 4.0
-                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> for more details
-                </li>
-                <li>
-                    KafkaLog4jAppender has been remove, users should migrate to the log4j2 appender
+                    KafkaLog4jAppender has been removed, users should migrate to the log4j2 appender
                     See <a href="https://logging.apache.org/log4j/2.x/manual/appenders.html#KafkaAppender">KafkaAppender</a> for more details
                 </li>
-                <li>The <code>--delete-config</code> option in the <code>kafka-topics</code> command line tool has been deprecated.
+                <li>
+                    The <code>--delete-config</code> option in the <code>kafka-topics</code> command line tool has been deprecated.
                 </li>
                 <li>
                     For implementors of RemoteLogMetadataManager (RLMM), a new API `nextSegmentWithTxnIndex` is
                     introduced in RLMM to allow the implementation to return the next segment metadata with a transaction
                     index. This API is used when the consumers are enabled with isolation level as READ_COMMITTED.
                     See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1058:+Txn+consumer+exerts+pressure+on+remote+storage+when+collecting+aborted+transactions">KIP-1058</a> for more details.
+                </li>
+                <li>
+                    The criteria for identifying internal topics in ReplicationPolicy and DefaultReplicationPolicy have
+                    been updated to enable the replication of topics that appear to be internal but aren't truly internal to Kafka and Mirror Maker 2.
+                    See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1074%3A+Allow+the+replication+of+user+internal+topics">KIP-1074</a> for more details.
                 </li>
             </ul>
         </li>

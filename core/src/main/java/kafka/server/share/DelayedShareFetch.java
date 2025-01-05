@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -58,7 +59,7 @@ public class DelayedShareFetch extends DelayedOperation {
 
     private final ShareFetch shareFetch;
     private final ReplicaManager replicaManager;
-    private final SharePartitionManager sharePartitionManager;
+    private final BiConsumer<SharePartitionKey, Throwable> exceptionHandler;
     // The topic partitions that need to be completed for the share fetch request are given by sharePartitions.
     // sharePartitions is a subset of shareFetchData. The order of insertion/deletion of entries in sharePartitions is important.
     private final LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions;
@@ -68,14 +69,14 @@ public class DelayedShareFetch extends DelayedOperation {
     DelayedShareFetch(
             ShareFetch shareFetch,
             ReplicaManager replicaManager,
-            SharePartitionManager sharePartitionManager,
+            BiConsumer<SharePartitionKey, Throwable> exceptionHandler,
             LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions) {
         super(shareFetch.fetchParams().maxWaitMs, Optional.empty());
         this.shareFetch = shareFetch;
         this.replicaManager = replicaManager;
         this.partitionsAcquired = new LinkedHashMap<>();
         this.partitionsAlreadyFetched = new LinkedHashMap<>();
-        this.sharePartitionManager = sharePartitionManager;
+        this.exceptionHandler = exceptionHandler;
         this.sharePartitions = sharePartitions;
     }
 
@@ -135,7 +136,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 fetchPartitionsData.put(entry.getKey(), entry.getValue().toFetchPartitionData(false));
 
             shareFetch.maybeComplete(ShareFetchUtils.processFetchResponse(shareFetch, fetchPartitionsData,
-                sharePartitions, replicaManager));
+                sharePartitions, replicaManager, exceptionHandler));
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
             handleFetchException(shareFetch, topicPartitionData.keySet(), e);
@@ -283,7 +284,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 endOffsetMetadata = endOffsetMetadataForTopicPartition(topicIdPartition);
             } catch (Exception e) {
                 shareFetch.addErroneous(topicIdPartition, e);
-                sharePartitionManager.handleFencedSharePartitionException(
+                exceptionHandler.accept(
                     new SharePartitionKey(shareFetch.groupId(), topicIdPartition), e);
                 continue;
             }
@@ -383,7 +384,7 @@ public class DelayedShareFetch extends DelayedOperation {
         Set<TopicIdPartition> topicIdPartitions,
         Throwable throwable
     ) {
-        topicIdPartitions.forEach(topicIdPartition -> sharePartitionManager.handleFencedSharePartitionException(
+        topicIdPartitions.forEach(topicIdPartition -> exceptionHandler.accept(
             new SharePartitionKey(shareFetch.groupId(), topicIdPartition), throwable));
         shareFetch.maybeCompleteWithException(topicIdPartitions, throwable);
     }

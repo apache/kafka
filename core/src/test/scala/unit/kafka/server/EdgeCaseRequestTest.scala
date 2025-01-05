@@ -44,7 +44,7 @@ import scala.jdk.CollectionConverters._
 class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
   def generateConfigs = {
-    val props = TestUtils.createBrokerConfig(1, zkConnectOrNull)
+    val props = TestUtils.createBrokerConfig(1, null)
     props.setProperty(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false")
     List(KafkaConfig.fromProps(props))
   }
@@ -129,7 +129,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val version = ApiKeys.PRODUCE.latestVersion: Short
     val (serializedBytes, responseHeaderVersion) = {
       val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, version, "", correlationId)
-      val request = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val request = requests.ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(topicPartition.topic()).setPartitionData(Collections.singletonList(

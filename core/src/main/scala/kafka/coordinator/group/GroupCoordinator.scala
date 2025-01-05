@@ -38,6 +38,7 @@ import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, GroupJoinKe
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
 
+import java.util.concurrent.CompletableFuture
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.math.max
 
@@ -931,7 +932,7 @@ private[group] class GroupCoordinator(
               offsetTopicPartition, offsetMetadata, newRequestLocal, responseCallback, Some(verificationGuard))
           }
         }
-        val transactionSupportedOperation = if (apiVersion >= 4) genericError else defaultError
+        val transactionSupportedOperation = AddPartitionsToTxnManager.txnOffsetCommitRequestVersionToTransactionSupportedOperation(apiVersion)
         groupManager.replicaManager.maybeStartTransactionVerificationForPartition(
           topicPartition = offsetTopicPartition,
           transactionalId,
@@ -982,7 +983,7 @@ private[group] class GroupCoordinator(
 
   def scheduleHandleTxnCompletion(producerId: Long,
                                   offsetsPartitions: Iterable[TopicPartition],
-                                  transactionResult: TransactionResult): Unit = {
+                                  transactionResult: TransactionResult): CompletableFuture[Void] = {
     require(offsetsPartitions.forall(_.topic == Topic.GROUP_METADATA_TOPIC_NAME))
     val isCommit = transactionResult == TransactionResult.COMMIT
     groupManager.scheduleHandleTxnCompletion(producerId, offsetsPartitions.map(_.partition).toSet, isCommit)
@@ -1138,15 +1139,20 @@ private[group] class GroupCoordinator(
     }
   }
 
-  def handleDescribeGroup(groupId: String): (Errors, GroupSummary) = {
+  def handleDescribeGroup(groupId: String, apiVersion: Short): (Errors, Option[String], GroupSummary) = {
     validateGroupStatus(groupId, ApiKeys.DESCRIBE_GROUPS) match {
-      case Some(error) => (error, GroupCoordinator.EmptyGroup)
+      case Some(error) => (error, None, GroupCoordinator.EmptyGroup)
       case None =>
         groupManager.getGroup(groupId) match {
-          case None => (Errors.NONE, GroupCoordinator.DeadGroup)
+          case None =>
+            if (apiVersion >= 6) {
+              (Errors.GROUP_ID_NOT_FOUND, Some(s"Group $groupId not found."), GroupCoordinator.DeadGroup)
+            } else {
+              (Errors.NONE, None, GroupCoordinator.DeadGroup)
+            }
           case Some(group) =>
             group.inLock {
-              (Errors.NONE, group.summary)
+              (Errors.NONE, None, group.summary)
             }
         }
     }
@@ -1378,68 +1384,70 @@ private[group] class GroupCoordinator(
           info(s"Static member which joins during Stable stage and doesn't affect selectProtocol will not trigger rebalance.")
           val groupAssignment: Map[String, Array[Byte]] = group.allMemberMetadata.map(member => member.memberId -> member.assignment).toMap
           groupManager.storeGroup(group, groupAssignment, error => {
-            if (error != Errors.NONE) {
-              warn(s"Failed to persist metadata for group ${group.groupId}: ${error.message}")
+            group.inLock {
+              if (error != Errors.NONE) {
+                warn(s"Failed to persist metadata for group ${group.groupId}: ${error.message}")
 
-              // Failed to persist member.id of the given static member, revert the update of the static member in the group.
-              group.updateMember(knownStaticMember, oldProtocols, oldRebalanceTimeoutMs, oldSessionTimeoutMs, null)
-              val oldMember = group.replaceStaticMember(groupInstanceId, newMemberId, oldMemberId)
-              completeAndScheduleNextHeartbeatExpiration(group, oldMember)
-              responseCallback(JoinGroupResult(
-                List.empty,
-                memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID,
-                generationId = group.generationId,
-                protocolType = group.protocolType,
-                protocolName = group.protocolName,
-                leaderId = currentLeader,
-                skipAssignment = false,
-                error = error
-              ))
-            } else if (supportSkippingAssignment) {
-              // Starting from version 9 of the JoinGroup API, static members are able to
-              // skip running the assignor based on the `SkipAssignment` field. We leverage
-              // this to tell the leader that it is the leader of the group but by skipping
-              // running the assignor while the group is in stable state.
-              // Notes:
-              // 1) This allows the leader to continue monitoring metadata changes for the
-              // group. Note that any metadata changes happening while the static leader is
-              // down won't be noticed.
-              // 2) The assignors are not idempotent nor free from side effects. This is why
-              // we skip entirely the assignment step as it could generate a different group
-              // assignment which would be ignored by the group coordinator because the group
-              // is the stable state.
-              val isLeader = group.isLeader(newMemberId)
-              group.maybeInvokeJoinCallback(member, JoinGroupResult(
-                members = if (isLeader) {
-                  group.currentMemberMetadata
-                } else {
-                  List.empty
-                },
-                memberId = newMemberId,
-                generationId = group.generationId,
-                protocolType = group.protocolType,
-                protocolName = group.protocolName,
-                leaderId = group.leaderOrNull,
-                skipAssignment = isLeader,
-                error = Errors.NONE
-              ))
-            } else {
-              // Prior to version 9 of the JoinGroup API, we wanted to avoid current leader
-              // performing trivial assignment while the group is in stable stage, because
-              // the new assignment in leader's next sync call won't be broadcast by a stable group.
-              // This could be guaranteed by always returning the old leader id so that the current
-              // leader won't assume itself as a leader based on the returned message, since the new
-              // member.id won't match returned leader id, therefore no assignment will be performed.
-              group.maybeInvokeJoinCallback(member, JoinGroupResult(
-                members = List.empty,
-                memberId = newMemberId,
-                generationId = group.generationId,
-                protocolType = group.protocolType,
-                protocolName = group.protocolName,
-                leaderId = currentLeader,
-                skipAssignment = false,
-                error = Errors.NONE
-              ))
+                // Failed to persist member.id of the given static member, revert the update of the static member in the group.
+                group.updateMember(knownStaticMember, oldProtocols, oldRebalanceTimeoutMs, oldSessionTimeoutMs, null)
+                val oldMember = group.replaceStaticMember(groupInstanceId, newMemberId, oldMemberId)
+                completeAndScheduleNextHeartbeatExpiration(group, oldMember)
+                responseCallback(JoinGroupResult(
+                  List.empty,
+                  memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                  generationId = group.generationId,
+                  protocolType = group.protocolType,
+                  protocolName = group.protocolName,
+                  leaderId = currentLeader,
+                  skipAssignment = false,
+                  error = error
+                ))
+              } else if (supportSkippingAssignment) {
+                // Starting from version 9 of the JoinGroup API, static members are able to
+                // skip running the assignor based on the `SkipAssignment` field. We leverage
+                // this to tell the leader that it is the leader of the group but by skipping
+                // running the assignor while the group is in stable state.
+                // Notes:
+                // 1) This allows the leader to continue monitoring metadata changes for the
+                // group. Note that any metadata changes happening while the static leader is
+                // down won't be noticed.
+                // 2) The assignors are not idempotent nor free from side effects. This is why
+                // we skip entirely the assignment step as it could generate a different group
+                // assignment which would be ignored by the group coordinator because the group
+                // is the stable state.
+                val isLeader = group.isLeader(newMemberId)
+                group.maybeInvokeJoinCallback(member, JoinGroupResult(
+                  members = if (isLeader) {
+                    group.currentMemberMetadata
+                  } else {
+                    List.empty
+                  },
+                  memberId = newMemberId,
+                  generationId = group.generationId,
+                  protocolType = group.protocolType,
+                  protocolName = group.protocolName,
+                  leaderId = group.leaderOrNull,
+                  skipAssignment = isLeader,
+                  error = Errors.NONE
+                ))
+              } else {
+                // Prior to version 9 of the JoinGroup API, we wanted to avoid current leader
+                // performing trivial assignment while the group is in stable stage, because
+                // the new assignment in leader's next sync call won't be broadcast by a stable group.
+                // This could be guaranteed by always returning the old leader id so that the current
+                // leader won't assume itself as a leader based on the returned message, since the new
+                // member.id won't match returned leader id, therefore no assignment will be performed.
+                group.maybeInvokeJoinCallback(member, JoinGroupResult(
+                  members = List.empty,
+                  memberId = newMemberId,
+                  generationId = group.generationId,
+                  protocolType = group.protocolType,
+                  protocolName = group.protocolName,
+                  leaderId = currentLeader,
+                  skipAssignment = false,
+                  error = Errors.NONE
+                ))
+              }
             }
           }, requestLocal)
         } else {

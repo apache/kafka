@@ -50,8 +50,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
@@ -132,68 +132,71 @@ class DefaultStatePersisterTest {
         int incorrectPartition = -1;
 
         // Request Parameters are null
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.writeState(null);
-        });
+        DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        CompletableFuture<WriteShareGroupStateResult> result = defaultStatePersister.writeState(null);
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // groupTopicPartitionData is null
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder().setGroupTopicPartitionData(null).build());
-        });
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder().setGroupTopicPartitionData(null).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // groupId is null
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
-                    .setGroupId(null).build()).build());
-        });
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
+                .setGroupId(null).build()).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // topicsData is empty
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
-                    .setGroupId(groupId)
-                    .setTopicsData(Collections.emptyList()).build()).build());
-        });
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
+                .setGroupId(groupId)
+                .setTopicsData(Collections.emptyList()).build()).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // topicId is null
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
-                    .setGroupId(groupId)
-                    .setTopicsData(Collections.singletonList(new TopicData<>(null,
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
+                .setGroupId(groupId)
+                .setTopicsData(Collections.singletonList(new TopicData<>(null,
                         Collections.singletonList(PartitionFactory.newPartitionStateBatchData(
-                            partition, 1, 0, 0, null))))
-                    ).build()).build());
-        });
+                            partition, 1, 0, 0, null))))).build()).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // partitionData is empty
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
-                    .setGroupId(groupId)
-                    .setTopicsData(Collections.singletonList(new TopicData<>(topicId,
-                        Collections.emptyList()))
-                    ).build()).build());
-        });
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
+                .setGroupId(groupId)
+                .setTopicsData(Collections.singletonList(new TopicData<>(topicId, Collections.emptyList()))).build()).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // partition value is incorrect
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
-                    .setGroupId(groupId)
-                    .setTopicsData(Collections.singletonList(new TopicData<>(topicId,
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
+                .setGroupId(groupId)
+                .setTopicsData(Collections.singletonList(new TopicData<>(topicId,
                         Collections.singletonList(PartitionFactory.newPartitionStateBatchData(
-                            incorrectPartition, 1, 0, 0, null))))
-                    ).build()).build());
-        });
+                            incorrectPartition, 1, 0, 0, null))))).build()).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
     }
 
     @Test
@@ -205,68 +208,70 @@ class DefaultStatePersisterTest {
         int incorrectPartition = -1;
 
         // Request Parameters are null
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.readState(null);
-        });
+        DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        CompletableFuture<ReadShareGroupStateResult> result = defaultStatePersister.readState(null);
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // groupTopicPartitionData is null
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder().setGroupTopicPartitionData(null).build());
-        });
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder().setGroupTopicPartitionData(null).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // groupId is null
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
-                    .setGroupId(null).build()).build());
-        });
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
+                .setGroupId(null).build()).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // topicsData is empty
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
-                    .setGroupId(groupId)
-                    .setTopicsData(Collections.emptyList()).build()).build());
-        });
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
+                .setGroupId(groupId)
+                .setTopicsData(Collections.emptyList()).build()).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // topicId is null
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
-                    .setGroupId(groupId)
-                    .setTopicsData(Collections.singletonList(new TopicData<>(null,
-                        Collections.singletonList(PartitionFactory.newPartitionIdLeaderEpochData(
-                            partition, 1))))
-                    ).build()).build());
-        });
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
+                .setGroupId(groupId)
+                .setTopicsData(Collections.singletonList(new TopicData<>(null,
+                        Collections.singletonList(PartitionFactory.newPartitionIdLeaderEpochData(partition, 1))))
+                ).build()).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // partitionData is empty
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
-                    .setGroupId(groupId)
-                    .setTopicsData(Collections.singletonList(new TopicData<>(topicId,
-                        Collections.emptyList()))
-                    ).build()).build());
-        });
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
+                .setGroupId(groupId)
+                .setTopicsData(Collections.singletonList(new TopicData<>(topicId, Collections.emptyList()))).build()).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
 
         // partition value is incorrect
-        assertThrows(IllegalArgumentException.class, () -> {
-            DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
-            defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
-                    .setGroupId(groupId)
-                    .setTopicsData(Collections.singletonList(new TopicData<>(topicId,
-                        Collections.singletonList(PartitionFactory.newPartitionIdLeaderEpochData(
-                            incorrectPartition, 1))))
-                    ).build()).build());
-        });
+        defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
+        result = defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
+                .setGroupId(groupId)
+                .setTopicsData(Collections.singletonList(new TopicData<>(topicId,
+                        Collections.singletonList(PartitionFactory.newPartitionIdLeaderEpochData(incorrectPartition, 1))))).build()).build());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(result, IllegalArgumentException.class);
     }
 
     @Test

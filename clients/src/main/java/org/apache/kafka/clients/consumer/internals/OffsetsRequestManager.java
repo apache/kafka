@@ -472,20 +472,20 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * this function (ex. {@link org.apache.kafka.common.errors.TopicAuthorizationException})
      */
     CompletableFuture<Void> resetPositionsIfNeeded() {
-        Map<TopicPartition, Long> offsetResetTimestamps;
+        Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap;
 
         try {
-            offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
+            partitionAutoOffsetResetStrategyMap = offsetFetcherUtils.getOffsetResetStrategyForPartitions();
         } catch (Exception e) {
             CompletableFuture<Void> result = new CompletableFuture<>();
             result.completeExceptionally(e);
             return result;
         }
 
-        if (offsetResetTimestamps.isEmpty())
+        if (partitionAutoOffsetResetStrategyMap.isEmpty())
             return CompletableFuture.completedFuture(null);
 
-        return sendListOffsetsRequestsAndResetPositions(offsetResetTimestamps);
+        return sendListOffsetsRequestsAndResetPositions(partitionAutoOffsetResetStrategyMap);
     }
 
     /**
@@ -652,12 +652,14 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * partitions. Use the retrieved offsets to reset positions in the subscription state.
      * This also adds the request to the list of unsentRequests.
      *
-     * @param timestampsToSearch the mapping between partitions and target time
+     * @param partitionAutoOffsetResetStrategyMap the mapping between partitions and AutoOffsetResetStrategy
      * @return A {@link CompletableFuture} which completes when the requests are
      * complete.
      */
     private CompletableFuture<Void> sendListOffsetsRequestsAndResetPositions(
-            final Map<TopicPartition, Long> timestampsToSearch) {
+            final Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap) {
+        Map<TopicPartition, Long> timestampsToSearch = partitionAutoOffsetResetStrategyMap.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().timestamp().get()));
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(timestampsToSearch, Optional.empty());
 
@@ -677,8 +679,8 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             partialResult.whenComplete((result, error) -> {
                 if (error == null) {
-                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(resetTimestamps,
-                            result);
+                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(result,
+                            partitionAutoOffsetResetStrategyMap);
                 } else {
                     RuntimeException e;
                     if (error instanceof RuntimeException) {

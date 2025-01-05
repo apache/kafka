@@ -297,7 +297,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
-                keySerializer, valueSerializer, null, null, null, Time.SYSTEM);
+                keySerializer, valueSerializer, null, null, null, new ApiVersions(), Time.SYSTEM);
     }
 
     /**
@@ -326,23 +326,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this(Utils.propsToMap(properties), keySerializer, valueSerializer);
     }
 
-    /**
-     * Check if partitioner is deprecated and log a warning if it is.
-     */
-    @SuppressWarnings("deprecation")
-    private void warnIfPartitionerDeprecated() {
-        // Using DefaultPartitioner and UniformStickyPartitioner is deprecated, see KIP-794.
-        if (partitioner instanceof org.apache.kafka.clients.producer.internals.DefaultPartitioner) {
-            log.warn("DefaultPartitioner is deprecated.  Please clear " + ProducerConfig.PARTITIONER_CLASS_CONFIG
-                    + " configuration setting to get the default partitioning behavior");
-        }
-        if (partitioner instanceof org.apache.kafka.clients.producer.UniformStickyPartitioner) {
-            log.warn("UniformStickyPartitioner is deprecated.  Please clear " + ProducerConfig.PARTITIONER_CLASS_CONFIG
-                    + " configuration setting and set " + ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG
-                    + " to 'true' to get the uniform sticky partitioning behavior");
-        }
-    }
-
     // visible for testing
     @SuppressWarnings({"unchecked", "this-escape"})
     KafkaProducer(ProducerConfig config,
@@ -351,6 +334,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   ProducerMetadata metadata,
                   KafkaClient kafkaClient,
                   ProducerInterceptors<K, V> interceptors,
+                  ApiVersions apiVersions,
                   Time time) {
         try {
             this.producerConfig = config;
@@ -384,7 +368,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     ProducerConfig.PARTITIONER_CLASS_CONFIG,
                     Partitioner.class,
                     Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
-            warnIfPartitionerDeprecated();
             this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             long retryBackoffMaxMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
@@ -423,7 +406,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
 
-            this.apiVersions = new ApiVersions();
+            this.apiVersions = apiVersions;
             this.transactionManager = configureTransactionState(config, logContext);
             // There is no need to do work required for adaptive partitioning, if we use a custom partitioner.
             boolean enableAdaptivePartitioning = partitioner == null &&
@@ -664,6 +647,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
         producerMetrics.recordInit(time.nanoseconds() - now);
+        transactionManager.maybeUpdateTransactionV2Enabled(true);
     }
 
     /**
@@ -1020,7 +1004,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             setReadOnly(record.headers());
             Header[] headers = record.headers().toArray();
 
-            int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
+            int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
                     compression.type(), serializedKey, serializedValue, headers);
             ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
@@ -1218,11 +1202,19 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * flush all buffered records before performing the commit. This ensures that all the {@link #send(ProducerRecord)}
      * calls made since the previous {@link #beginTransaction()} are completed before the commit.
      * </p>
+     * <p>
+     * <b>Important:</b> This method should not be used within the callback provided to
+     * {@link #send(ProducerRecord, Callback)}. Invoking <code>flush()</code> in this context will cause a deadlock.
+     * </p>
      *
      * @throws InterruptException If the thread is interrupted while blocked
      */
     @Override
     public void flush() {
+        if (Thread.currentThread() == this.ioThread) {
+            log.error("KafkaProducer.flush() invocation inside a callback will cause a deadlock.");
+        }
+
         log.trace("Flushing accumulated records in producer.");
 
         long start = time.nanoseconds();
@@ -1287,9 +1279,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public void registerMetricForSubscription(KafkaMetric metric) {
-        if (clientTelemetryReporter.isPresent()) {
-            ClientTelemetryReporter reporter = clientTelemetryReporter.get();
-            reporter.metricChange(metric);
+        if (!metrics().containsKey(metric.metricName())) {
+            clientTelemetryReporter.ifPresent(reporter -> reporter.metricChange(metric));
+        }  else {
+            log.debug("Skipping registration for metric {}. Existing producer metrics cannot be overwritten.", metric.metricName());
         }
     }
 
@@ -1304,9 +1297,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public void unregisterMetricFromSubscription(KafkaMetric metric) {
-        if (clientTelemetryReporter.isPresent()) {
-            ClientTelemetryReporter reporter = clientTelemetryReporter.get();
-            reporter.metricRemoval(metric);
+        if (!metrics().containsKey(metric.metricName())) {
+            clientTelemetryReporter.ifPresent(reporter -> reporter.metricRemoval(metric));
+        } else {
+            log.debug("Skipping unregistration for metric {}. Existing producer metrics cannot be removed.", metric.metricName());
         }
     }
 
@@ -1505,6 +1499,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     // Visible for testing
     String getClientId() {
         return clientId;
+    }
+
+    // Visible for testing
+    TransactionManager getTransactionManager() {
+        return transactionManager;
     }
 
     private static class ClusterAndWaitTime {

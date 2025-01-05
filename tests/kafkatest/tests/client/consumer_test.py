@@ -39,7 +39,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 consumer.stop_node(node, clean_shutdown)
 
                 wait_until(lambda: len(consumer.dead_nodes()) == 1,
-                           timeout_sec=self.session_timeout_sec+5,
+                           timeout_sec=60,
                            err_msg="Timed out waiting for the consumer to shutdown")
 
                 consumer.start_node(node)
@@ -89,7 +89,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         Verify correct consumer behavior when the brokers are consecutively restarted.
 
         Setup: single Kafka cluster with one producer writing messages to a single topic with one
-        partition, an a set of consumers in the same group reading from the same topic.
+        partition, a set of consumers in the same group reading from the same topic.
 
         - Start a producer which continues producing new messages throughout the test.
         - Start up the consumers and wait until they've joined the group.
@@ -101,15 +101,10 @@ class OffsetValidationTest(VerifiableConsumerTest):
         partition = TopicPartition(self.TOPIC, 0)
 
         producer = self.setup_producer(self.TOPIC)
-        # The consumers' session timeouts must exceed the time it takes for a broker to roll.  Consumers are likely
-        # to see cluster metadata consisting of just a single alive broker in the case where the cluster has just 2
-        # brokers and the cluster is rolling (which is what is happening here).  When the consumer sees a single alive
-        # broker, and then that broker rolls, the consumer will be unable to connect to the cluster until that broker
-        # completes its roll.  In the meantime, the consumer group will move to the group coordinator on the other
-        # broker, and that coordinator will fail the consumer and trigger a group rebalance if its session times out.
-        # This test is asserting that no rebalances occur, so we increase the session timeout for this to be the case.
-        self.session_timeout_sec = 30
-        consumer = self.setup_consumer(self.TOPIC, group_protocol=group_protocol)
+        # Due to KIP-899, which rebootstrap is performed when there are no available brokers in the current metadata.
+        # We disable rebootstrapping by setting `metadata.recovery.strategy=none` for the consumer, as the test expects no metadata changes.
+        # see KAFKA-18194
+        consumer = self.setup_consumer(self.TOPIC, group_protocol=group_protocol, prop_file="metadata.recovery.strategy=none")
 
         producer.start()
         self.await_produced_messages(producer)
@@ -229,7 +224,6 @@ class OffsetValidationTest(VerifiableConsumerTest):
         producer.start()
         self.await_produced_messages(producer)
 
-        self.session_timeout_sec = 60
         consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership, group_protocol=group_protocol, 
                                        assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor")
 
@@ -295,7 +289,6 @@ class OffsetValidationTest(VerifiableConsumerTest):
         producer = self.setup_producer(self.TOPIC)
         producer.start()
         self.await_produced_messages(producer)
-        self.session_timeout_sec = 60
         consumer = self.setup_consumer(self.TOPIC, static_membership=True, group_protocol=group_protocol)
         consumer.start()
         self.await_all_members(consumer)
@@ -340,7 +333,6 @@ class OffsetValidationTest(VerifiableConsumerTest):
         producer.start()
         self.await_produced_messages(producer)
 
-        self.session_timeout_sec = 60
         consumer = self.setup_consumer(self.TOPIC, static_membership=True, group_protocol=group_protocol)
 
         self.num_consumers = num_conflict_consumers
@@ -372,7 +364,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 # Stop existing nodes, so conflicting ones should be able to join.
                 consumer.stop_all()
                 wait_until(lambda: len(consumer.dead_nodes()) == len(consumer.nodes),
-                           timeout_sec=self.session_timeout_sec+5,
+                           timeout_sec=60,
                            err_msg="Timed out waiting for the consumer to shutdown")
                 conflict_consumer.start()
                 self.await_members(conflict_consumer, num_conflict_consumers)
@@ -383,13 +375,13 @@ class OffsetValidationTest(VerifiableConsumerTest):
             conflict_consumer.start()
 
             wait_until(lambda: len(consumer.joined_nodes()) + len(conflict_consumer.joined_nodes()) == len(consumer.nodes),
-                       timeout_sec=self.session_timeout_sec*2,
+                       timeout_sec=60,
                        err_msg="Timed out waiting for consumers to join, expected total %d joined, but only see %d joined from "
                                "normal consumer group and %d from conflict consumer group" % \
                                (len(consumer.nodes), len(consumer.joined_nodes()), len(conflict_consumer.joined_nodes()))
                        )
             wait_until(lambda: len(consumer.dead_nodes()) + len(conflict_consumer.dead_nodes()) == len(conflict_consumer.nodes),
-                       timeout_sec=self.session_timeout_sec*2,
+                       timeout_sec=60,
                        err_msg="Timed out waiting for fenced consumers to die, expected total %d dead, but only see %d dead in "
                                "normal consumer group and %d dead in conflict consumer group" % \
                                (len(conflict_consumer.nodes), len(consumer.dead_nodes()), len(conflict_consumer.dead_nodes()))
@@ -427,7 +419,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         # stop the partition owner and await its shutdown
         consumer.kill_node(partition_owner, clean_shutdown=clean_shutdown)
         wait_until(lambda: len(consumer.joined_nodes()) == (self.num_consumers - 1) and consumer.owner(partition) is not None,
-                   timeout_sec=self.session_timeout_sec*2+5,
+                   timeout_sec=60,
                    err_msg="Timed out waiting for consumer to close")
 
         # ensure that the remaining consumer does some work after rebalancing

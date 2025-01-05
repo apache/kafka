@@ -61,20 +61,13 @@ object Kafka extends Logging {
     props
   }
 
-  // For Zk mode, the API forwarding is currently enabled only under migration flag. We can
-  // directly do a static IBP check to see API forwarding is enabled here because IBP check is
-  // static in Zk mode.
-  private def enableApiForwarding(config: KafkaConfig) =
-    config.migrationEnabled && config.interBrokerProtocolVersion.isApiForwardingEnabled
-
   private def buildServer(props: Properties): Server = {
     val config = KafkaConfig.fromProps(props, doLog = false)
     if (config.requiresZookeeper) {
       new KafkaServer(
         config,
         Time.SYSTEM,
-        threadNamePrefix = None,
-        enableForwarding = enableApiForwarding(config)
+        threadNamePrefix = None
       )
     } else {
       new KafkaRaftServer(

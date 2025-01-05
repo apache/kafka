@@ -19,14 +19,22 @@
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ClusterId", "type": "string", "versions": "0" },
-    { "name": "LeaderId", "type": "int32", "versions": "0+", "default": "-1" },
-    { "name": "LeaderEpoch", "type": "int32", "versions": "0+", "default": "-1" },
-    { "name": "VotedId", "type": "int32", "versions": "0+", "default": "-1" },
-    { "name": "VotedDirectoryId", "type": "uuid", "versions": "1+" },
-    { "name": "AppliedOffset", "type": "int64", "versions": "0" },
-    { "name": "CurrentVoters", "type": "[]Voter", "versions": "0", "nullableVersions": "0", "fields": [
-      { "name": "VoterId", "type": "int32", "versions": "0" }
+    { "name": "ClusterId", "type": "string", "versions": "0",
+      "about": "The cluster id."},
+    { "name": "LeaderId", "type": "int32", "versions": "0+", "default": "-1",
+      "about": "The leader id."},
+    { "name": "LeaderEpoch", "type": "int32", "versions": "0+", "default": "-1",
+      "about": "The leader epoch."},
+    { "name": "VotedId", "type": "int32", "versions": "0+", "default": "-1",
+      "about": "The voted id."},
+    { "name": "VotedDirectoryId", "type": "uuid", "versions": "1+",
+      "about": "The voted directory id."},
+    { "name": "AppliedOffset", "type": "int64", "versions": "0",
+      "about": "The applied offset."},
+    { "name": "CurrentVoters", "type": "[]Voter", "versions": "0", "nullableVersions": "0",
+      "about": "The current voters.", "fields": [
+      { "name": "VoterId", "type": "int32", "versions": "0",
+        "about": "The voter id."}
     ]}
   ]
 }

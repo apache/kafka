@@ -17,16 +17,25 @@
 package kafka.admin;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
+import org.apache.kafka.clients.admin.AlterConfigsOptions;
+import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -57,9 +66,11 @@ import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBA
 import static org.apache.kafka.server.config.ServerConfigs.MESSAGE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 
 @ExtendWith(value = ClusterTestExtensions.class)
 public class ConfigCommandIntegrationTest {
@@ -159,11 +170,11 @@ public class ConfigCommandIntegrationTest {
                     singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"), alterOpts);
             // Per-broker config configured at default cluster-level should fail
             assertThrows(ExecutionException.class,
-                    () -> alterConfigWithKraft(client, Optional.empty(),
+                    () -> alterConfigWithAdmin(client, Optional.empty(),
                             singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"), alterOpts));
             deleteAndVerifyConfigValue(client, defaultBrokerId,
                     singleton("listener.name.internal.ssl.keystore.location"), false, alterOpts);
-            alterConfigWithKraft(client, Optional.of(defaultBrokerId),
+            alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
                     singletonMap("listener.name.external.ssl.keystore.password", "secret"), alterOpts);
 
             // Password config update with encoder secret should succeed and encoded password must be stored in ZK
@@ -175,7 +186,7 @@ public class ConfigCommandIntegrationTest {
 
             // Password config update at default cluster-level should fail
             assertThrows(ExecutionException.class,
-                    () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId), configs, alterOpts));
+                    () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId), configs, alterOpts));
         }
     }
 
@@ -204,7 +215,7 @@ public class ConfigCommandIntegrationTest {
             deleteAndVerifyGroupConfigValue(client, defaultGroupName, configs, alterOpts);
 
             // Unknown config configured should fail
-            assertThrows(ExecutionException.class, () -> alterConfigWithKraft(client, singletonMap("unknown.config", "20000"), alterOpts));
+            assertThrows(ExecutionException.class, () -> alterConfigWithAdmin(client, singletonMap("unknown.config", "20000"), alterOpts));
         }
     }
 
@@ -232,7 +243,7 @@ public class ConfigCommandIntegrationTest {
             deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs.keySet(), alterOpts);
 
             // Unknown config configured should fail
-            assertThrows(ExecutionException.class, () -> alterConfigWithKraft(client, singletonMap("unknown.config", "20000"), alterOpts));
+            assertThrows(ExecutionException.class, () -> alterConfigWithAdmin(client, singletonMap("unknown.config", "20000"), alterOpts));
         }
     }
 
@@ -242,13 +253,13 @@ public class ConfigCommandIntegrationTest {
 
         try (Admin client = cluster.admin()) {
             assertThrows(ExecutionException.class,
-                    () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
+                    () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
                             singletonMap(AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false"), alterOpts));
             assertThrows(ExecutionException.class,
-                    () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
+                    () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
                             singletonMap(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, "false"), alterOpts));
             assertThrows(ExecutionException.class,
-                    () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
+                    () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
                             singletonMap("broker.id", "1"), alterOpts));
         }
     }
@@ -277,7 +288,7 @@ public class ConfigCommandIntegrationTest {
                     singletonMap(listenerName + "ssl.truststore.type", "PKCS12"), alterOpts);
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
                     singletonMap(listenerName + "ssl.truststore.location", "/temp/test.jks"), alterOpts);
-            alterConfigWithKraft(client, Optional.of(defaultBrokerId),
+            alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
                     singletonMap(listenerName + "ssl.truststore.password", "password"), alterOpts);
             verifyConfigSecretValue(client, Optional.of(defaultBrokerId),
                     singleton(listenerName + "ssl.truststore.password"));
@@ -290,14 +301,116 @@ public class ConfigCommandIntegrationTest {
 
         try (Admin client = cluster.admin()) {
             assertThrows(ExecutionException.class,
-                    () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
+                    () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
                             singletonMap(SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12"), alterOpts));
             assertThrows(ExecutionException.class,
-                    () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
+                    () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
                             singletonMap(SSL_TRUSTSTORE_LOCATION_CONFIG, "/temp/test.jks"), alterOpts));
             assertThrows(ExecutionException.class,
-                    () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
+                    () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
                             singletonMap(SSL_TRUSTSTORE_PASSWORD_CONFIG, "password"), alterOpts));
+        }
+    }
+
+    @ClusterTest
+    public void testUpdateInvalidBrokerConfigs() {
+        updateAndCheckInvalidBrokerConfig(Optional.empty());
+        updateAndCheckInvalidBrokerConfig(Optional.of(cluster.anyBrokerSocketServer().config().brokerId() + ""));
+    }
+
+    private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) {
+        List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
+        try (Admin client = cluster.admin()) {
+            alterConfigWithAdmin(client, brokerIdOrDefault, Collections.singletonMap("invalid", "2"), alterOpts);
+
+            Stream<String> describeCommand = Stream.concat(
+                    Stream.concat(
+                            Stream.of("--bootstrap-server", cluster.bootstrapServers()),
+                            Stream.of(entityOp(brokerIdOrDefault).toArray(new String[0]))),
+                    Stream.of("--entity-type", "brokers", "--describe"));
+            String describeResult = captureStandardStream(false, run(describeCommand));
+
+            // We will treat unknown config as sensitive
+            assertTrue(describeResult.contains("sensitive=true"), describeResult);
+            // Sensitive config will not return
+            assertTrue(describeResult.contains("invalid=null"), describeResult);
+        }
+    }
+
+    @ClusterTest
+    public void testUpdateInvalidTopicConfigs() throws ExecutionException, InterruptedException {
+        List<String> alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "topics", "--alter");
+        try (Admin client = cluster.admin()) {
+            client.createTopics(Collections.singletonList(new NewTopic("test-config-topic", 1, (short) 1))).all().get();
+            assertInstanceOf(
+                    InvalidConfigurationException.class,
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> ConfigCommand.alterConfig(
+                                    client,
+                                    new ConfigCommand.ConfigCommandOptions(
+                                            toArray(alterOpts,
+                                                    asList("--add-config", "invalid=2", "--entity-type", "topics", "--entity-name", "test-config-topic"))))
+                    ).getCause()
+            );
+        }
+    }
+
+    // Test case from KAFKA-13788
+    @ClusterTest(serverProperties = {
+        // Must be at greater than 1MB per cleaner thread, set to 2M+2 so that we can set 2 cleaner threads.
+        @ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "2097154"),
+    })
+    public void testUpdateBrokerConfigNotAffectedByInvalidConfig() {
+        try (Admin client = cluster.admin()) {
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(
+                    toArray(asList("--bootstrap-server", cluster.bootstrapServers(),
+                            "--alter",
+                            "--add-config", "log.cleaner.threadzz=2",
+                            "--entity-type", "brokers",
+                            "--entity-default"))));
+
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(
+                    toArray(asList("--bootstrap-server", cluster.bootstrapServers(),
+                            "--alter",
+                            "--add-config", "log.cleaner.threads=2",
+                            "--entity-type", "brokers",
+                            "--entity-default"))));
+            kafka.utils.TestUtils.waitUntilTrue(
+                    () -> cluster.brokerSocketServers().stream().allMatch(broker -> broker.config().getInt("log.cleaner.threads") == 2),
+                    () -> "Timeout waiting for topic config propagating to broker",
+                    org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
+                    100L);
+        }
+    }
+
+    @ClusterTest(
+         // Must be at greater than 1MB per cleaner thread, set to 2M+2 so that we can set 2 cleaner threads.
+         serverProperties = {@ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "2097154")},
+         // Zk code has been removed, use kraft and mockito to mock this situation
+         metadataVersion = MetadataVersion.IBP_3_3_IV0
+    )
+    public void testUnsupportedVersionException() {
+        try (Admin client = cluster.admin()) {
+            Admin spyAdmin = Mockito.spy(client);
+
+            AlterConfigsResult mockResult = AdminClientTestUtils.alterConfigsResult(
+                    new ConfigResource(ConfigResource.Type.BROKER, ""), new UnsupportedVersionException("simulated error"));
+            Mockito.doReturn(mockResult).when(spyAdmin)
+                    .incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
+            assertEquals(
+                    "The INCREMENTAL_ALTER_CONFIGS API is not supported by the cluster. The API is supported starting from version 2.3.0. You may want to use an older version of this tool to interact with your cluster, or upgrade your brokers to version 2.3.0 or newer to avoid this error.",
+                    assertThrows(UnsupportedVersionException.class, () -> {
+                        ConfigCommand.alterConfig(spyAdmin, new ConfigCommand.ConfigCommandOptions(
+                                toArray(asList(
+                                        "--bootstrap-server", cluster.bootstrapServers(),
+                                        "--alter",
+                                        "--add-config", "log.cleaner.threads=2",
+                                        "--entity-type", "brokers",
+                                        "--entity-default"))));
+                    }).getMessage()
+            );
+            Mockito.verify(spyAdmin).incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
         }
     }
 
@@ -333,7 +446,7 @@ public class ConfigCommandIntegrationTest {
                                       Optional<String> brokerId,
                                       Map<String, String> config,
                                       List<String> alterOpts) throws Exception {
-        alterConfigWithKraft(client, brokerId, config, alterOpts);
+        alterConfigWithAdmin(client, brokerId, config, alterOpts);
         verifyConfig(client, brokerId, config);
     }
 
@@ -341,7 +454,7 @@ public class ConfigCommandIntegrationTest {
                                            String groupName,
                                            Map<String, String> config,
                                            List<String> alterOpts) throws Exception {
-        alterConfigWithKraft(client, config, alterOpts);
+        alterConfigWithAdmin(client, config, alterOpts);
         verifyGroupConfig(client, groupName, config);
     }
 
@@ -349,11 +462,11 @@ public class ConfigCommandIntegrationTest {
                                                    String clientMetricsName,
                                                    Map<String, String> config,
                                                    List<String> alterOpts) throws Exception {
-        alterConfigWithKraft(client, config, alterOpts);
+        alterConfigWithAdmin(client, config, alterOpts);
         verifyClientMetricsConfig(client, clientMetricsName, config);
     }
 
-    private void alterConfigWithKraft(Admin client, Optional<String> resourceName, Map<String, String> config, List<String> alterOpts) {
+    private void alterConfigWithAdmin(Admin client, Optional<String> resourceName, Map<String, String> config, List<String> alterOpts) {
         String configStr = transferConfigMapToString(config);
         List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
         ConfigCommand.ConfigCommandOptions addOpts =
@@ -365,7 +478,7 @@ public class ConfigCommandIntegrationTest {
         ConfigCommand.alterConfig(client, addOpts);
     }
 
-    private void alterConfigWithKraft(Admin client, Map<String, String> config, List<String> alterOpts) {
+    private void alterConfigWithAdmin(Admin client, Map<String, String> config, List<String> alterOpts) {
         String configStr = transferConfigMapToString(config);
         List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
         ConfigCommand.ConfigCommandOptions addOpts =

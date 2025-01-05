@@ -181,7 +181,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * is thrown immediately, and is not affected by <code>connection.failed.authentication.delay.ms</code>.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testServerAuthenticationFailure(quorum: String, groupProtocol: String): Unit = {
     // Setup client with a non-existent service principal, so that server authentication fails on the client
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism, Some("another-kafka-service"))

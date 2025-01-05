@@ -19,7 +19,8 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
@@ -65,6 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -192,7 +194,7 @@ public class ApplicationEventProcessorTest {
     @Test
     public void testResetOffsetEvent() {
         Collection<TopicPartition> tp = Collections.singleton(new TopicPartition("topic", 0));
-        OffsetResetStrategy strategy = OffsetResetStrategy.LATEST;
+        AutoOffsetResetStrategy strategy = AutoOffsetResetStrategy.LATEST;
         ResetOffsetEvent event = new ResetOffsetEvent(tp, strategy, 12345);
 
         setupProcessor(false);
@@ -288,7 +290,7 @@ public class ApplicationEventProcessorTest {
 
     @Test
     public void testTopicSubscriptionChangeEventWithIllegalSubscriptionState() {
-        subscriptionState = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         Optional<ConsumerRebalanceListener> listener = Optional.of(new MockRebalanceListener());
         TopicSubscriptionChangeEvent event = new TopicSubscriptionChangeEvent(
             Set.of("topic1", "topic2"), listener, 12345);
@@ -334,8 +336,32 @@ public class ApplicationEventProcessorTest {
     }
 
     @Test
+    public void testTopicPatternSubscriptionTriggersJoin() {
+        TopicPatternSubscriptionChangeEvent event = new TopicPatternSubscriptionChangeEvent(
+            Pattern.compile("topic.*"), Optional.of(new MockRebalanceListener()), 12345);
+        setupProcessor(true);
+        Cluster cluster = mock(Cluster.class);
+        when(metadata.fetch()).thenReturn(cluster);
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+
+        // Initial subscription where no topics match the pattern. Membership manager
+        // should still be notified so it joins if not in the group (with empty subscription).
+        when(subscriptionState.subscribeFromPattern(any())).thenReturn(false);
+        processor.process(event);
+        verify(membershipManager).onSubscriptionUpdated();
+
+        clearInvocations(membershipManager);
+
+        // Subscription where some topics match so subscription is updated. Membership manager
+        // should be notified so it joins if not in the group.
+        when(subscriptionState.subscribeFromPattern(any())).thenReturn(true);
+        processor.process(event);
+        verify(membershipManager).onSubscriptionUpdated();
+    }
+
+    @Test
     public void testTopicPatternSubscriptionChangeEventWithIllegalSubscriptionState() {
-        subscriptionState = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         Optional<ConsumerRebalanceListener> listener = Optional.of(new MockRebalanceListener());
         TopicPatternSubscriptionChangeEvent event = new TopicPatternSubscriptionChangeEvent(
             Pattern.compile("topic.*"), listener, 12345);
@@ -355,11 +381,10 @@ public class ApplicationEventProcessorTest {
         UpdatePatternSubscriptionEvent event1 = new UpdatePatternSubscriptionEvent(12345);
 
         setupProcessor(true);
-
+        when(subscriptionState.hasPatternSubscription()).thenReturn(true);
         when(metadata.updateVersion()).thenReturn(0);
 
         processor.process(event1);
-        verify(subscriptionState, never()).hasPatternSubscription();
         assertDoesNotThrow(() -> event1.future().get());
 
         Cluster cluster = mock(Cluster.class);
@@ -377,11 +402,44 @@ public class ApplicationEventProcessorTest {
         UpdatePatternSubscriptionEvent event2 = new UpdatePatternSubscriptionEvent(12345);
         processor.process(event2);
         verify(metadata).requestUpdateForNewTopics();
-        verify(subscriptionState).hasPatternSubscription();
         verify(subscriptionState).subscribeFromPattern(topics);
         assertEquals(1, processor.metadataVersionSnapshot());
         verify(membershipManager).onSubscriptionUpdated();
         assertDoesNotThrow(() -> event2.future().get());
+    }
+
+    @Test
+    public void testR2JPatternSubscriptionEventSuccess() {
+        SubscriptionPattern pattern = new SubscriptionPattern("t*");
+        Optional<ConsumerRebalanceListener> listener = Optional.of(mock(ConsumerRebalanceListener.class));
+        TopicRe2JPatternSubscriptionChangeEvent event =
+            new TopicRe2JPatternSubscriptionChangeEvent(pattern, listener, 12345);
+
+        setupProcessor(true);
+        processor.process(event);
+
+        verify(subscriptionState).subscribe(pattern, listener);
+        verify(subscriptionState, never()).subscribeFromPattern(any());
+        verify(membershipManager).onSubscriptionUpdated();
+        assertDoesNotThrow(() -> event.future().get());
+    }
+
+    @Test
+    public void testR2JPatternSubscriptionEventFailureWithMixedSubscriptionType() {
+        SubscriptionPattern pattern = new SubscriptionPattern("t*");
+        Optional<ConsumerRebalanceListener> listener = Optional.of(mock(ConsumerRebalanceListener.class));
+        TopicRe2JPatternSubscriptionChangeEvent event =
+            new TopicRe2JPatternSubscriptionChangeEvent(pattern, listener, 12345);
+        Exception mixedSubscriptionError = new IllegalStateException("Subscription to topics, partitions and " +
+            "pattern are mutually exclusive");
+        doThrow(mixedSubscriptionError).when(subscriptionState).subscribe(pattern, listener);
+
+        setupProcessor(true);
+        processor.process(event);
+
+        verify(subscriptionState).subscribe(pattern, listener);
+        Exception thrown = assertFutureThrows(event.future(), mixedSubscriptionError.getClass());
+        assertEquals(mixedSubscriptionError, thrown);
     }
 
     @ParameterizedTest

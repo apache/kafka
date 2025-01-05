@@ -50,10 +50,8 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.server.util.Csv
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
-import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 import scala.jdk.OptionConverters.RichOptional
@@ -337,11 +335,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def requiresZookeeper: Boolean = processRoles.isEmpty
   def usesSelfManagedQuorum: Boolean = processRoles.nonEmpty
 
-  val migrationEnabled: Boolean = getBoolean(KRaftConfigs.MIGRATION_ENABLED_CONFIG)
-  val migrationMetadataMinBatchSize: Int = getInt(KRaftConfigs.MIGRATION_METADATA_MIN_BATCH_SIZE_CONFIG)
-
-  val elrEnabled: Boolean = getBoolean(KRaftConfigs.ELR_ENABLED_CONFIG)
-
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KRaftConfigs.PROCESS_ROLES_CONFIG).asScala.map {
       case "broker" => ProcessRole.BrokerRole
@@ -480,51 +473,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def logPreAllocateEnable: java.lang.Boolean = getBoolean(ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG)
   def logInitialTaskDelayMs: java.lang.Long = Option(getLong(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG)).getOrElse(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT)
 
-  // We keep the user-provided String as `MetadataVersion.fromVersionString` can choose a slightly different version (eg if `0.10.0`
-  // is passed, `0.10.0-IV0` may be picked)
-  @nowarn("cat=deprecation")
-  private val logMessageFormatVersionString = getString(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG)
-
-  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
-  @deprecated("3.0")
-  lazy val logMessageFormatVersion =
-    if (LogConfig.shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion))
-      MetadataVersion.fromVersionString(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_DEFAULT)
-    else MetadataVersion.fromVersionString(logMessageFormatVersionString)
-
   def logMessageTimestampType = TimestampType.forName(getString(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG))
 
-  /* See `TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG` for details */
-  @deprecated("3.6")
-  def logMessageTimestampDifferenceMaxMs: Long = getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG)
+  def logMessageTimestampBeforeMaxMs: Long = getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG)
 
-  // In the transition period before logMessageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
-  // we are using its value if logMessageTimestampBeforeMaxMs default value hasn't changed.
-  // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
-  @nowarn("cat=deprecation")
-  def logMessageTimestampBeforeMaxMs: Long = {
-    val messageTimestampBeforeMaxMs: Long = getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG)
-    if (messageTimestampBeforeMaxMs != ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT) {
-      messageTimestampBeforeMaxMs
-    } else {
-      logMessageTimestampDifferenceMaxMs
-    }
-  }
-
-  // In the transition period before logMessageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
-  // we are using its value if logMessageTimestampAfterMaxMs default value hasn't changed.
-  // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
-  @nowarn("cat=deprecation")
-  def logMessageTimestampAfterMaxMs: Long = {
-    val messageTimestampAfterMaxMs: Long = getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG)
-    if (messageTimestampAfterMaxMs != Long.MaxValue) {
-      messageTimestampAfterMaxMs
-    } else {
-      logMessageTimestampDifferenceMaxMs
-    }
-  }
-
-  def logMessageDownConversionEnable: Boolean = getBoolean(ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG)
+  def logMessageTimestampAfterMaxMs: Long = getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG)
 
   def logDirFailureTimeoutMs: Long = getLong(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG)
 
@@ -822,7 +775,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   validateValues()
 
-  @nowarn("cat=deprecation")
   private def validateValues(): Unit = {
     if (nodeId != brokerId) {
       throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
@@ -832,9 +784,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         throw new ConfigException(s"Missing required configuration `${ZkConfigs.ZK_CONNECT_CONFIG}` which has no default value.")
       }
       if (brokerIdGenerationEnable) {
-        if (migrationEnabled) {
-          require(brokerId >= 0, "broker.id generation is incompatible with ZooKeeper migration. Please stop using it before enabling migration (set broker.id to a value greater or equal to 0).")
-        }
         require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be greater than or equal to -1 and not greater than reserved.broker.max.id")
       } else {
         require(brokerId >= 0, "broker.id must be greater than or equal to 0")
@@ -844,11 +793,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       if (nodeId < 0) {
         throw new ConfigException(s"Missing configuration `${KRaftConfigs.NODE_ID_CONFIG}` which is required " +
           s"when `process.roles` is defined (i.e. when running in KRaft mode).")
-      }
-      if (migrationEnabled) {
-        if (zkConnect == null) {
-          throw new ConfigException(s"If using `${KRaftConfigs.MIGRATION_ENABLED_CONFIG}` in KRaft mode, `${ZkConfigs.ZK_CONNECT_CONFIG}` must also be set.")
-        }
       }
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
@@ -874,15 +818,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         )
       }
     }
-    def validateQuorumVotersAndQuorumBootstrapServerForMigration(): Unit = {
-      if (voterIds.isEmpty && quorumConfig.bootstrapServers.isEmpty) {
-        throw new ConfigException(
-          s"""If using ${KRaftConfigs.MIGRATION_ENABLED_CONFIG}, either ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG} must
-          |contain the set of bootstrap controllers or ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable
-          |set of controllers.""".stripMargin.replace("\n", " ")
-        )
-      }
-    }
+
     def validateControlPlaneListenerEmptyForKRaft(): Unit = {
       require(controlPlaneListenerName.isEmpty,
         s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG} is not supported in KRaft mode.")
@@ -939,6 +875,13 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         effectiveAdvertisedControllerListeners.size == listeners.size,
         s"The ${SocketServerConfigs.LISTENERS_CONFIG} config must only contain KRaft controller listeners from ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfigs.PROCESS_ROLES_CONFIG}=controller"
       )
+      // controller.listener.names must not contain inter.broker.listener.name when inter.broker.listener.name is explicitly set
+      if (Option(getString(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG)).isDefined) {
+        require(
+          !controllerListenerNames.contains(interBrokerListenerName.value()),
+          s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must not contain an explicitly set ${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} configuration value when ${KRaftConfigs.PROCESS_ROLES_CONFIG}=controller'"
+        )
+      }
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateAdvertisedControllerListenersNonEmptyForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
@@ -950,25 +893,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       validateAdvertisedControllerListenersNonEmptyForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
     } else {
-      // ZK-based
-      if (migrationEnabled) {
-        require(brokerId >= 0,
-          "broker.id generation is incompatible with ZooKeeper migration. Please stop using it before enabling migration (set broker.id to a value greater or equal to 0).")
-        validateQuorumVotersAndQuorumBootstrapServerForMigration()
-        require(controllerListenerNames.nonEmpty,
-          s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")
-        require(interBrokerProtocolVersion.isMigrationSupported, s"Cannot enable ZooKeeper migration without setting " +
-          s"'${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG}' to 3.4 or higher")
-        if (logDirs.size > 1) {
-          require(interBrokerProtocolVersion.isDirectoryAssignmentSupported,
-            s"Cannot enable ZooKeeper migration with multiple log directories (aka JBOD) without setting " +
-            s"'${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG}' to ${MetadataVersion.IBP_3_7_IV2} or higher")
-        }
-      } else {
-        // controller listener names must be empty when not in KRaft mode
-        require(controllerListenerNames.isEmpty,
-          s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava}")
-      }
+      // controller listener names must be empty when not in KRaft mode
+      require(controllerListenerNames.isEmpty,
+        s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava}")
     }
 
     val listenerNames = listeners.map(_.listenerName).toSet
@@ -1003,15 +930,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG}, when defined, should have a different value from the inter broker listener name. " +
         s"Currently they both have the value ${controlPlaneListenerName.get}")
     }
-
-    val messageFormatVersion = new MessageFormatVersion(logMessageFormatVersionString, interBrokerProtocolVersionString)
-    if (messageFormatVersion.shouldWarn)
-      warn(createBrokerWarningMessage)
-
-    val recordVersion = logMessageFormatVersion.highestSupportedRecordVersion
-    require(interBrokerProtocolVersion.highestSupportedRecordVersion().value >= recordVersion.value,
-      s"log.message.format.version $logMessageFormatVersionString can only be used when inter.broker.protocol.version " +
-      s"is set to version ${MetadataVersion.minSupportedFor(recordVersion).shortVersion} or higher")
 
     if (groupCoordinatorConfig.offsetTopicCompressionType == CompressionType.ZSTD)
       require(interBrokerProtocolVersion.highestSupportedRecordVersion().value >= IBP_2_1_IV0.highestSupportedRecordVersion().value,
@@ -1062,7 +980,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
    * Copy the subset of properties that are relevant to Logs. The individual properties
    * are listed here since the names are slightly different in each Config class...
    */
-  @nowarn("cat=deprecation")
   def extractLogConfigMap: java.util.Map[String, Object] = {
     val logProps = new java.util.HashMap[String, Object]()
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, logSegmentBytes)
@@ -1088,21 +1005,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, zstdCompressionLevel)
     logProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, uncleanLeaderElectionEnable)
     logProps.put(TopicConfig.PREALLOCATE_CONFIG, logPreAllocateEnable)
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, logMessageFormatVersion.version)
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, logMessageTimestampType.name)
-    logProps.put(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, logMessageTimestampDifferenceMaxMs: java.lang.Long)
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, logMessageTimestampBeforeMaxMs: java.lang.Long)
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, logMessageTimestampAfterMaxMs: java.lang.Long)
-    logProps.put(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, logMessageDownConversionEnable: java.lang.Boolean)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, remoteLogManagerConfig.logLocalRetentionMs: java.lang.Long)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, remoteLogManagerConfig.logLocalRetentionBytes: java.lang.Long)
     logProps
-  }
-
-  @nowarn("cat=deprecation")
-  private def createBrokerWarningMessage: String = {
-    s"Broker configuration ${ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG} with value $logMessageFormatVersionString is ignored " +
-      s"because the inter-broker protocol version `$interBrokerProtocolVersionString` is greater or equal than 3.0. " +
-      "This configuration is deprecated and it will be removed in Apache Kafka 4.0."
   }
 }

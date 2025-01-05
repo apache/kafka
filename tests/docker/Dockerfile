@@ -78,6 +78,12 @@ RUN echo 'PermitUserEnvironment yes' >> /etc/ssh/sshd_config
 # Install binary test dependencies.
 # we use the same versions as in vagrant/base.sh
 ARG KAFKA_MIRROR="https://s3-us-west-2.amazonaws.com/kafka-packages"
+# The versions between 0.11.0.3 and 2.0.1 are used to run client code, because zookeeper in these versions is not compatible with JDK 17.
+# See KAFKA-17888 for more details.
+RUN mkdir -p "/opt/kafka-0.11.0.3" && chmod a+rw /opt/kafka-0.11.0.3 && curl -s "$KAFKA_MIRROR/kafka_2.11-0.11.0.3.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.11.0.3"
+RUN mkdir -p "/opt/kafka-1.0.2" && chmod a+rw /opt/kafka-1.0.2 && curl -s "$KAFKA_MIRROR/kafka_2.11-1.0.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-1.0.2"
+RUN mkdir -p "/opt/kafka-1.1.1" && chmod a+rw /opt/kafka-1.1.1 && curl -s "$KAFKA_MIRROR/kafka_2.11-1.1.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-1.1.1"
+RUN mkdir -p "/opt/kafka-2.0.1" && chmod a+rw /opt/kafka-2.0.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.0.1"
 RUN mkdir -p "/opt/kafka-2.1.1" && chmod a+rw /opt/kafka-2.1.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.1.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.1.1"
 RUN mkdir -p "/opt/kafka-2.2.2" && chmod a+rw /opt/kafka-2.2.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.2.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.2.2"
 RUN mkdir -p "/opt/kafka-2.3.1" && chmod a+rw /opt/kafka-2.3.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.3.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.3.1"
@@ -93,12 +99,16 @@ RUN mkdir -p "/opt/kafka-3.3.2" && chmod a+rw /opt/kafka-3.3.2 && curl -s "$KAFK
 RUN mkdir -p "/opt/kafka-3.4.1" && chmod a+rw /opt/kafka-3.4.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.4.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.4.1"
 RUN mkdir -p "/opt/kafka-3.5.2" && chmod a+rw /opt/kafka-3.5.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.5.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.5.2"
 RUN mkdir -p "/opt/kafka-3.6.2" && chmod a+rw /opt/kafka-3.6.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.6.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.6.2"
-RUN mkdir -p "/opt/kafka-3.7.1" && chmod a+rw /opt/kafka-3.7.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.7.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.7.1"
+RUN mkdir -p "/opt/kafka-3.7.2" && chmod a+rw /opt/kafka-3.7.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.7.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.7.2"
 RUN mkdir -p "/opt/kafka-3.8.1" && chmod a+rw /opt/kafka-3.8.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.8.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.8.1"
 RUN mkdir -p "/opt/kafka-3.9.0" && chmod a+rw /opt/kafka-3.9.0 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.9.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.9.0"
 
 
 # Streams test dependencies
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-0.11.0.3-test.jar" -o /opt/kafka-0.11.0.3/libs/kafka-streams-0.11.0.3-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-1.0.2-test.jar" -o /opt/kafka-1.0.2/libs/kafka-streams-1.0.2-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-1.1.1-test.jar" -o /opt/kafka-1.1.1/libs/kafka-streams-1.1.1-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.0.1-test.jar" -o /opt/kafka-2.0.1/libs/kafka-streams-2.0.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.1.1-test.jar" -o /opt/kafka-2.1.1/libs/kafka-streams-2.1.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.2.2-test.jar" -o /opt/kafka-2.2.2/libs/kafka-streams-2.2.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.3.1-test.jar" -o /opt/kafka-2.3.1/libs/kafka-streams-2.3.1-test.jar
@@ -114,7 +124,7 @@ RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.3.2-test.jar" -o /opt/kafka-3.3.2/lib
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.4.1-test.jar" -o /opt/kafka-3.4.1/libs/kafka-streams-3.4.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.5.2-test.jar" -o /opt/kafka-3.5.2/libs/kafka-streams-3.5.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.6.2-test.jar" -o /opt/kafka-3.6.2/libs/kafka-streams-3.6.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.7.1-test.jar" -o /opt/kafka-3.7.1/libs/kafka-streams-3.7.1-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.7.2-test.jar" -o /opt/kafka-3.7.2/libs/kafka-streams-3.7.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.8.1-test.jar" -o /opt/kafka-3.8.1/libs/kafka-streams-3.8.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.9.0-test.jar" -o /opt/kafka-3.9.0/libs/kafka-streams-3.9.0-test.jar
 

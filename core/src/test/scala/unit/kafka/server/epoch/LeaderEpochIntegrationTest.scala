@@ -68,7 +68,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(quorum: String): Unit = {
-    brokers ++= (0 to 1).map { id => createBroker(fromProps(createBrokerConfig(id, zkConnectOrNull))) }
+    brokers ++= (0 to 1).map { id => createBroker(fromProps(createBrokerConfig(id, null))) }
 
     // Given two topics with replication of a single partition
     for (topic <- List(topic1, topic2)) {
@@ -103,7 +103,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   def shouldSendLeaderEpochRequestAndGetAResponse(quorum: String): Unit = {
 
     //3 brokers, put partition on 100/101 and then pretend to be 102
-    brokers ++= (100 to 102).map { id => createBroker(fromProps(createBrokerConfig(id, zkConnectOrNull))) }
+    brokers ++= (100 to 102).map { id => createBroker(fromProps(createBrokerConfig(id, null))) }
 
     val assignment1 = Map(0 -> Seq(100), 1 -> Seq(101))
     createTopic(topic1, assignment1)
@@ -150,14 +150,10 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   @ValueSource(strings = Array("kraft"))
   def shouldIncreaseLeaderEpochBetweenLeaderRestarts(quorum: String): Unit = {
     //Setup: we are only interested in the single partition on broker 101
-    brokers += createBroker(fromProps(createBrokerConfig(100, zkConnectOrNull)))
-    if (isKRaftTest()) {
-      assertEquals(controllerServer.config.nodeId, waitUntilQuorumLeaderElected(controllerServer))
-    } else {
-      assertEquals(100, TestUtils.waitUntilControllerElected(zkClient))
-    }
+    brokers += createBroker(fromProps(createBrokerConfig(100, null)))
+    assertEquals(controllerServer.config.nodeId, waitUntilQuorumLeaderElected(controllerServer))
 
-    brokers += createBroker(fromProps(createBrokerConfig(101, zkConnectOrNull)))
+    brokers += createBroker(fromProps(createBrokerConfig(101, null)))
 
     def leo() = brokers(1).replicaManager.localLog(tp).get.logEndOffset
 
@@ -287,7 +283,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   }
 
   private def createTopic(topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]]): Unit = {
-    Using(createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))) { admin =>
+    Using.resource(createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))) { admin =>
       try {
         TestUtils.createTopicWithAdmin(
           admin = admin,

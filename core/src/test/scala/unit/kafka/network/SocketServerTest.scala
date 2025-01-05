@@ -37,7 +37,6 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils._
 import org.apache.kafka.network.RequestConvertToJson
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.network.metrics.RequestMetrics
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfig
@@ -45,7 +44,8 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.ConnectionDisconnectListener
 import org.apache.kafka.server.quota.{ThrottleCallback, ThrottledChannel}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
-import org.apache.log4j.Level
+import org.apache.logging.log4j.{Level, LogManager}
+import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
@@ -88,7 +88,7 @@ class SocketServerTest {
   var server: SocketServer = _
   val sockets = new ArrayBuffer[Socket]
 
-  private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
+  private val kafkaLogger = LogManager.getLogger("kafka")
   private var logLevelToRestore: Level = _
   def endpoint: EndPoint = {
     KafkaConfig.fromProps(props, doLog = false).dataPlaneListeners.head
@@ -102,7 +102,7 @@ class SocketServerTest {
     server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
-    kafkaLogger.setLevel(Level.TRACE)
+    Configurator.setLevel(kafkaLogger.getName, Level.TRACE)
 
     assertTrue(server.controlPlaneRequestChannelOpt.isEmpty)
   }
@@ -112,7 +112,7 @@ class SocketServerTest {
     shutdownServerAndMetrics(server)
     sockets.foreach(_.close())
     sockets.clear()
-    kafkaLogger.setLevel(logLevelToRestore)
+    Configurator.setLevel(kafkaLogger.getName, logLevelToRestore)
     TestUtils.clearYammerMetrics()
   }
 
@@ -120,8 +120,9 @@ class SocketServerTest {
     val outgoing = new DataOutputStream(socket.getOutputStream)
     id match {
       case Some(id) =>
-        outgoing.writeInt(request.length + 2)
+        outgoing.writeInt(request.length + 4)
         outgoing.writeShort(id)
+        outgoing.writeShort(ApiKeys.PRODUCE.oldestVersion)
       case None =>
         outgoing.writeInt(request.length)
     }
@@ -235,7 +236,7 @@ class SocketServerTest {
     val clientId = ""
     val ackTimeoutMs = 10000
 
-    val emptyRequest = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+    val emptyRequest = requests.ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
       .setAcks(ack)
       .setTimeoutMs(ackTimeoutMs)
@@ -311,52 +312,6 @@ class SocketServerTest {
       ClientInformation.UNKNOWN_NAME_OR_VERSION,
       ClientInformation.UNKNOWN_NAME_OR_VERSION
     )
-  }
-
-  @Test
-  def testRequestPerSecAndDeprecatedRequestsPerSecMetrics(): Unit = {
-    val clientName = "apache-kafka-java"
-    val clientVersion = AppInfoParser.getVersion
-
-    def deprecatedRequestsPerSec(requestVersion: Short): Option[Long] =
-      TestUtils.meterCountOpt(s"${RequestMetrics.DEPRECATED_REQUESTS_PER_SEC},request=Produce,version=$requestVersion," +
-        s"clientSoftwareName=$clientName,clientSoftwareVersion=$clientVersion")
-
-    def requestsPerSec(requestVersion: Short): Option[Long] =
-      TestUtils.meterCountOpt(s"${RequestMetrics.REQUESTS_PER_SEC},request=Produce,version=$requestVersion")
-
-    val plainSocket = connect()
-    val address = plainSocket.getLocalAddress
-    val clientId = "clientId"
-
-    sendRequest(plainSocket, apiVersionRequestBytes(clientId, ApiKeys.API_VERSIONS.latestVersion))
-    var receivedReq = receiveRequest(server.dataPlaneRequestChannel)
-    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
-
-    var requestVersion = ApiKeys.PRODUCE.latestVersion
-    sendRequest(plainSocket, producerRequestBytes(requestVersion))
-    receivedReq = receiveRequest(server.dataPlaneRequestChannel)
-
-    assertEquals(clientName, receivedReq.context.clientInformation.softwareName)
-    assertEquals(clientVersion, receivedReq.context.clientInformation.softwareVersion)
-
-    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
-    TestUtils.waitUntilTrue(() => requestsPerSec(requestVersion).isDefined, "RequestsPerSec metric could not be found")
-    assertTrue(requestsPerSec(requestVersion).getOrElse(0L) > 0, "RequestsPerSec should be higher than 0")
-    assertEquals(None, deprecatedRequestsPerSec(requestVersion))
-
-    requestVersion = 3
-    sendRequest(plainSocket, producerRequestBytes(requestVersion))
-    receivedReq = receiveRequest(server.dataPlaneRequestChannel)
-    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
-    TestUtils.waitUntilTrue(() => deprecatedRequestsPerSec(requestVersion).isDefined, "DeprecatedRequestsPerSec metric could not be found")
-    assertTrue(deprecatedRequestsPerSec(requestVersion).getOrElse(0L) > 0, "DeprecatedRequestsPerSec should be higher than 0")
-
-    plainSocket.setSoLinger(true, 0)
-    plainSocket.close()
-
-    TestUtils.waitUntilTrue(() => server.connectionCount(address) == 0, msg = "Connection not closed")
-
   }
 
   @Test
@@ -1062,7 +1017,7 @@ class SocketServerTest {
       val clientId = ""
       val ackTimeoutMs = 10000
       val ack = 0: Short
-      val emptyRequest = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val emptyRequest = requests.ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
         .setAcks(ack)
         .setTimeoutMs(ackTimeoutMs)
@@ -1144,7 +1099,7 @@ class SocketServerTest {
       // ...and now send something to trigger the disconnection
       val ackTimeoutMs = 10000
       val ack = 0: Short
-      val emptyRequest = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val emptyRequest = requests.ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
         .setAcks(ack)
         .setTimeoutMs(ackTimeoutMs)

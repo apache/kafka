@@ -136,10 +136,6 @@ public class ResetConsumerGroupOffsetTest {
         String[] args = buildArgsForGroup(cluster, group, "--all-topics", "--to-current", "--execute");
 
         try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-            // Make sure we got a coordinator
-            TestUtils.waitForCondition(
-                    () -> "localhost".equals(service.collectGroupState(group).coordinator.host()),
-                    "Can't find a coordinator");
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
             assertTrue(resetOffsets.isEmpty());
             assertTrue(committedOffsets(cluster, topic, group).isEmpty());
@@ -800,9 +796,11 @@ public class ResetConsumerGroupOffsetTest {
         configs.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name);
         configs.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
         configs.put(AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000);
         configs.put(GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 1000);
+        if (GroupProtocol.CLASSIC == groupProtocol) {
+            configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+        }
         return configs;
     }
 

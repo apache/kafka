@@ -70,7 +70,7 @@ Command line arguments:
  * `--group-id <group-id>`
  * `--topic <topic>`
  * `--broker-list <brokers>`
- * `--session-timeout <n>`
+ * `--session-timeout <n>` - note that this configuration is not supported when group protocol is consumer
  * `--enable-autocommit`
  * `--max-messages <n>`
  * `--assignment-strategy <s>`

@@ -16,8 +16,6 @@
  */
 package kafka.coordinator.transaction
 
-import java.util.Properties
-import java.util.concurrent.atomic.AtomicBoolean
 import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -33,6 +31,8 @@ import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.util.Scheduler
 
+import java.util.Properties
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.jdk.CollectionConverters._
 
 object TransactionCoordinator {
@@ -133,7 +133,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           try {
             val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
               producerId = producerIdManager.generateProducerId(),
-              previousProducerId = RecordBatch.NO_PRODUCER_ID,
+              prevProducerId = RecordBatch.NO_PRODUCER_ID,
               nextProducerId = RecordBatch.NO_PRODUCER_ID,
               producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
               lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
@@ -221,7 +221,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       //      could be a retry after a valid epoch bump that the producer never received the response for
       txnMetadata.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH ||
         producerIdAndEpoch.producerId == txnMetadata.producerId ||
-        (producerIdAndEpoch.producerId == txnMetadata.previousProducerId && TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch))
+        (producerIdAndEpoch.producerId == txnMetadata.prevProducerId && TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch))
     }
 
     if (txnMetadata.pendingTransitionInProgress) {
@@ -391,6 +391,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback,
+                                       clientTransactionVersion: TransactionVersion,
                                        requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
       debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
@@ -420,7 +421,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               // this is an optimization: if the partitions are already in the metadata reply OK immediately
               Left(Errors.NONE)
             } else {
-              Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.milliseconds()))
+              Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.milliseconds(), clientTransactionVersion))
             }
           }
       }
@@ -476,7 +477,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
   private def logInvalidStateTransitionAndReturnError(transactionalId: String,
                                                       transactionState: TransactionState,
                                                       transactionResult: TransactionResult) = {
-    debug(s"TransactionalId: $transactionalId's state is $transactionState, but received transaction " +
+    warn(s"TransactionalId: $transactionalId's state is $transactionState, but received transaction " +
       s"marker result to send: $transactionResult")
     Left(Errors.INVALID_TXN_STATE)
   }
@@ -498,20 +499,28 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       requestLocal)
   }
 
-  private def endTransaction(transactionalId: String,
+  /**
+   * Handling the endTxn request under the Transaction Version 1.
+   *
+   * @param transactionalId     The transaction ID from the endTxn request
+   * @param producerId          The producer ID from the endTxn request
+   * @param producerEpoch       The producer epoch from the endTxn request
+   * @param txnMarkerResult     To commit or abort the transaction
+   * @param isFromClient        Is the request from client
+   * @param responseCallback    The response callback
+   * @param requestLocal        The request local object
+   */
+  private def endTransactionWithTV1(transactionalId: String,
                              producerId: Long,
                              producerEpoch: Short,
                              txnMarkerResult: TransactionResult,
                              isFromClient: Boolean,
-                             clientTransactionVersion: TransactionVersion,
                              responseCallback: EndTxnCallback,
                              requestLocal: RequestLocal): Unit = {
     var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
     else {
-      var producerIdCopy = RecordBatch.NO_PRODUCER_ID
-      var producerEpochCopy = RecordBatch.NO_PRODUCER_EPOCH
       val preAppendResult: ApiResult[(Int, TxnTransitMetadata)] = txnManager.getTransactionState(transactionalId).flatMap {
         case None =>
           Left(Errors.INVALID_PRODUCER_ID_MAPPING)
@@ -521,39 +530,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
 
           txnMetadata.inLock {
-            producerIdCopy = txnMetadata.producerId
-            producerEpochCopy = txnMetadata.producerEpoch
-            // PrepareEpochFence has slightly different epoch bumping logic so don't include it here.
-            val currentTxnMetadataIsAtLeastTransactionsV2 = !txnMetadata.pendingState.contains(PrepareEpochFence) && txnMetadata.clientTransactionVersion.supportsEpochBump()
-            // True if the client used TV_2 and retried a request that had overflowed the epoch, and a new producer ID is stored in the txnMetadata
-            val retryOnOverflow = currentTxnMetadataIsAtLeastTransactionsV2 &&
-              txnMetadata.previousProducerId == producerId && producerEpoch == Short.MaxValue - 1 && txnMetadata.producerEpoch == 0
-            // True if the client used TV_2 and retried an endTxn request, and the bumped producer epoch is stored in the txnMetadata.
-            val retryOnEpochBump = endTxnEpochBumped(txnMetadata, producerEpoch)
-
-            val isValidEpoch = {
-              if (currentTxnMetadataIsAtLeastTransactionsV2) {
-                // With transactions V2, state + same epoch is not sufficient to determine if a retry transition is valid. If the epoch is the
-                // same it actually indicates the next endTransaction call. Instead, we want to check the epoch matches with the epoch in the retry conditions.
-                // Return producer fenced even in the cases where the epoch is higher and could indicate an invalid state transition.
-                // Use the following criteria to determine if a v2 retry is valid:
-                txnMetadata.state match {
-                  case Ongoing | Empty | Dead | PrepareEpochFence =>
-                    producerEpoch == txnMetadata.producerEpoch
-                  case PrepareCommit | PrepareAbort =>
-                    retryOnEpochBump
-                  case CompleteCommit | CompleteAbort =>
-                    retryOnEpochBump || retryOnOverflow
-                }
-              } else {
-                // For transactions V1 strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch without server knowledge.
-                (!isFromClient || producerEpoch == txnMetadata.producerEpoch) && producerEpoch >= txnMetadata.producerEpoch
-              }
-            }
-
-            if (txnMetadata.producerId != producerId && !retryOnOverflow)
+            if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-            else if (!isValidEpoch)
+            // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
+            else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)
               Left(Errors.PRODUCER_FENCED)
             else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -564,18 +544,6 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 else
                   PrepareAbort
 
-                // Maybe allocate new producer ID if we are bumping epoch and epoch is exhausted
-                val nextProducerIdOrErrors =
-                  if (clientTransactionVersion.supportsEpochBump() && !txnMetadata.pendingState.contains(PrepareEpochFence) && txnMetadata.isProducerEpochExhausted) {
-                    try {
-                      Right(producerIdManager.generateProducerId())
-                    } catch {
-                      case e: Exception => Left(Errors.forException(e))
-                    }
-                  } else {
-                    Right(RecordBatch.NO_PRODUCER_ID)
-                  }
-
                 if (nextState == PrepareAbort && txnMetadata.pendingState.contains(PrepareEpochFence)) {
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump
                   // the epoch in the transaction metadata we are about to append.
@@ -585,10 +553,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
                 }
 
-                nextProducerIdOrErrors.flatMap {
-                  nextProducerId =>
-                    Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, clientTransactionVersion, nextProducerId.asInstanceOf[Long], time.milliseconds()))
-                }
+                Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, TransactionVersion.fromFeatureLevel(0), RecordBatch.NO_PRODUCER_ID, time.milliseconds(), false))
               case CompleteCommit =>
                 if (txnMarkerResult == TransactionResult.COMMIT)
                   Left(Errors.NONE)
@@ -616,6 +581,295 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   s"This is illegal as we should never have transitioned to this state."
                 fatal(errorMsg)
                 throw new IllegalStateException(errorMsg)
+            }
+          }
+      }
+
+      preAppendResult match {
+        case Left(err) =>
+          debug(s"Aborting append of $txnMarkerResult to transaction log with coordinator and returning $err error to client for $transactionalId's EndTransaction request")
+          responseCallback(err, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
+
+        case Right((coordinatorEpoch, newMetadata)) =>
+          def sendTxnMarkersCallback(error: Errors): Unit = {
+            if (error == Errors.NONE) {
+              val preSendResult: ApiResult[(TransactionMetadata, TxnTransitMetadata)] = txnManager.getTransactionState(transactionalId).flatMap {
+                case None =>
+                  val errorMsg = s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                    s"no metadata in the cache; this is not expected"
+                  fatal(errorMsg)
+                  throw new IllegalStateException(errorMsg)
+
+                case Some(epochAndMetadata) =>
+                  if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
+                    val txnMetadata = epochAndMetadata.transactionMetadata
+                    txnMetadata.inLock {
+                      if (txnMetadata.producerId != producerId)
+                        Left(Errors.INVALID_PRODUCER_ID_MAPPING)
+                      else if (txnMetadata.producerEpoch != producerEpoch)
+                        Left(Errors.PRODUCER_FENCED)
+                      else if (txnMetadata.pendingTransitionInProgress)
+                        Left(Errors.CONCURRENT_TRANSACTIONS)
+                      else txnMetadata.state match {
+                        case Empty| Ongoing | CompleteCommit | CompleteAbort =>
+                          logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                        case PrepareCommit =>
+                          if (txnMarkerResult != TransactionResult.COMMIT)
+                            logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                          else
+                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
+                        case PrepareAbort =>
+                          if (txnMarkerResult != TransactionResult.ABORT)
+                            logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                          else
+                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
+                        case Dead | PrepareEpochFence =>
+                          val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+                            s"This is illegal as we should never have transitioned to this state."
+                          fatal(errorMsg)
+                          throw new IllegalStateException(errorMsg)
+                      }
+                    }
+                  } else {
+                    debug(s"The transaction coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch} after $txnMarkerResult was " +
+                      s"successfully appended to the log for $transactionalId with old epoch $coordinatorEpoch")
+                    Left(Errors.NOT_COORDINATOR)
+                  }
+              }
+
+              preSendResult match {
+                case Left(err) =>
+                  info(s"Aborting sending of transaction markers after appended $txnMarkerResult to transaction log and returning $err error to client for $transactionalId's EndTransaction request")
+                  responseCallback(err, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
+
+                case Right((txnMetadata, newPreSendMetadata)) =>
+                  // we can respond to the client immediately and continue to write the txn markers if
+                  // the log append was successful
+                  responseCallback(Errors.NONE, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
+
+                  txnMarkerChannelManager.addTxnMarkersToSend(coordinatorEpoch, txnMarkerResult, txnMetadata, newPreSendMetadata)
+              }
+            } else {
+              info(s"Aborting sending of transaction markers and returning $error error to client for $transactionalId's EndTransaction request of $txnMarkerResult, " +
+                s"since appending $newMetadata to transaction log with coordinator epoch $coordinatorEpoch failed")
+
+              if (isEpochFence) {
+                txnManager.getTransactionState(transactionalId).foreach {
+                  case None =>
+                    warn(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                      s"no metadata in the cache; this is not expected")
+
+                  case Some(epochAndMetadata) =>
+                    if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
+                      // This was attempted epoch fence that failed, so mark this state on the metadata
+                      epochAndMetadata.transactionMetadata.hasFailedEpochFence = true
+                      warn(s"The coordinator failed to write an epoch fence transition for producer $transactionalId to the transaction log " +
+                        s"with error $error. The epoch was increased to ${newMetadata.producerEpoch} but not returned to the client")
+                    }
+                }
+              }
+
+              responseCallback(error, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
+            }
+          }
+
+          txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
+            sendTxnMarkersCallback, requestLocal = requestLocal)
+      }
+    }
+  }
+
+
+  /*
+    Here is the table to demonstrate the state transition for Empty, CompleteAbort, CompleteCommit in Transaction V2.
+    Note:
+    PF = PRODUCER_FENCED
+    ITS = INVALID_TXN_STATE
+    NONE = No error and no epoch bump
+    EB = No error and epoch bump
+
+    Retry => producerEpoch = txnState.ProducerEpoch - 1
+    Current => producerEpoch = txnState.ProducerEpoch
+
+    ------------------------------------------------------
+    With transaction V1, Retry is not allowed, PRODUCER_FENCED will be returned if the epoch does not match.
+    Empty does not accept Abort and Commit.
+    CompleteAbort only accepts Abort.
+    CompleteCommit only accepts Commit.
+    For all invalid cases, INVALID_TXN_STATE is returned.
+
+    ------------------------------------------------------
+    With transaction V2.
+    +----------------+-----------------+-----------------+
+    |                | Abort           | Commit          |
+    +----------------+-------+---------+-------+---------+
+    |                | Retry | Current | Retry | Current |
+    +----------------+-------+---------+-------+---------+
+    | Empty          | PF    | EB      | PF    | ITS     |
+    +----------------+-------+---------+-------+---------+
+    | CompleteAbort  | NONE  | EB      | ITS   | ITS     |
+    +----------------+-------+---------+-------+---------+
+    | CompleteCommit | ITS   | EB      | NONE  | ITS     |
+    +----------------+-------+---------+-------+---------+
+   */
+
+  /**
+   * Handling the endTxn request above the Transaction Version 2.
+   *
+   * @param transactionalId           The transaction ID from the endTxn request
+   * @param producerId                The producer ID from the endTxn request
+   * @param producerEpoch             The producer epoch from the endTxn request
+   * @param txnMarkerResult           To commit or abort the transaction
+   * @param isFromClient              Is the request from client
+   * @param clientTransactionVersion  The transaction version for the endTxn request
+   * @param responseCallback          The response callback
+   * @param requestLocal              The request local object
+   */
+  private def endTransaction(transactionalId: String,
+                             producerId: Long,
+                             producerEpoch: Short,
+                             txnMarkerResult: TransactionResult,
+                             isFromClient: Boolean,
+                             clientTransactionVersion: TransactionVersion,
+                             responseCallback: EndTxnCallback,
+                             requestLocal: RequestLocal): Unit = {
+    if (!clientTransactionVersion.supportsEpochBump()) {
+      endTransactionWithTV1(transactionalId, producerId, producerEpoch, txnMarkerResult, isFromClient, responseCallback, requestLocal)
+      return
+    }
+    var isEpochFence = false
+    if (transactionalId == null || transactionalId.isEmpty)
+      responseCallback(Errors.INVALID_REQUEST, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
+    else {
+      var producerIdCopy = RecordBatch.NO_PRODUCER_ID
+      var producerEpochCopy = RecordBatch.NO_PRODUCER_EPOCH
+      val preAppendResult: ApiResult[(Int, TxnTransitMetadata)] = txnManager.getTransactionState(transactionalId).flatMap {
+        case None =>
+          Left(Errors.INVALID_PRODUCER_ID_MAPPING)
+
+        case Some(epochAndTxnMetadata) =>
+          val txnMetadata = epochAndTxnMetadata.transactionMetadata
+          val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
+
+          txnMetadata.inLock {
+            producerIdCopy = txnMetadata.producerId
+            producerEpochCopy = txnMetadata.producerEpoch
+            // PrepareEpochFence has slightly different epoch bumping logic so don't include it here.
+            // Note that, it can only happen when the current state is Ongoing.
+            isEpochFence = txnMetadata.pendingState.contains(PrepareEpochFence)
+            // True if the client retried a request that had overflowed the epoch, and a new producer ID is stored in the txnMetadata
+            val retryOnOverflow = !isEpochFence && txnMetadata.prevProducerId == producerId &&
+              producerEpoch == Short.MaxValue - 1 && txnMetadata.producerEpoch == 0
+            // True if the client retried an endTxn request, and the bumped producer epoch is stored in the txnMetadata.
+            val retryOnEpochBump = !isEpochFence && txnMetadata.producerEpoch == producerEpoch + 1
+
+            val isValidEpoch = {
+              if (!isEpochFence) {
+                // With transactions V2, state + same epoch is not sufficient to determine if a retry transition is valid. If the epoch is the
+                // same it actually indicates the next endTransaction call. Instead, we want to check the epoch matches with the epoch in the retry conditions.
+                // Return producer fenced even in the cases where the epoch is higher and could indicate an invalid state transition.
+                // Use the following criteria to determine if a v2 retry is valid:
+                txnMetadata.state match {
+                  case Ongoing | Empty | Dead | PrepareEpochFence =>
+                    producerEpoch == txnMetadata.producerEpoch
+                  case PrepareCommit | PrepareAbort =>
+                    retryOnEpochBump
+                  case CompleteCommit | CompleteAbort =>
+                    retryOnEpochBump || retryOnOverflow || producerEpoch == txnMetadata.producerEpoch
+                }
+              } else {
+                // If the epoch is going to be fenced, it bumps the epoch differently with TV2.
+                (!isFromClient || producerEpoch == txnMetadata.producerEpoch) && producerEpoch >= txnMetadata.producerEpoch
+              }
+            }
+
+            val isRetry = retryOnEpochBump || retryOnOverflow
+
+            def generateTxnTransitMetadataForTxnCompletion(nextState: TransactionState, noPartitionAdded: Boolean): ApiResult[(Int, TxnTransitMetadata)] = {
+              // Maybe allocate new producer ID if we are bumping epoch and epoch is exhausted
+              val nextProducerIdOrErrors =
+                if (!isEpochFence && txnMetadata.isProducerEpochExhausted) {
+                  try {
+                    Right(producerIdManager.generateProducerId())
+                  } catch {
+                    case e: Exception => Left(Errors.forException(e))
+                  }
+                } else {
+                  Right(RecordBatch.NO_PRODUCER_ID)
+                }
+
+              if (nextState == PrepareAbort && isEpochFence) {
+                // We should clear the pending state to make way for the transition to PrepareAbort and also bump
+                // the epoch in the transaction metadata we are about to append.
+                txnMetadata.pendingState = None
+                txnMetadata.producerEpoch = producerEpoch
+                txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
+              }
+
+              nextProducerIdOrErrors.flatMap {
+                nextProducerId =>
+                  Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, clientTransactionVersion, nextProducerId.asInstanceOf[Long], time.milliseconds(), noPartitionAdded))
+              }
+            }
+
+            if (txnMetadata.producerId != producerId && !retryOnOverflow)
+              Left(Errors.INVALID_PRODUCER_ID_MAPPING)
+            else if (!isValidEpoch)
+              Left(Errors.PRODUCER_FENCED)
+            else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
+              Left(Errors.CONCURRENT_TRANSACTIONS)
+            else txnMetadata.state match {
+              case Ongoing =>
+                val nextState = if (txnMarkerResult == TransactionResult.COMMIT)
+                  PrepareCommit
+                else
+                  PrepareAbort
+
+                generateTxnTransitMetadataForTxnCompletion(nextState, false)
+              case CompleteCommit =>
+                if (txnMarkerResult == TransactionResult.COMMIT) {
+                  if (isRetry)
+                    Left(Errors.NONE)
+                  else
+                    logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                } else {
+                  // Abort.
+                  if (isRetry)
+                    logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                  else
+                    generateTxnTransitMetadataForTxnCompletion(PrepareAbort, true)
+                }
+              case CompleteAbort =>
+                if (txnMarkerResult == TransactionResult.ABORT) {
+                  if (isRetry)
+                    Left(Errors.NONE)
+                  else
+                    generateTxnTransitMetadataForTxnCompletion(PrepareAbort, true)
+                } else {
+                  // Commit.
+                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                }
+              case PrepareCommit =>
+                if (txnMarkerResult == TransactionResult.COMMIT)
+                  Left(Errors.CONCURRENT_TRANSACTIONS)
+                else
+                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+              case PrepareAbort =>
+                if (txnMarkerResult == TransactionResult.ABORT)
+                  Left(Errors.CONCURRENT_TRANSACTIONS)
+                else
+                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+              case Empty =>
+                if (txnMarkerResult == TransactionResult.ABORT) {
+                  generateTxnTransitMetadataForTxnCompletion(PrepareAbort, true)
+                } else {
+                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                }
+              case Dead | PrepareEpochFence =>
+                val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+                  s"This is illegal as we should never have transitioned to this state."
+                fatal(errorMsg)
+                throw new IllegalStateException(errorMsg)
 
             }
           }
@@ -626,8 +880,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           if (err == Errors.NONE) {
             responseCallback(err, producerIdCopy, producerEpochCopy)
           } else {
-          debug(s"Aborting append of $txnMarkerResult to transaction log with coordinator and returning $err error to client for $transactionalId's EndTransaction request")
-          responseCallback(err, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
+            debug(s"Aborting append of $txnMarkerResult to transaction log with coordinator and returning $err error to client for $transactionalId's EndTransaction request")
+            responseCallback(err, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
           }
 
         case Right((coordinatorEpoch, newMetadata)) =>
@@ -646,7 +900,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                     txnMetadata.inLock {
                       if (txnMetadata.producerId != producerId)
                         Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-                      else if (txnMetadata.producerEpoch != producerEpoch && !endTxnEpochBumped(txnMetadata, producerEpoch))
+                      else if (txnMetadata.producerEpoch != producerEpoch && txnMetadata.producerEpoch != producerEpoch + 1)
                         Left(Errors.PRODUCER_FENCED)
                       else if (txnMetadata.pendingTransitionInProgress)
                         Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -718,14 +972,6 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             sendTxnMarkersCallback, requestLocal = requestLocal)
       }
     }
-  }
-
-  // When a client and server support V2, every endTransaction call bumps the producer epoch. When checking epoch, we want to
-  // check epoch + 1. Epoch bumps from PrepareEpochFence state are handled separately, so this method should not be used to check that case.
-  // Returns true if the transaction state epoch is the specified producer epoch + 1 and epoch bump on every transaction is expected.
-  private def endTxnEpochBumped(txnMetadata: TransactionMetadata, producerEpoch: Short): Boolean = {
-    !txnMetadata.pendingState.contains(PrepareEpochFence) && txnMetadata.clientTransactionVersion.supportsEpochBump() &&
-      txnMetadata.producerEpoch == producerEpoch + 1
   }
 
   def transactionTopicConfigs: Properties = txnManager.transactionTopicConfigs

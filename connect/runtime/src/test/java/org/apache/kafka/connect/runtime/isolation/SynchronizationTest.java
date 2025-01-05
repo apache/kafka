@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.Converter;
 
+import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -190,10 +191,10 @@ public class SynchronizationTest {
         }
 
         @Override
-        public PluginClassLoader pluginClassLoader(String name) {
+        public PluginClassLoader pluginClassLoader(String name, VersionRange range) {
             dclBreakpoint.await(name);
             dclBreakpoint.await(name);
-            return super.pluginClassLoader(name);
+            return super.pluginClassLoader(name, range);
         }
     }
 
@@ -456,14 +457,13 @@ public class SynchronizationTest {
         }
     }
 
+    @SuppressWarnings("removal")
     private static ThreadFactory threadFactoryWithNamedThreads(String threadPrefix) {
         AtomicInteger threadNumber = new AtomicInteger(1);
         return r -> {
             // This is essentially Executors.defaultThreadFactory except with
             // custom thread names so in order to filter by thread names when debugging
-            SecurityManager s = System.getSecurityManager();
-            Thread t = new Thread((s != null) ? s.getThreadGroup() :
-                Thread.currentThread().getThreadGroup(), r,
+            Thread t = new Thread(Thread.currentThread().getThreadGroup(), r,
                 threadPrefix + threadNumber.getAndIncrement(),
                 0);
             if (t.isDaemon()) {

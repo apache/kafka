@@ -227,7 +227,7 @@ public class SessionWindowedKStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final SessionStore<String, Long> store = driver.getSessionStore("count-store");
-            final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toList(store.fetch("1", "2"));
+            final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toListAndCloseIterator(store.fetch("1", "2"));
             if (!emitFinal) {
                 assertThat(
                         data,
@@ -255,7 +255,7 @@ public class SessionWindowedKStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final SessionStore<String, String> sessionStore = driver.getSessionStore("reduced");
-            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(sessionStore.fetch("1", "2"));
+            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch("1", "2"));
 
             if (!emitFinal) {
                 assertThat(
@@ -288,7 +288,7 @@ public class SessionWindowedKStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final SessionStore<String, String> sessionStore = driver.getSessionStore("aggregated");
-            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(sessionStore.fetch("1", "2"));
+            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch("1", "2"));
             if (!emitFinal) {
                 assertThat(
                         data,

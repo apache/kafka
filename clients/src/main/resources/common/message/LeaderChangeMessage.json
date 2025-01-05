@@ -20,20 +20,21 @@
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
-    {"name": "Version", "type": "int16", "versions": "0+",
-      "about": "The version of the leader change message"},
-    {"name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
-      "about": "The ID of the newly elected leader"},
-    {"name": "Voters", "type": "[]Voter", "versions": "0+",
-      "about": "The set of voters in the quorum for this epoch"},
-    {"name": "GrantingVoters", "type": "[]Voter", "versions": "0+",
-      "about": "The voters who voted for the leader at the time of election"}
+    { "name": "Version", "type": "int16", "versions": "0+",
+      "about": "The version of the leader change message."},
+    { "name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+      "about": "The ID of the newly elected leader."},
+    { "name": "Voters", "type": "[]Voter", "versions": "0+",
+      "about": "The set of voters in the quorum for this epoch."},
+    { "name": "GrantingVoters", "type": "[]Voter", "versions": "0+",
+      "about": "The voters who voted for the leader at the time of election."}
   ],
   "commonStructs": [
     { "name": "Voter", "versions": "0+", "fields": [
-      {"name": "VoterId", "type": "int32", "versions": "0+"},
-      {"name": "VoterDirectoryId", "type": "uuid", "versions": "1+",
-        "about": "The directory id of the voter"}
+      { "name": "VoterId", "type": "int32", "versions": "0+",
+        "about": "The ID of the voter."},
+      { "name": "VoterDirectoryId", "type": "uuid", "versions": "1+",
+        "about": "The directory id of the voter."}
     ]}
   ]
 }

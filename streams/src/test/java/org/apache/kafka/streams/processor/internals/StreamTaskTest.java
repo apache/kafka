@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -157,8 +157,8 @@ public class StreamTaskTest {
     private final LogContext logContext = new LogContext("[test] ");
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
-    private final TopicPartition partition1 = new TopicPartition(topic1, 1);
-    private final TopicPartition partition2 = new TopicPartition(topic2, 1);
+    private final TopicPartition partition1 = new TopicPartition(topic1, 0);
+    private final TopicPartition partition2 = new TopicPartition(topic2, 0);
     private final Set<TopicPartition> partitions = new HashSet<>(List.of(partition1, partition2));
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
@@ -189,7 +189,7 @@ public class StreamTaskTest {
     private final MockKeyValueStore stateStore = new MockKeyValueStore(storeName, false);
     private final TopicPartition changelogPartition = new TopicPartition("store-changelog", 1);
 
-    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final String threadId = Thread.currentThread().getName();
@@ -440,7 +440,7 @@ public class StreamTaskTest {
         task.addPartitionsForOffsetReset(Collections.singleton(partition1));
 
         final AtomicReference<AssertionError> shouldNotSeek = new AtomicReference<>();
-        try (final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST) {
+        try (final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
                 @Override
                 public void seek(final TopicPartition partition, final long offset) {
                     final AssertionError error = shouldNotSeek.get();
@@ -1080,6 +1080,70 @@ public class StreamTaskTest {
         task.resumePollingForPartitionsWithAvailableSpace();
 
         assertEquals(0, consumer.paused().size());
+    }
+
+    @Test
+    public void shouldResumePartitionWhenSkippingOverRecordsWithInvalidTs() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(
+            StreamsConfig.AT_LEAST_ONCE,
+            "-1",
+            LogAndContinueExceptionHandler.class,
+            LogAndFailProcessingExceptionHandler.class,
+            LogAndSkipOnInvalidTimestamp.class
+        ));
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        task.addRecords(partition1, asList(
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 20),
+            getConsumerRecordWithInvalidTimestamp(30),
+            getConsumerRecordWithInvalidTimestamp(40),
+            getConsumerRecordWithInvalidTimestamp(50)
+        ));
+        assertTrue(consumer.paused().contains(partition1));
+
+        assertTrue(task.process(0L));
+
+        task.resumePollingForPartitionsWithAvailableSpace();
+        assertTrue(consumer.paused().contains(partition1));
+
+        assertTrue(task.process(0L));
+
+        task.resumePollingForPartitionsWithAvailableSpace();
+        assertEquals(0, consumer.paused().size());
+
+        assertTrue(task.process(0L)); // drain head record (ie, last invalid record)
+        assertFalse(task.process(0L));
+        assertFalse(task.hasRecordsQueued());
+
+
+        // repeat test for deserialization error
+        task.resumePollingForPartitionsWithAvailableSpace();
+        task.addRecords(partition1, asList(
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 110),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 120),
+            getCorruptedConsumerRecordWithOffsetAsTimestamp(130),
+            getCorruptedConsumerRecordWithOffsetAsTimestamp(140),
+            getCorruptedConsumerRecordWithOffsetAsTimestamp(150)
+        ));
+        assertTrue(consumer.paused().contains(partition1));
+
+        assertTrue(task.process(0L));
+
+        task.resumePollingForPartitionsWithAvailableSpace();
+        assertTrue(consumer.paused().contains(partition1));
+
+        assertTrue(task.process(0L));
+
+        task.resumePollingForPartitionsWithAvailableSpace();
+        assertEquals(0, consumer.paused().size());
+
+        assertTrue(task.process(0L)); // drain head record (ie, last corrupted record)
+        assertFalse(task.process(0L));
+        assertFalse(task.hasRecordsQueued());
     }
 
     @Test
@@ -1965,7 +2029,7 @@ public class StreamTaskTest {
     public void shouldThrowStreamsExceptionWhenFetchCommittedFailed() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+        final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 throw new KafkaException("KABOOM!");
@@ -3029,7 +3093,7 @@ public class StreamTaskTest {
             singletonList(stateStore),
             emptyMap());
 
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 throw new TimeoutException("KABOOM!");
@@ -3314,7 +3378,7 @@ public class StreamTaskTest {
     private ConsumerRecord<byte[], byte[]> getConsumerRecordWithOffsetAsTimestamp(final Integer key, final long offset) {
         return new ConsumerRecord<>(
             topic1,
-            1,
+            0,
             offset,
             offset, // use the offset as the timestamp
             TimestampType.CREATE_TIME,
@@ -3330,7 +3394,7 @@ public class StreamTaskTest {
     private ConsumerRecord<byte[], byte[]> getConsumerRecordWithInvalidTimestamp(final long offset) {
         return new ConsumerRecord<>(
             topic1,
-            1,
+            0,
             offset,
             -1L, // invalid (negative) timestamp
             TimestampType.CREATE_TIME,
@@ -3347,24 +3411,24 @@ public class StreamTaskTest {
                                                                                                  final long offset,
                                                                                                  final int leaderEpoch) {
         return new ConsumerRecord<>(
-                topicPartition.topic(),
-                topicPartition.partition(),
-                offset,
-                offset, // use the offset as the timestamp
-                TimestampType.CREATE_TIME,
-                0,
-                0,
-                recordKey,
-                recordValue,
-                new RecordHeaders(),
-                Optional.of(leaderEpoch)
+            topicPartition.topic(),
+            topicPartition.partition(),
+            offset,
+            offset, // use the offset as the timestamp
+            TimestampType.CREATE_TIME,
+            0,
+            0,
+            recordKey,
+            recordValue,
+            new RecordHeaders(),
+            Optional.of(leaderEpoch)
         );
     }
 
     private ConsumerRecord<byte[], byte[]> getCorruptedConsumerRecordWithOffsetAsTimestamp(final long offset) {
         return new ConsumerRecord<>(
             topic1,
-            1,
+            0,
             offset,
             offset, // use the offset as the timestamp
             TimestampType.CREATE_TIME,

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.test.api;
 
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -28,6 +28,6 @@ import java.lang.annotation.Target;
 @Target({ElementType.ANNOTATION_TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ClusterFeature {
-    Features feature();
+    Feature feature();
     short version();
 }

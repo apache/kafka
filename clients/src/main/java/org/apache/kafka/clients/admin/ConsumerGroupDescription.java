@@ -27,6 +27,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -42,9 +43,11 @@ public class ConsumerGroupDescription {
     private final GroupState groupState;
     private final Node coordinator;
     private final Set<AclOperation> authorizedOperations;
+    private final Optional<Integer> groupEpoch;
+    private final Optional<Integer> targetAssignmentEpoch;
 
     /**
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupState, Node)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)}.
      */
     @Deprecated
     public ConsumerGroupDescription(String groupId,
@@ -57,7 +60,7 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupState, Node, Set)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)}.
      */
     @Deprecated
     public ConsumerGroupDescription(String groupId,
@@ -71,7 +74,7 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)}.
      */
     @Deprecated
     public ConsumerGroupDescription(String groupId,
@@ -90,25 +93,8 @@ public class ConsumerGroupDescription {
         this.groupState = GroupState.parse(state.name());
         this.coordinator = coordinator;
         this.authorizedOperations = authorizedOperations;
-    }
-
-    public ConsumerGroupDescription(String groupId,
-                                    boolean isSimpleConsumerGroup,
-                                    Collection<MemberDescription> members,
-                                    String partitionAssignor,
-                                    GroupState groupState,
-                                    Node coordinator) {
-        this(groupId, isSimpleConsumerGroup, members, partitionAssignor, groupState, coordinator, Collections.emptySet());
-    }
-
-    public ConsumerGroupDescription(String groupId,
-                                    boolean isSimpleConsumerGroup,
-                                    Collection<MemberDescription> members,
-                                    String partitionAssignor,
-                                    GroupState groupState,
-                                    Node coordinator,
-                                    Set<AclOperation> authorizedOperations) {
-        this(groupId, isSimpleConsumerGroup, members, partitionAssignor, GroupType.CLASSIC, groupState, coordinator, authorizedOperations);
+        this.groupEpoch = Optional.empty();
+        this.targetAssignmentEpoch = Optional.empty();
     }
 
     public ConsumerGroupDescription(String groupId,
@@ -118,7 +104,9 @@ public class ConsumerGroupDescription {
                                     GroupType type,
                                     GroupState groupState,
                                     Node coordinator,
-                                    Set<AclOperation> authorizedOperations) {
+                                    Set<AclOperation> authorizedOperations,
+                                    Optional<Integer> groupEpoch,
+                                    Optional<Integer> targetAssignmentEpoch) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.members = members == null ? Collections.emptyList() : List.copyOf(members);
@@ -127,6 +115,8 @@ public class ConsumerGroupDescription {
         this.groupState = groupState;
         this.coordinator = coordinator;
         this.authorizedOperations = authorizedOperations;
+        this.groupEpoch = groupEpoch;
+        this.targetAssignmentEpoch = targetAssignmentEpoch;
     }
 
     @Override
@@ -141,12 +131,15 @@ public class ConsumerGroupDescription {
             type == that.type &&
             groupState == that.groupState &&
             Objects.equals(coordinator, that.coordinator) &&
-            Objects.equals(authorizedOperations, that.authorizedOperations);
+            Objects.equals(authorizedOperations, that.authorizedOperations) &&
+            Objects.equals(groupEpoch, that.groupEpoch) &&
+            Objects.equals(targetAssignmentEpoch, that.targetAssignmentEpoch);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, isSimpleConsumerGroup, members, partitionAssignor, type, groupState, coordinator, authorizedOperations);
+        return Objects.hash(groupId, isSimpleConsumerGroup, members, partitionAssignor, type, groupState, coordinator,
+            authorizedOperations, groupEpoch, targetAssignmentEpoch);
     }
 
     /**
@@ -215,6 +208,24 @@ public class ConsumerGroupDescription {
         return authorizedOperations;
     }
 
+    /**
+     * The epoch of the consumer group.
+     * The optional is set to an integer if it is a {@link GroupType#CONSUMER} group, and to empty if it
+     * is a {@link GroupType#CLASSIC} group.
+     */
+    public Optional<Integer> groupEpoch() {
+        return groupEpoch;
+    }
+
+    /**
+     * The epoch of the target assignment.
+     * The optional is set to an integer if it is a {@link GroupType#CONSUMER} group, and to empty if it
+     * is a {@link GroupType#CLASSIC} group.
+     */
+    public Optional<Integer> targetAssignmentEpoch() {
+        return targetAssignmentEpoch;
+    }
+
     @Override
     public String toString() {
         return "(groupId=" + groupId +
@@ -225,6 +236,8 @@ public class ConsumerGroupDescription {
             ", groupState=" + groupState +
             ", coordinator=" + coordinator +
             ", authorizedOperations=" + authorizedOperations +
+            ", groupEpoch=" + groupEpoch.orElse(null) +
+            ", targetAssignmentEpoch=" + targetAssignmentEpoch.orElse(null) +
             ")";
     }
 }
