@@ -642,10 +642,8 @@ public class LeaderState<T> implements EpochState {
     private ReplicaState getOrCreateReplicaState(ReplicaKey replicaKey) {
         ReplicaState state = voterStates.get(replicaKey.id());
         if (state == null || !state.matchesKey(replicaKey)) {
-            LeaderState.ReplicaState previous = observerStates.putIfAbsent(replicaKey, new ReplicaState(replicaKey, false, Endpoints.empty()));
-            if (previous == null) {
-                kafkaRaftMetrics.updateNumObservers(observerStates.size());
-            }
+            observerStates.putIfAbsent(replicaKey, new ReplicaState(replicaKey, false, Endpoints.empty()));
+            kafkaRaftMetrics.updateNumObservers(observerStates.size());
             return observerStates.get(replicaKey);
         }
         return state;
@@ -664,13 +662,11 @@ public class LeaderState<T> implements EpochState {
      * Clear observer states that have not been active for a while and are not the leader.
      */
     private void clearInactiveObservers(final long currentTimeMs) {
-        boolean removed = observerStates.entrySet().removeIf(integerReplicaStateEntry ->
+        observerStates.entrySet().removeIf(integerReplicaStateEntry ->
             currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS &&
             !integerReplicaStateEntry.getKey().equals(localReplicaKey)
         );
-        if (removed) {
-            kafkaRaftMetrics.updateNumObservers(observerStates.size());
-        }
+        kafkaRaftMetrics.updateNumObservers(observerStates.size());
     }
 
     private boolean isVoter(ReplicaKey remoteReplicaKey) {
@@ -689,10 +685,8 @@ public class LeaderState<T> implements EpochState {
 
             // Remove the voter from the previous data structures
             oldVoterStates.remove(voterNode.voterKey().id());
-            LeaderState.ReplicaState previous = observerStates.remove(voterNode.voterKey());
-            if (previous != null) {
-                kafkaRaftMetrics.updateNumObservers(observerStates.size());
-            }
+            observerStates.remove(voterNode.voterKey());
+            kafkaRaftMetrics.updateNumObservers(observerStates.size());
 
             // Make sure that the replica key in the replica state matches the voter's
             state.setReplicaKey(voterNode.voterKey());
@@ -706,11 +700,13 @@ public class LeaderState<T> implements EpochState {
         // Move any of the remaining old voters to observerStates
         for (ReplicaState replicaStateEntry : oldVoterStates.values()) {
             replicaStateEntry.clearListeners();
-            LeaderState.ReplicaState previous = observerStates.putIfAbsent(replicaStateEntry.replicaKey, replicaStateEntry);
-            if (previous == null) {
-                kafkaRaftMetrics.updateNumObservers(observerStates.size());
-            }
+            observerStates.putIfAbsent(replicaStateEntry.replicaKey, replicaStateEntry);
+            kafkaRaftMetrics.updateNumObservers(observerStates.size());
         }
+    }
+
+    public KafkaRaftMetrics getKafkaRaftMetrics() {
+        return kafkaRaftMetrics;
     }
 
     public static class ReplicaState implements Comparable<ReplicaState> {

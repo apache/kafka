@@ -2347,7 +2347,7 @@ public class KafkaRaftClientReconfigTest {
     }
 
     @Test
-    public void testLeaderMetrics() throws Exception {
+    public void testLeaderMetricsAreReset() throws Exception {
         ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
