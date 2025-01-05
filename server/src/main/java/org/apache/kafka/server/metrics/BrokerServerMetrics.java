@@ -176,6 +176,10 @@ public final class BrokerServerMetrics implements AutoCloseable {
     }
 
     public void setIgnoredStaticVoters() {
-        ignoredStaticVoters.compareAndSet(false, true);
+        ignoredStaticVoters.set(true);
+    }
+
+    public boolean ignoredStaticVoters() {
+        return ignoredStaticVoters.get();
     }
 }

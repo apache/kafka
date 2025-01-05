@@ -45,6 +45,7 @@ import java.util.Random;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class KafkaRaftMetricsTest {
 
@@ -417,6 +418,54 @@ public class KafkaRaftMetricsTest {
 
         raftMetrics.updateFetchedRecords(48);
         assertEquals(2.4, getMetric(metrics, "fetch-records-rate").metricValue());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void testNumberOfVoters(KRaftVersion kraftVersion) {
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
+        raftMetrics.initialize(state);
+        state.initialize(new OffsetAndEpoch(0L, 0));
+
+        assertEquals(0, getMetric(metrics, "number-of-voters").metricValue());
+
+        raftMetrics.updateNumVoters(3);
+        assertEquals(3, getMetric(metrics, "number-of-voters").metricValue());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void testLeaderMetrics(KRaftVersion kraftVersion) {
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
+        raftMetrics.initialize(state);
+        state.initialize(new OffsetAndEpoch(0L, 0));
+
+        assertNull(getMetric(metrics, "number-of-observers"));
+        assertNull(getMetric(metrics, "uncommitted-voter-change"));
+
+        raftMetrics.addLeaderMetrics();
+
+        assertEquals(0, getMetric(metrics, "number-of-observers").metricValue());
+        assertEquals(false, getMetric(metrics, "uncommitted-voter-change").metricValue());
+
+        raftMetrics.updateNumObservers(1);
+        raftMetrics.updateUncommittedVoterChange(true);
+
+        assertEquals(1, getMetric(metrics, "number-of-observers").metricValue());
+        assertEquals(true, getMetric(metrics, "uncommitted-voter-change").metricValue());
+
+        raftMetrics.removeLeaderMetrics();
+
+        assertNull(getMetric(metrics, "number-of-observers"));
+        assertNull(getMetric(metrics, "uncommitted-voter-change"));
+
+        // Check that these metrics are reset to default values when added back
+        raftMetrics.addLeaderMetrics();
+
+        assertEquals(0, getMetric(metrics, "number-of-observers").metricValue());
+        assertEquals(false, getMetric(metrics, "uncommitted-voter-change").metricValue());
     }
 
     private KafkaMetric getMetric(final Metrics metrics, final String name) {

@@ -42,9 +42,15 @@ import java.util.Optional;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class KRaftControlRecordStateMachineTest {
     private static final RecordSerde<String> STRING_SERDE = new StringSerde();
+    private static BrokerServerMetrics brokerServerMetrics = new BrokerServerMetrics(new Metrics());
+    private static ControllerMetadataMetrics controllerMetadataMetrics = new ControllerMetadataMetrics(
+        Optional.of(new MetricsRegistry())
+    );
 
     private static MockLog buildLog() {
         return new MockLog(new TopicPartition("partition", 0), Uuid.randomUuid(), new LogContext());
@@ -60,14 +66,15 @@ final class KRaftControlRecordStateMachineTest {
             new LogContext(),
             new KafkaRaftMetrics(new Metrics(), "raft"),
             new DefaultExternalKRaftMetrics(
-                new BrokerServerMetrics(new Metrics()),
-                new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()))
+                brokerServerMetrics,
+                controllerMetadataMetrics
             )
         );
     }
 
     @Test
     void testEmptyPartition() {
+        resetExternalMetrics();
         MockLog log = buildLog();
         VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
 
@@ -77,6 +84,8 @@ final class KRaftControlRecordStateMachineTest {
         partitionState.updateState();
 
         assertEquals(voterSet, partitionState.lastVoterSet());
+        assertFalse(brokerServerMetrics.ignoredStaticVoters());
+        assertFalse(controllerMetadataMetrics.ignoredStaticVoters());
     }
 
     @Test
@@ -93,12 +102,15 @@ final class KRaftControlRecordStateMachineTest {
 
     @Test
     void testUpdateWithoutSnapshot() {
+        resetExternalMetrics();
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+        assertFalse(brokerServerMetrics.ignoredStaticVoters());
+        assertFalse(controllerMetadataMetrics.ignoredStaticVoters());
 
         // Append the kraft.version control record
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -132,6 +144,8 @@ final class KRaftControlRecordStateMachineTest {
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
+        assertTrue(brokerServerMetrics.ignoredStaticVoters());
+        assertTrue(controllerMetadataMetrics.ignoredStaticVoters());
     }
 
     @Test
@@ -187,11 +201,14 @@ final class KRaftControlRecordStateMachineTest {
 
     @Test
     void testUpdateWithSnapshot() {
+        resetExternalMetrics();
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         int epoch = 1;
 
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+        assertFalse(brokerServerMetrics.ignoredStaticVoters());
+        assertFalse(controllerMetadataMetrics.ignoredStaticVoters());
 
         // Create a snapshot that has kraft.version and voter set control records
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -212,16 +229,21 @@ final class KRaftControlRecordStateMachineTest {
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
+        assertTrue(brokerServerMetrics.ignoredStaticVoters());
+        assertTrue(controllerMetadataMetrics.ignoredStaticVoters());
     }
 
     @Test
     void testUpdateWithSnapshotAndLogOverride() {
+        resetExternalMetrics();
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+        assertFalse(brokerServerMetrics.ignoredStaticVoters());
+        assertFalse(controllerMetadataMetrics.ignoredStaticVoters());
 
         // Create a snapshot that has kraft.version and voter set control records
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -256,6 +278,8 @@ final class KRaftControlRecordStateMachineTest {
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
+        assertTrue(brokerServerMetrics.ignoredStaticVoters());
+        assertTrue(controllerMetadataMetrics.ignoredStaticVoters());
 
         // Check the voter set at the snapshot
         assertEquals(Optional.of(snapshotVoterSet), partitionState.voterSetAtOffset(snapshotId.offset() - 1));
@@ -400,5 +424,10 @@ final class KRaftControlRecordStateMachineTest {
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(kraftVersionOffset));
         assertEquals(Optional.empty(), partitionState.voterSetAtOffset(firstVoterSetOffset));
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(voterSetOffset));
+    }
+
+    void resetExternalMetrics() {
+        brokerServerMetrics = new BrokerServerMetrics(new Metrics());
+        controllerMetadataMetrics = new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()));
     }
 }

@@ -20,6 +20,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
@@ -2343,6 +2344,88 @@ public class KafkaRaftClientReconfigTest {
             leaderEpoch,
             OptionalInt.of(leader.id())
         );
+    }
+
+    @Test
+    public void testLeaderMetrics() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        // Check expected metrics values for leader
+        assertEquals(2, getMetric(context.metrics, "number-of-voters").metricValue());
+        assertEquals(false, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+
+        ReplicaKey newVoter = replicaKey(local.id() + 2, true);
+        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
+            "localhost",
+            9990 + newVoter.id()
+        );
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+            Collections.singletonMap(context.channel.listenerName(), newAddress)
+        );
+
+        // Establish a HWM and fence previous leaders
+        context.deliverRequest(
+            context.fetchRequest(epoch, follower, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+
+        // Catch up the new voter to the leader's LEO, the new voter is still an observer at this point
+        context.deliverRequest(
+            context.fetchRequest(epoch, newVoter, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+        assertEquals(1, getMetric(context.metrics, "number-of-observers").metricValue());
+
+        // Attempt to add new voter to the quorum
+        context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
+
+        // Leader should send an API_VERSIONS request to the new voter's endpoint
+        context.pollUntilRequest();
+        assertEquals(true, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
+        RaftRequest.Outbound apiVersionRequest = context.assertSentApiVersionsRequest();
+        assertEquals(
+            new Node(newVoter.id(), newAddress.getHostString(), newAddress.getPort()),
+            apiVersionRequest.destination()
+        );
+
+        // Leader completes the AddVoter RPC when resigning
+        context.client.resign(epoch);
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.NOT_LEADER_OR_FOLLOWER);
+
+        assertEquals(2, getMetric(context.metrics, "number-of-voters").metricValue());
+        assertNull(getMetric(context.metrics, "number-of-observers"));
+        assertNull(getMetric(context.metrics, "uncommitted-voter-change"));
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound request = context.assertSentEndQuorumEpochRequest(epoch, follower.id());
+
+        EndQuorumEpochResponseData response = context.endEpochResponse(
+            epoch,
+            OptionalInt.of(local.id())
+        );
+
+        context.deliverResponse(request.correlationId(), request.destination(), response);
+        context.client.poll();
+
+        // Become leader again and verify metrics values have been reset
+        context.becomeLeader();
+        assertEquals(0, getMetric(context.metrics, "number-of-observers").metricValue());
+        assertEquals(false, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
     }
 
     private static void verifyVotersRecord(

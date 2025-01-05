@@ -17,7 +17,9 @@
 package org.apache.kafka.raft;
 
 import com.yammer.metrics.core.MetricsRegistry;
+
 import kafka.raft.DefaultExternalKRaftMetrics;
+
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
