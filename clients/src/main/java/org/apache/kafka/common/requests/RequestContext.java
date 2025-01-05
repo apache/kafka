@@ -151,7 +151,7 @@ public class RequestContext implements AuthorizableRequestContext {
     }
 
     private boolean isUnsupportedApiVersionsRequest() {
-        return header.apiKey() == API_VERSIONS && !API_VERSIONS.isVersionSupported(header.apiVersion());
+        return header.apiKey() == API_VERSIONS && !header.isApiVersionSupported();
     }
 
     public short apiVersion() {

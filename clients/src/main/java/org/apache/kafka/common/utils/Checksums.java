@@ -16,34 +16,15 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.nio.ByteBuffer;
 import java.util.zip.Checksum;
 
 /**
  * Utility methods for `Checksum` instances.
  *
- * Implementation note: we can add methods to our implementations of CRC32 and CRC32C, but we cannot do the same for
- * the Java implementations (we prefer the Java 9 implementation of CRC32C if available). A utility class is the
- * simplest way to add methods that are useful for all Checksum implementations.
- *
  * NOTE: This class is intended for INTERNAL usage only within Kafka.
  */
 public final class Checksums {
-    private static final MethodHandle BYTE_BUFFER_UPDATE;
-
-    static {
-        MethodHandle byteBufferUpdate = null;
-        try {
-            byteBufferUpdate = MethodHandles.publicLookup().findVirtual(Checksum.class, "update",
-                    MethodType.methodType(void.class, ByteBuffer.class));
-        } catch (Throwable t) {
-            handleUpdateThrowable(t);
-        }
-        BYTE_BUFFER_UPDATE = byteBufferUpdate;
-    }
 
     private Checksums() {
     }
@@ -63,7 +44,7 @@ public final class Checksums {
     public static void update(Checksum checksum, ByteBuffer buffer, int offset, int length) {
         if (buffer.hasArray()) {
             checksum.update(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, length);
-        } else if (BYTE_BUFFER_UPDATE != null && buffer.isDirect()) {
+        } else if (buffer.isDirect()) {
             final int oldPosition = buffer.position();
             final int oldLimit = buffer.limit();
             try {
@@ -71,9 +52,7 @@ public final class Checksums {
                 final int start = oldPosition + offset;
                 buffer.limit(start + length);
                 buffer.position(start);
-                BYTE_BUFFER_UPDATE.invokeExact(checksum, buffer);
-            } catch (Throwable t) {
-                handleUpdateThrowable(t);
+                checksum.update(buffer);
             } finally {
                 // reset buffer's offsets
                 buffer.limit(oldLimit);
@@ -86,16 +65,6 @@ public final class Checksums {
                 checksum.update(buffer.get(i));
             }
         }
-    }
-
-    private static void handleUpdateThrowable(Throwable t) {
-        if (t instanceof RuntimeException) {
-            throw (RuntimeException) t;
-        }
-        if (t instanceof Error) {
-            throw (Error) t;
-        }
-        throw new IllegalStateException(t);
     }
     
     public static void updateInt(Checksum checksum, int input) {

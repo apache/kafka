@@ -420,7 +420,7 @@ public class MirrorSourceConnector extends SourceConnector {
     void syncTopicAcls()
             throws InterruptedException, ExecutionException {
         Optional<Collection<AclBinding>> rawBindings = listTopicAclBindings();
-        if (!rawBindings.isPresent())
+        if (rawBindings.isEmpty())
             return;
         List<AclBinding> filteredBindings = rawBindings.get().stream()
             .filter(x -> x.pattern().resourceType() == ResourceType.TOPIC)

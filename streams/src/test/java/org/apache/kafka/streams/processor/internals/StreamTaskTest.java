@@ -1552,7 +1552,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
-        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
+        assertThat("task is not idling", task.timeCurrentIdlingStarted().isEmpty());
 
         assertFalse(task.process(0L));
 
@@ -1564,7 +1564,7 @@ public class StreamTaskTest {
         task.addRecords(partition2, singleton(getConsumerRecordWithOffsetAsTimestamp(partition2, 0)));
 
         assertTrue(task.process(0L));
-        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
+        assertThat("task is not idling", task.timeCurrentIdlingStarted().isEmpty());
     }
 
     @Test
@@ -1580,7 +1580,7 @@ public class StreamTaskTest {
 
         task.resume();
 
-        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
+        assertThat("task is not idling", task.timeCurrentIdlingStarted().isEmpty());
     }
 
     @Test

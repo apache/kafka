@@ -2119,8 +2119,7 @@ public class LogValidatorTest {
     }
 
     private void maybeCheckBaseTimestamp(long expected, RecordBatch batch) {
-        if (batch instanceof DefaultRecordBatch) {
-            DefaultRecordBatch b = (DefaultRecordBatch) batch;
+        if (batch instanceof DefaultRecordBatch b) {
             assertEquals(expected, b.baseTimestamp(), "Unexpected base timestamp of batch " + batch);
         }
     }

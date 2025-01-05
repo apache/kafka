@@ -116,8 +116,7 @@ public final class FeaturesImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof FeaturesImage)) return false;
-        FeaturesImage other = (FeaturesImage) o;
+        if (!(o instanceof FeaturesImage other)) return false;
         return finalizedVersions.equals(other.finalizedVersions) &&
             metadataVersion.equals(other.metadataVersion);
     }
