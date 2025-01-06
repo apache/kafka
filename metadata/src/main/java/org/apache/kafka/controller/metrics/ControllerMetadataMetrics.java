@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller.metrics;
 
-import org.apache.kafka.raft.ExternalKRaftMetrics;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import com.yammer.metrics.core.Gauge;
