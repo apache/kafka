@@ -326,7 +326,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             int currIndex = 0;
             int cumValueSize = 0;
 
-            long latestValidToKnown = -1; // When ignoring tombstones, latest valid "validTo" value known
+            // When ignoring tombstones, latest valid "validTo" value known
+            // if "latestValidToKnown", we need to find a correct one in the following segments
+            long latestValidToKnown = -1; 
             while (currTimestamp != minTimestamp) {
                 if (currIndex <= deserIndex) {
                     final TimestampAndValueSize curr = unpackedReversedTimestampAndValueSizes.get(currIndex);
@@ -351,25 +353,14 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                             final byte[] value = new byte[currValueSize];
                             final int valueSegmentIndex = segmentValue.length - cumValueSize;
                             System.arraycopy(segmentValue, valueSegmentIndex, value, 0, currValueSize);
-                            // we need to have a valid "validTo" timestamp in this case
-                            // id this is the upper bound (greater timestamp) of the segment, we will be
-                            // searching in next segment
                             return new SegmentSearchResult(currIndex, currTimestamp,
                                     ignoreTombstone ? latestValidToKnown : currNextTimestamp, value);
                         } else if (!ignoreTombstone) {
                             return new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, null);
-                        } else {
-                            // we have a tombstone value, we skip and go to next iteration
-                            currIndex++;
-                            continue;
                         }
-                    } else {
-                        if (ignoreTombstone && currValueSize < 0) {
-                            // we have a tombstone value, we skip and go to next iteration
-                            currIndex++;
-                            continue;
-                        }
-                        return new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp);
+                    } else if (!ignoreTombstone || currValueSize > 0) {
+                        return new SegmentSearchResult(currIndex, currTimestamp,
+                                ignoreTombstone ? latestValidToKnown : currNextTimestamp);
                     }
                 }
 
