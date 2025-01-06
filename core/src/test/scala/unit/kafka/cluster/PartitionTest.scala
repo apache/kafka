@@ -43,7 +43,7 @@ import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, Semaphore}
-import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.DelayedShareFetch
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.compress.Compression
@@ -66,6 +66,7 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import scala.List
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
 
@@ -1501,7 +1502,7 @@ class PartitionTest extends AbstractPartitionTest {
     val isrItem = alterPartitionManager.isrUpdates.head
     assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId).map(Int.box).asJava)
     isrItem.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
-      // In ZK mode, the broker epochs in the leaderAndIsr should be -1.
+      // the broker epochs in the leaderAndIsr should be -1.
       assertEquals(-1, brokerState.brokerEpoch())
     }
     assertEquals(Set(brokerId), partition.partitionState.isr)
@@ -1680,8 +1681,6 @@ class PartitionTest extends AbstractPartitionTest {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testIsrNotExpandedIfReplicaIsFencedOrShutdown(quorum: String): Unit = {
-    val kraft = quorum == "kraft"
-
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
@@ -1691,20 +1690,13 @@ class PartitionTest extends AbstractPartitionTest {
     val replicas = List(brokerId, remoteBrokerId)
     val isr = Set(brokerId)
 
-    val metadataCache: MetadataCache = if (kraft) mock(classOf[KRaftMetadataCache]) else mock(classOf[ZkMetadataCache])
-    if (kraft) {
-      addBrokerEpochToMockMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], replicas)
-    }
+    val metadataCache: MetadataCache = mock(classOf[KRaftMetadataCache])
+    addBrokerEpochToMockMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], replicas)
 
     // Mark the remote broker as eligible or ineligible in the metadata cache of the leader.
     // When using kraft, we can make the broker ineligible by fencing it.
-    // In ZK mode, we must mark the broker as alive for it to be eligible.
     def markRemoteReplicaEligible(eligible: Boolean): Unit = {
-      if (kraft) {
-        when(metadataCache.asInstanceOf[KRaftMetadataCache].isBrokerFenced(remoteBrokerId)).thenReturn(!eligible)
-      } else {
-        when(metadataCache.hasAliveBroker(remoteBrokerId)).thenReturn(eligible)
-      }
+      when(metadataCache.asInstanceOf[KRaftMetadataCache].isBrokerFenced(remoteBrokerId)).thenReturn(!eligible)
     }
 
     val partition = new Partition(
@@ -1843,7 +1835,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(isr, partition.partitionState.maximalIsr)
 
     // Fetch to let the follower catch up to the log end offset, but using a wrong broker epoch. The expansion should fail.
-    addBrokerEpochToMockMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], List(brokerId, remoteBrokerId2))
+    addBrokerEpochToMockMetadataCache(metadataCache, List(brokerId, remoteBrokerId2))
     // Create a race case where the replica epoch get bumped right after the previous fetch succeeded.
     val wrongReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1) - 1
     when(metadataCache.getAliveBrokerEpoch(remoteBrokerId1)).thenReturn(Option(wrongReplicaEpoch), Option(defaultBrokerEpoch(remoteBrokerId1)))
@@ -3133,7 +3125,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Some(0L), partition.leaderEpochStartOffsetOpt)
 
     val leaderLog = partition.localLogOrException
-    assertEquals(Optional.of(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.asJava.flatMap(_.latestEntry))
+    assertEquals(Optional.of(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.toJava.flatMap(_.latestEntry))
 
     // Write to the log to increment the log end offset.
     leaderLog.appendAsLeader(MemoryRecords.withRecords(0L, Compression.NONE, 0,
@@ -3157,7 +3149,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
     assertEquals(Set(leaderId), partition.partitionState.isr)
     assertEquals(Some(0L), partition.leaderEpochStartOffsetOpt)
-    assertEquals(Optional.of(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.asJava.flatMap(_.latestEntry))
+    assertEquals(Optional.of(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.toJava.flatMap(_.latestEntry))
   }
 
   @Test
@@ -3706,8 +3698,8 @@ class PartitionTest extends AbstractPartitionTest {
       fetchOffset,
       FetchRequest.INVALID_LOG_START_OFFSET,
       maxBytes,
-      leaderEpoch.map(Int.box).asJava,
-      lastFetchedEpoch.map(Int.box).asJava
+      leaderEpoch.map(Int.box).toJava,
+      lastFetchedEpoch.map(Int.box).toJava
     )
 
     partition.fetchRecords(
@@ -3743,8 +3735,8 @@ class PartitionTest extends AbstractPartitionTest {
       fetchOffset,
       logStartOffset,
       maxBytes,
-      leaderEpoch.map(Int.box).asJava,
-      lastFetchedEpoch.map(Int.box).asJava
+      leaderEpoch.map(Int.box).toJava,
+      lastFetchedEpoch.map(Int.box).toJava
     )
 
     partition.fetchRecords(
