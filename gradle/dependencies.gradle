@@ -213,7 +213,6 @@ libs += [
   log4j1Bridge2Api: "org.apache.logging.log4j:log4j-1.2-api:$versions.log4j2",
   log4j2Api: "org.apache.logging.log4j:log4j-api:$versions.log4j2",
   log4j2Core: "org.apache.logging.log4j:log4j-core:$versions.log4j2",
-  log4j2CoreTest: "org.apache.logging.log4j:log4j-core-test:$versions.log4j2",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
