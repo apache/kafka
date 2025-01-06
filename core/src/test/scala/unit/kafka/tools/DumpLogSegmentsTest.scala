@@ -1119,7 +1119,7 @@ class DumpLogSegmentsTest {
           .setGroupId("gs1")
           .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
           .setPartition(0),
-          ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION),
+          0.toShort),
         new ApiMessageAndVersion(new ShareSnapshotValue()
           .setSnapshotEpoch(0)
           .setStateEpoch(0)
@@ -1132,7 +1132,7 @@ class DumpLogSegmentsTest {
               .setDeliveryState(2)
               .setDeliveryCount(1)
           ).asJava),
-          ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION)
+          0.toShort)
       ))
     )
 
@@ -1147,7 +1147,7 @@ class DumpLogSegmentsTest {
           .setGroupId("gs1")
           .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
           .setPartition(0),
-          ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
+          1.toShort),
         new ApiMessageAndVersion(new ShareUpdateValue()
           .setSnapshotEpoch(0)
           .setLeaderEpoch(0)
