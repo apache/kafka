@@ -463,7 +463,7 @@ public class DescribeConsumerGroupTest {
                         return false;
 
                     Optional<PartitionAssignmentState> maybePartitionState = assignments.get().stream().filter(isGrp).findFirst();
-                    if (!maybePartitionState.isPresent())
+                    if (maybePartitionState.isEmpty())
                         return false;
 
                     PartitionAssignmentState partitionState = maybePartitionState.get();
@@ -837,7 +837,7 @@ public class DescribeConsumerGroupTest {
                             res.getValue().isPresent() &&
                             res.getValue().get().stream().filter(s -> Objects.equals(s.group, group)).count() == 2 &&
                             res.getValue().get().stream().filter(x -> Objects.equals(x.group, group) && x.partition.isPresent()).count() == 2 &&
-                            res.getValue().get().stream().noneMatch(x -> Objects.equals(x.group, group) && !x.partition.isPresent());
+                            res.getValue().get().stream().noneMatch(x -> Objects.equals(x.group, group) && x.partition.isEmpty());
                 }, "Expected two rows (one row per consumer) in describe group results.");
             }
         }
@@ -1031,7 +1031,7 @@ public class DescribeConsumerGroupTest {
                         return false;
 
                     Optional<PartitionAssignmentState> maybeAssignmentState = groupOffsets.getValue().get().stream().filter(isGrp).findFirst();
-                    if (!maybeAssignmentState.isPresent())
+                    if (maybeAssignmentState.isEmpty())
                         return false;
 
                     PartitionAssignmentState assignmentState = maybeAssignmentState.get();

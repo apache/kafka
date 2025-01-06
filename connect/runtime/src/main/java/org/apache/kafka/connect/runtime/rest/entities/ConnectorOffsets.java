@@ -77,10 +77,9 @@ public class ConnectorOffsets {
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof ConnectorOffsets)) {
+        if (!(obj instanceof ConnectorOffsets that)) {
             return false;
         }
-        ConnectorOffsets that = (ConnectorOffsets) obj;
         return Objects.equals(this.offsets, that.offsets);
     }
 

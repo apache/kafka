@@ -66,18 +66,6 @@ object KafkaConfig {
     Option(clientConfig.getProperty(ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName)))
   }
 
-  private[kafka] def setZooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String, kafkaPropValue: Any): Unit = {
-    clientConfig.setProperty(ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName),
-      kafkaPropName match {
-        case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => (kafkaPropValue.toString.toUpperCase == "HTTPS").toString
-        case ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG | ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG => kafkaPropValue match {
-          case list: java.util.List[_] => list.asScala.mkString(",")
-          case _ => kafkaPropValue.toString
-        }
-        case _ => kafkaPropValue.toString
-    })
-  }
-
   // For ZooKeeper TLS client authentication to be enabled the client must (at a minimum) configure itself as using TLS
   // with both a client connection socket and a key store location explicitly set.
   private[kafka] def zkTlsClientAuthEnabled(zkClientConfig: ZKClientConfig): Boolean = {
@@ -192,11 +180,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     this.currentConfig = newConfig
   }
 
-  // The following captures any system properties impacting ZooKeeper TLS configuration
-  // and defines the default values this instance will use if no explicit config is given.
-  // We make it part of each instance rather than the object to facilitate testing.
-  private val zkClientConfigViaSystemProperties = new ZKClientConfig()
-
   override def originals: util.Map[String, AnyRef] =
     if (this eq currentConfig) super.originals else currentConfig.originals
   override def values: util.Map[String, _] =
@@ -250,78 +233,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   private val _quotaConfig = new QuotaConfig(this)
   def quotaConfig: QuotaConfig = _quotaConfig
 
-
-  private def zkBooleanConfigOrSystemPropertyWithDefaultValue(propKey: String): Boolean = {
-    // Use the system property if it exists and the Kafka config value was defaulted rather than actually provided
-    // Need to translate any system property value from true/false (String) to true/false (Boolean)
-    val actuallyProvided = originals.containsKey(propKey)
-    if (actuallyProvided) getBoolean(propKey) else {
-      val sysPropValue = KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey)
-      sysPropValue match {
-        case Some("true") => true
-        case Some(_) => false
-        case _ => getBoolean(propKey) // not specified so use the default value
-      }
-    }
-  }
-
-  private def zkStringConfigOrSystemPropertyWithDefaultValue(propKey: String): String = {
-    // Use the system property if it exists and the Kafka config value was defaulted rather than actually provided
-    val actuallyProvided = originals.containsKey(propKey)
-    if (actuallyProvided) getString(propKey) else {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey) match {
-        case Some(v) => v
-        case _ => getString(propKey) // not specified so use the default value
-      }
-    }
-  }
-
-  private def zkOptionalStringConfigOrSystemProperty(propKey: String): Option[String] = {
-    Option(getString(propKey)).orElse {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey)
-    }
-  }
-  private def zkPasswordConfigOrSystemProperty(propKey: String): Option[Password] = {
-    Option(getPassword(propKey)).orElse {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey).map(new Password(_))
-    }
-  }
-  private def zkListConfigOrSystemProperty(propKey: String): Option[util.List[String]] = {
-    Option(getList(propKey)).orElse {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey).map { sysProp =>
-        sysProp.split("\\s*,\\s*").toBuffer.asJava
-      }
-    }
-  }
-
-  val zkSslClientEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG)
-  val zkClientCnxnSocketClassName = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG)
-  val zkSslKeyStoreLocation = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG)
-  val zkSslKeyStorePassword = zkPasswordConfigOrSystemProperty(ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG)
-  val zkSslKeyStoreType = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG)
-  val zkSslTrustStoreLocation = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG)
-  val zkSslTrustStorePassword = zkPasswordConfigOrSystemProperty(ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG)
-  val zkSslTrustStoreType = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG)
-  val ZkSslProtocol = zkStringConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_PROTOCOL_CONFIG)
-  val ZkSslEnabledProtocols = zkListConfigOrSystemProperty(ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG)
-  val ZkSslCipherSuites = zkListConfigOrSystemProperty(ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG)
-  val ZkSslEndpointIdentificationAlgorithm = {
-    // Use the system property if it exists and the Kafka config value was defaulted rather than actually provided
-    // Need to translate any system property value from true/false to HTTPS/<blank>
-    val kafkaProp = ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
-    val actuallyProvided = originals.containsKey(kafkaProp)
-    if (actuallyProvided)
-      getString(kafkaProp)
-    else {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, kafkaProp) match {
-        case Some("true") => "HTTPS"
-        case Some(_) => ""
-        case None => getString(kafkaProp) // not specified so use the default value
-      }
-    }
-  }
-  val ZkSslCrlEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG)
-  val ZkSslOcspEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG)
   /** ********* General Configuration ***********/
   val brokerIdGenerationEnable: Boolean = getBoolean(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG)
   val maxReservedBrokerId: Int = getInt(ServerConfigs.RESERVED_BROKER_MAX_ID_CONFIG)
@@ -526,8 +437,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   /** ********* Controlled shutdown configuration ***********/
-  val controlledShutdownMaxRetries = getInt(ServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG)
-  val controlledShutdownRetryBackoffMs = getLong(ServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG)
   val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
 
   /** ********* Feature configuration ***********/

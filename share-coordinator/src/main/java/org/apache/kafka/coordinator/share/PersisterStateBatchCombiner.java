@@ -390,8 +390,7 @@ public class PersisterStateBatchCombiner {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof MergeCandidatePair)) return false;
-            MergeCandidatePair that = (MergeCandidatePair) o;
+            if (!(o instanceof MergeCandidatePair that)) return false;
             return Objects.equals(prev, that.prev) && Objects.equals(candidate, that.candidate);
         }
 

@@ -383,12 +383,12 @@ public class LogValidator {
 
                     Optional<ApiRecordError> recordError = validateRecordCompression(sourceCompressionType,
                         recordIndex, record);
-                    if (!recordError.isPresent()) {
+                    if (recordError.isEmpty()) {
                         recordError = validateRecord(batch, topicPartition, record, recordIndex, now,
                             timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic, metricsRecorder);
                     }
 
-                    if (!recordError.isPresent()
+                    if (recordError.isEmpty()
                             && batch.magic() > RecordBatch.MAGIC_VALUE_V0
                             && toMagic > RecordBatch.MAGIC_VALUE_V0) {
 

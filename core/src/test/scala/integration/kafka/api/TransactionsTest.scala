@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
-import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -172,7 +171,6 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @Flaky("KAFKA-18036")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testReadCommittedConsumerShouldNotSeeUndecidedData(quorum: String, groupProtocol: String): Unit = {
@@ -850,7 +848,6 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @Flaky("KAFKA-18306")
   @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isTV2Enabled={2}")
   @CsvSource(Array(
     "kraft, classic, false",

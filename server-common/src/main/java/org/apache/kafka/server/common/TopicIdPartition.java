@@ -48,8 +48,7 @@ public final class TopicIdPartition {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof TopicIdPartition)) return false;
-        TopicIdPartition other = (TopicIdPartition) o;
+        if (!(o instanceof TopicIdPartition other)) return false;
         return other.topicId.equals(topicId) && other.partitionId == partitionId;
     }
 

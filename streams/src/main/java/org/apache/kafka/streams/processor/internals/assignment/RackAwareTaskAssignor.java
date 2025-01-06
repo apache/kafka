@@ -241,7 +241,7 @@ public class RackAwareTaskAssignor {
             final ProcessId processId = entry.getKey();
             KeyValue<String, String> previousRackInfo = null;
             for (final Map.Entry<String, Optional<String>> rackEntry : entry.getValue().entrySet()) {
-                if (!rackEntry.getValue().isPresent()) {
+                if (rackEntry.getValue().isEmpty()) {
                     if (!StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy())) {
                         log.error(
                             String.format("RackId doesn't exist for process %s and consumer %s",
