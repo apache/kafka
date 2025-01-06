@@ -847,7 +847,7 @@ public class RocksDBVersionedStoreTest {
         verifyTimestampedGetValueFromStoreWithoutTombtones("k", BASE_TIMESTAMP + 4, "v1", BASE_TIMESTAMP + 1, BASE_TIMESTAMP + 5);
 
         // Insert new value between v1 and v3 (and expect validTo == PUT_RETURN_CODE_VALID_TO_UNDEFINED)
-        putToStore("k", "v4", BASE_TIMESTAMP + 2, BASE_TIMESTAMP + 3); // TODO: Make put return valid timestamp (in another "put" method) ?
+        putToStore("k", "v4", BASE_TIMESTAMP + 2, BASE_TIMESTAMP + 3); // TODO: Make put return valid "validTo" by ignoring tombstones timestamp (in another "put" method) ?
         verifyTimestampedGetValueFromStoreWithoutTombtones("k", BASE_TIMESTAMP + 4, "v4", BASE_TIMESTAMP + 2, BASE_TIMESTAMP + 5);
     }
     
@@ -866,9 +866,7 @@ public class RocksDBVersionedStoreTest {
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 20, "v4", SEGMENT_INTERVAL + 20, SEGMENT_INTERVAL + 30);
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 30, "v5", SEGMENT_INTERVAL + 30, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
         
-        // Delete the first value of second segment
-        //TODO: Autre bug -> Check segment suivant pour vérifier le "validTo"
-        
+        // Delete the first value of second segment        
         deleteFromStore("k", SEGMENT_INTERVAL - 10);
         deleteFromStore("k", SEGMENT_INTERVAL + 10);
         verifyTimestampedGetValueFromStoreWithoutTombtones("k", SEGMENT_INTERVAL - 10, "v1", BASE_TIMESTAMP, SEGMENT_INTERVAL + 20);
