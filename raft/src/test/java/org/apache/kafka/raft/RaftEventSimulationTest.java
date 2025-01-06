@@ -958,8 +958,7 @@ public class RaftEventSimulationTest {
          */
         @Override
         public boolean acceptOutbound(RaftMessage message) {
-            if (message instanceof RaftRequest.Outbound) {
-                RaftRequest.Outbound request = (RaftRequest.Outbound) message;
+            if (message instanceof RaftRequest.Outbound request) {
                 InetSocketAddress destination = InetSocketAddress.createUnresolved(
                     request.destination().host(),
                     request.destination().port()

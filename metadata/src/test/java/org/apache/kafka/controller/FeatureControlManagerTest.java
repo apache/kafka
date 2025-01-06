@@ -77,7 +77,7 @@ public class FeatureControlManagerTest {
     }
 
     public static QuorumFeatures features(Object... args) {
-        Map<String, VersionRange> features = QuorumFeatures.defaultFeatureMap(true);
+        Map<String, VersionRange> features = QuorumFeatures.defaultSupportedFeatureMap(true);
         features.putAll(rangeMap(args));
         return new QuorumFeatures(0, features, emptyList());
     }

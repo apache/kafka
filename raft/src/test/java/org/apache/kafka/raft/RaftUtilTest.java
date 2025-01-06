@@ -95,13 +95,6 @@ public class RaftUtilTest {
 
     private static Stream<Arguments> singletonFetchRequestTestCases() {
         return Stream.of(
-                Arguments.of(new FetchRequestTestCase(Uuid.ZERO_UUID, (short) 0, (short) -1,
-                        "{\"replicaId\":-1,\"maxWaitMs\":0,\"minBytes\":0,\"topics\":[{\"topic\":\"topic\"," +
-                            "\"partitions\":[{\"partition\":2,\"fetchOffset\":333,\"partitionMaxBytes\":10}]}]}")),
-                Arguments.of(new FetchRequestTestCase(Uuid.ZERO_UUID, (short) 3, (short) -1,
-                        "{\"replicaId\":-1,\"maxWaitMs\":0,\"minBytes\":0,\"maxBytes\":2147483647," +
-                            "\"topics\":[{\"topic\":\"topic\",\"partitions\":[{\"partition\":2,\"fetchOffset\":333," +
-                            "\"partitionMaxBytes\":10}]}]}")),
                 Arguments.of(new FetchRequestTestCase(Uuid.ZERO_UUID, (short) 4, (short) -1,
                         "{\"replicaId\":-1,\"maxWaitMs\":0,\"minBytes\":0,\"maxBytes\":2147483647,\"isolationLevel\":0," +
                             "\"topics\":[{\"topic\":\"topic\",\"partitions\":[{\"partition\":2,\"fetchOffset\":333," +
@@ -141,12 +134,6 @@ public class RaftUtilTest {
 
     private static Stream<Arguments> singletonFetchResponseTestCases() {
         return Stream.of(
-                Arguments.of(new FetchResponseTestCase((short) 0, -1,
-                        "{\"responses\":[{\"topic\":\"topic\",\"partitions\":[{\"partitionIndex\":1," +
-                            "\"errorCode\":0,\"highWatermark\":1000,\"records\":\"\"}]}]}")),
-                Arguments.of(new FetchResponseTestCase((short) 1, -1,
-                        "{\"throttleTimeMs\":0,\"responses\":[{\"topic\":\"topic\",\"partitions\":" +
-                            "[{\"partitionIndex\":1,\"errorCode\":0,\"highWatermark\":1000,\"records\":\"\"}]}]}")),
                 Arguments.of(new FetchResponseTestCase((short) 4, -1,
                         "{\"throttleTimeMs\":0,\"responses\":[{\"topic\":\"topic\",\"partitions\":" +
                             "[{\"partitionIndex\":1,\"errorCode\":0,\"highWatermark\":1000,\"lastStableOffset\":900," +

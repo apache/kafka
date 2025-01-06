@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class AutoOffsetResetStrategy {
     public enum StrategyType {
@@ -164,6 +165,18 @@ public class AutoOffsetResetStrategy {
                 throw new ConfigException(name, value, "Invalid value `" + offsetStrategy + "` for configuration " +
                         name + ". The value must be either 'earliest', 'latest', 'none' or of the format 'by_duration:<PnDTnHnMn.nS.>'.");
             }
+        }
+
+        @Override
+        public String toString() {
+            String values = Arrays.stream(StrategyType.values())
+                .map(strategyType -> {
+                    if (strategyType == StrategyType.BY_DURATION) {
+                        return "by_duration:PnDTnHnMn.nS";
+                    }
+                    return strategyType.toString();
+                }).collect(Collectors.joining(", "));
+            return "[" + values + "]";
         }
     }
 }

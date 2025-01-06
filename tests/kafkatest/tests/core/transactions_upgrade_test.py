@@ -21,7 +21,7 @@ from kafkatest.services.transactional_message_copier import TransactionalMessage
 from kafkatest.utils import is_int
 from kafkatest.utils.transactions_utils import create_and_start_copiers
 from kafkatest.version import LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, \
-    LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, DEV_BRANCH, KafkaVersion, LATEST_STABLE_METADATA_VERSION
+    LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, DEV_BRANCH, KafkaVersion, LATEST_STABLE_METADATA_VERSION, LATEST_STABLE_TRANSACTION_VERSION
 
 from ducktape.tests.test import Test
 from ducktape.mark import matrix
@@ -48,9 +48,9 @@ class TransactionsUpgradeTest(Test):
         self.replication_factor = 3
 
         # Test parameters
-        self.num_input_partitions = 3
-        self.num_output_partitions = 3
-        self.num_seed_messages = 1000
+        self.num_input_partitions = 1
+        self.num_output_partitions = 1
+        self.num_seed_messages = 4500
         self.transaction_size = 5
 
         # The transaction timeout should be lower than the progress timeout, but at
@@ -141,6 +141,15 @@ class TransactionsUpgradeTest(Test):
             self.logger.info("Successfully restarted broker node %s" % node.account.hostname)
         self.logger.info("Changing metadata.version to %s" % LATEST_STABLE_METADATA_VERSION)
         self.kafka.upgrade_metadata_version(LATEST_STABLE_METADATA_VERSION)
+        self.logger.info("Changing transaction.version to %s" % LATEST_STABLE_TRANSACTION_VERSION)
+        self.kafka.run_features_command("upgrade", "transaction.version", LATEST_STABLE_TRANSACTION_VERSION)
+        # Restart brokers to ensure new api versions sent
+        for node in self.kafka.nodes:
+            self.logger.info("Stopping broker node %s" % node.account.hostname)
+            self.kafka.stop_node(node)
+            self.logger.info("Restarting broker node %s" % node.account.hostname)
+            self.kafka.start_node(node)
+            self.wait_until_rejoin()
 
     def copy_messages_transactionally_during_upgrade(self, input_topic, output_topic,
                                                      num_copiers, num_messages_to_copy,
@@ -169,7 +178,7 @@ class TransactionsUpgradeTest(Test):
 
         self.perform_upgrade(from_kafka_version)
 
-        copier_timeout_sec = 120
+        copier_timeout_sec = 180
         for copier in copiers:
             wait_until(lambda: copier.is_done,
                        timeout_sec=copier_timeout_sec,
@@ -197,7 +206,7 @@ class TransactionsUpgradeTest(Test):
             }
         }
 
-    @cluster(num_nodes=10)
+    @cluster(num_nodes=8)
     @matrix(
         from_kafka_version=[str(LATEST_3_9), str(LATEST_3_8), str(LATEST_3_7), str(LATEST_3_6), str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3), str(LATEST_3_2), str(LATEST_3_1)],
         metadata_quorum=[isolated_kraft],

@@ -46,11 +46,7 @@ import java.util.Set;
  *     to {@link org.apache.kafka.streams.StreamsBuilder#StreamsBuilder(TopologyConfig)}</li>
  * </ul>
  */
-public interface StoreFactory {
-
-    default void configure(final StreamsConfig config) {
-        // do nothing
-    }
+public interface StoreFactory extends ConfigurableStore {
 
     StoreBuilder<?> builder();
 
@@ -76,7 +72,7 @@ public interface StoreFactory {
 
     boolean isCompatibleWith(StoreFactory storeFactory);
 
-    class FactoryWrappingStoreBuilder<T extends StateStore> implements StoreBuilder<T> {
+    class FactoryWrappingStoreBuilder<T extends StateStore> implements StoreBuilder<T>, ConfigurableStore {
 
         private final StoreFactory storeFactory;
 
@@ -86,6 +82,10 @@ public interface StoreFactory {
 
         public StoreFactory storeFactory() {
             return storeFactory;
+        }
+
+        public void configure(final StreamsConfig config) {
+            storeFactory.configure(config);
         }
 
         @Override

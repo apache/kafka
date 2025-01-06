@@ -17,7 +17,9 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -56,6 +58,17 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
  * Please ensure any new record added here stays in sync with DumpLogSegments.
  */
 public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
+    // This method is temporary until the share coordinator is converted to
+    // using the new coordinator records.
+    @Override
+    public byte[] serializeKey(CoordinatorRecord record) {
+        // Record does not accept a null key.
+        return MessageUtil.toCoordinatorTypePrefixedBytes(
+            record.key().version(),
+            record.key().message()
+        );
+    }
+
     @Override
     protected ApiMessage apiMessageKeyFor(short recordVersion) {
         switch (recordVersion) {
