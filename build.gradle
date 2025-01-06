@@ -1075,6 +1075,7 @@ project(':core') {
     implementation libs.jacksonModuleScala
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
+    implementation libs.jacksonDatabindYaml
     implementation libs.joptSimple
     implementation libs.jose4j
     implementation libs.metrics
