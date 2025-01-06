@@ -41,12 +41,31 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsGroupMemberTest {
 
     @Test
-    public void testNewMemberDefaults() {
+    public void testBuilderWithMemberIdIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember.Builder((String) null).build()
+        );
+        assertEquals("memberId cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testBuilderWithMemberIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember.Builder((StreamsGroupMember) null).build()
+        );
+        assertEquals("member cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testBuilderWithDefaults() {
         final String memberId = Uuid.randomUuid().toString();
         StreamsGroupMember member = new StreamsGroupMember.Builder(memberId).build();
 
@@ -72,7 +91,7 @@ public class StreamsGroupMemberTest {
     }
 
     @Test
-    public void testNewMember() {
+    public void testBuilderNewMember() {
         final String memberId = "member-id";
         final int memberEpoch = 10;
         final int previousMemberEpoch = 9;
@@ -137,7 +156,7 @@ public class StreamsGroupMemberTest {
     }
 
     @Test
-    public void testUpdateWithStreamsGroupMemberMetadataValue() {
+    public void testBuilderUpdateWithStreamsGroupMemberMetadataValue() {
         StreamsGroupMemberMetadataValue record = new StreamsGroupMemberMetadataValue()
             .setClientId("client-id")
             .setClientHost("host-id")
@@ -178,7 +197,7 @@ public class StreamsGroupMemberTest {
     }
 
     @Test
-    public void testUpdateWithConsumerGroupCurrentMemberAssignmentValue() {
+    public void testBuilderUpdateWithConsumerGroupCurrentMemberAssignmentValue() {
         final String subtopology1 = "subtopology-id1";
         final String subtopology2 = "subtopology-id2";
         final List<Integer> partitions1 = Arrays.asList(1, 2);
@@ -261,7 +280,7 @@ public class StreamsGroupMemberTest {
     }
 
     @Test
-    public void testMaybeUpdateMember() {
+    public void testBuilderMaybeUpdateMember() {
         final String subtopology1 = "subtopology-id1";
         final String subtopology2 = "subtopology-id2";
 
@@ -339,7 +358,7 @@ public class StreamsGroupMemberTest {
     }
 
     @Test
-    public void testUpdateMemberEpoch() {
+    public void testBuilderUpdateMemberEpoch() {
         final StreamsGroupMember member = new StreamsGroupMember.Builder("member-id").build();
 
         final int newMemberEpoch = member.memberEpoch() + 1;
@@ -367,6 +386,474 @@ public class StreamsGroupMemberTest {
         assertEquals(member.activeTasksPendingRevocation(), updatedMember.activeTasksPendingRevocation());
         assertEquals(member.standbyTasksPendingRevocation(), updatedMember.standbyTasksPendingRevocation());
         assertEquals(member.warmupTasksPendingRevocation(), updatedMember.warmupTasksPendingRevocation());
+    }
+
+    @Test
+    public void testConstructorWithMemberIdIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                null,
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("memberId cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithMemberStateIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                null,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("state cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithInstanceIdIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                null,
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("instanceId cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithRackIdIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                null,
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("rackId cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithClientIdIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                null,
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("clientId cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithClientHostIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                null,
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("clientHost cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithProcessIdIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                null,
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("processId cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithUserEndpointIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                null,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("userEndpoint cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithClientTagsIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                null,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("clientTags cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithAssignedActiveTasksIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                null,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("assignedActiveTasks cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithAssignedStandbyTasksIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                null,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("assignedStandbyTasks cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithAssignedWarmupTasksIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                null,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("assignedWarmupTasks cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithActiveTasksPendingRevocationIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                null,
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("activeTasksPendingRevocation cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithStandbyTasksPendingRevocationIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                null,
+                Collections.emptyMap()
+            )
+        );
+        assertEquals("standbyTasksPendingRevocation cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testConstructorWithWarmupTasksPendingRevocationIsNull() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsGroupMember(
+                "",
+                0,
+                -1,
+                MemberState.STABLE,
+                Optional.empty(),
+                Optional.empty(),
+                "",
+                "",
+                -1,
+                -1,
+                "",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                null
+            )
+        );
+        assertEquals("warmupTasksPendingRevocation cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testReturnUnmodifiableFields() {
+        final StreamsGroupMember member = new StreamsGroupMember(
+            "",
+            0,
+            -1,
+            MemberState.STABLE,
+            Optional.empty(),
+            Optional.empty(),
+            "",
+            "",
+            -1,
+            -1,
+            "",
+            Optional.empty(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap()
+        );
+
+        assertThrows(UnsupportedOperationException.class, () -> member.clientTags().put("not allowed", ""));
+        assertThrows(UnsupportedOperationException.class, () -> member.assignedActiveTasks().put("not allowed", Collections.emptySet()));
+        assertThrows(UnsupportedOperationException.class, () -> member.assignedStandbyTasks().put("not allowed", Collections.emptySet()));
+        assertThrows(UnsupportedOperationException.class, () -> member.assignedWarmupTasks().put("not allowed", Collections.emptySet()));
+        assertThrows(UnsupportedOperationException.class, () -> member.activeTasksPendingRevocation().put("not allowed", Collections.emptySet()));
+        assertThrows(UnsupportedOperationException.class, () -> member.standbyTasksPendingRevocation().put("not allowed", Collections.emptySet()));
+        assertThrows(UnsupportedOperationException.class, () -> member.warmupTasksPendingRevocation().put("not allowed", Collections.emptySet()));
     }
 
     @Test
@@ -451,7 +938,6 @@ public class StreamsGroupMemberTest {
                         .setPartitions(assignedTasks1)))
             )
             .setUserEndpoint(new StreamsGroupDescribeResponseData.Endpoint().setHost("host").setPort(9090));
-        // TODO: TaskOffset, TaskEndOffset, IsClassic are to be implemented.
 
         assertEquals(expected, actual);
     }

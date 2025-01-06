@@ -83,7 +83,39 @@ public record StreamsGroupMember(String memberId,
                                  Map<String, Set<Integer>> standbyTasksPendingRevocation,
                                  Map<String, Set<Integer>> warmupTasksPendingRevocation) {
 
-  /**
+    public StreamsGroupMember {
+        Objects.requireNonNull(memberId, "memberId cannot be null");
+        Objects.requireNonNull(state, "state cannot be null");
+        Objects.requireNonNull(instanceId, "instanceId cannot be null");
+        Objects.requireNonNull(rackId, "rackId cannot be null");
+        Objects.requireNonNull(clientId, "clientId cannot be null");
+        Objects.requireNonNull(clientHost, "clientHost cannot be null");
+        Objects.requireNonNull(processId, "processId cannot be null");
+        Objects.requireNonNull(userEndpoint, "userEndpoint cannot be null");
+        clientTags = Collections.unmodifiableMap(
+            Objects.requireNonNull(clientTags, "clientTags cannot be null")
+        );
+        assignedActiveTasks = Collections.unmodifiableMap(
+            Objects.requireNonNull(assignedActiveTasks, "assignedActiveTasks cannot be null")
+        );
+        assignedStandbyTasks = Collections.unmodifiableMap(
+            Objects.requireNonNull(assignedStandbyTasks, "assignedStandbyTasks cannot be null")
+        );
+        assignedWarmupTasks = Collections.unmodifiableMap(
+            Objects.requireNonNull(assignedWarmupTasks, "assignedWarmupTasks cannot be null")
+        );
+        activeTasksPendingRevocation = Collections.unmodifiableMap(
+            Objects.requireNonNull(activeTasksPendingRevocation, "activeTasksPendingRevocation cannot be null")
+        );
+        standbyTasksPendingRevocation = Collections.unmodifiableMap(
+            Objects.requireNonNull(standbyTasksPendingRevocation, "standbyTasksPendingRevocation cannot be null")
+        );
+        warmupTasksPendingRevocation = Collections.unmodifiableMap(
+            Objects.requireNonNull(warmupTasksPendingRevocation, "warmupTasksPendingRevocation cannot be null")
+        );
+    }
+
+    /**
      * A builder that facilitates the creation of a new member or the update of an existing one.
      * <p>
      * Please refer to the javadoc of {{@link StreamsGroupMember}} for the definition of the fields.
@@ -111,11 +143,11 @@ public record StreamsGroupMember(String memberId,
         private Map<String, Set<Integer>> warmupTasksPendingRevocation = Collections.emptyMap();
 
         public Builder(String memberId) {
-            this.memberId = Objects.requireNonNull(memberId);
+            this.memberId = Objects.requireNonNull(memberId, "memberId cannot be null");
         }
 
         public Builder(StreamsGroupMember member) {
-            Objects.requireNonNull(member);
+            Objects.requireNonNull(member, "member cannot be null");
 
             this.memberId = member.memberId;
             this.memberEpoch = member.memberEpoch;
