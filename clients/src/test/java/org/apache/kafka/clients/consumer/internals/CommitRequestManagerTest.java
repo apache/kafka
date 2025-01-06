@@ -25,6 +25,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -1480,6 +1481,23 @@ public class CommitRequestManagerTest {
         assertEquals(1, res.unsentRequests.size());
         OffsetCommitRequestData data = (OffsetCommitRequestData) res.unsentRequests.get(0).requestBuilder().build().data();
         assertEquals("topic", data.topics().get(0).name());
+    }
+    
+    @Test
+    public void testPollWithFatalErrorShouldFailingAllUnsetRequest() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        commitRequestManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 0)), 200);
+        assertEquals(1, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
+
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(coordinatorRequestManager.fatalError())
+                .thenReturn(Optional.of(new GroupAuthorizationException("Group authorization exception")));
+
+        assertEquals(NetworkClientDelegate.PollResult.EMPTY, commitRequestManager.poll(200));
+        
+        assertEmptyPendingRequests(commitRequestManager);
     }
 
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManager) {

@@ -201,8 +201,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private void maybeFailPendingRequestsOnCoordinatorFatalError() {
         Optional<Throwable> fatalError = coordinatorRequestManager.fatalError();
         if (fatalError.isPresent()) {
+            log.warn("Failing all unset commit requests and offset fetches because of coordinator fatal error. ", fatalError.get());
             pendingRequests.unsentOffsetCommits.forEach(request -> request.future.completeExceptionally(fatalError.get()));
             pendingRequests.unsentOffsetFetches.forEach(request -> request.future.completeExceptionally(fatalError.get()));
+            pendingRequests.clearAll();
         }
     }
 
