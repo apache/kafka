@@ -63,14 +63,10 @@ object Kafka extends Logging {
 
   private def buildServer(props: Properties): Server = {
     val config = KafkaConfig.fromProps(props, doLog = false)
-    if (config.requiresZookeeper) {
-      throw new RuntimeException("ZooKeeper is not supported")
-    } else {
-      new KafkaRaftServer(
-        config,
-        Time.SYSTEM,
-      )
-    }
+    new KafkaRaftServer(
+      config,
+      Time.SYSTEM,
+    )
   }
 
   def main(args: Array[String]): Unit = {
