@@ -307,7 +307,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             if (timestamp < minTimestamp) {
                 throw new IllegalArgumentException("Timestamp is too small to be found in this segment.");
             }
-            if (timestamp >= nextTimestamp) {
+            // when searching for values and ignoring tombstones, we search first "valid" values
+            // and we can search in previous segments
+            if (timestamp >= nextTimestamp && !ignoreTombstone) {
                 throw new IllegalArgumentException("Timestamp is too large to be found in this segment.");
             }
             // for degenerate segments, minTimestamp == nextTimestamp, and we will always throw an exception
@@ -318,9 +320,10 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             int currValueSize;
             int currIndex = 0;
             int cumValueSize = 0;
+            long lastValidValueTimestampKnown = -1L;
             while (currTimestamp != minTimestamp) {
                 if (currIndex <= deserIndex) {
-                                        final TimestampAndValueSize curr = unpackedReversedTimestampAndValueSizes.get(currIndex);
+                    final TimestampAndValueSize curr = unpackedReversedTimestampAndValueSizes.get(currIndex);
                     currTimestamp = curr.timestamp;
                     currValueSize = curr.valueSize;
                     cumValueSize = cumulativeValueSizes.get(currIndex);
@@ -361,6 +364,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 }
 
                 // prep for next iteration
+                if (currValueSize > 0) lastValidValueTimestampKnown = currTimestamp;
                 currNextTimestamp = currTimestamp;
                 currIndex++;
             }
@@ -368,7 +372,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             if (ignoreTombstone) {
                 // If we didn't find value in segment, it means that the value is in a previous segment
                 // REVIEW: Can we send a specific value maybe instead of putting index to -1 ?
-                return new SegmentSearchResult(-1, -1, currNextTimestamp);
+                return new SegmentSearchResult(-1, -1, lastValidValueTimestampKnown);
             }
 
             throw new IllegalStateException("Search in segment expected to find result but did not.");

@@ -832,7 +832,7 @@ public class RocksDBVersionedStoreTest {
     }
     
     @Test
-    public void shouldCorrectlyPropagateAfterDeletingVersion() {
+    public void shouldFindValueWithIgnoreTombstones() {
         // Insert three dummy values
         putToStore("k", "v1", BASE_TIMESTAMP + 1, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
         putToStore("k", "v2", BASE_TIMESTAMP + 3, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
@@ -849,6 +849,31 @@ public class RocksDBVersionedStoreTest {
         // Insert new value between v1 and v3 (and expect validTo == PUT_RETURN_CODE_VALID_TO_UNDEFINED)
         putToStore("k", "v4", BASE_TIMESTAMP + 2, BASE_TIMESTAMP + 3); // TODO: Make put return valid timestamp (in another "put" method) ?
         verifyTimestampedGetValueFromStoreWithoutTombtones("k", BASE_TIMESTAMP + 4, "v4", BASE_TIMESTAMP + 2, BASE_TIMESTAMP + 5);
+    }
+    
+    @Test
+    public void shouldFindValueInAnotherSegmentWithIgnoreTombstones() {
+        // Insert five dummy values in two different segments
+        putToStore("k", "v1", BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        putToStore("k", "v2", SEGMENT_INTERVAL - 10, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        putToStore("k", "v3", SEGMENT_INTERVAL + 10, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        putToStore("k", "v4", SEGMENT_INTERVAL + 20, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        putToStore("k", "v5", SEGMENT_INTERVAL + 30, PUT_RETURN_CODE_VALID_TO_UNDEFINED); // In latest store
+        verifyGetValueFromStore("k", "v5", SEGMENT_INTERVAL + 30);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v1",  BASE_TIMESTAMP, SEGMENT_INTERVAL - 10);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 10, "v2", SEGMENT_INTERVAL - 10, SEGMENT_INTERVAL + 10);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 10, "v3", SEGMENT_INTERVAL + 10, SEGMENT_INTERVAL + 20);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 20, "v4", SEGMENT_INTERVAL + 20, SEGMENT_INTERVAL + 30);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 30, "v5", SEGMENT_INTERVAL + 30, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        
+        // Delete the first value of second segment
+        //TODO: Autre bug -> Check segment suivant pour vérifier le "validTo"
+        
+        deleteFromStore("k", SEGMENT_INTERVAL - 10);
+        deleteFromStore("k", SEGMENT_INTERVAL + 10);
+        System.out.println("");
+        System.out.println("");
+        verifyTimestampedGetValueFromStoreWithoutTombtones("k", SEGMENT_INTERVAL - 10, "v1", BASE_TIMESTAMP, SEGMENT_INTERVAL + 20);
     }
 
     private void putToStore(final String key, final String value, final long timestamp, final long expectedValidTo) {

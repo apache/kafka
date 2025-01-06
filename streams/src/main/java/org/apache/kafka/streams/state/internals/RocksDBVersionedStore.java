@@ -242,12 +242,16 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         // check segment stores
         final List<LogicalKeyValueSegment> segments = segmentStores.segments(asOfTimestamp, Long.MAX_VALUE, false);
+        long foundValidTo = -1L;
         for (int segmentIndex = 0; segmentIndex < segments.size(); segmentIndex++) {
             final LogicalKeyValueSegment segment = segments.get(segmentIndex);
             final byte[] rawSegmentValue = segment.get(key);
             if (rawSegmentValue != null) {
                 final long nextTs = RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(rawSegmentValue);
-                if (nextTs <= asOfTimestamp) {
+                
+                // when searching for values and ignoring tombstones, we search first "valid" values
+                // and we can search in previous segments
+                if (nextTs <= asOfTimestamp && !ignoreTombstones) {
                     // this segment contains no data for the queried timestamp, so earlier segments
                     // cannot either
                     return null;
@@ -269,11 +273,13 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 
                 // If we have a negative index, we need to take last value in previous segments
                 if (searchResult.index() == -1) {
-                    // TODO
+                    foundValidTo = searchResult.validTo();
+                    continue;
                 }
                 
                 if (searchResult.value() != null) {
-                    return new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo());
+                    return new VersionedRecord<>(searchResult.value(), searchResult.validFrom(),
+                            foundValidTo > 0 ? foundValidTo : searchResult.validTo());
                 } else {
                     return null;
                 }

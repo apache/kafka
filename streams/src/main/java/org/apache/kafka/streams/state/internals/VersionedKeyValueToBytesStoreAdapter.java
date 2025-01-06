@@ -75,6 +75,12 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
         final VersionedRecord<byte[]> versionedRecord = inner.get(key, asOfTimestamp);
         return serializeAsBytes(versionedRecord);
     }
+    
+    @Override
+    public byte[] get(final Bytes key, final long asOfTimestamp, final boolean ignoreTombstones) {
+        final VersionedRecord<byte[]> versionedRecord = inner.get(key, asOfTimestamp, ignoreTombstones);
+        return serializeAsBytes(versionedRecord);
+    }
 
     @Override
     public byte[] delete(final Bytes key, final long timestamp) {
