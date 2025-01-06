@@ -145,10 +145,10 @@ public class Uuid implements Comparable<Uuid> {
 
     private byte[] getBytesFromUuid() {
         // Extract bytes for uuid that are 128 bits (or 16 bytes) long.
-        ByteBuffer uuidBytes = ByteBuffer.wrap(new byte[16]);
-        uuidBytes.putLong(this.mostSignificantBits);
-        uuidBytes.putLong(this.leastSignificantBits);
-        return uuidBytes.array();
+        return ByteBuffer.allocate(0x10)
+                .putLong(this.mostSignificantBits)
+                .putLong(this.leastSignificantBits)
+                .array();
     }
 
     @Override
