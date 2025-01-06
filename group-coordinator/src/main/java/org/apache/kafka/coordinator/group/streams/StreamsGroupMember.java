@@ -409,7 +409,7 @@ public record StreamsGroupMember(String memberId,
     }
 
     /**
-     * @return The topology epoch
+     * @return The topology epoch.
      */
     public int topologyEpoch() {
         return topologyEpoch;
@@ -539,7 +539,6 @@ public record StreamsGroupMember(String memberId,
                         .setPort(endpoint.port())
                     ).orElse(null)
             );
-        // TODO: TaskOffset, TaskEndOffset, IsClassic are to be implemented.
     }
 
     private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMap(
