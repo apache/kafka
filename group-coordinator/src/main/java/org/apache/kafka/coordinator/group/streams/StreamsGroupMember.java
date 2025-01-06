@@ -31,10 +31,57 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * StreamsGroupMember contains all the information related to a member within a Streams group. This class is immutable and is fully backed
- * by records stored in the __consumer_offsets topic.
+ * Contains all information related to a member within a Streams group.
+ * <p>
+ * This class is immutable and is fully backed by records stored in the __consumer_offsets topic.
+ *
+ * @param memberId                      The ID of the member.
+ * @param memberEpoch                   The current epoch of the member.
+ * @param previousMemberEpoch           The previous epoch of the member.
+ * @param state                         The current state of the member.
+ * @param instanceId                    The instance ID of the member.
+ * @param rackId                        The rack ID of the member.
+ * @param clientId                      The client ID of the member.
+ * @param clientHost                    The host of the member.
+ * @param rebalanceTimeoutMs            The rebalance timeout in milliseconds.
+ * @param topologyEpoch                 The epoch of the topology the member uses.
+ * @param processId                     The ID of the Streams client that contains the member.
+ * @param userEndpoint                  The user endpoint exposed for Interactive Queries by the Streams client that
+ *                                      contains the member.
+ * @param clientTags                    Tags of the client of the member used for rack-aware assignment.
+ * @param assignedActiveTasks           Active tasks assigned to the member.
+ *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
+ * @param assignedStandbyTasks          Standby tasks assigned to the member.
+ *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
+ * @param assignedWarmupTasks           Warm-up tasks assigned to the member.
+ *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
+ * @param activeTasksPendingRevocation  Active tasks assigned to the member pending revocation.
+ *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
+ * @param standbyTasksPendingRevocation Standby tasks assigned to the member pending revocation.
+ *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
+ * @param warmupTasksPendingRevocation  Warm-up tasks assigned to the member pending revocation.
+ *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
  */
-public class StreamsGroupMember {
+@SuppressWarnings("checkstyle:JavaNCSS")
+public record StreamsGroupMember(String memberId,
+                                 int memberEpoch,
+                                 int previousMemberEpoch,
+                                 MemberState state,
+                                 Optional<String> instanceId,
+                                 Optional<String> rackId,
+                                 String clientId,
+                                 String clientHost,
+                                 int rebalanceTimeoutMs,
+                                 int topologyEpoch,
+                                 String processId,
+                                 Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint,
+                                 Map<String, String> clientTags,
+                                 Map<String, Set<Integer>> assignedActiveTasks,
+                                 Map<String, Set<Integer>> assignedStandbyTasks,
+                                 Map<String, Set<Integer>> assignedWarmupTasks,
+                                 Map<String, Set<Integer>> activeTasksPendingRevocation,
+                                 Map<String, Set<Integer>> standbyTasksPendingRevocation,
+                                 Map<String, Set<Integer>> warmupTasksPendingRevocation) {
 
   /**
      * A builder that facilitates the creation of a new member or the update of an existing one.
@@ -47,14 +94,14 @@ public class StreamsGroupMember {
         private int memberEpoch = 0;
         private int previousMemberEpoch = -1;
         private MemberState state = MemberState.STABLE;
-        private String instanceId = null;
-        private String rackId = null;
+        private Optional<String> instanceId = Optional.empty();
+        private Optional<String> rackId = Optional.empty();
         private int rebalanceTimeoutMs = -1;
         private String clientId = "";
         private String clientHost = "";
         private int topologyEpoch = -1;
-        private String processId;
-        private StreamsGroupMemberMetadataValue.Endpoint userEndpoint;
+        private String processId = "";
+        private Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint = Optional.empty();
         private Map<String, String> clientTags = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedActiveTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedStandbyTasks = Collections.emptyMap();
@@ -109,22 +156,22 @@ public class StreamsGroupMember {
         }
 
         public Builder setInstanceId(String instanceId) {
-            this.instanceId = instanceId;
+            this.instanceId = Optional.ofNullable(instanceId);
             return this;
         }
 
         public Builder maybeUpdateInstanceId(Optional<String> instanceId) {
-            this.instanceId = instanceId.orElse(this.instanceId);
+            instanceId.ifPresent(this::setInstanceId);
             return this;
         }
 
         public Builder setRackId(String rackId) {
-            this.rackId = rackId;
+            this.rackId = Optional.ofNullable(rackId);
             return this;
         }
 
         public Builder maybeUpdateRackId(Optional<String> rackId) {
-            this.rackId = rackId.orElse(this.rackId);
+            rackId.ifPresent(this::setRackId);
             return this;
         }
 
@@ -174,12 +221,12 @@ public class StreamsGroupMember {
         }
 
         public Builder setUserEndpoint(StreamsGroupMemberMetadataValue.Endpoint userEndpoint) {
-            this.userEndpoint = userEndpoint;
+            this.userEndpoint = Optional.ofNullable(userEndpoint);
             return this;
         }
 
         public Builder maybeUpdateUserEndpoint(Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint) {
-            this.userEndpoint = userEndpoint.orElse(this.userEndpoint);
+            userEndpoint.ifPresent(this::setUserEndpoint);
             return this;
         }
 
@@ -285,16 +332,16 @@ public class StreamsGroupMember {
                 memberId,
                 memberEpoch,
                 previousMemberEpoch,
+                state,
                 instanceId,
                 rackId,
-                rebalanceTimeoutMs,
                 clientId,
                 clientHost,
+                rebalanceTimeoutMs,
                 topologyEpoch,
                 processId,
                 userEndpoint,
                 clientTags,
-                state,
                 assignedActiveTasks,
                 assignedStandbyTasks,
                 assignedWarmupTasks,
@@ -303,144 +350,6 @@ public class StreamsGroupMember {
                 warmupTasksPendingRevocation
             );
         }
-    }
-
-    /**
-     * The member ID.
-     */
-    private final String memberId;
-
-    /**
-     * The current member epoch.
-     */
-    private final int memberEpoch;
-
-    /**
-     * The previous member epoch.
-     */
-    private final int previousMemberEpoch;
-
-    /**
-     * The member state.
-     */
-    private final MemberState state;
-
-    /**
-     * The instance ID provided by the member.
-     */
-    private final String instanceId;
-
-    /**
-     * The rack ID provided by the member.
-     */
-    private final String rackId;
-
-    /**
-     * The rebalance timeout provided by the member.
-     */
-    private final int rebalanceTimeoutMs;
-
-    /**
-     * The client ID reported by the member.
-     */
-    private final String clientId;
-
-    /**
-     * The host reported by the member.
-     */
-    private final String clientHost;
-
-    /**
-     * The topology epoch.
-     */
-    private final int topologyEpoch;
-
-    /**
-     * The process ID.
-     */
-    private final String processId;
-
-    /**
-     * The endpoint.
-     */
-    private final StreamsGroupMemberMetadataValue.Endpoint userEndpoint;
-
-    /**
-     * The client tags.
-     */
-    private final Map<String, String> clientTags;
-
-    /**
-     * Active tasks assigned to this member.
-     */
-    private final Map<String, Set<Integer>> assignedActiveTasks;
-
-    /**
-     * Standby tasks assigned to this member.
-     */
-    private final Map<String, Set<Integer>> assignedStandbyTasks;
-
-    /**
-     * Warmup tasks assigned to this member.
-     */
-    private final Map<String, Set<Integer>> assignedWarmupTasks;
-
-    /**
-     * Active tasks being revoked by this member.
-     */
-    private final Map<String, Set<Integer>> activeTasksPendingRevocation;
-
-    /**
-     * Standby tasks being revoked by this member.
-     */
-    private final Map<String, Set<Integer>> standbyTasksPendingRevocation;
-
-    /**
-     * Warmup tasks being revoked by this member.
-     */
-    private final Map<String, Set<Integer>> warmupTasksPendingRevocation;
-
-    @SuppressWarnings("checkstyle:ParameterNumber")
-    private StreamsGroupMember(
-        String memberId,
-        int memberEpoch,
-        int previousMemberEpoch,
-        String instanceId,
-        String rackId,
-        int rebalanceTimeoutMs,
-        String clientId,
-        String clientHost,
-        int topologyEpoch,
-        String processId,
-        StreamsGroupMemberMetadataValue.Endpoint userEndpoint,
-        Map<String, String> clientTags,
-        MemberState state,
-        Map<String, Set<Integer>> assignedActiveTasks,
-        Map<String, Set<Integer>> assignedStandbyTasks,
-        Map<String, Set<Integer>> assignedWarmupTasks,
-        Map<String, Set<Integer>> activeTasksPendingRevocation,
-        Map<String, Set<Integer>> standbyTasksPendingRevocation,
-        Map<String, Set<Integer>> warmupTasksPendingRevocation
-    ) {
-        this.memberId = memberId;
-        this.memberEpoch = memberEpoch;
-        this.previousMemberEpoch = previousMemberEpoch;
-        this.state = state;
-        this.instanceId = instanceId;
-        this.rackId = rackId;
-        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
-        this.clientId = clientId;
-        this.clientHost = clientHost;
-        this.topologyEpoch = topologyEpoch;
-        this.processId = processId;
-        this.userEndpoint = userEndpoint;
-        this.clientTags = clientTags;
-        this.assignedActiveTasks = assignedActiveTasks;
-        this.assignedStandbyTasks = assignedStandbyTasks;
-        this.assignedWarmupTasks = assignedWarmupTasks;
-        this.activeTasksPendingRevocation = activeTasksPendingRevocation;
-        this.standbyTasksPendingRevocation = standbyTasksPendingRevocation;
-        this.warmupTasksPendingRevocation = warmupTasksPendingRevocation;
     }
 
     /**
@@ -467,14 +376,14 @@ public class StreamsGroupMember {
     /**
      * @return The instance ID.
      */
-    public String instanceId() {
+    public Optional<String> instanceId() {
         return instanceId;
     }
 
     /**
      * @return The rack ID.
      */
-    public String rackId() {
+    public Optional<String> rackId() {
         return rackId;
     }
 
@@ -516,7 +425,7 @@ public class StreamsGroupMember {
     /**
      * @return The user endpoint
      */
-    public StreamsGroupMemberMetadataValue.Endpoint userEndpoint() {
+    public Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint() {
         return userEndpoint;
     }
 
@@ -584,6 +493,8 @@ public class StreamsGroupMember {
     }
 
     /**
+     * Creates a member description for the Streams group describe response from this member.
+     *
      * @param targetAssignment The target assignment of this member in the corresponding group.
      *
      * @return The StreamsGroupMember mapped as StreamsGroupDescribeResponseData.Member.
@@ -612,8 +523,8 @@ public class StreamsGroupMember {
             .setTargetAssignment(describedTargetAssignment)
             .setClientHost(clientHost)
             .setClientId(clientId)
-            .setInstanceId(instanceId)
-            .setRackId(rackId)
+            .setInstanceId(instanceId.orElse(null))
+            .setRackId(rackId.orElse(null))
             .setClientTags(clientTags.entrySet().stream().map(
                 entry -> new StreamsGroupDescribeResponseData.KeyValue()
                     .setKey(entry.getKey())
@@ -622,10 +533,11 @@ public class StreamsGroupMember {
             .setProcessId(processId)
             .setTopologyEpoch(topologyEpoch)
             .setUserEndpoint(
-                userEndpoint == null ? null :
-                    new StreamsGroupDescribeResponseData.Endpoint()
-                        .setHost(userEndpoint.host())
-                        .setPort(userEndpoint.port())
+                userEndpoint.map(
+                    endpoint -> new StreamsGroupDescribeResponseData.Endpoint()
+                        .setHost(endpoint.host())
+                        .setPort(endpoint.port())
+                    ).orElse(null)
             );
         // TODO: TaskOffset, TaskEndOffset, IsClassic are to be implemented.
     }
@@ -640,87 +552,6 @@ public class StreamsGroupMember {
                 .setPartitions(new ArrayList<>(partitionSet)));
         });
         return taskIds;
-    }
-
-    @SuppressWarnings("checkstyle:CyclomaticComplexity")
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        StreamsGroupMember that = (StreamsGroupMember) o;
-        return memberEpoch == that.memberEpoch
-            && previousMemberEpoch == that.previousMemberEpoch
-            && rebalanceTimeoutMs == that.rebalanceTimeoutMs
-            && Objects.equals(memberId, that.memberId)
-            && state == that.state
-            && Objects.equals(instanceId, that.instanceId)
-            && Objects.equals(rackId, that.rackId)
-            && Objects.equals(clientId, that.clientId)
-            && Objects.equals(clientHost, that.clientHost)
-            && Objects.equals(topologyEpoch, that.topologyEpoch)
-            && Objects.equals(processId, that.processId)
-            && Objects.equals(userEndpoint, that.userEndpoint)
-            && Objects.equals(clientTags, that.clientTags)
-            && Objects.equals(assignedActiveTasks, that.assignedActiveTasks)
-            && Objects.equals(assignedStandbyTasks, that.assignedStandbyTasks)
-            && Objects.equals(assignedWarmupTasks, that.assignedWarmupTasks)
-            && Objects.equals(activeTasksPendingRevocation, that.activeTasksPendingRevocation)
-            && Objects.equals(standbyTasksPendingRevocation, that.standbyTasksPendingRevocation)
-            && Objects.equals(warmupTasksPendingRevocation, that.warmupTasksPendingRevocation);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(
-            memberId,
-            memberEpoch,
-            previousMemberEpoch,
-            state,
-            instanceId,
-            rackId,
-            rebalanceTimeoutMs,
-            clientId,
-            clientHost,
-            topologyEpoch,
-            processId,
-            userEndpoint,
-            clientTags,
-            assignedActiveTasks,
-            assignedStandbyTasks,
-            assignedWarmupTasks,
-            activeTasksPendingRevocation,
-            standbyTasksPendingRevocation,
-            warmupTasksPendingRevocation
-        );
-    }
-
-    @Override
-    public String toString() {
-        return "StreamsGroupMember(" +
-            "memberId='" + memberId + '\'' +
-            ", memberEpoch=" + memberEpoch +
-            ", previousMemberEpoch=" + previousMemberEpoch +
-            ", state='" + state + '\'' +
-            ", instanceId='" + instanceId + '\'' +
-            ", rackId='" + rackId + '\'' +
-            ", rebalanceTimeoutMs=" + rebalanceTimeoutMs +
-            ", clientId='" + clientId + '\'' +
-            ", clientHost='" + clientHost + '\'' +
-            ", topologyEpoch='" + topologyEpoch + '\'' +
-            ", processId='" + processId + '\'' +
-            ", userEndpoint=" + userEndpoint +
-            ", clientTags=" + clientTags +
-            ", assignedActiveTasks=" + assignedActiveTasks +
-            ", assignedStandbyTasks=" + assignedStandbyTasks +
-            ", assignedWarmupTasks=" + assignedWarmupTasks +
-            ", activeTasksPendingRevocation=" + activeTasksPendingRevocation +
-            ", standbyTasksPendingRevocation=" + standbyTasksPendingRevocation +
-            ", warmupTasksPendingRevocation=" + warmupTasksPendingRevocation +
-            ')';
     }
 
     /**

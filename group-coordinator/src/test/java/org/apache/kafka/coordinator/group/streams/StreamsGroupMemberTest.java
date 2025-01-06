@@ -41,8 +41,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsGroupMemberTest {
 
@@ -55,14 +54,14 @@ public class StreamsGroupMemberTest {
         assertEquals(0, member.memberEpoch());
         assertEquals(-1, member.previousMemberEpoch());
         assertEquals(MemberState.STABLE, member.state());
-        assertNull(member.instanceId());
-        assertNull(member.rackId());
+        assertTrue(member.instanceId().isEmpty());
+        assertTrue(member.rackId().isEmpty());
         assertEquals(-1, member.rebalanceTimeoutMs());
         assertEquals("", member.clientId());
         assertEquals("", member.clientHost());
         assertEquals(-1, member.topologyEpoch());
-        assertNull(member.processId());
-        assertNull(member.userEndpoint());
+        assertTrue(member.processId().isEmpty());
+        assertTrue(member.userEndpoint().isEmpty());
         assertEquals(Collections.emptyMap(), member.clientTags());
         assertEquals(Collections.emptyMap(), member.assignedActiveTasks());
         assertEquals(Collections.emptyMap(), member.assignedStandbyTasks());
@@ -121,13 +120,13 @@ public class StreamsGroupMemberTest {
         assertEquals(memberEpoch, member.memberEpoch());
         assertEquals(previousMemberEpoch, member.previousMemberEpoch());
         assertEquals(state, member.state());
-        assertEquals(instanceId, member.instanceId());
-        assertEquals(rackId, member.rackId());
+        assertEquals(Optional.of(instanceId), member.instanceId());
+        assertEquals(Optional.of(rackId), member.rackId());
         assertEquals(clientId, member.clientId());
         assertEquals(hostname, member.clientHost());
         assertEquals(topologyEpoch, member.topologyEpoch());
         assertEquals(processId, member.processId());
-        assertEquals(userEndpoint, member.userEndpoint());
+        assertEquals(Optional.of(userEndpoint), member.userEndpoint());
         assertEquals(clientTags, member.clientTags());
         assertEquals(assignedActiveTasks, member.assignedActiveTasks());
         assertEquals(assignedStandbyTasks, member.assignedStandbyTasks());
@@ -135,214 +134,6 @@ public class StreamsGroupMemberTest {
         assertEquals(activeTasksPendingRevocation, member.activeTasksPendingRevocation());
         assertEquals(standbyTasksPendingRevocation, member.standbyTasksPendingRevocation());
         assertEquals(warmupTasksPendingRevocation, member.warmupTasksPendingRevocation());
-    }
-
-    @Test
-    public void testEquals() {
-        StreamsGroupMember member1 = new StreamsGroupMember.Builder("member-id").build();
-        StreamsGroupMember member2 = new StreamsGroupMember.Builder(member1.memberId()).build();
-        assertEquals(member1, member2);
-        assertEquals(member1.hashCode(), member2.hashCode());
-
-        final StreamsGroupMember member3 = new StreamsGroupMember.Builder(member1.memberId() + "2")
-            .build();
-        assertNotEquals(member1, member3);
-        assertNotEquals(member1.hashCode(), member3.hashCode());
-
-        final StreamsGroupMember member4 = new StreamsGroupMember.Builder(member1.memberId())
-            .setMemberEpoch(member1.memberEpoch() + 1)
-            .build();
-        assertNotEquals(member1, member4);
-        assertNotEquals(member1.hashCode(), member4.hashCode());
-
-        final StreamsGroupMember member5 = new StreamsGroupMember.Builder(member1.memberId())
-            .setPreviousMemberEpoch(member1.previousMemberEpoch() + 1)
-            .build();
-        assertNotEquals(member1, member5);
-        assertNotEquals(member1.hashCode(), member5.hashCode());
-
-        final StreamsGroupMember member6 = new StreamsGroupMember.Builder(member1.memberId())
-            .setState(MemberState.UNREVOKED_TASKS)
-            .build();
-        assertNotEquals(member1, member6);
-        assertNotEquals(member1.hashCode(), member6.hashCode());
-
-        final StreamsGroupMember member7 = new StreamsGroupMember.Builder(member1.memberId())
-            .setInstanceId("instance-id")
-            .build();
-        final StreamsGroupMember member8 = new StreamsGroupMember.Builder(member7.memberId())
-            .setInstanceId(member7.instanceId())
-            .build();
-        final StreamsGroupMember member9 = new StreamsGroupMember.Builder(member7.memberId())
-            .setInstanceId(member7.instanceId() + "2")
-            .build();
-        assertEquals(member7, member8);
-        assertEquals(member7.hashCode(), member8.hashCode());
-        assertNotEquals(member7, member9);
-        assertNotEquals(member7.hashCode(), member9.hashCode());
-
-        final StreamsGroupMember member10 = new StreamsGroupMember.Builder(member1.memberId())
-            .setRackId("rack-id")
-            .build();
-        final StreamsGroupMember member11 = new StreamsGroupMember.Builder(member10.memberId())
-            .setRackId(member10.rackId())
-            .build();
-        final StreamsGroupMember member12 = new StreamsGroupMember.Builder(member11.memberId())
-            .setRackId(member10.rackId() + "2")
-            .build();
-        assertEquals(member10, member11);
-        assertEquals(member10.hashCode(), member11.hashCode());
-        assertNotEquals(member10, member12);
-        assertNotEquals(member10.hashCode(), member12.hashCode());
-
-        final StreamsGroupMember member13 = new StreamsGroupMember.Builder(member1.memberId())
-            .setClientHost("hostname")
-            .build();
-        final StreamsGroupMember member14 = new StreamsGroupMember.Builder(member13.memberId())
-            .setClientHost(member13.clientHost())
-            .build();
-        final StreamsGroupMember member15 = new StreamsGroupMember.Builder(member13.memberId())
-            .setClientHost(member13.clientHost() + "2")
-            .build();
-        assertEquals(member13, member14);
-        assertEquals(member13.hashCode(), member14.hashCode());
-        assertNotEquals(member13, member15);
-        assertNotEquals(member13.hashCode(), member15.hashCode());
-
-        final StreamsGroupMember member16 = new StreamsGroupMember.Builder(member1.memberId())
-            .setClientId("hostname")
-            .build();
-        final StreamsGroupMember member17 = new StreamsGroupMember.Builder(member16.memberId())
-            .setClientId(member16.clientId())
-            .build();
-        final StreamsGroupMember member18 = new StreamsGroupMember.Builder(member16.memberId())
-            .setClientId(member16.clientId() + "2")
-            .build();
-        assertEquals(member16, member17);
-        assertEquals(member16.hashCode(), member17.hashCode());
-        assertNotEquals(member16, member18);
-        assertNotEquals(member16.hashCode(), member18.hashCode());
-
-        final StreamsGroupMember member19 = new StreamsGroupMember.Builder(member1.memberId())
-            .setRebalanceTimeoutMs(member1.rebalanceTimeoutMs() + 1)
-            .build();
-        assertNotEquals(member1, member19);
-        assertNotEquals(member1.hashCode(), member19.hashCode());
-
-        final StreamsGroupMember member20 = new StreamsGroupMember.Builder(member1.memberId())
-            .setTopologyEpoch(member1.topologyEpoch() + 1)
-            .build();
-        assertNotEquals(member1, member20);
-        assertNotEquals(member1.hashCode(), member20.hashCode());
-
-        final StreamsGroupMember member21 = new StreamsGroupMember.Builder(member1.memberId())
-            .setProcessId("process-id")
-            .build();
-        final StreamsGroupMember member22 = new StreamsGroupMember.Builder(member21.memberId())
-            .setProcessId(member21.processId())
-            .build();
-        final StreamsGroupMember member23 = new StreamsGroupMember.Builder(member21.memberId())
-            .setClientId(member21.processId() + "2")
-            .build();
-        assertEquals(member21, member22);
-        assertEquals(member21.hashCode(), member22.hashCode());
-        assertNotEquals(member21, member23);
-        assertNotEquals(member21.hashCode(), member23.hashCode());
-
-        final StreamsGroupMember member24 = new StreamsGroupMember.Builder(member1.memberId())
-            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
-            .build();
-        final StreamsGroupMember member25 = new StreamsGroupMember.Builder(member24.memberId())
-            .setUserEndpoint(member24.userEndpoint())
-            .build();
-        final StreamsGroupMember member26 = new StreamsGroupMember.Builder(member24.memberId())
-            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint()
-                .setHost("host")
-                .setPort(member24.userEndpoint().port() + 1)
-            ).build();
-        assertEquals(member24, member25);
-        assertEquals(member24.hashCode(), member25.hashCode());
-        assertNotEquals(member24, member26);
-        assertNotEquals(member24.hashCode(), member26.hashCode());
-
-        final StreamsGroupMember member27 = new StreamsGroupMember.Builder(member1.memberId())
-            .setClientTags(mkMap(mkEntry("client", "tag")))
-            .build();
-        final StreamsGroupMember member28 = new StreamsGroupMember.Builder(member27.memberId())
-            .setClientTags(member27.clientTags())
-            .build();
-        final Map<String, String> clientTags = new HashMap<>(member27.clientTags());
-        clientTags.put("client2", "tag2");
-        final StreamsGroupMember member29 = new StreamsGroupMember.Builder(member27.memberId())
-            .setClientTags(clientTags)
-            .build();
-        assertEquals(member27, member28);
-        assertEquals(member27.hashCode(), member28.hashCode());
-        assertNotEquals(member27, member29);
-        assertNotEquals(member27.hashCode(), member29.hashCode());
-
-        final StreamsGroupMember member30 = new StreamsGroupMember.Builder(member1.memberId())
-            .build();
-        final StreamsGroupMember member31 = new StreamsGroupMember.Builder(member30.memberId())
-            .setAssignedActiveTasks(mkTasksPerSubtopology(mkTasks("subtopology-id", 1, 2, 3)))
-            .build();
-        assertEquals(member1, member30);
-        assertEquals(member1.hashCode(), member30.hashCode());
-        assertNotEquals(member1, member31);
-        assertNotEquals(member1.hashCode(), member31.hashCode());
-
-        final StreamsGroupMember member32 = new StreamsGroupMember.Builder(member1.memberId())
-            .build();
-        final StreamsGroupMember member33 = new StreamsGroupMember.Builder(member32.memberId())
-            .setAssignedStandbyTasks(mkTasksPerSubtopology(mkTasks("subtopology-id", 1, 2, 3)))
-            .build();
-        assertEquals(member1, member32);
-        assertEquals(member1.hashCode(), member32.hashCode());
-        assertNotEquals(member1, member33);
-        assertNotEquals(member1.hashCode(), member33.hashCode());
-
-        final StreamsGroupMember member34 = new StreamsGroupMember.Builder(member1.memberId())
-            .build();
-        final StreamsGroupMember member35 = new StreamsGroupMember.Builder(member34.memberId())
-            .setAssignedWarmupTasks(mkTasksPerSubtopology(mkTasks("subtopology-id", 1, 2, 3)))
-            .build();
-        assertEquals(member1, member34);
-        assertEquals(member1.hashCode(), member34.hashCode());
-        assertNotEquals(member1, member35);
-        assertNotEquals(member1.hashCode(), member35.hashCode());
-
-        final StreamsGroupMember member36 = new StreamsGroupMember.Builder(member1.memberId())
-            .build();
-        final StreamsGroupMember member37 = new StreamsGroupMember.Builder(member36.memberId())
-            .setActiveTasksPendingRevocation(
-                mkTasksPerSubtopology(mkTasks("subtopology-id", 1, 2, 3))
-            ).build();
-        assertEquals(member1, member36);
-        assertEquals(member1.hashCode(), member36.hashCode());
-        assertNotEquals(member1, member37);
-        assertNotEquals(member1.hashCode(), member37.hashCode());
-
-        final StreamsGroupMember member38 = new StreamsGroupMember.Builder(member1.memberId())
-            .build();
-        final StreamsGroupMember member39 = new StreamsGroupMember.Builder(member38.memberId())
-            .setStandbyTasksPendingRevocation(
-                mkTasksPerSubtopology(mkTasks("subtopology-id", 1, 2, 3))
-            ).build();
-        assertEquals(member1, member38);
-        assertEquals(member1.hashCode(), member38.hashCode());
-        assertNotEquals(member1, member39);
-        assertNotEquals(member1.hashCode(), member39.hashCode());
-
-        final StreamsGroupMember member40 = new StreamsGroupMember.Builder(member1.memberId())
-            .build();
-        final StreamsGroupMember member41 = new StreamsGroupMember.Builder(member40.memberId())
-            .setWarmupTasksPendingRevocation(
-                mkTasksPerSubtopology(mkTasks("subtopology-id", 1, 2, 3))
-            ).build();
-        assertEquals(member1, member40);
-        assertEquals(member1.hashCode(), member40.hashCode());
-        assertNotEquals(member1, member41);
-        assertNotEquals(member1.hashCode(), member41.hashCode());
     }
 
     @Test
@@ -364,12 +155,12 @@ public class StreamsGroupMemberTest {
 
         assertEquals(record.clientId(), member.clientId());
         assertEquals(record.clientHost(), member.clientHost());
-        assertEquals(record.instanceId(), member.instanceId());
-        assertEquals(record.rackId(), member.rackId());
+        assertEquals(Optional.of(record.instanceId()), member.instanceId());
+        assertEquals(Optional.of(record.rackId()), member.rackId());
         assertEquals(record.rebalanceTimeoutMs(), member.rebalanceTimeoutMs());
         assertEquals(record.topologyEpoch(), member.topologyEpoch());
         assertEquals(record.processId(), member.processId());
-        assertEquals(record.userEndpoint(), member.userEndpoint());
+        assertEquals(Optional.of(record.userEndpoint()), member.userEndpoint());
         assertEquals(
             record.clientTags().stream().collect(Collectors.toMap(KeyValue::key, KeyValue::value)),
             member.clientTags()
@@ -458,14 +249,14 @@ public class StreamsGroupMemberTest {
             member.warmupTasksPendingRevocation()
         );
         assertEquals("member-id", member.memberId());
-        assertNull(member.instanceId());
-        assertNull(member.rackId());
+        assertTrue(member.instanceId().isEmpty());
+        assertTrue(member.rackId().isEmpty());
         assertEquals(-1, member.rebalanceTimeoutMs());
         assertEquals("", member.clientId());
         assertEquals("", member.clientHost());
         assertEquals(-1, member.topologyEpoch());
-        assertNull(member.processId());
-        assertNull(member.userEndpoint());
+        assertTrue(member.processId().isEmpty());
+        assertTrue(member.userEndpoint().isEmpty());
         assertEquals(Collections.emptyMap(), member.clientTags());
     }
 
@@ -512,7 +303,7 @@ public class StreamsGroupMemberTest {
         final String newProcessId = "new" + member.processId();
         final int newTopologyEpoch = member.topologyEpoch() + 1;
         final StreamsGroupMemberMetadataValue.Endpoint newUserEndpoint =
-            new StreamsGroupMemberMetadataValue.Endpoint().setHost(member.userEndpoint().host() + "2").setPort(9090);
+            new StreamsGroupMemberMetadataValue.Endpoint().setHost(member.userEndpoint().get().host() + "2").setPort(9090);
         final Map<String, String> newClientTags = new HashMap<>(member.clientTags());
         newClientTags.put("client2", "tag2");
 
@@ -526,12 +317,12 @@ public class StreamsGroupMemberTest {
             .maybeUpdateClientTags(Optional.of(newClientTags))
             .build();
 
-        assertEquals(newRackId, updatedMember.rackId());
-        assertEquals(newInstanceId, updatedMember.instanceId());
+        assertEquals(Optional.of(newRackId), updatedMember.rackId());
+        assertEquals(Optional.of(newInstanceId), updatedMember.instanceId());
         assertEquals(newRebalanceTimeout, updatedMember.rebalanceTimeoutMs());
         assertEquals(newProcessId, updatedMember.processId());
         assertEquals(newTopologyEpoch, updatedMember.topologyEpoch());
-        assertEquals(newUserEndpoint, updatedMember.userEndpoint());
+        assertEquals(Optional.of(newUserEndpoint), updatedMember.userEndpoint());
         assertEquals(newClientTags, updatedMember.clientTags());
         assertEquals(member.memberId(), updatedMember.memberId());
         assertEquals(member.memberEpoch(), updatedMember.memberEpoch());
@@ -567,8 +358,8 @@ public class StreamsGroupMemberTest {
         assertEquals(member.clientId(), updatedMember.clientId());
         assertEquals(member.clientHost(), updatedMember.clientHost());
         assertEquals(member.topologyEpoch(), updatedMember.topologyEpoch());
-        assertNull(member.processId());
-        assertNull(member.userEndpoint());
+        assertTrue(member.processId().isEmpty());
+        assertTrue(member.userEndpoint().isEmpty());
         assertEquals(member.clientTags(), updatedMember.clientTags());
         assertEquals(member.assignedActiveTasks(), updatedMember.assignedActiveTasks());
         assertEquals(member.assignedStandbyTasks(), updatedMember.assignedStandbyTasks());

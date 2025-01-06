@@ -27,6 +27,13 @@ import java.util.stream.Collectors;
 
 /**
  * An immutable assignment for a member.
+ *
+ * @param activeTasks           Active tasks assigned to the member.
+ *                              The key of the map is the subtopology ID and the value is the set of partition IDs.
+ * @param standbyTasks          Standby tasks assigned to the member.
+ *                              The key of the map is the subtopology ID and the value is the set of partition IDs.
+ * @param warmupTasks           Warm-up tasks assigned to the member.
+ *                              The key of the map is the subtopology ID and the value is the set of partition IDs.
  */
 public record Assignment(Map<String, Set<Integer>> activeTasks,
                          Map<String, Set<Integer>> standbyTasks,
@@ -38,6 +45,9 @@ public record Assignment(Map<String, Set<Integer>> activeTasks,
         warmupTasks = Collections.unmodifiableMap(Objects.requireNonNull(warmupTasks));
     }
 
+    /**
+     * An empty assignment.
+     */
     public static final Assignment EMPTY = new Assignment(
         Collections.emptyMap(),
         Collections.emptyMap(),
