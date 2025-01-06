@@ -81,7 +81,7 @@ public class FetchParams {
     }
 
     public boolean fetchOnlyLeader() {
-        return isFromFollower() || (isFromConsumer() && !clientMetadata.isPresent()) || shareFetchRequest;
+        return isFromFollower() || (isFromConsumer() && clientMetadata.isEmpty()) || shareFetchRequest;
     }
 
     public boolean hardMaxBytesLimit() {

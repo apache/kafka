@@ -84,14 +84,14 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-            context.appConfigs(),
+            stateStoreContext.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
             false
         );
         // register the store
-        context.register(
+        stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) records -> {
                 restoring = true;
@@ -108,7 +108,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
                 restoring = false;
             }
         );
-        this.context = context;
+        this.context = stateStoreContext;
     }
 
     @Override

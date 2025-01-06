@@ -339,8 +339,8 @@ class AutoTopicCreationManagerTest {
     topicsCollection.add(getNewTopic(topicName))
     val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
       .setApiKey(ApiKeys.CREATE_TOPICS.id)
-      .setMinVersion(0)
-      .setMaxVersion(0)
+      .setMinVersion(2)
+      .setMaxVersion(2)
     Mockito.when(brokerToController.controllerApiVersions())
       .thenReturn(Optional.of(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))))
 

@@ -65,67 +65,64 @@ public class OffsetMessageFormatterTest {
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 10, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 10, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"version\":10,\"data\":\"unknown\"},\"value\":{\"version\":10,\"data\":\"unknown\"}}"
+                        ""
                 ),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"version\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
                             "\"value\":{\"version\":0,\"data\":{\"offset\":100,\"metadata\":\"metadata\"," +
                             "\"commitTimestamp\":1234}}}"
                 ),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"version\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
                             "\"value\":{\"version\":1,\"data\":{\"offset\":100,\"metadata\":\"metadata\"," +
                             "\"commitTimestamp\":1234,\"expireTimestamp\":-1}}}"
                 ),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"version\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
                             "\"value\":{\"version\":2,\"data\":{\"offset\":100,\"metadata\":\"metadata\"," +
                             "\"commitTimestamp\":1234}}}"
                 ),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 3, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"version\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
                             "\"value\":{\"version\":3,\"data\":{\"offset\":100,\"leaderEpoch\":10," +
                             "\"metadata\":\"metadata\",\"commitTimestamp\":1234}}}"
                 ),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 4, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"version\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
                             "\"value\":{\"version\":4,\"data\":{\"offset\":100,\"leaderEpoch\":10," +
                             "\"metadata\":\"metadata\",\"commitTimestamp\":1234}}}"
                 ),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 5, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 4, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"version\":5,\"data\":\"unknown\"},\"value\":{\"version\":4," +
-                            "\"data\":{\"offset\":100,\"leaderEpoch\":10,\"metadata\":\"metadata\"," +
-                            "\"commitTimestamp\":1234}}}"
+                        ""
                 ),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 5, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"version\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
                             "\"value\":{\"version\":5,\"data\":\"unknown\"}}"
                 ),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
                         null,
-                        "{\"key\":{\"version\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
                             "\"value\":null}"),
                 Arguments.of(
                         null,
                         MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":null,\"value\":{\"version\":1,\"data\":{\"offset\":100,\"metadata\":\"metadata\"," +
-                            "\"commitTimestamp\":1234,\"expireTimestamp\":-1}}}"),
-                Arguments.of(null, null, "{\"key\":null,\"value\":null}"),
+                        ""),
+                Arguments.of(null, null, ""),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_VALUE).array(),

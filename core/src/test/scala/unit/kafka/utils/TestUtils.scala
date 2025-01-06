@@ -47,7 +47,6 @@ import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils.formatAddress
-import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.LeaderAndIsr
@@ -78,7 +77,6 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Collections, Optional, Properties}
-import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, mutable}
 import scala.concurrent.duration.FiniteDuration
@@ -150,22 +148,6 @@ object TestUtils extends Logging {
   def tempPropertiesFile(properties: Map[String, String]): File = {
     val content = properties.map{case (k, v) => k + "=" + v}.mkString(System.lineSeparator())
     JTestUtils.tempFile(content)
-  }
-
-  /**
-   * Create a kafka server instance with appropriate test settings
-   * USING THIS IS A SIGN YOU ARE NOT WRITING A REAL UNIT TEST
-   *
-   * @param config The configuration of the server
-   */
-  def createServer(config: KafkaConfig, time: Time = Time.SYSTEM): KafkaServer = {
-    createServer(config, time, None, startup = true)
-  }
-
-  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], startup: Boolean): KafkaServer = {
-    val server = new KafkaServer(config, time, threadNamePrefix)
-    if (startup) server.startup()
-    server
   }
 
   /**
@@ -356,12 +338,8 @@ object TestUtils extends Logging {
     props
   }
 
-  @nowarn("cat=deprecation")
-  def setIbpAndMessageFormatVersions(config: Properties, version: MetadataVersion): Unit = {
+  def setIbpVersion(config: Properties, version: MetadataVersion): Unit = {
     config.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, version.version)
-    // for clarity, only set the log message format version if it's not ignored
-    if (!LogConfig.shouldIgnoreMessageFormatVersion(version))
-      config.setProperty(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG, version.version)
   }
 
   def createAdminClient[B <: KafkaBroker](
@@ -527,39 +505,6 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Create a topic in ZooKeeper.
-   * Wait until the leader is elected and the metadata is propagated to all brokers.
-   * Return the leader for each partition.
-   */
-  def createTopic(zkClient: KafkaZkClient,
-                  topic: String,
-                  numPartitions: Int = 1,
-                  replicationFactor: Int = 1,
-                  servers: Seq[KafkaBroker],
-                  topicConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] = {
-    val adminZkClient = new AdminZkClient(zkClient)
-    // create topic
-    waitUntilTrue( () => {
-      var hasSessionExpirationException = false
-      try {
-        adminZkClient.createTopic(topic, numPartitions, replicationFactor, topicConfig)
-      } catch {
-        case _: SessionExpiredException => hasSessionExpirationException = true
-        case e: Throwable => throw e // let other exceptions propagate
-      }
-      !hasSessionExpirationException},
-      s"Can't create topic $topic")
-
-    // wait until we've propagated all partitions metadata to all servers
-    val allPartitionsMetadata = waitForAllPartitionsMetadata(servers, topic, numPartitions)
-
-    (0 until numPartitions).map { i =>
-      i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
-        throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
-    }.toMap
-  }
-
-  /**
    * Create a topic in ZooKeeper using a customized replica assignment.
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
@@ -696,31 +641,6 @@ object TestUtils extends Logging {
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, if (readCommitted) "read_committed" else "read_uncommitted")
     consumerProps ++= JaasTestUtils.consumerSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(saslProperties))
     new KafkaConsumer[K, V](consumerProps, keyDeserializer, valueDeserializer)
-  }
-
-  /**
-   *  If neither oldLeaderOpt nor newLeaderOpt is defined, wait until the leader of a partition is elected.
-   *  If oldLeaderOpt is defined, it waits until the new leader is different from the old leader.
-   *  If newLeaderOpt is defined, it waits until the new leader becomes the expected new leader.
-   *
-   * @return The new leader (note that negative values are used to indicate conditions like NoLeader and
-   *         LeaderDuringDelete).
-   * @throws AssertionError if the expected condition is not true within the timeout.
-   */
-  def waitUntilLeaderIsElectedOrChanged(
-    zkClient: KafkaZkClient,
-    topic: String,
-    partition: Int,
-    timeoutMs: Long = 30000L,
-    oldLeaderOpt: Option[Int] = None,
-    newLeaderOpt: Option[Int] = None,
-    ignoreNoLeader: Boolean = false
-  ): Int = {
-    def getPartitionLeader(topic: String, partition: Int): Option[Int] = {
-      zkClient.getLeaderForPartition(new TopicPartition(topic, partition))
-        .filter(p => !ignoreNoLeader || p != LeaderAndIsr.NO_LEADER)
-    }
-    doWaitUntilLeaderIsElectedOrChanged(getPartitionLeader, topic, partition, timeoutMs, oldLeaderOpt, newLeaderOpt)
   }
 
   /**
@@ -1033,11 +953,6 @@ object TestUtils extends Logging {
       }, msg)
   }
 
-  def waitUntilControllerElected(zkClient: KafkaZkClient, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
-    val (controllerId, _) = computeUntilTrue(zkClient.getControllerId, waitTime = timeout)(_.isDefined)
-    controllerId.getOrElse(throw new AssertionError(s"Controller not elected after $timeout ms"))
-  }
-
   def awaitLeaderChange[B <: KafkaBroker](
       brokers: Seq[B],
       tp: TopicPartition,
@@ -1240,18 +1155,10 @@ object TestUtils extends Logging {
   }
 
   def verifyTopicDeletion[B <: KafkaBroker](
-      zkClient: KafkaZkClient,
       topic: String,
       numPartitions: Int,
       brokers: Seq[B]): Unit = {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))
-    if (zkClient != null) {
-      // wait until admin path for delete topic is deleted, signaling completion of topic deletion
-      waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic),
-        "Admin path /admin/delete_topics/%s path not deleted even after a replica is restarted".format(topic))
-      waitUntilTrue(() => !zkClient.topicExists(topic),
-        "Topic path /brokers/topics/%s not deleted after /admin/delete_topics/%s path is deleted".format(topic, topic))
-    }
     // ensure that the topic-partition has been deleted from all brokers' replica managers
     waitUntilTrue(() =>
       brokers.forall(broker => topicPartitions.forall(tp => broker.replicaManager.onlinePartition(tp).isEmpty)),
