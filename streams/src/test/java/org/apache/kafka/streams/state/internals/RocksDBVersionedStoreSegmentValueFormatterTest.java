@@ -32,6 +32,7 @@ import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RocksDBVersionedStoreSegmentValueFormatterTest {
@@ -298,6 +299,22 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
 
         final TestCase expectedRecords = buildExpectedRecordsForInsertLatest(testCase);
         verifySegmentContents(segmentValue, expectedRecords);
+    }
+    
+    @ParameterizedTest
+    @MethodSource("nonExceptionalData")
+    public void shouldFindFirstValidTimestampInSegment(final TestCase testCase) {
+        final SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
+        
+        long expectedValue = testCase.isDegenerate || testCase.records.size() == 0 ? -1 : testCase.minTimestamp;
+
+        // in case we have tombstones
+        if (testCase.records.stream().anyMatch(r -> r.value == null)) {
+            expectedValue = testCase.records.stream().filter(r -> r.value != null).map(r -> r.timestamp)
+                    .min((r1, r2) -> Long.compare(r1, r2)).orElseGet(() -> -1L);
+        }
+        
+        assertEquals(expectedValue, segmentValue.firstValidTimestamp(Long.MIN_VALUE));
     }
 
     private static TestCase buildExpectedRecordsForInsertLatest(final TestCase originalTestCase) {
