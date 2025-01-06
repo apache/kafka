@@ -47,16 +47,16 @@ public final class AlterLogDirAction implements TieredStorageTestAction {
     @Override
     public void doExecute(TieredStorageTestContext context) throws InterruptedException, ExecutionException, TimeoutException {
         Optional<BrokerLocalStorage> localStorage = context.localStorages().stream().filter(storage -> storage.getBrokerId() == brokerId).findFirst();
-        if (!localStorage.isPresent()) {
+        if (localStorage.isEmpty()) {
             throw new IllegalArgumentException("cannot find local storage for this topic partition:" + topicPartition + " in this broker id:" + brokerId);
         }
 
         Optional<File> sourceDir = localStorage.get().getBrokerStorageDirectories().stream().filter(dir -> localStorage.get().dirContainsTopicPartition(topicPartition, dir)).findFirst();
-        if (!sourceDir.isPresent()) {
+        if (sourceDir.isEmpty()) {
             throw new IllegalArgumentException("No log dir with topic partition:" + topicPartition + " in this broker id:" + brokerId);
         }
         Optional<File> targetDir = localStorage.get().getBrokerStorageDirectories().stream().filter(dir -> !localStorage.get().dirContainsTopicPartition(topicPartition, dir)).findFirst();
-        if (!targetDir.isPresent()) {
+        if (targetDir.isEmpty()) {
             throw new IllegalArgumentException("No log dir without topic partition:" + topicPartition + " in this broker id:" + brokerId);
         }
 

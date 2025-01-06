@@ -31,20 +31,18 @@ import java.io.File;
 import java.util.List;
 import java.util.Optional;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.unmodifiableList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
 @Timeout(40)
 public class BootstrapDirectoryTest {
-    static final List<ApiMessageAndVersion> SAMPLE_RECORDS1 = unmodifiableList(asList(
+    static final List<ApiMessageAndVersion> SAMPLE_RECORDS1 = List.of(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                     setName(MetadataVersion.FEATURE_NAME).
                     setFeatureLevel((short) 7), (short) 0),
             new ApiMessageAndVersion(new NoOpRecord(), (short) 0),
-            new ApiMessageAndVersion(new NoOpRecord(), (short) 0)));
+            new ApiMessageAndVersion(new NoOpRecord(), (short) 0));
 
     static class BootstrapTestDirectory implements AutoCloseable {
         File directory = null;

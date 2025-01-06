@@ -102,7 +102,7 @@ public class LeaderElectionCommand {
          * The validate function should be checking that this option is required if the --topic and --path-to-json-file
          * are not specified.
          */
-        Optional<Set<TopicPartition>> topicPartitions = jsonFileTopicPartitions.map(Optional::of).orElse(singleTopicPartition);
+        Optional<Set<TopicPartition>> topicPartitions = jsonFileTopicPartitions.or(() -> singleTopicPartition);
 
         Properties props = new Properties();
         if (commandOptions.hasAdminClientConfig()) {
