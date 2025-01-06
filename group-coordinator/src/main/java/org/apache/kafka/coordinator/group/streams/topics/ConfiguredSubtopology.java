@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams.topics;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,12 +30,23 @@ import java.util.stream.Collectors;
  * resolved and defined exactly the information that is being used by streams groups assignment reconciliation.
  * <p>
  * Configured subtopologies may be recreated every time the input topics used by the subtopology are modified.
+ *
+ * @param sourceTopics            The source topics of the subtopology.
+ * @param repartitionSourceTopics The repartition source topics of the subtopology.
+ * @param repartitionSinkTopics   The repartition sink topics of the subtopology.
+ * @param stateChangelogTopics    The state changelog topics of the subtopology.
  */
-public record ConfiguredSubtopology(Set<String> repartitionSinkTopics,
-                                    Set<String> sourceTopics,
+public record ConfiguredSubtopology(Set<String> sourceTopics,
                                     Map<String, ConfiguredInternalTopic> repartitionSourceTopics,
+                                    Set<String> repartitionSinkTopics,
                                     Map<String, ConfiguredInternalTopic> stateChangelogTopics) {
 
+    public ConfiguredSubtopology {
+        Objects.requireNonNull(sourceTopics, "sourceTopics can't be null");
+        Objects.requireNonNull(repartitionSourceTopics, "repartitionSourceTopics can't be null");
+        Objects.requireNonNull(repartitionSinkTopics, "repartitionSinkTopics can't be null");
+        Objects.requireNonNull(stateChangelogTopics, "stateChangelogTopics can't be null");
+    }
 
     public StreamsGroupDescribeResponseData.Subtopology asStreamsGroupDescribeSubtopology(String subtopologyId) {
         return new StreamsGroupDescribeResponseData.Subtopology()

@@ -22,17 +22,67 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class ConfiguredTopologyTest {
+
+    @Test
+    public void testConstructorWithNullSubtopologies() {
+        assertThrows(NullPointerException.class,
+            () -> new ConfiguredTopology(
+                0,
+                null,
+                Collections.emptyMap(),
+                Optional.empty()
+            )
+        );
+    }
+
+    @Test
+    public void testConstructorWithNullInternalTopicsToBeCreated() {
+        assertThrows(NullPointerException.class,
+            () -> new ConfiguredTopology(
+                0,
+                Collections.emptyMap(),
+                null,
+                Optional.empty()
+            )
+        );
+    }
+
+    @Test
+    public void testConstructorWithNullTopicConfigurationException() {
+        assertThrows(NullPointerException.class,
+            () -> new ConfiguredTopology(
+                0,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                null
+            )
+        );
+    }
+
+    @Test
+    public void testConstructorWithInvalidTopologyEpoch() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new ConfiguredTopology(
+                -1,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Optional.empty()
+            )
+        );
+    }
 
     @Test
     public void testIsReady() {
@@ -48,17 +98,13 @@ public class ConfiguredTopologyTest {
     @Test
     public void testAsStreamsGroupDescribeTopology() {
         int topologyEpoch = 1;
-
         ConfiguredSubtopology subtopologyMock = mock(ConfiguredSubtopology.class);
         StreamsGroupDescribeResponseData.Subtopology subtopologyResponse = new StreamsGroupDescribeResponseData.Subtopology();
         when(subtopologyMock.asStreamsGroupDescribeSubtopology(Mockito.anyString())).thenReturn(subtopologyResponse);
-
         Map<String, ConfiguredSubtopology> subtopologies = new HashMap<>();
         subtopologies.put("subtopology1", subtopologyMock);
-
         Map<String, CreatableTopic> internalTopicsToBeCreated = new HashMap<>();
         Optional<TopicConfigurationException> topicConfigurationException = Optional.empty();
-
         ConfiguredTopology configuredTopology = new ConfiguredTopology(
             topologyEpoch, subtopologies, internalTopicsToBeCreated, topicConfigurationException);
 

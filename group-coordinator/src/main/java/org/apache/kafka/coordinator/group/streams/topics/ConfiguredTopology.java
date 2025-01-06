@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -41,6 +42,15 @@ public record ConfiguredTopology(int topologyEpoch,
                                  Map<String, ConfiguredSubtopology> subtopologies,
                                  Map<String, CreatableTopic> internalTopicsToBeCreated,
                                  Optional<TopicConfigurationException> topicConfigurationException) {
+
+    public ConfiguredTopology {
+        if (topologyEpoch < 0) {
+            throw new IllegalArgumentException("Topology epoch must be non-negative.");
+        }
+        Objects.requireNonNull(subtopologies, "subtopologies can't be null");
+        Objects.requireNonNull(internalTopicsToBeCreated, "internalTopicsToBeCreated can't be null");
+        Objects.requireNonNull(topicConfigurationException, "topicConfigurationException can't be null");
+    }
 
     public boolean isReady() {
         return topicConfigurationException.isEmpty();

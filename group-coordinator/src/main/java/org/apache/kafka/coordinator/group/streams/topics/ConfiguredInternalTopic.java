@@ -26,28 +26,29 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * ConfiguredInternalTopic captures the properties required for configuring the internal topics we create for change-logs and repartitioning
- * etc.
+ * Captures the properties required for configuring the internal topics we create for changelogs and repartitioning etc.
  * <p>
  * It is derived from the topology sent by the client, and the current state of the topics inside the broker. If the topics on the broker
  * changes, the internal topic may need to be reconfigured.
+ *
+ * @param name               The name of the topic.
+ * @param numberOfPartitions The number of partitions for the topic.
+ * @param replicationFactor  The replication factor of the topic. If undefiend, the broker default is used.
+ * @param topicConfigs       The topic configurations of the topic.
  */
 public record ConfiguredInternalTopic(String name,
-                                      Map<String, String> topicConfigs,
                                       int numberOfPartitions,
-                                      Optional<Short> replicationFactor) {
+                                      Optional<Short> replicationFactor,
+                                      Map<String, String> topicConfigs
+) {
 
     public ConfiguredInternalTopic {
         Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
-        validateNumberOfPartitions(numberOfPartitions);
-        topicConfigs = Collections.unmodifiableMap(Objects.requireNonNull(topicConfigs, "topicConfigs can't be null"));
-    }
-
-    private static void validateNumberOfPartitions(final int numberOfPartitions) {
         if (numberOfPartitions < 1) {
             throw new IllegalArgumentException("Number of partitions must be at least 1.");
         }
+        topicConfigs = Collections.unmodifiableMap(Objects.requireNonNull(topicConfigs, "topicConfigs can't be null"));
     }
 
     public StreamsGroupDescribeResponseData.TopicInfo asStreamsGroupDescribeTopicInfo() {
