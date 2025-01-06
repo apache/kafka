@@ -2783,8 +2783,13 @@ All the following metrics have a recording level of <code>info</code>:
   </tr>
   <tr>
     <td>state</td>
-    <td>The state of the Kafka Streams client.</td>
+    <td>The state of the Kafka Streams client as a string.</td>
     <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+    <td>client-state</td>
+    <td>The state of the Kafka Streams client as a number (<code>ordinal()</code> of the corresponding enum).</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+),process-id=([-.\w]+)</td>
   </tr>
   <tr>
     <td>alive-stream-threads</td>
@@ -2795,6 +2800,11 @@ All the following metrics have a recording level of <code>info</code>:
       <td>failed-stream-threads</td>
       <td>The number of failed stream threads since the start of the Kafka Streams client.</td>
       <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+      <td>recording-level</td>
+      <td>The metric recording level as a number (0 = INFO, 1 = DEBUG, 2 = TRACE).</td>
+      <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+),process-id=([-.\w]+)</td>
   </tr>
   </tbody>
 </table>
@@ -2807,6 +2817,16 @@ All the following metrics have a recording level of <code>info</code>:
         <th>Metric/Attribute name</th>
         <th>Description</th>
         <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>state</td>
+        <td>The state of the thread as a string.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>thread-state</td>
+        <td>The state of the thread as a number (<code>ordinal()</code> of the corresponding enum).</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>commit-latency-avg</td>

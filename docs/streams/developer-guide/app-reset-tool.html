@@ -45,7 +45,7 @@
         </ul>
         <p>The application reset tool does not:</p>
         <ul class="simple">
-            <li>Reset output topics of an application. If any output (or intermediate) topics are consumed by downstream
+            <li>Reset output topics of an application. If any output topics are consumed by downstream
                 applications, it is your responsibility to adjust those downstream applications as appropriate when you reset the
                 upstream application.</li>
             <li>Reset the local environment of your application instances.  It is your responsibility to delete the local
@@ -78,9 +78,6 @@
                                          (s) to connect to. The broker list
                                          string in the form HOST1:PORT1,HOST2:
                                          PORT2.
---bootstrap-servers &lt;String: urls&gt;     DEPRECATED: Comma-separated list of
-                                         broker urls with format: HOST1:PORT1,
-                                         HOST2:PORT2 (default: localhost:9092)
 --by-duration &lt;String: urls&gt;          Reset offsets to offset by duration from
                                         current timestamp. Format: &#39;PnDTnHnMnS&#39;
 --config-file &lt;String: file name&gt;     Property file containing configs to be
@@ -123,8 +120,7 @@
             </ul>
             <p>Only one of these scenarios can be defined. If not, <code>to-earliest</code> will be executed by default</p>
             <p>All the other parameters can be combined as needed.  For example, if you want to restart an application from an
-                empty internal state, but not reprocess previous data, simply omit the parameters <code class="docutils literal"><span class="pre">--input-topics</span></code> and
-                <code class="docutils literal"><span class="pre">--intermediate-topics</span></code>.</p>
+                empty internal state, but not reprocess previous data, simply omit the parameter <code class="docutils literal"><span class="pre">--input-topics</span></code>.
         </div>
         <div class="section" id="step-2-reset-the-local-environments-of-your-application-instances">
             <span id="streams-developer-guide-reset-local-environment"></span><h2>Step 2: Reset the local environments of your application instances<a class="headerlink" href="#step-2-reset-the-local-environments-of-your-application-instances" title="Permalink to this headline"></a></h2>
@@ -133,7 +129,7 @@
                 use either of these methods:</p>
             <ul class="simple">
                 <li>The API method <code class="docutils literal"><span class="pre">KafkaStreams#cleanUp()</span></code> in your application code.</li>
-                <li>Manually delete the corresponding local state directory (default location: <code class="docutils literal"><span class="pre">/tmp/kafka-streams/&lt;application.id&gt;</span></code>). For more information, see <a href="/{{version}}/javadoc/org/apache/kafka/streams/StreamsConfig.html#STATE_DIR_CONFIG">Streams</a> javadocs.</li>
+                <li>Manually delete the corresponding local state directory (default location: <code class="docutils literal"><span class="pre">/${java.io.tmpdir}/kafka-streams/&lt;application.id&gt;</span></code>). For more information, see <a href="/{{version}}/javadoc/org/apache/kafka/streams/StreamsConfig.html#STATE_DIR_CONFIG">Streams</a> javadocs.</li>
             </ul>
 </div>
 </div>
