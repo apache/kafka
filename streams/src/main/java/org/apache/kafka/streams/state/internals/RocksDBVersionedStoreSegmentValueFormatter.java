@@ -229,6 +229,11 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
          * @return the bytes serialization for this segment value
          */
         byte[] serialize();
+        
+        /**
+         * @return the first timestamp of a record that isnt a tombstone
+         */
+        long firstValidTimestamp(long validFrom);
 
         class SegmentSearchResult {
             private final int index;
@@ -320,7 +325,8 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             int currValueSize;
             int currIndex = 0;
             int cumValueSize = 0;
-            long lastValidValueTimestampKnown = -1L;
+
+            long latestValidToKnown = -1; // When ignoring tombstones, latest valid "validTo" value known
             while (currTimestamp != minTimestamp) {
                 if (currIndex <= deserIndex) {
                     final TimestampAndValueSize curr = unpackedReversedTimestampAndValueSizes.get(currIndex);
@@ -345,7 +351,11 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                             final byte[] value = new byte[currValueSize];
                             final int valueSegmentIndex = segmentValue.length - cumValueSize;
                             System.arraycopy(segmentValue, valueSegmentIndex, value, 0, currValueSize);
-                            return new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, value);
+                            // we need to have a valid "validTo" timestamp in this case
+                            // id this is the upper bound (greater timestamp) of the segment, we will be
+                            // searching in next segment
+                            return new SegmentSearchResult(currIndex, currTimestamp,
+                                    ignoreTombstone ? latestValidToKnown : currNextTimestamp, value);
                         } else if (!ignoreTombstone) {
                             return new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, null);
                         } else {
@@ -364,18 +374,53 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 }
 
                 // prep for next iteration
-                if (currValueSize > 0) lastValidValueTimestampKnown = currTimestamp;
+                if (currValueSize > 0)
+                    latestValidToKnown = currTimestamp;
                 currNextTimestamp = currTimestamp;
                 currIndex++;
             }
-            
+
             if (ignoreTombstone) {
                 // If we didn't find value in segment, it means that the value is in a previous segment
                 // REVIEW: Can we send a specific value maybe instead of putting index to -1 ?
-                return new SegmentSearchResult(-1, -1, lastValidValueTimestampKnown);
+                return new SegmentSearchResult(-1, -1, -1);
             }
 
             throw new IllegalStateException("Search in segment expected to find result but did not.");
+        }
+
+        @Override
+        public long firstValidTimestamp(final long validFrom) {
+            long currTimestamp = -1L; // choose an invalid timestamp. if this is valid, this needs to be re-worked
+            int currValueSize;
+            int currIndex = 0;
+            int cumValueSize = 0;
+
+            long foundTS = -1;
+            while (currTimestamp != minTimestamp) {
+                if (currIndex <= deserIndex) {
+                    final TimestampAndValueSize curr = unpackedReversedTimestampAndValueSizes.get(currIndex);
+                    currTimestamp = curr.timestamp;
+                    currValueSize = curr.valueSize;
+                    cumValueSize = cumulativeValueSizes.get(currIndex);
+                } else {
+                    final int timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
+                    currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
+                    currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
+                    cumValueSize += Math.max(currValueSize, 0);
+
+                    deserIndex = currIndex;
+                    unpackedReversedTimestampAndValueSizes.add(new TimestampAndValueSize(currTimestamp, currValueSize));
+                    cumulativeValueSizes.add(cumValueSize);
+                }
+
+                if (currValueSize != -1 && currTimestamp > validFrom) {
+                    foundTS = currTimestamp;
+                }
+                currIndex++;
+            }
+
+            return foundTS;
         }
 
         @Override

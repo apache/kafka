@@ -856,7 +856,7 @@ public class RocksDBVersionedStoreTest {
         // Insert five dummy values in two different segments
         putToStore("k", "v1", BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
         putToStore("k", "v2", SEGMENT_INTERVAL - 10, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
-        putToStore("k", "v3", SEGMENT_INTERVAL + 10, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        putToStore("k", "v3", SEGMENT_INTERVAL + 10, PUT_RETURN_CODE_VALID_TO_UNDEFINED); // Last in first segment
         putToStore("k", "v4", SEGMENT_INTERVAL + 20, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
         putToStore("k", "v5", SEGMENT_INTERVAL + 30, PUT_RETURN_CODE_VALID_TO_UNDEFINED); // In latest store
         verifyGetValueFromStore("k", "v5", SEGMENT_INTERVAL + 30);
@@ -871,8 +871,6 @@ public class RocksDBVersionedStoreTest {
         
         deleteFromStore("k", SEGMENT_INTERVAL - 10);
         deleteFromStore("k", SEGMENT_INTERVAL + 10);
-        System.out.println("");
-        System.out.println("");
         verifyTimestampedGetValueFromStoreWithoutTombtones("k", SEGMENT_INTERVAL - 10, "v1", BASE_TIMESTAMP, SEGMENT_INTERVAL + 20);
     }
 

@@ -242,7 +242,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         // check segment stores
         final List<LogicalKeyValueSegment> segments = segmentStores.segments(asOfTimestamp, Long.MAX_VALUE, false);
-        long foundValidTo = -1L;
         for (int segmentIndex = 0; segmentIndex < segments.size(); segmentIndex++) {
             final LogicalKeyValueSegment segment = segments.get(segmentIndex);
             final byte[] rawSegmentValue = segment.get(key);
@@ -273,13 +272,13 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 
                 // If we have a negative index, we need to take last value in previous segments
                 if (searchResult.index() == -1) {
-                    foundValidTo = searchResult.validTo();
                     continue;
                 }
                 
-                if (searchResult.value() != null) {
+                if (searchResult.value() != null) {                    
                     return new VersionedRecord<>(searchResult.value(), searchResult.validFrom(),
-                            foundValidTo > 0 ? foundValidTo : searchResult.validTo());
+                            searchResult.validTo() != -1 ? searchResult.validTo()
+                                    : checkNextSegmentsForValidTo(key, searchResult.validFrom()));
                 } else {
                     return null;
                 }
@@ -288,6 +287,25 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         // checked all segments and no results found
         return null;
+    }
+    
+    private long checkNextSegmentsForValidTo(final Bytes key, final long validFrom) {
+        final List<LogicalKeyValueSegment> previousSegments = segmentStores.segments(validFrom, Long.MAX_VALUE, true);
+        long validTo = -1;
+        for (final LogicalKeyValueSegment previousSegment : previousSegments) {
+            validTo = RocksDBVersionedStoreSegmentValueFormatter.deserialize(previousSegment.get(key))
+                    .firstValidTimestamp(validFrom);
+            if (validTo != -1) {
+                break;
+            }
+        }
+
+        // if we go through next all segment and didn't find, we set lastValue timestamp as validto
+        if (validTo == -1) {
+            validTo = LatestValueFormatter.timestamp(latestValueStore.get(key));
+        }
+        
+        return validTo;
     }
 
     @SuppressWarnings("unchecked")
