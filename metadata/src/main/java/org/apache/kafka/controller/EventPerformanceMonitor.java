@@ -189,10 +189,10 @@ class EventPerformanceMonitor {
             bld.append("there were no controller events completed.");
         } else {
             bld.append(numEvents).append(" controller events were completed, which took an average of ");
-            bld.append(nanosecondsToDecimalMillis(totalEventDurationNs / numEvents));
+            bld.append(formatNsAsDecimalMs(totalEventDurationNs / numEvents));
             bld.append(" ms each. The slowest event was ").append(slowestEventName);
             bld.append(", which took ");
-            bld.append(nanosecondsToDecimalMillis(slowestEventDurationNs));
+            bld.append(formatNsAsDecimalMs(slowestEventDurationNs));
             bld.append(" ms.");
         }
         return bld.toString();
@@ -204,7 +204,7 @@ class EventPerformanceMonitor {
      * @param durationNs    The duration in nanoseconds.
      * @return              The decimal duration in milliseconds.
      */
-    static String nanosecondsToDecimalMillis(long durationNs) {
+    static String formatNsAsDecimalMs(long durationNs) {
         double number = NANOSECONDS.toMicros(durationNs);
         number /= 1000;
         return MILLISECOND_DECIMAL_FORMAT.format(number);

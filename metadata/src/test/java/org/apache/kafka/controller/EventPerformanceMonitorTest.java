@@ -63,21 +63,21 @@ public class EventPerformanceMonitorTest {
     }
 
     @Test
-    public void testNanosecondsToDecimalMillisWithZero() {
+    public void testFormatNsAsDecimalMsWithZero() {
         assertEquals("0.00",
-            EventPerformanceMonitor.nanosecondsToDecimalMillis(0));
+            EventPerformanceMonitor.formatNsAsDecimalMs(0));
     }
 
     @Test
-    public void testNanosecondsToDecimalMillisWith100() {
+    public void testFormatNsAsDecimalMsWith100() {
         assertEquals("100.00",
-            EventPerformanceMonitor.nanosecondsToDecimalMillis(MILLISECONDS.toNanos(100)));
+            EventPerformanceMonitor.formatNsAsDecimalMs(MILLISECONDS.toNanos(100)));
     }
 
     @Test
-    public void testNanosecondsToDecimalMillisWith123456789() {
+    public void testFormatNsAsDecimalMsWith123456789() {
         assertEquals("123.46",
-            EventPerformanceMonitor.nanosecondsToDecimalMillis(123456789));
+            EventPerformanceMonitor.formatNsAsDecimalMs(123456789));
     }
 
     @Test
