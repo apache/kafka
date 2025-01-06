@@ -33,18 +33,29 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * This class is responsible for setting up the changelog topics for a topology.
+ * This class is responsible for setting up the changelog topics for a topology. For a given topology, which does not have the number
+ * of partitions specified for changelog partitions, this class will determine the number of partitions for each non-source changelog topic.
  */
 public class ChangelogTopics {
 
     private final Logger log;
     private final Collection<Subtopology> subtopologies;
-    private final Function<String, Integer> topicPartitionCountProvider;
+    private final Function<String, OptionalInt> topicPartitionCountProvider;
 
+    /**
+     * Constructor for ChangelogTopics.
+     *
+     * @param logContext                    The context for emitting log messages.
+     * @param subtopologies                 The subtopologies for the requested topology.
+     * @param topicPartitionCountProvider   Returns the number of partitions for a given topic, representing the current state of the broker
+     *                                      as well as any partition number decisions that have already been made. In particular, we expect
+     *                                      the number of partitions for all repartition topics defined, even if they do not exist in the
+     *                                      broker yet.
+     */
     public ChangelogTopics(
         final LogContext logContext,
         final Collection<Subtopology> subtopologies,
-        final Function<String, Integer> topicPartitionCountProvider
+        final Function<String, OptionalInt> topicPartitionCountProvider
     ) {
         this.log = logContext.logger(getClass());
         this.subtopologies = subtopologies;
@@ -81,10 +92,10 @@ public class ChangelogTopics {
     }
 
     private int getPartitionCountOrFail(String topic) {
-        final Integer topicPartitionCount = topicPartitionCountProvider.apply(topic);
-        if (topicPartitionCount == null) {
+        final OptionalInt topicPartitionCount = topicPartitionCountProvider.apply(topic);
+        if (topicPartitionCount.isEmpty()) {
             throw TopicConfigurationException.missingSourceTopics("No partition count for source topic " + topic);
         }
-        return topicPartitionCount;
+        return topicPartitionCount.getAsInt();
     }
 }

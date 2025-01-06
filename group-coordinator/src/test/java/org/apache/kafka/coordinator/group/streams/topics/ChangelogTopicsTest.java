@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -80,8 +81,8 @@ public class ChangelogTopicsTest {
         .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC_INFO))
         .setStateChangelogTopics(List.of(SOURCE_CHANGELOG_TOPIC_CONFIG, CHANGELOG_TOPIC_CONFIG));
 
-    private static Integer topicPartitionProvider(String s) {
-        return 3;
+    private static OptionalInt topicPartitionProvider(String s) {
+        return OptionalInt.of(3);
     }
 
     @Test
