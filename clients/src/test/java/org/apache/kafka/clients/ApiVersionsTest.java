@@ -17,46 +17,14 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.RecordBatch;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ApiVersionsTest {
-
-    @Test
-    public void testMaxUsableProduceMagic() {
-        ApiVersions apiVersions = new ApiVersions();
-        assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
-
-        apiVersions.update("0", NodeApiVersions.create());
-        assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
-
-        apiVersions.update("1", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
-        assertEquals(RecordBatch.MAGIC_VALUE_V1, apiVersions.maxUsableProduceMagic());
-
-        apiVersions.remove("1");
-        assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
-    }
-
-    @Test
-    public void testMaxUsableProduceMagicWithRaftController() {
-        ApiVersions apiVersions = new ApiVersions();
-        assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
-
-        // something that doesn't support PRODUCE, which is the case with Raft-based controllers
-        apiVersions.update("2", NodeApiVersions.create(Collections.singleton(
-            new ApiVersionsResponseData.ApiVersion()
-                .setApiKey(ApiKeys.FETCH.id)
-                .setMinVersion((short) 0)
-                .setMaxVersion((short) 2))));
-        assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
-    }
 
     @Test
     public void testFinalizedFeaturesUpdate() {
@@ -96,4 +64,5 @@ public class ApiVersionsTest {
         assertEquals(1, info.finalizedFeaturesEpoch);
         assertEquals((short) 2, info.finalizedFeatures.get("transaction.version"));
     }
+
 }

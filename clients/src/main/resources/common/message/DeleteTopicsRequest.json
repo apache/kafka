@@ -18,6 +18,7 @@
   "type": "request",
   "listeners": ["zkBroker", "broker", "controller"],
   "name": "DeleteTopicsRequest",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   // Versions 0, 1, 2, and 3 are the same.
   //
   // Version 4 is the first flexible version.
@@ -26,8 +27,7 @@
   // in the response if the topics deletion is throttled (KIP-599).
   //
   // Version 6 reorganizes topics, adds topic IDs and allows topic names to be null.
-  "validVersions": "0-6",
-  "deprecatedVersions": "0",
+  "validVersions": "1-6",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "Topics", "type": "[]DeleteTopicState", "versions": "6+", "about": "The name or topic ID of the topic.",

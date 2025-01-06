@@ -507,7 +507,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   private def prepareExhaustedEpochTxnMetadata(txn: Transaction): TransactionMetadata = {
     new TransactionMetadata(transactionalId = txn.transactionalId,
       producerId = producerId,
-      previousProducerId = RecordBatch.NO_PRODUCER_ID,
+      prevProducerId = RecordBatch.NO_PRODUCER_ID,
       nextProducerId = RecordBatch.NO_PRODUCER_ID,
       producerEpoch = (Short.MaxValue - 1).toShort,
       lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,

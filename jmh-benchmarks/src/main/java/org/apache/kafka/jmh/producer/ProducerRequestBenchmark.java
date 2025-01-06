@@ -21,7 +21,6 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
@@ -68,7 +67,7 @@ public class ProducerRequestBenchmark {
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(TOPIC_PRODUCE_DATA.iterator()));
 
     private static ProduceRequest request() {
-        return ProduceRequest.forMagic(RecordBatch.CURRENT_MAGIC_VALUE, PRODUCE_REQUEST_DATA, false).build();
+        return ProduceRequest.builder(PRODUCE_REQUEST_DATA, false).build();
     }
 
     private static final ProduceRequest REQUEST = request();

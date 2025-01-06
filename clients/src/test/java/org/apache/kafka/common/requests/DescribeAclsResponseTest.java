@@ -21,7 +21,6 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
 import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
@@ -43,7 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DescribeAclsResponseTest {
-    private static final short V0 = 0;
     private static final short V1 = 1;
 
     private static final AclDescription ALLOW_CREATE_ACL = buildAclDescription(
@@ -83,29 +81,9 @@ public class DescribeAclsResponseTest {
             Collections.singletonList(DENY_READ_ACL));
 
     @Test
-    public void shouldThrowOnV0IfNotLiteral() {
-        assertThrows(UnsupportedVersionException.class,
-            () -> buildResponse(10, Errors.NONE, Collections.singletonList(PREFIXED_ACL1)).serialize(V0));
-    }
-
-    @Test
     public void shouldThrowIfUnknown() {
         assertThrows(IllegalArgumentException.class,
-            () -> buildResponse(10, Errors.NONE, Collections.singletonList(UNKNOWN_ACL)).serialize(V0));
-    }
-
-    @Test
-    public void shouldRoundTripV0() {
-        List<DescribeAclsResource> resources = Arrays.asList(LITERAL_ACL1, LITERAL_ACL2);
-        final DescribeAclsResponse original = buildResponse(10, Errors.NONE, resources);
-        final ByteBuffer buffer = original.serialize(V0);
-
-        final DescribeAclsResponse result = DescribeAclsResponse.parse(buffer, V0);
-        assertResponseEquals(original, result);
-
-        final DescribeAclsResponse result2 = buildResponse(10, Errors.NONE, DescribeAclsResponse.aclsResources(
-            DescribeAclsResponse.aclBindings(resources)));
-        assertResponseEquals(original, result2);
+            () -> buildResponse(10, Errors.NONE, Collections.singletonList(UNKNOWN_ACL)).serialize(V1));
     }
 
     @Test

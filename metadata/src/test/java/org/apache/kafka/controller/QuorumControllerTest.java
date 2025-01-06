@@ -1365,7 +1365,7 @@ public class QuorumControllerTest {
     }
 
     private static final List<ApiMessageAndVersion> PRE_PRODUCTION_RECORDS =
-            Collections.unmodifiableList(Arrays.asList(
+            List.of(
                 new ApiMessageAndVersion(new RegisterBrokerRecord().
                         setBrokerEpoch(42).
                         setBrokerId(123).
@@ -1379,7 +1379,7 @@ public class QuorumControllerTest {
                 new ApiMessageAndVersion(new TopicRecord().
                         setName("bar").
                         setTopicId(Uuid.fromString("cxBT72dK4si8Ied1iP4wBA")),
-                        (short) 0)));
+                        (short) 0));
 
     private static final BootstrapMetadata COMPLEX_BOOTSTRAP = BootstrapMetadata.fromRecords(
             Arrays.asList(

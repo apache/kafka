@@ -1313,7 +1313,7 @@ public class ClientMetricsManagerTest {
         Optional<Entry<MetricName, KafkaMetric>> metric = kafkaMetrics.metrics().entrySet().stream()
             .filter(entry -> entry.getKey().name().equals(name))
             .findFirst();
-        if (!metric.isPresent())
+        if (metric.isEmpty())
             throw new Exception(String.format("Could not find metric called %s", name));
 
         return metric.get().getValue();

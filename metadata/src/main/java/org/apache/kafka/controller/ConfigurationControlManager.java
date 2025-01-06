@@ -482,7 +482,7 @@ public class ConfigurationControlManager {
         if (map == null) {
             return Collections.emptyMap();
         } else {
-            return Collections.unmodifiableMap(new HashMap<>(map));
+            return Map.copyOf(map);
         }
     }
 

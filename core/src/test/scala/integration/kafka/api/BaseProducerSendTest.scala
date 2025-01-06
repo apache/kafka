@@ -55,7 +55,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     overridingProps.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, 4.toString)
     TestUtils.createBrokerConfigs(
       numServers,
-      zkConnectOrNull,
+      null,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile,
       saslProperties = serverSaslProperties

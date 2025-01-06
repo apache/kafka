@@ -31,6 +31,7 @@ import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
@@ -50,7 +51,8 @@ class StorageToolTest {
     properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9092")
-    properties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT")
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    properties.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
     properties
   }
 
@@ -290,19 +292,6 @@ Found problem:
     assertTrue(stream.toString().contains(
       "I/O error trying to read log directory %s. Ignoring...".format(unavailableDir2)),
         "Failed to find content in output: " + stream.toString())
-  }
-
-  @Test
-  def testFormatFailsInZkMode(): Unit = {
-    val availableDirs = Seq(TestUtils.tempDir())
-    val properties = new Properties()
-    properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("zookeeper.connect", "localhost:2181")
-    val stream = new ByteArrayOutputStream()
-    assertEquals("The kafka configuration file appears to be for a legacy cluster. " +
-      "Formatting is only supported for clusters in KRaft mode.",
-        assertThrows(classOf[TerseFailure],
-          () => runFormatCommand(stream, properties)).getMessage)
   }
 
   @Test
