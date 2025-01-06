@@ -20,7 +20,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
-from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_4_0_0
+from kafkatest.version import DEV_BRANCH
 
 class ConsumerState:
     Started = 1
@@ -236,10 +236,7 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
 
         cmd += " --offset-reset-strategy %s" % self.offset_reset_strategy
 
-        if node.version < V_4_0_0:
-            cmd += " --broker-list %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
-        else:
-            cmd += " --bootstrap-server %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
+        cmd += " --bootstrap-server %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
 
         cmd += " --group-id %s --topic %s" % (self.group_id, self.topic)
 

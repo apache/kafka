@@ -88,7 +88,6 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     private final Boolean verbose;
     private final int maxMessages;
     private Integer totalAcknowledged = 0;
-    private Integer totalConsumed = 0;
     private final String brokerHostandPort;
     private final String groupId;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
@@ -237,7 +236,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         private final boolean success;
 
         public OffsetsAcknowledged(long count, List<AcknowledgedData> partitions, String error, boolean success) {
-            this.count=count;
+            this.count = count;
             this.partitions = partitions;
             this.error = error;
             this.success = success;
@@ -369,10 +368,8 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
                     printJson(new RecordData(record));
                 }
             }
-
         }
 
-        totalConsumed += records.count();
         printJson(new RecordsConsumed(records.count(), summaries));
     }
 
@@ -397,7 +394,6 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             this.totalAcknowledged += totalAcknowledged;
         }
     }
-
 
     public void run() {
         try {
@@ -446,16 +442,12 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
                 }
             }
         } catch (WakeupException e) {
-            out.println("caught wakeup exception: " + e);
             // ignore, we are closing
             log.trace("Caught WakeupException because share consumer is shutdown, ignore and terminate.", e);
         } catch (Throwable t) {
-            out.println("caught throwable exception: " + t);
             // Log the error, so it goes to the service log and not stdout
             log.error("Error during processing, terminating share consumer process: ", t);
         } finally {
-            out.println("Total records Consumed: " + totalConsumed.toString());
-            out.println("Total records Acknowledged: " + totalAcknowledged.toString());
             consumer.close();
             printJson(new ShutdownComplete());
             shutdownLatch.countDown();
@@ -499,7 +491,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
 
     private static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("verifiable-share-group")
+            .newArgumentParser("verifiable-share-consumer")
             .defaultHelp(true)
             .description("This tool creates a share group and consumes messages from a specific topic and emits share consumer events (e.g. share consumer startup, received messages, and offsets acknowledged) as JSON objects to STDOUT.");
         MutuallyExclusiveGroup connectionGroup = parser.addMutuallyExclusiveGroup("Connection Group")
@@ -557,7 +549,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .setDefault("")
             .type(String.class)
             .dest("offsetResetStrategy")
-            .help("Set share group reset strategy (must be either 'earliest' or 'latest'");
+            .help("Set share group reset strategy (must be either 'earliest' or 'latest')");
 
         parser.addArgument("--consumer.config")
             .action(store())

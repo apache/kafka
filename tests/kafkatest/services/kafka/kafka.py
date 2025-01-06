@@ -205,6 +205,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  use_new_coordinator=None,
                  consumer_group_migration_policy=None,
                  dynamicRaftQuorum=False,
+                 share_group_enable=False
                  ):
         """
         :param context: test context
@@ -379,6 +380,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.zk_client_secure = zk_client_secure
         self.listener_security_config = listener_security_config
         self.extra_kafka_opts = extra_kafka_opts
+        self.share_group_enable = share_group_enable
 
         #
         # In a heavily loaded and not very fast machine, it is
@@ -751,7 +753,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         #load template configs as dictionary
         config_template = self.render('kafka.properties', node=node, broker_id=self.idx(node),
                                       security_config=self.security_config, num_nodes=self.num_nodes,
-                                      listener_security_config=self.listener_security_config)
+                                      listener_security_config=self.listener_security_config,
+                                      share_group_enable=self.share_group_enable)
 
         configs = dict( l.rstrip().split('=', 1) for l in config_template.split('\n')
                         if not l.startswith("#") and "=" in l )
