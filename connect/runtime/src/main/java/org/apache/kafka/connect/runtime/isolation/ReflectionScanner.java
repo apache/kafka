@@ -77,7 +77,7 @@ public class ReflectionScanner extends PluginScanner {
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
         ClassGraph classGraphBuilder = new ClassGraph()
-                .addClassLoader(source.loader())
+                .overrideClassLoaders(source.loader())
                 .enableExternalClasses()
                 .enableClassInfo();
         try (ScanResult classGraph = classGraphBuilder.scan()) {
