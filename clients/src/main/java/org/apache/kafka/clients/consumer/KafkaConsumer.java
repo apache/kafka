@@ -281,8 +281,8 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * <b>Note: The committed offset should always be the offset of the next message that your application will read.</b>
  * Thus, when calling {@link #commitSync(Map) commitSync(offsets)} you should use {@code nextRecordToBeProcessed.offset()}
  * or if {@link ConsumerRecords} is exhausted already {@link ConsumerRecords#nextOffsets()} instead.
- * You should also pass in the {@link ConsumerRecord#leaderEpoch()} (or {@code nextOffsets().get(...).leaderEpoch()})
- * as commit metadata.
+ * You should also add the leader epoch as commit metadata, which can be obtained from
+ * {@link ConsumerRecord#leaderEpoch()} or {@link ConsumerRecords#nextOffsets()}.
  *
  * <h4><a name="manualassignment">Manual Partition Assignment</a></h4>
  *
