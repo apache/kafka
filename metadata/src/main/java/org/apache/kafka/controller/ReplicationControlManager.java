@@ -1568,7 +1568,7 @@ public class ReplicationControlManager {
             .setEligibleLeaderReplicasEnabled(isElrEnabled())
             .setDefaultDirProvider(clusterDescriber)
             .build();
-        if (!record.isPresent()) {
+        if (record.isEmpty()) {
             if (electionType == ElectionType.PREFERRED) {
                 return new ApiError(Errors.PREFERRED_LEADER_NOT_AVAILABLE);
             } else {
@@ -1649,7 +1649,7 @@ public class ReplicationControlManager {
     ControllerResult<Boolean> maybeFenceOneStaleBroker() {
         BrokerHeartbeatManager heartbeatManager = clusterControl.heartbeatManager();
         Optional<BrokerIdAndEpoch> idAndEpoch = heartbeatManager.tracker().maybeRemoveExpired();
-        if (!idAndEpoch.isPresent()) {
+        if (idAndEpoch.isEmpty()) {
             log.debug("No stale brokers found.");
             return ControllerResult.of(Collections.emptyList(), false);
         }

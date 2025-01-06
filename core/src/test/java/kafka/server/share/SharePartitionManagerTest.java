@@ -17,7 +17,6 @@
 package kafka.server.share;
 
 import kafka.cluster.Partition;
-import kafka.log.OffsetResultHolder;
 import kafka.server.LogReadResult;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
@@ -81,6 +80,7 @@ import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
+import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -2689,7 +2689,7 @@ public class SharePartitionManagerTest {
 
     private void mockFetchOffsetForTimestamp(ReplicaManager replicaManager) {
         FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(-1L, 0L, Optional.empty());
-        Mockito.doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).
+        Mockito.doReturn(new OffsetResultHolder(Optional.of(timestampAndOffset), Optional.empty())).
             when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
     }
 

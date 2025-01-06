@@ -675,8 +675,7 @@ public class Plugins {
         }
         try (LoaderSwap loaderSwap = withClassLoader(klass.getClassLoader())) {
             plugin = newPlugin(klass);
-            if (plugin instanceof Versioned) {
-                Versioned versionedPlugin = (Versioned) plugin;
+            if (plugin instanceof Versioned versionedPlugin) {
                 if (Utils.isBlank(versionedPlugin.version())) {
                     throw new ConnectException("Version not defined for '" + klassName + "'");
                 }

@@ -54,6 +54,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentMatcher;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.time.Duration;
@@ -101,7 +102,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("checkstyle:JavaNCSS")
+@SuppressWarnings({"checkstyle:JavaNCSS", "checkstyle:ClassDataAbstractionCoupling"})
 public class CoordinatorRuntimeTest {
     private static final TopicPartition TP = new TopicPartition("__consumer_offsets", 0);
     private static final Duration DEFAULT_WRITE_TIMEOUT = Duration.ofMillis(5);
@@ -117,6 +118,34 @@ public class CoordinatorRuntimeTest {
         @Override
         public byte[] serializeValue(String record) {
             return record.getBytes(Charset.defaultCharset());
+        }
+    }
+
+    private static class ThrowingSerializer<T> implements Serializer<T> {
+        private final Serializer<T> serializer;
+        private boolean throwOnNextOperation;
+
+        public ThrowingSerializer(Serializer<T> serializer) {
+            this.serializer = serializer;
+            this.throwOnNextOperation = false;
+        }
+
+        public void throwOnNextOperation() {
+            throwOnNextOperation = true;
+        }
+
+        @Override
+        public byte[] serializeKey(T record) {
+            return serializer.serializeKey(record);
+        }
+
+        @Override
+        public byte[] serializeValue(T record) {
+            if (throwOnNextOperation) {
+                throwOnNextOperation = false;
+                throw new BufferOverflowException();
+            }
+            return serializer.serializeValue(record);
         }
     }
 
@@ -269,6 +298,10 @@ public class CoordinatorRuntimeTest {
         ) {
             if (batch.sizeInBytes() > config(tp).maxMessageSize())
                 throw new RecordTooLargeException("Batch is larger than the max message size");
+
+            // We don't want the coordinator to write empty batches.
+            if (batch.validBytes() <= 0)
+                throw new KafkaException("Coordinator tried to write an empty batch");
 
             if (writeCount.incrementAndGet() > maxWrites)
                 throw new KafkaException("Maximum number of writes reached");
@@ -4211,6 +4244,73 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
         assertEquals(Collections.emptyList(), ctx.coordinator.coordinator().fullRecords());
         assertEquals(Collections.emptyList(), writer.entries(TP));
+    }
+
+    @Test
+    public void testEmptyBatch() throws Exception {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        ThrowingSerializer<String> serializer = new ThrowingSerializer<String>(new StringSerializer());
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(serializer)
+                .withAppendLingerMs(10)
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertNull(ctx.currentBatch);
+
+        // Write #1, which fails.
+        serializer.throwOnNextOperation();
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(List.of("1"), "response1"));
+
+        // Write #1 should fail and leave an empty batch.
+        assertFutureThrows(write1, BufferOverflowException.class);
+        assertNotNull(ctx.currentBatch);
+
+        // Write #2, with no records.
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(Collections.emptyList(), "response2"));
+
+        // Write #2 should not be attached to the empty batch.
+        assertTrue(write2.isDone());
+        assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
+
+        // Complete transaction #1. It will flush the current empty batch.
+        // The coordinator must not try to write an empty batch, otherwise the mock partition writer
+        // will throw an exception.
+        CompletableFuture<Void> complete1 = runtime.scheduleTransactionCompletion(
+            "complete#1",
+            TP,
+            100L,
+            (short) 50,
+            10,
+            TransactionResult.COMMIT,
+            DEFAULT_WRITE_TIMEOUT
+        );
+
+        // Verify that the completion is not committed yet.
+        assertFalse(complete1.isDone());
+
+        // Commit and verify that writes are completed.
+        writer.commit(TP);
+        assertNull(complete1.get(5, TimeUnit.SECONDS));
     }
 
     @Test

@@ -14,7 +14,8 @@
 // limitations under the License.
 
 {
-  "type": "data",
+  "apiKey": 1,
+  "type": "coordinator-value",
   "name": "OffsetCommitValue",
   // Version 4 is the first flexible version.
   // KIP-915: bumping the version will no longer make this record backward compatible.

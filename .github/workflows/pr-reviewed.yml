@@ -16,39 +16,48 @@
 name: Remove Triage Label
 
 on:
-  workflow_run:
-    workflows: [Pull Request Reviewed]
-    types:
-      - completed
+  workflow_dispatch:      # Let us run manually
+
+  schedule:
+    - cron: '0 3 * * *'    # Run at 3:00 UTC nightly -- just before the "stale.yml" workflow
 
 jobs:
-  # This job runs with elevated permissions and the ability to modify pull requests. The steps taken here
-  # should be limited to updating labels and adding comments to PRs. This approach is taken from
-  # https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/.
   remove-triage:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Env
         run: printenv
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
-      - uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ github.token }}
-          run-id: ${{ github.event.workflow_run.id }}
-          name: pr-number.txt
       - name: Remove label
         uses: actions/github-script@v7
         continue-on-error: true
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            var fs = require('fs');
-            var pr_number = Number(fs.readFileSync('./pr-number.txt'));
-            await github.rest.issues.removeLabel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr_number,
-              name: 'triage'
+            github.paginate("GET /search/issues{?q}", {
+              q: "repo:apache/kafka label:triage is:pull-request"
+            })
+            .then((pulls) => {
+              pulls.forEach(pull => {
+                github.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews", {
+                  owner: "apache",
+                  repo: "kafka",
+                  pull_number: pull.number,
+                  headers: {
+                    "X-GitHub-Api-Version": "2022-11-28"
+                  }
+                }).then((resp) => {
+                  console.log("Found " + resp.data.length + " reviews for PR " + pull.number);
+                  if (resp.data.length > 0) {
+                    console.log("Removing 'triage' label from PR " + pull.number + " : " + pull.title);
+                    github.rest.issues.removeLabel({
+                      owner: "apache",
+                      repo: "kafka",
+                      issue_number: pull.number,
+                      name: "triage"
+                    });
+                  }
+                });
+              });
             });

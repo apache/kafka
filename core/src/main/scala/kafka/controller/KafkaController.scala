@@ -114,7 +114,7 @@ class KafkaController(val config: KafkaConfig,
 
   this.logIdent = s"[Controller id=${config.brokerId}] "
 
-  @volatile private var brokerInfo = initialBrokerInfo
+  private val brokerInfo = initialBrokerInfo
   @volatile private var _brokerEpoch = initialBrokerEpoch
 
   private val isAlterPartitionEnabled = config.interBrokerProtocolVersion.isAlterPartitionSupported
@@ -243,15 +243,6 @@ class KafkaController(val config: KafkaConfig,
   def controlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {
     val controlledShutdownEvent = ControlledShutdown(id, brokerEpoch, controlledShutdownCallback)
     eventManager.put(controlledShutdownEvent)
-  }
-
-  private[kafka] def updateBrokerInfo(newBrokerInfo: BrokerInfo): Unit = {
-    this.brokerInfo = newBrokerInfo
-    zkClient.updateBrokerInfo(newBrokerInfo)
-  }
-
-  private[kafka] def enableDefaultUncleanLeaderElection(): Unit = {
-    eventManager.put(UncleanLeaderElectionEnable)
   }
 
   private[kafka] def enableTopicUncleanLeaderElection(topic: String): Unit = {
@@ -2692,10 +2683,6 @@ class LogDirEventNotificationHandler(eventManager: ControllerEventManager) exten
   override val path: String = LogDirEventNotificationZNode.path
 
   override def handleChildChange(): Unit = eventManager.put(LogDirEventNotification)
-}
-
-object LogDirEventNotificationHandler {
-  val Version: Long = 1L
 }
 
 class PartitionModificationsHandler(eventManager: ControllerEventManager, topic: String) extends ZNodeChangeHandler {

@@ -19,14 +19,12 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.KTableFilter;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 public class TableFilterNode<K, V> extends TableProcessorNode<K, V> implements VersionedSemanticsGraphNode {
 
     public TableFilterNode(final String nodeName,
-                           final ProcessorParameters<K, V, ?, ?> processorParameters,
-                           final StoreFactory storeFactory) {
-        super(nodeName, processorParameters, storeFactory, null);
+                           final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        super(nodeName, processorParameters, null, null);
     }
 
     @SuppressWarnings("unchecked")

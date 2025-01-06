@@ -20,35 +20,26 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
-import org.apache.logging.log4j.core.config.Configuration;
-import org.apache.logging.log4j.core.config.LoggerConfig;
+import org.apache.logging.log4j.core.config.Configurator;
 import org.apache.logging.log4j.core.config.Property;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class LogCaptureAppender extends AbstractAppender implements AutoCloseable {
     private final List<LogEvent> events = new LinkedList<>();
-    private final List<LogLevelChange> logLevelChanges = new LinkedList<>();
+    private final Map<Class<?>, Level> logLevelChanges = new HashMap<>();
     private final List<org.apache.logging.log4j.core.Logger> loggers = new ArrayList<>();
-
-    public static class LogLevelChange {
-        private final Level originalLevel;
-        private final Class<?> clazz;
-
-        public LogLevelChange(final Level originalLevel, final Class<?> clazz) {
-            this.originalLevel = originalLevel;
-            this.clazz = clazz;
-        }
-    }
-
+    
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     public static class Event {
         private final String level;
@@ -80,19 +71,19 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
         }
     }
 
-    public LogCaptureAppender(String name) {
-        super(name, null, null, true, Property.EMPTY_ARRAY);
+    public LogCaptureAppender() {
+        super("LogCaptureAppender-" + UUID.randomUUID(), null, null, true, Property.EMPTY_ARRAY);
     }
 
     public static LogCaptureAppender createAndRegister() {
-        final LogCaptureAppender logCaptureAppender = new LogCaptureAppender("LogCaptureAppender");
+        final LogCaptureAppender logCaptureAppender = new LogCaptureAppender();
         Logger logger = LogManager.getRootLogger();
         logCaptureAppender.addToLogger(logger);
         return logCaptureAppender;
     }
 
     public static LogCaptureAppender createAndRegister(final Class<?> clazz) {
-        final LogCaptureAppender logCaptureAppender = new LogCaptureAppender("LogCaptureAppender");
+        final LogCaptureAppender logCaptureAppender = new LogCaptureAppender();
         Logger logger = LogManager.getLogger(clazz);
         logCaptureAppender.addToLogger(logger);
         return logCaptureAppender;
@@ -106,21 +97,12 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
     }
 
     public void setClassLogger(final Class<?> clazz, Level level) {
-        LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
-        Configuration config = ctx.getConfiguration();
-        String loggerName = clazz.getName();
-        LoggerConfig loggerConfig = config.getLoggerConfig(loggerName);
-
-        Level originalLevel = loggerConfig.getLevel();
-        logLevelChanges.add(new LogLevelChange(originalLevel, clazz));
-
-        if (!loggerConfig.getName().equals(loggerName)) {
-            LoggerConfig newLoggerConfig = new LoggerConfig(loggerName, level, true);
-            config.addLogger(loggerName, newLoggerConfig);
-        } else {
-            loggerConfig.setLevel(level);
+        if (!logLevelChanges.containsKey(clazz)) {
+            Level currentLevel = LogManager.getLogger(clazz).getLevel();
+            logLevelChanges.put(clazz, currentLevel);
         }
-        ctx.updateLoggers();
+
+        Configurator.setLevel(clazz.getName(), level);
     }
 
     @Override
@@ -138,7 +120,7 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
     }
 
     public List<String> getMessages() {
-        final LinkedList<String> result = new LinkedList<>();
+        final List<String> result = new LinkedList<>();
         synchronized (events) {
             for (final LogEvent event : events) {
                 result.add(event.getMessage().getFormattedMessage());
@@ -177,21 +159,12 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
 
     @Override
     public void close() {
-        LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
-        Configuration config = ctx.getConfiguration();
-
-        for (final LogLevelChange logLevelChange : logLevelChanges) {
-            String loggerName = logLevelChange.clazz.getName();
-            LoggerConfig loggerConfig = config.getLoggerConfig(loggerName);
-            if (!loggerConfig.getName().equals(loggerName)) {
-                LoggerConfig newLoggerConfig = new LoggerConfig(loggerName, logLevelChange.originalLevel, true);
-                config.addLogger(loggerName, newLoggerConfig);
-            } else {
-                loggerConfig.setLevel(logLevelChange.originalLevel);
-            }
+        for (Map.Entry<Class<?>, Level> entry : logLevelChanges.entrySet()) {
+            Class<?> clazz = entry.getKey();
+            Level originalLevel = entry.getValue();
+            Configurator.setLevel(clazz.getName(), originalLevel);
         }
         logLevelChanges.clear();
-        ctx.updateLoggers();
 
         unregister();
     }

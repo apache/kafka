@@ -20,8 +20,10 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Represents the strategy for resetting offsets in share consumer groups when no previous offset is found
@@ -148,12 +150,19 @@ public class ShareGroupAutoOffsetResetStrategy {
                 fromString(offsetStrategy);
             } catch (Exception e) {
                 throw new ConfigException(name, value, "Invalid value `" + offsetStrategy + "` for configuration " +
-                        name + ". The value must be either 'earliest', 'latest' or of the format 'by_duration:<PnDTnHnMn.nS.>'.");
+                        name + ". The value must be either 'earliest', 'latest' or of the format 'by_duration:<PnDTnHnMn.nS>'.");
             }
         }
 
         public String toString() {
-            return "[earliest, latest, by_duration:PnDTnHnMn.nS]";  
+            String values = Arrays.stream(StrategyType.values())
+                .map(strategyType -> {
+                    if (strategyType == StrategyType.BY_DURATION) {
+                        return strategyType + ":PnDTnHnMn.nS";
+                    }
+                    return strategyType.toString();
+                }).collect(Collectors.joining(", "));
+            return "[" + values + "]";
         }
     }
 }
