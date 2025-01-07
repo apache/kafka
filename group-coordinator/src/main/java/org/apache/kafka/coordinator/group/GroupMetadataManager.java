@@ -2269,25 +2269,7 @@ public class GroupMetadataManager {
             );
         }
 
-        // Build the endpoint to topic partition information
-        final Map<String, StreamsGroupMember> members = group.members();
-        for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
-            final String memberIdForAssignment = entry.getKey();
-            // Don't need to provide host info to partitions for itself
-            if (!memberIdForAssignment.equals(memberId)) {
-                final StreamsGroupMemberMetadataValue.Endpoint endpoint = members.get(memberIdForAssignment).userEndpoint();
-                StreamsGroupMember groupMember = entry.getValue();
-                if (endpoint != null) {
-                    final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
-                    responseEndpoint.setHost(endpoint.host());
-                    responseEndpoint.setPort(endpoint.port());
-                    addToEndpointToPartitions(groupMember.assignedActiveTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
-                    addToEndpointToPartitions(groupMember.assignedStandbyTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
-                }
-            }
-        }
-
-       // 3. Determine the partition metadata and any internal topics if needed.
+        // 3. Determine the partition metadata and any internal topics if needed.
         ConfiguredTopology updatedConfiguredTopology = group.configuredTopology();
         Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> updatedPartitionMetadata = group.partitionMetadata();
         if (reconfigureTopology || group.hasMetadataExpired(currentTimeMs)) {
@@ -2361,6 +2343,8 @@ public class GroupMetadataManager {
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
 
+        maybeSetHostInfoPartitions(memberId, group, endpointToPartitionsList);
+
         // Prepare the response.
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
@@ -2399,6 +2383,28 @@ public class GroupMetadataManager {
         return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated));
     }
 
+    private void maybeSetHostInfoPartitions(String memberId,
+                                            StreamsGroup group,
+                                            List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList) {
+        // Build the endpoint to topic partition information
+        final Map<String, StreamsGroupMember> members = group.members();
+        for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
+            final String memberIdForAssignment = entry.getKey();
+            // Don't need to provide host info to partitions for itself
+            if (!memberIdForAssignment.equals(memberId)) {
+                final StreamsGroupMemberMetadataValue.Endpoint endpoint = members.get(memberIdForAssignment).userEndpoint();
+                StreamsGroupMember groupMember = entry.getValue();
+                if (endpoint != null) {
+                    final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
+                    responseEndpoint.setHost(endpoint.host());
+                    responseEndpoint.setPort(endpoint.port());
+                    addToEndpointToPartitions(groupMember.assignedActiveTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
+                    addToEndpointToPartitions(groupMember.assignedStandbyTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
+                }
+            }
+        }
+    }
+
     private void addToEndpointToPartitions(Set<Map.Entry<String, Set<Integer>>> taskEntrySet,
                                            StreamsGroup group,
                                            StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint,
@@ -2406,6 +2412,7 @@ public class GroupMetadataManager {
         for (Map.Entry<String, Set<Integer>> taskEntry : taskEntrySet) {
             String subtopologyId = taskEntry.getKey();
             List<Integer> partitions = new ArrayList<>(taskEntry.getValue());
+            Collections.sort(partitions);
             ConfiguredSubtopology configuredSubtopology = group.configuredTopology().subtopologies().get(subtopologyId);
             if (configuredSubtopology != null) {
                 List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions = Stream.concat(
@@ -2414,7 +2421,13 @@ public class GroupMetadataManager {
                 ).map(topic -> {
                     StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
                     tp.setTopic(topic);
-                    tp.setPartitions(partitions);
+                    if (tp.partitions().size() < partitions.size()) {
+                        List<Integer> tpPartitions = new ArrayList<>(tp.partitions());
+                        Collections.sort(tpPartitions);
+                        tp.setPartitions(partitions);
+                    } else {
+                       tp.setPartitions(partitions);
+                    }
                     return tp;
                 }).toList();
                 StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
