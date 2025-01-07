@@ -41,7 +41,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -214,11 +213,14 @@ public class DelayedShareFetch extends DelayedOperation {
                 try {
                     // If the share partition is already at capacity, we should not attempt to fetch.
                     if (sharePartition.canAcquireRecords()) {
+                        // We do not know the total partitions that can be acquired at this stage, hence we set maxBytes
+                        // to 0 for now and will update it before doing the replica manager fetch.
                         topicPartitionData.put(
                             topicIdPartition,
                             new FetchRequest.PartitionData(
                                 topicIdPartition.topicId(),
                                 sharePartition.nextFetchOffset(),
+                                0,
                                 0,
                                 Optional.empty()
                             )
@@ -340,7 +342,19 @@ public class DelayedShareFetch extends DelayedOperation {
         if (partitionsToFetch.isEmpty()) {
             return new LinkedHashMap<>();
         }
-        topicPartitionData.values().forEach(partitionData -> partitionData.updateMaxBytes(partitionMaxBytes));
+
+        // Update the maxBytes for every fetchable topic partition.
+        for (Map.Entry<TopicIdPartition, FetchRequest.PartitionData> entry : topicPartitionData.entrySet()) {
+            FetchRequest.PartitionData partitionData = entry.getValue();
+            FetchRequest.PartitionData updatedPartitionData = new FetchRequest.PartitionData(
+                partitionData.topicId,
+                partitionData.fetchOffset,
+                partitionData.logStartOffset,
+                partitionMaxBytes,
+                partitionData.currentLeaderEpoch
+            );
+            entry.setValue(updatedPartitionData);
+        }
 
         Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
             shareFetch.fetchParams(),
@@ -393,20 +407,24 @@ public class DelayedShareFetch extends DelayedOperation {
     LinkedHashMap<TopicIdPartition, LogReadResult> combineLogReadResponse(LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData,
                                                                 LinkedHashMap<TopicIdPartition, LogReadResult> existingFetchedData) {
         LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> missingLogReadTopicPartitions = new LinkedHashMap<>();
-        AtomicInteger totalPartitionMaxBytesUsed = new AtomicInteger();
         topicPartitionData.forEach((topicIdPartition, partitionData) -> {
             if (!existingFetchedData.containsKey(topicIdPartition)) {
                 missingLogReadTopicPartitions.put(topicIdPartition, partitionData);
-            } else {
-                totalPartitionMaxBytesUsed.addAndGet(partitionData.maxBytes);
             }
         });
         if (missingLogReadTopicPartitions.isEmpty()) {
             return existingFetchedData;
         }
+
+        // Computing the total bytes that has already been fetched for the existing fetched data.
+        int totalPartitionMaxBytesUsed = 0;
+        for (LogReadResult logReadResult : existingFetchedData.values()) {
+            totalPartitionMaxBytesUsed += logReadResult.info().records.sizeInBytes();
+        }
+
         LinkedHashMap<TopicIdPartition, LogReadResult> missingTopicPartitionsLogReadResponse = readFromLog(
             missingLogReadTopicPartitions,
-            (shareFetch.fetchParams().maxBytes - totalPartitionMaxBytesUsed.get()) / missingLogReadTopicPartitions.size()
+            (shareFetch.fetchParams().maxBytes - totalPartitionMaxBytesUsed) / missingLogReadTopicPartitions.size()
             );
         missingTopicPartitionsLogReadResponse.putAll(existingFetchedData);
         return missingTopicPartitionsLogReadResponse;
