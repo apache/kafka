@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
@@ -59,10 +58,6 @@ public class PluginDesc<T> implements Comparable<PluginDesc<?>> {
                 ", typeName='" + typeName + '\'' +
                 ", location='" + location + '\'' +
                 '}';
-    }
-    @JsonIgnore
-    DefaultArtifactVersion encodedVersion() {
-        return encodedVersion;
     }
 
     public Class<? extends T> pluginClass() {
