@@ -35,7 +35,7 @@ public interface ShareCoordinator {
     short SHARE_SNAPSHOT_RECORD_KEY_VERSION = 0;
     short SHARE_SNAPSHOT_RECORD_VALUE_VERSION = 0;
     short SHARE_UPDATE_RECORD_KEY_VERSION = 1;
-    short SHARE_UPDATE_RECORD_VALUE_VERSION = 1;
+    short SHARE_UPDATE_RECORD_VALUE_VERSION = 0;
 
     /**
      * Return the partition index for the given key.
