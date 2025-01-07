@@ -369,19 +369,6 @@ public class WorkerConfig extends AbstractConfig {
         return null;
     }
 
-    public boolean isKeyConverterVersionPresent() {
-        return get(WorkerConfig.KEY_CONVERTER_VERSION) != null;
-    }
-
-    public boolean isValueConverterVersionPresent() {
-        return get(WorkerConfig.VALUE_CONVERTER_VERSION) != null;
-    }
-
-    public boolean isHeaderConverterVersionPresent() {
-        return get(ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG) != null;
-    }
-
-
     public boolean topicCreationEnable() {
         return getBoolean(TOPIC_CREATION_ENABLE_CONFIG);
     }
