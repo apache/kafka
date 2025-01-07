@@ -131,7 +131,7 @@ public class ShareConsumerPerformance {
             executorService.submit(() -> {
                 try {
                     consumeMessagesForSingleShareConsumer(currentTimeMs, currentTimeMs,
-                            shareConsumers.get(index), currentTimeMs, joinTimeMsInSingleRound, messagesRead, bytesRead, options, shareConsumerConsumption);
+                            shareConsumers.get(index), currentTimeMs, joinTimeMsInSingleRound, messagesRead, bytesRead, options, shareConsumerConsumption, index + 1);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
@@ -187,7 +187,8 @@ public class ShareConsumerPerformance {
                                                               AtomicLong totalMessagesRead,
                                                               AtomicLong totalBytesRead,
                                                               ShareConsumerPerfOptions options,
-                                                              ShareConsumerConsumption shareConsumerConsumption) throws InterruptedException {
+                                                              ShareConsumerConsumption shareConsumerConsumption,
+                                                              int index) throws InterruptedException {
         SimpleDateFormat dateFormat = options.dateFormat();
 
         long lastBytesRead = 0L;
@@ -213,7 +214,7 @@ public class ShareConsumerPerformance {
                 if (currentTimeMs - lastReportTimeMs >= options.reportingIntervalMs()) {
                     if (options.showDetailedStats())
                         printShareConsumerProgress(bytesReadByConsumer, lastBytesRead, messagesReadByConsumer, lastMessagesRead,
-                                lastReportTimeMs, currentTimeMs, dateFormat, joinTimeMsInSingleRound.get());
+                                lastReportTimeMs, currentTimeMs, dateFormat, joinTimeMsInSingleRound.get(), index);
                     joinTimeMsInSingleRound = new AtomicLong(0);
                     lastReportTimeMs = currentTimeMs;
                     lastMessagesRead = messagesReadByConsumer;
@@ -232,7 +233,8 @@ public class ShareConsumerPerformance {
                                                 long startMs,
                                                 long endMs,
                                                 SimpleDateFormat dateFormat,
-                                                long joinTimeMsInSingleRound) {
+                                                long joinTimeMsInSingleRound,
+                                                int index) {
         double elapsedMs = endMs - startMs;
         double totalMbRead = (bytesRead * 1.0) / (1024 * 1024);
         double intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024);
@@ -240,8 +242,8 @@ public class ShareConsumerPerformance {
         double intervalMessagesPerSec = ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0;
         long fetchTimeMs = endMs - startMs - joinTimeMsInSingleRound;
 
-        System.out.printf("%s, %s, %.4f, %.4f, %.4f, %d, %d", dateFormat.format(startMs), dateFormat.format(endMs),
-            totalMbRead, intervalMbPerSec, intervalMessagesPerSec, messagesRead, fetchTimeMs);
+        System.out.printf("%s, %s, %.4f, %.4f, %.4f, %d, %d for share consumer %d", dateFormat.format(startMs), dateFormat.format(endMs),
+            totalMbRead, intervalMbPerSec, intervalMessagesPerSec, messagesRead, fetchTimeMs, index);
         System.out.println();
     }
 
