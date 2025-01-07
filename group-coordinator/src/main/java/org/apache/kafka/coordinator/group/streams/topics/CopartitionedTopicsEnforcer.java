@@ -48,8 +48,7 @@ public class CopartitionedTopicsEnforcer {
      * @param logContext                  The context for emitting log messages.
      * @param topicPartitionCountProvider Returns the number of partitions for a given topic, representing the current state of the broker
      *                                    as well as any partition number decisions that have already been made. In particular, we expect
-     *                                    the number of partitions for all repartition topics defined, even if they do not exist in the
-     *                                    broker yet.
+     *                                    the number of partitions for all topics in all co-partitions groups to be defined.
      */
     public CopartitionedTopicsEnforcer(final LogContext logContext,
                                        final Function<String, OptionalInt> topicPartitionCountProvider) {
@@ -65,8 +64,8 @@ public class CopartitionedTopicsEnforcer {
      *                                     client (in particular, when the user uses `repartition` in the DSL).
      * @param flexibleRepartitionTopics    The set of repartition topics whose partition count is flexible, and can be changed.
      *
-     * @throws TopicConfigurationException If source topics are missing, or there are topics in copartitionTopics that are not copartitioned
-     *                                     according to topicPartitionCountProvider.
+     * @throws IllegalStateException If the partition count for any topic in copartitionedTopics is not defined by
+     *                               topicPartitionCountProvider.
      *
      * @return A map from all repartition topics in copartitionedTopics to their updated partition counts.
      */
@@ -74,6 +73,7 @@ public class CopartitionedTopicsEnforcer {
                                         final Set<String> fixedRepartitionTopics,
                                         final Set<String> flexibleRepartitionTopics) throws StreamsInvalidTopologyException {
         if (copartitionedTopics.isEmpty()) {
+            log.debug("Ignoring unexpected empty copartitioned topics set.");
             return Collections.emptyMap();
         }
         final Map<String, Integer> returnedPartitionCounts = new HashMap<>();
@@ -85,16 +85,7 @@ public class CopartitionedTopicsEnforcer {
 
         final Map<String, Integer> nonRepartitionTopicPartitions =
             copartitionedTopics.stream().filter(topic -> !repartitionTopicPartitionCounts.containsKey(topic))
-                .collect(Collectors.toMap(topic -> topic, topic -> {
-                    final OptionalInt topicPartitionCount = topicPartitionCountProvider.apply(topic);
-                    if (topicPartitionCount.isEmpty()) {
-                        final String str = String.format("Following topics are missing: [%s]", topic);
-                        log.error(str);
-                        throw TopicConfigurationException.missingSourceTopics(str);
-                    } else {
-                        return topicPartitionCount.getAsInt();
-                    }
-                }));
+                .collect(Collectors.toMap(topic -> topic, this::getPartitionCount));
 
         final int numPartitionsToUseForRepartitionTopics;
 
@@ -139,7 +130,7 @@ public class CopartitionedTopicsEnforcer {
         if (partitions.isPresent()) {
             return partitions.getAsInt();
         } else {
-            throw new StreamsInvalidTopologyException("Number of partitions is not set for topic: " + topicName);
+            throw new IllegalStateException("Number of partitions is not set for topic: " + topicName);
         }
     }
 
