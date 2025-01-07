@@ -29,7 +29,9 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.ServiceLoader;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -76,8 +78,21 @@ public class ReflectionScanner extends PluginScanner {
 
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
+        // By default, java and classgraph uses parent first classloading, hence if a plugin is loaded by the classpath
+        // loader, and then by an isolated plugin loader, the default precedence will always load the classpath version.
+        // This breaks isolation and hence connect uses isolated plugin loaders, which are child first classloaders.
+        // Therefore, we override the classloader order to be child first, so that the isolated plugin loader is used first.
+        // In addition, we need to explicitly specify the full classloader order, as classgraph only scans the classes available
+        // in the classloaders and not the entire parent chain. Due to this reason if a plugin is extending a class present
+        // in classpath/application it will not be able to find the parent class unless we explicitly specify the classloader order.
+        List<ClassLoader> classLoaderOrder = new ArrayList<>();
+        ClassLoader cl = source.loader();
+        while (cl != null) {
+            classLoaderOrder.add(cl);
+            cl = cl.getParent();
+        }
         ClassGraph classGraphBuilder = new ClassGraph()
-                .overrideClassLoaders(source.loader())
+                .overrideClassLoaders(classLoaderOrder.toArray(new ClassLoader[0]))
                 .enableExternalClasses()
                 .enableClassInfo();
         try (ScanResult classGraph = classGraphBuilder.scan()) {
