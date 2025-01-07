@@ -41,8 +41,8 @@ import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
-import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotValue, ShareUpdateKey, ShareUpdateValue}
-import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde}
+import org.apache.kafka.coordinator.share.generated.{CoordinatorRecordType, ShareSnapshotKey, ShareSnapshotValue, ShareUpdateKey, ShareUpdateValue}
+import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.coordinator.transaction.{TransactionCoordinatorRecordSerde, TransactionLogConfig}
 import org.apache.kafka.metadata.MetadataRecordSerde
@@ -1119,7 +1119,7 @@ class DumpLogSegmentsTest {
           .setGroupId("gs1")
           .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
           .setPartition(0),
-          ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION),
+          CoordinatorRecordType.SHARE_SNAPSHOT.id()),
         new ApiMessageAndVersion(new ShareSnapshotValue()
           .setSnapshotEpoch(0)
           .setStateEpoch(0)
@@ -1132,7 +1132,7 @@ class DumpLogSegmentsTest {
               .setDeliveryState(2)
               .setDeliveryCount(1)
           ).asJava),
-          ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION)
+          0.toShort)
       ))
     )
 
@@ -1147,7 +1147,7 @@ class DumpLogSegmentsTest {
           .setGroupId("gs1")
           .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
           .setPartition(0),
-          ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
+          CoordinatorRecordType.SHARE_UPDATE.id()),
         new ApiMessageAndVersion(new ShareUpdateValue()
           .setSnapshotEpoch(0)
           .setLeaderEpoch(0)
@@ -1175,7 +1175,7 @@ class DumpLogSegmentsTest {
             .setGroupId("gs1")
             .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
             .setPartition(0),
-          0.toShort
+          CoordinatorRecordType.SHARE_SNAPSHOT.id()
         ),
         null
       ))

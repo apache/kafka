@@ -132,7 +132,7 @@ class ReplicaManagerTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, null)
+    val props = TestUtils.createBrokerConfig(1)
     config = KafkaConfig.fromProps(props)
     alterPartitionManager = mock(classOf[AlterPartitionManager])
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
@@ -191,7 +191,7 @@ class ReplicaManagerTest {
 
   @Test
   def testHighwaterMarkRelativeDirectoryMapping(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, null)
+    val props = TestUtils.createBrokerConfig(1)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
@@ -268,7 +268,7 @@ class ReplicaManagerTest {
   def testMaybeAddLogDirFetchersWithoutEpochCache(): Unit = {
     val dir1 = TestUtils.tempDir()
     val dir2 = TestUtils.tempDir()
-    val props = TestUtils.createBrokerConfig(0, null)
+    val props = TestUtils.createBrokerConfig(0)
     props.put("log.dirs", dir1.getAbsolutePath + "," + dir2.getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(new Properties()))
@@ -331,7 +331,7 @@ class ReplicaManagerTest {
   def testMaybeAddLogDirFetchersPausingCleaning(futureLogCreated: Boolean): Unit = {
     val dir1 = TestUtils.tempDir()
     val dir2 = TestUtils.tempDir()
-    val props = TestUtils.createBrokerConfig(0, null)
+    val props = TestUtils.createBrokerConfig(0)
     props.put("log.dirs", dir1.getAbsolutePath + "," + dir2.getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(new Properties()))
@@ -403,7 +403,7 @@ class ReplicaManagerTest {
 
   @Test
   def testClearPurgatoryOnBecomingFollower(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, null)
+    val props = TestUtils.createBrokerConfig(0)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val logProps = new Properties()
@@ -2511,7 +2511,7 @@ class ReplicaManagerTest {
 
   @Test
   def testDisabledTransactionVerification(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, null)
+    val props = TestUtils.createBrokerConfig(0)
     props.put("transaction.partition.verification.enable", "false")
     val config = KafkaConfig.fromProps(props)
 
@@ -2887,7 +2887,7 @@ class ReplicaManagerTest {
                                                  leaderEpochFromLeader: Int = 3,
                                                  extraProps: Properties = new Properties(),
                                                  topicId: Option[Uuid] = None): (ReplicaManager, LogManager) = {
-    val props = TestUtils.createBrokerConfig(0, null)
+    val props = TestUtils.createBrokerConfig(0)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     props.asScala ++= extraProps.asScala
     val config = KafkaConfig.fromProps(props)
@@ -3358,7 +3358,7 @@ class ReplicaManagerTest {
     buildRemoteLogAuxState: Boolean = false,
     remoteFetchQuotaExceeded: Option[Boolean] = None
   ): ReplicaManager = {
-    val props = TestUtils.createBrokerConfig(brokerId, null)
+    val props = TestUtils.createBrokerConfig(brokerId)
     val path1 = TestUtils.tempRelativeDir("data").getAbsolutePath
     val path2 = TestUtils.tempRelativeDir("data2").getAbsolutePath
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, enableRemoteStorage.toString)
@@ -3719,8 +3719,8 @@ class ReplicaManagerTest {
 
   private def prepareDifferentReplicaManagers(brokerTopicStats1: BrokerTopicStats,
                                               brokerTopicStats2: BrokerTopicStats): (ReplicaManager, ReplicaManager) = {
-    val props0 = TestUtils.createBrokerConfig(0, null)
-    val props1 = TestUtils.createBrokerConfig(1, null)
+    val props0 = TestUtils.createBrokerConfig(0)
+    val props1 = TestUtils.createBrokerConfig(1)
 
     props0.put("log0.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     props1.put("log1.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
@@ -4617,7 +4617,7 @@ class ReplicaManagerTest {
   def testReplicaNotAvailable(): Unit = {
 
     def createReplicaManager(): ReplicaManager = {
-      val props = TestUtils.createBrokerConfig(1, null)
+      val props = TestUtils.createBrokerConfig(1)
       val config = KafkaConfig.fromProps(props)
       val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
       new ReplicaManager(

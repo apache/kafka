@@ -535,7 +535,6 @@ class DescribeTopicPartitionsRequestHandlerTest {
         int brokerId = 1;
         Properties properties = TestUtils.createBrokerConfig(
             brokerId,
-            null,
             true,
             true,
             TestUtils.RandomPort(),
