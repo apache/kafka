@@ -268,7 +268,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
             val metricConfig = kafkaMetric.config()
             val quota = metricConfig.quota();
             val quotaBoundsStr = if (quota == null) "not configured" else quota.bound().toString()
-            info("Metric name (" + metricName + ") has value (" + quotaValueStr + ") with bound (" + quotaBoundsStr + ")")
+            debug("Metric name (" + metricName + ") has value (" + quotaValueStr + ") with bound (" + quotaBoundsStr + ")")
           }
         }
     }
