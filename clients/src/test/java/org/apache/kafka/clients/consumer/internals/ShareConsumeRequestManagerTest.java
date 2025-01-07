@@ -549,6 +549,39 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testSendingNullAcknowledgementsToCallback() {
+        buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        // Preparing response for a different TopicIdPartition.
+        client.prepareResponse(fullAcknowledgeResponse(tip1, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        // We expect no acknowledgements to be present as the TopicIdPartitions did not match.
+        assertEquals(0, completedAcknowledgements.size());
+    }
+
+    @Test
     public void testBatchingAcknowledgeRequestStates() {
         buildRequestManager();
 
