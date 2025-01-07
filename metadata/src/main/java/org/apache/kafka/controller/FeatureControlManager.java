@@ -164,66 +164,31 @@ public class FeatureControlManager {
         this.clusterSupportDescriber = clusterSupportDescriber;
     }
 
-    public static class FeatureUpdateResult {
-        final List<ApiMessageAndVersion> records;
-        final boolean isElrEnabled;
-        final ApiError error;
-        FeatureUpdateResult(
-            List<ApiMessageAndVersion> records,
-            boolean isElrEnabled,
-            ApiError error
-        ) {
-            this.records = records;
-            this.isElrEnabled = isElrEnabled;
-            this.error = error;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (o == null || (!o.getClass().equals(getClass()))) {
-                return false;
-            }
-            FeatureUpdateResult other = (FeatureUpdateResult) o;
-            return records.equals(other.records) &&
-                Objects.equals(error, other.error);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(records, error);
-        }
-
-        @Override
-        public String toString() {
-            return String.format(
-                "FeatureUpdateResult(records=%s, error=%s)",
-                records.stream().map(ApiMessageAndVersion::toString).collect(Collectors.joining(",")),
-                error);
-        }
-    }
-
-    FeatureUpdateResult updateFeatures(
+    ControllerResult<ApiError> updateFeatures(
         Map<String, Short> updates,
-        Map<String, FeatureUpdate.UpgradeType> upgradeTypes
+        Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
+        boolean validateOnly
     ) {
         List<ApiMessageAndVersion> records =
-            BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+
         Map<String, Short> proposedUpdatedVersions = new HashMap<>(finalizedVersions);
         proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersion.get().featureLevel());
         proposedUpdatedVersions.putAll(updates);
-        boolean isElrEnabled = false;
 
         for (Entry<String, Short> entry : updates.entrySet()) {
             ApiError error = updateFeature(entry.getKey(), entry.getValue(),
                 upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records, proposedUpdatedVersions);
             if (!error.error().equals(Errors.NONE)) {
-                return new FeatureUpdateResult(Collections.emptyList(), false, error);
-            }
-            if (entry.getKey().equals(EligibleLeaderReplicasVersion.FEATURE_NAME) && isElrFeatureEnabled(entry.getValue())) {
-                isElrEnabled = true;
+                return ControllerResult.of(Collections.emptyList(), error);
             }
         }
-        return new FeatureUpdateResult(records, isElrEnabled, ApiError.NONE);
+
+        if (validateOnly) {
+            return ControllerResult.of(Collections.emptyList(), ApiError.NONE);
+        } else {
+            return ControllerResult.atomicOf(records, ApiError.NONE);
+        }
     }
 
     MetadataVersion metadataVersion() {

@@ -17,8 +17,10 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -29,6 +31,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
+
 
 public class ActivationRecordsGenerator {
 
@@ -37,8 +41,7 @@ public class ActivationRecordsGenerator {
         long transactionStartOffset,
         BootstrapMetadata bootstrapMetadata,
         MetadataVersion metadataVersion,
-        boolean isElrEnabled,
-        ConfigurationControlManager configurationControl
+        int defaultMinInSyncReplicas
     ) {
         StringBuilder logMessageBuilder = new StringBuilder("Performing controller activation. ");
         List<ApiMessageAndVersion> records = new ArrayList<>();
@@ -90,8 +93,13 @@ public class ActivationRecordsGenerator {
         // initialization, etc.
         records.addAll(bootstrapMetadata.records());
 
-        if (isElrEnabled) {
-            configurationControl.maybeResetMinIsrConfig(records);
+        // If ELR is enabled, we need to set a cluster-level min.insync.replicas.
+        if (bootstrapMetadata.featureLevel(EligibleLeaderReplicasVersion.FEATURE_NAME) > 0) {
+            records.add(new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(BROKER.id()).
+                setResourceName("").
+                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
+                setValue(Integer.toString(defaultMinInSyncReplicas)), (short) 0));
         }
 
         activationMessageConsumer.accept(logMessageBuilder.toString().trim());
@@ -156,14 +164,18 @@ public class ActivationRecordsGenerator {
         long transactionStartOffset,
         BootstrapMetadata bootstrapMetadata,
         MetadataVersion curMetadataVersion,
-        ConfigurationControlManager configurationControl) {
+        int defaultMinInSyncReplicas
+    ) {
         if (isEmpty) {
-            return recordsForEmptyLog(activationMessageConsumer, transactionStartOffset,
-                    bootstrapMetadata, bootstrapMetadata.metadataVersion(),
-                    bootstrapMetadata.isElrEnabled(),
-                    configurationControl);
+            return recordsForEmptyLog(activationMessageConsumer,
+                    transactionStartOffset,
+                    bootstrapMetadata,
+                    bootstrapMetadata.metadataVersion(),
+                    defaultMinInSyncReplicas);
         } else {
-            return recordsForNonEmptyLog(activationMessageConsumer, transactionStartOffset, curMetadataVersion);
+            return recordsForNonEmptyLog(activationMessageConsumer,
+                    transactionStartOffset,
+                    curMetadataVersion);
         }
     }
 }

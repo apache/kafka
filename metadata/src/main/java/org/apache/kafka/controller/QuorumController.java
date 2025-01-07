@@ -137,6 +137,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -151,6 +152,7 @@ import java.util.function.Supplier;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.DOES_NOT_UPDATE_QUEUE_TIME;
 
 
@@ -1147,18 +1149,6 @@ public final class QuorumController implements Controller {
                 EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME)
             );
             queue.prepend(activationEvent);
-
-            // Also, checking whether the configuration for min ISR should be reset.
-            if (featureControl.isElrFeatureEnabled()) {
-                appendWriteEvent("maybeResetMinIsrConfig", OptionalLong.empty(),
-                    () -> {
-                        List<ApiMessageAndVersion> outputRecords =
-                            BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
-                        configurationControl.maybeResetMinIsrConfig(outputRecords);
-                        return ControllerResult.atomicOf(outputRecords, ApiError.NONE);
-                    }
-                );
-            }
         } catch (Throwable e) {
             fatalFaultHandler.handleFault("exception while claiming leadership", e);
         }
@@ -1174,7 +1164,7 @@ public final class QuorumController implements Controller {
                     offsetControl.transactionStartOffset(),
                     bootstrapMetadata,
                     featureControl.metadataVersion(),
-                    configurationControl);
+                    configurationControl.getStaticallyConfiguredMinInsyncReplicas());
             } catch (Throwable t) {
                 throw fatalFaultHandler.handleFault("exception while completing controller " +
                     "activation", t);

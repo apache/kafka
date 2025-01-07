@@ -30,10 +30,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
+import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
 
 
 /**
@@ -279,5 +281,13 @@ public class KafkaConfigSchema {
             emptyList(), // we don't populate synonyms, for now.
             translateConfigType(configKey.type()),
             configKey.documentation);
+    }
+
+    public int getStaticallyConfiguredMinInsyncReplicas(Map<String, ?> staticNodeConfig) {
+        String minInsyncReplicasString = Objects.requireNonNull(
+            getStaticOrDefaultConfig(MIN_IN_SYNC_REPLICAS_CONFIG, staticNodeConfig));
+        return (int) ConfigDef.parseType(MIN_IN_SYNC_REPLICAS_CONFIG,
+            minInsyncReplicasString,
+            ConfigDef.Type.INT);
     }
 }

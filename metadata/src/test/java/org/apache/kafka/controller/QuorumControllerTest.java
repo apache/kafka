@@ -119,7 +119,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1513,8 +1512,7 @@ public class QuorumControllerTest {
             -1L,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
             metadataVersion,
-            Mockito.mock(ConfigurationControlManager.class)
-        );
+            3);
         RecordTestUtils.replayAll(featureControlManager, result.records());
         return featureControlManager;
     }
@@ -1550,7 +1548,7 @@ public class QuorumControllerTest {
             0L,
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
             MetadataVersion.IBP_3_6_IV1,
-            Mockito.mock(ConfigurationControlManager.class));
+            3);
         assertFalse(result.isAtomic());
         assertTrue(RecordTestUtils.recordAtIndexAs(
             AbortTransactionRecord.class, result.records(), 0).isPresent());
@@ -1599,7 +1597,7 @@ public class QuorumControllerTest {
             offsetControlManager.transactionStartOffset(),
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
             MetadataVersion.IBP_3_6_IV1,
-            Mockito.mock(ConfigurationControlManager.class));
+            3);
 
         assertTrue(result.isAtomic());
         offsetControlManager.replay(
@@ -1623,7 +1621,6 @@ public class QuorumControllerTest {
                 offsetControlManager.transactionStartOffset(),
                 BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
                 MetadataVersion.IBP_3_6_IV0,
-                Mockito.mock(ConfigurationControlManager.class))
-        );
+                3));
     }
 }
