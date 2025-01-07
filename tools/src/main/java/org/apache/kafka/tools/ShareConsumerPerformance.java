@@ -52,7 +52,6 @@ import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 import static joptsimple.util.RegexMatcher.regex;
-import static org.apache.kafka.tools.ConsumerPerformance.printConsumerProgress;
 
 public class ShareConsumerPerformance {
     private static final Logger LOG = LoggerFactory.getLogger(ShareConsumerPerformance.class);
@@ -213,7 +212,7 @@ public class ShareConsumerPerformance {
                 }
                 if (currentTimeMs - lastReportTimeMs >= options.reportingIntervalMs()) {
                     if (options.showDetailedStats())
-                        printConsumerProgress(0, bytesReadByConsumer, lastBytesRead, messagesReadByConsumer, lastMessagesRead,
+                        printShareConsumerProgress(bytesReadByConsumer, lastBytesRead, messagesReadByConsumer, lastMessagesRead,
                                 lastReportTimeMs, currentTimeMs, dateFormat, joinTimeMsInSingleRound.get());
                     joinTimeMsInSingleRound = new AtomicLong(0);
                     lastReportTimeMs = currentTimeMs;
@@ -224,6 +223,26 @@ public class ShareConsumerPerformance {
                 shareConsumerConsumption.updateBytesConsumed(bytesReadByConsumer);
             }
         }
+    }
+
+    protected static void printShareConsumerProgress(long bytesRead,
+                                                long lastBytesRead,
+                                                long messagesRead,
+                                                long lastMessagesRead,
+                                                long startMs,
+                                                long endMs,
+                                                SimpleDateFormat dateFormat,
+                                                long joinTimeMsInSingleRound) {
+        double elapsedMs = endMs - startMs;
+        double totalMbRead = (bytesRead * 1.0) / (1024 * 1024);
+        double intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024);
+        double intervalMbPerSec = 1000.0 * intervalMbRead / elapsedMs;
+        double intervalMessagesPerSec = ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0;
+        long fetchTimeMs = endMs - startMs - joinTimeMsInSingleRound;
+
+        System.out.printf("%s, %s, %.4f, %.4f, %.4f, %d, %d", dateFormat.format(startMs), dateFormat.format(endMs),
+            totalMbRead, intervalMbPerSec, intervalMessagesPerSec, messagesRead, fetchTimeMs);
+        System.out.println();
     }
 
     // Prints stats for both share consumer and share group. For share group, index is -1. For share consumer,
