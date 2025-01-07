@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.connect.json.JsonConverter;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -31,6 +32,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -135,6 +137,17 @@ public class PluginScannerTest {
                 TestPlugins.pluginPath(TestPlugins.TestPlugin.READ_VERSION_FROM_RESOURCE_V1));
         assertFalse(versionedPluginResult.isEmpty());
         versionedPluginResult.forEach(pluginDesc -> assertEquals("1.0.0", pluginDesc.version()));
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testClasspathPluginIsAlsoLoadedInIsolation(PluginScanner scanner) {
+        // json converter is part of the classpath by default
+        String jsonConverterLocation = JsonConverter.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+        PluginScanResult result = scan(scanner, Collections.singleton(Path.of(jsonConverterLocation)));
+        assertFalse(result.converters().isEmpty());
+        result.converters().stream().filter(pluginDesc -> pluginDesc.className().equals(JsonConverter.class.getName()))
+            .forEach(pluginDesc -> assertInstanceOf(PluginClassLoader.class, pluginDesc.loader()));
     }
 
     private PluginScanResult scan(PluginScanner scanner, Set<Path> pluginLocations) {
