@@ -51,7 +51,7 @@ import org.apache.zookeeper.KeeperException.Code
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Try}
 
 sealed trait ElectionTrigger
 case object AutoTriggered extends ElectionTrigger
