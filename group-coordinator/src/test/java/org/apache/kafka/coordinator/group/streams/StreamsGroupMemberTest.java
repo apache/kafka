@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue.TaskIds;
@@ -41,10 +40,43 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class StreamsGroupMemberTest {
+
+    private static final String MEMBER_ID = "member-id";
+    private static final int MEMBER_EPOCH = 10;
+    private static final int PREVIOUS_MEMBER_EPOCH = 9;
+    private static final MemberState STATE = MemberState.UNRELEASED_TASKS;
+    private static final String INSTANCE_ID = "instance-id";
+    private static final String RACK_ID = "rack-id";
+    private static final int REBALANCE_TIMEOUT = 5000;
+    private static final String CLIENT_ID = "client-id";
+    private static final String HOSTNAME = "hostname";
+    private static final int TOPOLOGY_EPOCH = 3;
+    private static final String PROCESS_ID = "process-id";
+    private static final String SUBTOPOLOGY1 = "subtopology1";
+    private static final String SUBTOPOLOGY2 = "subtopology2";
+    private static final String SUBTOPOLOGY3 = "subtopology3";
+    private static final StreamsGroupMemberMetadataValue.Endpoint USER_ENDPOINT =
+        new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090);
+    private static final String CLIENT_TAG_KEY = "client";
+    private static final String CLIENT_TAG_VALUE = "tag";
+    private static final Map<String, String> CLIENT_TAGS = mkMap(mkEntry(CLIENT_TAG_KEY, CLIENT_TAG_VALUE));
+    private static final List<Integer> TASKS1 = List.of(1, 2, 3);
+    private static final List<Integer> TASKS2 = List.of(4, 5, 6);
+    private static final List<Integer> TASKS3 = List.of(7, 8);
+    private static final List<Integer> TASKS4 = List.of(3, 2, 1);
+    private static final List<Integer> TASKS5 = List.of(6, 5, 4);
+    private static final List<Integer> TASKS6 = List.of(9, 7);
+    private static final Map<String, Set<Integer>> ASSIGNED_ACTIVE_TASKS = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS1.toArray(Integer[]::new)));
+    private static final Map<String, Set<Integer>> ASSIGNED_STANDBY_TASKS = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS2.toArray(Integer[]::new)));
+    private static final Map<String, Set<Integer>> ASSIGNED_WARMUP_TASKS = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS3.toArray(Integer[]::new)));
+    private static final Map<String, Set<Integer>> ACTIVE_TASKS_PENDING_REVOCATION = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS4.toArray(Integer[]::new)));
+    private static final Map<String, Set<Integer>> STANDBY_TASKS_PENDING_REVOCATION = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS5.toArray(Integer[]::new)));
+    private static final Map<String, Set<Integer>> WARMUP_TASKS_PENDING_REVOCATION = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS6.toArray(Integer[]::new)));
 
     @Test
     public void testBuilderWithMemberIdIsNull() {
@@ -66,107 +98,68 @@ public class StreamsGroupMemberTest {
 
     @Test
     public void testBuilderWithDefaults() {
-        final String memberId = Uuid.randomUuid().toString();
-        StreamsGroupMember member = new StreamsGroupMember.Builder(memberId).build();
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_ID).build();
 
-        assertEquals(memberId, member.memberId());
-        assertEquals(0, member.memberEpoch());
-        assertEquals(-1, member.previousMemberEpoch());
-        assertEquals(MemberState.STABLE, member.state());
-        assertTrue(member.instanceId().isEmpty());
-        assertTrue(member.rackId().isEmpty());
-        assertEquals(-1, member.rebalanceTimeoutMs());
-        assertEquals("", member.clientId());
-        assertEquals("", member.clientHost());
-        assertEquals(-1, member.topologyEpoch());
-        assertTrue(member.processId().isEmpty());
-        assertTrue(member.userEndpoint().isEmpty());
-        assertEquals(Collections.emptyMap(), member.clientTags());
-        assertEquals(Collections.emptyMap(), member.assignedActiveTasks());
-        assertEquals(Collections.emptyMap(), member.assignedStandbyTasks());
-        assertEquals(Collections.emptyMap(), member.assignedWarmupTasks());
-        assertEquals(Collections.emptyMap(), member.activeTasksPendingRevocation());
-        assertEquals(Collections.emptyMap(), member.standbyTasksPendingRevocation());
-        assertEquals(Collections.emptyMap(), member.warmupTasksPendingRevocation());
+        fail();
+        assertEquals(MEMBER_ID, member.memberId());
+        assertNull(member.memberEpoch());
+        assertNull(member.previousMemberEpoch());
+        assertNull(member.state());
+        assertNull(member.instanceId());
+        assertNull(member.rackId());
+        assertNull(member.rebalanceTimeoutMs());
+        assertNull(member.clientId());
+        assertNull(member.clientHost());
+        assertNull(member.topologyEpoch());
+        assertNull(member.processId());
+        assertNull(member.userEndpoint());
+        assertNull(member.clientTags());
+        assertNull(member.assignedActiveTasks());
+        assertNull(member.assignedStandbyTasks());
+        assertNull(member.assignedWarmupTasks());
+        assertNull(member.activeTasksPendingRevocation());
+        assertNull(member.standbyTasksPendingRevocation());
+        assertNull(member.warmupTasksPendingRevocation());
     }
 
     @Test
     public void testBuilderNewMember() {
-        final String memberId = "member-id";
-        final int memberEpoch = 10;
-        final int previousMemberEpoch = 9;
-        final MemberState state = MemberState.UNRELEASED_TASKS;
-        final String instanceId = "instance-id";
-        final String rackId = "rack-id";
-        final int rebalanceTimeout = 5000;
-        final String clientId = "client-id";
-        final String hostname = "hostname";
-        final int topologyEpoch = 3;
-        final String processId = "process-id";
-        final String subtopology1 = "subtopology1";
-        final String subtopology2 = "subtopology2";
-        final StreamsGroupMemberMetadataValue.Endpoint userEndpoint =
-            new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090);
-        final Map<String, String> clientTags = mkMap(mkEntry("client", "tag"));
-        final Map<String, Set<Integer>> assignedActiveTasks = mkTasksPerSubtopology(mkTasks(subtopology1, 1, 2, 3));
-        final Map<String, Set<Integer>> assignedStandbyTasks = mkTasksPerSubtopology(mkTasks(subtopology2, 6, 5, 4));
-        final Map<String, Set<Integer>> assignedWarmupTasks = mkTasksPerSubtopology(mkTasks(subtopology1, 7, 8, 9));
-        final Map<String, Set<Integer>> activeTasksPendingRevocation = mkTasksPerSubtopology(mkTasks(subtopology2, 3, 2, 1));
-        final Map<String, Set<Integer>> standbyTasksPendingRevocation = mkTasksPerSubtopology(mkTasks(subtopology1, 4, 5, 6));
-        final Map<String, Set<Integer>> warmupTasksPendingRevocation = mkTasksPerSubtopology(mkTasks(subtopology2, 9, 8, 7));
-        StreamsGroupMember member = new StreamsGroupMember.Builder(memberId)
-            .setMemberEpoch(memberEpoch)
-            .setPreviousMemberEpoch(previousMemberEpoch)
-            .setState(state)
-            .setInstanceId(instanceId)
-            .setRackId(rackId)
-            .setRebalanceTimeoutMs(rebalanceTimeout)
-            .setClientId(clientId)
-            .setClientHost(hostname)
-            .setTopologyEpoch(topologyEpoch)
-            .setProcessId(processId)
-            .setUserEndpoint(userEndpoint)
-            .setClientTags(clientTags)
-            .setAssignedActiveTasks(assignedActiveTasks)
-            .setAssignedStandbyTasks(assignedStandbyTasks)
-            .setAssignedWarmupTasks(assignedWarmupTasks)
-            .setActiveTasksPendingRevocation(activeTasksPendingRevocation)
-            .setStandbyTasksPendingRevocation(standbyTasksPendingRevocation)
-            .setWarmupTasksPendingRevocation(warmupTasksPendingRevocation)
-            .build();
+        StreamsGroupMember member = createStreamsGroupMember();
 
-        assertEquals(memberId, member.memberId());
-        assertEquals(memberEpoch, member.memberEpoch());
-        assertEquals(previousMemberEpoch, member.previousMemberEpoch());
-        assertEquals(state, member.state());
-        assertEquals(Optional.of(instanceId), member.instanceId());
-        assertEquals(Optional.of(rackId), member.rackId());
-        assertEquals(clientId, member.clientId());
-        assertEquals(hostname, member.clientHost());
-        assertEquals(topologyEpoch, member.topologyEpoch());
-        assertEquals(processId, member.processId());
-        assertEquals(Optional.of(userEndpoint), member.userEndpoint());
-        assertEquals(clientTags, member.clientTags());
-        assertEquals(assignedActiveTasks, member.assignedActiveTasks());
-        assertEquals(assignedStandbyTasks, member.assignedStandbyTasks());
-        assertEquals(assignedWarmupTasks, member.assignedWarmupTasks());
-        assertEquals(activeTasksPendingRevocation, member.activeTasksPendingRevocation());
-        assertEquals(standbyTasksPendingRevocation, member.standbyTasksPendingRevocation());
-        assertEquals(warmupTasksPendingRevocation, member.warmupTasksPendingRevocation());
+        assertEquals(MEMBER_ID, member.memberId());
+        assertEquals(MEMBER_EPOCH, member.memberEpoch());
+        assertEquals(PREVIOUS_MEMBER_EPOCH, member.previousMemberEpoch());
+        assertEquals(STATE, member.state());
+        assertEquals(Optional.of(INSTANCE_ID), member.instanceId());
+        assertEquals(Optional.of(RACK_ID), member.rackId());
+        assertEquals(CLIENT_ID, member.clientId());
+        assertEquals(HOSTNAME, member.clientHost());
+        assertEquals(TOPOLOGY_EPOCH, member.topologyEpoch());
+        assertEquals(PROCESS_ID, member.processId());
+        assertEquals(Optional.of(USER_ENDPOINT), member.userEndpoint());
+        assertEquals(CLIENT_TAGS, member.clientTags());
+        assertEquals(ASSIGNED_ACTIVE_TASKS, member.assignedActiveTasks());
+        assertEquals(ASSIGNED_STANDBY_TASKS, member.assignedStandbyTasks());
+        assertEquals(ASSIGNED_WARMUP_TASKS, member.assignedWarmupTasks());
+        assertEquals(ACTIVE_TASKS_PENDING_REVOCATION, member.activeTasksPendingRevocation());
+        assertEquals(STANDBY_TASKS_PENDING_REVOCATION, member.standbyTasksPendingRevocation());
+        assertEquals(WARMUP_TASKS_PENDING_REVOCATION, member.warmupTasksPendingRevocation());
     }
 
     @Test
     public void testBuilderUpdateWithStreamsGroupMemberMetadataValue() {
         StreamsGroupMemberMetadataValue record = new StreamsGroupMemberMetadataValue()
-            .setClientId("client-id")
-            .setClientHost("host-id")
-            .setInstanceId("instance-id")
-            .setRackId("rack-id")
-            .setRebalanceTimeoutMs(1000)
-            .setTopologyEpoch(3)
-            .setProcessId("process-id")
-            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
-            .setClientTags(Collections.singletonList(new KeyValue().setKey("client").setValue("tag")));
+            .setClientId(CLIENT_ID)
+            .setClientHost(HOSTNAME)
+            .setInstanceId(INSTANCE_ID)
+            .setRackId(RACK_ID)
+            .setRebalanceTimeoutMs(REBALANCE_TIMEOUT)
+            .setTopologyEpoch(TOPOLOGY_EPOCH)
+            .setProcessId(PROCESS_ID)
+            .setUserEndpoint(USER_ENDPOINT)
+            .setClientTags(CLIENT_TAGS.entrySet().stream()
+                .map(e -> new KeyValue().setKey(e.getKey()).setValue(e.getValue()))
+                .collect(Collectors.toList()));
 
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
             .updateWith(record)
@@ -184,124 +177,59 @@ public class StreamsGroupMemberTest {
             record.clientTags().stream().collect(Collectors.toMap(KeyValue::key, KeyValue::value)),
             member.clientTags()
         );
-        assertEquals("member-id", member.memberId());
-        assertEquals(0, member.memberEpoch());
-        assertEquals(-1, member.previousMemberEpoch());
-        assertEquals(MemberState.STABLE, member.state());
-        assertEquals(Collections.emptyMap(), member.assignedActiveTasks());
-        assertEquals(Collections.emptyMap(), member.assignedStandbyTasks());
-        assertEquals(Collections.emptyMap(), member.assignedWarmupTasks());
-        assertEquals(Collections.emptyMap(), member.activeTasksPendingRevocation());
-        assertEquals(Collections.emptyMap(), member.standbyTasksPendingRevocation());
-        assertEquals(Collections.emptyMap(), member.warmupTasksPendingRevocation());
+        assertEquals(MEMBER_ID, member.memberId());
+        assertNull(member.memberEpoch());
+        assertNull(member.previousMemberEpoch());
+        assertNull(member.state());
+        assertNull(member.assignedActiveTasks());
+        assertNull(member.assignedStandbyTasks());
+        assertNull(member.assignedWarmupTasks());
+        assertNull(member.activeTasksPendingRevocation());
+        assertNull(member.standbyTasksPendingRevocation());
+        assertNull(member.warmupTasksPendingRevocation());
     }
 
     @Test
     public void testBuilderUpdateWithConsumerGroupCurrentMemberAssignmentValue() {
-        final String subtopology1 = "subtopology-id1";
-        final String subtopology2 = "subtopology-id2";
-        final List<Integer> partitions1 = Arrays.asList(1, 2);
-        final List<Integer> partitions2 = Arrays.asList(3, 4);
-        final List<Integer> partitions3 = Arrays.asList(5, 6);
-        final List<Integer> partitions4 = Arrays.asList(7, 8);
-        final List<Integer> partitions5 = Arrays.asList(9, 10);
-        final List<Integer> partitions6 = Arrays.asList(11, 12);
-
         StreamsGroupCurrentMemberAssignmentValue record = new StreamsGroupCurrentMemberAssignmentValue()
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(9)
-            .setState((byte) 2)
-            .setActiveTasks(Collections.singletonList(new TaskIds()
-                .setSubtopologyId(subtopology1)
-                .setPartitions(partitions1))
-            )
-            .setStandbyTasks(Collections.singletonList(new TaskIds()
-                .setSubtopologyId(subtopology2)
-                .setPartitions(partitions2))
-            )
-            .setWarmupTasks(Collections.singletonList(new TaskIds()
-                .setSubtopologyId(subtopology1)
-                .setPartitions(partitions3))
-            )
-            .setActiveTasksPendingRevocation(Collections.singletonList(new TaskIds()
-                .setSubtopologyId(subtopology2)
-                .setPartitions(partitions4))
-            )
-            .setStandbyTasksPendingRevocation(Collections.singletonList(new TaskIds()
-                .setSubtopologyId(subtopology1)
-                .setPartitions(partitions5))
-            )
-            .setWarmupTasksPendingRevocation(Collections.singletonList(new TaskIds()
-                .setSubtopologyId(subtopology2)
-                .setPartitions(partitions6))
-            );
+            .setMemberEpoch(MEMBER_EPOCH)
+            .setPreviousMemberEpoch(PREVIOUS_MEMBER_EPOCH)
+            .setState(STATE.value())
+            .setActiveTasks(List.of(new TaskIds().setSubtopologyId(SUBTOPOLOGY1).setPartitions(TASKS1)))
+            .setStandbyTasks(List.of(new TaskIds().setSubtopologyId(SUBTOPOLOGY2).setPartitions(TASKS2)))
+            .setWarmupTasks(List.of(new TaskIds().setSubtopologyId(SUBTOPOLOGY1).setPartitions(TASKS3)))
+            .setActiveTasksPendingRevocation(List.of(new TaskIds().setSubtopologyId(SUBTOPOLOGY2).setPartitions(TASKS4)))
+            .setStandbyTasksPendingRevocation(List.of(new TaskIds().setSubtopologyId(SUBTOPOLOGY1).setPartitions(TASKS5)))
+            .setWarmupTasksPendingRevocation(List.of(new TaskIds().setSubtopologyId(SUBTOPOLOGY2).setPartitions(TASKS6)));
 
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_ID)
             .updateWith(record)
             .build();
 
+        assertEquals(MEMBER_ID, member.memberId());
         assertEquals(record.memberEpoch(), member.memberEpoch());
         assertEquals(record.previousMemberEpoch(), member.previousMemberEpoch());
         assertEquals(MemberState.fromValue(record.state()), member.state());
-        assertEquals(
-            Map.of(subtopology1, new HashSet<>(partitions1)),
-            member.assignedActiveTasks()
-        );
-        assertEquals(
-            Map.of(subtopology2, new HashSet<>(partitions2)),
-            member.assignedStandbyTasks()
-        );
-        assertEquals(
-            Map.of(subtopology1, new HashSet<>(partitions3)),
-            member.assignedWarmupTasks()
-        );
-        assertEquals(
-            Map.of(subtopology2, new HashSet<>(partitions4)),
-            member.activeTasksPendingRevocation()
-        );
-        assertEquals(
-            Map.of(subtopology1, new HashSet<>(partitions5)),
-            member.standbyTasksPendingRevocation()
-        );
-        assertEquals(
-            Map.of(subtopology2, new HashSet<>(partitions6)),
-            member.warmupTasksPendingRevocation()
-        );
-        assertEquals("member-id", member.memberId());
-        assertTrue(member.instanceId().isEmpty());
-        assertTrue(member.rackId().isEmpty());
-        assertEquals(-1, member.rebalanceTimeoutMs());
-        assertEquals("", member.clientId());
-        assertEquals("", member.clientHost());
-        assertEquals(-1, member.topologyEpoch());
-        assertTrue(member.processId().isEmpty());
-        assertTrue(member.userEndpoint().isEmpty());
-        assertEquals(Collections.emptyMap(), member.clientTags());
+        assertEquals(ASSIGNED_ACTIVE_TASKS, member.assignedActiveTasks());
+        assertEquals(ASSIGNED_STANDBY_TASKS, member.assignedStandbyTasks());
+        assertEquals(ASSIGNED_WARMUP_TASKS, member.assignedWarmupTasks());
+        assertEquals(ACTIVE_TASKS_PENDING_REVOCATION, member.activeTasksPendingRevocation());
+        assertEquals(STANDBY_TASKS_PENDING_REVOCATION, member.standbyTasksPendingRevocation());
+        assertEquals(WARMUP_TASKS_PENDING_REVOCATION, member.warmupTasksPendingRevocation());
+        assertNull(member.instanceId());
+        assertNull(member.rackId());
+        assertNull(member.rebalanceTimeoutMs());
+        assertNull(member.clientId());
+        assertNull(member.clientHost());
+        assertNull(member.topologyEpoch());
+        assertNull(member.processId());
+        assertNull(member.userEndpoint());
+        assertNull(member.clientTags());
     }
 
     @Test
     public void testBuilderMaybeUpdateMember() {
-        final String subtopology1 = "subtopology-id1";
-        final String subtopology2 = "subtopology-id2";
-
-        final StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(9)
-            .setInstanceId("instance-id")
-            .setRackId("rack-id")
-            .setRebalanceTimeoutMs(5000)
-            .setClientId("client-id")
-            .setClientHost("hostname")
-            .setTopologyEpoch(3)
-            .setProcessId("process-id")
-            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
-            .setClientTags(mkMap(mkEntry("client", "tag")))
-            .setAssignedActiveTasks(mkTasksPerSubtopology(mkTasks(subtopology1, 1, 2, 3)))
-            .setAssignedStandbyTasks(mkTasksPerSubtopology(mkTasks(subtopology2, 6, 5, 4)))
-            .setAssignedWarmupTasks(mkTasksPerSubtopology(mkTasks(subtopology1, 7, 8, 9)))
-            .setActiveTasksPendingRevocation(
-                mkTasksPerSubtopology(mkTasks(subtopology2, 3, 2, 1)))
-            .build();
+        final StreamsGroupMember member = createStreamsGroupMember();
 
         // This is a no-op.
         StreamsGroupMember updatedMember = new StreamsGroupMember.Builder(member)
@@ -318,9 +246,9 @@ public class StreamsGroupMemberTest {
 
         final String newRackId = "new" + member.rackId();
         final String newInstanceId = "new" + member.instanceId();
-        final long newRebalanceTimeout = member.rebalanceTimeoutMs() + 1000;
+        final Integer newRebalanceTimeout = member.rebalanceTimeoutMs() + 1000;
         final String newProcessId = "new" + member.processId();
-        final int newTopologyEpoch = member.topologyEpoch() + 1;
+        final Integer newTopologyEpoch = member.topologyEpoch() + 1;
         final StreamsGroupMemberMetadataValue.Endpoint newUserEndpoint =
             new StreamsGroupMemberMetadataValue.Endpoint().setHost(member.userEndpoint().get().host() + "2").setPort(9090);
         final Map<String, String> newClientTags = new HashMap<>(member.clientTags());
@@ -359,7 +287,7 @@ public class StreamsGroupMemberTest {
 
     @Test
     public void testBuilderUpdateMemberEpoch() {
-        final StreamsGroupMember member = new StreamsGroupMember.Builder("member-id").build();
+        final StreamsGroupMember member = createStreamsGroupMember();
 
         final int newMemberEpoch = member.memberEpoch() + 1;
         final StreamsGroupMember updatedMember = new StreamsGroupMember.Builder(member)
@@ -377,8 +305,8 @@ public class StreamsGroupMemberTest {
         assertEquals(member.clientId(), updatedMember.clientId());
         assertEquals(member.clientHost(), updatedMember.clientHost());
         assertEquals(member.topologyEpoch(), updatedMember.topologyEpoch());
-        assertTrue(member.processId().isEmpty());
-        assertTrue(member.userEndpoint().isEmpty());
+        assertEquals(member.processId(), updatedMember.processId());
+        assertEquals(member.userEndpoint(), updatedMember.userEndpoint());
         assertEquals(member.clientTags(), updatedMember.clientTags());
         assertEquals(member.assignedActiveTasks(), updatedMember.assignedActiveTasks());
         assertEquals(member.assignedStandbyTasks(), updatedMember.assignedStandbyTasks());
@@ -389,463 +317,8 @@ public class StreamsGroupMemberTest {
     }
 
     @Test
-    public void testConstructorWithMemberIdIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                null,
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("memberId cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithMemberStateIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                null,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("state cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithInstanceIdIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                null,
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("instanceId cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithRackIdIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                null,
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("rackId cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithClientIdIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                null,
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("clientId cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithClientHostIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                null,
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("clientHost cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithProcessIdIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                null,
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("processId cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithUserEndpointIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                null,
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("userEndpoint cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithClientTagsIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                null,
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("clientTags cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithAssignedActiveTasksIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                null,
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("assignedActiveTasks cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithAssignedStandbyTasksIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                null,
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("assignedStandbyTasks cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithAssignedWarmupTasksIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                null,
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("assignedWarmupTasks cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithActiveTasksPendingRevocationIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                null,
-                Collections.emptyMap(),
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("activeTasksPendingRevocation cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithStandbyTasksPendingRevocationIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                null,
-                Collections.emptyMap()
-            )
-        );
-        assertEquals("standbyTasksPendingRevocation cannot be null", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithWarmupTasksPendingRevocationIsNull() {
-        final Exception exception = assertThrows(
-            NullPointerException.class,
-            () -> new StreamsGroupMember(
-                "",
-                0,
-                -1,
-                MemberState.STABLE,
-                Optional.empty(),
-                Optional.empty(),
-                "",
-                "",
-                -1,
-                -1,
-                "",
-                Optional.empty(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                null
-            )
-        );
-        assertEquals("warmupTasksPendingRevocation cannot be null", exception.getMessage());
-    }
-
-    @Test
     public void testReturnUnmodifiableFields() {
-        final StreamsGroupMember member = new StreamsGroupMember(
-            "",
-            0,
-            -1,
-            MemberState.STABLE,
-            Optional.empty(),
-            Optional.empty(),
-            "",
-            "",
-            -1,
-            -1,
-            "",
-            Optional.empty(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap()
-        );
+        final StreamsGroupMember member = createStreamsGroupMember();
 
         assertThrows(UnsupportedOperationException.class, () -> member.clientTags().put("not allowed", ""));
         assertThrows(UnsupportedOperationException.class, () -> member.assignedActiveTasks().put("not allowed", Collections.emptySet()));
@@ -858,98 +331,101 @@ public class StreamsGroupMemberTest {
 
     @Test
     public void testAsStreamsGroupDescribeMember() {
-        String subTopology1 = Uuid.randomUuid().toString();
-        String subTopology2 = Uuid.randomUuid().toString();
-        String subTopology3 = Uuid.randomUuid().toString();
-        List<Integer> assignedTasks1 = Arrays.asList(0, 1, 2);
-        List<Integer> assignedTasks2 = Arrays.asList(3, 4, 5);
-        List<Integer> assignedTasks3 = Arrays.asList(6, 7, 8);
-        int epoch = 10;
-        String memberId = Uuid.randomUuid().toString();
-        String clientId = "clientId";
-        String instanceId = "instanceId";
-        String rackId = "rackId";
-        String clientHost = "clientHost";
-        String processId = "processId";
-        int topologyEpoch = 3;
-        Map<String, String> clientTags = Collections.singletonMap("key", "value");
+        final StreamsGroupMember member = createStreamsGroupMember();
+        List<Integer> assignedTasks1 = Arrays.asList(10, 11, 12);
+        List<Integer> assignedTasks2 = Arrays.asList(13, 14, 15);
+        List<Integer> assignedTasks3 = Arrays.asList(16, 17, 18);
         Assignment targetAssignment = new Assignment(
-            mkMap(mkEntry(subTopology1, new HashSet<>(assignedTasks3))),
-            mkMap(mkEntry(subTopology2, new HashSet<>(assignedTasks2))),
-            mkMap(mkEntry(subTopology3, new HashSet<>(assignedTasks1)))
+            mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(assignedTasks3))),
+            mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(assignedTasks2))),
+            mkMap(mkEntry(SUBTOPOLOGY3, new HashSet<>(assignedTasks1)))
         );
-        StreamsGroupMember member = new StreamsGroupMember.Builder(memberId)
-            .setMemberEpoch(epoch)
-            .setPreviousMemberEpoch(epoch - 1)
-            .setClientId(clientId)
-            .setInstanceId(instanceId)
-            .setRackId(rackId)
-            .setClientHost(clientHost)
-            .setProcessId(processId)
-            .setTopologyEpoch(topologyEpoch)
-            .setClientTags(clientTags)
-            .setAssignedActiveTasks(
-                mkMap(mkEntry(subTopology1, new HashSet<>(assignedTasks1)))
-            )
-            .setAssignedStandbyTasks(
-                mkMap(mkEntry(subTopology2, new HashSet<>(assignedTasks2)))
-            )
-            .setAssignedWarmupTasks(
-                mkMap(mkEntry(subTopology3, new HashSet<>(assignedTasks3)))
-            )
-            .setUserEndpoint(
-                new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090)
-            )
-            .build();
 
         StreamsGroupDescribeResponseData.Member actual = member.asStreamsGroupDescribeMember(targetAssignment);
         StreamsGroupDescribeResponseData.Member expected = new StreamsGroupDescribeResponseData.Member()
-            .setMemberId(memberId)
-            .setMemberEpoch(epoch)
-            .setClientId(clientId)
-            .setInstanceId(instanceId)
-            .setRackId(rackId)
-            .setClientHost(clientHost)
-            .setProcessId(processId)
-            .setTopologyEpoch(topologyEpoch)
-            .setClientTags(Collections.singletonList(new StreamsGroupDescribeResponseData.KeyValue().setKey("key").setValue("value")))
+            .setMemberId(MEMBER_ID)
+            .setMemberEpoch(MEMBER_EPOCH)
+            .setClientId(CLIENT_ID)
+            .setInstanceId(INSTANCE_ID)
+            .setRackId(RACK_ID)
+            .setClientHost(HOSTNAME)
+            .setProcessId(PROCESS_ID)
+            .setTopologyEpoch(TOPOLOGY_EPOCH)
+            .setClientTags(List.of(
+                new StreamsGroupDescribeResponseData.KeyValue().setKey(CLIENT_TAG_KEY).setValue(CLIENT_TAG_VALUE))
+            )
             .setAssignment(
                 new StreamsGroupDescribeResponseData.Assignment()
-                    .setActiveTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
-                        .setSubtopologyId(subTopology1)
-                        .setPartitions(assignedTasks1)))
-                    .setStandbyTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
-                        .setSubtopologyId(subTopology2)
-                        .setPartitions(assignedTasks2)))
-                    .setWarmupTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
-                        .setSubtopologyId(subTopology3)
-                        .setPartitions(assignedTasks3)))
+                    .setActiveTasks(List.of(
+                        new StreamsGroupDescribeResponseData.TaskIds()
+                            .setSubtopologyId(SUBTOPOLOGY1)
+                            .setPartitions(TASKS1))
+                    )
+                    .setStandbyTasks(List.of(
+                        new StreamsGroupDescribeResponseData.TaskIds()
+                            .setSubtopologyId(SUBTOPOLOGY2)
+                            .setPartitions(TASKS2))
+                    )
+                    .setWarmupTasks(List.of(
+                        new StreamsGroupDescribeResponseData.TaskIds()
+                            .setSubtopologyId(SUBTOPOLOGY1)
+                            .setPartitions(TASKS3))
+                    )
             )
             .setTargetAssignment(
                 new StreamsGroupDescribeResponseData.Assignment()
-                    .setActiveTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
-                        .setSubtopologyId(subTopology1)
-                        .setPartitions(assignedTasks3)))
-                    .setStandbyTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
-                        .setSubtopologyId(subTopology2)
-                        .setPartitions(assignedTasks2)))
-                    .setWarmupTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
-                        .setSubtopologyId(subTopology3)
-                        .setPartitions(assignedTasks1)))
+                    .setActiveTasks(List.of(
+                        new StreamsGroupDescribeResponseData.TaskIds()
+                            .setSubtopologyId(SUBTOPOLOGY1)
+                            .setPartitions(assignedTasks3))
+                    )
+                    .setStandbyTasks(List.of(
+                        new StreamsGroupDescribeResponseData.TaskIds()
+                            .setSubtopologyId(SUBTOPOLOGY2)
+                            .setPartitions(assignedTasks2))
+                    )
+                    .setWarmupTasks(List.of(
+                        new StreamsGroupDescribeResponseData.TaskIds()
+                            .setSubtopologyId(SUBTOPOLOGY3)
+                            .setPartitions(assignedTasks1))
+                    )
             )
-            .setUserEndpoint(new StreamsGroupDescribeResponseData.Endpoint().setHost("host").setPort(9090));
+            .setUserEndpoint(new StreamsGroupDescribeResponseData.Endpoint()
+                .setHost(USER_ENDPOINT.host())
+                .setPort(USER_ENDPOINT.port())
+            );
 
         assertEquals(expected, actual);
     }
 
     @Test
     public void testAsStreamsGroupDescribeWithTargetAssignmentNull() {
-        StreamsGroupMember member = new StreamsGroupMember.Builder(Uuid.randomUuid().toString())
-            .build();
-
-        StreamsGroupDescribeResponseData.Member streamsGroupDescribeMember = member.asStreamsGroupDescribeMember(
-            null);
+        final StreamsGroupMember member = createStreamsGroupMember();
+        StreamsGroupDescribeResponseData.Member streamsGroupDescribeMember = member.asStreamsGroupDescribeMember(null);
 
         assertEquals(new StreamsGroupDescribeResponseData.Assignment(), streamsGroupDescribeMember.targetAssignment());
+    }
+
+    private StreamsGroupMember createStreamsGroupMember() {
+        return new StreamsGroupMember.Builder(MEMBER_ID)
+            .setMemberEpoch(MEMBER_EPOCH)
+            .setPreviousMemberEpoch(PREVIOUS_MEMBER_EPOCH)
+            .setState(STATE)
+            .setInstanceId(INSTANCE_ID)
+            .setRackId(RACK_ID)
+            .setRebalanceTimeoutMs(REBALANCE_TIMEOUT)
+            .setClientId(CLIENT_ID)
+            .setClientHost(HOSTNAME)
+            .setTopologyEpoch(TOPOLOGY_EPOCH)
+            .setProcessId(PROCESS_ID)
+            .setUserEndpoint(USER_ENDPOINT)
+            .setClientTags(CLIENT_TAGS)
+            .setAssignedActiveTasks(ASSIGNED_ACTIVE_TASKS)
+            .setAssignedStandbyTasks(ASSIGNED_STANDBY_TASKS)
+            .setAssignedWarmupTasks(ASSIGNED_WARMUP_TASKS)
+            .setActiveTasksPendingRevocation(ACTIVE_TASKS_PENDING_REVOCATION)
+            .setStandbyTasksPendingRevocation(STANDBY_TASKS_PENDING_REVOCATION)
+            .setWarmupTasksPendingRevocation(WARMUP_TASKS_PENDING_REVOCATION)
+            .build();
     }
 }

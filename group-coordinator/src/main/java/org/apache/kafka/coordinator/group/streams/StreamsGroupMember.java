@@ -64,15 +64,15 @@ import java.util.stream.Collectors;
  */
 @SuppressWarnings("checkstyle:JavaNCSS")
 public record StreamsGroupMember(String memberId,
-                                 int memberEpoch,
-                                 int previousMemberEpoch,
+                                 Integer memberEpoch,
+                                 Integer previousMemberEpoch,
                                  MemberState state,
                                  Optional<String> instanceId,
                                  Optional<String> rackId,
                                  String clientId,
                                  String clientHost,
-                                 int rebalanceTimeoutMs,
-                                 int topologyEpoch,
+                                 Integer rebalanceTimeoutMs,
+                                 Integer topologyEpoch,
                                  String processId,
                                  Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint,
                                  Map<String, String> clientTags,
@@ -85,34 +85,13 @@ public record StreamsGroupMember(String memberId,
 
     public StreamsGroupMember {
         Objects.requireNonNull(memberId, "memberId cannot be null");
-        Objects.requireNonNull(state, "state cannot be null");
-        Objects.requireNonNull(instanceId, "instanceId cannot be null");
-        Objects.requireNonNull(rackId, "rackId cannot be null");
-        Objects.requireNonNull(clientId, "clientId cannot be null");
-        Objects.requireNonNull(clientHost, "clientHost cannot be null");
-        Objects.requireNonNull(processId, "processId cannot be null");
-        Objects.requireNonNull(userEndpoint, "userEndpoint cannot be null");
-        clientTags = Collections.unmodifiableMap(
-            Objects.requireNonNull(clientTags, "clientTags cannot be null")
-        );
-        assignedActiveTasks = Collections.unmodifiableMap(
-            Objects.requireNonNull(assignedActiveTasks, "assignedActiveTasks cannot be null")
-        );
-        assignedStandbyTasks = Collections.unmodifiableMap(
-            Objects.requireNonNull(assignedStandbyTasks, "assignedStandbyTasks cannot be null")
-        );
-        assignedWarmupTasks = Collections.unmodifiableMap(
-            Objects.requireNonNull(assignedWarmupTasks, "assignedWarmupTasks cannot be null")
-        );
-        activeTasksPendingRevocation = Collections.unmodifiableMap(
-            Objects.requireNonNull(activeTasksPendingRevocation, "activeTasksPendingRevocation cannot be null")
-        );
-        standbyTasksPendingRevocation = Collections.unmodifiableMap(
-            Objects.requireNonNull(standbyTasksPendingRevocation, "standbyTasksPendingRevocation cannot be null")
-        );
-        warmupTasksPendingRevocation = Collections.unmodifiableMap(
-            Objects.requireNonNull(warmupTasksPendingRevocation, "warmupTasksPendingRevocation cannot be null")
-        );
+        clientTags = clientTags != null ? Collections.unmodifiableMap(clientTags) : null;
+        assignedActiveTasks = assignedActiveTasks != null ? Collections.unmodifiableMap(assignedActiveTasks) : null;
+        assignedStandbyTasks = assignedStandbyTasks != null ? Collections.unmodifiableMap(assignedStandbyTasks) : null;
+        assignedWarmupTasks = assignedWarmupTasks != null ? Collections.unmodifiableMap(assignedWarmupTasks) : null;
+        activeTasksPendingRevocation = activeTasksPendingRevocation != null ? Collections.unmodifiableMap(activeTasksPendingRevocation) : null;
+        standbyTasksPendingRevocation = standbyTasksPendingRevocation != null ? Collections.unmodifiableMap(standbyTasksPendingRevocation) : null;
+        warmupTasksPendingRevocation = warmupTasksPendingRevocation != null ? Collections.unmodifiableMap(warmupTasksPendingRevocation) : null;
     }
 
     /**
@@ -123,24 +102,24 @@ public record StreamsGroupMember(String memberId,
     public static class Builder {
 
         private final String memberId;
-        private int memberEpoch = 0;
-        private int previousMemberEpoch = -1;
-        private MemberState state = MemberState.STABLE;
-        private Optional<String> instanceId = Optional.empty();
-        private Optional<String> rackId = Optional.empty();
-        private int rebalanceTimeoutMs = -1;
-        private String clientId = "";
-        private String clientHost = "";
-        private int topologyEpoch = -1;
-        private String processId = "";
-        private Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint = Optional.empty();
-        private Map<String, String> clientTags = Collections.emptyMap();
-        private Map<String, Set<Integer>> assignedActiveTasks = Collections.emptyMap();
-        private Map<String, Set<Integer>> assignedStandbyTasks = Collections.emptyMap();
-        private Map<String, Set<Integer>> assignedWarmupTasks = Collections.emptyMap();
-        private Map<String, Set<Integer>> activeTasksPendingRevocation = Collections.emptyMap();
-        private Map<String, Set<Integer>> standbyTasksPendingRevocation = Collections.emptyMap();
-        private Map<String, Set<Integer>> warmupTasksPendingRevocation = Collections.emptyMap();
+        private Integer memberEpoch = null;
+        private Integer previousMemberEpoch = null;
+        private MemberState state = null;
+        private Optional<String> instanceId = null;
+        private Optional<String> rackId = null;
+        private Integer rebalanceTimeoutMs = null;
+        private String clientId = null;
+        private String clientHost = null;
+        private Integer topologyEpoch = null;
+        private String processId = null;
+        private Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint = null;
+        private Map<String, String> clientTags = null;
+        private Map<String, Set<Integer>> assignedActiveTasks = null;
+        private Map<String, Set<Integer>> assignedStandbyTasks = null;
+        private Map<String, Set<Integer>> assignedWarmupTasks = null;
+        private Map<String, Set<Integer>> activeTasksPendingRevocation = null;
+        private Map<String, Set<Integer>> standbyTasksPendingRevocation = null;
+        private Map<String, Set<Integer>> warmupTasksPendingRevocation = null;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId, "memberId cannot be null");
@@ -385,143 +364,10 @@ public record StreamsGroupMember(String memberId,
     }
 
     /**
-     * @return The member ID.
-     */
-    public String memberId() {
-        return memberId;
-    }
-
-    /**
-     * @return The current member epoch.
-     */
-    public int memberEpoch() {
-        return memberEpoch;
-    }
-
-    /**
-     * @return The previous member epoch.
-     */
-    public int previousMemberEpoch() {
-        return previousMemberEpoch;
-    }
-
-    /**
-     * @return The instance ID.
-     */
-    public Optional<String> instanceId() {
-        return instanceId;
-    }
-
-    /**
-     * @return The rack ID.
-     */
-    public Optional<String> rackId() {
-        return rackId;
-    }
-
-    /**
-     * @return The rebalance timeout in millis.
-     */
-    public int rebalanceTimeoutMs() {
-        return rebalanceTimeoutMs;
-    }
-
-    /**
-     * @return The client ID.
-     */
-    public String clientId() {
-        return clientId;
-    }
-
-    /**
-     * @return The client host.
-     */
-    public String clientHost() {
-        return clientHost;
-    }
-
-    /**
-     * @return The topology epoch.
-     */
-    public int topologyEpoch() {
-        return topologyEpoch;
-    }
-
-    /**
-     * @return The process ID
-     */
-    public String processId() {
-        return processId;
-    }
-
-    /**
-     * @return The user endpoint
-     */
-    public Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint() {
-        return userEndpoint;
-    }
-
-    /**
-     * @return The client tags
-     */
-    public Map<String, String> clientTags() {
-        return clientTags;
-    }
-
-    /**
-     * @return The current state.
-     */
-    public MemberState state() {
-        return state;
-    }
-
-    /**
      * @return True if the member is in the Stable state and at the desired epoch.
      */
     public boolean isReconciledTo(int targetAssignmentEpoch) {
         return state == MemberState.STABLE && memberEpoch == targetAssignmentEpoch;
-    }
-
-    /**
-     * @return The set of assigned active tasks.
-     */
-    public Map<String, Set<Integer>> assignedActiveTasks() {
-        return assignedActiveTasks;
-    }
-
-    /**
-     * @return The set of assigned standby tasks.
-     */
-    public Map<String, Set<Integer>> assignedStandbyTasks() {
-        return assignedStandbyTasks;
-    }
-
-    /**
-     * @return The set of assigned warm-up tasks.
-     */
-    public Map<String, Set<Integer>> assignedWarmupTasks() {
-        return assignedWarmupTasks;
-    }
-
-    /**
-     * @return The set of active tasks awaiting revocation from the member.
-     */
-    public Map<String, Set<Integer>> activeTasksPendingRevocation() {
-        return activeTasksPendingRevocation;
-    }
-
-    /**
-     * @return The set of standby tasks awaiting revocation from the member.
-     */
-    public Map<String, Set<Integer>> standbyTasksPendingRevocation() {
-        return standbyTasksPendingRevocation;
-    }
-
-    /**
-     * @return The set of warmup tasks awaiting revocation from the member.
-     */
-    public Map<String, Set<Integer>> warmupTasksPendingRevocation() {
-        return warmupTasksPendingRevocation;
     }
 
     /**
