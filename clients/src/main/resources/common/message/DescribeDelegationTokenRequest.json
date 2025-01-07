@@ -18,11 +18,11 @@
   "type": "request",
   "listeners": ["zkBroker", "broker", "controller"],
   "name": "DescribeDelegationTokenRequest",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   // Version 1 is the same as version 0.
   // Version 2 adds flexible version support
   // Version 3 adds token requester into the response
-  "validVersions": "0-3",
-  "deprecatedVersions": "0",
+  "validVersions": "1-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "Owners", "type": "[]DescribeDelegationTokenOwner", "versions": "0+", "nullableVersions": "0+",

@@ -36,7 +36,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -325,7 +324,7 @@ public class LeaderElectionCommandTest {
 
         String jsonString = stringifyTopicPartitions(new HashSet<>(partitions));
 
-        Files.write(file.toPath(), jsonString.getBytes(StandardCharsets.UTF_8));
+        Files.writeString(file.toPath(), jsonString);
 
         return file.toPath();
     }
@@ -333,7 +332,7 @@ public class LeaderElectionCommandTest {
     private Path tempAdminConfig(String defaultApiTimeoutMs, String requestTimeoutMs) throws Exception {
         String content = "default.api.timeout.ms=" + defaultApiTimeoutMs + "\nrequest.timeout.ms=" + requestTimeoutMs;
         java.io.File file = TestUtils.tempFile("admin-config", ".properties");
-        Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
+        Files.writeString(file.toPath(), content);
         return file.toPath();
     }
 

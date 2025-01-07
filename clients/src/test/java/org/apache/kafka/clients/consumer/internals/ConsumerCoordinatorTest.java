@@ -223,7 +223,7 @@ public abstract class ConsumerCoordinatorTest {
                                         groupInstanceId,
                                         retryBackoffMs,
                                         retryBackoffMaxMs,
-                                        !groupInstanceId.isPresent());
+                                        groupInstanceId.isEmpty());
     }
 
     @AfterEach
@@ -677,7 +677,6 @@ public abstract class ConsumerCoordinatorTest {
                                                 .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
                                                 .setCommittedMetadata("")
                                                 .setCommittedOffset(13L)
-                                                .setCommitTimestamp(0)
                                 ))
                         )
                 );
@@ -4136,7 +4135,7 @@ public abstract class ConsumerCoordinatorTest {
         @Override
         public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic, Map<String, Subscription> subscriptions) {
             subscriptions.forEach((consumer, subscription) -> {
-                if (!subscription.rackId().isPresent())
+                if (subscription.rackId().isEmpty())
                     throw new IllegalStateException("Rack id not provided in subscription for " + consumer);
                 rackIds.add(subscription.rackId().get());
             });

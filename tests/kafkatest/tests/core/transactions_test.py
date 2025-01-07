@@ -58,11 +58,6 @@ class TransactionsTest(Test):
         self.progress_timeout_sec = 60
         self.consumer_group = "transactions-test-consumer-group"
 
-        self.kafka = KafkaService(test_context,
-                                  num_nodes=self.num_brokers,
-                                  zk=None,
-                                  controller_num_nodes_override=1)
-
     def seed_messages(self, topic, num_seed_messages):
         seed_timeout_sec = 10000
         seed_producer = VerifiableProducer(context=self.test_context,
@@ -212,7 +207,8 @@ class TransactionsTest(Test):
         check_order=[True, False],
         use_group_metadata=[True, False],
         metadata_quorum=quorum.all_kraft,
-        use_new_coordinator=[False]
+        use_new_coordinator=[False],
+        use_transactions_v2=[True, False]
     )
     @matrix(
         failure_mode=["hard_bounce", "clean_bounce"],
@@ -221,9 +217,15 @@ class TransactionsTest(Test):
         use_group_metadata=[True, False],
         metadata_quorum=quorum.all_kraft,
         use_new_coordinator=[True],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=consumer_group.all_group_protocols,
+        use_transactions_v2=[True, False]
     )
-    def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata, metadata_quorum, use_new_coordinator=False, group_protocol=None, use_transactions_v2=False):
+        self.kafka = KafkaService(self.test_context,
+                                  num_nodes=self.num_brokers,
+                                  zk=None,
+                                  controller_num_nodes_override=1,
+                                  use_transactions_v2=use_transactions_v2)
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol

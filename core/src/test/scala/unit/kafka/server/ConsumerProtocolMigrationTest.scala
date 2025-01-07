@@ -897,7 +897,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // Member 1 commits offset. Start from version 1 because version 0 goes to ZK.
-    for (version <- 1 to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.OFFSET_COMMIT.oldestVersion to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
       for (partitionId <- 0 to 2) {
         commitOffset(
           groupId = groupId,
@@ -1196,7 +1196,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // Member 1 commits offset. Start from version 1 because version 0 goes to ZK.
-    for (version <- 1 to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.OFFSET_COMMIT.oldestVersion to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
       for (partitionId <- 0 to 2) {
         commitOffset(
           groupId = groupId,

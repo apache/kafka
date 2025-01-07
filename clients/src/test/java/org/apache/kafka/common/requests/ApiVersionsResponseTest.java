@@ -88,8 +88,8 @@ public class ApiVersionsResponseTest {
     public void shouldHaveCommonlyAgreedApiVersionResponseWithControllerOnForwardableAPIs() {
         final ApiKeys forwardableAPIKey = ApiKeys.CREATE_ACLS;
         final ApiKeys nonForwardableAPIKey = ApiKeys.JOIN_GROUP;
-        final short minVersion = 0;
-        final short maxVersion = 1;
+        final short minVersion = 2;
+        final short maxVersion = 3;
         Map<ApiKeys, ApiVersion> activeControllerApiVersions = Utils.mkMap(
             Utils.mkEntry(forwardableAPIKey, new ApiVersion()
                 .setApiKey(forwardableAPIKey.id)

@@ -112,8 +112,7 @@ public interface Authorizer extends Configurable, Closeable {
      * to process the update synchronously on the request thread.
      *
      * @param requestContext Request context if the ACL is being created by a broker to handle
-     *        a client request to create ACLs. This may be null if ACLs are created directly in ZooKeeper
-     *        using AclCommand.
+     *        a client request to create ACLs.
      * @param aclBindings ACL bindings to create
      *
      * @return Create result for each ACL binding in the same order as in the input list. Each result
@@ -131,8 +130,7 @@ public interface Authorizer extends Configurable, Closeable {
      * Refer to the authorizer implementation docs for details on concurrent update guarantees.
      *
      * @param requestContext Request context if the ACL is being deleted by a broker to handle
-     *        a client request to delete ACLs. This may be null if ACLs are deleted directly in ZooKeeper
-     *        using AclCommand.
+     *        a client request to delete ACLs.
      * @param aclBindingFilters Filters to match ACL bindings that are to be deleted
      *
      * @return Delete result for each filter in the same order as in the input list.

@@ -82,8 +82,9 @@ public class CompletableEventReaper {
      *
      * @param currentTimeMs <em>Current</em> time with which to compare against the
      *                      <em>{@link CompletableEvent#deadlineMs() expiration time}</em>
+     * @return The number of events that were expired
      */
-    public void reap(long currentTimeMs) {
+    public long reap(long currentTimeMs) {
         Consumer<CompletableEvent<?>> expireEvent = event -> {
             long pastDueMs = currentTimeMs - event.deadlineMs();
             TimeoutException error = new TimeoutException(String.format("%s was %s ms past its expiration of %s", event.getClass().getSimpleName(), pastDueMs, event.deadlineMs()));
@@ -96,13 +97,16 @@ public class CompletableEventReaper {
         };
 
         // First, complete (exceptionally) any events that have passed their deadline AND aren't already complete.
-        tracked.stream()
+        long count = tracked.stream()
             .filter(e -> !e.future().isDone())
             .filter(e -> currentTimeMs >= e.deadlineMs())
-            .forEach(expireEvent);
+            .peek(expireEvent)
+            .count();
         // Second, remove any events that are already complete, just to make sure we don't hold references. This will
         // include any events that finished successfully as well as any events we just completed exceptionally above.
         tracked.removeIf(e -> e.future().isDone());
+
+        return count;
     }
 
     /**
@@ -122,8 +126,9 @@ public class CompletableEventReaper {
      * don't take the deadline into consideration, just close it regardless.
      *
      * @param events Events from a queue that have not yet been tracked that also need to be reviewed
+     * @return The number of events that were expired
      */
-    public void reap(Collection<?> events) {
+    public long reap(Collection<?> events) {
         Objects.requireNonNull(events, "Event queue to reap must be non-null");
 
         Consumer<CompletableEvent<?>> expireEvent = event -> {
@@ -136,17 +141,20 @@ public class CompletableEventReaper {
             }
         };
 
-        tracked.stream()
+        long trackedExpiredCount = tracked.stream()
             .filter(e -> !e.future().isDone())
-            .forEach(expireEvent);
+            .peek(expireEvent)
+            .count();
         tracked.clear();
 
-        events.stream()
+        long eventExpiredCount = events.stream()
             .filter(e -> e instanceof CompletableEvent<?>)
             .map(e -> (CompletableEvent<?>) e)
             .filter(e -> !e.future().isDone())
-            .forEach(expireEvent);
+            .peek(expireEvent)
+            .count();
         events.clear();
+        return trackedExpiredCount + eventExpiredCount;
     }
 
     public int size() {

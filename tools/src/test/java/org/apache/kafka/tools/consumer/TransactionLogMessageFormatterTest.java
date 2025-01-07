@@ -56,13 +56,12 @@ public class TransactionLogMessageFormatterTest {
                 Arguments.of(
                     MessageUtil.toVersionPrefixedByteBuffer((short) 10, TXN_LOG_KEY).array(),
                     MessageUtil.toVersionPrefixedByteBuffer((short) 10, TXN_LOG_VALUE).array(),
-                    "{\"key\":{\"version\":10,\"data\":\"unknown\"}," +
-                        "\"value\":{\"version\":10,\"data\":\"unknown\"}}"
+                    ""
                 ),
                 Arguments.of(
                     MessageUtil.toVersionPrefixedByteBuffer((short) 0, TXN_LOG_KEY).array(),
                     MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_VALUE).array(),
-                    "{\"key\":{\"version\":0,\"data\":{\"transactionalId\":\"TXNID\"}}," +
+                    "{\"key\":{\"type\":0,\"data\":{\"transactionalId\":\"TXNID\"}}," +
                         "\"value\":{\"version\":1,\"data\":{\"producerId\":100,\"producerEpoch\":50," +
                         "\"transactionTimeoutMs\":500,\"transactionStatus\":4,\"transactionPartitions\":[]," +
                         "\"transactionLastUpdateTimestampMs\":1000,\"transactionStartTimestampMs\":750}}}"
@@ -70,29 +69,23 @@ public class TransactionLogMessageFormatterTest {
                 Arguments.of(
                     MessageUtil.toVersionPrefixedByteBuffer((short) 0, TXN_LOG_KEY).array(),
                     MessageUtil.toVersionPrefixedByteBuffer((short) 5, TXN_LOG_VALUE).array(),
-                    "{\"key\":{\"version\":0,\"data\":{\"transactionalId\":\"TXNID\"}}," +
+                    "{\"key\":{\"type\":0,\"data\":{\"transactionalId\":\"TXNID\"}}," +
                         "\"value\":{\"version\":5,\"data\":\"unknown\"}}"
                 ),
                 Arguments.of(
                     MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_KEY).array(),
                     MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_VALUE).array(),
-                    "{\"key\":{\"version\":1,\"data\":\"unknown\"}," +
-                        "\"value\":{\"version\":1,\"data\":{\"producerId\":100,\"producerEpoch\":50," +
-                        "\"transactionTimeoutMs\":500,\"transactionStatus\":4,\"transactionPartitions\":[]," +
-                        "\"transactionLastUpdateTimestampMs\":1000,\"transactionStartTimestampMs\":750}}}"),
+                    ""),
                 Arguments.of(
                     MessageUtil.toVersionPrefixedByteBuffer((short) 0, TXN_LOG_KEY).array(),
                     null,
-                    "{\"key\":{\"version\":0,\"data\":{\"transactionalId\":\"TXNID\"}}," +
+                    "{\"key\":{\"type\":0,\"data\":{\"transactionalId\":\"TXNID\"}}," +
                         "\"value\":null}"),
                 Arguments.of(
                     null,
                     MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_VALUE).array(),
-                    "{\"key\":null," +
-                        "\"value\":{\"version\":1,\"data\":{\"producerId\":100,\"producerEpoch\":50," +
-                        "\"transactionTimeoutMs\":500,\"transactionStatus\":4,\"transactionPartitions\":[]," +
-                        "\"transactionLastUpdateTimestampMs\":1000,\"transactionStartTimestampMs\":750}}}"),
-                Arguments.of(null, null, "{\"key\":null,\"value\":null}")
+                    ""),
+                Arguments.of(null, null, "")
         );
     }
 

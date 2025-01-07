@@ -22,6 +22,12 @@
 <h4><a id="upgrade_4_0_0" href="#upgrade_4_0_0">Upgrading to 4.0.0 from any version 0.8.x through 3.9.x</a></h4>
     <h5><a id="upgrade_400_notable" href="#upgrade_400_notable">Notable changes in 4.0.0</a></h5>
     <ul>
+        <li>
+            Old protocol API versions have been removed. Users should ensure brokers are version 2.1 or higher before upgrading the Java clients to 4.0.
+            Similarly, users should ensure their Java clients version 2.1 or higher before upgrading the brokers to 4.0. Finally, care also needs to be
+            taken when it comes to kafka clients that are not part of Apache Kafka, please see
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896%3A+Remove+old+client+protocol+API+versions+in+Kafka+4.0">KIP-896</a> for the details.
+        </li>
         <li>A number of deprecated classes, methods, configurations and tools have been removed.
             <ul>
                 <li><b>Common</b>
@@ -43,6 +49,21 @@
                         </li>
                         <li>The <code>kafka.common.requests.DescribeLogDirsResponse.ReplicaInfo</code> class was removed. Please use the <code>kafka.clients.admin.DescribeLogDirsResult.descriptions()</code> class
                             and <code>kafka.clients.admin.DescribeLogDirsResult.allDescriptions()</code>instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler</code> class was removed.
+                            Please use the <code>org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler</code> class instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerValidatorCallbackHandler</code> class was removed.
+                            Please use the <code>org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler</code> class instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.common.errors.NotLeaderForPartitionException</code> class was removed. The <code>org.apache.kafka.common.errors.NotLeaderOrFollowerException</code> is returned
+                            if a request could not be processed because the broker is not the leader or follower for a topic partition.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code> and <code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code> class was removed.
+                        </li>
+                        <li>The <code>log.message.format.version</code> and <code>message.format.version</code> configs were removed.
+                        </li>
+                        <li>The function <code>onNewBatch</code> in <code>org.apache.kafka.clients.producer.Partitioner</code> class was removed.
                         </li>
                     </ul>
                 </li>
@@ -156,6 +177,8 @@
                         <li>The <code>onPartitionsRevoked(Collection&lt;TopicPartition&gt;)</code> and <code>onPartitionsAssigned(Collection&lt;TopicPartition&gt;)</code> methods
                             were removed from <code>SinkTask</code>.
                         </li>
+                        <li>The <code>commitRecord(SourceRecord)</code> method was removed from <code>SourceTask</code>.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Consumer</b>
@@ -166,6 +189,10 @@
                         </li>
                         <li>The <code>committed(TopicPartition)</code> and <code>committed(TopicPartition, Duration)</code> methods were removed from the consumer.
                             Please use <code>committed(Set&ltTopicPartition&gt)</code> and <code>committed(Set&ltTopicPartition&gt, Duration)</code> instead.
+                        </li>
+                        <li>
+                            The <code>setException(KafkaException)</code> method was removed from the <code>org.apache.kafka.clients.consumer.MockConsumer</code>.
+                            Please use <code>setPollException(KafkaException)</code> instead.
                         </li>
                     </ul>
                 </li>
@@ -190,12 +217,47 @@
                             <code>DEAD</code> if the group ID was not found. In Apache Kafka 4.0, the <code>GroupIdNotFoundException</code>
                             is thrown instead as part of the support for new types of group.
                         </li>
+                        <li>The <code>org.apache.kafka.clients.admin.DeleteTopicsResult.values()</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.DeleteTopicsResult.topicNameValues()</code> instead.
+                        <li>The <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, boolean)</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, Uuid, boolean)</code> instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions.topicPartitions(List&lt;TopicPartition&gt;)</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.Admin.listConsumerGroupOffsets(Map&lt;String, ListConsumerGroupOffsetsSpec&gt;, ListConsumerGroupOffsetsOptions)</code> instead.
+                        </li>
+                        <li>
+                            The deprecated <code>dryRun</code> methods were removed from the <code>org.apache.kafka.clients.admin.UpdateFeaturesOptions</code>.
+                            Please use <code>validateOnly</code> instead.
+                        </li>
+                        <li>The constructor <code>org.apache.kafka.clients.admin.FeatureUpdate</code> with short and boolean arguments was removed.
+                            Please use the constructor that accepts short and the specified UpgradeType enum instead.
+                        </li>
+                        <li>
+                            The <code>allowDowngrade</code> method was removed from the <code>org.apache.kafka.clients.admin.FeatureUpdate</code>.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.admin.DescribeTopicsResult.DescribeTopicsResult(Map&lt;String, KafkaFuture&lt;TopicDescription&gt;&gt;)</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.DescribeTopicsResult.DescribeTopicsResult(Map&lt;Uuid, KafkaFuture&lt;TopicDescription&gt;&gt;, Map&lt;String, KafkaFuture&lt;TopicDescription&gt;&gt;)</code> instead.
+                        </li>
+                        <li>
+                            The <code>values()</code> method was removed from the <code>org.apache.kafka.clients.admin.DescribeTopicsResult</code>.
+                            Please use <code>topicNameValues()</code> instead.
+                        </li>
+                        <li>
+                            The <code>all()</code> method was removed from the <code>org.apache.kafka.clients.admin.DescribeTopicsResult</code>.
+                            Please use <code>allTopicNames()</code> instead.
+                        </li>
                     </ul>
                 </li>
             </ul>
         </li>
         <li>Other changes:
             <ul>
+                <li>
+                    The minimum Java version required by clients and streams applications has been increased from Java 8 to Java 11
+                    while brokers, connect and tools now require Java 17.
+                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> and
+                    <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510">KIP-1013</a> for more details.
+                </li>
                 <li>
                     Java 23 support has been added in Apache Kafka 4.0
                 </li>
@@ -204,8 +266,11 @@
                     See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218">KIP-751</a> for more details
                 </li>
                 <li>
-                    Java 8 support has been removed in Apache Kafka 4.0
-                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> for more details
+                    Logging framework has been migrated from Log4j to Log4j2.
+                    Users can use the log4j-transform-cli tool to automatically convert their existing Log4j configuration files to Log4j2 format.
+                    See <a href="https://logging.staged.apache.org/log4j/transform/cli.html#log4j-transform-cli">log4j-transform-cli</a> for more details.
+                    Log4j2 provides limited compatibility for Log4j configurations.
+                    See <a href="https://logging.apache.org/log4j/2.x/migrate-from-log4j1.html#ConfigurationCompatibility">Use Log4j 1 to Log4j 2 bridge</a> for more information,
                 </li>
                 <li>
                     KafkaLog4jAppender has been removed, users should migrate to the log4j2 appender

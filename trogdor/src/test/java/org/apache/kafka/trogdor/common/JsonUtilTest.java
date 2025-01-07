@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -62,7 +61,7 @@ public class JsonUtilTest {
         assertEquals(1, JsonUtil.objectFromCommandLineArgument("   {\"bar\": 1}   ", Foo.class).bar);
         File tempFile = TestUtils.tempFile();
         try {
-            Files.write(tempFile.toPath(), "{\"bar\": 456}".getBytes(StandardCharsets.UTF_8));
+            Files.writeString(tempFile.toPath(), "{\"bar\": 456}");
             assertEquals(456, JsonUtil.objectFromCommandLineArgument(tempFile.getAbsolutePath(), Foo.class).bar);
         } finally {
             Files.delete(tempFile.toPath());

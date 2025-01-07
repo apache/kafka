@@ -20,28 +20,13 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.StateSerdes;
 
-
 public class StoreSerdeInitializer {
     static <K, V> StateSerdes<K, V> prepareStoreSerde(final StateStoreContext context,
-                                                      final String storeName,
-                                                      final String changelogTopic,
-                                                      final Serde<K> keySerde,
-                                                      final Serde<V> valueSerde,
-                                                      final PrepareFunc<V> prepareValueSerdeFunc) {
-        return new StateSerdes<>(
-            changelogTopic,
-            prepareSerde(WrappingNullableUtils::prepareKeySerde, storeName, keySerde, new SerdeGetter(context), true, context.taskId()),
-            prepareSerde(prepareValueSerdeFunc, storeName, valueSerde, new SerdeGetter(context), false, context.taskId())
-        );
-    }
-
-    static <K, V> StateSerdes<K, V> prepareStoreSerde(final ProcessorContext context,
                                                       final String storeName,
                                                       final String changelogTopic,
                                                       final Serde<K> keySerde,

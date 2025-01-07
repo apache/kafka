@@ -174,11 +174,6 @@ public abstract class TopicCommand {
         configsToBeAdded.stream()
             .forEach(pair -> props.setProperty(pair.get(0).trim(), pair.get(1).trim()));
         LogConfig.validate(props);
-        if (props.containsKey(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)) {
-            System.out.println("WARNING: The configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG}=${props.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)} is specified. " +
-                "This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker or " +
-                "if the inter.broker.protocol.version is 3.0 or newer. This configuration is deprecated and it will be removed in Apache Kafka 4.0.");
-        }
         return props;
     }
 

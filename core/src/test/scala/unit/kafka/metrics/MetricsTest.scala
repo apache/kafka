@@ -62,7 +62,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val topic = "test-topic-metric"
     createTopic(topic)
     deleteTopic(topic)
-    TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 1, brokers)
+    TestUtils.verifyTopicDeletion(topic, 1, brokers)
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
@@ -77,7 +77,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(topicMetricGroups(topic).nonEmpty, "Topic metrics don't exist")
     brokers.foreach(b => assertNotNull(b.brokerTopicStats.topicStats(topic)))
     deleteTopic(topic)
-    TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 1, brokers)
+    TestUtils.verifyTopicDeletion(topic, 1, brokers)
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 

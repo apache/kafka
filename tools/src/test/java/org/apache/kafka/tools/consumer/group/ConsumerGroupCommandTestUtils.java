@@ -105,10 +105,12 @@ class ConsumerGroupCommandTestUtils {
                 consumer -> consumer.subscribe(Collections.singleton(topic)));
     }
 
-    private static <T> AutoCloseable buildConsumers(int numberOfConsumers,
-                                                    boolean syncCommit,
-                                                    Supplier<KafkaConsumer<T, T>> consumerSupplier,
-                                                    Consumer<KafkaConsumer<T, T>> setPartitions) {
+    static <T> AutoCloseable buildConsumers(
+        int numberOfConsumers,
+        boolean syncCommit,
+        Supplier<KafkaConsumer<T, T>> consumerSupplier,
+        Consumer<KafkaConsumer<T, T>> setPartitions
+    ) {
         List<KafkaConsumer<T, T>> consumers = new ArrayList<>(numberOfConsumers);
         ExecutorService executor = Executors.newFixedThreadPool(numberOfConsumers);
         AtomicBoolean closed = new AtomicBoolean(false);
@@ -141,7 +143,7 @@ class ConsumerGroupCommandTestUtils {
                                          AtomicBoolean closed) {
         try (KafkaConsumer<T, T> kafkaConsumer = consumerSupplier.get()) {
             while (!closed.get()) {
-                kafkaConsumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                kafkaConsumer.poll(Duration.ofMillis(1000));
                 if (syncCommit)
                     kafkaConsumer.commitSync();
             }

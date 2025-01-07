@@ -27,6 +27,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -38,8 +39,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.serialization.BytesDeserializer;
-import org.apache.kafka.common.serialization.BytesSerializer;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -58,6 +59,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -159,8 +161,8 @@ public interface ClusterInstance {
 
     default <K, V> Producer<K, V> producer(Map<String, Object> configs) {
         Map<String, Object> props = new HashMap<>(configs);
-        props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, BytesSerializer.class.getName());
-        props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, BytesSerializer.class.getName());
+        props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         return new KafkaProducer<>(props);
     }
@@ -171,8 +173,8 @@ public interface ClusterInstance {
 
     default <K, V> Consumer<K, V> consumer(Map<String, Object> configs) {
         Map<String, Object> props = new HashMap<>(configs);
-        props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class.getName());
-        props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class.getName());
+        props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
@@ -333,6 +335,22 @@ public interface ClusterInstance {
                 actualEntries.set(accessControlEntrySet);
                 return accessControlEntrySet.containsAll(entries) && entries.containsAll(accessControlEntrySet);
             }, "expected acls: " + entries + ", actual acls: " + actualEntries.get());
+        }
+    }
+
+    /**
+     * Returns the broker id of leader partition.
+     */
+    default int getLeaderBrokerId(TopicPartition topicPartition) throws ExecutionException, InterruptedException {
+        try (var admin = admin()) {
+            String topic = topicPartition.topic();
+            TopicDescription description = admin.describeTopics(List.of(topic)).topicNameValues().get(topic).get();
+
+            return description.partitions().stream()
+                    .filter(tp -> tp.partition() == topicPartition.partition())
+                    .mapToInt(tp -> tp.leader().id())
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
     }
 }

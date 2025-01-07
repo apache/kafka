@@ -3167,6 +3167,23 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testDescribeClusterHandleUnsupportedVersionForIncludingFencedBrokers() {
+        ApiVersion describeClusterV1 = new ApiVersion()
+            .setApiKey(ApiKeys.DESCRIBE_CLUSTER.id)
+            .setMinVersion((short) 0)
+            .setMaxVersion((short) 1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(describeClusterV1)));
+
+            env.kafkaClient().prepareUnsupportedVersionResponse(
+                    request -> request instanceof DescribeClusterRequest);
+
+            final DescribeClusterResult result = env.adminClient().describeCluster(new DescribeClusterOptions().includeFencedBrokers(true));
+            TestUtils.assertFutureThrows(result.nodes(), UnsupportedVersionException.class);
+        }
+    }
+
+    @Test
     public void testListConsumerGroups() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
                 AdminClientConfig.RETRIES_CONFIG, "2")) {
@@ -4155,17 +4172,11 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testListConsumerGroupOffsetsOptionsWithUnbatchedApi() throws Exception {
-        verifyListConsumerGroupOffsetsOptions(false);
-    }
-
-    @Test
     public void testListConsumerGroupOffsetsOptionsWithBatchedApi() throws Exception {
-        verifyListConsumerGroupOffsetsOptions(true);
+        verifyListConsumerGroupOffsetsOptions();
     }
 
-    @SuppressWarnings("deprecation")
-    private void verifyListConsumerGroupOffsetsOptions(boolean batchedApi) throws Exception {
+    private void verifyListConsumerGroupOffsetsOptions() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
         final Time time = new MockTime();
 
@@ -4179,13 +4190,10 @@ public class KafkaAdminClientTest {
             final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions()
                     .requireStable(true)
                     .timeoutMs(300);
-            if (batchedApi) {
-                final ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
-                        .topicPartitions(partitions);
-                env.adminClient().listConsumerGroupOffsets(Collections.singletonMap(GROUP_ID, groupSpec), options);
-            } else {
-                env.adminClient().listConsumerGroupOffsets(GROUP_ID, options.topicPartitions(partitions));
-            }
+
+            final ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
+                    .topicPartitions(partitions);
+            env.adminClient().listConsumerGroupOffsets(Collections.singletonMap(GROUP_ID, groupSpec), options);
 
             final MockClient mockClient = env.kafkaClient();
             waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
@@ -8695,7 +8703,8 @@ public class KafkaAdminClientTest {
         return new ShareMemberDescription(member.memberId(),
                                           member.clientId(),
                                           member.clientHost(),
-                                          assignment);
+                                          assignment,
+                                          member.memberEpoch());
     }
 
     @Test

@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.trogdor.rest;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -36,7 +34,6 @@ public enum TaskStateType {
         static final String RUNNING_VALUE = "RUNNING";
         static final String STOPPING_VALUE = "STOPPING";
         static final String DONE_VALUE = "DONE";
-        public static final List<String> VALUES = Collections.unmodifiableList(
-            Arrays.asList(PENDING_VALUE, RUNNING_VALUE, STOPPING_VALUE, DONE_VALUE));
+        public static final List<String> VALUES = List.of(PENDING_VALUE, RUNNING_VALUE, STOPPING_VALUE, DONE_VALUE);
     }
 }
