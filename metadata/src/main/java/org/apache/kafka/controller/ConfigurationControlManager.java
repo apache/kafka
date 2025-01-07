@@ -308,10 +308,11 @@ public class ConfigurationControlManager {
         }
         for (ApiMessageAndVersion newRecord : recordsExplicitlyAltered) {
             ConfigRecord configRecord = (ConfigRecord) newRecord.message();
-            if (isDisallowedMinIsrTransition(configRecord)) {
-                return DISALLOWED_MIN_ISR_TRANSITION_ERROR;
-            }
-            if (configRecord.value() == null) {
+            if (isDisallowedBrokerMinIsrTransition(configRecord)) {
+                return DISALLOWED_BROKER_MIN_ISR_TRANSITION_ERROR;
+            } else if (isDisallowedClusterMinIsrTransition(configRecord)) {
+                return DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR;
+            } else if (configRecord.value() == null) {
                 allConfigs.remove(configRecord.name());
             } else {
                 allConfigs.put(configRecord.name(), configRecord.value());
@@ -320,17 +321,13 @@ public class ConfigurationControlManager {
         }
         for (ApiMessageAndVersion recordImplicitlyDeleted : recordsImplicitlyDeleted) {
             ConfigRecord configRecord = (ConfigRecord) recordImplicitlyDeleted.message();
-            if (isDisallowedMinIsrTransition(configRecord)) {
-                return DISALLOWED_MIN_ISR_TRANSITION_ERROR;
+            if (isDisallowedBrokerMinIsrTransition(configRecord)) {
+                return DISALLOWED_BROKER_MIN_ISR_TRANSITION_ERROR;
+            } else if (isDisallowedClusterMinIsrTransition(configRecord)) {
+                return DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR;
+            } else {
+                allConfigs.remove(configRecord.name());
             }
-            if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
-                    configRecord.resourceType() == BROKER.id()) {
-                if (featureControl.isElrFeatureEnabled()) {
-                    return new ApiError(INVALID_CONFIG, "Broker-level " + MIN_IN_SYNC_REPLICAS_CONFIG +
-                        " cannot be removed while ELR is enabled.");
-                }
-            }
-            allConfigs.remove(configRecord.name());
             // As per KAFKA-14195, do not include implicit deletions caused by using the legacy AlterConfigs API
             // in the list passed to the policy in order to maintain backwards compatibility
         }
@@ -363,13 +360,30 @@ public class ConfigurationControlManager {
         return ApiError.NONE;
     }
 
-    private static final ApiError DISALLOWED_MIN_ISR_TRANSITION_ERROR =
+    private static final ApiError DISALLOWED_BROKER_MIN_ISR_TRANSITION_ERROR =
         new ApiError(INVALID_CONFIG, "Broker-level " + MIN_IN_SYNC_REPLICAS_CONFIG +
             " cannot be altered while ELR is enabled.");
 
-    boolean isDisallowedMinIsrTransition(ConfigRecord configRecord) {
+    private static final ApiError DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR =
+            new ApiError(INVALID_CONFIG, "Cluster-level " + MIN_IN_SYNC_REPLICAS_CONFIG +
+                    " cannot be removed while ELR is enabled.");
+
+    boolean isDisallowedBrokerMinIsrTransition(ConfigRecord configRecord) {
         if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
-                configRecord.resourceType() == BROKER.id()) {
+                configRecord.resourceType() == BROKER.id() &&
+                !configRecord.resourceName().isEmpty()) {
+            if (featureControl.isElrFeatureEnabled()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    boolean isDisallowedClusterMinIsrTransition(ConfigRecord configRecord) {
+        if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
+                configRecord.resourceType() == BROKER.id() &&
+                configRecord.resourceName().isEmpty() &&
+                configRecord.value() == null) {
             if (featureControl.isElrFeatureEnabled()) {
                 return true;
             }
