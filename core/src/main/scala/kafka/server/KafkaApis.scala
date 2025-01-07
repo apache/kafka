@@ -120,7 +120,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val clientMetricsManager: Option[ClientMetricsManager]
 ) extends ApiRequestHandler with Logging {
 
-  type FetchResponseStats = Map[TopicPartition, RecordValidationStats]
+  private type ResponseStats = Map[TopicPartition, RecordValidationStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val configHelper = new ConfigHelper(metadataCache, config, configRepository)
   val authHelper = new AuthHelper(authorizer)
@@ -729,7 +729,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    def processingStatsCallback(processingStats: FetchResponseStats): Unit = {
+    def processingStatsCallback(processingStats: ResponseStats): Unit = {
       processingStats.foreachEntry { (tp, info) =>
         updateRecordConversionStats(request, tp, info)
       }
@@ -4581,11 +4581,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.PRODUCE =>
           brokerTopicStats.topicStats(tp.topic).produceMessageConversionsRate.mark(conversionCount)
           brokerTopicStats.allTopicsStats.produceMessageConversionsRate.mark(conversionCount)
-        case ApiKeys.FETCH =>
-          brokerTopicStats.topicStats(tp.topic).fetchMessageConversionsRate.mark(conversionCount)
-          brokerTopicStats.allTopicsStats.fetchMessageConversionsRate.mark(conversionCount)
         case _ =>
-          throw new IllegalStateException("Message conversion info is recorded only for Produce/Fetch requests")
+          throw new IllegalStateException("Message conversion info is recorded only for Produce requests")
       }
       request.messageConversionsTimeNanos = conversionStats.conversionTimeNanos
     }
