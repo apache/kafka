@@ -60,9 +60,8 @@ public class PluginDesc<T> implements Comparable<PluginDesc<?>> {
                 ", location='" + location + '\'' +
                 '}';
     }
-
     @JsonIgnore
-    public DefaultArtifactVersion encodedVersion() {
+    DefaultArtifactVersion encodedVersion() {
         return encodedVersion;
     }
 

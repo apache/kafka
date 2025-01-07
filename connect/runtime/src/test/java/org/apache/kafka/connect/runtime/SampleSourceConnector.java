@@ -27,7 +27,7 @@ import java.util.Map;
 
 public class SampleSourceConnector extends SourceConnector {
 
-    public static final String VERSION = "some great version";
+    public static final String VERSION = "an entirely different version";
 
     @Override
     public String version() {

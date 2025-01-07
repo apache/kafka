@@ -278,10 +278,6 @@ public final class Worker {
         ThreadUtils.shutdownExecutorServiceQuietly(executor, EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
-    public WorkerConfig config() {
-        return config;
-    }
-
     /**
      * Start a connector managed by this worker.
      *

@@ -269,13 +269,6 @@ public class Plugins {
         return delegatingLoader.latestVersion(classOrAlias);
     }
 
-    public String pluginVersion(String classOrAlias, ClassLoader sourceLoader) {
-        if (!(sourceLoader instanceof PluginClassLoader)) {
-            return latestVersion(classOrAlias);
-        }
-        return delegatingLoader.versionInLocation(classOrAlias, ((PluginClassLoader) sourceLoader).location());
-    }
-
     public DelegatingClassLoader delegatingLoader() {
         return delegatingLoader;
     }
@@ -285,7 +278,7 @@ public class Plugins {
         return delegatingLoader.loader(connectorClassOrAlias);
     }
 
-    public ClassLoader pluginLoader(String classOrAlias, VersionRange range) {
+    public ClassLoader pluginLoader(String classOrAlias, VersionRange range) throws ClassNotFoundException, VersionedPluginLoadingException {
         return delegatingLoader.loader(classOrAlias, range);
     }
 
@@ -305,7 +298,7 @@ public class Plugins {
         return scanResult.sinkConnectors();
     }
 
-    Set<PluginDesc<SinkConnector>> sinkConnectors(String connectorClassOrAlias) {
+    public Set<PluginDesc<SinkConnector>> sinkConnectors(String connectorClassOrAlias) {
         return pluginsOfClass(connectorClassOrAlias, scanResult.sinkConnectors());
     }
 
@@ -313,7 +306,7 @@ public class Plugins {
         return scanResult.sourceConnectors();
     }
 
-    Set<PluginDesc<SourceConnector>> sourceConnectors(String connectorClassOrAlias) {
+    public Set<PluginDesc<SourceConnector>> sourceConnectors(String connectorClassOrAlias) {
         return pluginsOfClass(connectorClassOrAlias, scanResult.sourceConnectors());
     }
 
@@ -372,13 +365,6 @@ public class Plugins {
     public Object newPlugin(String classOrAlias, VersionRange range) throws VersionedPluginLoadingException, ClassNotFoundException {
         Class<?> klass = pluginClass(delegatingLoader, classOrAlias, Object.class, range);
         return newPlugin(klass);
-    }
-
-    public Object newPlugin(String classOrAlias, VersionRange range, ClassLoader sourceLoader) throws ClassNotFoundException {
-        if (range == null && sourceLoader instanceof PluginClassLoader) {
-            sourceLoader.loadClass(classOrAlias);
-        }
-        return newPlugin(classOrAlias, range);
     }
 
     public Connector newConnector(String connectorClassOrAlias) {

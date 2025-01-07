@@ -493,7 +493,6 @@ public class PluginUtils {
         }
         return distinct.values();
     }
-
     public static VersionRange connectorVersionRequirement(String version) throws InvalidVersionSpecificationException {
         if (version == null || version.equals("latest")) {
             return null;
@@ -501,13 +500,13 @@ public class PluginUtils {
         version = version.trim();
 
         // check first if the given version is valid
-        VersionRange range = VersionRange.createFromVersionSpec(version);
+        VersionRange.createFromVersionSpec(version);
 
-        if (range.hasRestrictions()) {
-            return range;
-        }
         // now if the version is not enclosed we consider it as a hard requirement and enclose it in []
-        version = "[" + version + "]";
+        if (!version.startsWith("[") && !version.startsWith("(")) {
+            version = "[" + version + "]";
+        }
         return VersionRange.createFromVersionSpec(version);
     }
+
 }
