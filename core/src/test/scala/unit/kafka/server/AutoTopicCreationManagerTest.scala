@@ -67,7 +67,7 @@ class AutoTopicCreationManagerTest {
 
   @BeforeEach
   def setup(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, "localhost")
+    val props = TestUtils.createBrokerConfig(1)
     props.setProperty(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG, requestTimeout.toString)
 
     props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)

@@ -133,8 +133,8 @@ class LogCleanerTest extends Logging {
       var nonexistent = LogCleaner.MetricNames.diff(KafkaYammerMetrics.defaultRegistry.allMetrics().keySet().asScala.map(_.getName))
       assertEquals(0, nonexistent.size, s"$nonexistent should be existent")
 
-      logCleaner.reconfigure(new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181")),
-        new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181")))
+      logCleaner.reconfigure(new KafkaConfig(TestUtils.createBrokerConfig(1)),
+        new KafkaConfig(TestUtils.createBrokerConfig(1)))
 
       nonexistent = LogCleaner.MetricNames.diff(KafkaYammerMetrics.defaultRegistry.allMetrics().keySet().asScala.map(_.getName))
       assertEquals(0, nonexistent.size, s"$nonexistent should be existent")
@@ -2017,7 +2017,7 @@ class LogCleanerTest extends Logging {
 
   @Test
   def testReconfigureLogCleanerIoMaxBytesPerSecond(): Unit = {
-    val oldKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
+    val oldKafkaProps = TestUtils.createBrokerConfig(1)
     oldKafkaProps.setProperty(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, "10000000")
 
     val logCleaner = new LogCleaner(LogCleaner.cleanerConfig(new KafkaConfig(oldKafkaProps)),
@@ -2034,7 +2034,7 @@ class LogCleanerTest extends Logging {
     try {
       assertEquals(10000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be initialized from initial `${CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP}` config.")
 
-      val newKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
+      val newKafkaProps = TestUtils.createBrokerConfig(1)
       newKafkaProps.setProperty(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, "20000000")
 
       logCleaner.reconfigure(new KafkaConfig(oldKafkaProps), new KafkaConfig(newKafkaProps))

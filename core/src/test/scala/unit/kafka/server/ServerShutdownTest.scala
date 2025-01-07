@@ -61,7 +61,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
         propsToChangeUponRestart.put(ServerLogConfigs.LOG_DIR_CONFIG, originals.get(ServerLogConfigs.LOG_DIR_CONFIG))
       }
     }
-    priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, null).head, propsToChangeUponRestart))
+    priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1).head, propsToChangeUponRestart))
     Seq(priorConfig.get)
   }
 
