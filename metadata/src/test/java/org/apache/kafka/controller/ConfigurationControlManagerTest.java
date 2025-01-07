@@ -64,6 +64,7 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -430,14 +431,17 @@ public class ConfigurationControlManagerTest {
         assertEquals(Set.of(1), manager.brokersWithConfigs());
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        assertEquals("", manager.maybeGenerateElrSafetyRecords(records));
+        String effectiveMinInsync = setStaticConfig ? "2" : "1";
+        assertEquals("Generating cluster-level min.insync.replicas of " +
+            effectiveMinInsync + ". Removing broker-level min.insync.replicas " +
+            "for brokers: 1.", manager.maybeGenerateElrSafetyRecords(records));
 
         assertEquals(Arrays.asList(new ApiMessageAndVersion(
             new ConfigRecord().
                 setResourceType(BROKER.id()).
                 setResourceName("").
                 setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
-                setValue(setStaticConfig ? "2" : "1"), (short) 0),
+                setValue(effectiveMinInsync), (short) 0),
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(BROKER.id()).
                 setResourceName("1").
@@ -451,25 +455,32 @@ public class ConfigurationControlManagerTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testRejectMinIsrClusterLevelChangeWhenElrEnabled(boolean removal) {
+        FeatureControlManager featureManager = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                Collections.emptyList())).
+            build();
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
+            setFeatureControl(featureManager).
             setKafkaConfigSchema(SCHEMA).
             build();
-
         ControllerResult<ApiError> result = manager.updateFeatures(
             Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
             Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 FeatureUpdate.UpgradeType.UPGRADE),
             false);
-        assertTrue(result.response().isSuccess());
+        assertNull(result.response());
         RecordTestUtils.replayAll(manager, result.records());
+        RecordTestUtils.replayAll(featureManager, result.records());
 
         result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, ""),
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
                 removal ? entry(DELETE, null) : entry(SET, "3"))),
             true);
         assertEquals(Errors.INVALID_CONFIG, result.response().error());
-        assertEquals("", result.response().error().message());
+        assertEquals("Broker-level min.insync.replicas cannot be altered while ELR is enabled.",
+            result.response().message());
     }
 }

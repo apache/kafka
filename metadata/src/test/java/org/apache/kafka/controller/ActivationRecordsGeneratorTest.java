@@ -110,7 +110,7 @@ public class ActivationRecordsGeneratorTest {
             2
         );
         assertFalse(result.isAtomic());
-        assertEquals(5, result.records().size());
+        assertEquals(6, result.records().size());
         assertTrue(result.records().contains(new ApiMessageAndVersion(new ConfigRecord().
             setResourceType(ConfigResource.Type.BROKER.id()).
             setResourceName("").

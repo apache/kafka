@@ -141,7 +141,9 @@ public class ConfigurationControlManager {
             if (configSchema == null) {
                 throw new RuntimeException("You must set the configSchema.");
             }
-            if (featureControl == null) featureControl = new FeatureControlManager.Builder().build();
+            if (featureControl == null) {
+                featureControl = new FeatureControlManager.Builder().build();
+            }
             return new ConfigurationControlManager(
                 logContext,
                 snapshotRegistry,
@@ -290,10 +292,12 @@ public class ConfigurationControlManager {
         return ApiError.NONE;
     }
 
-    private ApiError validateAlterConfig(ConfigResource configResource,
-                                         List<ApiMessageAndVersion> recordsExplicitlyAltered,
-                                         List<ApiMessageAndVersion> recordsImplicitlyDeleted,
-                                         boolean newlyCreatedResource) {
+    private ApiError validateAlterConfig(
+        ConfigResource configResource,
+        List<ApiMessageAndVersion> recordsExplicitlyAltered,
+        List<ApiMessageAndVersion> recordsImplicitlyDeleted,
+        boolean newlyCreatedResource
+    ) {
         Map<String, String> allConfigs = new HashMap<>();
         Map<String, String> existingConfigsMap = new HashMap<>();
         Map<String, String> alteredConfigsForAlterConfigPolicyCheck = new HashMap<>();
@@ -595,7 +599,7 @@ public class ConfigurationControlManager {
                 append(" of ").append(minInsyncReplicas);
             prefix = ". ";
         }
-        prefix = prefix + "Removing broker-level " + MIN_IN_SYNC_REPLICAS_CONFIG + " for brokers ";
+        prefix = prefix + "Removing broker-level " + MIN_IN_SYNC_REPLICAS_CONFIG + " for brokers: ";
         for (Integer brokerId : brokersWithConfigs) {
             ConfigResource configResource = new ConfigResource(BROKER, brokerId.toString());
             Map<String, String> configs = configData.get(configResource);

@@ -19,9 +19,7 @@ package org.apache.kafka.metadata.bootstrap;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.controller.FeatureControlManager;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -129,10 +127,6 @@ public class BootstrapMetadata {
 
     public MetadataVersion metadataVersion() {
         return metadataVersion;
-    }
-
-    public boolean isElrEnabled() {
-        return FeatureControlManager.isElrFeatureEnabled(featureLevel(EligibleLeaderReplicasVersion.FEATURE_NAME));
     }
 
     public String source() {
