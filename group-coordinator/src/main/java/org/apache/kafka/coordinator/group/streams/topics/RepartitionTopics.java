@@ -124,7 +124,7 @@ public class RepartitionTopics {
                         final Integer numPartitions = computePartitionCount(
                             repartitionSourceTopicPartitionCounts,
                             repartitionSourceTopic.name(),
-                            repartitionSinkTopics.get(subtopology.subtopologyId())
+                            repartitionSinkTopics
                         );
 
                         if (numPartitions == null) {
@@ -153,12 +153,12 @@ public class RepartitionTopics {
 
     private Integer computePartitionCount(final Map<String, Integer> repartitionSourceTopicPartitionCounts,
                                           final String repartitionSourceTopic,
-                                          Set<String> repartitionSinkTopics) {
+                                          Map<String, Set<String>> repartitionSinkTopics) {
         Integer partitionCount = null;
         // try set the number of partitions for this repartition topic if it is not set yet
         for (final Subtopology subtopology : subtopologies) {
 
-            if (repartitionSinkTopics.contains(repartitionSourceTopic)) {
+            if (repartitionSinkTopics.get(subtopology.subtopologyId()).contains(repartitionSourceTopic)) {
                 // if this topic is one of the sink topics of this topology,
                 // use the maximum of all its source topic partitions as the number of partitions
                 for (final String upstreamSourceTopic : subtopology.sourceTopics()) {
