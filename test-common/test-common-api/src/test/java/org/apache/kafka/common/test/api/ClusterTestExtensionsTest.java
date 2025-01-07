@@ -20,6 +20,7 @@ package org.apache.kafka.common.test.api;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.DescribeAclsOptions;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -449,6 +451,38 @@ public class ClusterTestExtensionsTest {
                 }
                 return false;
             }, "Failed to get exception");
+        }
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT, Type.CO_KRAFT},
+        brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+        controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+        serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+        }
+    )
+    public void testSaslPlaintextWithController(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+        // test with admin
+        try (Admin admin = clusterInstance.admin(Map.of(), true)) {
+            admin.describeAcls(AclBindingFilter.ANY).values().get();
+        }
+
+        // test with non-admin
+        Map<String, Object> nonAdminConfig = Map.of(
+            SaslConfigs.SASL_JAAS_CONFIG,
+            String.format(
+                "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD
+            )
+        );
+        try (Admin admin = clusterInstance.admin(nonAdminConfig, true)) {
+            ExecutionException exception = assertThrows(
+                ExecutionException.class,
+                () -> admin.describeAcls(AclBindingFilter.ANY, new DescribeAclsOptions().timeoutMs(5000)).values().get()
+            );
+            assertInstanceOf(TimeoutException.class, exception.getCause());
         }
     }
 }
