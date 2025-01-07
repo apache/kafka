@@ -17,20 +17,21 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.metrics.Metrics;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.lang.management.ManagementFactory;
 
 import javax.management.JMException;
 import javax.management.MBeanServer;
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 
-import java.lang.management.ManagementFactory;
-
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AppInfoParserTest {
@@ -57,6 +58,7 @@ public class AppInfoParserTest {
     @Test
     public void testRegisterAppInfoRegistersMetrics() throws JMException {
         registerAppInfo();
+        registerAppInfoMultipleTimes();
     }
 
     @Test
@@ -75,6 +77,19 @@ public class AppInfoParserTest {
         assertEquals(EXPECTED_VERSION, AppInfoParser.getVersion());
 
         AppInfoParser.registerAppInfo(METRICS_PREFIX, METRICS_ID, metrics, EXPECTED_START_MS);
+
+        assertTrue(mBeanServer.isRegistered(expectedAppObjectName()));
+        assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info")).metricValue());
+        assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info")).metricValue());
+        assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info")).metricValue());
+    }
+
+    private void registerAppInfoMultipleTimes() throws JMException {
+        assertEquals(EXPECTED_COMMIT_VERSION, AppInfoParser.getCommitId());
+        assertEquals(EXPECTED_VERSION, AppInfoParser.getVersion());
+
+        AppInfoParser.registerAppInfo(METRICS_PREFIX, METRICS_ID, metrics, EXPECTED_START_MS);
+        AppInfoParser.registerAppInfo(METRICS_PREFIX, METRICS_ID, metrics, EXPECTED_START_MS); // We register it again
 
         assertTrue(mBeanServer.isRegistered(expectedAppObjectName()));
         assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info")).metricValue());

@@ -18,7 +18,8 @@ package kafka.admin
 
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.admin.{AdminUtils, BrokerMetadata}
-import org.apache.kafka.common.errors.InvalidReplicationFactorException
+import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplicationFactorException}
+import org.apache.kafka.server.common.AdminOperationException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -224,5 +225,27 @@ class AdminRackAwareTest extends RackAwareTest with Logging {
 
     val actualAssignment = CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 3, 0, -1))
     assertEquals(expectedAssignment, actualAssignment)
+  }
+
+  @Test
+  def testAssignReplicasToBrokersWithInvalidParameters(): Unit = {
+    val rackMap = Map(0 -> "rack1", 1 -> "rack3", 2 -> "rack3", 3 -> "rack2", 4 -> null)
+    val brokerMetadatas = toBrokerMetadata(rackMap)
+
+    // test 0 partition
+    assertThrows(classOf[InvalidPartitionsException],
+      () => AdminUtils.assignReplicasToBrokers(brokerMetadatas, 0, 0, -1, -1))
+
+    // test 0 replication factor
+    assertThrows(classOf[InvalidReplicationFactorException],
+      () => AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 0, -1, -1))
+
+    // test wrong replication factor
+    assertThrows(classOf[InvalidReplicationFactorException],
+      () => AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, brokerMetadatas.size() + 1, -1, -1))
+
+    // test wrong brokerMetadatas
+    assertThrows(classOf[AdminOperationException],
+      () => AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, brokerMetadatas.size(), -1, -1))
   }
 }

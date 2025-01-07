@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.tools;
 
-import joptsimple.OptionSpec;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.ManualMetadataUpdater;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.admin.Admin;
@@ -55,7 +55,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.ShutdownableThread;
-import org.apache.kafka.server.util.TopicFilter;
+import org.apache.kafka.tools.filter.TopicFilter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,6 +81,8 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
+
+import joptsimple.OptionSpec;
 
 import static java.lang.String.format;
 
@@ -109,6 +112,8 @@ public class ReplicaVerificationTool {
 
     public static void main(String[] args) {
         try {
+            LOG.warn("This tool is deprecated and may be removed in a future major release.");
+
             ReplicaVerificationToolOptions options = new ReplicaVerificationToolOptions(args);
             // getting topic metadata
             LOG.info("Getting topic metadata...");
@@ -259,7 +264,6 @@ public class ReplicaVerificationTool {
         private final OptionSpec<String> brokerListOpt;
         private final OptionSpec<Integer> fetchSizeOpt;
         private final OptionSpec<Integer> maxWaitMsOpt;
-        private final OptionSpec<String> topicWhiteListOpt;
         private final OptionSpec<String> topicsIncludeOpt;
         private final OptionSpec<Long> initialOffsetTimeOpt;
         private final OptionSpec<Long> reportIntervalOpt;
@@ -280,12 +284,6 @@ public class ReplicaVerificationTool {
                 .describedAs("ms")
                 .ofType(Integer.class)
                 .defaultsTo(1_000);
-            topicWhiteListOpt = parser.accepts("topic-white-list", "DEPRECATED use --topics-include instead; " +
-                    "ignored if --topics-include specified. List of topics to verify replica consistency.")
-                .withRequiredArg()
-                .describedAs("Java regex (String)")
-                .ofType(String.class)
-                .defaultsTo(".*");
             topicsIncludeOpt = parser.accepts("topics-include", "List of topics to verify replica consistency.")
                 .withRequiredArg()
                 .describedAs("Java regex (String)")
@@ -309,8 +307,6 @@ public class ReplicaVerificationTool {
                 CommandLineUtils.printVersionAndExit();
             }
             CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt);
-            CommandLineUtils.checkInvalidArgs(parser, options, topicsIncludeOpt, topicWhiteListOpt);
-
         }
 
         String brokerHostsAndPorts() {
@@ -326,7 +322,7 @@ public class ReplicaVerificationTool {
         }
 
         TopicFilter.IncludeList topicsIncludeFilter() {
-            String regex = options.valueOf(options.has(topicsIncludeOpt) ? topicsIncludeOpt : topicWhiteListOpt);
+            String regex = options.valueOf(topicsIncludeOpt);
             try {
                 Pattern.compile(regex);
             } catch (PatternSyntaxException e) {
@@ -476,7 +472,7 @@ public class ReplicaVerificationTool {
                                 if (batch.lastOffset() >= fetchResponsePerReplica.get(replicaId).highWatermark()) {
                                     isMessageInAllReplicas = false;
                                 } else {
-                                    if (!messageInfoFromFirstReplicaOpt.isPresent()) {
+                                    if (messageInfoFromFirstReplicaOpt.isEmpty()) {
                                         messageInfoFromFirstReplicaOpt = Optional.of(
                                             new MessageInfo(replicaId, batch.lastOffset(), batch.nextOffset(), batch.checksum())
                                         );
@@ -706,7 +702,8 @@ public class ReplicaVerificationTool {
                 time,
                 false,
                 new ApiVersions(),
-                logContext
+                logContext,
+                MetadataRecoveryStrategy.forName(consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
             );
         }
 

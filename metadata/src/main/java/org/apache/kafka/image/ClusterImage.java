@@ -25,6 +25,7 @@ import org.apache.kafka.metadata.ControllerRegistration;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 
 
 /**
@@ -69,22 +70,39 @@ public final class ClusterImage {
         return brokers.containsKey(brokerId);
     }
 
+    public long brokerEpoch(int brokerId) {
+        BrokerRegistration brokerRegistration = broker(brokerId);
+        if (brokerRegistration == null) {
+            return -1L;
+        }
+        return brokerRegistration.epoch();
+    }
+
     public void write(ImageWriter writer, ImageWriterOptions options) {
         for (BrokerRegistration broker : brokers.values()) {
             writer.write(broker.toRecord(options));
+        }
+        if (!controllers.isEmpty()) {
+            if (!options.metadataVersion().isControllerRegistrationSupported()) {
+                options.handleLoss("controller registration data");
+            } else {
+                for (ControllerRegistration controller : controllers.values()) {
+                    writer.write(controller.toRecord(options));
+                }
+            }
         }
     }
 
     @Override
     public int hashCode() {
-        return brokers.hashCode();
+        return Objects.hash(brokers, controllers);
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ClusterImage)) return false;
-        ClusterImage other = (ClusterImage) o;
-        return brokers.equals(other.brokers);
+        if (!(o instanceof ClusterImage other)) return false;
+        return brokers.equals(other.brokers) &&
+            controllers.equals(other.controllers);
     }
 
     @Override

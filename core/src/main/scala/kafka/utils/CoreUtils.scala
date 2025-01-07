@@ -26,16 +26,16 @@ import com.typesafe.scalalogging.Logger
 
 import javax.management._
 import scala.collection._
-import scala.collection.{Seq, mutable}
+import scala.collection.Seq
 import kafka.cluster.EndPoint
 import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.network.SocketServerConfigs
 import org.slf4j.event.Level
 
 import java.util
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -61,16 +61,17 @@ object CoreUtils {
     * @param logging The logging instance to use for logging the thrown exception.
     * @param logLevel The log level to use for logging.
     */
+  @noinline // inlining this method is not typically useful and it triggers spurious spotbugs warnings
   def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN): Unit = {
     try {
       action
     } catch {
       case e: Throwable => logLevel match {
-        case Level.ERROR => logger.error(e.getMessage, e)
-        case Level.WARN => logger.warn(e.getMessage, e)
-        case Level.INFO => logger.info(e.getMessage, e)
-        case Level.DEBUG => logger.debug(e.getMessage, e)
-        case Level.TRACE => logger.trace(e.getMessage, e)
+        case Level.ERROR => logging.error(e.getMessage, e)
+        case Level.WARN => logging.warn(e.getMessage, e)
+        case Level.INFO => logging.info(e.getMessage, e)
+        case Level.DEBUG => logging.debug(e.getMessage, e)
+        case Level.TRACE => logging.trace(e.getMessage, e)
       }
     }
   }
@@ -80,30 +81,6 @@ object CoreUtils {
    * @param files sequence of files to be deleted
    */
   def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
-
-  /**
-   * Invokes every function in `all` even if one or more functions throws an exception.
-   *
-   * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
-   * added as suppressed exceptions.
-   */
-  // Note that this is a generalised version of `Utils.closeAll`. We could potentially make it more general by
-  // changing the signature to `def tryAll[R](all: Seq[() => R]): Seq[R]`
-  def tryAll(all: Seq[() => Unit]): Unit = {
-    var exception: Throwable = null
-    all.foreach { element =>
-      try element.apply()
-      catch {
-        case e: Throwable =>
-          if (exception != null)
-            exception.addSuppressed(e)
-          else
-            exception = e
-      }
-    }
-    if (exception != null)
-      throw exception
-  }
 
   /**
    * Register the given mbean with the platform mbean server,
@@ -117,7 +94,7 @@ object CoreUtils {
    */
   def registerMBean(mbean: Object, name: String): Boolean = {
     try {
-      val mbs = ManagementFactory.getPlatformMBeanServer()
+      val mbs = ManagementFactory.getPlatformMBeanServer
       mbs synchronized {
         val objName = new ObjectName(name)
         if (mbs.isRegistered(objName))
@@ -133,38 +110,10 @@ object CoreUtils {
   }
 
   /**
-   * This method gets comma separated values which contains key,value pairs and returns a map of
-   * key value pairs. the format of allCSVal is key1:val1, key2:val2 ....
-   * Also supports strings with multiple ":" such as IpV6 addresses, taking the last occurrence
-   * of the ":" in the pair as the split, eg a:b:c:val1, d:e:f:val2 => a:b:c -> val1, d:e:f -> val2
-   */
-  def parseCsvMap(str: String): Map[String, String] = {
-    val map = new mutable.HashMap[String, String]
-    if ("".equals(str))
-      return map
-    val keyVals = str.split("\\s*,\\s*").map(s => {
-      val lio = s.lastIndexOf(":")
-      (s.substring(0,lio).trim, s.substring(lio + 1).trim)
-    })
-    keyVals.toMap
-  }
-
-  /**
-   * Parse a comma separated string into a sequence of strings.
-   * Whitespace surrounding the comma will be removed.
-   */
-  def parseCsvList(csvList: String): Seq[String] = {
-    if (csvList == null || csvList.isEmpty)
-      Seq.empty[String]
-    else
-      csvList.split("\\s*,\\s*").filter(v => !v.equals(""))
-  }
-
-  /**
    * Create an instance of the class with the given class name
    */
   def createObject[T <: AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader()).asInstanceOf[Class[T]]
+    val klass = Utils.loadClass(className, classOf[Object]).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
   }
@@ -196,10 +145,10 @@ object CoreUtils {
   }
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
-    listenerListToEndPoints(listeners, securityProtocolMap, true)
+    listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
   }
 
-  def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {
+  private def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {
     val distinctPorts = endpoints.map(_.port).distinct
     require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
   }
@@ -259,8 +208,8 @@ object CoreUtils {
     }
 
     val endPoints = try {
-      val listenerList = parseCsvList(listeners)
-      listenerList.map(EndPoint.createEndPoint(_, Some(securityProtocolMap)))
+      SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap.asJava).
+        asScala.map(EndPoint.fromJava(_))
     } catch {
       case e: Exception =>
         throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)
@@ -290,31 +239,6 @@ object CoreUtils {
     val properties = new Properties()
     props.foreach { case (k, v) => properties.put(k, v) }
     properties
-  }
-
-  /**
-   * Atomic `getOrElseUpdate` for concurrent maps. This is optimized for the case where
-   * keys often exist in the map, avoiding the need to create a new value. `createValue`
-   * may be invoked more than once if multiple threads attempt to insert a key at the same
-   * time, but the same inserted value will be returned to all threads.
-   *
-   * In Scala 2.12, `ConcurrentMap.getOrElse` has the same behaviour as this method, but JConcurrentMapWrapper that
-   * wraps Java maps does not.
-   */
-  def atomicGetOrUpdate[K, V](map: concurrent.Map[K, V], key: K, createValue: => V): V = {
-    map.get(key) match {
-      case Some(value) => value
-      case None =>
-        val value = createValue
-        map.putIfAbsent(key, value).getOrElse(value)
-    }
-  }
-
-  @nowarn("cat=unused") // see below for explanation
-  def groupMapReduce[T, K, B](elements: Iterable[T])(key: T => K)(f: T => B)(reduce: (B, B) => B): Map[K, B] = {
-    // required for Scala 2.12 compatibility, unused in Scala 2.13 and hence we need to suppress the unused warning
-    import scala.collection.compat._
-    elements.groupMapReduce(key)(f)(reduce)
   }
 
   def replicaToBrokerAssignmentAsScala(map: util.Map[Integer, util.List[Integer]]): Map[Int, Seq[Int]] = {

@@ -20,13 +20,12 @@ package kafka.api
 import java.lang.{Boolean => JBoolean}
 import java.time.Duration
 import java.util
-import java.util.Collections
-
-import kafka.server.KafkaConfig
+import java.util.{Collections, Locale}
 import kafka.utils.{EmptyTestInfo, TestUtils}
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.{ConsumerConfig, GroupProtocol}
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
@@ -36,11 +35,13 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
  */
 class ConsumerTopicCreationTest {
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.groupProtocol={0}.brokerAutoTopicCreationEnable={1}.consumerAllowAutoCreateTopics={2}")
   @MethodSource(Array("parameters"))
-  def testAutoTopicCreation(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
-    val testCase = new ConsumerTopicCreationTest.TestCase(brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics)
-    testCase.setUp(new EmptyTestInfo())
+  def testAutoTopicCreation(groupProtocol: String, brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
+    val testCase = new ConsumerTopicCreationTest.TestCase(groupProtocol, brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics)
+    testCase.setUp(new EmptyTestInfo() {
+      override def getDisplayName = "quorum=kraft"
+    })
     try testCase.test() finally testCase.tearDown()
   }
 
@@ -48,15 +49,15 @@ class ConsumerTopicCreationTest {
 
 object ConsumerTopicCreationTest {
 
-  private class TestCase(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean) extends IntegrationTestHarness {
+  private class TestCase(groupProtocol: String, brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean) extends IntegrationTestHarness {
     private val topic_1 = "topic-1"
     private val topic_2 = "topic-2"
     private val producerClientId = "ConsumerTestProducer"
     private val consumerClientId = "ConsumerTestConsumer"
 
     // configure server properties
-    this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
-    this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, brokerAutoTopicCreationEnable.toString)
+    this.serverConfig.setProperty(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false") // speed up shutdown
+    this.serverConfig.setProperty(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, brokerAutoTopicCreationEnable.toString)
 
     // configure client properties
     this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
@@ -66,6 +67,7 @@ object ConsumerTopicCreationTest {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
     this.consumerConfig.setProperty(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, consumerAllowAutoCreateTopics.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     override protected def brokerCount: Int = 1
 
 
@@ -88,7 +90,7 @@ object ConsumerTopicCreationTest {
       }, "Timed out waiting to consume")
 
       // MetadataRequest is guaranteed to create the topic znode if creation was required
-      val topicCreated = zkClient.getAllTopicsInCluster().contains(topic_2)
+      val topicCreated = getTopicIds().keySet.contains(topic_2)
       if (brokerAutoTopicCreationEnable && consumerAllowAutoCreateTopics)
         assertTrue(topicCreated)
       else
@@ -100,7 +102,7 @@ object ConsumerTopicCreationTest {
     val data = new java.util.ArrayList[Arguments]()
     for (brokerAutoTopicCreationEnable <- Array(JBoolean.TRUE, JBoolean.FALSE))
       for (consumerAutoCreateTopicsPolicy <- Array(JBoolean.TRUE, JBoolean.FALSE))
-        data.add(Arguments.of(brokerAutoTopicCreationEnable, consumerAutoCreateTopicsPolicy))
+        data.add(Arguments.of(GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT), brokerAutoTopicCreationEnable, consumerAutoCreateTopicsPolicy))
     data.stream()
   }
 }

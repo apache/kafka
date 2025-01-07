@@ -25,7 +25,7 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -34,8 +34,9 @@ import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Collections;
@@ -46,12 +47,10 @@ import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.testutil.ConsumerRecordUtil.record;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class GlobalStateTaskTest {
 
@@ -71,16 +70,20 @@ public class GlobalStateTaskTest {
     private final MockProcessorNode<?, ?, ?, ?> processorTwo = new MockProcessorNode<>();
 
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
-    private File testDirectory = TestUtils.tempDirectory("global-store");
+    private final File testDirectory = TestUtils.tempDirectory("global-store");
     private final NoOpProcessorContext context = new NoOpProcessorContext();
+    private final MockTime time = new MockTime();
+    private final long flushInterval = 1000L;
+    private final long currentOffsetT1 = 50;
+    private final long currentOffsetT2 = 100;
 
     private ProcessorTopology topology;
     private GlobalStateManagerStub stateMgr;
     private GlobalStateUpdateTask globalStateTask;
 
-    @Before
+    @BeforeEach
     public void before() {
-        final Set<String> storeNames = Utils.mkSet("t1-store", "t2-store");
+        final Set<String> storeNames = Set.of("t1-store", "t2-store");
         final Map<String, SourceNode<?, ?>> sourceByTopics = new HashMap<>();
         sourceByTopics.put(topic1, sourceOne);
         sourceByTopics.put(topic2, sourceTwo);
@@ -101,7 +104,9 @@ public class GlobalStateTaskTest {
             topology,
             context,
             stateMgr,
-            new LogAndFailExceptionHandler()
+            new LogAndFailExceptionHandler(),
+            time,
+            flushInterval
         );
     }
 
@@ -188,7 +193,9 @@ public class GlobalStateTaskTest {
             topology,
             context,
             stateMgr,
-            new LogAndContinueExceptionHandler()
+            new LogAndContinueExceptionHandler(),
+            time,
+            flushInterval
         );
         final byte[] key = new LongSerializer().serialize(topic2, 1L);
         final byte[] recordValue = new IntegerSerializer().serialize(topic2, 10);
@@ -203,7 +210,9 @@ public class GlobalStateTaskTest {
             topology,
             context,
             stateMgr,
-            new LogAndContinueExceptionHandler()
+            new LogAndContinueExceptionHandler(),
+            time,
+            flushInterval
         );
         final byte[] key = new IntegerSerializer().serialize(topic2, 1);
         final byte[] recordValue = new LongSerializer().serialize(topic2, 10L);
@@ -217,10 +226,13 @@ public class GlobalStateTaskTest {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 52L);
         expectedOffsets.put(t2, 100L);
+
         globalStateTask.initialize();
-        globalStateTask.update(record(topic1, 1, 51, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.update(record(topic1, 1, currentOffsetT1 + 1, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
+
         assertEquals(expectedOffsets, stateMgr.changelogOffsets());
+        assertTrue(stateMgr.flushed);
     }
 
     @Test
@@ -228,11 +240,92 @@ public class GlobalStateTaskTest {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 102L);
         expectedOffsets.put(t2, 100L);
+
         globalStateTask.initialize();
-        globalStateTask.update(record(topic1, 1, 101, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.update(record(topic1, 1, currentOffsetT1 + 51L, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
-        assertThat(stateMgr.changelogOffsets(), equalTo(expectedOffsets));
+
+        assertEquals(expectedOffsets, stateMgr.changelogOffsets());
+        assertTrue(stateMgr.checkpointWritten);
     }
+
+    @Test
+    public void shouldNotCheckpointIfNotReceivedEnoughRecords() {
+        globalStateTask.initialize();
+        globalStateTask.update(record(topic1, 1, currentOffsetT1 + 9000L, "foo".getBytes(), "foo".getBytes()));
+        time.sleep(flushInterval); // flush interval elapsed
+        globalStateTask.maybeCheckpoint();
+
+        assertEquals(offsets, stateMgr.changelogOffsets());
+        assertFalse(stateMgr.flushed);
+        assertFalse(stateMgr.checkpointWritten);
+    }
+
+    @Test
+    public void shouldNotCheckpointWhenFlushIntervalHasNotLapsed() {
+        globalStateTask.initialize();
+
+        // offset delta exceeded
+        globalStateTask.update(record(topic1, 1, currentOffsetT1 + 10000L, "foo".getBytes(), "foo".getBytes()));
+
+        time.sleep(flushInterval / 2);
+        globalStateTask.maybeCheckpoint();
+
+        assertEquals(offsets, stateMgr.changelogOffsets());
+        assertFalse(stateMgr.flushed);
+        assertFalse(stateMgr.checkpointWritten);
+    }
+
+    @Test
+    public void shouldCheckpointIfReceivedEnoughRecordsAndFlushIntervalHasElapsed() {
+        final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(t1, 10051L); // topic1 advanced with 10001 records
+        expectedOffsets.put(t2, 100L);
+
+        globalStateTask.initialize();
+
+        time.sleep(flushInterval); // flush interval elapsed
+
+        // 10000 records received since last flush => do not flush
+        globalStateTask.update(record(topic1, 1, currentOffsetT1 + 9999L, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.maybeCheckpoint();
+
+        assertEquals(offsets, stateMgr.changelogOffsets());
+        assertFalse(stateMgr.flushed);
+        assertFalse(stateMgr.checkpointWritten);
+
+        // 1 more record received => triggers the flush
+        globalStateTask.update(record(topic1, 1, currentOffsetT1 + 10000L, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.maybeCheckpoint();
+
+        assertEquals(expectedOffsets, stateMgr.changelogOffsets());
+        assertTrue(stateMgr.flushed);
+        assertTrue(stateMgr.checkpointWritten);
+    }
+
+    @Test
+    public void shouldCheckpointIfReceivedEnoughRecordsFromMultipleTopicsAndFlushIntervalElapsed() {
+        final byte[] integerBytes = new IntegerSerializer().serialize(topic2, 1);
+
+        final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(t1, 9050L); // topic1 advanced with 9000 records
+        expectedOffsets.put(t2, 1101L); // topic2 advanced with 1001 records
+
+        globalStateTask.initialize();
+
+        time.sleep(flushInterval);
+
+        // received 9000 records in topic1
+        globalStateTask.update(record(topic1, 1, currentOffsetT1 + 8999L, "foo".getBytes(), "foo".getBytes()));
+        // received 1001 records in topic2
+        globalStateTask.update(record(topic2, 1, currentOffsetT2 + 1000L, integerBytes, integerBytes));
+        globalStateTask.maybeCheckpoint();
+
+        assertEquals(expectedOffsets, stateMgr.changelogOffsets());
+        assertTrue(stateMgr.flushed);
+        assertTrue(stateMgr.checkpointWritten);
+    }
+
 
     @Test
     public void shouldWipeGlobalStateDirectory() throws Exception {

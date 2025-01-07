@@ -24,10 +24,11 @@ package org.apache.kafka.streams.kstream;
  * {@code Aggregator} is used in combination with {@link Initializer} that provides an initial aggregation value.
  * <p>
  * {@code Aggregator} can be used to implement aggregation functions like count.
-
+ *
  * @param <K> key type
  * @param <V> input value type
- * @param <VA> aggregate value type
+ * @param <VAgg> aggregate value type
+ *
  * @see Initializer
  * @see KGroupedStream#aggregate(Initializer, Aggregator)
  * @see KGroupedStream#aggregate(Initializer, Aggregator, Materialized)
@@ -37,15 +38,19 @@ package org.apache.kafka.streams.kstream;
  * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized)
  * @see Reducer
  */
-public interface Aggregator<K, V, VA> {
+public interface Aggregator<K, V, VAgg> {
 
     /**
      * Compute a new aggregate from the key and value of a record and the current aggregate of the same key.
      *
-     * @param key       the key of the record
-     * @param value     the value of the record
-     * @param aggregate the current aggregate value
+     * @param key
+     *        the key of the record
+     * @param value
+     *        the value of the record
+     * @param aggregate
+     *        the current aggregate value
+     *
      * @return the new aggregate value
      */
-    VA apply(final K key, final V value, final VA aggregate);
+    VAgg apply(final K key, final V value, final VAgg aggregate);
 }

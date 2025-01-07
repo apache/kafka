@@ -55,21 +55,6 @@ public class FeatureUpdate {
     }
 
     /**
-     * @param maxVersionLevel   the new maximum version level for the finalized feature.
-     *                          a value of zero is special and indicates that the update is intended to
-     *                          delete the finalized feature, and should be accompanied by setting
-     *                          the allowDowngrade flag to true.
-     * @param allowDowngrade    - true, if this feature update was meant to downgrade the existing
-     *                            maximum version level of the finalized feature. Only "safe" downgrades are
-     *                            enabled with this boolean. See {@link FeatureUpdate#FeatureUpdate(short, UpgradeType)}
-     *                          - false, otherwise.
-     */
-    @Deprecated
-    public FeatureUpdate(final short maxVersionLevel, final boolean allowDowngrade) {
-        this(maxVersionLevel, allowDowngrade ? UpgradeType.SAFE_DOWNGRADE : UpgradeType.UPGRADE);
-    }
-
-    /**
      * @param maxVersionLevel   The new maximum version level for the finalized feature.
      *                          a value of zero is special and indicates that the update is intended to
      *                          delete the finalized feature, and should be accompanied by setting
@@ -82,7 +67,7 @@ public class FeatureUpdate {
     public FeatureUpdate(final short maxVersionLevel, final UpgradeType upgradeType) {
         if (maxVersionLevel == 0 && upgradeType.equals(UpgradeType.UPGRADE)) {
             throw new IllegalArgumentException(String.format(
-                    "The downgradeType flag should be set to SAFE or UNSAFE when the provided maxVersionLevel:%d is < 1.",
+                    "The upgradeType flag should be set to SAFE_DOWNGRADE or UNSAFE_DOWNGRADE when the provided maxVersionLevel:%d is < 1.",
                     maxVersionLevel));
         }
         if (maxVersionLevel < 0) {
@@ -94,11 +79,6 @@ public class FeatureUpdate {
 
     public short maxVersionLevel() {
         return maxVersionLevel;
-    }
-
-    @Deprecated
-    public boolean allowDowngrade() {
-        return upgradeType != UpgradeType.UPGRADE;
     }
 
     public UpgradeType upgradeType() {
@@ -126,6 +106,6 @@ public class FeatureUpdate {
 
     @Override
     public String toString() {
-        return String.format("FeatureUpdate{maxVersionLevel:%d, downgradeType:%s}", maxVersionLevel, upgradeType);
+        return String.format("FeatureUpdate{maxVersionLevel:%d, upgradeType:%s}", maxVersionLevel, upgradeType);
     }
 }

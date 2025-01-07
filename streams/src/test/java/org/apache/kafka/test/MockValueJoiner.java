@@ -20,7 +20,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 
 public class MockValueJoiner {
 
-    public final static ValueJoiner<Object, Object, String> TOSTRING_JOINER = instance("+");
+    public static final ValueJoiner<Object, Object, String> TOSTRING_JOINER = instance("+");
 
     public static <V1, V2> ValueJoiner<V1, V2, String> instance(final String separator) {
         return new ValueJoiner<V1, V2, String>() {

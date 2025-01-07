@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import kafka.admin.ReassignPartitionsCommand;
 import org.apache.kafka.common.utils.Exit;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(60)
 public class ReassignPartitionsCommandArgsTest {
-    public static final String MISSING_BOOTSTRAP_SERVER_MSG = "Please specify --bootstrap-server";
+    public static final String MISSING_BOOTSTRAP_SERVER_MSG = "Please specify either --bootstrap-server or --bootstrap-controller";
 
     @BeforeEach
     public void setUp() {
@@ -88,9 +88,9 @@ public class ReassignPartitionsCommandArgsTest {
             "--bootstrap-server", "localhost:1234",
             "--execute",
             "--reassignment-json-file", "myfile.json"};
-        ReassignPartitionsCommand.ReassignPartitionsCommandOptions opts = ReassignPartitionsCommand.validateAndParseArgs(args);
-        assertEquals(10000L, opts.options.valueOf(opts.timeoutOpt()));
-        assertEquals(-1L, opts.options.valueOf(opts.interBrokerThrottleOpt()));
+        ReassignPartitionsCommandOptions opts = ReassignPartitionsCommand.validateAndParseArgs(args);
+        assertEquals(10000L, opts.options.valueOf(opts.timeoutOpt));
+        assertEquals(-1L, opts.options.valueOf(opts.interBrokerThrottleOpt));
     }
 
     @Test
@@ -115,7 +115,7 @@ public class ReassignPartitionsCommandArgsTest {
     @Test
     public void shouldFailIfNoArgs() {
         String[] args = new String[0];
-        shouldFailWith(ReassignPartitionsCommand.helpText(), args);
+        shouldFailWith(ReassignPartitionsCommand.HELP_TEXT, args);
     }
 
     @Test
@@ -225,7 +225,7 @@ public class ReassignPartitionsCommandArgsTest {
     public void shouldPrintHelpTextIfHelpArg() {
         String[] args = new String[] {"--help"};
         // note, this is not actually a failed case, it's just we share the same `printUsageAndExit` method when wrong arg received
-        shouldFailWith(ReassignPartitionsCommand.helpText(), args);
+        shouldFailWith(ReassignPartitionsCommand.HELP_TEXT, args);
     }
 
     ///// Test --verify
@@ -288,5 +288,35 @@ public class ReassignPartitionsCommandArgsTest {
             "--bootstrap-server", "localhost:1234",
             "--preserve-throttles"};
         shouldFailWith("Missing required argument \"[reassignment-json-file]\"", args);
+    }
+    
+    @Test
+    public void shouldAllowBootstrapControllerArg() {
+        String[] args = new String[] {
+            "--bootstrap-controller", "localhost:1234",
+            "--cancel",
+            "--reassignment-json-file", "myfile.json"};
+        ReassignPartitionsCommand.validateAndParseArgs(args);
+    }
+
+    @Test
+    public void shouldNotAllowBootstrapControllerArgWithUnsupportedAction() {
+        String[] args = new String[] {
+            "--bootstrap-controller", "localhost:1234",
+            "--generate",
+            "--broker-list", "101,102",
+            "--topics-to-move-json-file", "myfile.json"};
+        shouldFailWith("Option \"[bootstrap-controller]\" can't be used with action \"[generate]", args);
+    }
+
+    @Test
+    public void shouldNotAllowBootstrapControllerAndBootstrapServerArg() {
+        String[] args = new String[] {
+            "--bootstrap-server", "localhost:1234",
+            "--bootstrap-controller", "localhost:1234",
+            "--generate",
+            "--broker-list", "101,102",
+            "--topics-to-move-json-file", "myfile.json"};
+        shouldFailWith("Please don't specify both --bootstrap-server and --bootstrap-controller", args);
     }
 }

@@ -19,5 +19,5 @@ package org.apache.kafka.storage.internals.log;
 public enum LeaderHwChange {
     INCREASED,
     SAME,
-    NONE;
+    NONE
 }

@@ -29,8 +29,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 
 
@@ -40,7 +40,7 @@ import java.util.Objects;
  * This class is thread-safe.
  */
 public final class ClientQuotaImage {
-    public final static ClientQuotaImage EMPTY = new ClientQuotaImage(Collections.emptyMap());
+    public static final ClientQuotaImage EMPTY = new ClientQuotaImage(Collections.emptyMap());
 
     private final Map<String, Double> quotas;
 
@@ -102,8 +102,7 @@ public final class ClientQuotaImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ClientQuotaImage)) return false;
-        ClientQuotaImage other = (ClientQuotaImage) o;
+        if (!(o instanceof ClientQuotaImage other)) return false;
         return quotas.equals(other.quotas);
     }
 

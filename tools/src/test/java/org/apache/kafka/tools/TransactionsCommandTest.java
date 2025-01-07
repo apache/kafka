@@ -41,7 +41,7 @@ import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -180,20 +180,31 @@ public class TransactionsCommandTest {
         List<String> expectedHeaders = TransactionsCommand.DescribeProducersCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
 
-        Set<List<String>> expectedRows = Utils.mkSet(
+        Set<List<String>> expectedRows = Set.of(
             asList("12345", "15", "20", "1300", "1599509565", "990"),
             asList("98765", "30", "-1", "2300", "1599509599", "None")
         );
         assertEquals(expectedRows, new HashSet<>(table.subList(1, table.size())));
     }
 
-    @Test
-    public void testListTransactions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testListTransactions(boolean hasDurationFilter) throws Exception {
         String[] args = new String[] {
             "--bootstrap-server",
             "localhost:9092",
             "list"
         };
+
+        if (hasDurationFilter) {
+            args = new String[] {
+                "--bootstrap-server",
+                "localhost:9092",
+                "list",
+                "--duration-filter",
+                Long.toString(Long.MAX_VALUE)
+            };
+        }
 
         Map<Integer, Collection<TransactionListing>> transactions = new HashMap<>();
         transactions.put(0, asList(
@@ -204,7 +215,11 @@ public class TransactionsCommandTest {
             new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
         ));
 
-        expectListTransactions(transactions);
+        if (hasDurationFilter) {
+            expectListTransactions(new ListTransactionsOptions().filterOnDuration(Long.MAX_VALUE), transactions);
+        } else {
+            expectListTransactions(transactions);
+        }
 
         execute(args);
         assertNormalExit();
@@ -216,7 +231,7 @@ public class TransactionsCommandTest {
         List<String> expectedHeaders = TransactionsCommand.ListTransactionsCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
 
-        Set<List<String>> expectedRows = Utils.mkSet(
+        Set<List<String>> expectedRows = Set.of(
             asList("foo", "0", "12345", "Ongoing"),
             asList("bar", "0", "98765", "PrepareAbort"),
             asList("baz", "1", "13579", "CompleteCommit")
@@ -428,13 +443,7 @@ public class TransactionsCommandTest {
         AbortTransactionResult abortTransactionResult = Mockito.mock(AbortTransactionResult.class);
         KafkaFuture<Void> abortFuture = completedFuture(null);
 
-        final int expectedCoordinatorEpoch;
-        if (coordinatorEpoch < 0) {
-            expectedCoordinatorEpoch = 0;
-        } else {
-            expectedCoordinatorEpoch = coordinatorEpoch;
-        }
-
+        int expectedCoordinatorEpoch = Math.max(coordinatorEpoch, 0);
         AbortTransactionSpec expectedAbortSpec = new AbortTransactionSpec(
             topicPartition, producerId, producerEpoch, expectedCoordinatorEpoch);
 

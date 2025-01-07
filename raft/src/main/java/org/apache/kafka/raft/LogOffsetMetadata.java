@@ -23,9 +23,8 @@ import java.util.Optional;
  * Metadata for specific local log offset
  */
 public class LogOffsetMetadata {
-
-    public final long offset;
-    public final Optional<OffsetMetadata> metadata;
+    private final long offset;
+    private final Optional<OffsetMetadata> metadata;
 
     public LogOffsetMetadata(long offset) {
         this(offset, Optional.empty());
@@ -36,6 +35,14 @@ public class LogOffsetMetadata {
         this.metadata = metadata;
     }
 
+    public long offset() {
+        return offset;
+    }
+
+    public Optional<OffsetMetadata> metadata() {
+        return metadata;
+    }
+
     @Override
     public String toString() {
         return "LogOffsetMetadata(offset=" + offset +
@@ -44,8 +51,7 @@ public class LogOffsetMetadata {
 
     @Override
     public boolean equals(Object obj) {
-        if (obj instanceof LogOffsetMetadata) {
-            LogOffsetMetadata other = (LogOffsetMetadata) obj;
+        if (obj instanceof LogOffsetMetadata other) {
             return this.offset == other.offset &&
                    this.metadata.equals(other.metadata);
         } else {

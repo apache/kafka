@@ -25,7 +25,7 @@ import org.apache.kafka.server.util.timer.{Timer, TimerTask}
 object TimingWheelExpirationService {
   private val WorkTimeoutMs: Long = 200L
 
-  class TimerTaskCompletableFuture[T](delayMs: Long) extends TimerTask(delayMs) {
+  private class TimerTaskCompletableFuture[T](delayMs: Long) extends TimerTask(delayMs) {
     val future = new CompletableFuture[T]
     override def run(): Unit = {
       future.completeExceptionally(new TimeoutException(

@@ -25,8 +25,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 public class UptimeResponse extends Message {
 
-    private long serverStartMs;
-    private long nowMs;
+    private final long serverStartMs;
+    private final long nowMs;
 
     @JsonCreator
     public UptimeResponse(@JsonProperty("serverStartMs") long serverStartMs,

@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TaskId;
+
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.InvocationTargetException;
@@ -26,8 +28,12 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 
+import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
+import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,10 +47,12 @@ class ReadOnlyTaskTest {
             add("inputPartitions");
             add("changelogPartitions");
             add("commitRequested");
+            add("commitNeeded");
             add("isActive");
             add("changelogOffsets");
             add("state");
             add("id");
+            add("store");
         }
     };
 
@@ -126,6 +134,28 @@ class ReadOnlyTaskTest {
     }
 
     @Test
+    public void shouldDelegateCommitNeededIfStandby() {
+        final StandbyTask standbyTask =
+            standbyTask(new TaskId(1, 0), Set.of(new TopicPartition("topic", 0))).build();
+        final ReadOnlyTask readOnlyTask = new ReadOnlyTask(standbyTask);
+
+        readOnlyTask.commitNeeded();
+
+        verify(standbyTask).commitNeeded();
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionForCommitNeededIfActive() {
+        final StreamTask statefulTask =
+            statefulTask(new TaskId(1, 0), Set.of(new TopicPartition("topic", 0))).build();
+        final ReadOnlyTask readOnlyTask = new ReadOnlyTask(statefulTask);
+
+        final Exception exception = assertThrows(UnsupportedOperationException.class, readOnlyTask::commitNeeded);
+
+        assertEquals("This task is read-only", exception.getMessage());
+    }
+
+    @Test
     public void shouldThrowUnsupportedOperationExceptionForForbiddenMethods() {
         final ReadOnlyTask readOnlyTask = new ReadOnlyTask(task);
         for (final Method method : ReadOnlyTask.class.getMethods()) {
@@ -175,6 +205,9 @@ class ReadOnlyTaskTest {
                     break;
                 case "org.apache.kafka.common.TopicPartition":
                     parameters[i] = new TopicPartition("topic", 0);
+                    break;
+                case "org.apache.kafka.clients.consumer.OffsetAndMetadata":
+                    parameters[i] = new OffsetAndMetadata(0, Optional.empty(), "");
                     break;
                 case "java.lang.Exception":
                     parameters[i] = new IllegalStateException();

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.utils.Serializer;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

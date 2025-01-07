@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
@@ -40,6 +41,7 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,7 +64,7 @@ public class RequestContextTest {
         requestBuffer.flip();
 
         RequestAndSize requestAndSize = context.parseRequest(requestBuffer);
-        assertTrue(requestAndSize.request instanceof ApiVersionsRequest);
+        assertInstanceOf(ApiVersionsRequest.class, requestAndSize.request);
         ApiVersionsRequest request = (ApiVersionsRequest) requestAndSize.request;
         assertTrue(request.hasUnsupportedRequestVersion());
 
@@ -115,7 +117,7 @@ public class RequestContextTest {
 
     @Test
     public void testInvalidRequestForImplicitHashCollection() throws UnknownHostException {
-        short version = (short) 5; // choose a version with fixed length encoding, for simplicity
+        short version = (short) 7; // choose a version with fixed length encoding, for simplicity
         ByteBuffer corruptBuffer = produceRequest(version);
         // corrupt the length of the topics array
         corruptBuffer.putInt(8, (Integer.MAX_VALUE - 1) / 2);
@@ -132,7 +134,7 @@ public class RequestContextTest {
 
     @Test
     public void testInvalidRequestForArrayList() throws UnknownHostException {
-        short version = (short) 5; // choose a version with fixed length encoding, for simplicity
+        short version = (short) 7; // choose a version with fixed length encoding, for simplicity
         ByteBuffer corruptBuffer = produceRequest(version);
         // corrupt the length of the partitions array
         corruptBuffer.putInt(17, Integer.MAX_VALUE);

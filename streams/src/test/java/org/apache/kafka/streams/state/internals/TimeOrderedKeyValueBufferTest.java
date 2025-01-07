@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -39,13 +38,13 @@ import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer.Evicti
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
@@ -54,6 +53,7 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
@@ -61,14 +61,13 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer.CHANGELOG_HEADERS;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.fail;
 
-@RunWith(Parameterized.class)
 public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<String, String, Change<String>>> {
 
     private static final String APP_ID = "test-app";
-    private final Function<String, B> bufferSupplier;
-    private final String testName;
+    private Function<String, B> bufferSupplier;
+    private String testName;
 
     public static final class NullRejectingStringSerializer extends StringSerializer {
         @Override
@@ -81,39 +80,36 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     }
 
     // As we add more buffer implementations/configurations, we can add them here
-    @Parameterized.Parameters(name = "{index}: test={0}")
-    public static Collection<Object[]> parameters() {
-        return singletonList(
-            new Object[] {
-                "in-memory buffer",
+    public static Stream<Arguments> parameters() {
+        return Stream.of(
+                Arguments.of("in-memory buffer",
                 (Function<String, InMemoryTimeOrderedKeyValueChangeBuffer<String, String, Change<String>>>) name ->
                     new InMemoryTimeOrderedKeyValueChangeBuffer
                         .Builder<>(name, Serdes.String(), Serdes.serdeFrom(new NullRejectingStringSerializer(), new StringDeserializer()))
-                        .build()
-            }
+                        .build())
         );
     }
 
-    public TimeOrderedKeyValueBufferTest(final String testName, final Function<String, B> bufferSupplier) {
+    private void setup(final String testName, final Function<String, B> bufferSupplier) {
         this.testName = testName + "_" + new Random().nextInt(Integer.MAX_VALUE);
         this.bufferSupplier = bufferSupplier;
     }
 
-    private static MockInternalProcessorContext makeContext() {
+    private static MockInternalProcessorContext<?, ?> makeContext() {
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
 
         final TaskId taskId = new TaskId(0, 0);
 
-        final MockInternalProcessorContext context = new MockInternalProcessorContext(properties, taskId, TestUtils.tempDirectory());
+        final MockInternalProcessorContext<?, ?> context = new MockInternalProcessorContext<>(properties, taskId, TestUtils.tempDirectory());
         context.setRecordCollector(new MockRecordCollector());
 
         return context;
     }
 
 
-    private static void cleanup(final MockInternalProcessorContext context, final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer) {
+    private static void cleanup(final MockInternalProcessorContext<?, ?> context, final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer) {
         try {
             buffer.close();
             Utils.delete(context.stateDir());
@@ -122,28 +118,34 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         }
     }
 
-    @Test
-    public void shouldInit() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldInit(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldAcceptData() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldAcceptData(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
         putRecord(buffer, context, 0L, 0L, "asdf", "2p93nf");
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldRejectNullValues() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRejectNullValues(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
         try {
             buffer.put(0, new Record<>("asdf", null, 0L), getContext(0));
             fail("expected an exception");
@@ -153,11 +155,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldRemoveData() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRemoveData(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
         putRecord(buffer, context, 0L, 0L, "asdf", "qwer");
         assertThat(buffer.numRecords(), is(1));
         buffer.evictWhile(() -> true, kv -> { });
@@ -165,11 +169,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldRespectEvictionPredicate() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRespectEvictionPredicate(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
         putRecord(buffer, context, 0L, 0L, "asdf", "eyt");
         putRecord(buffer, context, 1L, 0L, "zxcv", "rtg");
         assertThat(buffer.numRecords(), is(2));
@@ -182,11 +188,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldTrackCount() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldTrackCount(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
         putRecord(buffer, context, 0L, 0L, "asdf", "oin");
         assertThat(buffer.numRecords(), is(1));
         putRecord(buffer, context, 1L, 0L, "asdf", "wekjn");
@@ -196,11 +204,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldTrackSize() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldTrackSize(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
         putRecord(buffer, context, 0L, 0L, "asdf", "23roni");
         assertThat(buffer.bufferSize(), is(43L));
         putRecord(buffer, context, 1L, 0L, "asdf", "3l");
@@ -210,11 +220,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldTrackMinTimestamp() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldTrackMinTimestamp(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
         putRecord(buffer, context, 1L, 0L, "asdf", "2093j");
         assertThat(buffer.minTimestamp(), is(1L));
         putRecord(buffer, context, 0L, 0L, "zxcv", "3gon4i");
@@ -222,11 +234,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldEvictOldestAndUpdateSizeAndCountAndMinTimestamp() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldEvictOldestAndUpdateSizeAndCountAndMinTimestamp(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
 
         putRecord(buffer, context, 1L, 0L, "zxcv", "o23i4");
         assertThat(buffer.numRecords(), is(1));
@@ -268,20 +282,24 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldReturnUndefinedOnPriorValueForNotBufferedKey() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldReturnUndefinedOnPriorValueForNotBufferedKey(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
 
         assertThat(buffer.priorValueForBuffered("ASDF"), is(Maybe.undefined()));
     }
 
-    @Test
-    public void shouldReturnPriorValueForBufferedKey() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldReturnPriorValueForBufferedKey(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
 
         final ProcessorRecordContext recordContext = getContext(0L);
         context.setRecordContext(recordContext);
@@ -291,11 +309,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertThat(buffer.priorValueForBuffered("B"), is(Maybe.defined(null)));
     }
 
-    @Test
-    public void shouldFlush() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldFlush(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
         putRecord(buffer, context, 2L, 0L, "asdf", "2093j");
         putRecord(buffer, context, 1L, 1L, "zxcv", "3gon4i");
         putRecord(buffer, context, 0L, 2L, "deleteme", "deadbeef");
@@ -362,11 +382,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldRestoreOldUnversionedFormat() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRestoreOldUnversionedFormat(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
 
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
@@ -481,11 +503,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldRestoreV1Format() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRestoreV1Format(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
 
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
@@ -603,11 +627,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     }
 
 
-    @Test
-    public void shouldRestoreV2Format() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRestoreV2Format(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
 
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
@@ -724,14 +750,16 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldRestoreV3FormatWithV2Header() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRestoreV3FormatWithV2Header(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         // versions 2.4.0, 2.4.1, and 2.5.0 would have erroneously encoded a V3 record with the
         // V2 header, so we need to be sure to handle this case as well.
         // Note the data is the same as the V3 test.
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
 
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
@@ -848,11 +876,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldRestoreV3Format() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRestoreV3Format(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
 
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
@@ -969,11 +999,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    @Test
-    public void shouldNotRestoreUnrecognizedVersionRecord() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldNotRestoreUnrecognizedVersionRecord(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init((StateStoreContext) context, buffer);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
 
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
@@ -1006,7 +1038,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     }
 
     private static void putRecord(final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer,
-                                  final MockInternalProcessorContext context,
+                                  final MockInternalProcessorContext<?, ?> context,
                                   final long streamTime,
                                   final long recordTimestamp,
                                   final String key,
@@ -1016,11 +1048,12 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         buffer.put(streamTime, new Record<>(key, new Change<>(value, null), 0L), recordContext);
     }
 
+    @SuppressWarnings("resource")
     private static BufferValue getBufferValue(final String value, final long timestamp) {
         return new BufferValue(
             null,
             null,
-            Serdes.String().serializer().serialize(null, value),
+            new StringSerializer().serialize(null, value),
             getContext(timestamp)
         );
     }

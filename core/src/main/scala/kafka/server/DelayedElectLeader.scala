@@ -17,9 +17,11 @@
 
 package kafka.server
 
+import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
+import org.apache.kafka.server.purgatory.DelayedOperation
 
 import scala.collection.{Map, mutable}
 
@@ -32,7 +34,7 @@ class DelayedElectLeader(
   results: Map[TopicPartition, ApiError],
   replicaManager: ReplicaManager,
   responseCallback: Map[TopicPartition, ApiError] => Unit
-) extends DelayedOperation(delayMs) {
+) extends DelayedOperation(delayMs) with Logging {
 
   private val waitingPartitions = mutable.Map() ++= expectedLeaders
   private val fullResults = mutable.Map() ++= results

@@ -17,33 +17,34 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.Optional;
 
 /**
  * ExternalCommandWorker starts an external process to run a Trogdor command.
@@ -143,7 +144,7 @@ public class ExternalCommandWorker implements TaskWorker {
         this.doneFuture = doneFuture;
         this.executor = Executors.newCachedThreadPool(
             ThreadUtils.createThreadFactory("ExternalCommandWorkerThread%d", false));
-        Process process = null;
+        Process process;
         try {
             process = startProcess();
         } catch (Throwable t) {
@@ -168,8 +169,7 @@ public class ExternalCommandWorker implements TaskWorker {
             throw new RuntimeException("No command specified");
         }
         ProcessBuilder bld = new ProcessBuilder(spec.command());
-        Process process = bld.start();
-        return process;
+        return bld.start();
     }
 
     private static JsonNode readObject(String line) {
@@ -272,7 +272,7 @@ public class ExternalCommandWorker implements TaskWorker {
                 while (true) {
                     log.info("{}: stdin writer ready.", id);
                     Optional<JsonNode> node = stdinQueue.take();
-                    if (!node.isPresent()) {
+                    if (node.isEmpty()) {
                         log.trace("{}: StdinWriter terminating.", id);
                         return;
                     }

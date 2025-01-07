@@ -17,14 +17,12 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -47,27 +45,6 @@ public class BeginQuorumEpochResponse extends AbstractResponse {
     public BeginQuorumEpochResponse(BeginQuorumEpochResponseData data) {
         super(ApiKeys.BEGIN_QUORUM_EPOCH);
         this.data = data;
-    }
-
-    public static BeginQuorumEpochResponseData singletonResponse(
-        Errors topLevelError,
-        TopicPartition topicPartition,
-        Errors partitionLevelError,
-        int leaderEpoch,
-        int leaderId
-    ) {
-        return new BeginQuorumEpochResponseData()
-                   .setErrorCode(topLevelError.code())
-                   .setTopics(Collections.singletonList(
-                       new BeginQuorumEpochResponseData.TopicData()
-                           .setTopicName(topicPartition.topic())
-                           .setPartitions(Collections.singletonList(
-                               new BeginQuorumEpochResponseData.PartitionData()
-                                   .setErrorCode(partitionLevelError.code())
-                                   .setLeaderId(leaderId)
-                                   .setLeaderEpoch(leaderEpoch)
-                           )))
-                   );
     }
 
     @Override

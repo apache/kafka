@@ -16,23 +16,11 @@
  */
 package org.apache.kafka.tools;
 
-import joptsimple.OptionSpec;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
-import javax.management.Attribute;
-import javax.management.AttributeList;
-import javax.management.MBeanFeatureInfo;
-import javax.management.MBeanInfo;
-import javax.management.MBeanServerConnection;
-import javax.management.MalformedObjectNameException;
-import javax.management.ObjectName;
-import javax.management.remote.JMXConnector;
-import javax.management.remote.JMXConnectorFactory;
-import javax.management.remote.JMXServiceURL;
-import javax.rmi.ssl.SslRMIClientSocketFactory;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.text.DateFormat;
@@ -53,6 +41,20 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import javax.management.Attribute;
+import javax.management.AttributeList;
+import javax.management.MBeanFeatureInfo;
+import javax.management.MBeanInfo;
+import javax.management.MBeanServerConnection;
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
+import javax.management.remote.JMXConnector;
+import javax.management.remote.JMXConnectorFactory;
+import javax.management.remote.JMXServiceURL;
+import javax.rmi.ssl.SslRMIClientSocketFactory;
+
+import joptsimple.OptionSpec;
 
 /**
  * A program for reading JMX metrics from a given endpoint.
@@ -206,7 +208,7 @@ public class JmxTool {
                                                                       List<ObjectName> queries,
                                                                       Set<ObjectName> found) throws Exception {
         Map<ObjectName, Integer> result = new HashMap<>();
-        if (!attributesInclude.isPresent()) {
+        if (attributesInclude.isEmpty()) {
             found.forEach(objectName -> {
                 try {
                     MBeanInfo mBeanInfo = conn.getMBeanInfo(objectName);

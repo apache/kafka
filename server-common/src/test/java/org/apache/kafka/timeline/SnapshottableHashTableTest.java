@@ -17,6 +17,11 @@
 
 package org.apache.kafka.timeline;
 
+import org.apache.kafka.common.utils.LogContext;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -24,17 +29,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.apache.kafka.common.utils.LogContext;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 
 @Timeout(value = 40)
 public class SnapshottableHashTableTest {
@@ -73,10 +74,9 @@ public class SnapshottableHashTableTest {
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof TestElement)) {
+            if (!(o instanceof TestElement other)) {
                 return false;
             }
-            TestElement other = (TestElement) o;
             return other.i == i;
         }
 
@@ -301,7 +301,6 @@ public class SnapshottableHashTableTest {
             remaining.put(object, true);
         }
         List<Object> extraObjects = new ArrayList<>();
-        int i = 0;
         while (iter.hasNext()) {
             Object object = iter.next();
             assertNotNull(object);
@@ -310,10 +309,8 @@ public class SnapshottableHashTableTest {
             }
         }
         if (!extraObjects.isEmpty() || !remaining.isEmpty()) {
-            throw new RuntimeException("Found extra object(s): [" + String.join(", ",
-                extraObjects.stream().map(e -> e.toString()).collect(Collectors.toList())) +
-                "] and didn't find object(s): [" + String.join(", ",
-                remaining.keySet().stream().map(e -> e.toString()).collect(Collectors.toList())) + "]");
+            throw new RuntimeException("Found extra object(s): [" + extraObjects.stream().map(Object::toString).collect(Collectors.joining(", ")) +
+                "] and didn't find object(s): [" + remaining.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "]");
         }
     }
 }

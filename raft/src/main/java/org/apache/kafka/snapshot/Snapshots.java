@@ -17,10 +17,11 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.IdentitySerde;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +44,8 @@ public final class Snapshots {
 
     private static final int OFFSET_WIDTH = 20;
     private static final int EPOCH_WIDTH = 10;
+
+    public static final OffsetAndEpoch BOOTSTRAP_SNAPSHOT_ID = new OffsetAndEpoch(0, 0);
 
     static {
         OFFSET_FORMATTER.setMinimumIntegerDigits(OFFSET_WIDTH);

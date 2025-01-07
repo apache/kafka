@@ -18,6 +18,7 @@
 package org.apache.kafka.image.writer;
 
 import org.apache.kafka.image.FakeSnapshotWriter;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

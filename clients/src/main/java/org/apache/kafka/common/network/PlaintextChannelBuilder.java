@@ -23,11 +23,8 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
 import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.channels.SelectionKey;
 import java.util.Map;
@@ -35,7 +32,6 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 public class PlaintextChannelBuilder implements ChannelBuilder {
-    private static final Logger log = LoggerFactory.getLogger(PlaintextChannelBuilder.class);
     private final ListenerName listenerName;
     private Map<String, ?> configs;
 
@@ -54,12 +50,17 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     @Override
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
                                      MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
+        PlaintextTransportLayer transportLayer = null;
         try {
-            PlaintextTransportLayer transportLayer = buildTransportLayer(key);
-            Supplier<Authenticator> authenticatorCreator = () -> new PlaintextAuthenticator(configs, transportLayer, listenerName);
+            transportLayer = buildTransportLayer(key);
+            final PlaintextTransportLayer finalTransportLayer = transportLayer;
+            Supplier<Authenticator> authenticatorCreator = () -> new PlaintextAuthenticator(configs, finalTransportLayer, listenerName);
             return buildChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
                     memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
+            // Ideally these resources are closed by the KafkaChannel but this builder should close the resources instead
+            // if an error occurs due to which KafkaChannel is not created.
+            Utils.closeQuietly(transportLayer, "transport layer for channel Id: " + id);
             throw new KafkaException(e);
         }
     }
@@ -70,7 +71,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize, memoryPool, metadataRegistry);
     }
 
-    protected PlaintextTransportLayer buildTransportLayer(SelectionKey key) throws IOException {
+    protected PlaintextTransportLayer buildTransportLayer(SelectionKey key) {
         return new PlaintextTransportLayer(key);
     }
 

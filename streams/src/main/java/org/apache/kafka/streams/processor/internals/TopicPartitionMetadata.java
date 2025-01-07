@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.ByteBuffer;
 import java.util.Base64;
 import java.util.Objects;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Metadata to be committed together with TopicPartition offset

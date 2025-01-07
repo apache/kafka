@@ -28,29 +28,37 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.Set;
 
 public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
     ProcessorSupplier<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> {
     private static final Logger LOG = LoggerFactory.getLogger(ForeignTableJoinProcessorSupplier.class);
-    private final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder;
+    private final StoreFactory subscriptionStoreFactory;
     private final CombinedKeySchema<KO, K> keySchema;
     private boolean useVersionedSemantics = false;
 
-    public ForeignTableJoinProcessorSupplier(
-        final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder,
-        final CombinedKeySchema<KO, K> keySchema) {
-
-        this.storeBuilder = storeBuilder;
+    public ForeignTableJoinProcessorSupplier(final StoreFactory subscriptionStoreFactory,
+                                             final CombinedKeySchema<KO, K> keySchema) {
+        this.subscriptionStoreFactory = subscriptionStoreFactory;
         this.keySchema = keySchema;
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return Collections.singleton(new FactoryWrappingStoreBuilder<>(subscriptionStoreFactory));
     }
 
     @Override
@@ -80,7 +88,7 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
                 internalProcessorContext.taskId().toString(),
                 internalProcessorContext.metrics()
             );
-            subscriptionStore = internalProcessorContext.getStateStore(storeBuilder);
+            subscriptionStore = internalProcessorContext.getStateStore(subscriptionStoreFactory.storeName());
         }
 
         @Override
@@ -123,11 +131,11 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
                     if (prefixEquals(next.key.get(), prefixBytes.get())) {
                         final CombinedKey<KO, K> combinedKey = keySchema.fromBytes(next.key);
                         context().forward(
-                            record.withKey(combinedKey.getPrimaryKey())
+                            record.withKey(combinedKey.primaryKey())
                                 .withValue(new SubscriptionResponseWrapper<>(
-                                    next.value.value().getHash(),
+                                    next.value.value().hash(),
                                     record.value().newValue,
-                                    next.value.value().getPrimaryPartition()))
+                                    next.value.value().primaryPartition()))
                         );
                     }
                 }

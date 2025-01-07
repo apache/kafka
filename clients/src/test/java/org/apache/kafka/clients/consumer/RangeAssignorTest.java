@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.RackConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,8 +43,8 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.ALL_RACKS;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_CONSUMER_RACK;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_RACK_CONFIG;
-import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.racks;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.nullRacks;
+import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.racks;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.verifyRackAssignment;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -102,7 +103,7 @@ public class RangeAssignorTest {
         assertTrue(assignment.get(consumer1).isEmpty());
     }
 
-    @ParameterizedTest(name = "rackConfig = {0}")
+    @ParameterizedTest(name = "{displayName}.rackConfig = {0}")
     @EnumSource(RackConfig.class)
     public void testOneConsumerOneTopic(RackConfig rackConfig) {
         initializeRacks(rackConfig);

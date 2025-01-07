@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +39,11 @@ public class ConsumerInterceptors<K, V> implements Closeable {
 
     public ConsumerInterceptors(List<ConsumerInterceptor<K, V>> interceptors) {
         this.interceptors = interceptors;
+    }
+
+    /** Returns true if no interceptors are defined. All other methods will be no-ops in this case. */
+    public boolean isEmpty() {
+        return interceptors.isEmpty();
     }
 
     /**

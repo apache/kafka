@@ -23,8 +23,8 @@ import org.apache.kafka.metadata.DelegationTokenData;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 
 

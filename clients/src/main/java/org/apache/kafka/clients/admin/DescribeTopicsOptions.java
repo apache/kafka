@@ -30,6 +30,7 @@ import java.util.Collection;
 public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions> {
 
     private boolean includeAuthorizedOperations;
+    private int partitionSizeLimitPerResponse = 2000;
 
     /**
      * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
@@ -47,8 +48,18 @@ public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions
         return this;
     }
 
+    // Note that, partitionSizeLimitPerResponse will not be effective if it is larger than the config
+    // max.request.partition.size.limit on the server side.
+    public DescribeTopicsOptions partitionSizeLimitPerResponse(int partitionSizeLimitPerResponse) {
+        this.partitionSizeLimitPerResponse = partitionSizeLimitPerResponse;
+        return this;
+    }
+
     public boolean includeAuthorizedOperations() {
         return includeAuthorizedOperations;
     }
 
+    public int partitionSizeLimitPerResponse() {
+        return partitionSizeLimitPerResponse;
+    }
 }

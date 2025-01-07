@@ -56,4 +56,3 @@ public class InMemorySessionBytesStoreSupplier implements SessionBytesStoreSuppl
         return retentionPeriod;
     }
 }
-

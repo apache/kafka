@@ -22,13 +22,14 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
 
 public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowStore<K, V>> {
-    private final Logger log = LoggerFactory.getLogger(WindowStoreBuilder.class);
+    private static final Logger log = LoggerFactory.getLogger(WindowStoreBuilder.class);
 
     private final WindowBytesStoreSupplier storeSupplier;
 

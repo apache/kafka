@@ -23,4 +23,3 @@ public class EagerConsumerCoordinatorTest extends ConsumerCoordinatorTest {
         super(ConsumerPartitionAssignor.RebalanceProtocol.EAGER);
     }
 }
-

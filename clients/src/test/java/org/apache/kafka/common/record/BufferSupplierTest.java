@@ -18,6 +18,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.utils.BufferSupplier;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

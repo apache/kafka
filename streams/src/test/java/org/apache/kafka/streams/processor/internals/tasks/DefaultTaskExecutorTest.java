@@ -21,8 +21,11 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
+import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,8 +33,9 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.Collections;
 
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -45,7 +49,7 @@ import static org.mockito.Mockito.when;
 
 public class DefaultTaskExecutorTest {
 
-    private final static long VERIFICATION_TIMEOUT = 15000;
+    private static final long VERIFICATION_TIMEOUT = 15000;
 
     private final Time time = new MockTime(1L);
     private final StreamTask task = mock(StreamTask.class);
@@ -60,28 +64,50 @@ public class DefaultTaskExecutorTest {
         when(taskManager.assignNextTask(taskExecutor)).thenReturn(task).thenReturn(null);
         when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
         when(task.isProcessable(anyLong())).thenReturn(true);
+        when(task.id()).thenReturn(new TaskId(0, 0, "A"));
         when(task.process(anyLong())).thenReturn(true);
         when(task.prepareCommit()).thenReturn(Collections.emptyMap());
     }
 
     @AfterEach
     public void tearDown() {
-        taskExecutor.shutdown(Duration.ofMinutes(1));
+        taskExecutor.requestShutdown();
+        taskExecutor.awaitShutdown(Duration.ofMinutes(1));
     }
 
     @Test
     public void shouldShutdownTaskExecutor() {
+        assertNull(taskExecutor.currentTask(), "Have task assigned before startup");
+        assertFalse(taskExecutor.isRunning());
+
+        taskExecutor.start();
+
+        assertTrue(taskExecutor.isRunning());
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT)).assignNextTask(taskExecutor);
+
+        taskExecutor.requestShutdown();
+        taskExecutor.awaitShutdown(Duration.ofMinutes(1));
+
+        verify(task).flush();
+        verify(taskManager).unassignTask(task, taskExecutor);
+
+        assertNull(taskExecutor.currentTask(), "Have task assigned after shutdown");
+        assertFalse(taskExecutor.isRunning());
+    }
+
+    @Test
+    public void shouldClearTaskReleaseFutureOnShutdown() throws InterruptedException {
         assertNull(taskExecutor.currentTask(), "Have task assigned before startup");
 
         taskExecutor.start();
 
         verify(taskManager, timeout(VERIFICATION_TIMEOUT)).assignNextTask(taskExecutor);
 
-        taskExecutor.shutdown(Duration.ofMinutes(1));
+        final KafkaFuture<StreamTask> future = taskExecutor.unassign();
+        taskExecutor.requestShutdown();
+        taskExecutor.awaitShutdown(Duration.ofMinutes(1));
 
-        verify(task).prepareCommit();
-        verify(taskManager).unassignTask(task, taskExecutor);
-
+        waitForCondition(future::isDone, "Await for unassign future to complete");
         assertNull(taskExecutor.currentTask(), "Have task assigned after shutdown");
     }
 
@@ -92,7 +118,7 @@ public class DefaultTaskExecutorTest {
 
         taskExecutor.start();
 
-        verify(taskManager, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).awaitProcessableTasks();
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).awaitProcessableTasks(any());
     }
 
     @Test
@@ -104,7 +130,7 @@ public class DefaultTaskExecutorTest {
         taskExecutor.start();
 
         verify(taskManager, timeout(VERIFICATION_TIMEOUT)).unassignTask(task, taskExecutor);
-        verify(task).prepareCommit();
+        verify(task).flush();
         assertNull(taskExecutor.currentTask());
     }
 
@@ -204,12 +230,14 @@ public class DefaultTaskExecutorTest {
         taskExecutor.start();
 
         verify(taskManager, timeout(VERIFICATION_TIMEOUT)).assignNextTask(taskExecutor);
-        assertNotNull(taskExecutor.currentTask());
+        TestUtils.waitForCondition(() -> taskExecutor.currentTask() != null,
+                VERIFICATION_TIMEOUT,
+                "Task reassign take too much time");
 
         final KafkaFuture<StreamTask> future = taskExecutor.unassign();
 
         verify(taskManager, timeout(VERIFICATION_TIMEOUT)).unassignTask(task, taskExecutor);
-        verify(task).prepareCommit();
+        verify(task).flush();
         assertNull(taskExecutor.currentTask());
 
         assertTrue(future.isDone(), "Unassign is not completed");
@@ -223,10 +251,22 @@ public class DefaultTaskExecutorTest {
 
         taskExecutor.start();
 
-        verify(taskManager, timeout(VERIFICATION_TIMEOUT)).assignNextTask(taskExecutor);
         verify(taskManager, timeout(VERIFICATION_TIMEOUT)).setUncaughtException(exception, task.id());
         verify(taskManager, timeout(VERIFICATION_TIMEOUT)).unassignTask(task, taskExecutor);
         assertNull(taskExecutor.currentTask());
+        assertTrue(taskExecutor.isRunning(), "should not shut down upon exception");
+    }
+
+    @Test
+    public void shouldNotFlushOnException() {
+        final StreamsException exception = mock(StreamsException.class);
+        when(task.process(anyLong())).thenThrow(exception);
+        when(taskManager.hasUncaughtException(task.id())).thenReturn(true);
+
+        taskExecutor.start();
+
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT)).unassignTask(task, taskExecutor);
+        verify(task, never()).flush();
     }
 
 }

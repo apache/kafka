@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server.metadata;
+package kafka.server.metadata
 
 import java.util
 import java.util.Properties

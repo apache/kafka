@@ -19,7 +19,10 @@ package kafka.server
 import org.apache.kafka.clients.{ClientResponse, MockClient, NodeApiVersions}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AbstractRequest
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.util.MockTime
+
+import java.util.Optional
 
 class MockNodeToControllerChannelManager(
   val client: MockClient,
@@ -29,7 +32,7 @@ class MockNodeToControllerChannelManager(
   val retryTimeoutMs: Int = 60000,
   val requestTimeoutMs: Int = 30000
 ) extends NodeToControllerChannelManager {
-  private val unsentQueue = new java.util.ArrayDeque[NodeToControllerQueueItem]()
+  val unsentQueue = new java.util.concurrent.ConcurrentLinkedDeque[NodeToControllerQueueItem]()
 
   client.setNodeApiVersions(controllerApiVersions)
 
@@ -48,9 +51,11 @@ class MockNodeToControllerChannelManager(
     ))
   }
 
-  override def controllerApiVersions(): Option[NodeApiVersions] = {
-    Some(controllerApiVersions)
+  override def controllerApiVersions(): Optional[NodeApiVersions] = {
+    Optional.of(controllerApiVersions)
   }
+
+  override def getTimeoutMs: Long = retryTimeoutMs.toLong
 
   private[server] def handleResponse(request: NodeToControllerQueueItem)(response: ClientResponse): Unit = {
     if (response.authenticationException != null || response.versionMismatch != null) {

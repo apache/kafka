@@ -25,13 +25,15 @@ import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.junit.Test;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+
+import org.junit.jupiter.api.Test;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.utils.TestUtils.mockStoreFactory;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class GraphGraceSearchUtilTest {
     @Test
@@ -59,7 +61,7 @@ public class GraphGraceSearchUtilTest {
                 },
                 "dummy"
             ),
-            (StoreBuilder<?>) null
+            (StoreFactory) null
         );
 
         final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);
@@ -81,14 +83,14 @@ public class GraphGraceSearchUtilTest {
             new ProcessorParameters<>(
                 new KStreamWindowAggregate<String, Long, Integer, TimeWindow>(
                     windows,
-                    "asdf",
+                    mockStoreFactory("asdf"),
                     EmitStrategy.onWindowUpdate(),
                     null,
                     null
                 ),
                 "asdf"
             ),
-            (StoreBuilder<?>) null
+            (StoreFactory) null
         );
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
@@ -104,7 +106,7 @@ public class GraphGraceSearchUtilTest {
             new ProcessorParameters<>(
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
                     windows,
-                    "asdf",
+                    mockStoreFactory("asdf"),
                     EmitStrategy.onWindowUpdate(),
                     null,
                     null,
@@ -112,7 +114,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreBuilder<?>) null
+            (StoreFactory) null
         );
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
@@ -125,9 +127,9 @@ public class GraphGraceSearchUtilTest {
         final StatefulProcessorNode<String, Long> graceGrandparent = new StatefulProcessorNode<>(
             "asdf",
             new ProcessorParameters<>(new KStreamSessionWindowAggregate<String, Long, Integer>(
-                windows, "asdf", EmitStrategy.onWindowUpdate(), null, null, null
+                windows, mockStoreFactory("asdf"), EmitStrategy.onWindowUpdate(), null, null, null
             ), "asdf"),
-            (StoreBuilder<?>) null
+            (StoreFactory) null
         );
 
         final StatefulProcessorNode<String, Long> statefulParent = new StatefulProcessorNode<>(
@@ -141,7 +143,7 @@ public class GraphGraceSearchUtilTest {
                 },
                 "dummy"
             ),
-            (StoreBuilder<?>) null
+            (StoreFactory) null
         );
         graceGrandparent.addChild(statefulParent);
 
@@ -160,7 +162,7 @@ public class GraphGraceSearchUtilTest {
             new ProcessorParameters<>(
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
                     windows,
-                    "asdf",
+                    mockStoreFactory("asdf"),
                     EmitStrategy.onWindowUpdate(),
                     null,
                     null,
@@ -168,7 +170,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreBuilder<?>) null
+            (StoreFactory) null
         );
 
         final ProcessorGraphNode<String, Long> statelessParent = new ProcessorGraphNode<>("stateless", null);
@@ -188,7 +190,7 @@ public class GraphGraceSearchUtilTest {
             new ProcessorParameters<>(
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
                     SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1234L)),
-                    "asdf",
+                    mockStoreFactory("asdf"),
                     EmitStrategy.onWindowUpdate(),
                     null,
                     null,
@@ -196,7 +198,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreBuilder<?>) null
+            (StoreFactory) null
         );
 
         final StatefulProcessorNode<String, Long> rightParent = new StatefulProcessorNode<>(
@@ -204,14 +206,14 @@ public class GraphGraceSearchUtilTest {
             new ProcessorParameters<>(
                 new KStreamWindowAggregate<String, Long, Integer, TimeWindow>(
                     TimeWindows.ofSizeAndGrace(ofMillis(10L), ofMillis(4321L)),
-                    "asdf",
+                    mockStoreFactory("asdf"),
                     EmitStrategy.onWindowUpdate(),
                     null,
                     null
                 ),
                 "asdf"
             ),
-            (StoreBuilder<?>) null
+            (StoreFactory) null
         );
 
         final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);

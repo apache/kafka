@@ -20,13 +20,14 @@ package kafka.server
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.test.MockController
-import kafka.utils.NotNothing
+import kafka.server.metadata.KRaftMetadataCache
+import org.apache.kafka.common.test.MockController
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => OldAlterConfigsResource, AlterConfigsResourceCollection => OldAlterConfigsResourceCollection, AlterableConfig => OldAlterableConfig, AlterableConfigCollection => OldAlterableConfigCollection}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
@@ -51,8 +52,14 @@ import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.network.metrics.RequestChannelMetrics
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
+import org.apache.kafka.server.util.FutureUtils
+import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -60,18 +67,20 @@ import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.slf4j.LoggerFactory
 
 import java.net.InetAddress
 import java.util
 import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
-import java.util.{Collections, Properties}
-import scala.annotation.nowarn
+import java.util.{Collections, Optional, Properties}
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 class ControllerApisTest {
+  val logger = LoggerFactory.getLogger(classOf[ControllerApisTest])
+
   object MockControllerMutationQuota {
     val errorMessage = "quota exceeded in test"
     var throttleTimeMs = 1000
@@ -96,7 +105,7 @@ class ControllerApisTest {
   private val nodeId = 1
   private val brokerRack = "Rack1"
   private val clientID = "Client1"
-  private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
+  private val requestChannelMetrics: RequestChannelMetrics = mock(classOf[RequestChannelMetrics])
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
   private val time = new MockTime
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
@@ -117,8 +126,9 @@ class ControllerApisTest {
   )
   private val replicaQuotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
   private val raftManager: RaftManager[ApiMessageAndVersion] = mock(classOf[RaftManager[ApiMessageAndVersion]])
+  private val metadataCache: KRaftMetadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
-  private val quotasNeverThrottleControllerMutations = QuotaManagers(
+  private val quotasNeverThrottleControllerMutations = new QuotaManagers(
     clientQuotaManager,
     clientQuotaManager,
     clientRequestQuotaManager,
@@ -126,9 +136,9 @@ class ControllerApisTest {
     replicaQuotaManager,
     replicaQuotaManager,
     replicaQuotaManager,
-    None)
+    Optional.empty())
 
-  private val quotasAlwaysThrottleControllerMutations = QuotaManagers(
+  private val quotasAlwaysThrottleControllerMutations = new QuotaManagers(
     clientQuotaManager,
     clientQuotaManager,
     clientRequestQuotaManager,
@@ -136,16 +146,19 @@ class ControllerApisTest {
     replicaQuotaManager,
     replicaQuotaManager,
     replicaQuotaManager,
-    None)
+    Optional.empty())
+
+  private var controllerApis: ControllerApis = _
 
   private def createControllerApis(authorizer: Option[Authorizer],
                                    controller: Controller,
                                    props: Properties = new Properties(),
                                    throttle: Boolean = false): ControllerApis = {
-    props.put(KafkaConfig.NodeIdProp, nodeId: java.lang.Integer)
-    props.put(KafkaConfig.ProcessRolesProp, "controller")
-    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
-    props.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9092")
+    props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId: java.lang.Integer)
+    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
+    props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9092")
     new ControllerApis(
       requestChannel,
       authorizer,
@@ -154,13 +167,13 @@ class ControllerApisTest {
       controller,
       raftManager,
       new KafkaConfig(props),
-      MetaProperties("JgxuGe9URy-E-ceaL04lEw", nodeId = nodeId),
+      "JgxuGe9URy-E-ceaL04lEw",
       new ControllerRegistrationsPublisher(),
       new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         true,
-        false,
-        () => Features.fromKRaftVersion(MetadataVersion.latest()))
+        () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting())),
+      metadataCache
     )
   }
 
@@ -199,15 +212,17 @@ class ControllerApisTest {
 
   @Test
   def testUnauthorizedFetch(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleFetch(buildRequest(new FetchRequest(new FetchRequestData(), 12))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleFetch(buildRequest(new FetchRequest(new FetchRequestData(), 12)))
+    })
   }
 
   @Test
   def testFetchSentToKRaft(): Unit = {
     when(
       raftManager.handleRequest(
+        any(classOf[RequestContext]),
         any(classOf[RequestHeader]),
         any(classOf[ApiMessage]),
         any(classOf[Long])
@@ -216,10 +231,11 @@ class ControllerApisTest {
       new CompletableFuture[ApiMessage]()
     )
 
-    createControllerApis(None, new MockController.Builder().build())
-      .handleFetch(buildRequest(new FetchRequest(new FetchRequestData(), 12)))
+    controllerApis = createControllerApis(None, new MockController.Builder().build())
+    controllerApis.handleFetch(buildRequest(new FetchRequest(new FetchRequestData(), 12)))
 
     verify(raftManager).handleRequest(
+      ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any()
@@ -234,6 +250,7 @@ class ControllerApisTest {
 
     when(
       raftManager.handleRequest(
+        any(classOf[RequestContext]),
         any(classOf[RequestHeader]),
         any(classOf[ApiMessage]),
         any(classOf[Long])
@@ -246,10 +263,12 @@ class ControllerApisTest {
     // Local time should be updated when `ControllerApis.handle` returns
     val fetchRequestData = new FetchRequestData()
     val request = buildRequest(new FetchRequest(fetchRequestData, ApiKeys.FETCH.latestVersion))
-    createControllerApis(None, new MockController.Builder().build())
-      .handle(request, RequestLocal.NoCaching)
+    controllerApis = createControllerApis(None, new MockController.Builder().build())
+    controllerApis.handle(request, RequestLocal.noCaching)
+
 
     verify(raftManager).handleRequest(
+      ArgumentMatchers.eq(request.context),
       ArgumentMatchers.eq(request.header),
       ArgumentMatchers.eq(fetchRequestData),
       ArgumentMatchers.eq(initialTimeMs)
@@ -263,15 +282,17 @@ class ControllerApisTest {
 
   @Test
   def testUnauthorizedFetchSnapshot(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleFetchSnapshot(buildRequest(new FetchSnapshotRequest(new FetchSnapshotRequestData(), 0))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleFetchSnapshot(buildRequest(new FetchSnapshotRequest(new FetchSnapshotRequestData(), 0)))
+    })
   }
 
   @Test
   def testFetchSnapshotSentToKRaft(): Unit = {
     when(
       raftManager.handleRequest(
+        any(classOf[RequestContext]),
         any(classOf[RequestHeader]),
         any(classOf[ApiMessage]),
         any(classOf[Long])
@@ -280,10 +301,11 @@ class ControllerApisTest {
       new CompletableFuture[ApiMessage]()
     )
 
-    createControllerApis(None, new MockController.Builder().build())
-      .handleFetchSnapshot(buildRequest(new FetchSnapshotRequest(new FetchSnapshotRequestData(), 0)))
+    controllerApis = createControllerApis(None, new MockController.Builder().build())
+    controllerApis.handleFetchSnapshot(buildRequest(new FetchSnapshotRequest(new FetchSnapshotRequestData(), 0)))
 
     verify(raftManager).handleRequest(
+      ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any()
@@ -292,9 +314,10 @@ class ControllerApisTest {
 
   @Test
   def testUnauthorizedVote(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleVote(buildRequest(new VoteRequest.Builder(new VoteRequestData()).build(0))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleVote(buildRequest(new VoteRequest.Builder(new VoteRequestData()).build(0)))
+    })
   }
 
   @Test
@@ -305,19 +328,19 @@ class ControllerApisTest {
           setResourceName("1").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000")).iterator())),
         new OldAlterConfigsResource().
           setResourceName("2").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000")).iterator())),
         new OldAlterConfigsResource().
           setResourceName("2").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000")).iterator())),
         new OldAlterConfigsResource().
           setResourceName("baz").
@@ -327,8 +350,8 @@ class ControllerApisTest {
             setValue("bar")).iterator())),
         ).iterator()))
     val request = buildRequest(new AlterConfigsRequest(requestData, 0))
-    createControllerApis(Some(createDenyAllAuthorizer()),
-      new MockController.Builder().build()).handleLegacyAlterConfigs(request)
+    controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+    controllerApis.handleLegacyAlterConfigs(request)
     val capturedResponse: ArgumentCaptor[AbstractResponse] =
       ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
@@ -358,57 +381,63 @@ class ControllerApisTest {
 
   @Test
   def testUnauthorizedBeginQuorumEpoch(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleBeginQuorumEpoch(buildRequest(new BeginQuorumEpochRequest.Builder(
-          new BeginQuorumEpochRequestData()).build(0))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleBeginQuorumEpoch(buildRequest(new BeginQuorumEpochRequest.Builder(
+        new BeginQuorumEpochRequestData()).build(0)))
+    })
   }
 
   @Test
   def testUnauthorizedEndQuorumEpoch(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleEndQuorumEpoch(buildRequest(new EndQuorumEpochRequest.Builder(
-          new EndQuorumEpochRequestData()).build(0))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleEndQuorumEpoch(buildRequest(new EndQuorumEpochRequest.Builder(
+        new EndQuorumEpochRequestData()).build(0)))
+    })
   }
 
   @Test
   def testUnauthorizedDescribeQuorum(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleDescribeQuorum(buildRequest(new DescribeQuorumRequest.Builder(
-          new DescribeQuorumRequestData()).build(0))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleDescribeQuorum(buildRequest(new DescribeQuorumRequest.Builder(
+        new DescribeQuorumRequestData()).build(0)))
+    })
   }
 
   @Test
   def testUnauthorizedHandleAlterPartitionRequest(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
-          new AlterPartitionRequestData(), false).build(0))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
+        new AlterPartitionRequestData(), false).build(0)))
+    })
   }
 
   @Test
   def testUnauthorizedHandleBrokerHeartBeatRequest(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleBrokerHeartBeatRequest(buildRequest(new BrokerHeartbeatRequest.Builder(
-          new BrokerHeartbeatRequestData()).build(0))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleBrokerHeartBeatRequest(buildRequest(new BrokerHeartbeatRequest.Builder(
+        new BrokerHeartbeatRequestData()).build(0)))
+    })
   }
 
   @Test
   def testUnauthorizedHandleUnregisterBroker(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleUnregisterBroker(buildRequest(new UnregisterBrokerRequest.Builder(
-          new UnregisterBrokerRequestData()).build(0))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleUnregisterBroker(buildRequest(new UnregisterBrokerRequest.Builder(
+        new UnregisterBrokerRequestData()).build(0)))
+    })
   }
 
   @Test
   def testClose(): Unit = {
-    val apis = createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller]))
-    apis.close()
-    assertTrue(apis.isClosed)
+    controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller]))
+    controllerApis.close()
+    assertTrue(controllerApis.isClosed)
   }
 
   @Test
@@ -422,8 +451,8 @@ class ControllerApisTest {
     val request = buildRequest(brokerRegistrationRequest)
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
 
-    createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller])).handle(request,
-      RequestLocal.withThreadConfinedCaching)
+    controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller]))
+    controllerApis.handle(request, RequestLocal.withThreadConfinedCaching)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
       capturedResponse.capture(),
@@ -438,10 +467,11 @@ class ControllerApisTest {
 
   @Test
   def testUnauthorizedHandleAlterClientQuotas(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleAlterClientQuotas(buildRequest(new AlterClientQuotasRequest(
-          new AlterClientQuotasRequestData(), 0))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleAlterClientQuotas(buildRequest(new AlterClientQuotasRequest(
+        new AlterClientQuotasRequestData(), 0)))
+    })
   }
 
   @Test
@@ -452,7 +482,7 @@ class ControllerApisTest {
           setResourceName("1").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().
@@ -462,10 +492,25 @@ class ControllerApisTest {
             setName(TopicConfig.FLUSH_MS_CONFIG).
             setValue("1000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("sub").
+          setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("interval.ms").
+            setValue("100000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
         ).iterator()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
-    createControllerApis(Some(createDenyAllAuthorizer()),
-      new MockController.Builder().build()).handleIncrementalAlterConfigs(request)
+    controllerApis = createControllerApis(Some(createDenyAllAuthorizer()),
+      new MockController.Builder().build())
+    controllerApis.handleIncrementalAlterConfigs(request)
     val capturedResponse: ArgumentCaptor[AbstractResponse] =
       ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
@@ -475,41 +520,52 @@ class ControllerApisTest {
     assertNotNull(capturedResponse.getValue)
     val response = capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse]
     assertEquals(Set(new AlterConfigsResourceResponse().
-        setErrorCode(CLUSTER_AUTHORIZATION_FAILED.code()).
-        setErrorMessage(CLUSTER_AUTHORIZATION_FAILED.message()).
-        setResourceName("1").
-        setResourceType(ConfigResource.Type.BROKER.id()),
+      setErrorCode(CLUSTER_AUTHORIZATION_FAILED.code()).
+      setErrorMessage(CLUSTER_AUTHORIZATION_FAILED.message()).
+      setResourceName("1").
+      setResourceType(ConfigResource.Type.BROKER.id()),
       new AlterConfigsResourceResponse().
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
         setErrorMessage(TOPIC_AUTHORIZATION_FAILED.message()).
         setResourceName("foo").
-        setResourceType(ConfigResource.Type.TOPIC.id())),
+        setResourceType(ConfigResource.Type.TOPIC.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(CLUSTER_AUTHORIZATION_FAILED.code()).
+        setErrorMessage(CLUSTER_AUTHORIZATION_FAILED.message()).
+        setResourceName("sub").
+        setResourceType(ConfigResource.Type.CLIENT_METRICS.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(GROUP_AUTHORIZATION_FAILED.code()).
+        setErrorMessage(GROUP_AUTHORIZATION_FAILED.message()).
+        setResourceName("group-foo").
+        setResourceType(ConfigResource.Type.GROUP.id())),
       response.data().responses().asScala.toSet)
   }
 
-  @Test
-  def testInvalidIncrementalAlterConfigsResources(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testInvalidIncrementalAlterConfigsResources(denyAllAuthorizer: Boolean): Unit = {
     val requestData = new IncrementalAlterConfigsRequestData().setResources(
       new AlterConfigsResourceCollection(util.Arrays.asList(
         new AlterConfigsResource().
           setResourceName("1").
           setResourceType(ConfigResource.Type.BROKER_LOGGER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName("kafka.server.KafkaConfig").
-            setValue("TRACE").
+            setName("kafka.server.ControllerApisTest").
+            setValue("DEBUG").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().
           setResourceName("3").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().
           setResourceName("3").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().
@@ -519,10 +575,57 @@ class ControllerApisTest {
             setName("foo").
             setValue("bar").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("sub").
+          setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("interval.ms").
+            setValue("1").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("sub1").
+          setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("interval.ms").
+            setValue("1").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("sub1").
+          setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("interval.ms").
+            setValue("1").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo1").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo1").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
         ).iterator()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
-    createControllerApis(Some(createDenyAllAuthorizer()),
-      new MockController.Builder().build()).handleIncrementalAlterConfigs(request)
+    val authorizer = if (denyAllAuthorizer) {
+      Some(createDenyAllAuthorizer())
+    } else {
+      None
+    }
+    controllerApis = createControllerApis(authorizer, new MockController.Builder().build())
+    controllerApis.handleIncrementalAlterConfigs(request)
     val capturedResponse: ArgumentCaptor[AbstractResponse] =
       ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
@@ -533,8 +636,8 @@ class ControllerApisTest {
     val response = capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse]
     assertEquals(Set(
       new AlterConfigsResourceResponse().
-        setErrorCode(INVALID_REQUEST.code()).
-        setErrorMessage("Unexpected resource type BROKER_LOGGER.").
+        setErrorCode(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.code() else NONE.code()).
+        setErrorMessage(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.message() else null).
         setResourceName("1").
         setResourceType(ConfigResource.Type.BROKER_LOGGER.id()),
       new AlterConfigsResourceResponse().
@@ -546,38 +649,61 @@ class ControllerApisTest {
         setErrorCode(UNSUPPORTED_VERSION.code()).
         setErrorMessage("Unknown resource type 124.").
         setResourceName("foo").
-        setResourceType(124.toByte)),
+        setResourceType(124.toByte),
+      new AlterConfigsResourceResponse().
+        setErrorCode(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.code() else NONE.code()).
+        setErrorMessage(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.message() else null).
+        setResourceName("sub").
+        setResourceType(ConfigResource.Type.CLIENT_METRICS.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage("Duplicate resource.").
+        setResourceName("sub1").
+        setResourceType(ConfigResource.Type.CLIENT_METRICS.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(if (denyAllAuthorizer) GROUP_AUTHORIZATION_FAILED.code() else NONE.code()).
+        setErrorMessage(if (denyAllAuthorizer) GROUP_AUTHORIZATION_FAILED.message() else null).
+        setResourceName("group-foo").
+        setResourceType(ConfigResource.Type.GROUP.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage("Duplicate resource.").
+        setResourceName("group-foo1").
+        setResourceType(ConfigResource.Type.GROUP.id())),
       response.data().responses().asScala.toSet)
   }
 
   @Test
   def testUnauthorizedHandleAlterPartitionReassignments(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleAlterPartitionReassignments(buildRequest(new AlterPartitionReassignmentsRequest.Builder(
-            new AlterPartitionReassignmentsRequestData()).build())))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleAlterPartitionReassignments(buildRequest(new AlterPartitionReassignmentsRequest.Builder(
+        new AlterPartitionReassignmentsRequestData()).build()))
+    })
   }
 
   @Test
   def testUnauthorizedHandleAllocateProducerIds(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-      handleAllocateProducerIdsRequest(buildRequest(new AllocateProducerIdsRequest.Builder(
-        new AllocateProducerIdsRequestData()).build())))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleAllocateProducerIdsRequest(buildRequest(new AllocateProducerIdsRequest.Builder(
+        new AllocateProducerIdsRequestData()).build()))
+    })
   }
 
   @Test
   def testUnauthorizedHandleListPartitionReassignments(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-      handleListPartitionReassignments(buildRequest(new ListPartitionReassignmentsRequest.Builder(
-        new ListPartitionReassignmentsRequestData()).build())))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleListPartitionReassignments(buildRequest(new ListPartitionReassignmentsRequest.Builder(
+        new ListPartitionReassignmentsRequestData()).build()))
+    })
   }
 
   @Test
   def testCreateTopics(): Unit = {
     val controller = new MockController.Builder().build()
-    val controllerApis = createControllerApis(None, controller)
+    controllerApis = createControllerApis(None, controller)
     val request = new CreateTopicsRequestData().setTopics(new CreatableTopicCollection(
       util.Arrays.asList(new CreatableTopic().setName("foo").setNumPartitions(1).setReplicationFactor(3),
         new CreatableTopic().setName("foo").setNumPartitions(2).setReplicationFactor(3),
@@ -587,10 +713,11 @@ class ControllerApisTest {
         new CreatableTopic().setName("baz").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("indescribable").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("quux").setNumPartitions(2).setReplicationFactor(3),
-    ).iterator()))
+        new CreatableTopic().setName(Topic.CLUSTER_METADATA_TOPIC_NAME).setNumPartitions(2).setReplicationFactor(3),
+      ).iterator()))
     val expectedResponse = Set(new CreatableTopicResult().setName("foo").
-        setErrorCode(INVALID_REQUEST.code()).
-        setErrorMessage("Duplicate topic name."),
+      setErrorCode(INVALID_REQUEST.code()).
+      setErrorMessage("Duplicate topic name."),
       new CreatableTopicResult().setName("bar").
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Duplicate topic name."),
@@ -606,9 +733,12 @@ class ControllerApisTest {
         setTopicConfigErrorCode(TOPIC_AUTHORIZATION_FAILED.code()),
       new CreatableTopicResult().setName("quux").
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
-        setErrorMessage("Authorization failed."))
+        setErrorMessage("Authorization failed."),
+      new CreatableTopicResult().setName(Topic.CLUSTER_METADATA_TOPIC_NAME).
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage(s"Creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME} is prohibited."))
     assertEquals(expectedResponse, controllerApis.createTopics(ANONYMOUS_CONTEXT, request,
-      false,
+      hasClusterAuth = false,
       _ => Set("baz", "indescribable"),
       _ => Set("baz")).get().topics().asScala.toSet)
   }
@@ -617,17 +747,17 @@ class ControllerApisTest {
   @ValueSource(booleans = Array(true, false))
   def testCreateTopicsMutationQuota(throttle: Boolean): Unit = {
     val controller = new MockController.Builder().build()
-    val controllerApis = createControllerApis(None, controller, new Properties(), throttle)
+    controllerApis = createControllerApis(None, controller, new Properties(), throttle)
     val topicName = "foo"
     val requestData = new CreateTopicsRequestData().setTopics(new CreatableTopicCollection(
       util.Collections.singletonList(new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1)).iterator()))
     val request = new CreateTopicsRequest.Builder(requestData).build()
     val expectedResponseDataUnthrottled = Set(new CreatableTopicResult().setName(topicName).
-        setErrorCode(NONE.code()).
-        setTopicId(new Uuid(0L, 1L)).
-        setNumPartitions(1).
-        setReplicationFactor(1).
-        setTopicConfigErrorCode(NONE.code()))
+      setErrorCode(NONE.code()).
+      setTopicId(new Uuid(0L, 1L)).
+      setNumPartitions(1).
+      setReplicationFactor(1).
+      setTopicConfigErrorCode(NONE.code()))
     val expectedResponseDataThrottled = Set(new CreatableTopicResult().setName(topicName).
       setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
       setErrorMessage(THROTTLING_QUOTA_EXCEEDED.message()))
@@ -645,19 +775,19 @@ class ControllerApisTest {
   def testDeleteTopicsByName(): Unit = {
     val fooId = Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")
     val controller = new MockController.Builder().newInitialTopic("foo", fooId).build()
-    val controllerApis = createControllerApis(None, controller)
+    controllerApis = createControllerApis(None, controller)
     val request = new DeleteTopicsRequestData().setTopicNames(
       util.Arrays.asList("foo", "bar", "quux", "quux"))
     val expectedResponse = Set(new DeletableTopicResult().setName("quux").
-        setErrorCode(INVALID_REQUEST.code()).
-        setErrorMessage("Duplicate topic name."),
+      setErrorCode(INVALID_REQUEST.code()).
+      setErrorMessage("Duplicate topic name."),
       new DeletableTopicResult().setName("bar").
         setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()).
         setErrorMessage("This server does not host this topic-partition."),
       new DeletableTopicResult().setName("foo").setTopicId(fooId))
     assertEquals(expectedResponse, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-      true,
+      hasClusterAuth = true,
       _ => Set.empty,
       _ => Set.empty).get().asScala.toSet)
   }
@@ -668,22 +798,22 @@ class ControllerApisTest {
     val barId = Uuid.fromString("VlFu5c51ToiNx64wtwkhQw")
     val quuxId = Uuid.fromString("ObXkLhL_S5W62FAE67U3MQ")
     val controller = new MockController.Builder().newInitialTopic("foo", fooId).build()
-    val controllerApis = createControllerApis(None, controller)
+    controllerApis = createControllerApis(None, controller)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(fooId))
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(barId))
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(quuxId))
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(quuxId))
     val response = Set(new DeletableTopicResult().setName(null).setTopicId(quuxId).
-        setErrorCode(INVALID_REQUEST.code()).
-        setErrorMessage("Duplicate topic id."),
+      setErrorCode(INVALID_REQUEST.code()).
+      setErrorMessage("Duplicate topic id."),
       new DeletableTopicResult().setName(null).setTopicId(barId).
         setErrorCode(UNKNOWN_TOPIC_ID.code()).
         setErrorMessage("This server does not host this topic ID."),
       new DeletableTopicResult().setName("foo").setTopicId(fooId))
     assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-      true,
+      hasClusterAuth = true,
       _ => Set.empty,
       _ => Set.empty).get().asScala.toSet)
   }
@@ -696,7 +826,7 @@ class ControllerApisTest {
     val controller = new MockController.Builder().
       newInitialTopic("foo", fooId).
       newInitialTopic("bar", barId).build()
-    val controllerApis = createControllerApis(None, controller)
+    controllerApis = createControllerApis(None, controller)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(ZERO_UUID))
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(fooId))
@@ -709,8 +839,8 @@ class ControllerApisTest {
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(bazId))
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(bazId))
     val response = Set(new DeletableTopicResult().setName(null).setTopicId(ZERO_UUID).
-        setErrorCode(INVALID_REQUEST.code()).
-        setErrorMessage("Neither topic name nor id were specified."),
+      setErrorCode(INVALID_REQUEST.code()).
+      setErrorMessage("Neither topic name nor id were specified."),
       new DeletableTopicResult().setName("foo").setTopicId(fooId).
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("You may not specify both topic name and topic id."),
@@ -725,7 +855,7 @@ class ControllerApisTest {
         setErrorMessage("Duplicate topic id."))
     assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-      false,
+      hasClusterAuth = false,
       names => names.toSet,
       names => names.toSet).get().asScala.toSet)
   }
@@ -741,15 +871,15 @@ class ControllerApisTest {
       newInitialTopic("bar", barId).
       newInitialTopic("baz", bazId).
       newInitialTopic("quux", quuxId).build()
-    val controllerApis = createControllerApis(None, controller)
+    controllerApis = createControllerApis(None, controller)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(fooId))
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(barId))
     request.topics().add(new DeleteTopicState().setName("baz").setTopicId(ZERO_UUID))
     request.topics().add(new DeleteTopicState().setName("quux").setTopicId(ZERO_UUID))
     val response = Set(new DeletableTopicResult().setName(null).setTopicId(barId).
-        setErrorCode(TOPIC_AUTHORIZATION_FAILED.code).
-        setErrorMessage(TOPIC_AUTHORIZATION_FAILED.message),
+      setErrorCode(TOPIC_AUTHORIZATION_FAILED.code).
+      setErrorMessage(TOPIC_AUTHORIZATION_FAILED.message),
       new DeletableTopicResult().setName("quux").setTopicId(ZERO_UUID).
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code).
         setErrorMessage(TOPIC_AUTHORIZATION_FAILED.message),
@@ -761,7 +891,7 @@ class ControllerApisTest {
         setErrorMessage(TOPIC_AUTHORIZATION_FAILED.message))
     assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-      false,
+      hasClusterAuth = false,
       _ => Set("foo", "baz"),
       _ => Set.empty).get().asScala.toSet)
   }
@@ -770,14 +900,14 @@ class ControllerApisTest {
   def testNotAuthorizedToDeleteWithTopicNotExisting(): Unit = {
     val barId = Uuid.fromString("VlFu5c51ToiNx64wtwkhQw")
     val controller = new MockController.Builder().build()
-    val controllerApis = createControllerApis(None, controller)
+    controllerApis = createControllerApis(None, controller)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))
     request.topics().add(new DeleteTopicState().setName("bar").setTopicId(ZERO_UUID))
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(barId))
     val expectedResponse = Set(new DeletableTopicResult().setName("foo").
-        setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code).
-        setErrorMessage(UNKNOWN_TOPIC_OR_PARTITION.message),
+      setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code).
+      setErrorMessage(UNKNOWN_TOPIC_OR_PARTITION.message),
       new DeletableTopicResult().setName("bar").
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code).
         setErrorMessage(TOPIC_AUTHORIZATION_FAILED.message),
@@ -786,7 +916,7 @@ class ControllerApisTest {
         setErrorMessage(UNKNOWN_TOPIC_ID.message))
     assertEquals(expectedResponse, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-      false,
+      hasClusterAuth = false,
       _ => Set("foo"),
       _ => Set.empty).get().asScala.toSet)
   }
@@ -798,14 +928,14 @@ class ControllerApisTest {
     val controller = new MockController.Builder().
       newInitialTopic("foo", fooId).build()
     controller.setActive(false)
-    val controllerApis = createControllerApis(None, controller)
+    controllerApis = createControllerApis(None, controller)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(fooId))
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(barId))
     assertEquals(classOf[NotControllerException], assertThrows(
       classOf[ExecutionException], () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-        false,
+        hasClusterAuth = false,
         _ => Set("foo", "bar"),
         _ => Set("foo", "bar")).get()).getCause.getClass)
   }
@@ -816,20 +946,20 @@ class ControllerApisTest {
     val controller = new MockController.Builder().
       newInitialTopic("foo", fooId).build()
     val props = new Properties()
-    props.put(KafkaConfig.DeleteTopicEnableProp, "false")
-    val controllerApis = createControllerApis(None, controller, props)
+    props.put(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "false")
+    controllerApis = createControllerApis(None, controller, props)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))
     assertThrows(classOf[TopicDeletionDisabledException],
       () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-        false,
+        hasClusterAuth = false,
         _ => Set("foo", "bar"),
         _ => Set("foo", "bar")))
     assertThrows(classOf[InvalidRequestException],
       () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         1,
-        false,
+        hasClusterAuth = false,
         _ => Set("foo", "bar"),
         _ => Set("foo", "bar")))
   }
@@ -838,7 +968,7 @@ class ControllerApisTest {
   @ValueSource(booleans = Array(true, false))
   def testCreatePartitionsRequest(validateOnly: Boolean): Unit = {
     val controller = mock(classOf[Controller])
-    val controllerApis = createControllerApis(None, controller)
+    controllerApis = createControllerApis(None, controller)
     val request = new CreatePartitionsRequestData()
     request.topics().add(new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
@@ -878,8 +1008,7 @@ class ControllerApisTest {
       .newInitialTopic("foo", Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"))
       .build()
     val authorizer = mock(classOf[Authorizer])
-    val controllerApis = createControllerApis(Some(authorizer), controller)
-
+    controllerApis = createControllerApis(Some(authorizer), controller)
     val requestData = new CreatePartitionsRequestData()
     requestData.topics().add(new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(2))
     requestData.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(10))
@@ -917,7 +1046,7 @@ class ControllerApisTest {
     val controller = new MockController.Builder()
       .newInitialTopic(topicName, Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"), 1)
       .build()
-    val controllerApis = createControllerApis(None, controller, new Properties(), throttle)
+    controllerApis = createControllerApis(None, controller, new Properties(), throttle)
     val requestData = new CreatePartitionsRequestData()
     requestData.topics().add(new CreatePartitionsTopic().setName(topicName).setAssignments(null).setCount(2))
     val request = new CreatePartitionsRequest.Builder(requestData).build()
@@ -940,8 +1069,7 @@ class ControllerApisTest {
   def testElectLeadersAuthorization(): Unit = {
     val authorizer = mock(classOf[Authorizer])
     val controller = mock(classOf[Controller])
-    val controllerApis = createControllerApis(Some(authorizer), controller)
-
+    controllerApis = createControllerApis(Some(authorizer), controller)
     val request = new ElectLeadersRequest.Builder(
       ElectionType.PREFERRED,
       null,
@@ -963,8 +1091,7 @@ class ControllerApisTest {
   @Test
   def testElectLeadersHandledByController(): Unit = {
     val controller = mock(classOf[Controller])
-    val controllerApis = createControllerApis(None, controller)
-
+    controllerApis = createControllerApis(None, controller)
     val request = new ElectLeadersRequest.Builder(
       ElectionType.PREFERRED,
       null,
@@ -972,7 +1099,7 @@ class ControllerApisTest {
     ).build()
 
     val responseData = new ElectLeadersResponseData()
-        .setErrorCode(Errors.NOT_CONTROLLER.code)
+      .setErrorCode(Errors.NOT_CONTROLLER.code)
 
     when(controller.electLeaders(any[ControllerRequestContext],
       ArgumentMatchers.eq(request.data)
@@ -987,8 +1114,7 @@ class ControllerApisTest {
     val topicId = Uuid.randomUuid()
     val topicName = "foo"
     val controller = mock(classOf[Controller])
-    val controllerApis = createControllerApis(None, controller)
-
+    controllerApis = createControllerApis(None, controller)
     val findNamesFuture = CompletableFuture.completedFuture(
       singletonMap(topicId, new ResultOrError(topicName))
     )
@@ -1031,7 +1157,7 @@ class ControllerApisTest {
     val controller = new MockController.Builder()
       .newInitialTopic(topicName, topicId, 1)
       .build()
-    val controllerApis = createControllerApis(None, controller, new Properties(), throttle)
+    controllerApis = createControllerApis(None, controller, new Properties(), throttle)
     val requestData = new DeleteTopicsRequestData().setTopics(singletonList(
       new DeleteTopicState().setTopicId(topicId)))
     val request = new DeleteTopicsRequest.Builder(requestData).build()
@@ -1055,8 +1181,7 @@ class ControllerApisTest {
   @Test
   def testAllocateProducerIdsReturnsNotController(): Unit = {
     val controller = mock(classOf[Controller])
-    val controllerApis = createControllerApis(None, controller)
-
+    controllerApis = createControllerApis(None, controller)
     // We construct the future here to mimic the logic in `QuorumController.allocateProducerIds`.
     // When an exception is raised on the original future, the `thenApply` future is also completed
     // exceptionally, but the underlying cause is wrapped in a `CompletionException`.
@@ -1083,16 +1208,35 @@ class ControllerApisTest {
     assertEquals(Errors.NOT_CONTROLLER, response.error)
   }
 
+  @Test
+  def testAssignReplicasToDirs(): Unit = {
+    val controller = mock(classOf[Controller])
+    val authorizer = mock(classOf[Authorizer])
+    controllerApis = createControllerApis(Some(authorizer), controller)
+    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData()).build()
+
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(Collections.singletonList(new Action(
+      AclOperation.CLUSTER_ACTION,
+      new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL),
+      1, true, true
+    )))))
+      .thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
+    when(controller.assignReplicasToDirs(any[ControllerRequestContext], ArgumentMatchers.eq(request.data)))
+      .thenReturn(FutureUtils.failedFuture[AssignReplicasToDirsResponseData](Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()))
+
+    val response = handleRequest[AssignReplicasToDirsResponse](request, controllerApis)
+    assertEquals(new AssignReplicasToDirsResponseData().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()), response.data)
+  }
+
   private def handleRequest[T <: AbstractResponse](
     request: AbstractRequest,
     controllerApis: ControllerApis
   )(
-    implicit classTag: ClassTag[T],
-    @nowarn("cat=unused") nn: NotNothing[T]
+    implicit classTag: ClassTag[T]
   ): T = {
     val req = buildRequest(request)
 
-    controllerApis.handle(req, RequestLocal.NoCaching)
+    controllerApis.handle(req, RequestLocal.noCaching)
 
     val capturedResponse: ArgumentCaptor[AbstractResponse] =
       ArgumentCaptor.forClass(classOf[AbstractResponse])
@@ -1108,6 +1252,7 @@ class ControllerApisTest {
         throw new ClassCastException(s"Expected response with type ${classTag.runtimeClass}, " +
           s"but found ${response.getClass}")
     }
+
   }
 
   @Test
@@ -1118,7 +1263,7 @@ class ControllerApisTest {
     val response = new FetchResponseData()
     val responseFuture = new CompletableFuture[ApiMessage]()
     val errorResponseFuture = new AtomicReference[AbstractResponse]()
-    when(raftManager.handleRequest(any(), any(), any())).thenReturn(responseFuture)
+    when(raftManager.handleRequest(any(), any(), any(), any())).thenReturn(responseFuture)
     when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
       // Simulate an encoding failure in the initial fetch response
       throw new UnsupportedVersionException("Something went wrong")
@@ -1128,8 +1273,8 @@ class ControllerApisTest {
     }
 
     // Calling handle does not block since we do not call get() in ControllerApis
-    createControllerApis(None,
-      new MockController.Builder().build()).handle(request, null)
+    controllerApis = createControllerApis(None, new MockController.Builder().build())
+    controllerApis.handle(request, null)
 
     // When we complete this future, the completion stages will fire (including the error handler in ControllerApis#request)
     responseFuture.complete(response)
@@ -1141,23 +1286,27 @@ class ControllerApisTest {
 
   @Test
   def testUnauthorizedControllerRegistrationRequest(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleControllerRegistration(buildRequest(
-          new ControllerRegistrationRequest(new ControllerRegistrationRequestData(), 0.toShort))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleControllerRegistration(buildRequest(
+        new ControllerRegistrationRequest(new ControllerRegistrationRequestData(), 0.toShort)))
+    })
   }
 
   @Test
   def testUnauthorizedDescribeClusterRequest(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
-      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleDescribeCluster(buildRequest(
-          new DescribeClusterRequest(new DescribeClusterRequestData(), 1.toShort))))
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleDescribeCluster(buildRequest(
+        new DescribeClusterRequest(new DescribeClusterRequestData(), 1.toShort)))
+    })
   }
 
   @AfterEach
   def tearDown(): Unit = {
     quotasNeverThrottleControllerMutations.shutdown()
     quotasAlwaysThrottleControllerMutations.shutdown()
+    if (controllerApis != null && !controllerApis.isClosed)
+      controllerApis.close()
   }
 }

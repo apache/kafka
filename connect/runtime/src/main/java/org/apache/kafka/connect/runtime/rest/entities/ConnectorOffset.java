@@ -64,10 +64,9 @@ public class ConnectorOffset {
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof ConnectorOffset)) {
+        if (!(obj instanceof ConnectorOffset that)) {
             return false;
         }
-        ConnectorOffset that = (ConnectorOffset) obj;
         return Objects.equals(this.partition, that.partition) &&
                 Objects.equals(this.offset, that.offset);
     }
@@ -75,5 +74,13 @@ public class ConnectorOffset {
     @Override
     public int hashCode() {
         return Objects.hash(partition, offset);
+    }
+
+    @Override
+    public String toString() {
+        return "{" +
+                "partition=" + partition +
+                ", offset=" + offset +
+                '}';
     }
 }

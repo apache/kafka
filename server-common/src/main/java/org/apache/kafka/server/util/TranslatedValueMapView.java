@@ -29,7 +29,7 @@ import java.util.function.Function;
 /**
  * A map which presents a lightweight view of another "underlying" map. Values in the
  * underlying map will be translated by a callback before they are returned.
- *
+ * <br>
  * This class is not internally synchronized. (Typically the underlyingMap is treated as
  * immutable.)
  */
@@ -43,8 +43,7 @@ public final class TranslatedValueMapView<K, V, B> extends AbstractMap<K, V> {
         @SuppressWarnings("rawtypes")
         @Override
         public boolean contains(Object o) {
-            if (!(o instanceof Entry)) return false;
-            Entry other = (Entry) o;
+            if (!(o instanceof Entry other)) return false;
             if (!underlyingMap.containsKey(other.getKey())) return false;
             B value = underlyingMap.get(other.getKey());
             V translatedValue = valueMapping.apply(value);

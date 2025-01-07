@@ -84,19 +84,26 @@ public class DescribeQuorumResponse extends AbstractResponse {
                 .setTopicName(topicPartition.topic())
                 .setPartitions(Collections.singletonList(new DescribeQuorumResponseData.PartitionData()
                     .setPartitionIndex(topicPartition.partition())
-                    .setErrorCode(error.code())))));
+                    .setErrorCode(error.code())
+                    .setErrorMessage(error.message())))));
     }
 
 
     public static DescribeQuorumResponseData singletonResponse(
         TopicPartition topicPartition,
-        DescribeQuorumResponseData.PartitionData partitionData
+        DescribeQuorumResponseData.PartitionData partitionData,
+        DescribeQuorumResponseData.NodeCollection nodes
     ) {
-        return new DescribeQuorumResponseData()
+        DescribeQuorumResponseData res = new DescribeQuorumResponseData()
             .setTopics(Collections.singletonList(new DescribeQuorumResponseData.TopicData()
                 .setTopicName(topicPartition.topic())
                 .setPartitions(Collections.singletonList(partitionData
                     .setPartitionIndex(topicPartition.partition())))));
+
+        if (nodes != null)
+            res.setNodes(nodes);
+
+        return res;
     }
 
     public static DescribeQuorumResponse parse(ByteBuffer buffer, short version) {

@@ -18,7 +18,6 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.internals.QuotaConfigs;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.protocol.Errors;
@@ -27,6 +26,8 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.config.QuotaConfig;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -71,7 +72,7 @@ public class ClientQuotaControlManagerTest {
     }
 
     private void assertInvalidEntity(ClientQuotaControlManager manager, ClientQuotaEntity entity) {
-        assertInvalidQuota(manager, entity, quotas(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0));
+        assertInvalidQuota(manager, entity, quotas(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0));
     }
 
     @Test
@@ -80,10 +81,10 @@ public class ClientQuotaControlManagerTest {
         ClientQuotaEntity entity = entity(ClientQuotaEntity.USER, "user-1");
 
         // Invalid + valid keys
-        assertInvalidQuota(manager, entity, quotas("not.a.quota.key", 0.0, QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 99.9));
+        assertInvalidQuota(manager, entity, quotas("not.a.quota.key", 0.0, QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 99.9));
 
         // Valid + invalid keys
-        assertInvalidQuota(manager, entity, quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 99.9, "not.a.quota.key", 0.0));
+        assertInvalidQuota(manager, entity, quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 99.9, "not.a.quota.key", 0.0));
 
         // Null key
         assertInvalidQuota(manager, entity, quotas(null, 99.9));
@@ -105,44 +106,44 @@ public class ClientQuotaControlManagerTest {
         List<ClientQuotaAlteration> alters = new ArrayList<>();
 
         // Add one quota
-        entityQuotaToAlterations(userEntity, quotas(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0), alters::add);
+        entityQuotaToAlterations(userEntity, quotas(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0), alters::add);
         alterQuotas(alters, manager);
         assertEquals(1, manager.clientQuotaData.get(userEntity).size());
-        assertEquals(10000.0, manager.clientQuotaData.get(userEntity).get(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
+        assertEquals(10000.0, manager.clientQuotaData.get(userEntity).get(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
 
         // Replace it and add another
         alters.clear();
         entityQuotaToAlterations(userEntity, quotas(
-            QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10001.0,
-            QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, 20000.0
+            QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10001.0,
+            QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, 20000.0
         ), alters::add);
         alterQuotas(alters, manager);
         assertEquals(2, manager.clientQuotaData.get(userEntity).size());
-        assertEquals(10001.0, manager.clientQuotaData.get(userEntity).get(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
-        assertEquals(20000.0, manager.clientQuotaData.get(userEntity).get(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
+        assertEquals(10001.0, manager.clientQuotaData.get(userEntity).get(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
+        assertEquals(20000.0, manager.clientQuotaData.get(userEntity).get(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
 
         // Remove one of the quotas, the other remains
         alters.clear();
         entityQuotaToAlterations(userEntity, quotas(
-            QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, null
+            QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, null
         ), alters::add);
         alterQuotas(alters, manager);
         assertEquals(1, manager.clientQuotaData.get(userEntity).size());
-        assertEquals(20000.0, manager.clientQuotaData.get(userEntity).get(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
+        assertEquals(20000.0, manager.clientQuotaData.get(userEntity).get(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
 
         // Remove non-existent quota, no change
         alters.clear();
         entityQuotaToAlterations(userEntity, quotas(
-                QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, null
+                QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, null
         ), alters::add);
         alterQuotas(alters, manager);
         assertEquals(1, manager.clientQuotaData.get(userEntity).size());
-        assertEquals(20000.0, manager.clientQuotaData.get(userEntity).get(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
+        assertEquals(20000.0, manager.clientQuotaData.get(userEntity).get(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
 
         // All quotas removed, we should cleanup the map
         alters.clear();
         entityQuotaToAlterations(userEntity, quotas(
-                QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, null
+                QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, null
         ), alters::add);
         alterQuotas(alters, manager);
         assertFalse(manager.clientQuotaData.containsKey(userEntity));
@@ -150,7 +151,7 @@ public class ClientQuotaControlManagerTest {
         // Remove non-existent quota, again no change
         alters.clear();
         entityQuotaToAlterations(userEntity, quotas(
-                QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, null
+                QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, null
         ), alters::add);
         alterQuotas(alters, manager);
         assertFalse(manager.clientQuotaData.containsKey(userEntity));
@@ -158,17 +159,17 @@ public class ClientQuotaControlManagerTest {
         // Mixed update
         alters.clear();
         Map<String, Double> quotas = new HashMap<>(4);
-        quotas.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 99.0);
-        quotas.put(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG, null);
-        quotas.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10002.0);
-        quotas.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, 20001.0);
+        quotas.put(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 99.0);
+        quotas.put(QuotaConfig.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG, null);
+        quotas.put(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10002.0);
+        quotas.put(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, 20001.0);
 
         entityQuotaToAlterations(userEntity, quotas, alters::add);
         alterQuotas(alters, manager);
         assertEquals(3, manager.clientQuotaData.get(userEntity).size());
-        assertEquals(20001.0, manager.clientQuotaData.get(userEntity).get(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
-        assertEquals(10002.0, manager.clientQuotaData.get(userEntity).get(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
-        assertEquals(99.0, manager.clientQuotaData.get(userEntity).get(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG), 1e-6);
+        assertEquals(20001.0, manager.clientQuotaData.get(userEntity).get(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
+        assertEquals(10002.0, manager.clientQuotaData.get(userEntity).get(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
+        assertEquals(99.0, manager.clientQuotaData.get(userEntity).get(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG), 1e-6);
     }
 
     @Test
@@ -177,27 +178,27 @@ public class ClientQuotaControlManagerTest {
 
         Map<ClientQuotaEntity, Map<String, Double>> quotasToTest = new HashMap<>();
         quotasToTest.put(userClientEntity("user-1", "client-id-1"),
-                quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 50.50));
+                quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 50.50));
         quotasToTest.put(userClientEntity("user-2", "client-id-1"),
-                quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 51.51));
+                quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 51.51));
         quotasToTest.put(userClientEntity("user-3", "client-id-2"),
-                quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 52.52));
+                quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 52.52));
         quotasToTest.put(userClientEntity(null, "client-id-1"),
-                quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 53.53));
+                quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 53.53));
         quotasToTest.put(userClientEntity("user-1", null),
-                quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 54.54));
+                quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 54.54));
         quotasToTest.put(userClientEntity("user-3", null),
-                quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 55.55));
+                quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 55.55));
         quotasToTest.put(userEntity("user-1"),
-                quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 56.56));
+                quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 56.56));
         quotasToTest.put(userEntity("user-2"),
-                quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 57.57));
+                quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 57.57));
         quotasToTest.put(userEntity("user-3"),
-                quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 58.58));
+                quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 58.58));
         quotasToTest.put(userEntity(null),
-                quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 59.59));
+                quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 59.59));
         quotasToTest.put(clientEntity("client-id-2"),
-                quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 60.60));
+                quotas(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 60.60));
 
         List<ClientQuotaAlteration> alters = new ArrayList<>();
         quotasToTest.forEach((entity, quota) -> entityQuotaToAlterations(entity, quota, alters::add));
@@ -227,19 +228,19 @@ public class ClientQuotaControlManagerTest {
                 new EntityData().setEntityType("user").setEntityName("user-3"),
                 new EntityData().setEntityType("client-id").setEntityName(null))).
                     setKey("request_percentage").setValue(55.55).setRemove(false), (short) 0),
-            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
                 new EntityData().setEntityType("user").setEntityName("user-1"))).
                     setKey("request_percentage").setValue(56.56).setRemove(false), (short) 0),
-            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
                 new EntityData().setEntityType("user").setEntityName("user-2"))).
                     setKey("request_percentage").setValue(57.57).setRemove(false), (short) 0),
-            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
                 new EntityData().setEntityType("user").setEntityName("user-3"))).
                     setKey("request_percentage").setValue(58.58).setRemove(false), (short) 0),
-            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
                 new EntityData().setEntityType("user").setEntityName(null))).
                     setKey("request_percentage").setValue(59.59).setRemove(false), (short) 0),
-            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
                 new EntityData().setEntityType("client-id").setEntityName("client-id-2"))).
                     setKey("request_percentage").setValue(60.60).setRemove(false), (short) 0));
         records = new ArrayList<>(records);
@@ -322,7 +323,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithUser() {
-        testConfigKeysForEntityType(Arrays.asList(ClientQuotaEntity.USER),
+        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.USER),
             Arrays.asList(
                 "producer_byte_rate",
                 "consumer_byte_rate",
@@ -333,7 +334,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithClientId() {
-        testConfigKeysForEntityType(Arrays.asList(ClientQuotaEntity.CLIENT_ID),
+        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.CLIENT_ID),
             Arrays.asList(
                 "producer_byte_rate",
                 "consumer_byte_rate",
@@ -355,8 +356,8 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithIp() {
-        testConfigKeysForEntityType(Arrays.asList(ClientQuotaEntity.IP),
-            Arrays.asList(
+        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.IP),
+            Collections.singletonList(
                 "connection_creation_rate"
             ));
     }
@@ -385,7 +386,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEmptyEntity() {
-        testConfigKeysError(Arrays.asList(),
+        testConfigKeysError(Collections.emptyList(),
             new ApiError(Errors.INVALID_REQUEST, "Invalid empty client quota entity"));
     }
 
@@ -421,12 +422,12 @@ public class ClientQuotaControlManagerTest {
         assertEquals(expectedError, ClientQuotaControlManager.configKeysForEntityType(entity, output));
     }
 
-    private final static HashMap<String, ConfigDef.ConfigKey> VALID_CLIENT_ID_QUOTA_KEYS;
+    private static final HashMap<String, ConfigDef.ConfigKey> VALID_CLIENT_ID_QUOTA_KEYS;
 
     static {
         VALID_CLIENT_ID_QUOTA_KEYS = new HashMap<>();
         assertEquals(ApiError.NONE, ClientQuotaControlManager.configKeysForEntityType(
-                keysToEntity(Arrays.asList(ClientQuotaEntity.CLIENT_ID)), VALID_CLIENT_ID_QUOTA_KEYS));
+                keysToEntity(Collections.singletonList(ClientQuotaEntity.CLIENT_ID)), VALID_CLIENT_ID_QUOTA_KEYS));
     }
 
     @Test

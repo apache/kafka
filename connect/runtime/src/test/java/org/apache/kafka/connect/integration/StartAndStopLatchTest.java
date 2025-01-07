@@ -17,6 +17,14 @@
 
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -25,34 +33,26 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class StartAndStopLatchTest {
 
+    private final AtomicBoolean completed = new AtomicBoolean();
     private Time clock;
     private StartAndStopLatch latch;
     private List<StartAndStopLatch> dependents;
-    private AtomicBoolean completed = new AtomicBoolean();
     private ExecutorService waiters;
     private Future<Boolean> future;
 
-    @Before
+    @BeforeEach
     public void setup() {
         clock = new MockTime();
         waiters = Executors.newSingleThreadExecutor();
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         if (waiters != null) {
             waiters.shutdownNow();

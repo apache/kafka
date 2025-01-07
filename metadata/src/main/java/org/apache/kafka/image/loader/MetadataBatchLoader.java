@@ -27,6 +27,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
+
 import org.slf4j.Logger;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -45,7 +46,7 @@ public class MetadataBatchLoader {
         STARTED_TRANSACTION,
         CONTINUED_TRANSACTION,
         ENDED_TRANSACTION,
-        ABORTED_TRANSACTION;
+        ABORTED_TRANSACTION
     }
 
     @FunctionalInterface
@@ -97,7 +98,7 @@ public class MetadataBatchLoader {
      *
      * @param image     Metadata image to reset this batch loader's state to.
      */
-    public void resetToImage(MetadataImage image) {
+    public final void resetToImage(MetadataImage image) {
         this.image = image;
         this.hasSeenRecord = true;
         this.delta = new MetadataDelta.Builder().setImage(image).build();
@@ -135,14 +136,15 @@ public class MetadataBatchLoader {
                 replay(record);
             } catch (Throwable e) {
                 faultHandler.handleFault("Error loading metadata log record from offset " +
-                    batch.baseOffset() + indexWithinBatch, e);
+                    (batch.baseOffset() + indexWithinBatch), e);
             }
 
             // Emit the accumulated delta if a new transaction has been started and one of the following is true
             // 1) this is not the first record in this batch
             // 2) this is not the first batch since last emitting a delta
             if (transactionState == TransactionState.STARTED_TRANSACTION && (indexWithinBatch > 0 || numBatches > 0)) {
-                MetadataProvenance provenance = new MetadataProvenance(lastOffset, lastEpoch, lastContainedLogTimeMs);
+                // Accumulated delta is aligned on batch boundaries iff the BeginTransactionRecord is the first record in a batch
+                MetadataProvenance provenance = new MetadataProvenance(lastOffset, lastEpoch, lastContainedLogTimeMs, indexWithinBatch == 0);
                 LogDeltaManifest manifest = LogDeltaManifest.newBuilder()
                     .provenance(provenance)
                     .leaderAndEpoch(leaderAndEpoch)
@@ -151,9 +153,10 @@ public class MetadataBatchLoader {
                     .numBytes(numBytes)     // This will be zero if we have not yet read a batch
                     .build();
                 if (log.isDebugEnabled()) {
-                    log.debug("handleCommit: Generated a metadata delta between {} and {} from {} batch(es) in {} us.",
+                    log.debug("handleCommit: Generated a metadata delta between {} and {} from {} batch(es) in {} us. The delta is {}.",
                             image.offset(), manifest.provenance().lastContainedOffset(),
-                            manifest.numBatches(), NANOSECONDS.toMicros(manifest.elapsedNs()));
+                            manifest.numBatches(), NANOSECONDS.toMicros(manifest.elapsedNs()),
+                            provenance.isOffsetBatchAligned() ? "batch aligned" : "not batch aligned");
                 }
                 applyDeltaAndUpdate(delta, manifest);
                 transactionState = TransactionState.STARTED_TRANSACTION;
@@ -177,8 +180,8 @@ public class MetadataBatchLoader {
      * Flush the metadata accumulated in this batch loader if not in the middle of a transaction. The
      * flushed metadata will be passed to the {@link MetadataUpdater} configured for this class.
      */
-    public void maybeFlushBatches(LeaderAndEpoch leaderAndEpoch) {
-        MetadataProvenance provenance = new MetadataProvenance(lastOffset, lastEpoch, lastContainedLogTimeMs);
+    public void maybeFlushBatches(LeaderAndEpoch leaderAndEpoch, boolean isOffsetBatchAligned) {
+        MetadataProvenance provenance = new MetadataProvenance(lastOffset, lastEpoch, lastContainedLogTimeMs, isOffsetBatchAligned);
         LogDeltaManifest manifest = LogDeltaManifest.newBuilder()
             .provenance(provenance)
             .leaderAndEpoch(leaderAndEpoch)

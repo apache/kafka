@@ -35,6 +35,8 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     private final File baseDirectory;
     public boolean initialized;
     public boolean closed;
+    public boolean flushed;
+    public boolean checkpointWritten;
 
     public GlobalStateManagerStub(final Set<String> storeNames,
                                   final Map<TopicPartition, Long> offsets,
@@ -64,7 +66,9 @@ public class GlobalStateManagerStub implements GlobalStateManager {
                               final CommitCallback checkpoint) {}
 
     @Override
-    public void flush() {}
+    public void flush() {
+        flushed = true;
+    }
 
     @Override
     public void close() {
@@ -77,15 +81,17 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void checkpoint() {}
+    public void checkpoint() {
+        checkpointWritten = true;
+    }
 
     @Override
-    public StateStore getStore(final String name) {
+    public StateStore store(final String name) {
         return null;
     }
 
     @Override
-    public StateStore getGlobalStore(final String name) {
+    public StateStore globalStore(final String name) {
         return null;
     }
 

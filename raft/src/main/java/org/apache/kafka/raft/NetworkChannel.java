@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.raft;
 
-import java.io.Closeable;
+import org.apache.kafka.common.network.ListenerName;
 
 /**
  * A simple network interface with few assumptions. We do not assume ordering
  * of requests or even that every outbound request will receive a response.
  */
-public interface NetworkChannel extends Closeable {
+public interface NetworkChannel extends AutoCloseable {
 
     /**
      * Generate a new and unique correlationId for a new request to be sent.
@@ -37,10 +37,11 @@ public interface NetworkChannel extends Closeable {
     void send(RaftRequest.Outbound request);
 
     /**
-     * Update connection information for the given id.
+     * The name of listener used when sending requests.
+     *
+     * @return the name of the listener
      */
-    void updateEndpoint(int id, RaftConfig.InetAddressSpec address);
+    ListenerName listenerName();
 
-    default void close() {}
-
+    default void close() throws InterruptedException {}
 }

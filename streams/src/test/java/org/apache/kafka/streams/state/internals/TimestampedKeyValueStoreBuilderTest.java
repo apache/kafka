@@ -22,22 +22,25 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+
 import org.hamcrest.CoreMatchers;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Collections;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class TimestampedKeyValueStoreBuilderTest {
 
     @Mock
@@ -46,9 +49,7 @@ public class TimestampedKeyValueStoreBuilderTest {
     private RocksDBTimestampedStore inner;
     private TimestampedKeyValueStoreBuilder<String, String> builder;
 
-    @Before
-    public void setUp() {
-        when(supplier.get()).thenReturn(inner);
+    private void setUpWithoutInner() {
         when(supplier.name()).thenReturn("name");
         when(supplier.metricsScope()).thenReturn("metricScope");
 
@@ -60,14 +61,21 @@ public class TimestampedKeyValueStoreBuilderTest {
         );
     }
 
+    private void setUp() {
+        when(supplier.get()).thenReturn(inner);
+        setUpWithoutInner();
+    }
+
     @Test
     public void shouldHaveMeteredStoreAsOuterStore() {
+        setUp();
         final TimestampedKeyValueStore<String, String> store = builder.build();
         assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
     }
 
     @Test
     public void shouldHaveChangeLoggingStoreByDefault() {
+        setUp();
         final TimestampedKeyValueStore<String, String> store = builder.build();
         assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
         final StateStore next = ((WrappedStateStore) store).wrapped();
@@ -76,6 +84,7 @@ public class TimestampedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
+        setUp();
         final TimestampedKeyValueStore<String, String> store = builder.withLoggingDisabled().build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
         assertThat(next, CoreMatchers.equalTo(inner));
@@ -83,6 +92,7 @@ public class TimestampedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldHaveCachingStoreWhenEnabled() {
+        setUp();
         final TimestampedKeyValueStore<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
@@ -91,6 +101,7 @@ public class TimestampedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
+        setUp();
         final TimestampedKeyValueStore<String, String> store = builder
             .withLoggingEnabled(Collections.emptyMap())
             .build();
@@ -102,6 +113,7 @@ public class TimestampedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
+        setUp();
         final TimestampedKeyValueStore<String, String> store = builder
             .withLoggingEnabled(Collections.emptyMap())
             .withCachingEnabled()
@@ -116,6 +128,7 @@ public class TimestampedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldNotWrapTimestampedByteStore() {
+        setUp();
         when(supplier.get()).thenReturn(new RocksDBTimestampedStore("name", "metrics-scope"));
 
         final TimestampedKeyValueStore<String, String> store = builder
@@ -127,6 +140,7 @@ public class TimestampedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldWrapPlainKeyValueStoreAsTimestampStore() {
+        setUp();
         when(supplier.get()).thenReturn(new RocksDBStore("name", "metrics-scope"));
 
         final TimestampedKeyValueStore<String, String> store = builder
@@ -139,28 +153,33 @@ public class TimestampedKeyValueStoreBuilderTest {
     @SuppressWarnings("all")
     @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
+        setUpWithoutInner();
         assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
     }
 
     @Test
     public void shouldNotThrowNullPointerIfKeySerdeIsNull() {
+        setUpWithoutInner();
         // does not throw
         new TimestampedKeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
     }
 
     @Test
     public void shouldNotThrowNullPointerIfValueSerdeIsNull() {
+        setUpWithoutInner();
         // does not throw
         new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
     }
 
     @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
+        setUpWithoutInner();
         assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
+        setUpWithoutInner();
         when(supplier.metricsScope()).thenReturn(null);
 
         final Exception e = assertThrows(NullPointerException.class,

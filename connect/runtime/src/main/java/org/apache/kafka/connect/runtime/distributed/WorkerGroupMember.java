@@ -19,16 +19,17 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
@@ -48,6 +50,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
+
+import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 
 /**
  * This class manages the coordination process with brokers for the Connect cluster group membership. It ties together
@@ -84,8 +89,7 @@ public class WorkerGroupMember {
                     .tags(metricsTags);
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
 
-            Map<String, Object> contextLabels = new HashMap<>();
-            contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+            Map<String, Object> contextLabels = new HashMap<>(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             contextLabels.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, config.kafkaClusterId());
             contextLabels.put(WorkerConfig.CONNECT_GROUP_ID, config.getString(DistributedConfig.GROUP_ID_CONFIG));
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, contextLabels);
@@ -116,7 +120,10 @@ public class WorkerGroupMember {
                     time,
                     true,
                     new ApiVersions(),
-                    logContext);
+                    logContext,
+                    config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
+                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
+            );
             this.client = new ConsumerNetworkClient(
                     logContext,
                     netClient,
@@ -158,14 +165,14 @@ public class WorkerGroupMember {
      * Ensure that the connection to the broker coordinator is up and that the worker is an
      * active member of the group.
      */
-    public void ensureActive() {
-        coordinator.poll(0);
+    public void ensureActive(Supplier<UncheckedCloseable> onPoll) {
+        coordinator.poll(0, onPoll);
     }
 
-    public void poll(long timeout) {
+    public void poll(long timeout, Supplier<UncheckedCloseable> onPoll) {
         if (timeout < 0)
             throw new IllegalArgumentException("Timeout must not be negative");
-        coordinator.poll(timeout);
+        coordinator.poll(timeout, onPoll);
     }
 
     /**

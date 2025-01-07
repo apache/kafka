@@ -19,11 +19,11 @@ package org.apache.kafka.server.util;
 
 /**
  * This class helps producers throttle throughput.
- *
+ * <br>
  * If targetThroughput >= 0, the resulting average throughput will be approximately
  * min(targetThroughput, maximumPossibleThroughput). If targetThroughput < 0,
  * no throttling will occur.
- *
+ * <br>
  * To use, do this between successive send attempts:
  * <pre>
  *     {@code
@@ -43,7 +43,7 @@ public class ThroughputThrottler {
 
     private final long startMs;
     private final long sleepTimeNs;
-    private final long targetThroughput;
+    private final double targetThroughput;
 
     private long sleepDeficitNs = 0;
     private boolean wakeup = false;
@@ -52,11 +52,11 @@ public class ThroughputThrottler {
      * @param targetThroughput Can be messages/sec or bytes/sec
      * @param startMs          When the very first message is sent
      */
-    public ThroughputThrottler(long targetThroughput, long startMs) {
+    public ThroughputThrottler(double targetThroughput, long startMs) {
         this.startMs = startMs;
         this.targetThroughput = targetThroughput;
         this.sleepTimeNs = targetThroughput > 0 ?
-                           NS_PER_SEC / targetThroughput :
+                (long) (NS_PER_SEC / targetThroughput) :
                            Long.MAX_VALUE;
     }
 
@@ -64,7 +64,7 @@ public class ThroughputThrottler {
      * @param amountSoFar bytes produced so far if you want to throttle data throughput, or
      *                    messages produced so far if you want to throttle message throughput.
      * @param sendStartMs timestamp of the most recently sent message
-     * @return
+     * @return <code>true</code> if throttling should happen
      */
     public boolean shouldThrottle(long amountSoFar, long sendStartMs) {
         if (this.targetThroughput < 0) {
@@ -73,12 +73,12 @@ public class ThroughputThrottler {
         }
 
         float elapsedSec = (sendStartMs - startMs) / 1000.f;
-        return elapsedSec > 0 && (amountSoFar / elapsedSec) > this.targetThroughput;
+        return elapsedSec > 0 && ((double) amountSoFar / elapsedSec) > this.targetThroughput;
     }
 
     /**
      * Occasionally blocks for small amounts of time to achieve targetThroughput.
-     *
+     * <br>
      * Note that if targetThroughput is 0, this will block extremely aggressively.
      */
     public void throttle() {
@@ -136,4 +136,3 @@ public class ThroughputThrottler {
         }
     }
 }
-

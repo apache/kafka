@@ -22,13 +22,14 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class MaterializedTest {
 
@@ -99,14 +100,8 @@ public class MaterializedTest {
 
     @Test
     public void shouldThrowTopologyExceptionIfStoreNameExceedsMaxAllowedLength() {
-        final StringBuffer invalidStoreNameBuffer = new StringBuffer();
         final int maxNameLength = 249;
-
-        for (int i = 0; i < maxNameLength + 1; i++) {
-            invalidStoreNameBuffer.append('a');
-        }
-
-        final String invalidStoreName = invalidStoreNameBuffer.toString();
+        final String invalidStoreName = "a".repeat(maxNameLength + 1);
 
         final TopologyException e = assertThrows(TopologyException.class,
             () -> Materialized.as(invalidStoreName));

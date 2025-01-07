@@ -21,12 +21,10 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.StaleMetadataException;
-import org.apache.kafka.clients.consumer.LogTruncationException;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
-import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochClient.OffsetForEpochResult;
+import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochUtils.OffsetForEpochResult;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
@@ -39,15 +37,13 @@ import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -70,8 +66,7 @@ public class OffsetFetcher {
     private final SubscriptionState subscriptions;
     private final ConsumerNetworkClient client;
     private final Time time;
-    private final long retryBackoffMs;
-    private final long requestTimeoutMs;
+    private final int requestTimeoutMs;
     private final IsolationLevel isolationLevel;
     private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
     private final ApiVersions apiVersions;
@@ -83,7 +78,7 @@ public class OffsetFetcher {
                          SubscriptionState subscriptions,
                          Time time,
                          long retryBackoffMs,
-                         long requestTimeoutMs,
+                         int requestTimeoutMs,
                          IsolationLevel isolationLevel,
                          ApiVersions apiVersions) {
         this.log = logContext.logger(getClass());
@@ -91,7 +86,6 @@ public class OffsetFetcher {
         this.client = client;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
-        this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
         this.isolationLevel = isolationLevel;
         this.apiVersions = apiVersions;
@@ -107,12 +101,13 @@ public class OffsetFetcher {
      *                                                                         and one or more partitions aren't awaiting a seekToBeginning() or seekToEnd().
      */
     public void resetPositionsIfNeeded() {
-        Map<TopicPartition, Long> offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
+        Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap =
+                offsetFetcherUtils.getOffsetResetStrategyForPartitions();
 
-        if (offsetResetTimestamps.isEmpty())
+        if (partitionAutoOffsetResetStrategyMap.isEmpty())
             return;
 
-        resetPositionsAsync(offsetResetTimestamps);
+        resetPositionsAsync(partitionAutoOffsetResetStrategyMap);
     }
 
     /**
@@ -150,7 +145,7 @@ public class OffsetFetcher {
         do {
             RequestFuture<ListOffsetResult> future = sendListOffsetsRequests(remainingToSearch, requireTimestamps);
 
-            future.addListener(new RequestFutureListener<ListOffsetResult>() {
+            future.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(ListOffsetResult value) {
                     synchronized (future) {
@@ -215,7 +210,9 @@ public class OffsetFetcher {
         }
     }
 
-    private void resetPositionsAsync(Map<TopicPartition, Long> partitionResetTimestamps) {
+    private void resetPositionsAsync(Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap) {
+        Map<TopicPartition, Long> partitionResetTimestamps = partitionAutoOffsetResetStrategyMap.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().timestamp().get()));
         Map<Node, Map<TopicPartition, ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(partitionResetTimestamps, new HashSet<>());
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
@@ -224,19 +221,15 @@ public class OffsetFetcher {
             subscriptions.setNextAllowedRetry(resetTimestamps.keySet(), time.milliseconds() + requestTimeoutMs);
 
             RequestFuture<ListOffsetResult> future = sendListOffsetRequest(node, resetTimestamps, false);
-            future.addListener(new RequestFutureListener<ListOffsetResult>() {
+            future.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(ListOffsetResult result) {
-                    offsetFetcherUtils.onSuccessfulRequestForResettingPositions(
-                            resetTimestamps,
-                            result);
+                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(result, partitionAutoOffsetResetStrategyMap);
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    offsetFetcherUtils.onFailedRequestForResettingPositions(
-                            resetTimestamps,
-                            e);
+                    offsetFetcherUtils.onFailedResponseForResettingPositions(resetTimestamps, e);
                 }
             });
         }
@@ -281,56 +274,19 @@ public class OffsetFetcher {
             RequestFuture<OffsetForEpochResult> future =
                     offsetsForLeaderEpochClient.sendAsyncRequest(node, fetchPositions);
 
-            future.addListener(new RequestFutureListener<OffsetForEpochResult>() {
+            future.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(OffsetForEpochResult offsetsResult) {
-                    List<SubscriptionState.LogTruncation> truncations = new ArrayList<>();
-                    if (!offsetsResult.partitionsToRetry().isEmpty()) {
-                        subscriptions.setNextAllowedRetry(offsetsResult.partitionsToRetry(), time.milliseconds() + retryBackoffMs);
-                        metadata.requestUpdate(false);
-                    }
-
-                    // For each OffsetsForLeader response, check if the end-offset is lower than our current offset
-                    // for the partition. If so, it means we have experienced log truncation and need to reposition
-                    // that partition's offset.
-                    //
-                    // In addition, check whether the returned offset and epoch are valid. If not, then we should reset
-                    // its offset if reset policy is configured, or throw out of range exception.
-                    offsetsResult.endOffsets().forEach((topicPartition, respEndOffset) -> {
-                        FetchPosition requestPosition = fetchPositions.get(topicPartition);
-                        Optional<SubscriptionState.LogTruncation> truncationOpt =
-                                subscriptions.maybeCompleteValidation(topicPartition, requestPosition, respEndOffset);
-                        truncationOpt.ifPresent(truncations::add);
-                    });
-
-                    if (!truncations.isEmpty()) {
-                        offsetFetcherUtils.maybeSetOffsetForLeaderException(buildLogTruncationException(truncations));
-                    }
+                    offsetFetcherUtils.onSuccessfulResponseForValidatingPositions(fetchPositions,
+                            offsetsResult);
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    subscriptions.requestFailed(fetchPositions.keySet(), time.milliseconds() + retryBackoffMs);
-                    metadata.requestUpdate(false);
-
-                    if (!(e instanceof RetriableException)) {
-                        offsetFetcherUtils.maybeSetOffsetForLeaderException(e);
-                    }
+                    offsetFetcherUtils.onFailedResponseForValidatingPositions(fetchPositions, e);
                 }
             });
         });
-    }
-
-    private LogTruncationException buildLogTruncationException(List<SubscriptionState.LogTruncation> truncations) {
-        Map<TopicPartition, OffsetAndMetadata> divergentOffsets = new HashMap<>();
-        Map<TopicPartition, Long> truncatedFetchOffsets = new HashMap<>();
-        for (SubscriptionState.LogTruncation truncation : truncations) {
-            truncation.divergentOffsetOpt.ifPresent(divergentOffset ->
-                    divergentOffsets.put(truncation.topicPartition, divergentOffset));
-            truncatedFetchOffsets.put(truncation.topicPartition, truncation.fetchPosition.offset);
-        }
-        return new LogTruncationException("Detected truncated partitions: " + truncations,
-                truncatedFetchOffsets, divergentOffsets);
     }
 
     /**
@@ -355,7 +311,7 @@ public class OffsetFetcher {
 
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
             RequestFuture<ListOffsetResult> future = sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
-            future.addListener(new RequestFutureListener<ListOffsetResult>() {
+            future.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(ListOffsetResult partialResult) {
                     synchronized (listOffsetRequestsFuture) {
@@ -399,7 +355,7 @@ public class OffsetFetcher {
             Long offset = entry.getValue();
             Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
 
-            if (!leaderAndEpoch.leader.isPresent()) {
+            if (leaderAndEpoch.leader.isEmpty()) {
                 log.debug("Leader for partition {} is unknown for fetching offset {}", tp, offset);
                 metadata.requestUpdate(true);
                 partitionsToRetry.add(tp);
@@ -438,12 +394,13 @@ public class OffsetFetcher {
                                                                   final Map<TopicPartition, ListOffsetsPartition> timestampsToSearch,
                                                                   boolean requireTimestamp) {
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamp, isolationLevel, false)
-                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch));
+                .forConsumer(requireTimestamp, isolationLevel)
+                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch))
+                .setTimeoutMs(requestTimeoutMs);
 
         log.debug("Sending ListOffsetRequest {} to broker {}", builder, node);
         return client.send(node, builder)
-                .compose(new RequestFutureAdapter<ClientResponse, ListOffsetResult>() {
+                .compose(new RequestFutureAdapter<>() {
                     @Override
                     public void onSuccess(ClientResponse response, RequestFuture<ListOffsetResult> future) {
                         ListOffsetsResponse lor = (ListOffsetsResponse) response.responseBody();

@@ -47,7 +47,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
@@ -60,8 +59,8 @@ public class EosTestDriver extends SmokeTestUtil {
     private static final int MAX_NUMBER_OF_KEYS = 20000;
     private static final long MAX_IDLE_TIME_MS = 600000L;
 
-    private volatile static boolean isRunning = true;
-    private static CountDownLatch terminated = new CountDownLatch(1);
+    private static volatile boolean isRunning = true;
+    private static final CountDownLatch TERMINATED = new CountDownLatch(1);
 
     private static int numRecordsProduced = 0;
 
@@ -75,7 +74,7 @@ public class EosTestDriver extends SmokeTestUtil {
             isRunning = false;
 
             try {
-                if (terminated.await(5L, TimeUnit.MINUTES)) {
+                if (TERMINATED.await(5L, TimeUnit.MINUTES)) {
                     System.out.println("Terminated");
                 } else {
                     System.out.println("Terminated with timeout");
@@ -152,7 +151,7 @@ public class EosTestDriver extends SmokeTestUtil {
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
             props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
             props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-            props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT));
+            props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString());
 
             try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
                 final List<TopicPartition> partitions = getAllPartitions(consumer, "data");
@@ -168,7 +167,7 @@ public class EosTestDriver extends SmokeTestUtil {
             }
             System.out.flush();
         } finally {
-            terminated.countDown();
+            TERMINATED.countDown();
         }
     }
 
@@ -178,7 +177,7 @@ public class EosTestDriver extends SmokeTestUtil {
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT));
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString());
 
         try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
             verifyAllTransactionFinished(consumer, kafka, withRepartitioning);

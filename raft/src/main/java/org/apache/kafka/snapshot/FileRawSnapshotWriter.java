@@ -20,7 +20,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.raft.ReplicatedLog;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -28,25 +27,21 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.Optional;
 
 public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     private final Path tempSnapshotPath;
     private final FileChannel channel;
     private final OffsetAndEpoch snapshotId;
-    private final Optional<ReplicatedLog> replicatedLog;
     private long frozenSize;
 
     private FileRawSnapshotWriter(
         Path tempSnapshotPath,
         FileChannel channel,
-        OffsetAndEpoch snapshotId,
-        Optional<ReplicatedLog> replicatedLog
+        OffsetAndEpoch snapshotId
     ) {
         this.tempSnapshotPath = tempSnapshotPath;
         this.channel = channel;
         this.snapshotId = snapshotId;
-        this.replicatedLog = replicatedLog;
         this.frozenSize = -1L;
     }
 
@@ -123,8 +118,6 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
 
             Path destination = Snapshots.moveRename(tempSnapshotPath, snapshotId);
             Utils.atomicMoveWithFallback(tempSnapshotPath, destination);
-
-            replicatedLog.ifPresent(log -> log.onSnapshotFrozen(snapshotId));
         } catch (IOException e) {
             throw new UncheckedIOException(
                 String.format("Error freezing file snapshot, " +
@@ -178,19 +171,14 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
      * @param logDir the directory for the topic partition
      * @param snapshotId the end offset and epoch for the snapshotId
      */
-    public static FileRawSnapshotWriter create(
-        Path logDir,
-        OffsetAndEpoch snapshotId,
-        Optional<ReplicatedLog> replicatedLog
-    ) {
+    public static FileRawSnapshotWriter create(Path logDir, OffsetAndEpoch snapshotId) {
         Path path = Snapshots.createTempFile(logDir, snapshotId);
 
         try {
             return new FileRawSnapshotWriter(
                 path,
                 FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.APPEND),
-                snapshotId,
-                replicatedLog
+                snapshotId
             );
         } catch (IOException e) {
             throw new UncheckedIOException(

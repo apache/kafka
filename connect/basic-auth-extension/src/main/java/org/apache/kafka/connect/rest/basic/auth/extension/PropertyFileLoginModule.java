@@ -19,6 +19,7 @@ package org.apache.kafka.connect.rest.basic.auth.extension;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,13 +49,12 @@ import javax.security.auth.spi.LoginModule;
  */
 public class PropertyFileLoginModule implements LoginModule {
     private static final Logger log = LoggerFactory.getLogger(PropertyFileLoginModule.class);
+    private static final String FILE_OPTIONS = "file";
+    private static final Map<String, Properties> CREDENTIAL_PROPERTIES = new ConcurrentHashMap<>();
 
     private CallbackHandler callbackHandler;
-    private static final String FILE_OPTIONS = "file";
     private String fileName;
     private boolean authenticated;
-
-    private static Map<String, Properties> credentialPropertiesMap = new ConcurrentHashMap<>();
 
     @Override
     public void initialize(Subject subject, CallbackHandler callbackHandler, Map<String, ?> sharedState, Map<String, ?> options) {
@@ -64,7 +64,7 @@ public class PropertyFileLoginModule implements LoginModule {
             throw new ConfigException("Property Credentials file must be specified");
         }
 
-        if (!credentialPropertiesMap.containsKey(fileName)) {
+        if (!CREDENTIAL_PROPERTIES.containsKey(fileName)) {
             log.trace("Opening credential properties file '{}'", fileName);
             Properties credentialProperties = new Properties();
             try {
@@ -72,7 +72,7 @@ public class PropertyFileLoginModule implements LoginModule {
                     log.trace("Parsing credential properties file '{}'", fileName);
                     credentialProperties.load(inputStream);
                 }
-                credentialPropertiesMap.putIfAbsent(fileName, credentialProperties);
+                CREDENTIAL_PROPERTIES.putIfAbsent(fileName, credentialProperties);
                 if (credentialProperties.isEmpty())
                     log.warn("Credential properties file '{}' is empty; all requests will be permitted",
                         fileName);
@@ -101,7 +101,7 @@ public class PropertyFileLoginModule implements LoginModule {
         String username = ((NameCallback) callbacks[0]).getName();
         char[] passwordChars = ((PasswordCallback) callbacks[1]).getPassword();
         String password = passwordChars != null ? new String(passwordChars) : null;
-        Properties credentialProperties = credentialPropertiesMap.get(fileName);
+        Properties credentialProperties = CREDENTIAL_PROPERTIES.get(fileName);
 
         if (credentialProperties.isEmpty()) {
             log.trace("Not validating credentials for user '{}' as credential properties file '{}' is empty",
@@ -132,17 +132,17 @@ public class PropertyFileLoginModule implements LoginModule {
     }
 
     @Override
-    public boolean commit() throws LoginException {
+    public boolean commit() {
         return authenticated;
     }
 
     @Override
-    public boolean abort() throws LoginException {
+    public boolean abort() {
         return true;
     }
 
     @Override
-    public boolean logout() throws LoginException {
+    public boolean logout() {
         return true;
     }
 

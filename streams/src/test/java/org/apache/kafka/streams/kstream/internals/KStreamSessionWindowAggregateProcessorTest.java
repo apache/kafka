@@ -20,6 +20,8 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
@@ -31,14 +33,11 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogCaptureAppender.Event;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
@@ -50,33 +49,30 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
-import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.utils.TestUtils.mockStoreFactory;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Parameterized.class)
 public class KStreamSessionWindowAggregateProcessorTest {
 
     private static final long GAP_MS = 5 * 60 * 1000L;
@@ -84,44 +80,31 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics();
-    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time);
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", "processId", time);
     private final String threadId = Thread.currentThread().getName();
     private final Initializer<Long> initializer = () -> 0L;
     private final Aggregator<String, String, Long> aggregator = (aggKey, value, aggregate) -> aggregate + 1;
     private final Merger<String, Long> sessionMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
     private final List<KeyValueTimestamp<Windowed<String>, Change<Long>>> results = new ArrayList<>();
 
-    private InternalMockProcessorContext<Windowed<String>, Change<Long>> context;
+    private InternalMockProcessorContext<Windowed<String>, Change<Long>> mockContext;
     private KStreamSessionWindowAggregate<String, String, Long> sessionAggregator;
     private Processor<String, String, Windowed<String>, Change<Long>> processor;
     private SessionStore<String, Long> sessionStore;
-
-    @Parameterized.Parameter
+    
     public EmitStrategy.StrategyType type;
-
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return asList(new Object[][] {
-            {EmitStrategy.StrategyType.ON_WINDOW_UPDATE},
-            {EmitStrategy.StrategyType.ON_WINDOW_CLOSE}
-        });
-    }
 
     private EmitStrategy emitStrategy;
     private boolean emitFinal;
 
-    @Before
-    public void setup() {
-        setup(true);
-    }
-
-    private void setup(final boolean enableCache) {
+    private void setup(final EmitStrategy.StrategyType inputType, final boolean enableCaching) {
+        type = inputType;
         // Always process
         final Properties prop = StreamsTestUtils.getStreamsConfig();
         prop.put(StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
         final StreamsConfig config = new StreamsConfig(prop);
 
-        context = new InternalMockProcessorContext<Windowed<String>, Change<Long>>(
+        mockContext = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),
@@ -143,7 +126,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         sessionAggregator = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapWithNoGrace(ofMillis(GAP_MS)),
-            STORE_NAME,
+            mockStoreFactory(STORE_NAME),
             emitStrategy,
             initializer,
             aggregator,
@@ -156,11 +139,11 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         // Set initial timestamp for CachingSessionStore to prepare entry from as default
         // InternalMockProcessorContext#timestamp returns -1.
-        context.setTime(0L);
-        TaskMetrics.droppedRecordsSensor(threadId, context.taskId().toString(), streamsMetrics);
+        mockContext.setTime(0L);
+        TaskMetrics.droppedRecordsSensor(threadId, mockContext.taskId().toString(), streamsMetrics);
 
-        initStore(enableCache);
-        processor.init(context);
+        initStore(enableCaching);
+        processor.init(mockContext);
     }
 
     private void initStore(final boolean enableCaching) {
@@ -179,17 +162,19 @@ public class KStreamSessionWindowAggregateProcessorTest {
             sessionStore.close();
         }
         sessionStore = storeBuilder.build();
-        sessionStore.init((StateStoreContext) context, sessionStore);
+        sessionStore.init(mockContext, sessionStore);
     }
 
-    @After
+    @AfterEach
     public void closeStore() {
         sessionStore.close();
         processor.close();
     }
 
-    @Test
-    public void shouldCreateSingleSessionWhenWithinGap() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldCreateSingleSessionWhenWithinGap(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, true);
         processor.process(new Record<>("john", "first", 0L));
         processor.process(new Record<>("john", "second", 500L));
 
@@ -200,17 +185,25 @@ public class KStreamSessionWindowAggregateProcessorTest {
         }
     }
 
-    @Test
-    public void shouldMergeSessions() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldMergeSessions(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, true);
         final String sessionId = "mel";
         processor.process(new Record<>(sessionId, "first", 0L));
-        assertTrue(sessionStore.findSessions(sessionId, 0, 0).hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(sessionId, 0, 0)) {
+            assertTrue(iterator.hasNext());
+        }
 
         // move time beyond gap
         processor.process(new Record<>(sessionId, "second", GAP_MS + 1));
-        assertTrue(sessionStore.findSessions(sessionId, GAP_MS + 1, GAP_MS + 1).hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(sessionId, GAP_MS + 1, GAP_MS + 1)) {
+            assertTrue(iterator.hasNext());
+        }
         // should still exist as not within gap
-        assertTrue(sessionStore.findSessions(sessionId, 0, 0).hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(sessionId, 0, 0)) {
+            assertTrue(iterator.hasNext());
+        }
         // move time back
         processor.process(new Record<>(sessionId, "third", GAP_MS / 2));
 
@@ -223,8 +216,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
         }
     }
 
-    @Test
-    public void shouldUpdateSessionIfTheSameTime() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldUpdateSessionIfTheSameTime(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, true);
         processor.process(new Record<>("mel", "first", 0L));
         processor.process(new Record<>("mel", "second", 0L));
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
@@ -234,8 +229,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
         }
     }
 
-    @Test
-    public void shouldHaveMultipleSessionsForSameIdWhenTimestampApartBySessionGap() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldHaveMultipleSessionsForSameIdWhenTimestampApartBySessionGap(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, true);
         final String sessionId = "mel";
         long now = 0;
         processor.process(new Record<>(sessionId, "first", now));
@@ -284,8 +281,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
         }
     }
 
-    @Test
-    public void shouldRemoveMergedSessionsFromStateStore() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldRemoveMergedSessionsFromStateStore(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, true);
         processor.process(new Record<>("a", "1", 0L));
 
         // first ensure it is in the store
@@ -305,8 +304,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
         }
     }
 
-    @Test
-    public void shouldHandleMultipleSessionsAndMerging() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldHandleMultipleSessionsAndMerging(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, true);
         processor.process(new Record<>("a", "1", 0L));
         processor.process(new Record<>("b", "1", 0L));
         processor.process(new Record<>("c", "1", 0L));
@@ -376,10 +377,12 @@ public class KStreamSessionWindowAggregateProcessorTest {
         }
     }
 
-    @Test
-    public void shouldGetAggregatedValuesFromValueGetter() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldGetAggregatedValuesFromValueGetter(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, true);
         final KTableValueGetter<Windowed<String>, Long> getter = sessionAggregator.view().get();
-        getter.init(context);
+        getter.init(mockContext);
         processor.process(new Record<>("a", "1", 0L));
         processor.process(new Record<>("a", "1", GAP_MS + 1));
         processor.process(new Record<>("a", "2", GAP_MS + 1));
@@ -389,13 +392,15 @@ public class KStreamSessionWindowAggregateProcessorTest {
         assertEquals(2L, t1);
     }
 
-    @Test
-    public void shouldImmediatelyForwardNewSessionWhenNonCachedStore() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldImmediatelyForwardNewSessionWhenNonCachedStore(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, true);
         if (emitFinal)
             return;
 
         initStore(false);
-        processor.init(context);
+        processor.init(mockContext);
 
         processor.process(new Record<>("a", "1", 0L));
         processor.process(new Record<>("b", "1", 0L));
@@ -420,13 +425,15 @@ public class KStreamSessionWindowAggregateProcessorTest {
         );
     }
 
-    @Test
-    public void shouldImmediatelyForwardRemovedSessionsWhenMerging() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldImmediatelyForwardRemovedSessionsWhenMerging(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, true);
         if (emitFinal)
             return;
 
         initStore(false);
-        processor.init(context);
+        processor.init(mockContext);
 
         processor.process(new Record<>("a", "1", 0L));
         processor.process(new Record<>("a", "1", 5L));
@@ -449,10 +456,11 @@ public class KStreamSessionWindowAggregateProcessorTest {
         );
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics() {
-        setup(false);
-        context.setRecordContext(
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, false);
+        mockContext.setRecordContext(
             new ProcessorRecordContext(-1, -2, -3, "topic", new RecordHeaders())
         );
 
@@ -472,40 +480,41 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         assertEquals(
             1.0,
-            getMetricByName(context.metrics().metrics(), "dropped-records-total", "stream-task-metrics").metricValue()
+            getMetricByName(mockContext.metrics().metrics(), "dropped-records-total", "stream-task-metrics").metricValue()
         );
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace() {
-        setup(false);
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, false);
         final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(0L)),
-            STORE_NAME,
+            mockStoreFactory(STORE_NAME),
             EmitStrategy.onWindowUpdate(),
             initializer,
             aggregator,
             sessionMerger
         ).get();
-        processor.init(context);
+        processor.init(mockContext);
 
         // dummy record to establish stream time = 0
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+        mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
         processor.process(new Record<>("dummy", "dummy", 0L));
 
         // record arrives on time, should not be skipped
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+        mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
         processor.process(new Record<>("OnTime1", "1", 0L));
 
         // dummy record to advance stream time = 11, 10 for gap time plus 1 to place outside window
-        context.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
+        mockContext.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
         processor.process(new Record<>("dummy", "dummy", 11L));
 
         try (final LogCaptureAppender appender =
                  LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 
             // record is late
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("Late1", "1", 0L));
 
             assertThat(
@@ -542,44 +551,45 @@ public class KStreamSessionWindowAggregateProcessorTest {
         );
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace() {
-        setup(false);
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace(final EmitStrategy.StrategyType inputType) {
+        setup(inputType, false);
         final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1L)),
-            STORE_NAME,
+            mockStoreFactory(STORE_NAME),
             EmitStrategy.onWindowUpdate(),
             initializer,
             aggregator,
             sessionMerger
         ).get();
-        processor.init(context);
+        processor.init(mockContext);
 
         try (final LogCaptureAppender appender =
                  LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 
             // dummy record to establish stream time = 0
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("dummy", "dummy", 0L));
 
             // record arrives on time, should not be skipped
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("OnTime1", "1", 0L));
 
             // dummy record to advance stream time = 11, 10 for gap time plus 1 to place at edge of window
-            context.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("dummy", "dummy", 11L));
 
             // delayed record arrives on time, should not be skipped
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("OnTime2", "1", 0L));
 
             // dummy record to advance stream time = 12, 10 for gap time plus 2 to place outside window
-            context.setRecordContext(new ProcessorRecordContext(12, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(12, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("dummy", "dummy", 12L));
 
             // delayed record arrives late
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("Late1", "1", 0L));
 
             assertThat(

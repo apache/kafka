@@ -23,6 +23,7 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -194,7 +195,7 @@ public class AllBrokersStrategy implements AdminApiLookupStrategy<AllBrokersStra
         }
 
         private KafkaFutureImpl<V> futureOrThrow(BrokerKey key) {
-            if (!key.brokerId.isPresent()) {
+            if (key.brokerId.isEmpty()) {
                 throw new IllegalArgumentException("Attempt to complete with invalid key: " + key);
             } else {
                 int brokerId = key.brokerId.getAsInt();

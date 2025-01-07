@@ -20,6 +20,7 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.MockExpirationService;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CompletableFuture;

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 
@@ -28,7 +29,7 @@ import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTime
  *
  * @see KeyValueToTimestampedKeyValueByteStoreAdapter
  */
-class KeyValueToTimestampedKeyValueIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
+class KeyValueToTimestampedKeyValueIteratorAdapter<K> implements KeyValueIterator<K, byte[]>, TimestampedBytesStore {
     private final KeyValueIterator<K, byte[]> innerIterator;
 
     KeyValueToTimestampedKeyValueIteratorAdapter(final KeyValueIterator<K, byte[]> innerIterator) {

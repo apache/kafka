@@ -20,6 +20,7 @@ package org.apache.kafka.image.node;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.image.ConfigurationImage;
 import org.apache.kafka.image.ConfigurationsImage;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

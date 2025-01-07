@@ -20,6 +20,7 @@ package org.apache.kafka.server.util;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.concurrent.CountDownLatch;
@@ -46,6 +47,7 @@ public abstract class ShutdownableThread extends Thread {
         this(name, isInterruptible, "[" + name + "]: ");
     }
 
+    @SuppressWarnings("this-escape")
     public ShutdownableThread(String name, boolean isInterruptible, String logPrefix) {
         super(name);
         this.isInterruptible = isInterruptible;
@@ -65,6 +67,10 @@ public abstract class ShutdownableThread extends Thread {
 
     public boolean isShutdownComplete() {
         return shutdownComplete.getCount() == 0;
+    }
+
+    public boolean isStarted() {
+        return isStarted;
     }
 
     /**

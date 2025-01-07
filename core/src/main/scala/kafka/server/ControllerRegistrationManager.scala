@@ -21,18 +21,17 @@ import java.util.concurrent.TimeUnit.MILLISECONDS
 import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.message.ControllerRegistrationRequestData.ListenerCollection
 import org.apache.kafka.common.message.ControllerRegistrationRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControllerRegistrationRequest, ControllerRegistrationResponse}
-import org.apache.kafka.metadata.VersionRange
+import org.apache.kafka.metadata.{ListenerInfo, VersionRange}
 import org.apache.kafka.common.utils.{ExponentialBackoff, LogContext, Time}
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.queue.EventQueue.DeadlineFunction
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion, NodeToControllerChannelManager}
 
 import scala.jdk.CollectionConverters._
 
@@ -45,22 +44,20 @@ import scala.jdk.CollectionConverters._
  * each variable, most mutable state can be accessed only from that event queue thread.
  */
 class ControllerRegistrationManager(
-  val config: KafkaConfig,
+  val nodeId: Int,
   val clusterId: String,
   val time: Time,
   val threadNamePrefix: String,
   val supportedFeatures: util.Map[String, VersionRange],
   val incarnationId: Uuid,
-  val listenerPortOverrides: Map[String, Int] = Map(),
+  val listenerInfo: ListenerInfo,
   val resendExponentialBackoff: ExponentialBackoff = new ExponentialBackoff(100, 2, 120000L, 0.02)
 ) extends Logging with MetadataPublisher {
   override def name(): String = "ControllerRegistrationManager"
 
-  val nodeId: Int = config.nodeId
-
   private def logPrefix(): String = {
     val builder = new StringBuilder("[ControllerRegistrationManager")
-    builder.append(" id=").append(config.nodeId)
+    builder.append(" id=").append(nodeId)
     builder.append(" incarnation=").append(incarnationId)
     builder.append("] ")
     builder.toString()
@@ -69,18 +66,6 @@ class ControllerRegistrationManager(
   val logContext = new LogContext(logPrefix())
 
   this.logIdent = logContext.logPrefix()
-
-  val listenerCollection = {
-    val collection = new ListenerCollection()
-    config.controllerListeners.foreach(endPoint => {
-      collection.add(new ControllerRegistrationRequestData.Listener().
-        setHost(endPoint.host).
-        setName(endPoint.listenerName.value()).
-        setPort(listenerPortOverrides.getOrElse(endPoint.listenerName.value(), endPoint.port)).
-        setSecurityProtocol(endPoint.securityProtocol.id))
-    })
-    collection
-  }
 
   /**
    * True if there is a pending RPC. Only read or written from the event queue thread.
@@ -158,7 +143,7 @@ class ControllerRegistrationManager(
    * Start shutting down the ControllerRegistrationManager, but do not block.
    */
   def beginShutdown(): Unit = {
-    eventQueue.beginShutdown("beginShutdown");
+    eventQueue.beginShutdown("beginShutdown")
   }
 
   /**
@@ -218,10 +203,10 @@ class ControllerRegistrationManager(
       debug("maybeSendControllerRegistration: cannot register yet because the channel manager has " +
           "not been initialized.")
     } else if (!metadataVersion.isControllerRegistrationSupported) {
-      info("maybeSendControllerRegistration: cannot register yet because the metadata version is " +
+      info("maybeSendControllerRegistration: cannot register yet because the metadata.version is " +
           s"still $metadataVersion, which does not support KIP-919 controller registration.")
     } else if (pendingRpc) {
-      info("maybeSendControllerRegistration: waiting for the previous RPC to complete.");
+      info("maybeSendControllerRegistration: waiting for the previous RPC to complete.")
     } else {
       sendControllerRegistration()
     }
@@ -239,7 +224,9 @@ class ControllerRegistrationManager(
       setControllerId(nodeId).
       setFeatures(features).
       setIncarnationId(incarnationId).
-      setListeners(listenerCollection)
+      setListeners(listenerInfo.toControllerRegistrationRequest).
+      setZkMigrationReady(false)
+
     info(s"sendControllerRegistration: attempting to send $data")
     _channelManager.sendRequest(new ControllerRegistrationRequest.Builder(data),
       new RegistrationResponseHandler())
@@ -289,7 +276,7 @@ class ControllerRegistrationManager(
   }
 
   private def scheduleNextCommunication(intervalMs: Long): Unit = {
-    trace(s"Scheduling next communication at ${intervalMs} ms from now.")
+    trace(s"Scheduling next communication at $intervalMs ms from now.")
     val deadlineNs = time.nanoseconds() + MILLISECONDS.toNanos(intervalMs)
     eventQueue.scheduleDeferred("communication",
       new DeadlineFunction(deadlineNs),

@@ -69,22 +69,22 @@ public class KafkaCompletableFuture<T> extends CompletableFuture<T> {
         throw erroneousCompletionException();
     }
 
-    //@Override // enable once Kafka no longer supports Java 8
+    @Override
     public <U> CompletableFuture<U> newIncompleteFuture() {
         return new KafkaCompletableFuture<>();
     }
 
-    //@Override // enable once Kafka no longer supports Java 8
+    @Override
     public CompletableFuture<T> completeAsync(Supplier<? extends T> supplier, Executor executor) {
         throw erroneousCompletionException();
     }
 
-    //@Override // enable once Kafka no longer supports Java 8
+    @Override
     public CompletableFuture<T> completeAsync(Supplier<? extends T> supplier) {
         throw erroneousCompletionException();
     }
 
-    //@Override // enable once Kafka no longer supports Java 8
+    @Override
     public CompletableFuture<T> completeOnTimeout(T value, long timeout, TimeUnit unit) {
         throw erroneousCompletionException();
     }

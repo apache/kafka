@@ -17,26 +17,18 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import java.io.File;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Map.Entry;
-
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -54,23 +46,33 @@ import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
-import org.junit.Before;
-import org.junit.Test;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PluginsTest {
 
@@ -84,7 +86,7 @@ public class PluginsTest {
     private PluginScanResult empty;
     private String missingPluginClass;
 
-    @Before
+    @BeforeEach
     public void setup() {
         Map<String, String> pluginProps = new HashMap<>();
 
@@ -151,7 +153,7 @@ public class PluginsTest {
                                                                      WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
                                                                      ClassLoaderUsage.CURRENT_CLASSLOADER);
         assertNotNull(headerConverter);
-        assertTrue(headerConverter instanceof TestHeaderConverter);
+        assertInstanceOf(TestHeaderConverter.class, headerConverter);
         this.headerConverter = (TestHeaderConverter) headerConverter;
 
         // Validate extra configs got passed through to overridden converters
@@ -162,7 +164,7 @@ public class PluginsTest {
                                                      WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
                                                      ClassLoaderUsage.PLUGINS);
         assertNotNull(headerConverter);
-        assertTrue(headerConverter instanceof TestHeaderConverter);
+        assertInstanceOf(TestHeaderConverter.class, headerConverter);
         this.headerConverter = (TestHeaderConverter) headerConverter;
 
         // Validate extra configs got passed through to overridden converters
@@ -182,10 +184,9 @@ public class PluginsTest {
                                config,
                                ConnectRestExtension.class);
         assertNotNull(connectRestExtensions);
-        assertEquals("One Rest Extension expected", 1, connectRestExtensions.size());
+        assertEquals(1, connectRestExtensions.size(), "One Rest Extension expected");
         assertNotNull(connectRestExtensions.get(0));
-        assertTrue("Should be instance of TestConnectRestExtension",
-                   connectRestExtensions.get(0) instanceof TestConnectRestExtension);
+        assertInstanceOf(TestConnectRestExtension.class, connectRestExtensions.get(0), "Should be instance of TestConnectRestExtension");
         assertNotNull(((TestConnectRestExtension) connectRestExtensions.get(0)).configs);
         assertEquals(config.originals(),
                      ((TestConnectRestExtension) connectRestExtensions.get(0)).configs);
@@ -207,7 +208,7 @@ public class PluginsTest {
                                                      WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
                                                      ClassLoaderUsage.PLUGINS);
         assertNotNull(headerConverter);
-        assertTrue(headerConverter instanceof SimpleHeaderConverter);
+        assertInstanceOf(SimpleHeaderConverter.class, headerConverter);
     }
 
     @Test
@@ -449,7 +450,7 @@ public class PluginsTest {
     }
 
     @Test
-    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInChild() throws Exception {
+    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInChild() {
         assertClassLoaderReadsVersionFromResource(
                 TestPlugin.ALIASED_STATIC_FIELD,
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
@@ -458,7 +459,7 @@ public class PluginsTest {
     }
 
     @Test
-    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInParent() throws Exception {
+    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInParent() {
         assertClassLoaderReadsVersionFromResource(
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
                 TestPlugin.ALIASED_STATIC_FIELD,
@@ -467,7 +468,7 @@ public class PluginsTest {
     }
 
     @Test
-    public void pluginClassLoaderReadVersionFromResourceExistingInParentAndChild() throws Exception {
+    public void pluginClassLoaderReadVersionFromResourceExistingInParentAndChild() {
         assertClassLoaderReadsVersionFromResource(
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V2,
@@ -481,7 +482,7 @@ public class PluginsTest {
                 .stream()
                 .filter(pluginDesc -> ByteArrayConverter.class.equals(pluginDesc.pluginClass()))
                 .collect(Collectors.toSet());
-        assertFalse("Could not find superclass of " + TestPlugin.SUBCLASS_OF_CLASSPATH_CONVERTER + " as plugin", converters.isEmpty());
+        assertFalse(converters.isEmpty(), "Could not find superclass of " + TestPlugin.SUBCLASS_OF_CLASSPATH_CONVERTER + " as plugin");
         for (PluginDesc<Converter> byteArrayConverter : converters) {
             assertEquals("classpath", byteArrayConverter.location());
         }
@@ -493,7 +494,7 @@ public class PluginsTest {
                 .stream()
                 .filter(pluginDesc -> AllConnectorClientConfigOverridePolicy.class.equals(pluginDesc.pluginClass()))
                 .collect(Collectors.toSet());
-        assertFalse("Could not find superclass of " + TestPlugin.SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY + " as plugin", overridePolicies.isEmpty());
+        assertFalse(overridePolicies.isEmpty(), "Could not find superclass of " + TestPlugin.SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY + " as plugin");
         for (PluginDesc<ConnectorClientConfigOverridePolicy> allOverridePolicy : overridePolicies) {
             assertEquals("classpath", allOverridePolicy.location());
         }
@@ -595,6 +596,25 @@ public class PluginsTest {
         }
     }
 
+    @Test
+    public void testAliasesInConverters() throws ClassNotFoundException {
+        ClassLoader connectorLoader = plugins.connectorLoader(TestPlugin.SAMPLING_CONNECTOR.className());
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+            String configKey = "config.key";
+            String alias = "SamplingConverter";
+            assertTrue(TestPlugin.SAMPLING_CONVERTER.className().contains(alias));
+            ConfigDef def = new ConfigDef().define(configKey, ConfigDef.Type.CLASS, ConfigDef.Importance.HIGH, "docstring");
+            AbstractConfig config = new AbstractConfig(def, Collections.singletonMap(configKey, alias));
+
+            assertNotNull(config.getClass(configKey));
+            assertNotNull(config.getConfiguredInstance(configKey, Converter.class));
+            assertNotNull(plugins.newConverter(config, configKey, ClassLoaderUsage.CURRENT_CLASSLOADER));
+            assertNotNull(plugins.newConverter(config, configKey, ClassLoaderUsage.PLUGINS));
+
+            assertNotNull(Utils.newInstance(alias, Converter.class));
+        }
+    }
+
     private void assertClassLoaderReadsVersionFromResource(
             TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) {
         URL[] systemPath = TestPlugins.pluginPath(parentResource)
@@ -619,10 +639,10 @@ public class PluginsTest {
         );
         plugins = new Plugins(pluginProps, parent, new ClassLoaderFactory());
 
-        assertTrue("Should find plugin in plugin classloader",
-                plugins.converters().stream().anyMatch(desc -> desc.loader() instanceof PluginClassLoader));
-        assertTrue("Should find plugin in parent classloader",
-                plugins.converters().stream().anyMatch(desc -> parent.equals(desc.loader())));
+        assertTrue(plugins.converters().stream().anyMatch(desc -> desc.loader() instanceof PluginClassLoader),
+            "Should find plugin in plugin classloader");
+        assertTrue(plugins.converters().stream().anyMatch(desc -> parent.equals(desc.loader())),
+            "Should find plugin in parent classloader");
 
         Converter converter = plugins.newPlugin(
                 className,
@@ -657,21 +677,9 @@ public class PluginsTest {
         }
     }
 
-    public static void assertInstanceOf(Class<?> expected, Object actual, String message) {
-        assertTrue(
-            "Expected an instance of " + expected.getSimpleName() + ", found " + actual + " instead: " + message,
-            expected.isInstance(actual)
-        );
-    }
-
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {
         converter = (TestConverter) plugins.newConverter(config, configPropName, classLoaderUsage);
         assertNotNull(converter);
-    }
-
-    protected void instantiateAndConfigureHeaderConverter(String configPropName) {
-        headerConverter = (TestHeaderConverter) plugins.newHeaderConverter(config, configPropName, ClassLoaderUsage.CURRENT_CLASSLOADER);
-        assertNotNull(headerConverter);
     }
 
     protected void instantiateAndConfigureInternalConverter(boolean isKey, Map<String, String> config) {

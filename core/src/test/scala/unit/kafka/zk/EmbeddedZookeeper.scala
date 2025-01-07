@@ -17,8 +17,7 @@
 
 package kafka.zk
 
-import org.apache.zookeeper.server.ZooKeeperServer
-import org.apache.zookeeper.server.NIOServerCnxnFactory
+import org.apache.zookeeper.server.{NIOServerCnxnFactory, SessionTrackerImpl, ZooKeeperServer}
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 
 import java.net.InetSocketAddress
@@ -36,7 +35,7 @@ import java.io.Closeable
 // This should be named EmbeddedZooKeeper for consistency with other classes, but since this is widely used by other
 // projects (even though it's internal), we keep the name as it is until we have a publicly supported test library for
 // others to use.
-class EmbeddedZookeeper() extends Closeable with Logging {
+class EmbeddedZookeeper extends Closeable with Logging {
 
   val snapshotDir = TestUtils.tempDir()
   val logDir = TestUtils.tempDir()
@@ -54,6 +53,14 @@ class EmbeddedZookeeper() extends Closeable with Logging {
     // Also shuts down ZooKeeperServer
     CoreUtils.swallow(factory.shutdown(), this)
 
+    zookeeper.getSessionTracker match {
+      case tracker: SessionTrackerImpl =>
+        while (tracker.isAlive) {
+          Thread.sleep(100)
+        }
+      case _ =>
+    }
+
     def isDown(): Boolean = {
       try {
         ZkFourLetterWords.sendStat("127.0.0.1", port, 3000)
@@ -62,7 +69,7 @@ class EmbeddedZookeeper() extends Closeable with Logging {
     }
 
     Iterator.continually(isDown()).exists(identity)
-    CoreUtils.swallow(zookeeper.getZKDatabase().close(), this)
+    CoreUtils.swallow(zookeeper.getZKDatabase.close(), this)
 
     Utils.delete(logDir)
     Utils.delete(snapshotDir)

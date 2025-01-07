@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Combines a value (from a key-value record) with a timestamp, for use as the return type
@@ -27,17 +28,33 @@ import java.util.Objects;
 public final class VersionedRecord<V> {
     private final V value;
     private final long timestamp;
+    private final Optional<Long> validTo;
 
     /**
      * Create a new {@link VersionedRecord} instance. {@code value} cannot be {@code null}.
      *
-     * @param value      the value
-     * @param timestamp  the timestamp
+     * @param value      The value
+     * @param timestamp  The type of the result returned by this query.
      */
     public VersionedRecord(final V value, final long timestamp) {
+        this.value = Objects.requireNonNull(value, "value cannot be null.");
+        this.timestamp = timestamp;
+        this.validTo = Optional.empty();
+    }
+
+    /**
+     * Create a new {@link VersionedRecord} instance. {@code value} cannot be {@code null}.
+     *
+     * @param value      The value
+     * @param timestamp  The timestamp
+     * @param validTo    The exclusive upper bound of the validity interval
+     */
+    public VersionedRecord(final V value, final long timestamp, final long validTo) {
         this.value = Objects.requireNonNull(value);
         this.timestamp = timestamp;
+        this.validTo = Optional.of(validTo);
     }
+
 
     public V value() {
         return value;
@@ -47,9 +64,13 @@ public final class VersionedRecord<V> {
         return timestamp;
     }
 
+    public Optional<Long> validTo() {
+        return validTo;
+    }
+
     @Override
     public String toString() {
-        return "<" + value + "," + timestamp + ">";
+        return "<" + value + "," + timestamp + "," + validTo + ">";
     }
 
     @Override
@@ -61,12 +82,12 @@ public final class VersionedRecord<V> {
             return false;
         }
         final VersionedRecord<?> that = (VersionedRecord<?>) o;
-        return timestamp == that.timestamp &&
+        return timestamp == that.timestamp && validTo == that.validTo &&
             Objects.equals(value, that.value);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(value, timestamp);
+        return Objects.hash(value, timestamp, validTo);
     }
 }

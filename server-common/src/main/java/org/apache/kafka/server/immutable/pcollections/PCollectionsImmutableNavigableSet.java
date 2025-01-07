@@ -18,6 +18,7 @@
 package org.apache.kafka.server.immutable.pcollections;
 
 import org.apache.kafka.server.immutable.ImmutableNavigableSet;
+
 import org.pcollections.TreePSet;
 
 import java.util.Collection;

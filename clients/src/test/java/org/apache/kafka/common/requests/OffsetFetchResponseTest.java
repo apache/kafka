@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -389,16 +390,16 @@ public class OffsetFetchResponseTest {
                 .setErrorCode(Errors.NOT_COORDINATOR.code())
                 .setThrottleTimeMs(throttleTimeMs)
                 .setTopics(Collections.singletonList(
-                new OffsetFetchResponseTopic()
-                    .setName(topicOne)
-                    .setPartitions(Collections.singletonList(
-                        new OffsetFetchResponsePartition()
-                            .setPartitionIndex(partitionOne)
-                            .setCommittedOffset(offset)
-                            .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                            .setMetadata(metadata))
-                    ))
+                    new OffsetFetchResponseTopic()
+                        .setName(topicOne)
+                        .setPartitions(Collections.singletonList(
+                            new OffsetFetchResponsePartition()
+                                .setPartitionIndex(partitionOne)
+                                .setCommittedOffset(offset)
+                                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                                .setMetadata(metadata))
+                        ))
                 );
         assertEquals(expectedData, response.data());
     }

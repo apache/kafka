@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import javax.security.auth.x500.X500Principal;
-
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.SerializationException;
@@ -33,15 +31,16 @@ import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
 import org.apache.kafka.common.security.auth.SslAuthenticationContext;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
-
-import javax.net.ssl.SSLPeerUnverifiedException;
-import javax.net.ssl.SSLSession;
-import javax.security.sasl.SaslServer;
 import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.Principal;
+
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
+import javax.security.auth.x500.X500Principal;
+import javax.security.sasl.SaslServer;
 
 /**
  * Default implementation of {@link KafkaPrincipalBuilder} which provides basic support for

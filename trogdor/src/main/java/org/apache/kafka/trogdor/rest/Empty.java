@@ -17,8 +17,9 @@
 
 package org.apache.kafka.trogdor.rest;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import org.apache.kafka.trogdor.common.JsonUtil;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
 
 /**
  * An empty request or response.
@@ -33,8 +34,7 @@ public class Empty {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        return true;
+        return o != null && getClass() == o.getClass();
     }
 
     @Override

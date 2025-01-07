@@ -16,14 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.Timer;
-
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Application event with a result in the form of a future, that can be retrieved within a
@@ -31,69 +24,36 @@ import java.util.concurrent.TimeUnit;
  *
  * @param <T>
  */
-public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
+public abstract class CompletableApplicationEvent<T> extends ApplicationEvent implements CompletableEvent<T> {
 
-    protected final CompletableFuture<T> future;
+    private final CompletableFuture<T> future;
+    private final long deadlineMs;
 
-    protected CompletableApplicationEvent(Type type) {
+    /**
+     * <em>Note</em>: the {@code deadlineMs} is the future time of expiration, <em>not</em> a timeout.
+     */
+    protected CompletableApplicationEvent(final Type type, final long deadlineMs) {
         super(type);
         this.future = new CompletableFuture<>();
+        this.deadlineMs = deadlineMs;
     }
 
+    @Override
     public CompletableFuture<T> future() {
         return future;
     }
 
-    public T get(Timer timer) {
-        try {
-            return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
-        } catch (ExecutionException e) {
-            Throwable t = e.getCause();
-
-            if (t instanceof KafkaException)
-                throw (KafkaException) t;
-            else
-                throw new KafkaException(t);
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
-        } catch (java.util.concurrent.TimeoutException e) {
-            throw new TimeoutException(e);
-        }
-    }
-
-    public void chain(final CompletableFuture<T> providedFuture) {
-        providedFuture.whenComplete((value, exception) -> {
-            if (exception != null) {
-                this.future.completeExceptionally(exception);
-            } else {
-                this.future.complete(value);
-            }
-        });
+    @Override
+    public long deadlineMs() {
+        return deadlineMs;
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        CompletableApplicationEvent<?> that = (CompletableApplicationEvent<?>) o;
-
-        return future.equals(that.future);
+    protected String toStringBase() {
+        return super.toStringBase() + ", future=" + future + ", deadlineMs=" + deadlineMs;
     }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + future.hashCode();
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "CompletableApplicationEvent{" +
-                "future=" + future +
-                ", type=" + type +
-                '}';
+    
+    public boolean requireSubscriptionMetadata() {
+        return false;
     }
 }

@@ -17,10 +17,10 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,11 +31,13 @@ import java.util.Set;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T1_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
@@ -46,22 +48,19 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasStandbyTasks;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientStateTest {
     private final ClientState client = new ClientState(1);
@@ -70,8 +69,8 @@ public class ClientStateTest {
     @Test
     public void previousStateConstructorShouldCreateAValidObject() {
         final ClientState clientState = new ClientState(
-            mkSet(TASK_0_0, TASK_0_1),
-            mkSet(TASK_0_2, TASK_0_3),
+            Set.of(TASK_0_0, TASK_0_1),
+            Set.of(TASK_0_2, TASK_0_3),
             mkMap(mkEntry(TASK_0_0, 5L), mkEntry(TASK_0_2, -1L)),
             EMPTY_CLIENT_TAGS,
             4
@@ -87,9 +86,9 @@ public class ClientStateTest {
         assertThat(clientState.assignedTasks(), is(empty()));
 
         // and the "previous assignment" fields should match the constructor args
-        assertThat(clientState.prevActiveTasks(), is(mkSet(TASK_0_0, TASK_0_1)));
-        assertThat(clientState.prevStandbyTasks(), is(mkSet(TASK_0_2, TASK_0_3)));
-        assertThat(clientState.previousAssignedTasks(), is(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
+        assertThat(clientState.prevActiveTasks(), is(Set.of(TASK_0_0, TASK_0_1)));
+        assertThat(clientState.prevStandbyTasks(), is(Set.of(TASK_0_2, TASK_0_3)));
+        assertThat(clientState.previousAssignedTasks(), is(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
         assertThat(clientState.capacity(), is(4));
         assertThat(clientState.lagFor(TASK_0_0), is(5L));
         assertThat(clientState.lagFor(TASK_0_2), is(-1L));
@@ -223,16 +222,16 @@ public class ClientStateTest {
 
     @Test
     public void shouldAddPreviousActiveTasksToPreviousAssignedAndPreviousActive() {
-        client.addPreviousActiveTasks(Utils.mkSet(TASK_0_1, TASK_0_2));
-        assertThat(client.prevActiveTasks(), equalTo(Utils.mkSet(TASK_0_1, TASK_0_2)));
-        assertThat(client.previousAssignedTasks(), equalTo(Utils.mkSet(TASK_0_1, TASK_0_2)));
+        client.addPreviousActiveTasks(Set.of(TASK_0_1, TASK_0_2));
+        assertThat(client.prevActiveTasks(), equalTo(Set.of(TASK_0_1, TASK_0_2)));
+        assertThat(client.previousAssignedTasks(), equalTo(Set.of(TASK_0_1, TASK_0_2)));
     }
 
     @Test
     public void shouldAddPreviousStandbyTasksToPreviousAssignedAndPreviousStandby() {
-        client.addPreviousStandbyTasks(Utils.mkSet(TASK_0_1, TASK_0_2));
+        client.addPreviousStandbyTasks(Set.of(TASK_0_1, TASK_0_2));
         assertThat(client.prevActiveTasks().size(), equalTo(0));
-        assertThat(client.previousAssignedTasks(), equalTo(Utils.mkSet(TASK_0_1, TASK_0_2)));
+        assertThat(client.previousAssignedTasks(), equalTo(Set.of(TASK_0_1, TASK_0_2)));
     }
 
     @Test
@@ -357,15 +356,15 @@ public class ClientStateTest {
 
         client.initializePrevTasks(Collections.emptyMap(), false);
 
-        assertThat(client.prevOwnedStatefulTasksByConsumer("c1"), equalTo(mkSet(TASK_0_0, TASK_0_1)));
-        assertThat(client.prevOwnedStatefulTasksByConsumer("c2"), equalTo(mkSet(TASK_0_2)));
+        assertThat(client.prevOwnedStatefulTasksByConsumer("c1"), equalTo(Set.of(TASK_0_0, TASK_0_1)));
+        assertThat(client.prevOwnedStatefulTasksByConsumer("c2"), equalTo(Set.of(TASK_0_2)));
         assertTrue(client.prevOwnedStatefulTasksByConsumer("c3").isEmpty());
     }
 
     @Test
     public void shouldReturnPreviousActiveStandbyTasksForConsumer() {
-        client.addOwnedPartitions(mkSet(TP_0_1, TP_1_1), "c1");
-        client.addOwnedPartitions(mkSet(TP_0_2, TP_1_2), "c2");
+        client.addOwnedPartitions(Set.of(TP_0_1, TP_1_1), "c1");
+        client.addOwnedPartitions(Set.of(TP_0_2, TP_1_2), "c2");
         client.initializePrevTasks(
             mkMap(
                 mkEntry(TP_0_0, TASK_0_0),
@@ -382,8 +381,8 @@ public class ClientStateTest {
                 mkEntry(TASK_0_0, 10L)));
         client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_2, 0L));
 
-        assertThat(client.prevOwnedStatefulTasksByConsumer("c1"), equalTo(mkSet(TASK_0_1, TASK_0_0)));
-        assertThat(client.prevOwnedStatefulTasksByConsumer("c2"), equalTo(mkSet(TASK_0_2)));
+        assertThat(client.prevOwnedStatefulTasksByConsumer("c1"), equalTo(Set.of(TASK_0_1, TASK_0_0)));
+        assertThat(client.prevOwnedStatefulTasksByConsumer("c2"), equalTo(Set.of(TASK_0_2)));
         assertThat(client.prevOwnedActiveTasksByConsumer(), equalTo(
                 mkMap(
                         mkEntry("c1", Collections.singleton(TASK_0_1)),
@@ -419,14 +418,14 @@ public class ClientStateTest {
         client.revokeActiveFromConsumer(TASK_0_1, "c1");
 
         assertThat(client.assignedActiveTasksByConsumer(), equalTo(mkMap(
-                mkEntry("c1", mkSet(TASK_0_0, TASK_0_1)),
-                mkEntry("c2", mkSet(TASK_0_2))
+                mkEntry("c1", Set.of(TASK_0_0, TASK_0_1)),
+                mkEntry("c2", Set.of(TASK_0_2))
         )));
         assertThat(client.assignedStandbyTasksByConsumer(), equalTo(mkMap(
-                mkEntry("c1", mkSet(TASK_0_2)),
-                mkEntry("c2", mkSet(TASK_0_0))
+                mkEntry("c1", Set.of(TASK_0_2)),
+                mkEntry("c2", Set.of(TASK_0_0))
         )));
-        assertThat(client.revokingActiveTasksByConsumer(), equalTo(Collections.singletonMap("c1", mkSet(TASK_0_1))));
+        assertThat(client.revokingActiveTasksByConsumer(), equalTo(Collections.singletonMap("c1", Set.of(TASK_0_1))));
     }
 
     @Test
@@ -437,8 +436,8 @@ public class ClientStateTest {
         );
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
         client.initializePrevTasks(Collections.emptyMap(), false);
-        assertThat(client.prevStandbyTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
-        assertThat(client.previousAssignedTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
+        assertThat(client.prevStandbyTasks(), equalTo(Set.of(TASK_0_1, TASK_0_2)));
+        assertThat(client.previousAssignedTasks(), equalTo(Set.of(TASK_0_1, TASK_0_2)));
         assertTrue(client.prevActiveTasks().isEmpty());
     }
 
@@ -552,15 +551,15 @@ public class ClientStateTest {
 
     @Test
     public void shouldSetProcessId() {
-        assertEquals(UUID_1, new ClientState(UUID_1, 1).processId());
-        assertEquals(UUID_2, new ClientState(UUID_2, mkMap()).processId());
-        assertEquals(UUID_3, new ClientState(UUID_3, 1, mkMap()).processId());
+        assertEquals(PID_1, new ClientState(PID_1, 1).processId());
+        assertEquals(PID_2, new ClientState(PID_2, mkMap()).processId());
+        assertEquals(PID_3, new ClientState(PID_3, 1, mkMap()).processId());
         assertNull(new ClientState().processId());
     }
 
     @Test
     public void shouldCopyState() {
-        final ClientState clientState = new ClientState(mkSet(new TaskId(0, 0)), mkSet(new TaskId(0, 1)), Collections.emptyMap(), EMPTY_CLIENT_TAGS, 1, uuidForInt(1));
+        final ClientState clientState = new ClientState(Set.of(new TaskId(0, 0)), Set.of(new TaskId(0, 1)), Collections.emptyMap(), EMPTY_CLIENT_TAGS, 1, processIdForInt(1));
         final ClientState clientStateCopy = new ClientState(clientState);
 
         assertEquals(clientStateCopy.processId(), clientState.processId());

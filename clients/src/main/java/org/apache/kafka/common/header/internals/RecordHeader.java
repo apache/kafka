@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.header.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.utils.Utils;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
-
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.utils.Utils;
 
 public class RecordHeader implements Header {
     private ByteBuffer keyBuffer;

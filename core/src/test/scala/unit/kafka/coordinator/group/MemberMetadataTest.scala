@@ -16,10 +16,10 @@
  */
 package kafka.coordinator.group
 
-import java.util.Arrays
-
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
+import java.util
 
 class MemberMetadataTest {
   val groupId = "groupId"
@@ -60,8 +60,8 @@ class MemberMetadataTest {
 
     val member = new MemberMetadata(memberId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
-    assertTrue(Arrays.equals(Array[Byte](0), member.metadata("range")))
-    assertTrue(Arrays.equals(Array[Byte](1), member.metadata("roundrobin")))
+    assertTrue(util.Arrays.equals(Array[Byte](0), member.metadata("range")))
+    assertTrue(util.Arrays.equals(Array[Byte](1), member.metadata("roundrobin")))
   }
 
   @Test

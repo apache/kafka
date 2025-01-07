@@ -17,6 +17,7 @@
 package org.apache.kafka.server.util.timer;
 
 import org.apache.kafka.common.utils.MockTime;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -29,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TimerTaskListTest {
 
-    private class TestTask extends TimerTask {
+    private static class TestTask extends TimerTask {
         TestTask(long delayMs) {
             super(delayMs);
         }

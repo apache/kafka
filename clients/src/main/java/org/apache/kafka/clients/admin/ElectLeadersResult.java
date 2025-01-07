@@ -18,15 +18,15 @@
 package org.apache.kafka.clients.admin;
 
 
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * The result of {@link Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}
@@ -34,7 +34,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-final public class ElectLeadersResult {
+public final class ElectLeadersResult {
     private final KafkaFuture<Map<TopicPartition, Optional<Throwable>>> electionFuture;
 
     ElectLeadersResult(KafkaFuture<Map<TopicPartition, Optional<Throwable>>> electionFuture) {
@@ -57,20 +57,17 @@ final public class ElectLeadersResult {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
         partitions().whenComplete(
-                new KafkaFuture.BiConsumer<Map<TopicPartition, Optional<Throwable>>, Throwable>() {
-                    @Override
-                    public void accept(Map<TopicPartition, Optional<Throwable>> topicPartitions, Throwable throwable) {
-                        if (throwable != null) {
-                            result.completeExceptionally(throwable);
-                        } else {
-                            for (Optional<Throwable> exception : topicPartitions.values()) {
-                                if (exception.isPresent()) {
-                                    result.completeExceptionally(exception.get());
-                                    return;
-                                }
+                (topicPartitions, throwable) -> {
+                    if (throwable != null) {
+                        result.completeExceptionally(throwable);
+                    } else {
+                        for (Optional<Throwable> exception : topicPartitions.values()) {
+                            if (exception.isPresent()) {
+                                result.completeExceptionally(exception.get());
+                                return;
                             }
-                            result.complete(null);
                         }
+                        result.complete(null);
                     }
                 });
 

@@ -127,28 +127,6 @@ public final class SlidingWindows {
         return new SlidingWindows(timeDifferenceMs, afterWindowEndMs);
     }
 
-    /**
-     * Return a window definition with the window size based on the given maximum time difference (inclusive) between
-     * records in the same window and given window grace period. Reject out-of-order events that arrive after {@code grace}.
-     * A window is closed when {@code stream-time > window-end + grace-period}.
-     *
-     * @param timeDifference the max time difference (inclusive) between two records in a window
-     * @param grace the grace period to admit out-of-order events to a window
-     * @return a new window definition
-     * @throws IllegalArgumentException if the specified window size is &lt; 0 or grace &lt; 0, or either can't be represented as {@code long milliseconds}
-     * @deprecated since 3.0. Use {@link #ofTimeDifferenceWithNoGrace(Duration)} or {@link #ofTimeDifferenceAndGrace(Duration, Duration)} instead
-     */
-    @Deprecated
-    public static SlidingWindows withTimeDifferenceAndGrace(final Duration timeDifference, final Duration grace) throws IllegalArgumentException {
-        final String msgPrefixSize = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
-        final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefixSize);
-
-        final String msgPrefixGrace = prepareMillisCheckFailMsgPrefix(grace, "grace");
-        final long graceMs = validateMillisecondDuration(grace, msgPrefixGrace);
-
-        return new SlidingWindows(timeDifferenceMs, graceMs);
-    }
-
     public long timeDifferenceMs() {
         return timeDifferenceMs;
     }

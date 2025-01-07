@@ -17,7 +17,11 @@
 package org.apache.kafka.common;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
+import java.util.Set;
 
 /**
  * This class defines an immutable universally unique identifier (UUID). It represents a 128-bit value.
@@ -28,14 +32,24 @@ import java.util.Base64;
 public class Uuid implements Comparable<Uuid> {
 
     /**
+     * A reserved UUID. Will never be returned by the randomUuid method.
+     */
+    public static final Uuid ONE_UUID = new Uuid(0L, 1L);
+
+    /**
      * A UUID for the metadata topic in KRaft mode. Will never be returned by the randomUuid method.
      */
-    public static final Uuid METADATA_TOPIC_ID = new Uuid(0L, 1L);
+    public static final Uuid METADATA_TOPIC_ID = ONE_UUID;
 
     /**
      * A UUID that represents a null or empty UUID. Will never be returned by the randomUuid method.
      */
     public static final Uuid ZERO_UUID = new Uuid(0L, 0L);
+
+    /**
+     * The set of reserved UUIDs that will never be returned by the randomUuid method.
+     */
+    public static final Set<Uuid> RESERVED = Set.of(ZERO_UUID, ONE_UUID);
 
     private final long mostSignificantBits;
     private final long leastSignificantBits;
@@ -61,7 +75,7 @@ public class Uuid implements Comparable<Uuid> {
      */
     public static Uuid randomUuid() {
         Uuid uuid = unsafeRandomUuid();
-        while (uuid.equals(METADATA_TOPIC_ID) || uuid.equals(ZERO_UUID) || uuid.toString().startsWith("-")) {
+        while (RESERVED.contains(uuid) || uuid.toString().startsWith("-")) {
             uuid = unsafeRandomUuid();
         }
         return uuid;
@@ -150,5 +164,33 @@ public class Uuid implements Comparable<Uuid> {
         } else {
             return 0;
         }
+    }
+
+    /**
+     * Convert a list of Uuid to an array of Uuid.
+     *
+     * @param list          The input list
+     * @return              The output array
+     */
+    public static Uuid[] toArray(List<Uuid> list) {
+        if (list == null) return null;
+        Uuid[] array = new Uuid[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            array[i] = list.get(i);
+        }
+        return array;
+    }
+
+    /**
+     * Convert an array of Uuids to a list of Uuid.
+     *
+     * @param array         The input array
+     * @return              The output list
+     */
+    public static List<Uuid> toList(Uuid[] array) {
+        if (array == null) return null;
+        List<Uuid> list = new ArrayList<>(array.length);
+        list.addAll(Arrays.asList(array));
+        return list;
     }
 }

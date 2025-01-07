@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals.metrics;
 
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThreadTotalBlockedTime;
 
 import java.util.Map;
@@ -27,8 +29,6 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORDS_SUFFIX;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
@@ -46,7 +46,9 @@ public class ThreadMetrics {
     private static final String CREATE_TASK = "task-created";
     private static final String CLOSE_TASK = "task-closed";
     private static final String BLOCKED_TIME = "blocked-time-ns-total";
+    private static final String STATE  = "state";
     private static final String THREAD_START_TIME = "thread-start-time";
+    private static final String THREAD_STATE = "thread-state";
 
     private static final String COMMIT_DESCRIPTION = "calls to commit";
     private static final String COMMIT_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + COMMIT_DESCRIPTION;
@@ -78,10 +80,6 @@ public class ThreadMetrics {
     private static final String PUNCTUATE_RATE_DESCRIPTION = RATE_DESCRIPTION + PUNCTUATE_DESCRIPTION;
     private static final String PUNCTUATE_AVG_LATENCY_DESCRIPTION = "The average punctuate latency";
     private static final String PUNCTUATE_MAX_LATENCY_DESCRIPTION = "The maximum punctuate latency";
-    private static final String COMMIT_OVER_TASKS_DESCRIPTION =
-        "calls to commit over all tasks assigned to one stream thread";
-    private static final String COMMIT_OVER_TASKS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + COMMIT_OVER_TASKS_DESCRIPTION;
-    private static final String COMMIT_OVER_TASKS_RATE_DESCRIPTION = RATE_DESCRIPTION + COMMIT_OVER_TASKS_DESCRIPTION;
     private static final String PROCESS_RATIO_DESCRIPTION =
         "The fraction of time the thread spent on processing active tasks";
     private static final String PUNCTUATE_RATIO_DESCRIPTION =
@@ -94,6 +92,8 @@ public class ThreadMetrics {
         "The total time the thread spent blocked on kafka in nanoseconds";
     private static final String THREAD_START_TIME_DESCRIPTION =
         "The time that the thread was started";
+    private static final String THREAD_STATE_DESCRIPTION =
+        "The current state of the thread";
 
     public static Sensor createTaskSensor(final String threadId,
                                           final StreamsMetricsImpl streamsMetrics) {
@@ -225,22 +225,6 @@ public class ThreadMetrics {
         );
     }
 
-    public static Sensor commitOverTasksSensor(final String threadId,
-                                               final StreamsMetricsImpl streamsMetrics) {
-        final Sensor commitOverTasksSensor =
-            streamsMetrics.threadLevelSensor(threadId, COMMIT, Sensor.RecordingLevel.DEBUG);
-        final Map<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, ROLLUP_VALUE);
-        addInvocationRateAndCountToSensor(
-            commitOverTasksSensor,
-            TASK_LEVEL_GROUP,
-            tagMap,
-            COMMIT,
-            COMMIT_OVER_TASKS_RATE_DESCRIPTION,
-            COMMIT_OVER_TASKS_TOTAL_DESCRIPTION
-        );
-        return commitOverTasksSensor;
-    }
-
     public static Sensor processRatioSensor(final String threadId,
                                             final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
@@ -311,6 +295,30 @@ public class ThreadMetrics {
             startTime
         );
     }
+
+    public static void addThreadStateTelemetryMetric(final String threadId,
+                                                     final StreamsMetricsImpl streamsMetrics,
+                                                     final Gauge<Integer> threadStateProvider) {
+        streamsMetrics.addThreadLevelMutableMetric(
+            THREAD_STATE,
+            THREAD_STATE_DESCRIPTION,
+            threadId,
+            threadStateProvider
+        );
+    }
+
+    public static void addThreadStateMetric(final String threadId,
+                                            final StreamsMetricsImpl streamsMetrics,
+                                            final Gauge<StreamThread.State> threadStateProvider) {
+        streamsMetrics.addThreadLevelMutableMetric(
+            STATE,
+            THREAD_STATE_DESCRIPTION,
+            threadId,
+            threadStateProvider
+        );
+    }
+
+
 
     public static void addThreadBlockedTimeMetric(final String threadId,
                                                   final StreamThreadTotalBlockedTime blockedTime,

@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -36,11 +35,14 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,31 +54,32 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
-    private final static String TOPIC = "topic";
+    private static final String TOPIC = "topic";
     private static final String CACHE_NAMESPACE = "0_0-store-name";
     private final int maxCacheSizeBytes = 150;
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
     private CachingKeyValueStore store;
     private KeyValueStore<Bytes, byte[]> underlyingStore;
     private ThreadCache cache;
     private CacheFlushListenerStub<String, String> cacheFlushListener;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         final String storeName = "store";
         underlyingStore = new InMemoryKeyValueStore(storeName);
@@ -86,7 +89,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext<>(null, null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
-        store.init((StateStoreContext) context, null);
+        store.init(context, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -103,23 +106,13 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         return store;
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
-        final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
-        when(inner.name()).thenReturn("store");
-        outer.init((ProcessorContext) context, outer);
-        verify(inner).init((ProcessorContext) context, outer);
-    }
-
     @Test
     public void shouldDelegateInit() {
         final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
         final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
         when(inner.name()).thenReturn("store");
-        outer.init((StateStoreContext) context, outer);
-        verify(inner).init((StateStoreContext) context, outer);
+        outer.init(context, outer);
+        verify(inner).init(context, outer);
     }
 
     @Test
@@ -189,7 +182,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         cache = mock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
     @Test
@@ -467,10 +460,18 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         store.put(bytesKey("a"), bytesValue("a"));
         store.delete(bytesKey("a"));
         assertNull(store.get(bytesKey("a")));
-        assertFalse(store.range(bytesKey("a"), bytesKey("b")).hasNext());
-        assertFalse(store.reverseRange(bytesKey("a"), bytesKey("b")).hasNext());
-        assertFalse(store.all().hasNext());
-        assertFalse(store.reverseAll().hasNext());
+        try (final KeyValueIterator<Bytes, byte[]> iterator = store.range(bytesKey("a"), bytesKey("b"))) {
+            assertFalse(iterator.hasNext());
+        }
+        try (final KeyValueIterator<Bytes, byte[]> iterator = store.reverseRange(bytesKey("a"), bytesKey("b"))) {
+            assertFalse(iterator.hasNext());
+        }
+        try (final KeyValueIterator<Bytes, byte[]> iterator = store.all()) {
+            assertFalse(iterator.hasNext());
+        }
+        try (final KeyValueIterator<Bytes, byte[]> iterator = store.reverseAll()) {
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -479,10 +480,18 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         store.flush();
         store.delete(bytesKey("a"));
         assertNull(store.get(bytesKey("a")));
-        assertFalse(store.range(bytesKey("a"), bytesKey("b")).hasNext());
-        assertFalse(store.reverseRange(bytesKey("a"), bytesKey("b")).hasNext());
-        assertFalse(store.all().hasNext());
-        assertFalse(store.reverseAll().hasNext());
+        try (final KeyValueIterator<Bytes, byte[]> iterator = store.range(bytesKey("a"), bytesKey("b"))) {
+            assertFalse(iterator.hasNext());
+        }
+        try (final KeyValueIterator<Bytes, byte[]> iterator = store.reverseRange(bytesKey("a"), bytesKey("b"))) {
+            assertFalse(iterator.hasNext());
+        }
+        try (final KeyValueIterator<Bytes, byte[]> iterator = store.all()) {
+            assertFalse(iterator.hasNext());
+        }
+        try (final KeyValueIterator<Bytes, byte[]> iterator = store.reverseAll()) {
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -509,6 +518,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         });
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowIfTryingToDoRangeQueryOnClosedCachingStore() {
         assertThrows(InvalidStateStoreException.class, () -> {
@@ -517,6 +527,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         });
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowIfTryingToDoReverseRangeQueryOnClosedCachingStore() {
         assertThrows(InvalidStateStoreException.class, () -> {
@@ -525,6 +536,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         });
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowIfTryingToDoAllQueryOnClosedCachingStore() {
         assertThrows(InvalidStateStoreException.class, () -> {
@@ -533,6 +545,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         });
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowIfTryingToDoReverseAllQueryOnClosedCachingStore() {
         assertThrows(InvalidStateStoreException.class, () -> {

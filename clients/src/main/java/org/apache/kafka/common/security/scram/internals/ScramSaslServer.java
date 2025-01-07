@@ -16,6 +16,22 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.security.authenticator.SaslInternalConfigs;
+import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramCredentialCallback;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFinalMessage;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFirstMessage;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirstMessage;
+import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCredentialCallback;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -31,22 +47,6 @@ import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
-import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.IllegalSaslStateException;
-import org.apache.kafka.common.errors.SaslAuthenticationException;
-import org.apache.kafka.common.security.authenticator.SaslInternalConfigs;
-import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.security.scram.ScramCredentialCallback;
-import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFinalMessage;
-import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFirstMessage;
-import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
-import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirstMessage;
-import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCredentialCallback;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * SaslServer implementation for SASL/SCRAM. This server is configured with a callback
  * handler for integration with a credential manager. Kafka brokers provide callbacks
@@ -57,7 +57,7 @@ import org.slf4j.LoggerFactory;
 public class ScramSaslServer implements SaslServer {
 
     private static final Logger log = LoggerFactory.getLogger(ScramSaslServer.class);
-    private static final Set<String> SUPPORTED_EXTENSIONS = Utils.mkSet(ScramLoginModule.TOKEN_AUTH_CONFIG);
+    private static final Set<String> SUPPORTED_EXTENSIONS = Set.of(ScramLoginModule.TOKEN_AUTH_CONFIG);
 
     enum State {
         RECEIVE_CLIENT_FIRST_MESSAGE,
@@ -70,7 +70,6 @@ public class ScramSaslServer implements SaslServer {
     private final ScramFormatter formatter;
     private final CallbackHandler callbackHandler;
     private State state;
-    private String username;
     private ClientFirstMessage clientFirstMessage;
     private ServerFirstMessage serverFirstMessage;
     private ScramExtensions scramExtensions;
@@ -108,7 +107,7 @@ public class ScramSaslServer implements SaslServer {
                     String serverNonce = formatter.secureRandomString();
                     try {
                         String saslName = clientFirstMessage.saslName();
-                        this.username = ScramFormatter.username(saslName);
+                        String username = ScramFormatter.username(saslName);
                         NameCallback nameCallback = new NameCallback("username", username);
                         ScramCredentialCallback credentialCallback;
                         if (scramExtensions.tokenAuthenticated()) {
@@ -149,6 +148,9 @@ public class ScramSaslServer implements SaslServer {
                 case RECEIVE_CLIENT_FINAL_MESSAGE:
                     try {
                         ClientFinalMessage clientFinalMessage = new ClientFinalMessage(response);
+                        if (!clientFinalMessage.nonce().endsWith(serverFirstMessage.nonce())) {
+                            throw new SaslException("Invalid client nonce in the final client message.");
+                        }
                         verifyClientProof(clientFinalMessage);
                         byte[] serverKey = scramCredential.serverKey();
                         byte[] serverSignature = formatter.serverSignature(serverKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
@@ -222,7 +224,8 @@ public class ScramSaslServer implements SaslServer {
         this.state = state;
     }
 
-    private void verifyClientProof(ClientFinalMessage clientFinalMessage) throws SaslException {
+    // Visible for testing
+    void verifyClientProof(ClientFinalMessage clientFinalMessage) throws SaslException {
         try {
             byte[] expectedStoredKey = scramCredential.storedKey();
             byte[] clientSignature = formatter.clientSignature(expectedStoredKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);

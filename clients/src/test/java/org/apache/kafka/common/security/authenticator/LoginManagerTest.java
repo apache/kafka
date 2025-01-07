@@ -20,18 +20,31 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.security.auth.login.LoginException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
 
 public class LoginManagerTest {
 
@@ -150,6 +163,32 @@ public class LoginManagerTest {
         verifyLoginManagerRelease(dynamicLogin2, 2, dynamicContext, configs2);
         verifyLoginManagerRelease(staticLogin1, 4, staticContext, configs1);
         verifyLoginManagerRelease(staticLogin2, 2, staticContext, configs2);
+    }
+
+    @Test
+    public void testShouldReThrowExceptionOnErrorLoginAttempt() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(SaslConfigs.SASL_JAAS_CONFIG, dynamicPlainContext);
+        config.put(SaslConfigs.SASL_LOGIN_CLASS, Login.class);
+        config.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, AuthenticateCallbackHandler.class);
+        JaasContext dynamicContext = JaasContext.loadClientContext(config);
+
+        Login mockLogin = mock(Login.class);
+        AuthenticateCallbackHandler mockHandler = mock(AuthenticateCallbackHandler.class);
+
+        doThrow(new LoginException("Expecting LoginException")).when(mockLogin).login();
+
+        try (MockedStatic<Utils> mockedUtils = mockStatic(Utils.class, Mockito.CALLS_REAL_METHODS)) {
+            mockedUtils.when(() -> Utils.newInstance(Login.class)).thenReturn(mockLogin);
+            mockedUtils.when(() -> Utils.newInstance(AuthenticateCallbackHandler.class)).thenReturn(mockHandler);
+
+            assertThrows(LoginException.class, () ->
+                    LoginManager.acquireLoginManager(dynamicContext, "PLAIN", DefaultLogin.class, config)
+            );
+
+            verify(mockLogin).close();
+            verify(mockHandler).close();
+        }
     }
 
     private void verifyLoginManagerRelease(LoginManager loginManager, int acquireCount, JaasContext jaasContext,

@@ -24,7 +24,11 @@
   // Version 3 is the first flexible version.
   //
   // Version 4 adds support for batching via Coordinators (KIP-699)
-  "validVersions": "0-4",
+  //
+  // Version 5 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
+  //
+  // Version 6 adds support for share groups (KIP-932).
+  "validVersions": "0-6",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
@@ -39,7 +43,7 @@
       "about": "The host name." },
     { "name": "Port", "type": "int32", "versions": "0-3",
       "about": "The port." },
-    { "name": "Coordinators", "type": "[]Coordinator", "versions": "4+", "about": "Each coordinator result in the response", "fields": [
+    { "name": "Coordinators", "type": "[]Coordinator", "versions": "4+", "about": "Each coordinator result in the response.", "fields": [
       { "name": "Key", "type": "string", "versions": "4+", "about": "The coordinator key." },
       { "name": "NodeId", "type": "int32", "versions": "4+", "entityType": "brokerId",
         "about": "The node id." },

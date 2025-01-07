@@ -1,0 +1,67 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 78,
+  "type": "request",
+  "listeners": ["broker"],
+  "name": "ShareFetchRequest",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  // The ShareFetchRequest API is added as part of KIP-932 and is still under
+  // development. Hence, the API is not exposed by default by brokers unless
+  // explicitly enabled.
+  "latestVersionUnstable": true,
+  "fields": [
+    { "name": "GroupId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null", "entityType": "groupId",
+      "about": "The group identifier." },
+    { "name": "MemberId", "type": "string", "versions": "0+", "nullableVersions": "0+",
+      "about": "The member ID." },
+    { "name": "ShareSessionEpoch", "type": "int32", "versions": "0+",
+      "about": "The current share session epoch: 0 to open a share session; -1 to close it; otherwise increments for consecutive requests." },
+    { "name": "MaxWaitMs", "type": "int32", "versions": "0+",
+      "about": "The maximum time in milliseconds to wait for the response." },
+    { "name": "MinBytes", "type": "int32", "versions": "0+",
+      "about": "The minimum bytes to accumulate in the response." },
+    { "name": "MaxBytes", "type": "int32", "versions": "0+", "default": "0x7fffffff",
+      "about": "The maximum bytes to fetch.  See KIP-74 for cases where this limit may not be honored." },
+    { "name": "Topics", "type": "[]FetchTopic", "versions": "0+",
+      "about": "The topics to fetch.", "fields": [
+      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID."},
+      { "name": "Partitions", "type": "[]FetchPartition", "versions": "0+",
+        "about": "The partitions to fetch.", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "PartitionMaxBytes", "type": "int32", "versions": "0+",
+          "about": "The maximum bytes to fetch from this partition. 0 when only acknowledgement with no fetching is required. See KIP-74 for cases where this limit may not be honored." },
+        { "name": "AcknowledgementBatches", "type": "[]AcknowledgementBatch", "versions": "0+",
+          "about": "Record batches to acknowledge.", "fields": [
+          { "name": "FirstOffset", "type": "int64", "versions": "0+",
+            "about": "First offset of batch of records to acknowledge."},
+          { "name": "LastOffset", "type": "int64", "versions": "0+",
+            "about": "Last offset (inclusive) of batch of records to acknowledge."},
+          { "name": "AcknowledgeTypes", "type": "[]int8", "versions": "0+",
+            "about": "Array of acknowledge types - 0:Gap,1:Accept,2:Release,3:Reject."}
+        ]}
+      ]}
+    ]},
+    { "name": "ForgottenTopicsData", "type": "[]ForgottenTopic", "versions": "0+",
+      "about": "The partitions to remove from this share session.", "fields": [
+      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID."},
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
+        "about": "The partitions indexes to forget." }
+    ]}
+  ]
+}

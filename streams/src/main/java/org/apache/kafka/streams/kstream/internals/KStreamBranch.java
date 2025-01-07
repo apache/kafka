@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.List;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+
+import java.util.List;
 
 class KStreamBranch<K, V> implements ProcessorSupplier<K, V, K, V> {
 

@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -29,14 +30,13 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class MirrorSourceMetricsTest {
 
-    private final static String SOURCE = "source";
-    private final static String TARGET = "target";
-    private final static TopicPartition TP = new TopicPartition("topic", 0);
-    private final static TopicPartition SOURCE_TP = new TopicPartition(SOURCE + "." + TP.topic(), TP.partition());
+    private static final String SOURCE = "source";
+    private static final String TARGET = "target";
+    private static final TopicPartition TP = new TopicPartition("topic", 0);
+    private static final TopicPartition SOURCE_TP = new TopicPartition(SOURCE + "." + TP.topic(), TP.partition());
 
     private final Map<String, String> configs = new HashMap<>();
     private TestReporter reporter;
@@ -54,22 +54,6 @@ public class MirrorSourceMetricsTest {
 
     @Test
     public void testTags() {
-        MirrorSourceTaskConfig taskConfig = new MirrorSourceTaskConfig(configs);
-        MirrorSourceMetrics metrics = new MirrorSourceMetrics(taskConfig);
-        metrics.addReporter(reporter);
-
-        metrics.countRecord(SOURCE_TP);
-        assertEquals(13, reporter.metrics.size());
-        Map<String, String> tags = reporter.metrics.get(0).metricName().tags();
-        assertEquals(TARGET, tags.get("target"));
-        assertEquals(SOURCE_TP.topic(), tags.get("topic"));
-        assertEquals(String.valueOf(SOURCE_TP.partition()), tags.get("partition"));
-        assertNull(tags.get("source"));
-    }
-
-    @Test
-    public void testTagsWithSourceAlias() {
-        configs.put(MirrorSourceConfig.ADD_SOURCE_ALIAS_TO_METRICS, "true");
         MirrorSourceTaskConfig taskConfig = new MirrorSourceTaskConfig(configs);
         MirrorSourceMetrics metrics = new MirrorSourceMetrics(taskConfig);
         metrics.addReporter(reporter);

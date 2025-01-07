@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -35,9 +36,8 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class DescribeTransactionsHandlerTest {
     private final LogContext logContext = new LogContext();
@@ -49,12 +49,12 @@ public class DescribeTransactionsHandlerTest {
         String transactionalId2 = "bar";
         String transactionalId3 = "baz";
 
-        Set<String> transactionalIds = mkSet(transactionalId1, transactionalId2, transactionalId3);
+        Set<String> transactionalIds = Set.of(transactionalId1, transactionalId2, transactionalId3);
         DescribeTransactionsHandler handler = new DescribeTransactionsHandler(logContext);
 
         assertLookup(handler, transactionalIds);
-        assertLookup(handler, mkSet(transactionalId1));
-        assertLookup(handler, mkSet(transactionalId2, transactionalId3));
+        assertLookup(handler, Set.of(transactionalId1));
+        assertLookup(handler, Set.of(transactionalId2, transactionalId3));
     }
 
     @Test
@@ -62,7 +62,7 @@ public class DescribeTransactionsHandlerTest {
         String transactionalId1 = "foo";
         String transactionalId2 = "bar";
 
-        Set<String> transactionalIds = mkSet(transactionalId1, transactionalId2);
+        Set<String> transactionalIds = Set.of(transactionalId1, transactionalId2);
         DescribeTransactionsHandler handler = new DescribeTransactionsHandler(logContext);
 
         DescribeTransactionsResponseData.TransactionState transactionState1 =
@@ -104,10 +104,10 @@ public class DescribeTransactionsHandlerTest {
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         ApiResult<CoordinatorKey, TransactionDescription> result = handleResponseError(handler, transactionalId, error);
         assertEquals(emptyList(), result.unmappedKeys);
-        assertEquals(mkSet(key), result.failedKeys.keySet());
+        assertEquals(Set.of(key), result.failedKeys.keySet());
 
         Throwable throwable = result.failedKeys.get(key);
-        assertTrue(error.exception().getClass().isInstance(throwable));
+        assertInstanceOf(error.exception().getClass(), throwable);
     }
 
     private void assertRetriableError(
@@ -137,7 +137,7 @@ public class DescribeTransactionsHandlerTest {
         Errors error
     ) {
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
-        Set<CoordinatorKey> keys = mkSet(key);
+        Set<CoordinatorKey> keys = Set.of(key);
 
         DescribeTransactionsResponseData.TransactionState transactionState = new DescribeTransactionsResponseData.TransactionState()
             .setErrorCode(error.code())

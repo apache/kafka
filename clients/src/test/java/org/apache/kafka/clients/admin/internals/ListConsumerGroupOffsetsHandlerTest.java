@@ -16,27 +16,6 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import static java.util.Collections.emptyList;
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.RequestAndKeys;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -52,8 +31,29 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ListConsumerGroupOffsetsHandlerTest {
 
@@ -99,10 +99,10 @@ public class ListConsumerGroupOffsetsHandlerTest {
 
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(requestMap, false, logContext);
         OffsetFetchRequest request1 = handler.buildBatchedRequest(coordinatorKeys(groupZero, groupOne, groupTwo)).build();
-        assertEquals(Utils.mkSet(groupZero, groupOne, groupTwo), requestGroups(request1));
+        assertEquals(Set.of(groupZero, groupOne, groupTwo), requestGroups(request1));
 
         OffsetFetchRequest request2 = handler.buildBatchedRequest(coordinatorKeys(groupThree)).build();
-        assertEquals(Utils.mkSet(groupThree), requestGroups(request2));
+        assertEquals(Set.of(groupThree), requestGroups(request2));
 
         Map<String, ListConsumerGroupOffsetsSpec> builtRequests = new HashMap<>();
         request1.groupIdsToPartitions().forEach((group, partitions) ->
@@ -136,7 +136,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(batchedRequestMap, false, logContext);
         Collection<RequestAndKeys<CoordinatorKey>> requests = handler.buildRequest(1, coordinatorKeys(groupZero, groupOne, groupTwo));
         assertEquals(1, requests.size());
-        assertEquals(Utils.mkSet(groupZero, groupOne, groupTwo), requestGroups((OffsetFetchRequest) requests.iterator().next().request.build()));
+        assertEquals(Set.of(groupZero, groupOne, groupTwo), requestGroups((OffsetFetchRequest) requests.iterator().next().request.build()));
     }
 
     @Test
@@ -147,7 +147,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         Collection<RequestAndKeys<CoordinatorKey>> requests = handler.buildRequest(1, coordinatorKeys(groupZero, groupOne, groupTwo));
         assertEquals(3, requests.size());
         assertEquals(
-            Utils.mkSet(Utils.mkSet(groupZero), Utils.mkSet(groupOne), Utils.mkSet(groupTwo)),
+            Set.of(Set.of(groupZero), Set.of(groupOne), Set.of(groupTwo)),
             requests.stream().map(requestAndKey -> requestGroups((OffsetFetchRequest) requestAndKey.request.build())).collect(Collectors.toSet())
         );
     }
@@ -177,11 +177,11 @@ public class ListConsumerGroupOffsetsHandlerTest {
         Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMapTwo =
             Collections.singletonMap(t2p2, new OffsetAndMetadata(10L));
         Map<String, Map<TopicPartition, OffsetAndMetadata>> expectedResult =
-            new HashMap<String, Map<TopicPartition, OffsetAndMetadata>>() {{
-                put(groupZero, offsetAndMetadataMapZero);
-                put(groupOne, offsetAndMetadataMapOne);
-                put(groupTwo, offsetAndMetadataMapTwo);
-            }};
+            new HashMap<>() {{
+                    put(groupZero, offsetAndMetadataMapZero);
+                    put(groupOne, offsetAndMetadataMapOne);
+                    put(groupTwo, offsetAndMetadataMapTwo);
+                }};
 
         assertCompletedForMultipleGroups(
             handleWithPartitionErrorMultipleGroups(Errors.UNKNOWN_TOPIC_OR_PARTITION), expectedResult);
@@ -304,11 +304,11 @@ public class ListConsumerGroupOffsetsHandlerTest {
         responseDataTwo.put(t2p2, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", Errors.NONE));
 
         Map<String, Map<TopicPartition, PartitionData>> responseData =
-            new HashMap<String, Map<TopicPartition, PartitionData>>() {{
-                put(groupZero, responseDataZero);
-                put(groupOne, responseDataOne);
-                put(groupTwo, responseDataTwo);
-            }};
+            new HashMap<>() {{
+                    put(groupZero, responseDataZero);
+                    put(groupOne, responseDataOne);
+                    put(groupTwo, responseDataTwo);
+                }};
 
         Map<String, Errors> errorMap = errorMap(groups, Errors.NONE);
         return new OffsetFetchResponse(0, errorMap, responseData);
@@ -403,7 +403,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(singleton(key), result.failedKeys.keySet());
-        assertTrue(expectedExceptionType.isInstance(result.failedKeys.get(key)));
+        assertInstanceOf(expectedExceptionType, result.failedKeys.get(key));
     }
 
     private void assertFailedForMultipleGroups(
@@ -415,7 +415,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         for (String g : groupToExceptionMap.keySet()) {
             CoordinatorKey key = CoordinatorKey.byGroupId(g);
             assertTrue(result.failedKeys.containsKey(key));
-            assertTrue(groupToExceptionMap.get(g).isInstance(result.failedKeys.get(key)));
+            assertInstanceOf(groupToExceptionMap.get(g), result.failedKeys.get(key));
         }
     }
 

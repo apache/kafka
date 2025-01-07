@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -31,49 +30,28 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.test.StreamsTestUtils.toList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@RunWith(Parameterized.class)
 public class ListValueStoreTest {
-    private enum StoreType { InMemory, RocksDB }
+    public enum StoreType { InMemory, RocksDB }
 
-    private final StoreType storeType;
     private KeyValueStore<Integer, String> listStore;
 
     final File baseDir = TestUtils.tempDirectory("test");
 
-    public ListValueStoreTest(final StoreType type) {
-        this.storeType = type;
-    }
-
-    @Parameterized.Parameters(name = "store type = {0}")
-    public static Collection<Object[]> data() {
-        final List<Object[]> values = new ArrayList<>();
-        for (final StoreType type : Arrays.asList(StoreType.InMemory, StoreType.RocksDB)) {
-            values.add(new Object[]{type});
-        }
-        return values;
-    }
-
-    @Before
-    public void setup() {
-        listStore = buildStore(Serdes.Integer(), Serdes.String());
+    public void setup(final StoreType storeType) {
+        listStore = buildStore(Serdes.Integer(), Serdes.String(), storeType);
 
         final MockRecordCollector recordCollector = new MockRecordCollector();
         final InternalMockProcessorContext<Integer, String> context = new InternalMockProcessorContext<>(
@@ -87,16 +65,17 @@ public class ListValueStoreTest {
                 new MockStreamsMetrics(new Metrics())));
         context.setTime(1L);
 
-        listStore.init((StateStoreContext) context, listStore);
+        listStore.init(context, listStore);
     }
 
-    @After
+    @AfterEach
     public void after() {
         listStore.close();
     }
 
     <K, V> KeyValueStore<K, V> buildStore(final Serde<K> keySerde,
-                                          final Serde<V> valueSerde) {
+                                          final Serde<V> valueSerde,
+                                          final StoreType storeType) {
         return new ListValueStoreBuilder<>(
             storeType == StoreType.RocksDB ? Stores.persistentKeyValueStore("rocksDB list store")
                 : Stores.inMemoryKeyValueStore("in-memory list store"),
@@ -106,8 +85,10 @@ public class ListValueStoreTest {
             .build();
     }
 
-    @Test
-    public void shouldGetAll() {
+    @ParameterizedTest
+    @EnumSource(StoreType.class)
+    public void shouldGetAll(final StoreType storeType) {
+        setup(storeType);
         listStore.put(0, "zero");
         // should retain duplicates
         listStore.put(0, "zero again");
@@ -121,12 +102,14 @@ public class ListValueStoreTest {
 
         assertEquals(
             asList(zero, zeroAgain, one, two),
-            toList(listStore.all())
+            toListAndCloseIterator(listStore.all())
         );
     }
 
-    @Test
-    public void shouldGetAllNonDeletedRecords() {
+    @ParameterizedTest
+    @EnumSource(StoreType.class)
+    public void shouldGetAllNonDeletedRecords(final StoreType storeType) {
+        setup(storeType);
         // Add some records
         listStore.put(0, "zero");
         listStore.put(1, "one");
@@ -146,12 +129,14 @@ public class ListValueStoreTest {
 
         assertEquals(
             asList(zero, two, four),
-            toList(listStore.all())
+            toListAndCloseIterator(listStore.all())
         );
     }
 
-    @Test
-    public void shouldGetAllReturnTimestampOrderedRecords() {
+    @ParameterizedTest
+    @EnumSource(StoreType.class)
+    public void shouldGetAllReturnTimestampOrderedRecords(final StoreType storeType) {
+        setup(storeType);
         // Add some records in different order
         listStore.put(4, "four");
         listStore.put(0, "zero");
@@ -172,12 +157,14 @@ public class ListValueStoreTest {
 
         assertEquals(
             asList(zero, one, two1, two2, three, four),
-            toList(listStore.all())
+            toListAndCloseIterator(listStore.all())
         );
     }
 
-    @Test
-    public void shouldAllowDeleteWhileIterateRecords() {
+    @ParameterizedTest
+    @EnumSource(StoreType.class)
+    public void shouldAllowDeleteWhileIterateRecords(final StoreType storeType) {
+        setup(storeType);
         listStore.put(0, "zero1");
         listStore.put(0, "zero2");
         listStore.put(1, "one");
@@ -197,11 +184,13 @@ public class ListValueStoreTest {
         it.close();
 
         // A new all() iterator after a previous all() iterator was closed should not return deleted records.
-        assertEquals(Collections.singletonList(one), toList(listStore.all()));
+        assertEquals(Collections.singletonList(one), toListAndCloseIterator(listStore.all()));
     }
 
-    @Test
-    public void shouldNotReturnMoreDataWhenIteratorClosed() {
+    @ParameterizedTest
+    @EnumSource(StoreType.class)
+    public void shouldNotReturnMoreDataWhenIteratorClosed(final StoreType storeType) {
+        setup(storeType);
         listStore.put(0, "zero1");
         listStore.put(0, "zero2");
         listStore.put(1, "one");
@@ -211,6 +200,10 @@ public class ListValueStoreTest {
         it.close();
 
         // A new all() iterator after a previous all() iterator was closed should not return deleted records.
-        assertThrows(InvalidStateStoreException.class, it::next);
+        if (storeType == StoreType.InMemory) {
+            assertThrows(IllegalStateException.class, it::next);
+        } else {
+            assertThrows(InvalidStateStoreException.class, it::next);
+        }
     }
 }

@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.function.Function;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
+
+import java.util.function.Function;
 
 class WrappedSessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 

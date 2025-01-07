@@ -101,11 +101,11 @@ public class OffsetCommitRequest extends AbstractRequest {
                 .setName(topic.name());
             response.topics().add(responseTopic);
 
-            topic.partitions().forEach(partition -> {
+            topic.partitions().forEach(partition ->
                 responseTopic.partitions().add(new OffsetCommitResponsePartition()
                     .setPartitionIndex(partition.partitionIndex())
-                    .setErrorCode(error.code()));
-            });
+                    .setErrorCode(error.code()))
+            );
         });
         return response;
     }

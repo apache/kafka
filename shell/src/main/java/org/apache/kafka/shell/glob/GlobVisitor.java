@@ -50,10 +50,6 @@ public final class GlobVisitor implements Consumer<MetadataShellState> {
             this.node = node;
         }
 
-        public String[] path() {
-            return path;
-        }
-
         public MetadataNode node() {
             return node;
         }
@@ -72,24 +68,22 @@ public final class GlobVisitor implements Consumer<MetadataShellState> {
 
         @Override
         public int hashCode() {
-            return Objects.hash(path, node);
+            return Objects.hash(Arrays.hashCode(path), node);
         }
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof MetadataNodeInfo)) return false;
-            MetadataNodeInfo other = (MetadataNodeInfo) o;
+            if (!(o instanceof MetadataNodeInfo other)) return false;
             if (!Arrays.equals(path, other.path)) return false;
-            if (!node.equals(other.node)) return false;
-            return true;
+            return node.equals(other.node);
         }
 
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder("MetadataNodeInfo(path=");
-            for (int i = 0; i < path.length; i++) {
+            for (String s : path) {
                 bld.append("/");
-                bld.append(path[i]);
+                bld.append(s);
             }
             bld.append(", node=").append(node).append(")");
             return bld.toString();

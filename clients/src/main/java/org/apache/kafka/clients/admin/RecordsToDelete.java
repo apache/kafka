@@ -29,7 +29,7 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public class RecordsToDelete {
 
-    private long offset;
+    private final long offset;
 
     private RecordsToDelete(long offset) {
         this.offset = offset;

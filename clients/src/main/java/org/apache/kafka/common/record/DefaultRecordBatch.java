@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -56,6 +57,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  ProducerId => Int64
  *  ProducerEpoch => Int16
  *  BaseSequence => Int32
+ *  RecordsCount => Int32
  *  Records => [Record]
  *
  * Note that when compression is enabled (see attributes below), the compressed record data is serialized
@@ -270,7 +272,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     public InputStream recordInputStream(BufferSupplier bufferSupplier) {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
-        return compressionType().wrapForInput(buffer, magic(), bufferSupplier);
+        return Compression.of(compressionType()).build().wrapForInput(buffer, magic(), bufferSupplier);
     }
 
     private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier, boolean skipKeyValue) {

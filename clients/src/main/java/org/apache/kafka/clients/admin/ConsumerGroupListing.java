@@ -17,10 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.GroupType;
+
 import java.util.Objects;
 import java.util.Optional;
-
-import org.apache.kafka.common.ConsumerGroupState;
 
 /**
  * A listing of a consumer group in the cluster.
@@ -28,29 +30,84 @@ import org.apache.kafka.common.ConsumerGroupState;
 public class ConsumerGroupListing {
     private final String groupId;
     private final boolean isSimpleConsumerGroup;
-    private final Optional<ConsumerGroupState> state;
+    private final Optional<GroupState> groupState;
+    private final Optional<GroupType> type;
 
     /**
      * Create an instance with the specified parameters.
      *
-     * @param groupId Group Id
-     * @param isSimpleConsumerGroup If consumer group is simple or not.
+     * @param groupId                   Group Id.
+     * @param isSimpleConsumerGroup     If consumer group is simple or not.
      */
     public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup) {
-        this(groupId, isSimpleConsumerGroup, Optional.empty());
+        this(groupId, Optional.empty(), Optional.empty(), isSimpleConsumerGroup);
     }
 
     /**
      * Create an instance with the specified parameters.
      *
-     * @param groupId Group Id
-     * @param isSimpleConsumerGroup If consumer group is simple or not.
-     * @param state The state of the consumer group
+     * @param groupId                   Group Id.
+     * @param isSimpleConsumerGroup     If consumer group is simple or not.
+     * @param state                     The state of the consumer group.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupListing(String, Optional, boolean)} instead.
      */
+    @Deprecated
     public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup, Optional<ConsumerGroupState> state) {
+        this(groupId, Objects.requireNonNull(state).map(state0 -> GroupState.parse(state0.toString())), Optional.empty(), isSimpleConsumerGroup);
+    }
+
+    /**
+     * Create an instance with the specified parameters.
+     *
+     * @param groupId                   Group Id.
+     * @param isSimpleConsumerGroup     If consumer group is simple or not.
+     * @param state                     The state of the consumer group.
+     * @param type                      The type of the consumer group.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupListing(String, Optional, Optional, boolean)} instead.
+     */
+    @Deprecated
+    public ConsumerGroupListing(
+        String groupId,
+        boolean isSimpleConsumerGroup,
+        Optional<ConsumerGroupState> state,
+        Optional<GroupType> type
+    ) {
+        this(groupId, Objects.requireNonNull(state).map(state0 -> GroupState.parse(state0.toString())), type, isSimpleConsumerGroup);
+    }
+
+    /**
+     * Create an instance with the specified parameters.
+     *
+     * @param groupId                   Group Id.
+     * @param groupState                The state of the consumer group.
+     * @param isSimpleConsumerGroup     If consumer group is simple or not.
+     */
+    public ConsumerGroupListing(
+            String groupId,
+            Optional<GroupState> groupState,
+            boolean isSimpleConsumerGroup
+    ) {
+        this(groupId, groupState, Optional.empty(), isSimpleConsumerGroup);
+    }
+
+    /**
+     * Create an instance with the specified parameters.
+     *
+     * @param groupId                   Group Id.
+     * @param groupState                The state of the consumer group.
+     * @param type                      The type of the consumer group.
+     * @param isSimpleConsumerGroup     If consumer group is simple or not.
+     */
+    public ConsumerGroupListing(
+            String groupId,
+            Optional<GroupState> groupState,
+            Optional<GroupType> type,
+            boolean isSimpleConsumerGroup
+    ) {
         this.groupId = groupId;
+        this.groupState = Objects.requireNonNull(groupState);
+        this.type = Objects.requireNonNull(type);
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
-        this.state = Objects.requireNonNull(state);
     }
 
     /**
@@ -68,10 +125,28 @@ public class ConsumerGroupListing {
     }
 
     /**
-     * Consumer Group state
+     * Group state
      */
+    public Optional<GroupState> groupState() {
+        return groupState;
+    }
+
+    /**
+     * Consumer Group state
+     * @deprecated Since 4.0. Use {@link #groupState()} instead.
+     */
+    @Deprecated
     public Optional<ConsumerGroupState> state() {
-        return state;
+        return groupState.map(state0 -> ConsumerGroupState.parse(state0.toString()));
+    }
+
+    /**
+     * The type of the consumer group.
+     *
+     * @return An Optional containing the type, if available.
+     */
+    public Optional<GroupType> type() {
+        return type;
     }
 
     @Override
@@ -79,37 +154,24 @@ public class ConsumerGroupListing {
         return "(" +
             "groupId='" + groupId + '\'' +
             ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
-            ", state=" + state +
+            ", groupState=" + groupState +
+            ", type=" + type +
             ')';
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, isSimpleConsumerGroup, state);
+        return Objects.hash(groupId, isSimpleConsumerGroup(), groupState, type);
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
-            return false;
-        ConsumerGroupListing other = (ConsumerGroupListing) obj;
-        if (groupId == null) {
-            if (other.groupId != null)
-                return false;
-        } else if (!groupId.equals(other.groupId))
-            return false;
-        if (isSimpleConsumerGroup != other.isSimpleConsumerGroup)
-            return false;
-        if (state == null) {
-            if (other.state != null)
-                return false;
-        } else if (!state.equals(other.state))
-            return false;
-        return true;
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof ConsumerGroupListing)) return false;
+        ConsumerGroupListing that = (ConsumerGroupListing) o;
+        return isSimpleConsumerGroup() == that.isSimpleConsumerGroup() &&
+            Objects.equals(groupId, that.groupId) &&
+            Objects.equals(groupState, that.groupState) &&
+            Objects.equals(type, that.type);
     }
-
 }

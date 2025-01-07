@@ -17,8 +17,9 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import javax.security.auth.callback.Callback;
 import org.apache.kafka.common.KafkaException;
+
+import javax.security.auth.callback.Callback;
 
 /**
  * ValidateException is thrown in cases where a JWT access token cannot be determined to be

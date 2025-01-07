@@ -31,16 +31,16 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class DelegationTokenCache {
 
-    private CredentialCache credentialCache = new CredentialCache();
+    private final CredentialCache credentialCache = new CredentialCache();
 
     //Cache to hold all the tokens
-    private Map<String, TokenInformation> tokenCache = new ConcurrentHashMap<>();
+    private final Map<String, TokenInformation> tokenCache = new ConcurrentHashMap<>();
 
     //Cache to hold hmac->tokenId mapping. This is required for renew, expire requests
-    private Map<String, String> hmacTokenIdCache = new ConcurrentHashMap<>();
+    private final Map<String, String> hmacTokenIdCache = new ConcurrentHashMap<>();
 
     //Cache to hold tokenId->hmac mapping. This is required for removing entry from hmacTokenIdCache using tokenId.
-    private Map<String, String> tokenIdHmacCache = new ConcurrentHashMap<>();
+    private final Map<String, String> tokenIdHmacCache = new ConcurrentHashMap<>();
 
     public DelegationTokenCache(Collection<String> scramMechanisms) {
         //Create caches for scramMechanisms

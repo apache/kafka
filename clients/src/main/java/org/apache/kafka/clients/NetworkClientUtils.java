@@ -132,4 +132,12 @@ public final class NetworkClientUtils {
         if (exception != null)
             throw exception;
     }
+
+    /**
+     * Initiate a connection if currently possible. This is only really useful for resetting the
+     * failed status of a socket.
+     */
+    public static void tryConnect(KafkaClient client, Node node, Time time) {
+        client.ready(node, time.milliseconds());
+    }
 }

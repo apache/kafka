@@ -22,6 +22,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.shell.node.RootShellNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

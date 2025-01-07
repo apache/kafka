@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import java.util.Collections;
-import java.util.List;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.requests.ProduceResponse.RecordError;
+
+import java.util.Collections;
+import java.util.List;
 
 public class RecordValidationException extends RuntimeException {
     private final ApiException invalidException;

@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.CreateAclsRequestData;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -59,17 +60,7 @@ public class CreateAclsRequestTest {
 
     @Test
     public void shouldThrowOnIfUnknown() {
-        assertThrows(IllegalArgumentException.class, () -> new CreateAclsRequest(data(UNKNOWN_ACL1), V0));
-    }
-
-    @Test
-    public void shouldRoundTripV0() {
-        final CreateAclsRequest original = new CreateAclsRequest(data(LITERAL_ACL1, LITERAL_ACL2), V0);
-        final ByteBuffer buffer = original.serialize();
-
-        final CreateAclsRequest result = CreateAclsRequest.parse(buffer, V0);
-
-        assertRequestEquals(original, result);
+        assertThrows(IllegalArgumentException.class, () -> new CreateAclsRequest(data(UNKNOWN_ACL1), V1));
     }
 
     @Test

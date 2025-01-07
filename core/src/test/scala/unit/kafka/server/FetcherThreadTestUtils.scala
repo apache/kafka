@@ -17,16 +17,16 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
-import kafka.server.InitialFetchState
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.server.network.BrokerEndPoint
 
 import scala.jdk.CollectionConverters._
 
 object FetcherThreadTestUtils {
   def mkBatch(baseOffset: Long, leaderEpoch: Int, records: SimpleRecord*): RecordBatch = {
-    MemoryRecords.withRecords(baseOffset, CompressionType.NONE, leaderEpoch, records: _*)
+    MemoryRecords.withRecords(baseOffset, Compression.NONE, leaderEpoch, records: _*)
       .batches.asScala.head
   }
 

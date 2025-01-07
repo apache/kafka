@@ -14,6 +14,7 @@
  # limitations under the License.
 
 test.plugins.CoLocatedPlugin
+test.plugins.DefaultConstructorThrowsConverter
 test.plugins.MissingSuperclassConverter
 test.plugins.NoDefaultConstructorConverter
-test.plugins.NoDefaultConstructorConverter
+

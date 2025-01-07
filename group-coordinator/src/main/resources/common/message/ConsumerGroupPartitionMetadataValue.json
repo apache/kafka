@@ -13,15 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// KIP-848 is in development. This schema is subject to non-backwards-compatible changes.
 {
-  "type": "data",
+  "apiKey": 4,
+  "type": "coordinator-value",
   "name": "ConsumerGroupPartitionMetadataValue",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "Epoch", "versions": "0+", "type": "int32",
-      "about": "The group epoch." },
     { "name": "Topics", "versions": "0+", "type": "[]TopicMetadata",
       "about": "The list of topic metadata.", "fields": [
       { "name": "TopicId", "versions": "0+", "type": "uuid",
@@ -31,7 +29,7 @@
       { "name": "NumPartitions", "versions": "0+", "type": "int32",
         "about": "The number of partitions of the topic." },
       { "name": "PartitionMetadata", "versions": "0+", "type": "[]PartitionMetadata",
-        "about": "Partitions mapped to a set of racks. If the rack information is unavailable for all the partitions, an empty list is stored", "fields": [
+        "about": "Deprecated: this field is not used after 4.0. Partitions mapped to a set of racks. If the rack information is unavailable for all the partitions, an empty list is stored.", "fields": [
           { "name": "Partition", "versions": "0+", "type": "int32",
             "about": "The partition number." },
           { "name": "Racks", "versions": "0+", "type": "[]string",

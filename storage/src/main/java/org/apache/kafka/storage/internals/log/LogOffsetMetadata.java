@@ -28,10 +28,9 @@ public final class LogOffsetMetadata {
 
     //TODO KAFKA-14484 remove once UnifiedLog has been moved to the storage module
     private static final long UNIFIED_LOG_UNKNOWN_OFFSET = -1L;
-
-    public static final LogOffsetMetadata UNKNOWN_OFFSET_METADATA = new LogOffsetMetadata(-1L, 0L, 0);
-
     private static final int UNKNOWN_FILE_POSITION = -1;
+
+    public static final LogOffsetMetadata UNKNOWN_OFFSET_METADATA = new LogOffsetMetadata(-1L, UNIFIED_LOG_UNKNOWN_OFFSET, UNKNOWN_FILE_POSITION);
 
     public final long messageOffset;
     public final long segmentBaseOffset;
@@ -51,21 +50,22 @@ public final class LogOffsetMetadata {
 
     // check if this offset is already on an older segment compared with the given offset
     public boolean onOlderSegment(LogOffsetMetadata that) {
-        if (messageOffsetOnly())
-            throw new KafkaException(this + " cannot compare its segment info with " + that + " since it only has message offset info");
-
+        if (messageOffsetOnly() || that.messageOffsetOnly())
+            return false;
         return this.segmentBaseOffset < that.segmentBaseOffset;
     }
 
     // check if this offset is on the same segment with the given offset
-    private boolean onSameSegment(LogOffsetMetadata that) {
+    public boolean onSameSegment(LogOffsetMetadata that) {
+        if (messageOffsetOnly() || that.messageOffsetOnly())
+            return false;
         return this.segmentBaseOffset == that.segmentBaseOffset;
     }
 
     // compute the number of bytes between this offset to the given offset
     // if they are on the same segment and this offset precedes the given offset
     public int positionDiff(LogOffsetMetadata that) {
-        if (messageOffsetOnly())
+        if (messageOffsetOnly() || that.messageOffsetOnly())
             throw new KafkaException(this + " cannot compare its segment position with " + that + " since it only has message offset info");
         if (!onSameSegment(that))
             throw new KafkaException(this + " cannot compare its segment position with " + that + " since they are not on the same segment");

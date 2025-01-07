@@ -71,8 +71,8 @@ public final class HeaderGenerator {
 
     public void generate() {
         Objects.requireNonNull(packageName);
-        for (int i = 0; i < HEADER.length; i++) {
-            buffer.printf("%s%n", HEADER[i]);
+        for (String header : HEADER) {
+            buffer.printf("%s%n", header);
         }
         buffer.printf("package %s;%n", packageName);
         buffer.printf("%n");

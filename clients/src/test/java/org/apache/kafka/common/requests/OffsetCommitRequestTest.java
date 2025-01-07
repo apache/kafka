@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResp
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -55,11 +56,10 @@ public class OffsetCommitRequestTest {
     protected static int throttleTimeMs = 10;
 
     private static OffsetCommitRequestData data;
-    private static List<OffsetCommitRequestTopic> topics;
 
     @BeforeEach
     public void setUp() {
-        topics = Arrays.asList(
+        List<OffsetCommitRequestTopic> topics = Arrays.asList(
             new OffsetCommitRequestTopic()
                 .setName(topicOne)
                 .setPartitions(Collections.singletonList(
@@ -92,7 +92,7 @@ public class OffsetCommitRequestTest {
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
-        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
+        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             OffsetCommitRequest request = builder.build(version);
             assertEquals(expectedOffsets, request.offsets());
 

@@ -121,6 +121,24 @@ public class RecordTestUtils {
         }
     }
 
+    public static class ImageDeltaPair<I, D> {
+        private final Supplier<I> imageSupplier;
+        private final Function<I, D> deltaCreator;
+
+        public ImageDeltaPair(Supplier<I> imageSupplier, Function<I, D> deltaCreator) {
+            this.imageSupplier = imageSupplier;
+            this.deltaCreator = deltaCreator;
+        }
+
+        public Supplier<I> imageSupplier() {
+            return imageSupplier;
+        }
+
+        public Function<I, D> deltaCreator() {
+            return deltaCreator;
+        }
+    }
+
     public static class TestThroughAllIntermediateImagesLeadingToFinalImageHelper<D, I> {
         private final Supplier<I> emptyImageSupplier;
         private final Function<I, D> deltaUponImageCreator;
@@ -187,6 +205,18 @@ public class RecordTestUtils {
                 }
             }
         }
+
+        /**
+         * Tests applying records in all variations of batch sizes will result in the same image as applying all records in one batch.
+         * @param fromRecords    The list of records to apply.
+         */
+        public void test(List<ApiMessageAndVersion> fromRecords) {
+            D finalImageDelta = createDeltaUponImage(getEmptyImage());
+            RecordTestUtils.replayAll(finalImageDelta, fromRecords);
+            I finalImage = createImageByApplyingDelta(finalImageDelta);
+
+            test(finalImage, fromRecords);
+        }
     }
 
     /**
@@ -243,12 +273,10 @@ public class RecordTestUtils {
      *
      * @param o     The input object. It will be modified in-place.
      */
-    @SuppressWarnings("unchecked")
     public static void deepSortRecords(Object o) throws Exception {
         if (o == null) {
             return;
-        } else if (o instanceof List) {
-            List<?> list = (List<?>) o;
+        } else if (o instanceof List<?> list) {
             for (Object entry : list) {
                 if (entry != null) {
                     if (Number.class.isAssignableFrom(entry.getClass())) {
@@ -258,8 +286,7 @@ public class RecordTestUtils {
                 }
             }
             list.sort(Comparator.comparing(Object::toString));
-        } else if (o instanceof ImplicitLinkedHashCollection) {
-            ImplicitLinkedHashCollection<?> coll = (ImplicitLinkedHashCollection<?>) o;
+        } else if (o instanceof ImplicitLinkedHashCollection<?> coll) {
             for (Object entry : coll) {
                 deepSortRecords(entry);
             }
@@ -344,7 +371,7 @@ public class RecordTestUtils {
                 ).iterator()
             )).
             setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                Arrays.asList(
+                Collections.singletonList(
                     new RegisterControllerRecord.ControllerFeature().
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).

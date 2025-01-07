@@ -35,7 +35,8 @@ public final class ProcessorTopologyFactories {
                                      stateStoresByName,
                                      Collections.emptyList(),
                                      storeToChangelogTopic,
-                                     Collections.emptySet());
+                                     Collections.emptySet(),
+                                     Collections.emptyMap());
     }
 
     static ProcessorTopology withLocalStores(final List<StateStore> stateStores,
@@ -46,7 +47,9 @@ public final class ProcessorTopologyFactories {
                                      stateStores,
                                      Collections.emptyList(),
                                      storeToChangelogTopic,
-                                     Collections.emptySet());
+                                     Collections.emptySet(),
+                                     Collections.emptyMap());
+
     }
 
 }

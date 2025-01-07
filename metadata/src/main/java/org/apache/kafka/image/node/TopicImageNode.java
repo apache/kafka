@@ -52,7 +52,7 @@ public final class TopicImageNode implements MetadataNode {
         } else if (name.equals("id")) {
             return new MetadataLeafNode(image.id().toString());
         } else {
-            Integer partitionId;
+            int partitionId;
             try {
                 partitionId = Integer.parseInt(name);
             } catch (NumberFormatException e) {

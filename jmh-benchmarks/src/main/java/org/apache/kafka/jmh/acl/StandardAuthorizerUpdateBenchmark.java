@@ -25,6 +25,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -59,17 +60,17 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class StandardAuthorizerUpdateBenchmark {
+    private static final Random RANDOM = new Random(System.currentTimeMillis());
+    private static final KafkaPrincipal PRINCIPAL = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
+
+    private final String resourceNamePrefix = "foo-bar35_resource-";
+    private final Set<Uuid> ids = new HashSet<>();
+    private final List<StandardAclWithId> aclsToAdd = prepareAcls();
+
+    private StandardAuthorizer authorizer;
     @Param({"25000", "50000", "75000", "100000"})
     private int aclCount;
-    private final String resourceNamePrefix = "foo-bar35_resource-";
-    private static final KafkaPrincipal PRINCIPAL = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
-    private StandardAuthorizer authorizer;
-    private final Set<Uuid> ids = new HashSet<>();
-
-    private List<StandardAclWithId> aclsToAdd = prepareAcls();
-
     int index = 0;
-    private static final Random RANDOM = new Random(System.currentTimeMillis());
 
     @Setup(Level.Trial)
     public void setup() throws Exception {

@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -59,7 +58,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     private final boolean loggingEnabled;
     private int partition;
     private String changelogTopic;
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> iternalContext;
     private boolean minValid;
 
     public static class Builder<K, V> implements StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> {
@@ -157,7 +156,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     @Override
     public void setSerdesIfNull(final SerdeGetter getter) {
         keySerde = keySerde == null ? (Serde<K>) getter.keySerde() : keySerde;
-        valueSerde = valueSerde == null ? getter.valueSerde() : valueSerde;
+        valueSerde = valueSerde == null ? (Serde<V>) getter.valueSerde() : valueSerde;
     }
 
     private long observedStreamTime() {
@@ -169,24 +168,13 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
         return store.name();
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        store.init(context, root);
-        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
-        partition = context.taskId().partition();
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        store.init(stateStoreContext, root);
+        iternalContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
+        partition = stateStoreContext.taskId().partition();
         if (loggingEnabled) {
-            changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
-        }
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        store.init(context, root);
-        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
-        partition = context.taskId().partition();
-        if (loggingEnabled) {
-            changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
+            changelogTopic = ProcessorContextUtils.changelogFor(stateStoreContext, name(), Boolean.TRUE);
         }
     }
 
@@ -326,7 +314,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
         final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
         buffer.putLong(bufferKey.time());
         final byte[] array = buffer.array();
-        ((RecordCollector.Supplier) context).recordCollector().send(
+        ((RecordCollector.Supplier) iternalContext).recordCollector().send(
             changelogTopic,
             key,
             array,
@@ -340,7 +328,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     }
 
     private void logTombstone(final Bytes key) {
-        ((RecordCollector.Supplier) context).recordCollector().send(
+        ((RecordCollector.Supplier) iternalContext).recordCollector().send(
             changelogTopic,
             key,
             null,

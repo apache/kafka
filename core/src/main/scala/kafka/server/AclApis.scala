@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AuthorizerUtils
 import kafka.utils.Logging
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclBinding
@@ -30,14 +29,15 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType
+import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.authorizer._
 
 import java.util
 import java.util.concurrent.CompletableFuture
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 /**
  * Logic to handle ACL requests.
@@ -68,12 +68,10 @@ class AclApis(authHelper: AuthHelper,
           describeAclsRequest.version))
       case Some(auth) =>
         val filter = describeAclsRequest.filter
-        val returnedAcls = new util.HashSet[AclBinding]()
-        auth.acls(filter).forEach(returnedAcls.add)
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new DescribeAclsResponse(new DescribeAclsResponseData()
             .setThrottleTimeMs(requestThrottleMs)
-            .setResources(DescribeAclsResponse.aclsResources(returnedAcls)),
+            .setResources(DescribeAclsResponse.aclsResources(auth.acls(filter))),
           describeAclsRequest.version))
     }
     CompletableFuture.completedFuture[Unit](())
@@ -114,7 +112,7 @@ class AclApis(authHelper: AuthHelper,
           val aclCreationResults = allBindings.map { acl =>
             val result = errorResults.getOrElse(acl, createResults(validBindings.indexOf(acl)).get)
             val creationResult = new AclCreationResult()
-            result.exception.asScala.foreach { throwable =>
+            result.exception.toScala.foreach { throwable =>
               val apiError = ApiError.fromThrowable(throwable)
               creationResult
                 .setErrorCode(apiError.error.code)

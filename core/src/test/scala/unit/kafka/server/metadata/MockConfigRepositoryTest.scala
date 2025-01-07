@@ -28,6 +28,7 @@ class MockConfigRepositoryTest {
     val repository = new MockConfigRepository()
     assertEquals(new Properties(), repository.brokerConfig(0))
     assertEquals(new Properties(), repository.topicConfig("foo"))
+    assertEquals(new Properties(), repository.groupConfig("group"))
   }
 
   @Test

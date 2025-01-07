@@ -19,6 +19,7 @@ package org.apache.kafka.connect.tools;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Task implementation for {@link MockSourceConnector}.
+ */
 public class MockSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(MockSourceTask.class);
 

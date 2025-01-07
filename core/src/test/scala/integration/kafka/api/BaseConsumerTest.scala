@@ -16,13 +16,16 @@
  */
 package kafka.api
 
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
+import kafka.utils.TestInfoUtils
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
+import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, PartitionInfo}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.serialization.{Deserializer, Serializer}
-import org.junit.jupiter.api.Test
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
@@ -34,8 +37,9 @@ import scala.collection.Seq
  */
 abstract class BaseConsumerTest extends AbstractConsumerTest {
 
-  @Test
-  def testSimpleConsumption(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSimpleConsumption(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
@@ -53,8 +57,9 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     sendAndAwaitAsyncCommit(consumer)
   }
 
-  @Test
-  def testClusterResourceListener(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testClusterResourceListener(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 100
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerSerializer])
@@ -74,11 +79,14 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
   }
 
-  @Test
-  def testCoordinatorFailover(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testCoordinatorFailover(quorum: String, groupProtocol: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
-    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
-    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+      this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
+      this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    }
     // Use higher poll timeout to avoid consumer leaving the group due to timeout
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "15000")
     val consumer = createConsumer()
@@ -98,7 +106,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 
     // shutdown the coordinator
     val coordinator = parts.head.leader().id()
-    this.servers(coordinator).shutdown()
+    this.brokers(coordinator).shutdown()
 
     // the failover should not cause a rebalance
     ensureNoRebalance(consumer, listener)
@@ -106,19 +114,57 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 }
 
 object BaseConsumerTest {
+
   val updateProducerCount = new AtomicInteger()
   val updateConsumerCount = new AtomicInteger()
 
   class TestClusterResourceListenerSerializer extends Serializer[Array[Byte]] with ClusterResourceListener {
 
-    override def onUpdate(clusterResource: ClusterResource): Unit = updateProducerCount.incrementAndGet();
+    override def onUpdate(clusterResource: ClusterResource): Unit = updateProducerCount.incrementAndGet()
 
     override def serialize(topic: String, data: Array[Byte]): Array[Byte] = data
   }
 
   class TestClusterResourceListenerDeserializer extends Deserializer[Array[Byte]] with ClusterResourceListener {
 
-    override def onUpdate(clusterResource: ClusterResource): Unit = updateConsumerCount.incrementAndGet();
+    override def onUpdate(clusterResource: ClusterResource): Unit = updateConsumerCount.incrementAndGet()
     override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = data
+  }
+
+  class SerializerImpl extends Serializer[Array[Byte]] {
+    var serializer = new ByteArraySerializer()
+
+    override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
+      headers.add("content-type", "application/octet-stream".getBytes)
+      serializer.serialize(topic, data)
+    }
+
+    override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
+
+    override def close(): Unit = serializer.close()
+
+    override def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
+      fail("method should not be invoked")
+      null
+    }
+  }
+
+  class DeserializerImpl extends Deserializer[Array[Byte]] {
+    var deserializer = new ByteArrayDeserializer()
+
+    override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
+      val header = headers.lastHeader("content-type")
+      assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
+      deserializer.deserialize(topic, data)
+    }
+
+    override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
+
+    override def close(): Unit = deserializer.close()
+
+    override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = {
+      fail("method should not be invoked")
+      null
+    }
   }
 }

@@ -17,6 +17,8 @@
   "apiKey": 9,
   "type": "response",
   "name": "OffsetFetchResponse",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
+  //
   // Version 1 is the same as version 0.
   //
   // Version 2 adds a top-level error code.
@@ -36,7 +38,7 @@
   // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). The response is
   // the same as version 8 but can return STALE_MEMBER_EPOCH and UNKNOWN_MEMBER_ID errors when the new consumer group
   // protocol is used.
-  "validVersions": "0-9",
+  "validVersions": "1-9",
   "flexibleVersions": "6+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -55,7 +57,7 @@
       { "name": "Name", "type": "string", "versions": "0-7", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]OffsetFetchResponsePartition", "versions": "0-7",
-        "about": "The responses per partition", "fields": [
+        "about": "The responses per partition.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0-7",
           "about": "The partition index." },
         { "name": "CommittedOffset", "type": "int64", "versions": "0-7",
@@ -79,7 +81,7 @@
         { "name": "Name", "type": "string", "versions": "8+", "entityType": "topicName",
           "about": "The topic name." },
         { "name": "Partitions", "type": "[]OffsetFetchResponsePartitions", "versions": "8+",
-          "about": "The responses per partition", "fields": [
+          "about": "The responses per partition.", "fields": [
           { "name": "PartitionIndex", "type": "int32", "versions": "8+",
             "about": "The partition index." },
           { "name": "CommittedOffset", "type": "int64", "versions": "8+",

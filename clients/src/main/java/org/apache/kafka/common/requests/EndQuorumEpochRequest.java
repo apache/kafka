@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -26,6 +27,7 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class EndQuorumEpochRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<EndQuorumEpochRequest> {
@@ -95,4 +97,18 @@ public class EndQuorumEpochRequest extends AbstractRequest {
                    );
     }
 
+    public static List<EndQuorumEpochRequestData.ReplicaInfo> preferredCandidates(EndQuorumEpochRequestData.PartitionData partition) {
+        if (partition.preferredCandidates().isEmpty()) {
+            return partition
+                .preferredSuccessors()
+                .stream()
+                .map(id -> new EndQuorumEpochRequestData.ReplicaInfo()
+                    .setCandidateId(id)
+                    .setCandidateDirectoryId(Uuid.ZERO_UUID)
+                )
+                .collect(Collectors.toList());
+        } else {
+            return partition.preferredCandidates();
+        }
+    }
 }

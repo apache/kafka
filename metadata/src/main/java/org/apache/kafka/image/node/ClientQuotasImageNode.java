@@ -106,7 +106,7 @@ public class ClientQuotasImageNode implements MetadataNode {
     static ClientQuotaEntity decodeEntity(String input) {
         Map<String, String> entries = new HashMap<>();
         String type = null;
-        String value = "";
+        StringBuilder value = new StringBuilder();
         boolean escaping = false;
         int i = 0;
         while (true) {
@@ -127,20 +127,20 @@ public class ClientQuotasImageNode implements MetadataNode {
             } else {
                 char c = input.charAt(i++);
                 if (escaping) {
-                    value += c;
+                    value.append(c);
                     escaping = false;
                 } else {
                     switch (c) {
                         case ')':
-                            entries.put(type, value);
+                            entries.put(type, value.toString());
                             type = null;
-                            value = "";
+                            value = new StringBuilder();
                             break;
                         case '\\':
                             escaping = true;
                             break;
                         default:
-                            value += c;
+                            value.append(c);
                             break;
                     }
                 }

@@ -22,16 +22,17 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Collections;
-import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -42,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class FetchRequestTest {
 
     private static Stream<Arguments> fetchVersions() {
-        return ApiKeys.FETCH.allVersions().stream().map(version -> Arguments.of(version));
+        return ApiKeys.FETCH.allVersions().stream().map(Arguments::of);
     }
 
     @ParameterizedTest
@@ -64,7 +65,7 @@ public class FetchRequestTest {
 
         // If version < 13, we should not see any partitions in forgottenTopics. This is because we can not
         // distinguish different topic IDs on versions earlier than 13.
-        assertEquals(fetchRequestUsesTopicIds, fetchRequest.data().forgottenTopicsData().size() > 0);
+        assertEquals(fetchRequestUsesTopicIds, !fetchRequest.data().forgottenTopicsData().isEmpty());
         fetchRequest.data().forgottenTopicsData().forEach(forgottenTopic -> {
             // Since we didn't serialize, we should see the topic name and ID regardless of the version.
             assertEquals(tp.topic(), forgottenTopic.topic());
@@ -228,9 +229,9 @@ public class FetchRequestTest {
     public void testFetchRequestSimpleBuilderReplicaIdNotSupported(short version) {
         FetchRequestData fetchRequestData = new FetchRequestData().setReplicaId(1);
         FetchRequest.SimpleBuilder builder = new FetchRequest.SimpleBuilder(fetchRequestData);
-        assertThrows(IllegalStateException.class, () -> {
-            builder.build(version);
-        });
+        assertThrows(IllegalStateException.class, () ->
+            builder.build(version)
+        );
     }
 
     @Test
@@ -242,4 +243,96 @@ public class FetchRequestTest {
             new FetchRequest.PartitionData(Uuid.randomUuid(), 300, 0L, 300, Optional.of(300)));
     }
 
+    @ParameterizedTest
+    @MethodSource("fetchVersions")
+    public void testFetchRequestNoCacheData(short version) {
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+        TopicIdPartition tp = new TopicIdPartition(topicId, partition, "topic");
+        
+        FetchRequest fetchRequest = createFetchRequestByVersion(version, topicId, tp);
+        
+        Map<Uuid, String> topicNames = Collections.singletonMap(topicId, tp.topic());
+        List<TopicIdPartition> requestsWithTopicsName = fetchRequest.forgottenTopics(topicNames);
+        assertEquals(topicNames.size(), requestsWithTopicsName.size());
+        requestsWithTopicsName.forEach(request -> {
+            assertEquals(tp.topic(), request.topic());
+            assertEquals(topicId, request.topicId());
+            assertEquals(tp.partition(), request.partition());
+            assertEquals(tp.topicPartition(), request.topicPartition());
+        });
+
+        String expectedTopic = version >= 13 ? null : tp.topic();
+        List<TopicIdPartition> requestData = fetchRequest.forgottenTopics(Collections.emptyMap());
+        assertEquals(1, requestData.size());
+        requestData.forEach(request -> {
+            assertEquals(expectedTopic, request.topic());
+            assertEquals(topicId, request.topicId());
+            assertEquals(tp.partition(), request.partition());
+            assertEquals(new TopicPartition(expectedTopic, partition), request.topicPartition());
+        });
+
+    }
+
+    private FetchRequest createFetchRequestByVersion(short version, Uuid topicId, TopicIdPartition tp) {
+        return createFetchRequestByVersion(version, tp, new FetchRequest.PartitionData(topicId, 0, 0, 0, Optional.empty()));
+    }
+
+    private FetchRequest createFetchRequestByVersion(short version, TopicIdPartition tp,
+                                                     FetchRequest.PartitionData partitionData) {
+        Map<TopicPartition, FetchRequest.PartitionData> partitionDataMap = Collections.singletonMap(tp.topicPartition(), partitionData);
+        if (version >= 13) {
+            return FetchRequest.Builder
+                .forReplica(version, 0, 1, 1, 1, partitionDataMap)
+                .replaced(Collections.singletonList(tp))
+                .metadata(FetchMetadata.newIncremental(123)).build(version);
+        } else {
+            return FetchRequest.Builder
+                .forReplica(version, 0, 1, 1, 1, partitionDataMap)
+                .removed(Collections.singletonList(tp))
+                .metadata(FetchMetadata.newIncremental(123)).build(version);
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("fetchVersions")
+    public void testFetchDataNoCacheData(short version) {
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+        TopicIdPartition tp = new TopicIdPartition(topicId, partition, "topic1");
+        long fetchOffset = 118L;
+        long logStartOffset = 119L;
+        int maxBytes = 120;
+        Optional<Integer> currentLeaderEpoch = Optional.of(121);
+        FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(topicId, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch);
+        FetchRequest fetchRequest = createFetchRequestByVersion(version, tp, partitionData);
+        Map<Uuid, String> topicNames = Collections.singletonMap(topicId, tp.topic());
+        Map<TopicIdPartition, FetchRequest.PartitionData> topicIdPartitionMap = fetchRequest.fetchData(topicNames);
+
+        assertEquals(topicNames.size(), topicIdPartitionMap.size());
+        topicIdPartitionMap.forEach((topicIdPartition, partitionDataTmp) -> {
+            assertEquals(tp.topic(), topicIdPartition.topic());
+            assertEquals(topicId, topicIdPartition.topicId());
+            assertEquals(tp.partition(), topicIdPartition.partition());
+            assertEquals(tp.topicPartition(), topicIdPartition.topicPartition());
+            assertEquals(fetchOffset, partitionDataTmp.fetchOffset);
+            assertEquals(logStartOffset, partitionDataTmp.logStartOffset);
+            assertEquals(maxBytes, partitionDataTmp.maxBytes);
+            assertEquals(currentLeaderEpoch, partitionDataTmp.currentLeaderEpoch);
+        });
+
+        String expectedTopic = version >= 13 ? null : tp.topic();
+        topicIdPartitionMap = fetchRequest.fetchData(Collections.emptyMap());
+        assertEquals(1, topicIdPartitionMap.size());
+        topicIdPartitionMap.forEach((topicIdPartition, partitionDataTmp) -> {
+            assertEquals(expectedTopic, topicIdPartition.topic());
+            assertEquals(topicId, topicIdPartition.topicId());
+            assertEquals(tp.partition(), topicIdPartition.partition());
+            assertEquals(new TopicPartition(expectedTopic, partition), topicIdPartition.topicPartition());
+            assertEquals(fetchOffset, partitionDataTmp.fetchOffset);
+            assertEquals(logStartOffset, partitionDataTmp.logStartOffset);
+            assertEquals(maxBytes, partitionDataTmp.maxBytes);
+            assertEquals(currentLeaderEpoch, partitionDataTmp.currentLeaderEpoch);
+        });
+    }
 }

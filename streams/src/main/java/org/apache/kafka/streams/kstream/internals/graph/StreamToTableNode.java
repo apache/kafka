@@ -17,13 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.internals.KTableSource;
-import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
-import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 
 /**
  * Represents a KTable convert From KStream
@@ -31,37 +25,20 @@ import org.apache.kafka.streams.state.StoreBuilder;
 public class StreamToTableNode<K, V> extends GraphNode {
 
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
-    private final MaterializedInternal<K, V, ?> materializedInternal;
 
     public StreamToTableNode(final String nodeName,
-                             final ProcessorParameters<K, V, ?, ?> processorParameters,
-                             final MaterializedInternal<K, V, ?> materializedInternal) {
+                             final ProcessorParameters<K, V, ?, ?> processorParameters) {
         super(nodeName);
         this.processorParameters = processorParameters;
-        this.materializedInternal = materializedInternal;
     }
 
     @Override
     public String toString() {
-        return "StreamToTableNode{" +
-            ", processorParameters=" + processorParameters +
-            ", materializedInternal=" + materializedInternal +
-            "} " + super.toString();
+        return "StreamToTableNode{" + super.toString() + "}";
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final StoreBuilder<?> storeBuilder =
-            new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
-
-        final String processorName = processorParameters.processorName();
-        final KTableSource<K, V> tableSource =  processorParameters.processorSupplier() instanceof KTableSource ?
-                (KTableSource<K, V>) processorParameters.processorSupplier() : null;
-        topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNodeNames());
-
-        if (storeBuilder != null && tableSource.materialized()) {
-            topologyBuilder.addStateStore(storeBuilder, processorName);
-        }
+        processorParameters.addProcessorTo(topologyBuilder, parentNodeNames());
     }
 }

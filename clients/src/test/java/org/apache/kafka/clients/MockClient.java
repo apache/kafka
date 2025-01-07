@@ -250,15 +250,16 @@ public class MockClient implements KafkaClient {
                 short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
                         builder.latestAllowedVersion());
 
+
+                AbstractRequest abstractRequest = request.requestBuilder().build(version);
+                if (!futureResp.requestMatcher.matches(abstractRequest))
+                    throw new IllegalStateException("Request matcher did not match next-in-line request "
+                            + abstractRequest + " with prepared response " + futureResp.responseBody);
+
                 UnsupportedVersionException unsupportedVersionException = null;
                 if (futureResp.isUnsupportedRequest) {
                     unsupportedVersionException = new UnsupportedVersionException(
                             "Api " + request.apiKey() + " with version " + version);
-                } else {
-                    AbstractRequest abstractRequest = request.requestBuilder().build(version);
-                    if (!futureResp.requestMatcher.matches(abstractRequest))
-                        throw new IllegalStateException("Request matcher did not match next-in-line request "
-                                + abstractRequest + " with prepared response " + futureResp.responseBody);
                 }
 
                 ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
@@ -319,7 +320,7 @@ public class MockClient implements KafkaClient {
         checkTimeoutOfPendingRequests(now);
 
         // We skip metadata updates if all nodes are currently blacked out
-        if (metadataUpdater.isUpdateNeeded() && leastLoadedNode(now) != null) {
+        if (metadataUpdater.isUpdateNeeded() && leastLoadedNode(now).node() != null) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
             if (metadataUpdate != null) {
                 metadataUpdater.update(time, metadataUpdate);
@@ -588,13 +589,13 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public Node leastLoadedNode(long now) {
+    public LeastLoadedNode leastLoadedNode(long now) {
         // Consistent with NetworkClient, we do not return nodes awaiting reconnect backoff
         for (Node node : metadataUpdater.fetchNodes()) {
             if (!connectionState(node.idString()).isBackingOff(now))
-                return node;
+                return new LeastLoadedNode(node, true);
         }
-        return null;
+        return new LeastLoadedNode(null, false);
     }
 
     public void setWakeupHook(Runnable wakeupHook) {

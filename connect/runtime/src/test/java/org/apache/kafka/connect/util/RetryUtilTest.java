@@ -21,21 +21,25 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RetryUtilTest {
 
     private final Time mockTime = new MockTime(10);
@@ -44,7 +48,7 @@ public class RetryUtilTest {
     private final Supplier<String> testMsg = () -> "Test";
 
     @SuppressWarnings("unchecked")
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
         mockCallable = Mockito.mock(Callable.class);
     }
@@ -136,7 +140,7 @@ public class RetryUtilTest {
     public void testBackoffMoreThanTimeoutWillOnlyExecuteOnce() throws Exception {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
 
-        TimeoutException e = assertThrows(TimeoutException.class,
+        assertThrows(TimeoutException.class,
                 () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 100, mockTime));
         Mockito.verify(mockCallable, Mockito.times(1)).call();
     }
@@ -181,7 +185,7 @@ public class RetryUtilTest {
     public void testWakeupException() throws Exception {
         Mockito.when(mockCallable.call()).thenThrow(new WakeupException());
 
-        ConnectException e = assertThrows(ConnectException.class,
+        assertThrows(ConnectException.class,
                 () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 10, mockTime));
         Mockito.verify(mockCallable, Mockito.atLeastOnce()).call();
     }

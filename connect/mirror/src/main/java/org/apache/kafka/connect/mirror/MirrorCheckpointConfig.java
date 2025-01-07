@@ -17,14 +17,13 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class MirrorCheckpointConfig extends MirrorConnectorConfig {
-
     protected static final String REFRESH_GROUPS = "refresh.groups";
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
     protected static final String SYNC_GROUP_OFFSETS = "sync.group.offsets";
@@ -33,7 +32,6 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String GROUPS_DEFAULT = DefaultGroupFilter.GROUPS_INCLUDE_DEFAULT;
     private static final String GROUPS_DOC = "Consumer groups to replicate. Supports comma-separated group IDs and regexes.";
     public static final String GROUPS_EXCLUDE = DefaultGroupFilter.GROUPS_EXCLUDE_CONFIG;
-    public static final String GROUPS_EXCLUDE_ALIAS = DefaultGroupFilter.GROUPS_EXCLUDE_CONFIG_ALIAS;
 
     public static final String GROUPS_EXCLUDE_DEFAULT = DefaultGroupFilter.GROUPS_EXCLUDE_DEFAULT;
     private static final String GROUPS_EXCLUDE_DOC = "Exclude groups. Supports comma-separated group IDs and regexes."
@@ -73,15 +71,14 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String GROUP_FILTER_CLASS = "group.filter.class";
     private static final String GROUP_FILTER_CLASS_DOC = "GroupFilter to use. Selects consumer groups to replicate.";
     public static final Class<?> GROUP_FILTER_CLASS_DEFAULT = DefaultGroupFilter.class;
-    public static final String OFFSET_SYNCS_SOURCE_CONSUMER_ROLE = "offset-syncs-source-consumer";
-    public static final String OFFSET_SYNCS_TARGET_CONSUMER_ROLE = "offset-syncs-target-consumer";
-    public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = "offset-syncs-source-admin";
-    public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = "offset-syncs-target-admin";
+    public static final String OFFSET_SYNCS_SOURCE_CONSUMER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-consumer";
+    public static final String OFFSET_SYNCS_TARGET_CONSUMER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-consumer";
+    public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
+    public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-admin";
+    public static final String CHECKPOINTS_TARGET_CONSUMER_ROLE = "checkpoints-target-consumer";
 
     public MirrorCheckpointConfig(Map<String, String> props) {
-        super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
-                {GROUPS_EXCLUDE, GROUPS_EXCLUDE_ALIAS},
-        }));
+        super(CONNECTOR_CONFIG_DEF, props);
     }
 
     public MirrorCheckpointConfig(ConfigDef configDef, Map<String, String> props) {
@@ -165,6 +162,26 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
+    public static Map<String, String> validate(Map<String, String> configs) {
+        Map<String, String> invalidConfigs = new HashMap<>();
+
+        // No point to validate when connector is disabled.
+        if ("false".equals(configs.getOrDefault(ENABLED, "true"))) {
+            return invalidConfigs;
+        }
+
+        if ("false".equals(configs.get(EMIT_CHECKPOINTS_ENABLED))) {
+            invalidConfigs.putIfAbsent(EMIT_CHECKPOINTS_ENABLED, "MirrorCheckpointConnector can't run with " +
+                    EMIT_CHECKPOINTS_ENABLED + " set to false");
+        }
+
+        if ("false".equals(configs.get(EMIT_OFFSET_SYNCS_ENABLED))) {
+            invalidConfigs.putIfAbsent(EMIT_OFFSET_SYNCS_ENABLED, "MirrorCheckpointConnector can't run without offset syncs");
+        }
+
+        return invalidConfigs;
+    }
+
     private static ConfigDef defineCheckpointConfig(ConfigDef baseConfig) {
         return baseConfig
                 .define(
@@ -185,12 +202,6 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                         GROUPS_EXCLUDE_DEFAULT,
                         ConfigDef.Importance.HIGH,
                         GROUPS_EXCLUDE_DOC)
-                .define(
-                        GROUPS_EXCLUDE_ALIAS,
-                        ConfigDef.Type.LIST,
-                        null,
-                        ConfigDef.Importance.HIGH,
-                        "Deprecated. Use " + GROUPS_EXCLUDE + " instead.")
                 .define(
                         GROUP_FILTER_CLASS,
                         ConfigDef.Type.CLASS,
@@ -254,7 +265,7 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                         TOPIC_FILTER_CLASS_DOC);
     }
 
-    protected final static ConfigDef CONNECTOR_CONFIG_DEF = defineCheckpointConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
+    protected static final ConfigDef CONNECTOR_CONFIG_DEF = defineCheckpointConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
 
     public static void main(String[] args) {
         System.out.println(defineCheckpointConfig(new ConfigDef()).toHtml(4, config -> "mirror_checkpoint_" + config));

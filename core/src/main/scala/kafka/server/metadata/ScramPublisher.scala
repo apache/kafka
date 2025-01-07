@@ -17,11 +17,11 @@
 
 package kafka.server.metadata
 
-import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.fault.FaultHandler
 
 
@@ -33,7 +33,7 @@ class ScramPublisher(
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
   logIdent = s"[${name()}] "
 
-  override def name(): String = s"ScramPublisher ${nodeType} id=${conf.nodeId}"
+  override def name(): String = s"ScramPublisher $nodeType id=${conf.nodeId}"
 
   override def onMetadataUpdate(
     delta: MetadataDelta,
@@ -65,7 +65,7 @@ class ScramPublisher(
       }
     } catch {
       case t: Throwable => faultHandler.handleFault("Uncaught exception while " +
-        s"publishing SCRAM changes from ${deltaName}", t)
+        s"publishing SCRAM changes from $deltaName", t)
     }
   }
 }

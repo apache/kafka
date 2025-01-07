@@ -22,19 +22,29 @@
   "fields": [
       { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
         "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-      { "name": "TransactionStates", "type": "[]TransactionState", "versions": "0+", "fields": [
-        { "name": "ErrorCode", "type": "int16", "versions": "0+" },
-        { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId" },
-        { "name": "TransactionState", "type": "string", "versions": "0+" },
-        { "name": "TransactionTimeoutMs", "type": "int32", "versions": "0+" },
-        { "name": "TransactionStartTimeMs", "type": "int64", "versions": "0+" },
-        { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId" },
-        { "name": "ProducerEpoch", "type": "int16", "versions": "0+" },
+      { "name": "TransactionStates", "type": "[]TransactionState", "versions": "0+",
+        "about": "The current state of the transaction.", "fields": [
+        { "name": "ErrorCode", "type": "int16", "versions": "0+",
+          "about": "The error code."},
+        { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",
+          "about": "The transactional id."},
+        { "name": "TransactionState", "type": "string", "versions": "0+",
+          "about": "The current transaction state of the producer."},
+        { "name": "TransactionTimeoutMs", "type": "int32", "versions": "0+",
+          "about": "The timeout in milliseconds for the transaction."},
+        { "name": "TransactionStartTimeMs", "type": "int64", "versions": "0+",
+          "about": "The start time of the transaction in milliseconds."},
+        { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
+          "about": "The current producer id associated with the transaction."},
+        { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
+          "about": "The current epoch associated with the producer id."},
         { "name": "Topics", "type": "[]TopicData", "versions": "0+",
           "about": "The set of partitions included in the current transaction (if active). When a transaction is preparing to commit or abort, this will include only partitions which do not have markers.",
           "fields": [
-            { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true },
-            { "name": "Partitions", "type": "[]int32", "versions": "0+" }
+            { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
+              "about": "The topic name."},
+            { "name": "Partitions", "type": "[]int32", "versions": "0+",
+              "about": "The partition ids included in the current transaction."}
           ]
         }
       ]}

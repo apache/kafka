@@ -70,7 +70,7 @@ public enum ResourceType {
      */
     USER((byte) 7);
 
-    private final static HashMap<Byte, ResourceType> CODE_TO_VALUE = new HashMap<>();
+    private static final HashMap<Byte, ResourceType> CODE_TO_VALUE = new HashMap<>();
 
     static {
         for (ResourceType resourceType : ResourceType.values()) {

@@ -26,10 +26,10 @@ import java.util.Optional;
  * Note: Any change to this class is considered public and requires a KIP.
  */
 public class ConsumerGroupMetadata {
-    final private String groupId;
-    final private int generationId;
-    final private String memberId;
-    final private Optional<String> groupInstanceId;
+    private final String groupId;
+    private final int generationId;
+    private final String memberId;
+    private final Optional<String> groupInstanceId;
 
     public ConsumerGroupMetadata(String groupId,
                                  int generationId,

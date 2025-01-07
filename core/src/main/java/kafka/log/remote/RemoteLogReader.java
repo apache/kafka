@@ -16,50 +16,53 @@
  */
 package kafka.log.remote;
 
-import kafka.server.BrokerTopicStats;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
+
+import com.yammer.metrics.core.Timer;
+
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
 public class RemoteLogReader implements Callable<Void> {
-    private final Logger logger;
+    private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogReader.class);
     private final RemoteStorageFetchInfo fetchInfo;
     private final RemoteLogManager rlm;
     private final BrokerTopicStats brokerTopicStats;
     private final Consumer<RemoteLogReadResult> callback;
+    private final RLMQuotaManager quotaManager;
+    private final Timer remoteReadTimer;
 
     public RemoteLogReader(RemoteStorageFetchInfo fetchInfo,
                            RemoteLogManager rlm,
                            Consumer<RemoteLogReadResult> callback,
-                           BrokerTopicStats brokerTopicStats) {
+                           BrokerTopicStats brokerTopicStats,
+                           RLMQuotaManager quotaManager,
+                           Timer remoteReadTimer) {
         this.fetchInfo = fetchInfo;
         this.rlm = rlm;
         this.brokerTopicStats = brokerTopicStats;
         this.callback = callback;
         this.brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteFetchRequestRate().mark();
         this.brokerTopicStats.allTopicsStats().remoteFetchRequestRate().mark();
-        logger = new LogContext() {
-            @Override
-            public String logPrefix() {
-                return "[" + Thread.currentThread().getName() + "]";
-            }
-        }.logger(RemoteLogReader.class);
+        this.quotaManager = quotaManager;
+        this.remoteReadTimer = remoteReadTimer;
     }
 
     @Override
     public Void call() {
         RemoteLogReadResult result;
         try {
-            logger.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
-
-            FetchDataInfo fetchDataInfo = rlm.read(fetchInfo);
+            LOGGER.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
+            FetchDataInfo fetchDataInfo = remoteReadTimer.time(() -> rlm.read(fetchInfo));
             brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
             brokerTopicStats.allTopicsStats().remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
             result = new RemoteLogReadResult(Optional.of(fetchDataInfo), Optional.empty());
@@ -68,13 +71,12 @@ public class RemoteLogReader implements Callable<Void> {
         } catch (Exception e) {
             brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).failedRemoteFetchRequestRate().mark();
             brokerTopicStats.allTopicsStats().failedRemoteFetchRequestRate().mark();
-            logger.error("Error occurred while reading the remote data for {}", fetchInfo.topicPartition, e);
+            LOGGER.error("Error occurred while reading the remote data for {}", fetchInfo.topicPartition, e);
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         }
-
-        logger.debug("Finished reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
+        LOGGER.debug("Finished reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
+        quotaManager.record(result.fetchDataInfo.map(fetchDataInfo -> fetchDataInfo.records.sizeInBytes()).orElse(0));
         callback.accept(result);
-
         return null;
     }
 }

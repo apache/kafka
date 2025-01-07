@@ -16,18 +16,8 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.internals.AdminApiFuture.SimpleAdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.Batched;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -44,7 +34,18 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffsetsResultInfo> {
 
@@ -52,16 +53,19 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     private final ListOffsetsOptions options;
     private final Logger log;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
+    private final int defaultApiTimeoutMs;
 
     public ListOffsetsHandler(
         Map<TopicPartition, Long> offsetTimestampsByPartition,
         ListOffsetsOptions options,
-        LogContext logContext
+        LogContext logContext,
+        int defaultApiTimeoutMs
     ) {
         this.offsetTimestampsByPartition = offsetTimestampsByPartition;
         this.options = options;
         this.log = logContext.logger(ListOffsetsHandler.class);
         this.lookupStrategy = new PartitionLeaderStrategy(logContext, false);
+        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
     }
 
     @Override
@@ -91,9 +95,22 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             .stream()
             .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.MAX_TIMESTAMP);
 
-        return ListOffsetsRequest.Builder
-            .forConsumer(true, options.isolationLevel(), supportsMaxTimestamp)
-            .setTargetTimes(new ArrayList<>(topicsByName.values()));
+        boolean requireEarliestLocalTimestamp = keys
+                .stream()
+                .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+
+        boolean requireTieredStorageTimestamp = keys
+            .stream()
+            .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+
+        int timeoutMs = options.timeoutMs() != null ? options.timeoutMs() : defaultApiTimeoutMs;
+        return ListOffsetsRequest.Builder.forConsumer(true,
+                        options.isolationLevel(),
+                        supportsMaxTimestamp,
+                        requireEarliestLocalTimestamp,
+                        requireTieredStorageTimestamp)
+                .setTargetTimes(new ArrayList<>(topicsByName.values()))
+                .setTimeoutMs(timeoutMs);
     }
 
     @Override
@@ -199,9 +216,10 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         }
     }
 
-    public static SimpleAdminApiFuture<TopicPartition, ListOffsetsResultInfo> newFuture(
-        Collection<TopicPartition> topicPartitions
+    public static PartitionLeaderStrategy.PartitionLeaderFuture<ListOffsetsResultInfo> newFuture(
+        Collection<TopicPartition> topicPartitions,
+        Map<TopicPartition, Integer> partitionLeaderCache
     ) {
-        return AdminApiFuture.forKeys(new HashSet<>(topicPartitions));
+        return new PartitionLeaderStrategy.PartitionLeaderFuture<>(new HashSet<>(topicPartitions), partitionLeaderCache);
     }
 }

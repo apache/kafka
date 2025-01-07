@@ -19,8 +19,6 @@ package kafka.security.authorizer
 
 import java.net.InetAddress
 import java.util.UUID
-
-import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
 import kafka.server.KafkaConfig
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.acl.AclOperation.{ALL, READ, WRITE}
@@ -34,6 +32,8 @@ import org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, TRANSACTIONAL_ID}
 import org.apache.kafka.common.resource.{ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.server.authorizer.{AuthorizationResult, Authorizer}
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -234,7 +234,7 @@ trait BaseAuthorizerTest {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val host2 = InetAddress.getByName("192.168.1.2")
-    val allHost = AclEntry.WildcardHost
+    val allHost = AclEntry.WILDCARD_HOST
     val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
     val resource2 = new ResourcePattern(TOPIC, "sb2" + UUID.randomUUID(), LITERAL)
     val allowHost1 = new AccessControlEntry(user1.toString, host1.getHostAddress, READ, ALLOW)
@@ -274,7 +274,7 @@ trait BaseAuthorizerTest {
   def testAuthorizeByResourceTypeWithAllPrincipalAce(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user2")
-    val allUser = AclEntry.WildcardPrincipalString
+    val allUser = AclEntry.WILDCARD_PRINCIPAL_STRING
     val host1 = InetAddress.getByName("192.168.1.1")
     val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
     val resource2 = new ResourcePattern(TOPIC, "sb2" + UUID.randomUUID(), LITERAL)
@@ -312,8 +312,8 @@ trait BaseAuthorizerTest {
   }
 
   @Test
-  def testAuthorzeByResourceTypeSuperUserHasAccess(): Unit = {
-    val denyAllAce = new AccessControlEntry(WildcardPrincipalString, WildcardHost, AclOperation.ALL, DENY)
+  def testAuthorizeByResourceTypeSuperUserHasAccess(): Unit = {
+    val denyAllAce = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, AclOperation.ALL, DENY)
     val superUser1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, superUserName)
     val host1 = InetAddress.getByName("192.0.4.4")
     val allTopicsResource = new ResourcePattern(TOPIC, WILDCARD_RESOURCE, LITERAL)

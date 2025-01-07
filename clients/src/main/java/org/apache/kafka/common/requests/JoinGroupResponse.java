@@ -37,6 +37,12 @@ public class JoinGroupResponse extends AbstractResponse {
         if (version < 7 && data.protocolName() == null) {
             data.setProtocolName("");
         }
+
+        // If nullable string for the protocol name is supported,
+        // we set empty string to be null to ensure compliance.
+        if (version >= 7 && data.protocolName() != null && data.protocolName().isEmpty()) {
+            data.setProtocolName(null);
+        }
     }
 
     @Override

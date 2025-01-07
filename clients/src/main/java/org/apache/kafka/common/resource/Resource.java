@@ -34,12 +34,12 @@ public class Resource {
     /**
      * The name of the CLUSTER resource.
      */
-    public final static String CLUSTER_NAME = "kafka-cluster";
+    public static final String CLUSTER_NAME = "kafka-cluster";
 
     /**
      * A resource representing the whole cluster.
      */
-    public final static Resource CLUSTER = new Resource(ResourceType.CLUSTER, CLUSTER_NAME);
+    public static final Resource CLUSTER = new Resource(ResourceType.CLUSTER, CLUSTER_NAME);
 
     /**
      * Create an instance of this class with the provided parameters.
@@ -70,7 +70,7 @@ public class Resource {
 
     @Override
     public String toString() {
-        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ")";
+        return "(resourceType=" + resourceType + ", name=" + name + ")";
     }
 
     /**

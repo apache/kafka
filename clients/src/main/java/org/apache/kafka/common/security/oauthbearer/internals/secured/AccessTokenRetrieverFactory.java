@@ -17,19 +17,24 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
+import org.apache.kafka.common.config.SaslConfigs;
 
 import java.net.URL;
 import java.util.Locale;
 import java.util.Map;
+
 import javax.net.ssl.SSLSocketFactory;
+
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 
 public class AccessTokenRetrieverFactory  {
 
@@ -68,6 +73,8 @@ public class AccessTokenRetrieverFactory  {
             if (jou.shouldCreateSSLSocketFactory(tokenEndpointUrl))
                 sslSocketFactory = jou.createSSLSocketFactory();
 
+            boolean urlencodeHeader = validateUrlencodeHeader(cu);
+
             return new HttpAccessTokenRetriever(clientId,
                 clientSecret,
                 scope,
@@ -76,8 +83,28 @@ public class AccessTokenRetrieverFactory  {
                 cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS),
                 cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
                 cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
-                cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false));
+                cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false),
+                urlencodeHeader);
         }
+    }
+
+    /**
+     * In some cases, the incoming {@link Map} doesn't contain a value for
+     * {@link SaslConfigs#SASL_OAUTHBEARER_HEADER_URLENCODE}. Returning {@code null} from {@link Map#get(Object)}
+     * will cause a {@link NullPointerException} when it is later unboxed.
+     *
+     * <p/>
+     *
+     * This utility method ensures that we have a non-{@code null} value to use in the
+     * {@link HttpAccessTokenRetriever} constructor.
+     */
+    static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
+        Boolean urlencodeHeader = configurationUtils.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);
+
+        if (urlencodeHeader != null)
+            return urlencodeHeader;
+        else
+            return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
     }
 
 }

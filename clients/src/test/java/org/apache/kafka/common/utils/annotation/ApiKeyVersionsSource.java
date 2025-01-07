@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.common.utils.annotation;
 
+import org.apache.kafka.common.protocol.ApiKeys;
+
+import org.junit.jupiter.params.provider.ArgumentsSource;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.junit.jupiter.params.provider.ArgumentsSource;
 
 @Target({ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)

@@ -23,8 +23,8 @@ import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Collections;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Properties;
 
@@ -84,8 +84,7 @@ public final class ConfigurationsImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ConfigurationsImage)) return false;
-        ConfigurationsImage other = (ConfigurationsImage) o;
+        if (!(o instanceof ConfigurationsImage other)) return false;
         return data.equals(other.data);
     }
 

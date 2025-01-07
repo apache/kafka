@@ -20,6 +20,7 @@ package org.apache.kafka.image.node.printer;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

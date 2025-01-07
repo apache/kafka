@@ -17,27 +17,29 @@
 
 package org.apache.kafka.shell.glob;
 
-import static java.util.concurrent.TimeUnit.MINUTES;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import org.apache.kafka.image.node.MetadataNode;
 import org.apache.kafka.shell.glob.GlobVisitor.MetadataNodeInfo;
 import org.apache.kafka.shell.state.MetadataShellState;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 
+import static java.util.concurrent.TimeUnit.MINUTES;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 @Timeout(value = 5, unit = MINUTES)
 public class GlobVisitorTest {
-    static private final MetadataShellState DATA;
+    private static final MetadataShellState DATA;
 
     static class TestNode implements MetadataNode {
         private final String name;
@@ -99,11 +101,11 @@ public class GlobVisitorTest {
     }
 
     static class InfoConsumer implements Consumer<Optional<MetadataNodeInfo>> {
-        private Optional<List<MetadataNodeInfo>> infos = null;
+        private Optional<List<MetadataNodeInfo>> infos = Optional.empty();
 
         @Override
         public void accept(Optional<MetadataNodeInfo> info) {
-            if (infos == null) {
+            if (infos.isEmpty()) {
                 if (info.isPresent()) {
                     infos = Optional.of(new ArrayList<>());
                     infos.get().add(info.get());
@@ -137,7 +139,7 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("..", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(Arrays.asList(
+        assertEquals(Optional.of(Collections.singletonList(
             new MetadataNodeInfo(new String[0], DATA.root()))), consumer.infos);
     }
 
@@ -146,7 +148,7 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("../..", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(Arrays.asList(
+        assertEquals(Optional.of(Collections.singletonList(
             new MetadataNodeInfo(new String[0], DATA.root()))), consumer.infos);
     }
 
@@ -189,8 +191,8 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("/a?pha", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(Arrays.asList(
-            new MetadataNodeInfo(new String[] {"alpha"},
+        assertEquals(Optional.of(Collections.singletonList(
+            new MetadataNodeInfo(new String[]{"alpha"},
                 DATA.root().child("alpha")))), consumer.infos);
     }
 }

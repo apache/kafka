@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.connect;
 
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.transforms.ReplaceField;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;

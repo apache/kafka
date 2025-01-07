@@ -19,7 +19,7 @@ package org.apache.kafka.common.security.ssl;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SslPrincipalMapperTest {
 
@@ -56,11 +56,7 @@ public class SslPrincipalMapperTest {
     }
 
     private void testInvalidRule(String rules) {
-        try {
-            System.out.println(SslPrincipalMapper.fromRules(rules));
-            fail("should have thrown IllegalArgumentException");
-        } catch (IllegalArgumentException e) {
-        }
+        assertThrows(IllegalArgumentException.class, () -> SslPrincipalMapper.fromRules(rules));
     }
 
     @Test

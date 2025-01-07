@@ -17,13 +17,6 @@
 
 package org.apache.kafka.trogdor.agent;
 
-import static java.util.Arrays.asList;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Scheduler;
@@ -54,7 +47,12 @@ import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
 import org.apache.kafka.trogdor.task.SampleTaskSpec;
 import org.apache.kafka.trogdor.task.TaskSpec;
+
+import com.fasterxml.jackson.databind.node.TextNode;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -66,10 +64,16 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.TreeMap;
-import org.junit.jupiter.api.Timeout;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+import static java.util.Arrays.asList;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+@Timeout(value = 120)
 public class AgentTest {
+
+    private Agent agent;
 
     private static BasicPlatform createBasicPlatform(Scheduler scheduler) {
         TreeMap<String, Node> nodes = new TreeMap<>();
@@ -86,8 +90,17 @@ public class AgentTest {
         JsonRestServer restServer = new JsonRestServer(0);
         AgentRestResource resource = new AgentRestResource();
         restServer.start(resource);
-        return new Agent(createBasicPlatform(scheduler), scheduler,
+        agent = new Agent(createBasicPlatform(scheduler), scheduler,
                 restServer, resource);
+        return agent;
+    }
+
+    @AfterEach
+    public void cleanUp() throws Exception {
+        if (agent != null) {
+            agent.beginShutdown();
+            agent.waitForShutdown();
+        }
     }
 
     @Test
@@ -95,6 +108,7 @@ public class AgentTest {
         Agent agent = createAgent(Scheduler.SYSTEM);
         agent.beginShutdown();
         agent.waitForShutdown();
+        this.agent = null;
     }
 
     @Test
@@ -104,6 +118,7 @@ public class AgentTest {
             maxTries(10).target("localhost", agent.port()).build();
         client.invokeShutdown();
         agent.waitForShutdown();
+        this.agent = null;
     }
 
     @Test
@@ -113,8 +128,6 @@ public class AgentTest {
             maxTries(10).target("localhost", agent.port()).build();
         AgentStatusResponse status = client.status();
         assertEquals(agent.status(), status);
-        agent.beginShutdown();
-        agent.waitForShutdown();
     }
 
     @Test
@@ -168,8 +181,6 @@ public class AgentTest {
 
         time.setCurrentTimeMs(150);
         assertNotEquals(agent.uptime(), uptime);
-        agent.beginShutdown();
-        agent.waitForShutdown();
     }
 
     @Test
@@ -223,9 +234,6 @@ public class AgentTest {
                 workerState(new WorkerRunning("baz", bazSpec, 0, new TextNode("active"))).
                 build()).
             waitFor(client);
-
-        agent.beginShutdown();
-        agent.waitForShutdown();
     }
 
     @Test
@@ -284,9 +292,6 @@ public class AgentTest {
                 workerState(new WorkerDone("bar", barSpec, barSpecStartTimeMs, startTimeMs + 7, new TextNode("done"), "")).
                 build()).
             waitFor(client);
-
-        agent.beginShutdown();
-        agent.waitForShutdown();
     }
 
     @Test
@@ -445,9 +450,6 @@ public class AgentTest {
         time.sleep(1);
         client.destroyWorker(new DestroyWorkerRequest(1));
         new ExpectedTasks().waitFor(client);
-
-        agent.beginShutdown();
-        agent.waitForShutdown();
     }
 
     static void testExec(Agent agent, String expected, boolean expectedReturn, TaskSpec spec) throws Exception {
@@ -468,8 +470,6 @@ public class AgentTest {
                 JsonUtil.toPrettyJsonString(rebasedSpec)) +
             String.format("Task failed with status null and error worker expired%n"),
             false, rebasedSpec);
-        agent.beginShutdown();
-        agent.waitForShutdown();
     }
 
     @Test
@@ -483,8 +483,6 @@ public class AgentTest {
                 JsonUtil.toPrettyJsonString(rebasedSpec)) +
                 String.format("Task succeeded with status \"halted\"%n"),
             true, rebasedSpec);
-        agent.beginShutdown();
-        agent.waitForShutdown();
     }
 
 }

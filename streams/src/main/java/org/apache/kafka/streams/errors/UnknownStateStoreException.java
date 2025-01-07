@@ -28,6 +28,7 @@ public class UnknownStateStoreException extends InvalidStateStoreException {
         super(message);
     }
 
+    @SuppressWarnings("unused")
     public UnknownStateStoreException(final String message, final Throwable throwable) {
         super(message, throwable);
     }

@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+
+import java.util.Objects;
 
 /**
  * This class represents a version of a {@link StampedRecord} that failed to deserialize. We need

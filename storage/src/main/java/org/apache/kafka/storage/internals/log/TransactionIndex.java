@@ -194,6 +194,14 @@ public class TransactionIndex implements Closeable {
         }
     }
 
+    /**
+     * Check if the index is empty.
+     * @return `true` if the index is empty (or) when underlying file doesn't exists, `false` otherwise.
+     */
+    public boolean isEmpty() {
+        return !iterable().iterator().hasNext();
+    }
+
     private FileChannel openChannel() throws IOException {
         FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE,
                 StandardOpenOption.READ, StandardOpenOption.WRITE);

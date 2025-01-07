@@ -17,9 +17,6 @@
 
 package org.apache.kafka.tools;
 
-import joptsimple.OptionException;
-import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -34,14 +31,14 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.server.util.PartitionFilter;
-import org.apache.kafka.server.util.PartitionFilter.PartitionRangeFilter;
-import org.apache.kafka.server.util.PartitionFilter.PartitionsSetFilter;
-import org.apache.kafka.server.util.PartitionFilter.UniquePartitionFilter;
-import org.apache.kafka.server.util.TopicFilter.IncludeList;
-import org.apache.kafka.server.util.TopicPartitionFilter;
-import org.apache.kafka.server.util.TopicPartitionFilter.CompositeTopicPartitionFilter;
-import org.apache.kafka.server.util.TopicPartitionFilter.TopicFilterAndPartitionFilter;
+import org.apache.kafka.tools.filter.PartitionFilter;
+import org.apache.kafka.tools.filter.PartitionFilter.PartitionRangeFilter;
+import org.apache.kafka.tools.filter.PartitionFilter.PartitionsSetFilter;
+import org.apache.kafka.tools.filter.PartitionFilter.UniquePartitionFilter;
+import org.apache.kafka.tools.filter.TopicFilter.IncludeList;
+import org.apache.kafka.tools.filter.TopicPartitionFilter;
+import org.apache.kafka.tools.filter.TopicPartitionFilter.CompositeTopicPartitionFilter;
+import org.apache.kafka.tools.filter.TopicPartitionFilter.TopicFilterAndPartitionFilter;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -58,7 +55,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import joptsimple.OptionException;
+import joptsimple.OptionSpec;
+import joptsimple.OptionSpecBuilder;
+
 public class GetOffsetShell {
+    static final String USAGE_TEXT = "An interactive shell for getting topic-partition offsets.";
     private static final Pattern TOPIC_PARTITION_PATTERN = Pattern.compile("([^:,]*)(?::(?:([0-9]*)|(?:([0-9]*)-([0-9]*))))?");
 
     public static void main(String... args) {
@@ -94,25 +96,18 @@ public class GetOffsetShell {
     }
 
     private static class GetOffsetShellOptions extends CommandDefaultOptions {
-        private final OptionSpec<String> brokerListOpt;
-        private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpec<String> topicPartitionsOpt;
         private final OptionSpec<String> topicOpt;
         private final OptionSpec<String> partitionsOpt;
         private final OptionSpec<String> timeOpt;
         private final OptionSpec<String> commandConfigOpt;
-        private final OptionSpec<String> effectiveBrokerListOpt;
+        private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpecBuilder excludeInternalTopicsOpt;
 
         public GetOffsetShellOptions(String[] args) throws TerseException {
             super(args);
 
-            brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
-                    .withRequiredArg()
-                    .describedAs("HOST1:PORT1,...,HOST3:PORT3")
-                    .ofType(String.class);
             bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
-                    .requiredUnless("broker-list")
                     .withRequiredArg()
                     .describedAs("HOST1:PORT1,...,HOST3:PORT3")
                     .ofType(String.class);
@@ -132,7 +127,7 @@ public class GetOffsetShell {
                     .ofType(String.class);
             timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]")
                     .withRequiredArg()
-                    .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp")
+                    .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered")
                     .ofType(String.class)
                     .defaultsTo("latest");
             commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
@@ -142,7 +137,7 @@ public class GetOffsetShell {
             excludeInternalTopicsOpt = parser.accepts("exclude-internal-topics", "By default, internal topics are included. If specified, internal topics are excluded.");
 
             if (args.length == 0) {
-                CommandLineUtils.printUsageAndExit(parser, "An interactive shell for getting topic-partition offsets.");
+                CommandLineUtils.printUsageAndExit(parser, USAGE_TEXT);
             }
 
             try {
@@ -151,15 +146,11 @@ public class GetOffsetShell {
                 throw new TerseException(e.getMessage());
             }
 
-            if (options.has(bootstrapServerOpt)) {
-                effectiveBrokerListOpt = bootstrapServerOpt;
-            } else {
-                effectiveBrokerListOpt = brokerListOpt;
-            }
+            CommandLineUtils.maybePrintHelpOrVersion(this, USAGE_TEXT);
 
-            CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt);
+            CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
 
-            String brokerList = options.valueOf(effectiveBrokerListOpt);
+            String brokerList = options.valueOf(bootstrapServerOpt);
 
             try {
                 ToolsUtils.validateBootstrapServer(brokerList);
@@ -205,7 +196,7 @@ public class GetOffsetShell {
         }
 
         public String effectiveBrokerListOpt() {
-            return options.valueOf(effectiveBrokerListOpt);
+            return options.valueOf(bootstrapServerOpt);
         }
 
         public boolean hasExcludeInternalTopicsOpt() {
@@ -273,7 +264,8 @@ public class GetOffsetShell {
         }
     }
 
-    private OffsetSpec parseOffsetSpec(String listOffsetsTimestamp) throws TerseException {
+    // visible for tseting
+    static OffsetSpec parseOffsetSpec(String listOffsetsTimestamp) throws TerseException {
         switch (listOffsetsTimestamp) {
             case "earliest":
                 return OffsetSpec.earliest();
@@ -281,6 +273,10 @@ public class GetOffsetShell {
                 return OffsetSpec.latest();
             case "max-timestamp":
                 return OffsetSpec.maxTimestamp();
+            case "earliest-local":
+                return OffsetSpec.earliestLocal();
+            case "latest-tiered":
+                return OffsetSpec.latestTiered();
             default:
                 long timestamp;
 
@@ -288,7 +284,7 @@ public class GetOffsetShell {
                     timestamp = Long.parseLong(listOffsetsTimestamp);
                 } catch (NumberFormatException e) {
                     throw new TerseException("Malformed time argument " + listOffsetsTimestamp + ". " +
-                            "Please use -1 or latest / -2 or earliest / -3 or max-timestamp, or a specified long format timestamp");
+                            "Please use -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered, or a specified long format timestamp");
                 }
 
                 if (timestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
@@ -297,6 +293,10 @@ public class GetOffsetShell {
                     return OffsetSpec.latest();
                 } else if (timestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                     return OffsetSpec.maxTimestamp();
+                } else if (timestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
+                    return OffsetSpec.earliestLocal();
+                } else if (timestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
+                    return OffsetSpec.latestTiered();
                 } else {
                     return OffsetSpec.forTimestamp(timestamp);
                 }

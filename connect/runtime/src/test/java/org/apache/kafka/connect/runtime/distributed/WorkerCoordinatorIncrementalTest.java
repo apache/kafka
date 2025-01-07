@@ -29,15 +29,15 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
@@ -49,6 +49,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
@@ -58,38 +59,31 @@ import static org.apache.kafka.connect.runtime.WorkerTestUtils.clusterConfigStat
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.WorkerState;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.SESSIONED;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.runners.Parameterized.Parameter;
-import static org.junit.runners.Parameterized.Parameters;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@RunWith(value = Parameterized.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WorkerCoordinatorIncrementalTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
-    private String connectorId1 = "connector1";
-    private String connectorId2 = "connector2";
-    private String connectorId3 = "connector3";
-    private ConnectorTaskId taskId1x0 = new ConnectorTaskId(connectorId1, 0);
-    private ConnectorTaskId taskId1x1 = new ConnectorTaskId(connectorId1, 1);
-    private ConnectorTaskId taskId2x0 = new ConnectorTaskId(connectorId2, 0);
-    private ConnectorTaskId taskId3x0 = new ConnectorTaskId(connectorId3, 0);
+    private final String connectorId1 = "connector1";
+    private final String connectorId2 = "connector2";
+    private final ConnectorTaskId taskId1x0 = new ConnectorTaskId(connectorId1, 0);
+    private final ConnectorTaskId taskId2x0 = new ConnectorTaskId(connectorId2, 0);
 
-    private String groupId = "test-group";
-    private int sessionTimeoutMs = 10;
-    private int rebalanceTimeoutMs = 60;
-    private int heartbeatIntervalMs = 2;
-    private long retryBackoffMs = 100;
-    private long retryBackoffMaxMs = 1000;
-    private int requestTimeoutMs = 1000;
+    private final String groupId = "test-group";
+    private final int sessionTimeoutMs = 10;
+    private final int rebalanceTimeoutMs = 60;
+    private final int heartbeatIntervalMs = 2;
+    private final long retryBackoffMs = 100;
+    private final long retryBackoffMaxMs = 1000;
+    private final int requestTimeoutMs = 1000;
     private MockTime time;
     private MockClient client;
     private Node node;
@@ -115,25 +109,18 @@ public class WorkerCoordinatorIncrementalTest {
     private int configStorageCalls;
 
     private ClusterConfigState configState1;
-    private ClusterConfigState configState2;
-    private ClusterConfigState configStateSingleTaskConnectors;
 
     // Arguments are:
     // - Protocol type
     // - Expected metadata size
-    @Parameters
-    public static Iterable<?> mode() {
-        return Arrays.asList(new Object[][]{{COMPATIBLE, 2}, {SESSIONED, 3}});
+    static Stream<Arguments> mode() {
+        return Stream.of(
+            Arguments.of(ConnectProtocolCompatibility.COMPATIBLE, 2),
+            Arguments.of(ConnectProtocolCompatibility.SESSIONED, 3)
+        );
     }
 
-    @Parameter
-    public ConnectProtocolCompatibility compatibility;
-
-    @Parameter(1)
-    public int expectedMetadataSize;
-
-    @Before
-    public void setup() {
+    public void init(ConnectProtocolCompatibility compatibility) {
         LogContext loggerFactory = new LogContext();
 
         this.time = new MockTime();
@@ -142,7 +129,7 @@ public class WorkerCoordinatorIncrementalTest {
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
         this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
-                retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
+            retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
 
@@ -158,29 +145,29 @@ public class WorkerCoordinatorIncrementalTest {
         this.configStorageCalls = 0;
 
         this.rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
-                                                        rebalanceTimeoutMs,
-                                                        heartbeatIntervalMs,
-                                                        groupId,
-                                                        Optional.empty(),
-                                                        retryBackoffMs,
-                                                        retryBackoffMaxMs,
-                                                        true);
+            rebalanceTimeoutMs,
+            heartbeatIntervalMs,
+            groupId,
+            Optional.empty(),
+            retryBackoffMs,
+            retryBackoffMaxMs,
+            true);
         this.coordinator = new WorkerCoordinator(rebalanceConfig,
-                                                 loggerFactory,
-                                                 consumerClient,
-                                                 metrics,
-                                                 "worker" + groupId,
-                                                 time,
-                                                 expectedUrl(leaderId),
-                                                 configStorage,
-                                                 rebalanceListener,
-                                                 compatibility,
-                                                 rebalanceDelay);
+            loggerFactory,
+            consumerClient,
+            metrics,
+            "worker" + groupId,
+            time,
+            expectedUrl(leaderId),
+            configStorage,
+            rebalanceListener,
+            compatibility,
+            rebalanceDelay);
 
         configState1 = clusterConfigState(offset, 2, 4);
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         this.metrics.close();
         verifyNoMoreInteractions(configStorage);
@@ -193,8 +180,11 @@ public class WorkerCoordinatorIncrementalTest {
     // We only test functionality unique to WorkerCoordinator. Other functionality is already
     // well tested via the tests that cover AbstractCoordinator & ConsumerCoordinator.
 
-    @Test
-    public void testMetadata() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testMetadata(ConnectProtocolCompatibility compatibility, int expectedMetadataSize) {
+        init(compatibility);
+        System.err.println(compatibility);
         when(configStorage.snapshot()).thenReturn(configState1);
 
         JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
@@ -211,8 +201,10 @@ public class WorkerCoordinatorIncrementalTest {
         verify(configStorage, times(1)).snapshot();
     }
 
-    @Test
-    public void testMetadataWithExistingAssignment() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testMetadataWithExistingAssignment(ConnectProtocolCompatibility compatibility, int expectedMetadataSize) {
+        init(compatibility);
         when(configStorage.snapshot()).thenReturn(configState1);
 
         ExtendedAssignment assignment = new ExtendedAssignment(
@@ -242,8 +234,10 @@ public class WorkerCoordinatorIncrementalTest {
         verify(configStorage, times(1)).snapshot();
     }
 
-    @Test
-    public void testMetadataWithExistingAssignmentButOlderProtocolSelection() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testMetadataWithExistingAssignmentButOlderProtocolSelection(ConnectProtocolCompatibility compatibility, int expectedMetadataSize) {
+        init(compatibility);
         when(configStorage.snapshot()).thenReturn(configState1);
 
         ExtendedAssignment assignment = new ExtendedAssignment(
@@ -271,16 +265,18 @@ public class WorkerCoordinatorIncrementalTest {
         verify(configStorage, times(1)).snapshot();
     }
 
-    @Test
-    public void testTaskAssignmentWhenWorkerJoins() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testTaskAssignmentWhenWorkerJoins(ConnectProtocolCompatibility compatibility) {
+        init(compatibility);
         when(configStorage.snapshot()).thenReturn(configState1);
 
         coordinator.metadata();
         ++configStorageCalls;
 
         List<JoinGroupResponseMember> responseMembers = new ArrayList<>();
-        addJoinGroupResponseMember(responseMembers, leaderId, offset, null);
-        addJoinGroupResponseMember(responseMembers, memberId, offset, null);
+        addJoinGroupResponseMember(responseMembers, leaderId, offset, null, compatibility);
+        addJoinGroupResponseMember(responseMembers, memberId, offset, null, compatibility);
 
         Map<String, ByteBuffer> result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
@@ -300,9 +296,9 @@ public class WorkerCoordinatorIncrementalTest {
         ++configStorageCalls;
 
         responseMembers = new ArrayList<>();
-        addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment);
-        addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment);
-        addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
+        addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment, compatibility);
+        addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment, compatibility);
+        addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null, compatibility);
 
         result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
@@ -328,8 +324,10 @@ public class WorkerCoordinatorIncrementalTest {
         verify(configStorage, times(configStorageCalls)).snapshot();
     }
 
-    @Test
-    public void testTaskAssignmentWhenWorkerLeavesPermanently() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testTaskAssignmentWhenWorkerLeavesPermanently(ConnectProtocolCompatibility compatibility) {
+        init(compatibility);
         when(configStorage.snapshot()).thenReturn(configState1);
 
         // First assignment distributes configured connectors and tasks
@@ -337,9 +335,9 @@ public class WorkerCoordinatorIncrementalTest {
         ++configStorageCalls;
 
         List<JoinGroupResponseMember> responseMembers = new ArrayList<>();
-        addJoinGroupResponseMember(responseMembers, leaderId, offset, null);
-        addJoinGroupResponseMember(responseMembers, memberId, offset, null);
-        addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
+        addJoinGroupResponseMember(responseMembers, leaderId, offset, null, compatibility);
+        addJoinGroupResponseMember(responseMembers, memberId, offset, null, compatibility);
+        addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null, compatibility);
 
         Map<String, ByteBuffer> result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
@@ -367,8 +365,8 @@ public class WorkerCoordinatorIncrementalTest {
 
         // Mark everyone as in sync with configState1
         responseMembers = new ArrayList<>();
-        addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment);
-        addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment);
+        addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment, compatibility);
+        addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment, compatibility);
 
         result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
@@ -426,8 +424,10 @@ public class WorkerCoordinatorIncrementalTest {
         verify(configStorage, times(configStorageCalls)).snapshot();
     }
 
-    @Test
-    public void testTaskAssignmentWhenWorkerBounces() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testTaskAssignmentWhenWorkerBounces(ConnectProtocolCompatibility compatibility) {
+        init(compatibility);
         when(configStorage.snapshot()).thenReturn(configState1);
 
         // First assignment distributes configured connectors and tasks
@@ -435,9 +435,9 @@ public class WorkerCoordinatorIncrementalTest {
         ++configStorageCalls;
 
         List<JoinGroupResponseMember> responseMembers = new ArrayList<>();
-        addJoinGroupResponseMember(responseMembers, leaderId, offset, null);
-        addJoinGroupResponseMember(responseMembers, memberId, offset, null);
-        addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
+        addJoinGroupResponseMember(responseMembers, leaderId, offset, null, compatibility);
+        addJoinGroupResponseMember(responseMembers, memberId, offset, null, compatibility);
+        addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null, compatibility);
 
         Map<String, ByteBuffer> result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
@@ -464,8 +464,8 @@ public class WorkerCoordinatorIncrementalTest {
         ++configStorageCalls;
 
         responseMembers = new ArrayList<>();
-        addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment);
-        addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment);
+        addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment, compatibility);
+        addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment, compatibility);
 
         result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
@@ -488,7 +488,7 @@ public class WorkerCoordinatorIncrementalTest {
 
         // A third rebalance before the delay expires won't change the assignments even if the
         // member returns in the meantime
-        addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
+        addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null, compatibility);
         result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         leaderAssignment = deserializeAssignment(result, leaderId);
@@ -564,6 +564,9 @@ public class WorkerCoordinatorIncrementalTest {
             this.revokedTasks = tasks;
             revokedCount++;
         }
+
+        @Override
+        public void onPollTimeoutExpiry() {}
     }
 
     private static ExtendedAssignment deserializeAssignment(Map<String, ByteBuffer> assignment,
@@ -571,10 +574,12 @@ public class WorkerCoordinatorIncrementalTest {
         return IncrementalCooperativeConnectProtocol.deserializeAssignment(assignment.get(member));
     }
 
+
     private void addJoinGroupResponseMember(List<JoinGroupResponseMember> responseMembers,
-                                                   String member,
-                                                   long offset,
-                                                   ExtendedAssignment assignment) {
+                                            String member,
+                                            long offset,
+                                            ExtendedAssignment assignment,
+                                            ConnectProtocolCompatibility compatibility) {
         responseMembers.add(new JoinGroupResponseMember()
                 .setMemberId(member)
                 .setMetadata(

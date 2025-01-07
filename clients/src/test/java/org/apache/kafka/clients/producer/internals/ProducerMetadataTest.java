@@ -25,6 +25,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,12 +46,12 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProducerMetadataTest {
     private static final long METADATA_IDLE_MS = 60 * 1000;
-    private long refreshBackoffMs = 100;
-    private long refreshBackoffMaxMs = 1000;
-    private long metadataExpireMs = 1000;
-    private ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, METADATA_IDLE_MS,
+    private final long refreshBackoffMs = 100;
+    private final long refreshBackoffMaxMs = 1000;
+    private final long metadataExpireMs = 1000;
+    private final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, METADATA_IDLE_MS,
             new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
-    private AtomicReference<Exception> backgroundError = new AtomicReference<>();
+    private final AtomicReference<Exception> backgroundError = new AtomicReference<>();
 
     @AfterEach
     public void tearDown() {

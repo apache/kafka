@@ -20,15 +20,17 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.utils.Time;
+
 import org.junit.jupiter.api.Test;
+
+import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
-import java.lang.management.ManagementFactory;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -164,32 +166,13 @@ public class JmxReporterTest {
         JmxReporter reporter = new JmxReporter();
         MetricsContext metricsContext = new KafkaMetricsContext("kafka.server");
         MetricConfig metricConfig = new MetricConfig();
-        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Arrays.asList(reporter)), Time.SYSTEM, metricsContext);
+        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Collections.singletonList(reporter)), Time.SYSTEM, metricsContext);
 
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
             Sensor sensor = metrics.sensor("kafka.requests");
             sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
             assertEquals("kafka.server", server.getObjectInstance(new ObjectName("kafka.server:type=grp1")).getObjectName().getDomain());
-        } finally {
-            metrics.close();
-        }
-    }
-
-    @Test
-    public void testDeprecatedJmxPrefixWithDefaultMetrics() throws Exception {
-        @SuppressWarnings("deprecation")
-        JmxReporter reporter = new JmxReporter("my-prefix");
-
-        // for backwards compatibility, ensure prefix does not get overridden by the default empty namespace in metricscontext
-        MetricConfig metricConfig = new MetricConfig();
-        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Arrays.asList(reporter)), Time.SYSTEM);
-
-        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        try {
-            Sensor sensor = metrics.sensor("my-sensor");
-            sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
-            assertEquals("my-prefix", server.getObjectInstance(new ObjectName("my-prefix:type=grp1")).getObjectName().getDomain());
         } finally {
             metrics.close();
         }

@@ -32,7 +32,8 @@ import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 
@@ -42,9 +43,8 @@ import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@SuppressWarnings("deprecation")
 public class SuppressTopologyTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
 
@@ -153,7 +153,7 @@ public class SuppressTopologyTest {
         anonymousNodeBuilder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
             .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(SessionWindows.with(ofMillis(5L)).grace(ofMillis(5L)))
+            .windowedBy(SessionWindows.ofInactivityGapAndGrace(ofMillis(5L), ofMillis(5L)))
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled())
             .suppress(untilWindowCloses(unbounded()))
             .toStream()
@@ -171,7 +171,7 @@ public class SuppressTopologyTest {
         namedNodeBuilder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
             .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(SessionWindows.with(ofMillis(5L)).grace(ofMillis(5L)))
+            .windowedBy(SessionWindows.ofInactivityGapAndGrace(ofMillis(5L), ofMillis(5L)))
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled())
             .suppress(untilWindowCloses(unbounded()).withName("myname"))
             .toStream()

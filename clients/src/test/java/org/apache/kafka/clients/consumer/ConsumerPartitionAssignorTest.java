@@ -21,6 +21,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -35,7 +36,6 @@ import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.getAss
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsumerPartitionAssignorTest {
 
@@ -45,7 +45,7 @@ public class ConsumerPartitionAssignorTest {
                 Collections.singletonList(StickyAssignor.class.getName()),
                 Collections.emptyMap()
         );
-        assertTrue(assignors.get(0) instanceof StickyAssignor);
+        assertInstanceOf(StickyAssignor.class, assignors.get(0));
     }
 
     @Test
@@ -54,8 +54,8 @@ public class ConsumerPartitionAssignorTest {
                 Arrays.asList(StickyAssignor.class.getName(), CooperativeStickyAssignor.class.getName()),
                 Collections.emptyMap()
         );
-        assertTrue(assignors.get(0) instanceof StickyAssignor);
-        assertTrue(assignors.get(1) instanceof CooperativeStickyAssignor);
+        assertInstanceOf(StickyAssignor.class, assignors.get(0));
+        assertInstanceOf(CooperativeStickyAssignor.class, assignors.get(1));
     }
 
     @Test
@@ -80,7 +80,7 @@ public class ConsumerPartitionAssignorTest {
                 initConsumerConfigWithClassTypes(Collections.singletonList(StickyAssignor.class))
                 .getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
         List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classTypes, Collections.emptyMap());
-        assertTrue(assignors.get(0) instanceof StickyAssignor);
+        assertInstanceOf(StickyAssignor.class, assignors.get(0));
     }
 
     @Test
@@ -91,8 +91,8 @@ public class ConsumerPartitionAssignorTest {
 
         List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classTypes, Collections.emptyMap());
 
-        assertTrue(assignors.get(0) instanceof StickyAssignor);
-        assertTrue(assignors.get(1) instanceof CooperativeStickyAssignor);
+        assertInstanceOf(StickyAssignor.class, assignors.get(0));
+        assertInstanceOf(CooperativeStickyAssignor.class, assignors.get(1));
     }
 
     @Test
@@ -150,6 +150,7 @@ public class ConsumerPartitionAssignorTest {
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classTypes);
+        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
         return new ConsumerConfig(props);
     }
 }

@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import java.time.Duration;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
+
+import java.time.Duration;
 
 /**
  * The {@code Transformer} interface is for stateful mapping of an input record to zero, one, or multiple new output
@@ -42,11 +43,12 @@ import org.apache.kafka.streams.processor.To;
  * @param <R> {@link KeyValue} return type (both key and value type can be set
  *            arbitrarily)
  * @see TransformerSupplier
- * @see KStream#transform(TransformerSupplier, String...)
  * @see ValueTransformer
  * @see KStream#map(KeyValueMapper)
  * @see KStream#flatMap(KeyValueMapper)
+ * @deprecated Since 4.0. Use {@link org.apache.kafka.streams.processor.api.Processor api.Processor} instead.
  */
+@Deprecated
 public interface Transformer<K, V, R> {
 
     /**
@@ -68,8 +70,7 @@ public interface Transformer<K, V, R> {
 
     /**
      * Transform the record with the given key and value.
-     * Additionally, any {@link StateStore state} that is {@link KStream#transform(TransformerSupplier, String...)
-     * attached} to this operator can be accessed and modified
+     * Additionally, any {@link StateStore state} that is attached to this operator can be accessed and modified
      * arbitrarily (cf. {@link ProcessorContext#getStateStore(String)}).
      * <p>
      * If only one record should be forward downstream, {@code transform} can return a new {@link KeyValue}. If

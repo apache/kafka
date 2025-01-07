@@ -17,13 +17,16 @@
 
 package org.apache.kafka.controller.metrics;
 
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
 import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -32,27 +35,29 @@ import java.util.concurrent.atomic.AtomicInteger;
  * All of these except MetadataErrorCount are managed by ControllerMetadataMetricsPublisher.
  *
  * IMPORTANT: Metrics which are managed by the QuorumController class itself should go in
- * @link{org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
+ * {@link org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
  */
 public final class ControllerMetadataMetrics implements AutoCloseable {
-    private final static MetricName FENCED_BROKER_COUNT = getMetricName(
+    private static final MetricName FENCED_BROKER_COUNT = getMetricName(
         "KafkaController", "FencedBrokerCount");
-    private final static MetricName ACTIVE_BROKER_COUNT = getMetricName(
+    private static final MetricName ACTIVE_BROKER_COUNT = getMetricName(
         "KafkaController", "ActiveBrokerCount");
-    private final static MetricName MIGRATING_ZK_BROKER_COUNT = getMetricName(
+    private static final MetricName MIGRATING_ZK_BROKER_COUNT = getMetricName(
         "KafkaController", "MigratingZkBrokerCount");
-    private final static MetricName GLOBAL_TOPIC_COUNT = getMetricName(
+    private static final MetricName GLOBAL_TOPIC_COUNT = getMetricName(
         "KafkaController", "GlobalTopicCount");
-    private final static MetricName GLOBAL_PARTITION_COUNT = getMetricName(
+    private static final MetricName GLOBAL_PARTITION_COUNT = getMetricName(
         "KafkaController", "GlobalPartitionCount");
-    private final static MetricName OFFLINE_PARTITION_COUNT = getMetricName(
+    private static final MetricName OFFLINE_PARTITION_COUNT = getMetricName(
         "KafkaController", "OfflinePartitionsCount");
-    private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
+    private static final MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
         "KafkaController", "PreferredReplicaImbalanceCount");
-    private final static MetricName METADATA_ERROR_COUNT = getMetricName(
+    private static final MetricName METADATA_ERROR_COUNT = getMetricName(
         "KafkaController", "MetadataErrorCount");
-    private final static MetricName ZK_MIGRATION_STATE = getMetricName(
+    private static final MetricName ZK_MIGRATION_STATE = getMetricName(
         "KafkaController", "ZkMigrationState");
+    private static final MetricName UNCLEAN_LEADER_ELECTIONS_PER_SEC = getMetricName(
+        "ControllerStats", "UncleanLeaderElectionsPerSec");
 
     private final Optional<MetricsRegistry> registry;
     private final AtomicInteger fencedBrokerCount = new AtomicInteger(0);
@@ -64,6 +69,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private final AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger(0);
     private final AtomicInteger metadataErrorCount = new AtomicInteger(0);
     private final AtomicInteger zkMigrationState = new AtomicInteger(-1);
+    private Optional<Meter> uncleanLeaderElectionMeter = Optional.empty();
+
 
     /**
      * Create a new ControllerMetadataMetrics object.
@@ -128,6 +135,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             }
         }));
 
+        registry.ifPresent(r -> uncleanLeaderElectionMeter =
+                Optional.of(registry.get().newMeter(UNCLEAN_LEADER_ELECTIONS_PER_SEC, "elections", TimeUnit.SECONDS)));
     }
 
     public void setFencedBrokerCount(int brokerCount) {
@@ -230,6 +239,10 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         return zkMigrationState.byteValue();
     }
 
+    public void updateUncleanLeaderElection(int count) {
+        this.uncleanLeaderElectionMeter.ifPresent(m -> m.mark(count));
+    }
+
     @Override
     public void close() {
         registry.ifPresent(r -> Arrays.asList(
@@ -241,7 +254,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             OFFLINE_PARTITION_COUNT,
             PREFERRED_REPLICA_IMBALANCE_COUNT,
             METADATA_ERROR_COUNT,
-            ZK_MIGRATION_STATE
+            ZK_MIGRATION_STATE,
+            UNCLEAN_LEADER_ELECTIONS_PER_SEC
         ).forEach(r::removeMetric));
     }
 

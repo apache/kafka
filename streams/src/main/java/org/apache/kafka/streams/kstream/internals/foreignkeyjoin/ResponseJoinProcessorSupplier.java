@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
@@ -27,8 +28,11 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Murmur3;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,6 +75,8 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
             private Serializer<V> runtimeValueSerializer = constructionTimeValueSerializer;
 
             private KTableValueGetter<K, V> valueGetter;
+            private Sensor droppedRecordsSensor;
+
 
             @SuppressWarnings("unchecked")
             @Override
@@ -82,11 +88,18 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
                 if (runtimeValueSerializer == null) {
                     runtimeValueSerializer = (Serializer<V>) context.valueSerde().serializer();
                 }
+
+                final InternalProcessorContext<?, ?> internalProcessorContext = (InternalProcessorContext<?, ?>) context;
+                droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
+                        Thread.currentThread().getName(),
+                        internalProcessorContext.taskId().toString(),
+                        internalProcessorContext.metrics()
+                );
             }
 
             @Override
             public void process(final Record<K, SubscriptionResponseWrapper<VO>> record) {
-                if (record.value().getVersion() != SubscriptionResponseWrapper.CURRENT_VERSION) {
+                if (record.value().version() != SubscriptionResponseWrapper.CURRENT_VERSION) {
                     //Guard against modifications to SubscriptionResponseWrapper. Need to ensure that there is
                     //compatibility with previous versions to enable rolling upgrades. Must develop a strategy for
                     //upgrading from older SubscriptionWrapper versions to newer versions.
@@ -98,20 +111,21 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
                     null :
                     Murmur3.hash128(runtimeValueSerializer.serialize(valueHashSerdePseudoTopic, currentValueWithTimestamp.value()));
 
-                final long[] messageHash = record.value().getOriginalValueHash();
+                final long[] messageHash = record.value().originalValueHash();
 
                 //If this value doesn't match the current value from the original table, it is stale and should be discarded.
                 if (java.util.Arrays.equals(messageHash, currentHash)) {
                     final VR result;
 
-                    if (record.value().getForeignValue() == null && (!leftJoin || currentValueWithTimestamp == null)) {
+                    if (record.value().foreignValue() == null && (!leftJoin || currentValueWithTimestamp == null)) {
                         result = null; //Emit tombstone
                     } else {
-                        result = joiner.apply(currentValueWithTimestamp == null ? null : currentValueWithTimestamp.value(), record.value().getForeignValue());
+                        result = joiner.apply(currentValueWithTimestamp == null ? null : currentValueWithTimestamp.value(), record.value().foreignValue());
                     }
                     context().forward(record.withValue(result));
                 } else {
                     LOG.trace("Dropping FK-join response due to hash mismatch. Expected {}. Actual {}", messageHash, currentHash);
+                    droppedRecordsSensor.record();
                 }
             }
         };

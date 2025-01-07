@@ -23,10 +23,10 @@ import java.util.Objects;
 
 /**
  * This is a mutable reference to an immutable object. It can be snapshotted.
- *
+ * <br>
  * This class requires external synchronization.
  */
-public class TimelineObject<T> implements Revertable {
+public final class TimelineObject<T> implements Revertable {
     static class ObjectContainer<T> implements Delta {
         private T value;
 
@@ -109,8 +109,7 @@ public class TimelineObject<T> implements Revertable {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof TimelineObject)) return false;
-        TimelineObject other = (TimelineObject) o;
+        if (!(o instanceof TimelineObject other)) return false;
         return value.equals(other.value);
     }
 

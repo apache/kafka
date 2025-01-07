@@ -17,9 +17,11 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.common.utils.Time;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.common.utils.Time;
+
 import java.util.Random;
 
 /*
@@ -109,7 +111,7 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
         // Calculate the next window start time.
         long now = Time.SYSTEM.milliseconds();
         if (nextWindowStarts > 0) {
-            while (nextWindowStarts < now) {
+            while (nextWindowStarts <= now) {
                 nextWindowStarts += windowSizeMs;
             }
         } else {
@@ -117,7 +119,7 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
         }
 
         // Check the windows between rate changes.
-        if ((windowTracker > windowsUntilRateChange) || force) {
+        if ((windowTracker >= windowsUntilRateChange) || force) {
             windowTracker = 0;
 
             // Calculate the number of messages allowed in this window using a normal distribution.
@@ -144,6 +146,9 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
             while (nextWindowStarts > Time.SYSTEM.milliseconds()) {
                 wait(nextWindowStarts - Time.SYSTEM.milliseconds());
             }
+
+            // Calculate the next window now.
+            calculateNextWindow(false);
         }
     }
 }

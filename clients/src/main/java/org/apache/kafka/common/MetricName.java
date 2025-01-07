@@ -65,7 +65,7 @@ public final class MetricName {
     private final String name;
     private final String group;
     private final String description;
-    private Map<String, String> tags;
+    private final Map<String, String> tags;
     private int hash = 0;
 
     /**

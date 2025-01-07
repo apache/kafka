@@ -18,6 +18,7 @@
 package org.apache.kafka.image.node;
 
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

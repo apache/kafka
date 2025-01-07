@@ -71,7 +71,7 @@ public class KeyValue<K, V> {
             return false;
         }
 
-        final KeyValue other = (KeyValue) obj;
+        final KeyValue<?, ?> other = (KeyValue<?, ?>) obj;
         return Objects.equals(key, other.key) && Objects.equals(value, other.value);
     }
 

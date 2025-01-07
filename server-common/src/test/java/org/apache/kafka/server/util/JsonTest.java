@@ -17,12 +17,14 @@
 
 package org.apache.kafka.server.util;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.server.util.json.DecodeJson;
 import org.apache.kafka.server.util.json.JsonObject;
 import org.apache.kafka.server.util.json.JsonValue;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.AbstractMap;
@@ -34,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -121,8 +124,7 @@ public class JsonTest {
         List<JsonValue> results = new ArrayList<>();
         parse(JSON).asJsonObject().apply("array").asJsonArray().iterator().forEachRemaining(results::add);
 
-        List<JsonValue> expected = Arrays.asList("4.0", "11.1", "44.5")
-                .stream()
+        List<JsonValue> expected = Stream.of("4.0", "11.1", "44.5")
                 .map(this::parse)
                 .collect(Collectors.toList());
         assertEquals(expected, results);

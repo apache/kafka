@@ -18,11 +18,11 @@ package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.ConnectMetricsRegistry;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
  */
 public class ErrorHandlingMetrics implements AutoCloseable {
 
-    private final Time time = new SystemTime();
+    private final Time time = Time.SYSTEM;
 
     private final ConnectMetrics.MetricGroup metricGroup;
 

@@ -1,0 +1,39 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 76,
+  "type": "request",
+  "listeners": ["broker"],
+  "name": "ShareGroupHeartbeatRequest",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  // The ShareGroupHeartbeatRequest API is added as part of KIP-932 and is still under
+  // development. Hence, the API is not exposed by default by brokers unless
+  // explicitly enabled.
+  "latestVersionUnstable": true,
+  "fields": [
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
+      "about": "The group identifier." },
+    { "name": "MemberId", "type": "string", "versions": "0+",
+      "about": "The member id." },
+    { "name": "MemberEpoch", "type": "int32", "versions": "0+",
+      "about": "The current member epoch; 0 to join the group; -1 to leave the group." },
+    { "name": "RackId", "type": "string", "versions": "0+",  "nullableVersions": "0+", "default": "null",
+      "about": "null if not provided or if it didn't change since the last heartbeat; the rack ID of consumer otherwise." },
+    { "name": "SubscribedTopicNames", "type": "[]string", "versions": "0+", "nullableVersions": "0+", "default": "null", "entityType": "topicName",
+      "about": "null if it didn't change since the last heartbeat; the subscribed topic names otherwise." }
+  ]
+}

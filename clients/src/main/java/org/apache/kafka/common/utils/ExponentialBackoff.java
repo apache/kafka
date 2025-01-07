@@ -39,12 +39,16 @@ public class ExponentialBackoff {
     private final double expMax;
 
     public ExponentialBackoff(long initialInterval, int multiplier, long maxInterval, double jitter) {
-        this.initialInterval = maxInterval < initialInterval ? maxInterval : initialInterval;
+        this.initialInterval = Math.min(maxInterval, initialInterval);
         this.multiplier = multiplier;
         this.maxInterval = maxInterval;
         this.jitter = jitter;
         this.expMax = maxInterval > initialInterval ?
                 Math.log(maxInterval / (double) Math.max(initialInterval, 1)) / Math.log(multiplier) : 0;
+    }
+
+    public long initialInterval() {
+        return initialInterval;
     }
 
     public long backoff(long attempts) {
@@ -56,7 +60,7 @@ public class ExponentialBackoff {
         double randomFactor = jitter < Double.MIN_NORMAL ? 1.0 :
             ThreadLocalRandom.current().nextDouble(1 - jitter, 1 + jitter);
         long backoffValue = (long) (randomFactor * term);
-        return backoffValue > maxInterval ? maxInterval : backoffValue;
+        return Math.min(backoffValue, maxInterval);
     }
 
     @Override

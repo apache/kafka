@@ -17,6 +17,9 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.common.KafkaException;
+
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -63,4 +66,20 @@ public class MetadataQuorumCommandErrorTest {
         assertThrows(KafkaException.class, () -> MetadataQuorumCommand.relativeTimeMs(futureEpochMs, "test"));
     }
 
+    @Test
+    public void testRemoveControllerRequiresControllerId() {
+        assertThrows(ArgumentParserException.class, () ->
+            MetadataQuorumCommand.execute("--bootstrap-server", "localhost:9092",
+                "remove-controller",
+                "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
+                "--dry-run"));
+    }
+
+    @Test
+    public void testRemoveControllerRequiresControllerDirectoryId() {
+        assertThrows(ArgumentParserException.class, () ->
+            MetadataQuorumCommand.execute("--bootstrap-server", "localhost:9092",
+                "remove-controller",
+                "--controller-id", "1"));
+    }
 }

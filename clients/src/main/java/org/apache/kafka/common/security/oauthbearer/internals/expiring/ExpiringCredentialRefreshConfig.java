@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.expiring;
 
+import org.apache.kafka.common.config.SaslConfigs;
+
 import java.util.Map;
 import java.util.Objects;
-
-import org.apache.kafka.common.config.SaslConfigs;
 
 /**
  * Immutable refresh-related configuration for expiring credentials that can be

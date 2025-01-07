@@ -24,7 +24,9 @@
   // Version 3 is the same as version 2.
   //
   // Version 4 adds the support for new error code PRODUCER_FENCED.
-  "validVersions": "0-4",
+  //
+  // Version 5 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
+  "validVersions": "0-5",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+", "ignorable": true,

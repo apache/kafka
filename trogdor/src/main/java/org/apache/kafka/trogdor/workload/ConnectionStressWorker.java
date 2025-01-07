@@ -17,12 +17,10 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.ManualMetadataUpdater;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.admin.Admin;
@@ -43,6 +41,11 @@ import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +53,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -60,7 +64,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ConnectionStressWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ConnectionStressWorker.class);
-    private static final Time TIME = Time.SYSTEM;
 
     private static final int THROTTLE_PERIOD_MS = 100;
 
@@ -105,7 +108,7 @@ public class ConnectionStressWorker implements TaskWorker {
         synchronized (ConnectionStressWorker.this) {
             this.totalConnections = 0;
             this.totalFailedConnections = 0;
-            this.startTimeMs = TIME.milliseconds();
+            this.startTimeMs = Time.SYSTEM.milliseconds();
         }
         this.statusUpdaterExecutor = Executors.newScheduledThreadPool(1,
             ThreadUtils.createThreadFactory("StatusUpdaterWorkerThread%d", false));
@@ -160,10 +163,10 @@ public class ConnectionStressWorker implements TaskWorker {
                 List<Node> nodes = updater.fetchNodes();
                 Node targetNode = nodes.get(ThreadLocalRandom.current().nextInt(nodes.size()));
                 // channelBuilder will be closed as part of Selector.close()
-                ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(conf, TIME, logContext);
+                ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(conf, Time.SYSTEM, logContext);
                 try (Metrics metrics = new Metrics()) {
                     try (Selector selector = new Selector(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                        metrics, TIME, "", channelBuilder, logContext)) {
+                        metrics, Time.SYSTEM, "", channelBuilder, logContext)) {
                         try (NetworkClient client = new NetworkClient(selector,
                             updater,
                             "ConnectionStressWorker",
@@ -175,11 +178,12 @@ public class ConnectionStressWorker implements TaskWorker {
                             1000,
                             10 * 1000,
                             127 * 1000,
-                            TIME,
+                            Time.SYSTEM,
                             false,
                             new ApiVersions(),
-                            logContext)) {
-                            NetworkClientUtils.awaitReady(client, targetNode, TIME, 500);
+                            logContext,
+                            MetadataRecoveryStrategy.NONE)) {
+                            NetworkClientUtils.awaitReady(client, targetNode, Time.SYSTEM, 500);
                         }
                     }
                 }
@@ -208,9 +212,7 @@ public class ConnectionStressWorker implements TaskWorker {
         public boolean tryConnect() {
             try (Admin client = Admin.create(this.props)) {
                 client.describeCluster().nodes().get();
-            } catch (RuntimeException e) {
-                return false;
-            } catch (Exception e) {
+            } catch (ExecutionException | InterruptedException  e) {
                 return false;
             }
             return true;
@@ -253,7 +255,7 @@ public class ConnectionStressWorker implements TaskWorker {
         public void run() {
             try {
                 long lastTimeMs = Time.SYSTEM.milliseconds();
-                JsonNode node = null;
+                JsonNode node;
                 synchronized (ConnectionStressWorker.this) {
                     node = JsonUtil.JSON_SERDE.valueToTree(
                         new StatusData(totalConnections, totalFailedConnections,

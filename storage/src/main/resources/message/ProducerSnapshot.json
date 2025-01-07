@@ -1,0 +1,85 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "type": "data",
+  "name": "ProducerSnapshot",
+  "validVersions": "1",
+  "flexibleVersions":  "none",
+  "fields": [
+    {
+      "name": "Crc",
+      "type": "uint32",
+      "versions": "1",
+      "about": "CRC of the snapshot data"
+    },
+    {
+      "name": "ProducerEntries",
+      "type": "[]ProducerEntry",
+      "versions": "1",
+      "about": "The entries in the producer table",
+      "fields": [
+        {
+          "name": "ProducerId",
+          "type": "int64",
+          "versions": "1",
+          "about": "The producer ID"
+        },
+        {
+          "name": "Epoch",
+          "type": "int16",
+          "versions": "1",
+          "about": "Current epoch of the producer"
+        },
+        {
+          "name": "LastSequence",
+          "type": "int32",
+          "versions": "1",
+          "about": "Last written sequence of the producer"
+        },
+        {
+          "name": "LastOffset",
+          "type": "int64",
+          "versions": "1",
+          "about": "Last written offset of the producer"
+        },
+        {
+          "name": "OffsetDelta",
+          "type": "int32",
+          "versions": "1",
+          "about": "The difference of the last sequence and first sequence in the last written batch"
+        },
+        {
+          "name": "Timestamp",
+          "type": "int64",
+          "versions": "1",
+          "about": "Max timestamp from the last written entry"
+        },
+        {
+          "name": "CoordinatorEpoch",
+          "type": "int32",
+          "versions": "1",
+          "about": "The epoch of the last transaction coordinator to send an end transaction marker"
+        },
+        {
+          "name": "CurrentTxnFirstOffset",
+          "type": "int64",
+          "versions": "1",
+          "about": "The first offset of the on-going transaction (-1 if there is none)"
+        }
+      ]
+    }
+  ]
+}

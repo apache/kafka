@@ -39,17 +39,14 @@ import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TestName;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -57,6 +54,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -64,8 +62,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-@RunWith(Parameterized.class)
 public class SessionStoreFetchTest {
     private enum StoreType { InMemory, RocksDB }
     private static final String STORE_NAME = "store";
@@ -89,7 +87,7 @@ public class SessionStoreFetchTest {
     private String innerLowBetween;
     private String innerHighBetween;
 
-    public SessionStoreFetchTest(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) {
+    private void setUp(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) {
         this.storeType = storeType;
         this.enableLogging = enableLogging;
         this.enableCaching = enableCaching;
@@ -125,13 +123,13 @@ public class SessionStoreFetchTest {
                 innerHighBetween = "key-" + index;
             }
         }
-        Assert.assertNotNull(low);
-        Assert.assertNotNull(high);
-        Assert.assertNotNull(middle);
-        Assert.assertNotNull(innerLow);
-        Assert.assertNotNull(innerHigh);
-        Assert.assertNotNull(innerLowBetween);
-        Assert.assertNotNull(innerHighBetween);
+        assertNotNull(low);
+        assertNotNull(high);
+        assertNotNull(middle);
+        assertNotNull(innerLow);
+        assertNotNull(innerHigh);
+        assertNotNull(innerLowBetween);
+        assertNotNull(innerHighBetween);
 
         expectedRecords.add(new KeyValue<>(new Windowed<>("key-a", new SessionWindow(0, 500)), 4L));
         expectedRecords.add(new KeyValue<>(new Windowed<>("key-aa", new SessionWindow(0, 500)), 4L));
@@ -139,11 +137,7 @@ public class SessionStoreFetchTest {
         expectedRecords.add(new KeyValue<>(new Windowed<>("key-bb", new SessionWindow(1500, 2000)), 6L));
     }
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Parameterized.Parameters(name = "storeType={0}, enableLogging={1}, enableCaching={2}, forward={3}")
-    public static Collection<Object[]> data() {
+    public static Stream<Arguments> data() {
         final List<StoreType> types = Arrays.asList(StoreType.InMemory, StoreType.RocksDB);
         final List<Boolean> logging = Arrays.asList(true, false);
         final List<Boolean> caching = Arrays.asList(true, false);
@@ -151,8 +145,8 @@ public class SessionStoreFetchTest {
         return buildParameters(types, logging, caching, forward);
     }
 
-    @Before
-    public void setup() {
+    @BeforeEach
+    public void setUp() {
         streamsConfig = mkProperties(mkMap(
                 mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
@@ -207,17 +201,19 @@ public class SessionStoreFetchTest {
     }
 
     private void verifyRangeQuery(final SessionStore<String, Long> stateStore) {
-        testRange("range", stateStore, innerLow, innerHigh, forward);
-        testRange("until", stateStore, null, middle, forward);
-        testRange("from", stateStore, middle, null, forward);
+        testRange(stateStore, innerLow, innerHigh, forward);
+        testRange(stateStore, null, middle, forward);
+        testRange(stateStore, middle, null, forward);
 
-        testRange("untilBetween", stateStore, null, innerHighBetween, forward);
-        testRange("fromBetween", stateStore, innerLowBetween, null, forward);
+        testRange(stateStore, null, innerHighBetween, forward);
+        testRange(stateStore, innerLowBetween, null, forward);
     }
 
-    @Test
-    public void testStoreConfig() {
-        final Materialized<String, Long, SessionStore<Bytes, byte[]>> stateStoreConfig = getStoreConfig(storeType, STORE_NAME, enableLogging, enableCaching);
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testStoreConfig(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) {
+        setUp(storeType, enableLogging, enableCaching, forward);
+        final Materialized<String, Long, SessionStore<Bytes, byte[]>> stateStoreConfig = getStoreConfig(this.storeType, this.enableLogging, enableCaching);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> stream = builder.stream("input", Consumed.with(Serdes.String(), Serdes.String()));
@@ -253,23 +249,20 @@ public class SessionStoreFetchTest {
 
 
     private List<KeyValue<Windowed<String>, Long>> filterList(final KeyValueIterator<Windowed<String>, Long> iterator, final String from, final String to) {
-        final Predicate<KeyValue<Windowed<String>, Long>> pred = new Predicate<KeyValue<Windowed<String>, Long>>() {
-            @Override
-            public boolean test(final KeyValue<Windowed<String>, Long> elem) {
-                if (from != null && elem.key.key().compareTo(from) < 0) {
-                    return false;
-                }
-                if (to != null && elem.key.key().compareTo(to) > 0) {
-                    return false;
-                }
-                return elem != null;
+        final Predicate<KeyValue<Windowed<String>, Long>> pred = elem -> {
+            if (from != null && elem.key.key().compareTo(from) < 0) {
+                return false;
             }
+            if (to != null && elem.key.key().compareTo(to) > 0) {
+                return false;
+            }
+            return elem != null;
         };
 
         return Utils.toList(iterator, pred);
     }
 
-    private void testRange(final String name, final SessionStore<String, Long> store, final String from, final String to, final boolean forward) {
+    private void testRange(final SessionStore<String, Long> store, final String from, final String to, final boolean forward) {
         try (final KeyValueIterator<Windowed<String>, Long> resultIterator = forward ? store.fetch(from, to) : store.backwardFetch(from, to);
              final KeyValueIterator<Windowed<String>, Long> expectedIterator = forward ? store.fetch(null, null) : store.backwardFetch(null, null)) {
             final List<KeyValue<Windowed<String>, Long>> result = Utils.toList(resultIterator);
@@ -278,31 +271,24 @@ public class SessionStoreFetchTest {
         }
     }
 
-    private static Collection<Object[]> buildParameters(final List<?>... argOptions) {
-        List<Object[]> result = new LinkedList<>();
-        result.add(new Object[0]);
-
-        for (final List<?> argOption : argOptions) {
-            result = times(result, argOption);
-        }
-
-        return result;
-    }
-
-    private static List<Object[]> times(final List<Object[]> left, final List<?> right) {
-        final List<Object[]> result = new LinkedList<>();
-        for (final Object[] args : left) {
-            for (final Object rightElem : right) {
-                final Object[] resArgs = new Object[args.length + 1];
-                System.arraycopy(args, 0, resArgs, 0, args.length);
-                resArgs[args.length] = rightElem;
-                result.add(resArgs);
+    private static Stream<Arguments> buildParameters(final List<StoreType> types,
+                                                     final List<Boolean> logging,
+                                                     final List<Boolean> caching,
+                                                     final List<Boolean> forward) {
+        final Stream.Builder<Arguments> builder = Stream.builder();
+        for (final StoreType type : types) {
+            for (final boolean log : logging) {
+                for (final boolean cache : caching) {
+                    for (final boolean f : forward) {
+                        builder.add(Arguments.of(type, log, cache, f));
+                    }
+                }
             }
         }
-        return result;
+        return builder.build();
     }
 
-    private Materialized<String, Long, SessionStore<Bytes, byte[]>> getStoreConfig(final StoreType type, final String name, final boolean cachingEnabled, final boolean loggingEnabled) {
+    private Materialized<String, Long, SessionStore<Bytes, byte[]>> getStoreConfig(final StoreType type, final boolean cachingEnabled, final boolean loggingEnabled) {
         final Supplier<SessionBytesStoreSupplier> createStore = () -> {
             if (type == StoreType.InMemory) {
                 return Stores.inMemorySessionStore(STORE_NAME, Duration.ofMillis(RETENTION_MS));
@@ -324,7 +310,7 @@ public class SessionStoreFetchTest {
             stateStoreConfig.withCachingDisabled();
         }
         if (loggingEnabled) {
-            stateStoreConfig.withLoggingEnabled(new HashMap<String, String>());
+            stateStoreConfig.withLoggingEnabled(new HashMap<>());
         } else {
             stateStoreConfig.withLoggingDisabled();
         }

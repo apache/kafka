@@ -16,79 +16,54 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
 
-public class RemoteStorageThreadPool extends ThreadPoolExecutor {
-    private final Logger logger;
+public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RemoteStorageThreadPool.class);
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
-    public RemoteStorageThreadPool(String threadNamePrefix,
+    public RemoteStorageThreadPool(String threadNamePattern,
                                    int numThreads,
                                    int maxPendingTasks) {
-        super(numThreads, numThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(maxPendingTasks),
-                new RemoteStorageThreadFactory(threadNamePrefix));
-        logger = new LogContext() {
-            @Override
-            public String logPrefix() {
-                return "[" + Thread.currentThread().getName() + "]";
-            }
-        }.logger(RemoteStorageThreadPool.class);
-
-        metricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(), new Gauge<Integer>() {
-            @Override
-            public Integer value() {
-                return RemoteStorageThreadPool.this.getQueue().size();
-            }
-        });
-        metricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(), new Gauge<Double>() {
-            @Override
-            public Double value() {
-                return 1 - (double) RemoteStorageThreadPool.this.getActiveCount() / (double) RemoteStorageThreadPool.this.getCorePoolSize();
-            }
-        });
+        super(numThreads,
+                numThreads,
+                0L,
+                TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(maxPendingTasks),
+                ThreadUtils.createThreadFactory(threadNamePattern, false,
+                        (t, e) -> LOGGER.error("Uncaught exception in thread '{}':", t.getName(), e))
+        );
+        metricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
+                () -> getQueue().size());
+        metricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
+                () -> 1 - (double) getActiveCount() / (double) getCorePoolSize());
     }
 
     @Override
     protected void afterExecute(Runnable runnable, Throwable th) {
         if (th != null) {
             if (th instanceof FatalExitError) {
-                logger.error("Stopping the server as it encountered a fatal error.");
+                LOGGER.error("Stopping the server as it encountered a fatal error.");
                 Exit.exit(((FatalExitError) th).statusCode());
             } else {
                 if (!isShutdown())
-                    logger.error("Error occurred while executing task: {}", runnable, th);
+                    LOGGER.error("Error occurred while executing task: {}", runnable, th);
             }
         }
-    }
-
-    private static class RemoteStorageThreadFactory implements ThreadFactory {
-        private final String namePrefix;
-        private final AtomicInteger threadNumber = new AtomicInteger(0);
-
-        RemoteStorageThreadFactory(String namePrefix) {
-            this.namePrefix = namePrefix;
-        }
-
-        @Override
-        public Thread newThread(Runnable r) {
-            return new Thread(r, namePrefix + threadNumber.getAndIncrement());
-        }
-
     }
 
     public void removeMetrics() {

@@ -26,7 +26,8 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -34,12 +35,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
@@ -52,7 +55,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     private static final SinkRecord DUMMY_RECORD = new SinkRecord(null, 0, null, null, null, null, 0L);
 
-    public static abstract class TestConnector extends Connector {
+    public abstract static class TestConnector extends Connector {
     }
 
     public static class SimpleTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
@@ -198,13 +201,10 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("connector.class", TestConnector.class.getName());
         props.put("transforms", "a");
         props.put("transforms.a.type", AbstractTransformation.class.getName());
-        try {
-            new ConnectorConfig(MOCK_PLUGINS, props);
-        } catch (ConfigException ex) {
-            assertTrue(
-                ex.getMessage().contains("Transformation is abstract and cannot be created.")
-            );
-        }
+        ConfigException ex = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
+        assertTrue(
+            ex.getMessage().contains("This class is abstract and cannot be created.")
+        );
     }
     @Test
     public void abstractKeyValueTransform() {
@@ -213,19 +213,16 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("connector.class", TestConnector.class.getName());
         props.put("transforms", "a");
         props.put("transforms.a.type", AbstractKeyValueTransformation.class.getName());
-        try {
-            new ConnectorConfig(MOCK_PLUGINS, props);
-        } catch (ConfigException ex) {
-            assertTrue(
-                ex.getMessage().contains("Transformation is abstract and cannot be created.")
-            );
-            assertTrue(
-                ex.getMessage().contains(AbstractKeyValueTransformation.Key.class.getName())
-            );
-            assertTrue(
-                ex.getMessage().contains(AbstractKeyValueTransformation.Value.class.getName())
-            );
-        }
+        ConfigException ex = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
+        assertTrue(
+            ex.getMessage().contains("This class is abstract and cannot be created.")
+        );
+        assertTrue(
+            ex.getMessage().contains(AbstractKeyValueTransformation.Key.class.getName())
+        );
+        assertTrue(
+            ex.getMessage().contains(AbstractKeyValueTransformation.Value.class.getName())
+        );
     }
 
     @Test
@@ -240,7 +237,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("predicates", "my-pred");
         props.put("predicates.my-pred.type", TestConnector.class.getName());
         ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
-        assertTrue(e.getMessage().contains("Not a Predicate"));
+        assertEquals("Class " + TestConnector.class + " does not implement the Predicate interface", e.getMessage());
     }
 
     @Test
@@ -287,7 +284,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("predicates.my-pred.type", AbstractTestPredicate.class.getName());
         props.put("predicates.my-pred.int", "84");
         ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
-        assertTrue(e.getMessage().contains("Predicate is abstract and cannot be created"));
+        assertTrue(e.getMessage().contains("This class is abstract and cannot be created"));
     }
 
     private void assertTransformationStageWithPredicate(Map<String, String> props, boolean expectedNegated) {
@@ -399,7 +396,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
     }
 
-    public static abstract class AbstractTestPredicate<R extends ConnectRecord<R>> implements Predicate<R>, Versioned {
+    public abstract static class AbstractTestPredicate<R extends ConnectRecord<R>> implements Predicate<R>, Versioned {
 
         @Override
         public String version() {
@@ -410,7 +407,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     }
 
-    public static abstract class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
+    public abstract static class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
 
         @Override
         public String version() {
@@ -419,7 +416,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     }
 
-    public static abstract class AbstractKeyValueTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
+    public abstract static class AbstractKeyValueTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
         @Override
         public R apply(R record) {
             return null;
@@ -460,13 +457,19 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
     }
 
     @Test
-    public void testEnrichedConfigDef() {
+    @SuppressWarnings("rawtypes")
+    public void testEnrichedConfigDef() throws ClassNotFoundException {
         String alias = "hdt";
         String prefix = ConnectorConfig.TRANSFORMS_CONFIG + "." + alias + ".";
         Map<String, String> props = new HashMap<>();
         props.put(ConnectorConfig.TRANSFORMS_CONFIG, alias);
+        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestConnector.class.getName());
         props.put(prefix + "type", HasDuplicateConfigTransformation.class.getName());
-        ConfigDef def = ConnectorConfig.enrich(MOCK_PLUGINS, new ConfigDef(), props, false);
+        Plugins mockPlugins = mock(Plugins.class);
+        when(mockPlugins.newPlugin(HasDuplicateConfigTransformation.class.getName(),
+                null, (ClassLoader) null)).thenReturn(new HasDuplicateConfigTransformation());
+        when(mockPlugins.transformations()).thenReturn(Collections.emptySet());
+        ConfigDef def = ConnectorConfig.enrich(mockPlugins, new ConfigDef(), props, false);
         assertEnrichedConfigDef(def, prefix, HasDuplicateConfigTransformation.MUST_EXIST_KEY, ConfigDef.Type.BOOLEAN);
         assertEnrichedConfigDef(def, prefix, TransformationStage.PREDICATE_CONFIG, ConfigDef.Type.STRING);
         assertEnrichedConfigDef(def, prefix, TransformationStage.NEGATE_CONFIG, ConfigDef.Type.BOOLEAN);
@@ -475,8 +478,8 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
     private static void assertEnrichedConfigDef(ConfigDef def, String prefix, String keyName, ConfigDef.Type expectedType) {
         assertNull(def.configKeys().get(keyName));
         ConfigDef.ConfigKey configKey = def.configKeys().get(prefix + keyName);
-        assertNotNull(prefix + keyName + "' config must be present", configKey);
-        assertEquals(prefix + keyName + "' config should be a " + expectedType, expectedType, configKey.type);
+        assertNotNull(configKey, prefix + keyName + "' config must be present");
+        assertEquals(expectedType, configKey.type, prefix + keyName + "' config should be a " + expectedType);
     }
 
     public static class HasDuplicateConfigTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {

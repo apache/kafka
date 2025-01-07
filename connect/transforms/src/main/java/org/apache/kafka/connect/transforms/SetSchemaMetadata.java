@@ -26,6 +26,7 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,14 +44,18 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
     private interface ConfigName {
         String SCHEMA_NAME = "schema.name";
         String SCHEMA_VERSION = "schema.version";
+        String REPLACE_NULL_WITH_DEFAULT = "replace.null.with.default";
     }
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(ConfigName.SCHEMA_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Schema name to set.")
-            .define(ConfigName.SCHEMA_VERSION, ConfigDef.Type.INT, null, ConfigDef.Importance.HIGH, "Schema version to set.");
+            .define(ConfigName.SCHEMA_VERSION, ConfigDef.Type.INT, null, ConfigDef.Importance.HIGH, "Schema version to set.")
+            .define(ConfigName.REPLACE_NULL_WITH_DEFAULT, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+                    "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
     private String schemaName;
     private Integer schemaVersion;
+    private boolean replaceNullWithDefault;
 
     @Override
     public String version() {
@@ -62,6 +67,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
         schemaName = config.getString(ConfigName.SCHEMA_NAME);
         schemaVersion = config.getInt(ConfigName.SCHEMA_VERSION);
+        replaceNullWithDefault = config.getBoolean(ConfigName.REPLACE_NULL_WITH_DEFAULT);
 
         if (schemaName == null && schemaVersion == null) {
             throw new ConfigException("Neither schema name nor version configured");
@@ -93,6 +99,13 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
         log.trace("Applying SetSchemaMetadata SMT. Original schema: {}, updated schema: {}",
             schema, updatedSchema);
         return newRecord(record, updatedSchema);
+    }
+
+    private Object getFieldValue(Struct value, Field field) {
+        if (replaceNullWithDefault) {
+            return value.get(field);
+        }
+        return value.getWithoutDefault(field.name());
     }
 
     @Override
@@ -165,13 +178,12 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
      * @return the original key or value object if it does not reference the old schema, or
      * a copy of the key or value object with updated references to the new schema.
      */
-    protected static Object updateSchemaIn(Object keyOrValue, Schema updatedSchema) {
-        if (keyOrValue instanceof Struct) {
-            Struct origStruct = (Struct) keyOrValue;
+    protected Object updateSchemaIn(Object keyOrValue, Schema updatedSchema) {
+        if (keyOrValue instanceof Struct origStruct) {
             Struct newStruct = new Struct(updatedSchema);
             for (Field field : updatedSchema.fields()) {
                 // assume both schemas have exact same fields with same names and schemas ...
-                newStruct.put(field, origStruct.get(field));
+                newStruct.put(field, getFieldValue(origStruct, field));
             }
             return newStruct;
         }

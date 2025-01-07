@@ -28,10 +28,10 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.tools.MockSinkConnector;
 import org.apache.kafka.connect.tools.MockSourceConnector;
 import org.apache.kafka.connect.transforms.Transformation;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -46,18 +46,21 @@ import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PluginUtilsTest {
-    @Rule
-    public TemporaryFolder rootDir = new TemporaryFolder();
+    @TempDir
+    Path rootDir;
+
     private Path pluginPath;
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
-        pluginPath = rootDir.newFolder("plugins").toPath().toRealPath();
+        pluginPath = rootDir.resolve("plugins");
+        Files.createDirectories(pluginPath);
+        pluginPath = pluginPath.toRealPath();
     }
 
     @Test
@@ -190,10 +193,8 @@ public class PluginUtilsTest {
         );
         // Classes in the API should never be loaded in isolation.
         for (String clazz : apiClasses) {
-            assertFalse(
-                clazz + " from 'api' is loaded in isolation but should not be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertFalse(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'api' is loaded in isolation but should not be");
         }
     }
 
@@ -221,10 +222,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.util."
         );
         for (String clazz : runtimeClasses) {
-            assertFalse(
-                clazz + " from 'runtime' is loaded in isolation but should not be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertFalse(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'runtime' is loaded in isolation but should not be");
         }
     }
 
@@ -250,10 +249,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.storage.SimpleHeaderConverter"
         );
         for (String clazz : jsonConverterClasses) {
-            assertTrue(
-                clazz + " from 'runtime' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'runtime' is not loaded in isolation but should be");
         }
     }
 
@@ -305,10 +302,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.transforms.predicates.TopicNameMatches"
         );
         for (String clazz : transformsClasses) {
-            assertTrue(
-                clazz + " from 'transforms' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'transforms' is not loaded in isolation but should be");
         }
     }
 
@@ -324,10 +319,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.json.JsonSerializer"
         );
         for (String clazz : jsonConverterClasses) {
-            assertTrue(
-                clazz + " from 'json' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'json' is not loaded in isolation but should be");
         }
     }
 
@@ -341,10 +334,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.file.FileStreamSourceTask"
         );
         for (String clazz : jsonConverterClasses) {
-            assertTrue(
-                clazz + " from 'file' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'file' is not loaded in isolation but should be");
         }
     }
 
@@ -356,10 +347,8 @@ public class PluginUtilsTest {
             //"org.apache.kafka.connect.rest.basic.auth.extension.PropertyFileLoginModule" TODO fix?
         );
         for (String clazz : basicAuthExtensionClasses) {
-            assertTrue(
-                clazz + " from 'basic-auth-extension' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'basic-auth-extension' is not loaded in isolation but should be");
         }
     }
 
@@ -388,13 +377,13 @@ public class PluginUtilsTest {
 
     @Test
     public void testEmptyPluginUrls() throws Exception {
-        assertEquals(Collections.<Path>emptyList(), PluginUtils.pluginUrls(pluginPath));
+        assertEquals(Collections.emptyList(), PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
     public void testEmptyStructurePluginUrls() throws Exception {
         createBasicDirectoryLayout();
-        assertEquals(Collections.<Path>emptyList(), PluginUtils.pluginUrls(pluginPath));
+        assertEquals(Collections.emptyList(), PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
@@ -457,7 +446,9 @@ public class PluginUtilsTest {
     public void testPluginUrlsWithAbsoluteSymlink() throws Exception {
         createBasicDirectoryLayout();
 
-        Path anotherPath = rootDir.newFolder("moreplugins").toPath().toRealPath();
+        Path anotherPath = rootDir.resolve("moreplugins");
+        Files.createDirectories(anotherPath);
+        anotherPath = anotherPath.toRealPath();
         Files.createDirectories(anotherPath.resolve("connectorB-deps"));
         Files.createSymbolicLink(
                 pluginPath.resolve("connectorB/deps/symlink"),
@@ -474,7 +465,9 @@ public class PluginUtilsTest {
     public void testPluginUrlsWithRelativeSymlinkBackwards() throws Exception {
         createBasicDirectoryLayout();
 
-        Path anotherPath = rootDir.newFolder("moreplugins").toPath().toRealPath();
+        Path anotherPath = rootDir.resolve("moreplugins");
+        Files.createDirectories(anotherPath);
+        anotherPath = anotherPath.toRealPath();
         Files.createDirectories(anotherPath.resolve("connectorB-deps"));
         Files.createSymbolicLink(
                 pluginPath.resolve("connectorB/deps/symlink"),
@@ -525,7 +518,6 @@ public class PluginUtilsTest {
                 Collections.emptySortedSet(),
                 Collections.emptySortedSet()
         );
-        Map<String, String> aliases = PluginUtils.computeAliases(result);
         Map<String, String> actualAliases = PluginUtils.computeAliases(result);
         Map<String, String> expectedAliases = new HashMap<>();
         expectedAliases.put("MockSinkConnector", MockSinkConnector.class.getName());

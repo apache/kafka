@@ -16,7 +16,20 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWithoutOverflow;
+import org.apache.kafka.common.serialization.BytesSerializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
+
+import org.rocksdb.ReadOptions;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.Snapshot;
+import org.rocksdb.WriteBatchInterface;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -24,20 +37,12 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.serialization.BytesSerializer;
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
-import org.rocksdb.RocksDBException;
-import org.rocksdb.WriteBatch;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWithoutOverflow;
 
 /**
  * This "logical segment" is a segment which shares its underlying physical store with other
@@ -84,7 +89,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
                 + "an entire store is closed, via the close() method rather than destroy().");
         }
 
-        final Bytes keyPrefix = prefixKeyFormatter.getPrefix();
+        final Bytes keyPrefix = prefixKeyFormatter.prefix();
 
         // this deleteRange() call deletes all entries with the given prefix, because the
         // deleteRange() implementation calls Bytes.increment() in order to make keyTo inclusive
@@ -131,9 +136,8 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
         return name;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         throw new UnsupportedOperationException("cannot initialize a logical segment");
     }
 
@@ -170,21 +174,44 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
 
     @Override
     public synchronized byte[] get(final Bytes key) {
-        return physicalStore.get(prefixKeyFormatter.addPrefix(key));
+        return get(key, Optional.empty());
+    }
+
+    public synchronized byte[] get(final Bytes key, final Snapshot snapshot) {
+        return get(key, Optional.of(snapshot));
+    }
+
+    private synchronized byte[] get(final Bytes key, final Optional<Snapshot> snapshot) {
+        if (snapshot.isPresent()) {
+            try (ReadOptions readOptions = new ReadOptions()) {
+                readOptions.setSnapshot(snapshot.get());
+                return physicalStore.get(prefixKeyFormatter.addPrefix(key), readOptions);
+            }
+        } else {
+            return physicalStore.get(prefixKeyFormatter.addPrefix(key));
+        }
+    }
+
+    public Snapshot snapshot() {
+        return physicalStore.snapshot();
+    }
+
+    public void releaseSnapshot(final Snapshot snapshot) {
+        physicalStore.releaseSnapshot(snapshot);
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
         // from bound is inclusive. if the provided bound is null, replace with prefix
         final Bytes fromBound = from == null
-            ? prefixKeyFormatter.getPrefix()
+            ? prefixKeyFormatter.prefix()
             : prefixKeyFormatter.addPrefix(from);
         // to bound is inclusive. if the provided bound is null, replace with the next prefix.
         // this requires potentially filtering out the element corresponding to the next prefix
         // with empty bytes from the returned iterator. this filtering is accomplished by
         // passing the prefix filter into StrippedPrefixKeyValueIteratorAdapter().
         final Bytes toBound = to == null
-            ? incrementWithoutOverflow(prefixKeyFormatter.getPrefix())
+            ? incrementWithoutOverflow(prefixKeyFormatter.prefix())
             : prefixKeyFormatter.addPrefix(to);
         final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes = physicalStore.range(
             fromBound,
@@ -199,7 +226,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
         final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes = physicalStore.prefixScan(
-            prefixKeyFormatter.getPrefix(),
+            prefixKeyFormatter.prefix(),
             new BytesSerializer(),
             openIterators);
         return new StrippedPrefixKeyValueIteratorAdapter(
@@ -213,7 +240,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
-    public void addToBatch(final KeyValue<byte[], byte[]> record, final WriteBatch batch) throws RocksDBException {
+    public void addToBatch(final KeyValue<byte[], byte[]> record, final WriteBatchInterface batch) throws RocksDBException {
         physicalStore.addToBatch(
             new KeyValue<>(
                 prefixKeyFormatter.addPrefix(record.key),
@@ -222,7 +249,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
-    public void write(final WriteBatch batch) throws RocksDBException {
+    public void write(final WriteBatchInterface batch) throws RocksDBException {
         // no key transformations here since they should've already been done as part
         // of adding to the write batch
         physicalStore.write(batch);
@@ -261,7 +288,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
             return rawKey;
         }
 
-        Bytes getPrefix() {
+        Bytes prefix() {
             return Bytes.wrap(prefix);
         }
 

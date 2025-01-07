@@ -22,7 +22,7 @@ public class FloatSerializer implements Serializer<Float> {
         if (data == null)
             return null;
 
-        long bits = Float.floatToRawIntBits(data);
+        int bits = Float.floatToRawIntBits(data);
         return new byte[] {
             (byte) (bits >>> 24),
             (byte) (bits >>> 16),

@@ -36,7 +36,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 object DelegationTokenManager {
-  val DefaultHmacAlgorithm = "HmacSHA512"
+  private val DefaultHmacAlgorithm = "HmacSHA512"
   val CurrentVersion = 3
   val ErrorTimestamp = -1
 
@@ -55,7 +55,7 @@ object DelegationTokenManager {
    * @param keybytes the byte[] to create the secret key from
    * @return the secret key
    */
-  def createSecretKey(keybytes: Array[Byte]) : SecretKey = {
+  private def createSecretKey(keybytes: Array[Byte]) : SecretKey = {
     new SecretKeySpec(keybytes, DefaultHmacAlgorithm)
   }
 
@@ -70,7 +70,7 @@ object DelegationTokenManager {
     try
       mac.init(secretKey)
     catch {
-      case ike: InvalidKeyException => throw new IllegalArgumentException("Invalid key to HMAC computation", ike);
+      case ike: InvalidKeyException => throw new IllegalArgumentException("Invalid key to HMAC computation", ike)
     }
     mac.doFinal(tokenId.getBytes(StandardCharsets.UTF_8))
   }
@@ -110,7 +110,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   type RenewResponseCallback = (Errors, Long) => Unit
   type ExpireResponseCallback = (Errors, Long) => Unit
 
-  val secretKey = {
+  val secretKey: SecretKey = {
     val keyBytes =  if (config.tokenAuthEnabled) config.delegationTokenSecretKey.value.getBytes(StandardCharsets.UTF_8) else null
     if (keyBytes == null || keyBytes.isEmpty) null
     else

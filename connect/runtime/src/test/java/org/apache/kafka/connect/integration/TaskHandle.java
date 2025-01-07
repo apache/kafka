@@ -19,6 +19,7 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,7 +49,7 @@ public class TaskHandle {
     private CountDownLatch recordsRemainingLatch;
     private CountDownLatch recordsToCommitLatch;
     private int expectedRecords = -1;
-    private int expectedCommits = -1;
+    private final int expectedCommits = -1;
 
     public TaskHandle(ConnectorHandle connectorHandle, String taskId, Consumer<SinkRecord> consumer) {
         this.taskId = taskId;

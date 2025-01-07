@@ -19,69 +19,62 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
 
-@RunWith(EasyMockRunner.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KeyValueIteratorFacadeTest {
     @Mock
     private KeyValueIterator<String, ValueAndTimestamp<String>> mockedKeyValueIterator;
 
     private KeyValueIteratorFacade<String, String> keyValueIteratorFacade;
 
-    @Before
+    @BeforeEach
     public void setup() {
         keyValueIteratorFacade = new KeyValueIteratorFacade<>(mockedKeyValueIterator);
     }
 
     @Test
     public void shouldForwardHasNext() {
-        expect(mockedKeyValueIterator.hasNext()).andReturn(true).andReturn(false);
-        replay(mockedKeyValueIterator);
+        when(mockedKeyValueIterator.hasNext()).thenReturn(true).thenReturn(false);
 
         assertTrue(keyValueIteratorFacade.hasNext());
         assertFalse(keyValueIteratorFacade.hasNext());
-        verify(mockedKeyValueIterator);
     }
 
     @Test
     public void shouldForwardPeekNextKey() {
-        expect(mockedKeyValueIterator.peekNextKey()).andReturn("key");
-        replay(mockedKeyValueIterator);
+        when(mockedKeyValueIterator.peekNextKey()).thenReturn("key");
 
         assertThat(keyValueIteratorFacade.peekNextKey(), is("key"));
-        verify(mockedKeyValueIterator);
     }
 
     @Test
     public void shouldReturnPlainKeyValuePairOnGet() {
-        expect(mockedKeyValueIterator.next()).andReturn(
+        when(mockedKeyValueIterator.next()).thenReturn(
             new KeyValue<>("key", ValueAndTimestamp.make("value", 42L)));
-        replay(mockedKeyValueIterator);
 
         assertThat(keyValueIteratorFacade.next(), is(KeyValue.pair("key", "value")));
-        verify(mockedKeyValueIterator);
     }
 
     @Test
     public void shouldCloseInnerIterator() {
-        mockedKeyValueIterator.close();
-        expectLastCall();
-        replay(mockedKeyValueIterator);
+        doNothing().when(mockedKeyValueIterator).close();
 
         keyValueIteratorFacade.close();
-        verify(mockedKeyValueIterator);
     }
 }

@@ -17,18 +17,17 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.jose4j.keys.resolvers.VerificationKeyResolver;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
-
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import org.jose4j.keys.resolvers.VerificationKeyResolver;
 
 public class AccessTokenValidatorFactory {
 
@@ -56,7 +55,7 @@ public class AccessTokenValidatorFactory {
         List<String> l = cu.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
 
         if (l != null)
-            expectedAudiences = Collections.unmodifiableSet(new HashSet<>(l));
+            expectedAudiences = Set.copyOf(l);
 
         Integer clockSkew = cu.validateInteger(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, false);
         String expectedIssuer = cu.validateString(SASL_OAUTHBEARER_EXPECTED_ISSUER, false);

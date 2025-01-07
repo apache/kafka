@@ -21,7 +21,8 @@ import java.io.PrintWriter
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, RecordBatch}
+import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
@@ -35,7 +36,7 @@ import scala.jdk.CollectionConverters._
   */
 class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
 
-  val codec: CompressionType = CompressionType.LZ4
+  val codec: Compression = Compression.lz4().build()
 
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
@@ -56,7 +57,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
       val log = cleaner.logs.get(tp)
       writeDups(numKeys = 20, numDups = 3, log = log, codec = codec)
 
-      val partitionFile = log.logSegments.last.log.file()
+      val partitionFile = log.logSegments.asScala.last.log.file()
       val writer = new PrintWriter(partitionFile)
       writer.write("jogeajgoea")
       writer.close()
@@ -76,8 +77,8 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     val uncleanableBytesGauge = getGauge[Long]("uncleanable-bytes", uncleanableDirectory)
 
     TestUtils.waitUntilTrue(() => uncleanablePartitionsCountGauge.value() == 2, "There should be 2 uncleanable partitions", 2000L)
-    val expectedTotalUncleanableBytes = LogCleanerManager.calculateCleanableBytes(log, 0, log.logSegments.last.baseOffset)._2 +
-      LogCleanerManager.calculateCleanableBytes(log2, 0, log2.logSegments.last.baseOffset)._2
+    val expectedTotalUncleanableBytes = LogCleanerManager.calculateCleanableBytes(log, 0, log.logSegments.asScala.last.baseOffset)._2 +
+      LogCleanerManager.calculateCleanableBytes(log2, 0, log2.logSegments.asScala.last.baseOffset)._2
     TestUtils.waitUntilTrue(() => uncleanableBytesGauge.value() == expectedTotalUncleanableBytes,
       s"There should be $expectedTotalUncleanableBytes uncleanable bytes", 1000L)
 
@@ -141,7 +142,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     val log = cleaner.logs.get(topicPartitions(0))
 
     val T0 = time.milliseconds
-    writeKeyDups(numKeys = 100, numDups = 3, log, CompressionType.NONE, timestamp = T0, startValue = 0, step = 1)
+    writeKeyDups(numKeys = 100, numDups = 3, log, Compression.NONE, timestamp = T0, startValue = 0, step = 1)
 
     val startSizeBlock0 = log.size
 
@@ -159,7 +160,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     val T1 = time.milliseconds
 
     // write the second block of data: all zero keys
-    val appends1 = writeKeyDups(numKeys = 100, numDups = 1, log, CompressionType.NONE, timestamp = T1, startValue = 0, step = 0)
+    val appends1 = writeKeyDups(numKeys = 100, numDups = 1, log, Compression.NONE, timestamp = T1, startValue = 0, step = 0)
 
     // roll the active segment
     log.roll()
@@ -192,14 +193,14 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
   }
 
   private def readFromLog(log: UnifiedLog): Iterable[(Int, Int)] = {
-    for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
+    for (segment <- log.logSegments.asScala; record <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(record.key).toInt
       val value = TestUtils.readString(record.value).toInt
       key -> value
     }
   }
 
-  private def writeKeyDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType, timestamp: Long,
+  private def writeKeyDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: Compression, timestamp: Long,
                            startValue: Int, step: Int): Seq[(Int, Int)] = {
     var valCounter = startValue
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {

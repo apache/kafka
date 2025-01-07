@@ -26,6 +26,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.TrackingSnapshotRegistry;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -54,7 +55,7 @@ public class OffsetControlManagerTest {
         assertEquals(-1L, offsetControl.transactionStartOffset());
         assertEquals(-1L, offsetControl.nextWriteOffset());
         assertFalse(offsetControl.active());
-        assertEquals(Arrays.asList(-1L), offsetControl.snapshotRegistry().epochsList());
+        assertEquals(Collections.singletonList(-1L), offsetControl.snapshotRegistry().epochsList());
     }
 
     @Test
@@ -64,7 +65,7 @@ public class OffsetControlManagerTest {
         assertEquals(1000L, offsetControl.nextWriteOffset());
         assertTrue(offsetControl.active());
         assertTrue(offsetControl.metrics().active());
-        assertEquals(Arrays.asList(-1L), offsetControl.snapshotRegistry().epochsList());
+        assertEquals(Collections.singletonList(-1L), offsetControl.snapshotRegistry().epochsList());
     }
 
     @Test
@@ -99,9 +100,7 @@ public class OffsetControlManagerTest {
     public void testDeactivateFailsIfNotActive() {
         OffsetControlManager offsetControl = new OffsetControlManager.Builder().build();
         assertEquals("Can't deactivate inactive OffsetControlManager.",
-            assertThrows(RuntimeException.class,
-                () -> offsetControl.deactivate()).
-                    getMessage());
+            assertThrows(RuntimeException.class, offsetControl::deactivate).getMessage());
     }
 
     private static Batch<ApiMessageAndVersion> newFakeBatch(
@@ -122,7 +121,7 @@ public class OffsetControlManagerTest {
         OffsetControlManager offsetControl = new OffsetControlManager.Builder().build();
 
         offsetControl.handleCommitBatch(newFakeBatch(1000L, 200, 3000L));
-        assertEquals(Arrays.asList(1000L), offsetControl.snapshotRegistry().epochsList());
+        assertEquals(Collections.singletonList(1000L), offsetControl.snapshotRegistry().epochsList());
         assertEquals(1000L, offsetControl.lastCommittedOffset());
         assertEquals(200, offsetControl.lastCommittedEpoch());
         assertEquals(1000L, offsetControl.lastStableOffset());
@@ -139,7 +138,7 @@ public class OffsetControlManagerTest {
     public void testHandleScheduleAtomicAppend() {
         OffsetControlManager offsetControl = new OffsetControlManager.Builder().build();
 
-        offsetControl.handleScheduleAtomicAppend(2000L);
+        offsetControl.handleScheduleAppend(2000L);
         assertEquals(2001L, offsetControl.nextWriteOffset());
         assertEquals(2000L, offsetControl.metrics().lastAppliedRecordOffset());
         assertEquals(-1L, offsetControl.lastStableOffset());
@@ -149,7 +148,7 @@ public class OffsetControlManagerTest {
         offsetControl.handleCommitBatch(newFakeBatch(2000L, 200, 3000L));
         assertEquals(2000L, offsetControl.lastStableOffset());
         assertEquals(2000L, offsetControl.lastCommittedOffset());
-        assertEquals(Arrays.asList(2000L), offsetControl.snapshotRegistry().epochsList());
+        assertEquals(Collections.singletonList(2000L), offsetControl.snapshotRegistry().epochsList());
     }
 
     @Test
@@ -163,14 +162,14 @@ public class OffsetControlManagerTest {
         assertEquals(Arrays.asList("snapshot[-1]", "reset"), snapshotRegistry.operations());
         assertEquals(new OffsetAndEpoch(4000L, 300), offsetControl.currentSnapshotId());
         assertEquals("00000000000000004000-0000000300", offsetControl.currentSnapshotName());
-        assertEquals(Arrays.asList(), offsetControl.snapshotRegistry().epochsList());
+        assertEquals(Collections.emptyList(), offsetControl.snapshotRegistry().epochsList());
 
         offsetControl.endLoadSnapshot(3456L);
         assertEquals(Arrays.asList("snapshot[-1]", "reset", "snapshot[4000]"),
             snapshotRegistry.operations());
         assertNull(offsetControl.currentSnapshotId());
         assertNull(offsetControl.currentSnapshotName());
-        assertEquals(Arrays.asList(4000L), offsetControl.snapshotRegistry().epochsList());
+        assertEquals(Collections.singletonList(4000L), offsetControl.snapshotRegistry().epochsList());
         assertEquals(4000L, offsetControl.lastCommittedOffset());
         assertEquals(300, offsetControl.lastCommittedEpoch());
         assertEquals(4000L, offsetControl.lastStableOffset());
@@ -236,7 +235,7 @@ public class OffsetControlManagerTest {
         assertEquals(1550L, offsetControl.lastCommittedOffset());
         assertEquals(100, offsetControl.lastCommittedEpoch());
         assertEquals(1499L, offsetControl.lastStableOffset());
-        assertEquals(Arrays.asList(1499L), offsetControl.snapshotRegistry().epochsList());
+        assertEquals(Collections.singletonList(1499L), offsetControl.snapshotRegistry().epochsList());
 
         if (aborted) {
             offsetControl.replay(new AbortTransactionRecord(), 1600L);
@@ -252,7 +251,7 @@ public class OffsetControlManagerTest {
 
         offsetControl.handleCommitBatch(newFakeBatch(1650, 100, 2100L));
         assertEquals(1650, offsetControl.lastStableOffset());
-        assertEquals(Arrays.asList(1650L), offsetControl.snapshotRegistry().epochsList());
+        assertEquals(Collections.singletonList(1650L), offsetControl.snapshotRegistry().epochsList());
     }
 
     @Test

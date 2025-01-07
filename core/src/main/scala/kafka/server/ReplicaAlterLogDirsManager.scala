@@ -17,13 +17,17 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.common.DirectoryEventHandler
+import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
                                  replicaManager: ReplicaManager,
                                  quotaManager: ReplicationQuotaManager,
-                                 brokerTopicStats: BrokerTopicStats)
+                                 brokerTopicStats: BrokerTopicStats,
+                                 directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
+                                )
   extends AbstractFetcherManager[ReplicaAlterLogDirsThread](
     name = s"ReplicaAlterLogDirsManager on broker ${brokerConfig.brokerId}",
     clientId = "ReplicaAlterLogDirs",
@@ -33,7 +37,7 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
     val threadName = s"ReplicaAlterLogDirsThread-$fetcherId"
     val leader = new LocalLeaderEndPoint(sourceBroker, brokerConfig, replicaManager, quotaManager)
     new ReplicaAlterLogDirsThread(threadName, leader, failedPartitions, replicaManager,
-      quotaManager, brokerTopicStats, brokerConfig.replicaFetchBackoffMs)
+      quotaManager, brokerTopicStats, brokerConfig.replicaFetchBackoffMs, directoryEventHandler)
   }
 
   override protected def addPartitionsToFetcherThread(fetcherThread: ReplicaAlterLogDirsThread,

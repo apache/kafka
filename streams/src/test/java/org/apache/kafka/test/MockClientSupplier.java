@@ -20,7 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -34,7 +34,7 @@ import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class MockClientSupplier implements KafkaClientSupplier {
     private static final ByteArraySerializer BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
@@ -43,9 +43,10 @@ public class MockClientSupplier implements KafkaClientSupplier {
     private String applicationId;
 
     public MockAdminClient adminClient = new MockAdminClient();
+    private final List<MockProducer<byte[], byte[]>> preparedProducers = new LinkedList<>();
     public final List<MockProducer<byte[], byte[]>> producers = new LinkedList<>();
-    public final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    public final MockConsumer<byte[], byte[]> restoreConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
+    public final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
+    public final MockConsumer<byte[], byte[]> restoreConsumer = new MockConsumer<>(AutoOffsetResetStrategy.LATEST.name());
 
     public void setApplicationIdForProducer(final String applicationId) {
         this.applicationId = applicationId;
@@ -61,6 +62,10 @@ public class MockClientSupplier implements KafkaClientSupplier {
         return adminClient;
     }
 
+    public void prepareProducer(final MockProducer<byte[], byte[]> producer) {
+        preparedProducers.add(producer);
+    }
+
     @Override
     public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
         if (applicationId != null) {
@@ -68,7 +73,14 @@ public class MockClientSupplier implements KafkaClientSupplier {
         } else {
             assertFalse(config.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
         }
-        final MockProducer<byte[], byte[]> producer = new MockProducer<>(cluster, true, BYTE_ARRAY_SERIALIZER, BYTE_ARRAY_SERIALIZER);
+
+        final MockProducer<byte[], byte[]> producer;
+        if (preparedProducers.isEmpty()) {
+            producer = new MockProducer<>(cluster, true, null, BYTE_ARRAY_SERIALIZER, BYTE_ARRAY_SERIALIZER);
+        } else {
+            producer = preparedProducers.remove(0);
+        }
+
         producers.add(producer);
         return producer;
     }

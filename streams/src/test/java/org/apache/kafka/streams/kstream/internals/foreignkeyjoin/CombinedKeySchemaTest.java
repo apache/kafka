@@ -18,12 +18,13 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CombinedKeySchemaTest {
 
@@ -37,8 +38,8 @@ public class CombinedKeySchemaTest {
         final Bytes result = cks.toBytes("foreignKey", primary);
 
         final CombinedKey<String, Integer> deserializedKey = cks.fromBytes(result);
-        assertEquals("foreignKey", deserializedKey.getForeignKey());
-        assertEquals(primary, deserializedKey.getPrimaryKey());
+        assertEquals("foreignKey", deserializedKey.foreignKey());
+        assertEquals(primary, deserializedKey.primaryKey());
     }
 
     @Test

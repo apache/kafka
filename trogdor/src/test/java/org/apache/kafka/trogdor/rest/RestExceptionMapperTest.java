@@ -16,19 +16,21 @@
  */
 package org.apache.kafka.trogdor.rest;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.SerializationException;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidTypeIdException;
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.core.Response;
 
-import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.SerializationException;
 import org.junit.jupiter.api.Test;
+
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RestExceptionMapperTest {
 
@@ -80,7 +82,7 @@ public class RestExceptionMapperTest {
     @Test
     public void testToResponseUnknownException() {
         RestExceptionMapper mapper = new RestExceptionMapper();
-        Response resp = mapper.toResponse(new Exception("Unkown exception"));
+        Response resp = mapper.toResponse(new Exception("Unknown exception"));
         assertEquals(resp.getStatus(), Response.Status.INTERNAL_SERVER_ERROR.getStatusCode());
     }
 
@@ -104,6 +106,6 @@ public class RestExceptionMapperTest {
 
     @Test
     public void testToExceptionRuntimeException() {
-        assertThrows(RuntimeException.class, () -> RestExceptionMapper.toException(-1, "Unkown status code"));
+        assertThrows(RuntimeException.class, () -> RestExceptionMapper.toException(-1, "Unknown status code"));
     }
 }

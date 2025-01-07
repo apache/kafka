@@ -28,9 +28,9 @@ import java.util.UUID;
  */
 public class Serdes {
 
-    static public class WrapperSerde<T> implements Serde<T> {
-        final private Serializer<T> serializer;
-        final private Deserializer<T> deserializer;
+    public static class WrapperSerde<T> implements Serde<T> {
+        private final Serializer<T> serializer;
+        private final Deserializer<T> deserializer;
 
         public WrapperSerde(Serializer<T> serializer, Deserializer<T> deserializer) {
             this.serializer = serializer;
@@ -60,81 +60,81 @@ public class Serdes {
         }
     }
 
-    static public final class VoidSerde extends WrapperSerde<Void> {
+    public static final class VoidSerde extends WrapperSerde<Void> {
         public VoidSerde() {
             super(new VoidSerializer(), new VoidDeserializer());
         }
     }
 
-    static public final class LongSerde extends WrapperSerde<Long> {
+    public static final class LongSerde extends WrapperSerde<Long> {
         public LongSerde() {
             super(new LongSerializer(), new LongDeserializer());
         }
     }
 
-    static public final class IntegerSerde extends WrapperSerde<Integer> {
+    public static final class IntegerSerde extends WrapperSerde<Integer> {
         public IntegerSerde() {
             super(new IntegerSerializer(), new IntegerDeserializer());
         }
     }
 
-    static public final class ShortSerde extends WrapperSerde<Short> {
+    public static final class ShortSerde extends WrapperSerde<Short> {
         public ShortSerde() {
             super(new ShortSerializer(), new ShortDeserializer());
         }
     }
 
-    static public final class FloatSerde extends WrapperSerde<Float> {
+    public static final class FloatSerde extends WrapperSerde<Float> {
         public FloatSerde() {
             super(new FloatSerializer(), new FloatDeserializer());
         }
     }
 
-    static public final class DoubleSerde extends WrapperSerde<Double> {
+    public static final class DoubleSerde extends WrapperSerde<Double> {
         public DoubleSerde() {
             super(new DoubleSerializer(), new DoubleDeserializer());
         }
     }
 
-    static public final class StringSerde extends WrapperSerde<String> {
+    public static final class StringSerde extends WrapperSerde<String> {
         public StringSerde() {
             super(new StringSerializer(), new StringDeserializer());
         }
     }
 
-    static public final class ByteBufferSerde extends WrapperSerde<ByteBuffer> {
+    public static final class ByteBufferSerde extends WrapperSerde<ByteBuffer> {
         public ByteBufferSerde() {
             super(new ByteBufferSerializer(), new ByteBufferDeserializer());
         }
     }
 
-    static public final class BytesSerde extends WrapperSerde<Bytes> {
+    public static final class BytesSerde extends WrapperSerde<Bytes> {
         public BytesSerde() {
             super(new BytesSerializer(), new BytesDeserializer());
         }
     }
 
-    static public final class ByteArraySerde extends WrapperSerde<byte[]> {
+    public static final class ByteArraySerde extends WrapperSerde<byte[]> {
         public ByteArraySerde() {
             super(new ByteArraySerializer(), new ByteArrayDeserializer());
         }
     }
 
-    static public final class UUIDSerde extends WrapperSerde<UUID> {
+    public static final class UUIDSerde extends WrapperSerde<UUID> {
         public UUIDSerde() {
             super(new UUIDSerializer(), new UUIDDeserializer());
         }
     }
 
-    static public final class BooleanSerde extends WrapperSerde<Boolean> {
+    public static final class BooleanSerde extends WrapperSerde<Boolean> {
         public BooleanSerde() {
             super(new BooleanSerializer(), new BooleanDeserializer());
         }
     }
 
-    static public final class ListSerde<Inner> extends WrapperSerde<List<Inner>> {
+    public static final class ListSerde<Inner> extends WrapperSerde<List<Inner>> {
 
-        final static int NULL_ENTRY_VALUE = -1;
+        static final int NULL_ENTRY_VALUE = -1;
 
         enum SerializationStrategy {
             CONSTANT_SIZE,
@@ -154,7 +154,7 @@ public class Serdes {
     }
 
     @SuppressWarnings("unchecked")
-    static public <T> Serde<T> serdeFrom(Class<T> type) {
+    public static <T> Serde<T> serdeFrom(Class<T> type) {
         if (String.class.isAssignableFrom(type)) {
             return (Serde<T>) String();
         }
@@ -210,7 +210,7 @@ public class Serdes {
      * @param serializer    must not be null.
      * @param deserializer  must not be null.
      */
-    static public <T> Serde<T> serdeFrom(final Serializer<T> serializer, final Deserializer<T> deserializer) {
+    public static <T> Serde<T> serdeFrom(final Serializer<T> serializer, final Deserializer<T> deserializer) {
         if (serializer == null) {
             throw new IllegalArgumentException("serializer must not be null");
         }
@@ -224,91 +224,91 @@ public class Serdes {
     /**
      * A serde for nullable {@code Long} type.
      */
-    static public Serde<Long> Long() {
+    public static Serde<Long> Long() {
         return new LongSerde();
     }
 
     /**
      * A serde for nullable {@code Integer} type.
      */
-    static public Serde<Integer> Integer() {
+    public static Serde<Integer> Integer() {
         return new IntegerSerde();
     }
 
     /**
      * A serde for nullable {@code Short} type.
      */
-    static public Serde<Short> Short() {
+    public static Serde<Short> Short() {
         return new ShortSerde();
     }
 
     /**
      * A serde for nullable {@code Float} type.
      */
-    static public Serde<Float> Float() {
+    public static Serde<Float> Float() {
         return new FloatSerde();
     }
 
     /**
      * A serde for nullable {@code Double} type.
      */
-    static public Serde<Double> Double() {
+    public static Serde<Double> Double() {
         return new DoubleSerde();
     }
 
     /**
      * A serde for nullable {@code String} type.
      */
-    static public Serde<String> String() {
+    public static Serde<String> String() {
         return new StringSerde();
     }
 
     /**
      * A serde for nullable {@code ByteBuffer} type.
      */
-    static public Serde<ByteBuffer> ByteBuffer() {
+    public static Serde<ByteBuffer> ByteBuffer() {
         return new ByteBufferSerde();
     }
 
     /**
      * A serde for nullable {@code Bytes} type.
      */
-    static public Serde<Bytes> Bytes() {
+    public static Serde<Bytes> Bytes() {
         return new BytesSerde();
     }
 
     /**
      * A serde for nullable {@code UUID} type
      */
-    static public Serde<UUID> UUID() {
+    public static Serde<UUID> UUID() {
         return new UUIDSerde();
     }
 
     /**
      * A serde for nullable {@code Boolean} type.
      */
-    static public Serde<Boolean> Boolean() {
+    public static Serde<Boolean> Boolean() {
         return new BooleanSerde();
     }
 
     /**
      * A serde for nullable {@code byte[]} type.
      */
-    static public Serde<byte[]> ByteArray() {
+    public static Serde<byte[]> ByteArray() {
         return new ByteArraySerde();
     }
 
     /**
      * A serde for {@code Void} type.
      */
-    static public Serde<Void> Void() {
+    public static Serde<Void> Void() {
         return new VoidSerde();
     }
 
     /*
      * A serde for {@code List} type
      */
-    static public <L extends List<Inner>, Inner> Serde<List<Inner>> ListSerde(Class<L> listClass, Serde<Inner> innerSerde) {
+    public static <L extends List<Inner>, Inner> Serde<List<Inner>> ListSerde(Class<L> listClass, Serde<Inner> innerSerde) {
         return new ListSerde<>(listClass, innerSerde);
     }
 

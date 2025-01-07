@@ -27,6 +27,7 @@ import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.server.quota.ThrottleCallback
 
 import java.util.OptionalInt
 
@@ -82,7 +83,7 @@ class RequestHandlerHelper(
       sendErrorResponseExemptThrottle(request, e)
   }
 
-  def sendErrorOrCloseConnection(
+  private def sendErrorOrCloseConnection(
     request: RequestChannel.Request,
     error: Throwable,
     throttleMs: Int
@@ -148,9 +149,11 @@ class RequestHandlerHelper(
    * Throttle the channel if the controller mutations quota or the request quota have been violated.
    * Regardless of throttling, send the response immediately.
    */
-  def sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota: ControllerMutationQuota,
-                                                   request: RequestChannel.Request,
-                                                   createResponse: Int => AbstractResponse): Unit = {
+  def sendResponseMaybeThrottleWithControllerQuota(
+    controllerMutationQuota: ControllerMutationQuota,
+    request: RequestChannel.Request,
+    response: AbstractResponse
+  ): Unit = {
     val timeMs = time.milliseconds
     val controllerThrottleTimeMs = controllerMutationQuota.throttleTime
     val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
@@ -165,7 +168,8 @@ class RequestHandlerHelper(
       }
     }
 
-    requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs), None)
+    response.maybeSetThrottleTimeMs(maxThrottleTimeMs)
+    requestChannel.sendResponse(request, response, None)
   }
 
   def sendResponseExemptThrottle(request: RequestChannel.Request,
@@ -175,7 +179,7 @@ class RequestHandlerHelper(
     requestChannel.sendResponse(request, response, onComplete)
   }
 
-  def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
+  private def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     quotas.request.maybeRecordExempt(request)
     sendErrorOrCloseConnection(request, error, 0)
   }
