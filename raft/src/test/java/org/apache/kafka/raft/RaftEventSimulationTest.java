@@ -296,6 +296,67 @@ public class RaftEventSimulationTest {
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void leadershipWillNotChangeIfMajorityIsReachable(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 0, max = 3) int numObservers
+    ) {
+        int numVoters = 5;
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, numObservers, random);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+        scheduler.addInvariant(new StableLeadershipWhenMajorityReachable(cluster));
+
+        // Seed the cluster with some data
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 1);
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(5));
+
+        int leaderId = cluster.latestLeader().orElseThrow(() ->
+            new AssertionError("Failed to find current leader during setup")
+        );
+
+        int leaderEpoch = cluster.epoch(leaderId);
+
+        // Create network partition which would result in ping-pong of leadership between nodes C and D without PreVote
+        // A   B
+        // |   |
+        // C - D  (have leader start in position C)
+        //  \ /
+        //   E
+        int nodeA = (leaderId + 1) % numVoters;
+        int nodeB = (leaderId + 2) % numVoters;
+        int nodeD = (leaderId + 3) % numVoters;
+        int nodeE = (leaderId + 4) % numVoters;
+        router.filter(
+            nodeA,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeB, nodeD, nodeE)))
+        );
+        router.filter(
+            nodeB,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA, leaderId, nodeE)))
+        );
+        router.filter(leaderId, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeB))));
+        router.filter(nodeD, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA))));
+        router.filter(nodeE, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA, nodeB))));
+
+        // Check that leadership is stable
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, Set.of(nodeA, leaderId, nodeD, nodeE)));
+        // Leader and leader epoch should be the same
+        assertEquals(leaderId, cluster.latestLeader().orElseThrow(
+            () -> new AssertionError("Failed to find current leader after partition"))
+        );
+        assertEquals(leaderEpoch, cluster.epoch(leaderId));
+        // All nodes should be on the same epoch
+        for (int nodeId : cluster.nodeIds()) {
+            assertEquals(leaderEpoch, cluster.epoch(nodeId));
+        }
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canMakeProgressAfterBackToBackLeaderFailures(
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
@@ -643,6 +704,14 @@ public class RaftEventSimulationTest {
                 }
             }
             return latestLeader;
+        }
+
+        int epoch(int nodeId) {
+            return running.values().stream()
+                .filter(node -> node.nodeId == nodeId)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Node " + nodeId + " is not running"))
+                .client.quorum().epoch();
         }
 
         boolean hasConsistentLeader() {
@@ -1050,6 +1119,40 @@ public class RaftEventSimulationTest {
                         } else {
                             epoch = election.epoch();
                             leaderId = OptionalInt.of(election.leaderId());
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    private static class StableLeadershipWhenMajorityReachable implements Invariant {
+        final Cluster cluster;
+        OptionalInt epochWithFirstLeader = OptionalInt.empty();
+        OptionalInt firstLeaderId = OptionalInt.empty();
+
+        private StableLeadershipWhenMajorityReachable(Cluster cluster) {
+            this.cluster = cluster;
+        }
+
+        @Override
+        public void verify() {
+            // Todo: currently this just checks the leader is never changed after the first successful election.
+            // KAFKA-18439 will generalize the invariant so it holds for all tests even if routing filters are changed.
+            // i.e. if the current leader is reachable by majority, we do not expect leadership to change
+            for (Map.Entry<Integer, PersistentState> nodeEntry : cluster.nodes.entrySet()) {
+                PersistentState state = nodeEntry.getValue();
+                Optional<ElectionState> electionState = state.store.readElectionState();
+
+                electionState.ifPresent(election -> {
+                    if (election.hasLeader()) {
+                        // verify there were no leaders prior to this one
+                        if (epochWithFirstLeader.isEmpty()) {
+                            epochWithFirstLeader = OptionalInt.of(election.epoch());
+                            firstLeaderId = OptionalInt.of(election.leaderId());
+                        } else {
+                            assertEquals(epochWithFirstLeader.getAsInt(), election.epoch());
+                            assertEquals(firstLeaderId.getAsInt(), election.leaderId());
                         }
                     }
                 });
