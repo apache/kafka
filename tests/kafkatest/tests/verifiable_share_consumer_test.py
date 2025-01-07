@@ -24,7 +24,7 @@ class VerifiableShareConsumerTest(KafkaTest):
     PRODUCER_REQUEST_TIMEOUT_SEC = 30
 
     def __init__(self, test_context, num_consumers=1, num_producers=0, **kwargs):
-        super(VerifiableShareConsumerTest, self).__init__(test_context, share_group_enable=True, **kwargs)
+        super(VerifiableShareConsumerTest, self).__init__(test_context, **kwargs)
         self.num_consumers = num_consumers
         self.num_producers = num_producers
 

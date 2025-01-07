@@ -289,7 +289,7 @@
     <suppress id="dontUseSystemExit"
               files="VerifiableProducer.java"/>
     <suppress id="dontUseSystemExit"
-              files="VerifiableShareGroup.java"/>
+              files="VerifiableShareConsumer.java"/>
 
     <!-- Shell -->
     <suppress checks="CyclomaticComplexity"

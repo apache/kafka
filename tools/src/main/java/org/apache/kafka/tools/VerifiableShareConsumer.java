@@ -57,18 +57,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -347,7 +336,6 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     }
 
     private void onRecordsReceived(ConsumerRecords<String, String> records) {
-
         List<RecordSetSummary> summaries = new ArrayList<>();
         for (TopicPartition tp : records.partitions()) {
             List<ConsumerRecord<String, String>> partitionRecords = records.records(tp);
@@ -355,7 +343,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             if (partitionRecords.isEmpty())
                 continue;
 
-            Set<Long> partitionOffsets = new HashSet<>();
+            TreeSet<Long> partitionOffsets = new TreeSet<>();
 
             for (ConsumerRecord<String, String> record : partitionRecords) {
                 partitionOffsets.add(record.offset());
@@ -518,7 +506,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .type(String.class)
             .metavar("GROUP_ID")
             .dest("groupId")
-            .help("The groupId shared among members of the consumer group");
+            .help("The groupId shared among members of the share group");
 
         parser.addArgument("--max-messages")
             .action(store())
