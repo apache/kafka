@@ -22,7 +22,7 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import javax.security.auth.login.Configuration;
@@ -46,11 +46,11 @@ public class JaasUtils {
     public static final String KAFKA_PLAIN_ADMIN = "plain-admin";
     public static final String KAFKA_PLAIN_ADMIN_PASSWORD = "plain-admin-secret";
 
-    public static File writeJaasContextsToFile(Map<String, JaasSection> jaasSections) throws IOException {
+    public static File writeJaasContextsToFile(Set<JaasSection> jaasSections) throws IOException {
         File jaasFile = TestUtils.tempFile();
         try (FileOutputStream fileStream = new FileOutputStream(jaasFile);
              OutputStreamWriter writer = new OutputStreamWriter(fileStream, StandardCharsets.UTF_8);) {
-            writer.write(String.join("", jaasSections.values().stream().map(Object::toString).toArray(String[]::new)));
+            writer.write(String.join("", jaasSections.stream().map(Object::toString).toArray(String[]::new)));
         }
         return jaasFile;
     }

@@ -66,6 +66,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -141,6 +142,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             if (controllerNode != null) {
                 props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
                         controllerNode.metadataDirectory());
+                setSecurityProtocolProps(props, controllerSecurityProtocol);
             } else {
                 props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
                         node.metadataDirectory());
@@ -149,6 +151,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 // Set the log.dirs according to the broker node setting (if there is a broker node)
                 props.put(LOG_DIRS_CONFIG,
                         String.join(",", brokerNode.logDataDirectories()));
+                setSecurityProtocolProps(props, brokerSecurityProtocol);
             } else {
                 // Set log.dirs equal to the metadata directory if there is just a controller.
                 props.put(LOG_DIRS_CONFIG,
@@ -179,15 +182,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
             // reduce log cleaner offset map memory usage
             props.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
 
-            if (brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
-                props.putIfAbsent(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
-                props.putIfAbsent(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
-                props.putIfAbsent(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
-                props.putIfAbsent(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, StandardAuthorizer.class.getName());
-                props.putIfAbsent(StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
-                props.putIfAbsent(StandardAuthorizer.SUPER_USERS_CONFIG, "User:" + JaasUtils.KAFKA_PLAIN_ADMIN);
-            }
-
             // Add associated broker node property overrides
             if (brokerNode != null) {
                 props.putAll(brokerNode.propertyOverrides());
@@ -201,6 +195,17 @@ public class KafkaClusterTestKit implements AutoCloseable {
             return new KafkaConfig(props, false);
         }
 
+        private void setSecurityProtocolProps(Map<String, Object> props, String securityProtocol) {
+            if (securityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
+                props.putIfAbsent(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
+                props.putIfAbsent(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
+                props.putIfAbsent(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
+                props.putIfAbsent(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, StandardAuthorizer.class.getName());
+                props.putIfAbsent(StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
+                props.putIfAbsent(StandardAuthorizer.SUPER_USERS_CONFIG, "User:" + JaasUtils.KAFKA_PLAIN_ADMIN);
+            }
+        }
+
         public KafkaClusterTestKit build() throws Exception {
             Map<Integer, ControllerServer> controllers = new HashMap<>();
             Map<Integer, BrokerServer> brokers = new HashMap<>();
@@ -209,8 +214,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             File jaasFile = null;
 
             if (brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
-                jaasFile = JaasUtils.writeJaasContextsToFile(Map.of(
-                    JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
+                jaasFile = JaasUtils.writeJaasContextsToFile(Set.of(
                     new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
                         List.of(
                             JaasModule.plainLoginModule(
@@ -637,13 +641,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
             waitForAllFutures(futureEntries);
             futureEntries.clear();
             Utils.delete(baseDirectory);
-            jaasFile.ifPresent(f -> {
-                try {
-                    Utils.delete(f);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            if (jaasFile.isPresent()) {
+                Utils.delete(jaasFile.get());
+            }
         } catch (Exception e) {
             for (Entry<String, Future<?>> entry : futureEntries) {
                 entry.getValue().cancel(true);
