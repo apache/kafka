@@ -13,16 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Remove Triage Label
+name: Fixup PR Labels
 
 on:
   workflow_dispatch:      # Let us run manually
 
   schedule:
-    - cron: '0 3 * * *'    # Run at 3:00 UTC nightly -- just before the "stale.yml" workflow
+    - cron: '0 3 * * *'    # Run at 3:00 UTC nightly
 
 jobs:
-  remove-triage:
+  # This job removes the triage and needs-attention labels from any PRs that have been reviewed. Once reviewed, it is
+  # assumed that a PR does _not_ need extra attention from the committers, so these labels can be removed.
+  fixup-pr-labels:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -65,3 +67,26 @@ jobs:
                 });
               });
             });
+
+  # This job adds a 'needs-attention' label to any PR that has not been updated in 7 days and has been labeled with 'triage'.
+  # The idea here is to give committers a quick way to see which PRs have languished and need attention.
+  needs-attention:
+    runs-on: ubuntu-latest
+    needs: [fixup-pr-labels]
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@v9
+        with:
+          debug-only: ${{ inputs.dryRun || false }}
+          operations-per-run: ${{ inputs.operationsPerRun || 500 }}
+          days-before-stale: 7
+          days-before-close: -1
+          ignore-pr-updates: true
+          only-pr-labels: 'triage'
+          stale-pr-label: 'needs-attention'
+          stale-pr-message: |
+            A label of 'needs-attention' was automatically added to this PR in order to raise the
+            attention of the committers. Once this issue has been triaged, the `triage` label
+            should be removed to prevent this automation from happening again.
