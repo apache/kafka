@@ -444,7 +444,8 @@ class BrokerServer(
         config.shareGroupConfig.shareFetchMaxFetchRecords,
         persister,
         groupConfigManager,
-        metrics
+        metrics,
+        brokerTopicStats
       )
 
       // Create the request processor objects.

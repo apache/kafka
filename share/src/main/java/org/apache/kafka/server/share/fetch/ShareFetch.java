@@ -28,7 +28,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
+import java.util.function.BiConsumer;
 
 /**
  * The ShareFetch class is used to store the fetch parameters for a share fetch request.
@@ -61,6 +61,11 @@ public class ShareFetch {
      */
     private final int maxFetchRecords;
     /**
+     * The handler to update the failed share fetch metrics.
+     */
+    private final BiConsumer<Collection<TopicIdPartition>, Boolean> failedShareFetchMetricsHandler;
+
+    /**
      * The partitions that had an error during the fetch.
      */
     private Map<TopicIdPartition, Throwable> erroneous;
@@ -71,7 +76,8 @@ public class ShareFetch {
         String memberId,
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
         Map<TopicIdPartition, Integer> partitionMaxBytes,
-        int maxFetchRecords
+        int maxFetchRecords,
+        BiConsumer<Collection<TopicIdPartition>, Boolean> failedShareFetchMetricsHandler
     ) {
         this.fetchParams = fetchParams;
         this.groupId = groupId;
@@ -79,6 +85,7 @@ public class ShareFetch {
         this.future = future;
         this.partitionMaxBytes = partitionMaxBytes;
         this.maxFetchRecords = maxFetchRecords;
+        this.failedShareFetchMetricsHandler = failedShareFetchMetricsHandler;
     }
 
     public String groupId() {
@@ -164,10 +171,9 @@ public class ShareFetch {
         if (isCompleted()) {
             return;
         }
-        Map<TopicIdPartition, PartitionData> response = topicIdPartitions.stream().collect(
-            Collectors.toMap(tp -> tp, tp -> new PartitionData()
-                .setErrorCode(Errors.forException(throwable).code())
-                .setErrorMessage(throwable.getMessage())));
+        Map<TopicIdPartition, PartitionData> response = new HashMap<>();
+        // Add the exception to erroneous partitions to track the error.
+        topicIdPartitions.forEach(tp -> addErroneous(tp, throwable));
         // Add any erroneous partitions to the response.
         addErroneousToResponse(response);
         future.complete(response);
@@ -197,6 +203,7 @@ public class ShareFetch {
                     .setErrorCode(Errors.forException(throwable).code())
                     .setErrorMessage(throwable.getMessage()));
             });
+            failedShareFetchMetricsHandler.accept(erroneous.keySet(), errorInAllPartitions());
         }
     }
 }

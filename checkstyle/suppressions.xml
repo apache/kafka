@@ -45,7 +45,7 @@
               files="(KafkaClusterTestKit).java"/>
     <suppress checks="NPathComplexity" files="TestKitNodes.java"/>
     <suppress checks="JavaNCSS"
-              files="(RemoteLogManagerTest|SharePartitionTest).java"/>
+              files="(RemoteLogManagerTest|SharePartitionManagerTest|SharePartitionTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="SharePartitionManagerTest"/>
     <suppress checks="CyclomaticComplexity" files="SharePartition.java"/>
 
