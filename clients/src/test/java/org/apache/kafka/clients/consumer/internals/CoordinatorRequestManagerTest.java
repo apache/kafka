@@ -187,13 +187,14 @@ public class CoordinatorRequestManagerTest {
     }
 
     @Test
-    public void testPropagateAndBackoffAfterFatalError() {
+    public void testBackoffAfterFatalError() {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
         expectFindCoordinatorRequest(coordinatorManager, Errors.GROUP_AUTHORIZATION_FAILED);
-        
-        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
+
+        time.sleep(RETRY_BACKOFF_MS - 1);
 
         time.sleep(1);
+        assertEquals(1, coordinatorManager.poll(time.milliseconds()).unsentRequests.size());
         assertEquals(0, coordinatorManager.poll(time.milliseconds()).unsentRequests.size());
         assertEquals(Optional.empty(), coordinatorManager.coordinator());
     }
