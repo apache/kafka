@@ -1759,7 +1759,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       lock synchronized {
         localLog.checkIfMemoryMappedBufferClosed()
         producerExpireCheck.cancel(true)
-        leaderEpochCache.clear()
+        // `renameDir` with `shouldReinitialize=false` sets this to `null` and it's usually (but not always) called before this method
+        if (leaderEpochCache != null)
+          leaderEpochCache.clear()
         val deletedSegments = localLog.deleteAllSegments()
         deleteProducerSnapshots(deletedSegments, asyncDelete = false)
         localLog.deleteEmptyDir()
