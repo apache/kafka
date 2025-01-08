@@ -168,6 +168,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     maybeForwardToController(request, errorHandler)
   }
 
+  private def forwardToControllerOrThrow(request: RequestChannel.Request,
+                                          createException: RequestChannel.Request => Exception
+                                       ): Unit = {
+    def errorHandler(request: RequestChannel.Request): Unit = {
+      throw createException(request)
+    }
+
+    maybeForwardToController(request, errorHandler)
+  }
+
   /**
    * Top-level method that handles all requests and multiplexes to the right api
    */
@@ -208,8 +218,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request).exceptionally(handleError)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
-        case ApiKeys.CREATE_TOPICS => maybeForwardToController(request, null)
-        case ApiKeys.DELETE_TOPICS => maybeForwardToController(request, null)
+        case ApiKeys.CREATE_TOPICS => forwardToControllerOrThrow(request, KafkaApis.shouldAlwaysForward)
+        case ApiKeys.DELETE_TOPICS => forwardToControllerOrThrow(request, KafkaApis.shouldAlwaysForward)
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
         case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request, requestLocal)
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
@@ -226,7 +236,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
         case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
-        case ApiKeys.CREATE_PARTITIONS => maybeForwardToController(request, null)
+        case ApiKeys.CREATE_PARTITIONS => forwardToControllerOrThrow(request, KafkaApis.shouldAlwaysForward)
         // Create, renew and expire DelegationTokens must first validate that the connection
         // itself is not authenticated with a delegation token before maybeForwardToController.
         case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateTokenRequest(request)
