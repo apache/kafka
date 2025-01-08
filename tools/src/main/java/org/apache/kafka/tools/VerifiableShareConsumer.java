@@ -615,7 +615,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         try {
             final VerifiableShareConsumer shareConsumer = createFromArgs(parser, args);
             // Can't use `Exit.addShutdownHook` here because it didn't exist until 2.5.0.
-            Runtime.getRuntime().addShutdownHook(new Thread(shareConsumer::close, "verifiable-share-group-shutdown-hook"));
+            Runtime.getRuntime().addShutdownHook(new Thread(shareConsumer::close, "verifiable-share-consumer-shutdown-hook"));
             shareConsumer.run();
         } catch (ArgumentParserException e) {
             parser.handleError(e);
