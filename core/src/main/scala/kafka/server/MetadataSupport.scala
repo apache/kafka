@@ -66,8 +66,6 @@ sealed trait MetadataSupport {
     if (!request.isForwarded && canForward()) {
       forwardingManager.get.forwardRequest(request, responseCallback)
     } else {
-      if (handler == null)
-        throw KafkaApis.shouldAlwaysForward(request)
       handler(request)
     }
   }
