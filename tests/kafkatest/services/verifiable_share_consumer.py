@@ -306,7 +306,7 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
         with self.lock:
             return self.total_records_acknowledged_failed
 
-    def total_consumed_for_a_share_consumerq(self, node):
+    def total_consumed_for_a_share_consumer(self, node):
         with self.lock:
             return self.event_handlers[node].total_consumed
 

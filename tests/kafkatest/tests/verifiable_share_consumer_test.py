@@ -72,6 +72,14 @@ class VerifiableShareConsumerTest(KafkaTest):
         wait_until(lambda: consumer.total_consumed() >= current_total + min_messages,
                    timeout_sec=timeout_sec,
                    err_msg="Timed out waiting for consumption")
+
+    def await_consumed_messages_by_a_consumer(self, consumer, node, min_messages=1, timeout_sec=10, total=False):
+        current_total = 0
+        if total is False:
+            current_total = consumer.total_consumed_for_a_share_consumer(node)
+        wait_until(lambda: consumer.total_consumed_for_a_share_consumer(node) >= current_total + min_messages,
+                   timeout_sec=timeout_sec,
+                   err_msg="Timed out waiting for consumption")
         
     def await_unique_consumed_messages(self, consumer, min_messages=1, timeout_sec=10):
         wait_until(lambda: consumer.total_unique_consumed() >= min_messages,
