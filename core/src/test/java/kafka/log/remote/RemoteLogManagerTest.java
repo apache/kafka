@@ -3149,21 +3149,25 @@ public class RemoteLogManagerTest {
                 return remoteLogMetadataManager;
             }
 
+            @Override
             public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition,
                                                                                     int epochForOffset, long offset) {
                 return Optional.of(segmentMetadata);
             }
 
+            @Override
             public Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata,
-                                                                              Option<LeaderEpochFileCache> leaderEpochFileCacheOption) {
+                                                                              LeaderEpochFileCache leaderEpochFileCacheOption) {
                 return Optional.empty();
             }
 
+            @Override
             int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 1;
             }
 
             // This is the key scenario that we are testing here
+            @Override
             EnrichedRecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) {
                 return new EnrichedRecordBatch(null, 0);
             }
