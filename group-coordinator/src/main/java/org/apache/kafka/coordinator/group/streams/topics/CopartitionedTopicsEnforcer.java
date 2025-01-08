@@ -46,7 +46,10 @@ public class CopartitionedTopicsEnforcer {
      * The constructor for the class.
      *
      * @param logContext                  The context for emitting log messages.
-     * @param topicPartitionCountProvider Returns the number of partitions for a given topic, representing the current state of the broker.
+     * @param topicPartitionCountProvider Returns the number of partitions for a given topic, representing the current state of the broker
+     *                                    as well as any partition number decisions that have already been made. In particular, we expect
+     *                                    the number of partitions for all repartition topics defined, even if they do not exist in the
+     *                                    broker yet.
      */
     public CopartitionedTopicsEnforcer(final LogContext logContext,
                                        final Function<String, OptionalInt> topicPartitionCountProvider) {
@@ -57,26 +60,27 @@ public class CopartitionedTopicsEnforcer {
     /**
      * Enforces the number of partitions for copartitioned topics.
      *
-     * @param copartitionedTopics             The set of copartitioned topics.
-     * @param repartitionTopicPartitionCounts A map from repartition topics to their determined partition count.
-     * @param enforcedRepartitionTopics       The set of repartition topics whose partition count is enforced by the topology.
+     * @param copartitionedTopics          The set of copartitioned topics (external source topics and repartition topics).
+     * @param fixedRepartitionTopics       The set of repartition topics whose partition count is fixed by the topology.
+     * @param flexibleRepartitionTopics    The set of repartition topics whose partition count is flexible, and can be changed.
+     *
      * @throws TopicConfigurationException If source topics are missing, or there are topics in copartitionTopics that are not copartitioned
      *                                     according to topicPartitionCountProvider are not co-partitioned.
      *
-     * @return A map from all repartition topics to their partition counts
+     * @return A map from all repartition topics in copartitionedTopics to their updated partition counts.
      */
     public Map<String, Integer> enforce(final Set<String> copartitionedTopics,
-                                        final Map<String, Integer> repartitionTopicPartitionCounts,
-                                        final Set<String> enforcedRepartitionTopics) throws StreamsInvalidTopologyException {
+                                        final Set<String> fixedRepartitionTopics,
+                                        final Set<String> flexibleRepartitionTopics) throws StreamsInvalidTopologyException {
         if (copartitionedTopics.isEmpty()) {
             return Collections.emptyMap();
         }
         final Map<String, Integer> returnedPartitionCounts = new HashMap<>();
 
-        final Map<String, Integer> repartitionTopicConfigs =
+        final Map<String, Integer> repartitionTopicPartitionCounts =
             copartitionedTopics.stream()
-                .filter(repartitionTopicPartitionCounts::containsKey)
-                .collect(Collectors.toMap(topic -> topic, repartitionTopicPartitionCounts::get));
+                .filter(x -> fixedRepartitionTopics.contains(x) || flexibleRepartitionTopics.contains(x))
+                .collect(Collectors.toMap(topic -> topic, this::getPartitionCount));
 
         final Map<String, Integer> nonRepartitionTopicPartitions =
             copartitionedTopics.stream().filter(topic -> !repartitionTopicPartitionCounts.containsKey(topic))
@@ -93,14 +97,14 @@ public class CopartitionedTopicsEnforcer {
 
         final int numPartitionsToUseForRepartitionTopics;
 
-        if (copartitionedTopics.equals(repartitionTopicConfigs.keySet())) {
+        if (copartitionedTopics.equals(repartitionTopicPartitionCounts.keySet())) {
 
-            // if there's at least one repartition topic with enforced number of partitions
+            // if there's at least one repartition topic with fixed number of partitions
             // validate that they all have same number of partitions
-            if (!enforcedRepartitionTopics.isEmpty()) {
+            if (!fixedRepartitionTopics.isEmpty()) {
                 numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitions(
                     repartitionTopicPartitionCounts,
-                    enforcedRepartitionTopics
+                    fixedRepartitionTopics
                 );
             } else {
                 // If all topics for this co-partition group are repartition topics,
@@ -115,7 +119,7 @@ public class CopartitionedTopicsEnforcer {
         // coerce all the repartition topics to use the decided number of partitions.
         for (final Entry<String, Integer> repartitionTopic : repartitionTopicPartitionCounts.entrySet()) {
             returnedPartitionCounts.put(repartitionTopic.getKey(), numPartitionsToUseForRepartitionTopics);
-            if (enforcedRepartitionTopics.contains(repartitionTopic.getKey())
+            if (fixedRepartitionTopics.contains(repartitionTopic.getKey())
                 && repartitionTopic.getValue() != numPartitionsToUseForRepartitionTopics) {
                 final String msg = String.format("Number of partitions [%d] of repartition topic [%s] " +
                         "doesn't match number of partitions [%d] of the source topic.",
@@ -129,23 +133,23 @@ public class CopartitionedTopicsEnforcer {
         return returnedPartitionCounts;
     }
 
-    private int getEnforcedPartitionCount(final String topicName, final Map<String, Integer> repartitionTopicConfigs) {
-        Integer partitions = repartitionTopicConfigs.get(topicName);
-        if (partitions != null) {
-            return partitions;
+    private int getPartitionCount(final String topicName) {
+        OptionalInt partitions = topicPartitionCountProvider.apply(topicName);
+        if (partitions.isPresent()) {
+            return partitions.getAsInt();
         } else {
             throw new StreamsInvalidTopologyException("Number of partitions is not set for topic: " + topicName);
         }
     }
 
     private int validateAndGetNumOfPartitions(final Map<String, Integer> repartitionTopics,
-                                              final Collection<String> enforcedTopics) {
-        final String firstTopicName = enforcedTopics.iterator().next();
+                                              final Collection<String> fixedRepartitionTopics) {
+        final String firstTopicName = fixedRepartitionTopics.iterator().next();
 
-        final int firstNumberOfPartitionsOfInternalTopic = getEnforcedPartitionCount(firstTopicName, repartitionTopics);
+        final int firstNumberOfPartitionsOfInternalTopic = getPartitionCount(firstTopicName);
 
-        for (final String topicName : enforcedTopics) {
-            final int numberOfPartitions = getEnforcedPartitionCount(topicName, repartitionTopics);
+        for (final String topicName : fixedRepartitionTopics) {
+            final int numberOfPartitions = getPartitionCount(topicName);
 
             if (numberOfPartitions != firstNumberOfPartitionsOfInternalTopic) {
                 final String msg = String.format("Following topics do not have the same number of partitions: [%s]",
