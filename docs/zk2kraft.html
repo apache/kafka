@@ -125,7 +125,24 @@
     <h4 class="anchor-heading">Removal metrics</h4>
     <ul>
         <li>
-            
+            <p>
+                Remove the following metrics related to ZooKeeper.
+                <code>ControlPlaneNetworkProcessorAvgIdlePercent</code>
+                is to monitor the average fraction of time the network processors are idle. The other <code>ControlPlaneExpiredConnectionsKilledCount</code>
+                is to monitor the total number of connections disconnected, across all processors.
+            </p>
+            <ul>
+                <li><code>ControlPlaneNetworkProcessorAvgIdlePercent</code></li>
+                <li><code>ControlPlaneExpiredConnectionsKilledCount</code></li>
+            </ul>
+            <p>
+                In Kraft mode, Kafka also provides metrics to monitor the network processors and expired connections.
+                Use the following metrics to monitor the network processors and expired connections:
+            </p>
+            <ul>
+                <li><code>NetworkProcessorAvgIdlePercent</code></li>
+                <li><code>ExpiredConnectionsKilledCount</code></li>
+            </ul>
         </li>
     </ul>
 </div>
