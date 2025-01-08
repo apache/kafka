@@ -813,8 +813,34 @@ public class LogSegmentTest {
         assertEquals(2, segment.offsetIndex().entries());
         assertTrue(segment.offsetIndex().lookup(2L).position > segment.offsetIndex().lookup(1L).position);
 
+        assertEquals(2, segment.timeIndex().entries());
+        assertTrue(segment.timeIndex().lookup(2L).offset > segment.timeIndex().lookup(1L).offset);
+    }
+
+    @Test
+    public void testNonMonotonicTimestampForMultipleBatchesInMemoryRecords() throws IOException {
+        LogSegment segment = createSegment(0, 1, Time.SYSTEM);
+
+        ByteBuffer buffer1 = ByteBuffer.allocate(1024);
+        // append first batch to buffer1
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer1, Compression.NONE, TimestampType.CREATE_TIME, 0);
+        builder.append(1L, "key1".getBytes(), "value1".getBytes());
+        builder.close();
+
+        // append second batch to buffer1
+        builder = MemoryRecords.builder(buffer1, Compression.NONE, TimestampType.CREATE_TIME, 1);
+        builder.append(0L, "key1".getBytes(), "value1".getBytes());
+        builder.close();
+
+        buffer1.flip();
+        MemoryRecords record = MemoryRecords.readableRecords(buffer1);
+        segment.append(1L, 1L, 1L, record);
+
+        assertEquals(1, segment.offsetIndex().entries());
+        assertEquals(1, segment.offsetIndex().lookup(1L).offset);
+
         assertEquals(1, segment.timeIndex().entries());
-        assertEquals(2L, segment.timeIndex().lookup(2L).offset);
+        assertEquals(0L, segment.timeIndex().lookup(1L).offset);
     }
 
     private ProducerStateManager newProducerStateManager() throws IOException {
