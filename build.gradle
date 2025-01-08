@@ -190,10 +190,6 @@ allprojects {
           libs.scalaReflect,
           libs.jacksonAnnotations,
           libs.jacksonDatabindYaml,
-          // be explicit about the Netty dependency version instead of relying on the version set by
-          // ZooKeeper (potentially older and containing CVEs)
-          libs.nettyHandler,
-          libs.nettyTransportNativeEpoll,
           libs.log4j2Api,
           libs.log4j2Core,
           libs.log4j1Bridge2Api
@@ -1107,20 +1103,6 @@ project(':core') {
     // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
     implementation libs.scalaReflect
     implementation libs.scalaLogging
-    implementation libs.commonsIo // ZooKeeper dependency. Do not use, this is going away.
-    implementation(libs.zookeeper) {
-      // Dropwizard Metrics are required by ZooKeeper as of v3.6.0,
-      // but the library should *not* be used in Kafka code
-      implementation libs.dropwizardMetrics
-      exclude module: 'slf4j-log4j12'
-      exclude module: 'log4j'
-      // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0.
-      // We are removing Zookeeper's dependency on logback so we have a singular logging backend.
-      exclude module: 'logback-classic'
-      exclude module: 'logback-core'
-    }
-    // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
-    implementation libs.commonsCli
     implementation log4jLibs
 
     runtimeOnly log4jRuntimeLibs

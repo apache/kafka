@@ -49,7 +49,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.server.util.Csv
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
-import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
@@ -60,18 +59,6 @@ object KafkaConfig {
   def main(args: Array[String]): Unit = {
     System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
       DynamicBrokerConfig.dynamicConfigUpdateModes))
-  }
-
-  private[kafka] def zooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String): Option[String] = {
-    Option(clientConfig.getProperty(ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName)))
-  }
-
-  // For ZooKeeper TLS client authentication to be enabled the client must (at a minimum) configure itself as using TLS
-  // with both a client connection socket and a key store location explicitly set.
-  private[kafka] def zkTlsClientAuthEnabled(zkClientConfig: ZKClientConfig): Boolean = {
-    zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG).contains("true") &&
-      zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG).isDefined &&
-      zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG).isDefined
   }
 
   val configDef = AbstractKafkaConfig.CONFIG_DEF
