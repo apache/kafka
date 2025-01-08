@@ -17,8 +17,7 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-
-import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.storage.Converter;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -28,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -145,9 +145,11 @@ public class PluginScannerTest {
     public void testClasspathPluginIsAlsoLoadedInIsolation(PluginScanner scanner) {
         Set<Path> isolatedClassPathPlugin = TestPlugins.pluginPath(TestPlugins.TestPlugin.CLASSPATH_CONVERTER);
         PluginScanResult result = scan(scanner, isolatedClassPathPlugin);
-        assertFalse(result.converters().isEmpty());
-        result.converters().stream().filter(pluginDesc -> pluginDesc.className().equals(JsonConverter.class.getName()))
-            .forEach(pluginDesc -> assertInstanceOf(PluginClassLoader.class, pluginDesc.loader()));
+        Optional<PluginDesc<Converter>> pluginDesc = result.converters().stream()
+            .filter(desc -> desc.className().equals(TestPlugins.TestPlugin.CLASSPATH_CONVERTER.className()))
+            .findFirst();
+        assertTrue(pluginDesc.isPresent());
+        assertInstanceOf(PluginClassLoader.class, pluginDesc.get().loader());
     }
 
     private PluginScanResult scan(PluginScanner scanner, Set<Path> pluginLocations) {
