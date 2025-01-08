@@ -222,7 +222,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     cleaner.startup()
 
     val firstDirty = log.activeSegment.baseOffset
-    assertTrue(firstDirty > appendsV0.size) // ensure we clean data from V0 and V1
+    assertTrue(firstDirty >= appends.size) // ensure we clean data from V0 and V1
 
     checkLastCleaned("log", 0, firstDirty)
     val compactedSize = log.logSegments.asScala.map(_.size).sum
