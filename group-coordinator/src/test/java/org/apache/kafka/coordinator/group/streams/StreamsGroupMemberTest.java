@@ -100,7 +100,6 @@ public class StreamsGroupMemberTest {
     public void testBuilderWithDefaults() {
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_ID).build();
 
-        fail();
         assertEquals(MEMBER_ID, member.memberId());
         assertNull(member.memberEpoch());
         assertNull(member.previousMemberEpoch());
