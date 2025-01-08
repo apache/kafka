@@ -62,8 +62,6 @@ public class ShareConsumerPerformance {
             ShareConsumerPerfOptions options = new ShareConsumerPerfOptions(args);
             AtomicLong totalMessagesRead = new AtomicLong(0);
             AtomicLong totalBytesRead = new AtomicLong(0);
-            AtomicLong joinTimeMs = new AtomicLong(0);
-            AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
 
             if (!options.hideHeader())
                 printHeader();
@@ -73,7 +71,7 @@ public class ShareConsumerPerformance {
                 shareConsumers.add(new KafkaShareConsumer<>(options.props()));
             }
             long startMs = System.currentTimeMillis();
-            consume(shareConsumers, options, totalMessagesRead, totalBytesRead, joinTimeMsInSingleRound, startMs);
+            consume(shareConsumers, options, totalMessagesRead, totalBytesRead, startMs);
             long endMs = System.currentTimeMillis();
 
             List<Map<MetricName, ? extends Metric>> shareConsumersMetrics = new ArrayList<>();
@@ -87,14 +85,12 @@ public class ShareConsumerPerformance {
 
             // Print final stats for share group.
             double elapsedSec = (endMs - startMs) / 1_000.0;
-            long fetchTimeInMs = (endMs - startMs) - joinTimeMs.get();
+            long fetchTimeInMs = endMs - startMs;
             printStats(totalBytesRead.get(), totalMessagesRead.get(), elapsedSec, fetchTimeInMs, startMs, endMs,
                     options.dateFormat(), -1);
 
-            if (!shareConsumersMetrics.isEmpty()) {
-                for (Map<MetricName, ? extends Metric> metrics : shareConsumersMetrics)
-                    ToolsUtils.printMetrics(metrics);
-            }
+            shareConsumersMetrics.forEach(ToolsUtils::printMetrics);
+
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
@@ -111,14 +107,12 @@ public class ShareConsumerPerformance {
                                 ShareConsumerPerfOptions options,
                                 AtomicLong totalMessagesRead,
                                 AtomicLong totalBytesRead,
-                                AtomicLong joinTimeMsInSingleRound,
                                 long startMs) {
         long numMessages = options.numMessages();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         shareConsumers.forEach(shareConsumer -> shareConsumer.subscribe(options.topic()));
 
         // Now start the benchmark.
-        long currentTimeMs = System.currentTimeMillis();
         AtomicLong messagesRead = new AtomicLong(0);
         AtomicLong bytesRead = new AtomicLong(0);
         List<ShareConsumerConsumption> shareConsumersConsumptionDetails = new ArrayList<>();
@@ -130,8 +124,8 @@ public class ShareConsumerPerformance {
             ShareConsumerConsumption shareConsumerConsumption = new ShareConsumerConsumption(0, 0);
             executorService.submit(() -> {
                 try {
-                    consumeMessagesForSingleShareConsumer(currentTimeMs, currentTimeMs,
-                            shareConsumers.get(index), currentTimeMs, joinTimeMsInSingleRound, messagesRead, bytesRead, options, shareConsumerConsumption, index + 1);
+                    consumeMessagesForSingleShareConsumer(shareConsumers.get(index), messagesRead, bytesRead, options,
+                        shareConsumerConsumption, index + 1);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
@@ -179,17 +173,16 @@ public class ShareConsumerPerformance {
         totalBytesRead.set(bytesRead.get());
     }
 
-    private static void consumeMessagesForSingleShareConsumer(long currentTimeMs,
-                                                              long lastConsumedTimeMs,
-                                                              KafkaShareConsumer<byte[], byte[]> shareConsumer,
-                                                              long lastReportTimeMs,
-                                                              AtomicLong joinTimeMsInSingleRound,
+    private static void consumeMessagesForSingleShareConsumer(KafkaShareConsumer<byte[], byte[]> shareConsumer,
                                                               AtomicLong totalMessagesRead,
                                                               AtomicLong totalBytesRead,
                                                               ShareConsumerPerfOptions options,
                                                               ShareConsumerConsumption shareConsumerConsumption,
                                                               int index) throws InterruptedException {
         SimpleDateFormat dateFormat = options.dateFormat();
+        long currentTimeMs = System.currentTimeMillis();
+        long lastConsumedTimeMs = currentTimeMs;
+        long lastReportTimeMs = currentTimeMs;
 
         long lastBytesRead = 0L;
         long lastMessagesRead = 0L;
@@ -214,8 +207,7 @@ public class ShareConsumerPerformance {
                 if (currentTimeMs - lastReportTimeMs >= options.reportingIntervalMs()) {
                     if (options.showDetailedStats())
                         printShareConsumerProgress(bytesReadByConsumer, lastBytesRead, messagesReadByConsumer, lastMessagesRead,
-                                lastReportTimeMs, currentTimeMs, dateFormat, joinTimeMsInSingleRound.get(), index);
-                    joinTimeMsInSingleRound = new AtomicLong(0);
+                                lastReportTimeMs, currentTimeMs, dateFormat, index);
                     lastReportTimeMs = currentTimeMs;
                     lastMessagesRead = messagesReadByConsumer;
                     lastBytesRead = bytesReadByConsumer;
@@ -233,14 +225,13 @@ public class ShareConsumerPerformance {
                                                 long startMs,
                                                 long endMs,
                                                 SimpleDateFormat dateFormat,
-                                                long joinTimeMsInSingleRound,
                                                 int index) {
         double elapsedMs = endMs - startMs;
         double totalMbRead = (bytesRead * 1.0) / (1024 * 1024);
         double intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024);
         double intervalMbPerSec = 1000.0 * intervalMbRead / elapsedMs;
         double intervalMessagesPerSec = ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0;
-        long fetchTimeMs = endMs - startMs - joinTimeMsInSingleRound;
+        long fetchTimeMs = endMs - startMs;
 
         System.out.printf("%s, %s, %.4f, %.4f, %.4f, %d, %d for share consumer %d", dateFormat.format(startMs), dateFormat.format(endMs),
             totalMbRead, intervalMbPerSec, intervalMessagesPerSec, messagesRead, fetchTimeMs, index);
@@ -387,7 +378,7 @@ public class ShareConsumerPerformance {
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostsAndPorts());
             props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt));
             props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, options.valueOf(socketBufferSizeOpt).toString());
-            props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, options.valueOf(fetchSizeOpt).toString());
+            props.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, options.valueOf(fetchSizeOpt).toString());
             props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
             props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
             props.put(ConsumerConfig.CHECK_CRCS_CONFIG, "false");

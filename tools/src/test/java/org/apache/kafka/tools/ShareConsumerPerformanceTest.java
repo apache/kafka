@@ -54,7 +54,7 @@ public class ShareConsumerPerformanceTest {
     @Test
     public void testHeaderMatchBody() {
         testHeaderMatchContent(2,
-            () -> ShareConsumerPerformance.printShareConsumerProgress(1024 * 1024, 0, 1, 0, 0, 1, dateFormat, 1L, 1));
+            () -> ShareConsumerPerformance.printShareConsumerProgress(1024 * 1024, 0, 1, 0, 0, 1, dateFormat, 1));
     }
 
     @Test
