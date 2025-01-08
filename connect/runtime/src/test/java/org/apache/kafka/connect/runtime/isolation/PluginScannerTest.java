@@ -17,8 +17,8 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.apache.kafka.connect.json.JsonConverter;
 
+import org.apache.kafka.connect.json.JsonConverter;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -143,9 +143,8 @@ public class PluginScannerTest {
     @ParameterizedTest
     @MethodSource("parameters")
     public void testClasspathPluginIsAlsoLoadedInIsolation(PluginScanner scanner) {
-        // json converter is part of the classpath by default
-        String jsonConverterLocation = JsonConverter.class.getProtectionDomain().getCodeSource().getLocation().getPath();
-        PluginScanResult result = scan(scanner, Collections.singleton(Path.of(jsonConverterLocation)));
+        Set<Path> isolatedClassPathPlugin = TestPlugins.pluginPath(TestPlugins.TestPlugin.CLASSPATH_CONVERTER);
+        PluginScanResult result = scan(scanner, isolatedClassPathPlugin);
         assertFalse(result.converters().isEmpty());
         result.converters().stream().filter(pluginDesc -> pluginDesc.className().equals(JsonConverter.class.getName()))
             .forEach(pluginDesc -> assertInstanceOf(PluginClassLoader.class, pluginDesc.loader()));
