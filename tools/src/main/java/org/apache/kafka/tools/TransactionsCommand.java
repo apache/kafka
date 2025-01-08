@@ -175,7 +175,7 @@ public abstract class TransactionsCommand {
                 })
                 .findFirst();
 
-            if (!foundProducerState.isPresent()) {
+            if (foundProducerState.isEmpty()) {
                 printErrorAndExit("Could not find any open transactions starting at offset " +
                     startOffset + " on partition " + topicPartition);
                 return null;
@@ -543,14 +543,14 @@ public abstract class TransactionsCommand {
             Optional<Integer> brokerId = Optional.ofNullable(ns.getInt("broker_id"));
             Optional<String> topic = Optional.ofNullable(ns.getString("topic"));
 
-            if (!topic.isPresent() && !brokerId.isPresent()) {
+            if (topic.isEmpty() && brokerId.isEmpty()) {
                 printErrorAndExit("The `find-hanging` command requires either --topic " +
                     "or --broker-id to limit the scope of the search");
                 return;
             }
 
             Optional<Integer> partition = Optional.ofNullable(ns.getInt("partition"));
-            if (partition.isPresent() && !topic.isPresent()) {
+            if (partition.isPresent() && topic.isEmpty()) {
                 printErrorAndExit("The --partition argument requires --topic to be provided");
                 return;
             }
@@ -767,7 +767,7 @@ public abstract class TransactionsCommand {
                 Map<String, TopicDescription> topicDescriptions = admin.describeTopics(topics).allTopicNames().get();
                 topicDescriptions.forEach((topic, description) -> {
                     description.partitions().forEach(partitionInfo -> {
-                        if (!brokerId.isPresent() || hasReplica(brokerId.get(), partitionInfo)) {
+                        if (brokerId.isEmpty() || hasReplica(brokerId.get(), partitionInfo)) {
                             topicPartitions.add(new TopicPartition(topic, partitionInfo.partition()));
                         }
                     });
@@ -1017,7 +1017,7 @@ public abstract class TransactionsCommand {
             .filter(cmd -> cmd.name().equals(commandName))
             .findFirst();
 
-        if (!commandOpt.isPresent()) {
+        if (commandOpt.isEmpty()) {
             printErrorAndExit("Unexpected command " + commandName);
         }
 

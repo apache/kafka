@@ -678,7 +678,6 @@ class GroupCoordinatorAdapterTest {
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
               .setCommittedOffset(100)
-              .setCommitTimestamp(now)
               .setCommittedLeaderEpoch(1)
           ).asJava)
       ).asJava)
@@ -951,6 +950,6 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[Exception])
+    assertFutureThrows(future, classOf[IllegalStateException])
   }
 }

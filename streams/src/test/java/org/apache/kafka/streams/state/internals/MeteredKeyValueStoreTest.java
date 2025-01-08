@@ -31,7 +31,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -94,7 +93,7 @@ public class MeteredKeyValueStoreTest {
     @Mock
     private KeyValueStore<Bytes, byte[]> inner;
     @Mock
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
 
     private MeteredKeyValueStore<String, String> metered;
     private final Metrics metrics = new Metrics();
@@ -132,7 +131,7 @@ public class MeteredKeyValueStoreTest {
     }
 
     private void init() {
-        metered.init((StateStoreContext) context, metered);
+        metered.init(context, metered);
     }
 
     @Test
@@ -145,8 +144,8 @@ public class MeteredKeyValueStoreTest {
             Serdes.String(),
             Serdes.String()
         );
-        doNothing().when(inner).init((StateStoreContext) context, outer);
-        outer.init((StateStoreContext) context, outer);
+        doNothing().when(inner).init(context, outer);
+        outer.init(context, outer);
     }
 
     @Test
@@ -184,7 +183,7 @@ public class MeteredKeyValueStoreTest {
             keySerde,
             valueSerde
         );
-        metered.init((StateStoreContext) context, metered);
+        metered.init(context, metered);
 
         metered.get(KEY);
         metered.put(KEY, VALUE);
@@ -213,7 +212,7 @@ public class MeteredKeyValueStoreTest {
     @Test
     public void shouldRecordRestoreLatencyOnInit() {
         setUp();
-        doNothing().when(inner).init((StateStoreContext) context, metered);
+        doNothing().when(inner).init(context, metered);
 
         init();
 
@@ -415,6 +414,7 @@ public class MeteredKeyValueStoreTest {
         assertThrows(NullPointerException.class, () -> metered.putAll(Collections.singletonList(KeyValue.pair(null, VALUE))));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnPrefixScanIfPrefixIsNull() {
         setUpWithoutContext();
@@ -422,24 +422,28 @@ public class MeteredKeyValueStoreTest {
         assertThrows(NullPointerException.class, () -> metered.prefixScan(null, stringSerializer));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnRangeIfFromIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.range(null, "to"));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnRangeIfToIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.range("from", null));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnReverseRangeIfFromIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.reverseRange(null, "to"));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnReverseRangeIfToIsNull() {
         setUpWithoutContext();
@@ -462,6 +466,7 @@ public class MeteredKeyValueStoreTest {
         assertTrue((Double) metric.metricValue() > 0);
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTrackOpenIteratorsMetric() {
         setUp();
@@ -474,13 +479,14 @@ public class MeteredKeyValueStoreTest {
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
 
-        try (final KeyValueIterator<String, String> iterator = metered.prefixScan(KEY, stringSerializer)) {
+        try (final KeyValueIterator<String, String> unused = metered.prefixScan(KEY, stringSerializer)) {
             assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
         }
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTimeIteratorDuration() {
         setUp();
@@ -495,7 +501,7 @@ public class MeteredKeyValueStoreTest {
         assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
         assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
 
-        try (final KeyValueIterator<String, String> iterator = metered.all()) {
+        try (final KeyValueIterator<String, String> unused = metered.all()) {
             // nothing to do, just close immediately
             mockTime.sleep(2);
         }
@@ -512,6 +518,7 @@ public class MeteredKeyValueStoreTest {
         assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTrackOldestOpenIteratorTimestamp() {
         setUp();
@@ -526,7 +533,7 @@ public class MeteredKeyValueStoreTest {
         KeyValueIterator<String, String> second = null;
         final long secondTimestamp;
         try {
-            try (final KeyValueIterator<String, String> first = metered.all()) {
+            try (final KeyValueIterator<String, String> unused = metered.all()) {
                 final long oldestTimestamp = mockTime.milliseconds();
                 assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
                 mockTime.sleep(100);

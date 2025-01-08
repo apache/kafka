@@ -29,7 +29,7 @@ import org.junit.jupiter.params.provider.ValueSource
 class MinIsrConfigTest extends KafkaServerTestHarness {
   val overridingProps = new Properties()
   overridingProps.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "5")
-  def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, null).map(KafkaConfig.fromProps(_, overridingProps))
+  def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1).map(KafkaConfig.fromProps(_, overridingProps))
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))

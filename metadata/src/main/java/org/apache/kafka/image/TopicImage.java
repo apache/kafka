@@ -74,8 +74,7 @@ public final class TopicImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof TopicImage)) return false;
-        TopicImage other = (TopicImage) o;
+        if (!(o instanceof TopicImage other)) return false;
         return name.equals(other.name) &&
             id.equals(other.id) &&
             partitions.equals(other.partitions);

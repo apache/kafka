@@ -215,7 +215,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
             removeTopologyFuture.completeExceptionally(
                 new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state)
             );
-        } else if (!getTopologyByName(topologyToRemove).isPresent()) {
+        } else if (getTopologyByName(topologyToRemove).isEmpty()) {
             log.error("Attempted to remove unknown topology {}. This application currently contains the"
                           + "following topologies: {}.", topologyToRemove, topologyMetadata.namedTopologiesView()
             );
@@ -431,7 +431,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * See {@link KafkaStreams#allLocalStorePartitionLags()}
      */
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLagsForTopology(final String topologyName) {
-        if (!getTopologyByName(topologyName).isPresent()) {
+        if (getTopologyByName(topologyName).isEmpty()) {
             log.error("Can't get local store partition lags since topology {} does not exist in this application",
                       topologyName);
             throw new UnknownTopologyException("Can't get local store partition lags", topologyName);

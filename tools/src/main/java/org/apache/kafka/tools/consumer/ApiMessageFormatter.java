@@ -33,6 +33,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 public abstract class ApiMessageFormatter implements MessageFormatter {
 
+    private static final String TYPE = "type";
     private static final String VERSION = "version";
     private static final String DATA = "data";
     private static final String KEY = "key";
@@ -46,22 +47,22 @@ public abstract class ApiMessageFormatter implements MessageFormatter {
         byte[] key = consumerRecord.key();
         if (Objects.nonNull(key)) {
             short keyVersion = ByteBuffer.wrap(key).getShort();
-            JsonNode dataNode = readToKeyJson(ByteBuffer.wrap(key), keyVersion);
+            JsonNode dataNode = readToKeyJson(ByteBuffer.wrap(key));
 
             if (dataNode instanceof NullNode) {
                 return;
             }
             json.putObject(KEY)
-                    .put(VERSION, keyVersion)
+                    .put(TYPE, keyVersion)
                     .set(DATA, dataNode);
         } else {
-            json.set(KEY, NullNode.getInstance());
+            return;
         }
 
         byte[] value = consumerRecord.value();
         if (Objects.nonNull(value)) {
             short valueVersion = ByteBuffer.wrap(value).getShort();
-            JsonNode dataNode = readToValueJson(ByteBuffer.wrap(value), valueVersion);
+            JsonNode dataNode = readToValueJson(ByteBuffer.wrap(value));
 
             json.putObject(VALUE)
                     .put(VERSION, valueVersion)
@@ -77,6 +78,6 @@ public abstract class ApiMessageFormatter implements MessageFormatter {
         }
     }
 
-    protected abstract JsonNode readToKeyJson(ByteBuffer byteBuffer, short version);
-    protected abstract JsonNode readToValueJson(ByteBuffer byteBuffer, short version);
+    protected abstract JsonNode readToKeyJson(ByteBuffer byteBuffer);
+    protected abstract JsonNode readToValueJson(ByteBuffer byteBuffer);
 }  

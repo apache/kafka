@@ -276,7 +276,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(2, null).zipWithIndex.map{ case (props, index) =>
+    TestUtils.createBrokerConfigs(2).zipWithIndex.map{ case (props, index) =>
      // We use mock timer so the records can get removed if the test env is too busy to complete
      // tests before kafka-log-retention. Hence, we disable the retention to avoid failed tests
      props.setProperty(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "-1")

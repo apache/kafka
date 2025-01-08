@@ -20,7 +20,6 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import kafka.utils.Logging
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.TopicPartition
@@ -99,17 +98,6 @@ object AlterPartitionManager {
       brokerEpochSupplier = brokerEpochSupplier,
       metadataVersionSupplier = () => metadataCache.metadataVersion()
     )
-  }
-
-  /**
-   * Factory for ZK based implementation, used when IBP < 2.7-IV2
-   */
-  def apply(
-    scheduler: Scheduler,
-    time: Time,
-    zkClient: KafkaZkClient
-  ): AlterPartitionManager = {
-    new ZkAlterPartitionManager(scheduler, time, zkClient)
   }
 }
 

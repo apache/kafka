@@ -32,7 +32,6 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.util.MockScheduler;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
@@ -785,7 +784,7 @@ public class LogSegmentTest {
             topicPartition,
             logDir,
             (int) (Duration.ofMinutes(5).toMillis()),
-            new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+            new ProducerStateManagerConfig(86400000, false),
             new MockTime()
         );
     }

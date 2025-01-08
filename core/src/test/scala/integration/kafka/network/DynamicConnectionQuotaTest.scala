@@ -305,7 +305,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   private def produceRequest: ProduceRequest =
-    requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+    requests.ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
         Collections.singletonList(new ProduceRequestData.TopicProduceData()
           .setName(topic)

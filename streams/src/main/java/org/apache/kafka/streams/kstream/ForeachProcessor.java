@@ -20,7 +20,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 
 /**
- * @deprecated since 4.0 and should not be used any longer.
+ * @deprecated Since 4.0 and should not be used any longer.
  */
 @Deprecated
 public class ForeachProcessor<K, V> implements Processor<K, V, Void, Void> {
