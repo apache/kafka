@@ -508,7 +508,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  private def initializeLeaderEpochCache(): Unit = lock synchronized {
+  private def reinitializeLeaderEpochCache(): Unit = lock synchronized {
     leaderEpochCache = UnifiedLog.createLeaderEpochCache(
       dir, topicPartition, logDirFailureChannel, Option.apply(leaderEpochCache), scheduler)
   }
@@ -672,7 +672,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           if (shouldReinitialize) {
             // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
             // the checkpoint file in renamed log directory
-            initializeLeaderEpochCache()
+            reinitializeLeaderEpochCache()
             initializePartitionMetadata()
           } else {
             leaderEpochCache.clear()
