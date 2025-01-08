@@ -83,7 +83,7 @@ public class UnifiedLog {
         // offset (see below). The next time the log is reloaded, we will load producer state using this snapshot
         // (or later snapshots). Otherwise, if there is no snapshot file, then we have to rebuild producer state
         // from the first segment.
-        if (!producerStateManager.latestSnapshotOffset().isPresent() && reloadFromCleanShutdown) {
+        if (producerStateManager.latestSnapshotOffset().isEmpty() && reloadFromCleanShutdown) {
             // To avoid an expensive scan through all the segments, we take empty snapshots from the start of the
             // last two segments and the last offset. This should avoid the full scan in the case that the log needs
             // truncation.

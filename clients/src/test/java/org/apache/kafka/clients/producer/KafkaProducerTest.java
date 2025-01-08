@@ -2274,6 +2274,34 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void shouldNotInvokeFlushInCallback() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        // only test in idempotence disabled producer for simplicity
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+        AtomicReference<KafkaException> kafkaException = new AtomicReference<>();
+
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+            new StringSerializer(), metadata, client, null, time)) {
+            producer.send(
+                new ProducerRecord<>("topic", "value"),
+                (recordMetadata, exception) -> kafkaException.set(assertThrows(KafkaException.class, producer::flush))
+            );
+        }
+
+        assertNotNull(kafkaException.get());
+        assertEquals("KafkaProducer.flush() invocation inside a callback is not permitted because it may lead to deadlock.",
+            kafkaException.get().getMessage());
+    }
+
+    @Test
     public void negativePartitionShouldThrow() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");

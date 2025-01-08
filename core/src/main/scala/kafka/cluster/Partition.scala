@@ -1398,8 +1398,9 @@ class Partition(val topicPartition: TopicPartition,
 
           // Avoid writing to leader if there are not enough insync replicas to make it safe
           if (inSyncSize < minIsr && requiredAcks == -1) {
-            throw new NotEnoughReplicasException(s"The size of the current ISR ${partitionState.isr} " +
-              s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
+            throw new NotEnoughReplicasException(s"The size of the current ISR : $inSyncSize " +
+              s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition, " +
+              s"live replica(s) broker.id are : $inSyncReplicaIds")
           }
 
           val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,

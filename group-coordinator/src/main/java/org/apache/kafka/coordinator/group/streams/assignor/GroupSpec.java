@@ -14,16 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.security;
+package org.apache.kafka.coordinator.group.streams.assignor;
 
-import java.security.AlgorithmParameters;
-import java.security.spec.AlgorithmParameterSpec;
-import java.security.spec.InvalidParameterSpecException;
 import java.util.Map;
 
-public interface CipherParamsEncoder {
+/**
+ * The group metadata specifications required to compute the target assignment.
+ */
+public interface GroupSpec {
 
-    Map<String, String> toMap(AlgorithmParameters cipher) throws InvalidParameterSpecException;
+    /**
+     * @return Member metadata keyed by member Id.
+     */
+    Map<String, AssignmentMemberSpec> members();
 
-    AlgorithmParameterSpec toParameterSpec(Map<String, String> paramMap);
+    /**
+     * @return Any configurations passed to the assignor.
+     */
+    Map<String, String> assignmentConfigs();
+
 }

@@ -50,7 +50,7 @@ public class ClusterInstanceParameterResolver implements ParameterResolver {
             return false;
         }
 
-        if (!extensionContext.getTestMethod().isPresent()) {
+        if (extensionContext.getTestMethod().isEmpty()) {
             // Allow this to be injected into the class
             extensionContext.getRequiredTestClass();
             return true;

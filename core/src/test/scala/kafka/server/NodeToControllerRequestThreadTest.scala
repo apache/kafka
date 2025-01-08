@@ -50,7 +50,7 @@ class NodeToControllerRequestThreadTest {
   @Test
   def testRetryTimeoutWhileControllerNotAvailable(): Unit = {
     val time = new MockTime()
-    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1))
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
@@ -84,7 +84,7 @@ class NodeToControllerRequestThreadTest {
   def testRequestsSent(): Unit = {
     // just a simple test that tests whether the request from 1 -> 2 is sent and the response callback is called
     val time = new MockTime()
-    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1))
     val controllerId = 2
 
     val metadata = mock(classOf[Metadata])
@@ -125,7 +125,7 @@ class NodeToControllerRequestThreadTest {
   def testControllerChanged(): Unit = {
     // in this test the current broker is 1, and the controller changes from 2 -> 3 then back: 3 -> 2
     val time = new MockTime()
-    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1))
     val oldControllerId = 1
     val newControllerId = 2
 
@@ -173,7 +173,7 @@ class NodeToControllerRequestThreadTest {
   @Test
   def testNotController(): Unit = {
     val time = new MockTime()
-    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1))
     val oldControllerId = 1
     val newControllerId = 2
 
@@ -233,7 +233,7 @@ class NodeToControllerRequestThreadTest {
   @Test
   def testEnvelopeResponseWithNotControllerError(): Unit = {
     val time = new MockTime()
-    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1))
     val oldControllerId = 1
     val newControllerId = 2
 
@@ -307,7 +307,7 @@ class NodeToControllerRequestThreadTest {
   @Test
   def testRetryTimeout(): Unit = {
     val time = new MockTime()
-    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1))
     val controllerId = 1
 
     val metadata = mock(classOf[Metadata])
@@ -356,7 +356,7 @@ class NodeToControllerRequestThreadTest {
   @Test
   def testUnsupportedVersionHandling(): Unit = {
     val time = new MockTime()
-    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1))
     val controllerId = 2
 
     val metadata = mock(classOf[Metadata])
@@ -394,7 +394,7 @@ class NodeToControllerRequestThreadTest {
   @Test
   def testAuthenticationExceptionHandling(): Unit = {
     val time = new MockTime()
-    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1))
     val controllerId = 2
 
     val metadata = mock(classOf[Metadata])
@@ -434,7 +434,7 @@ class NodeToControllerRequestThreadTest {
   def testThreadNotStarted(): Unit = {
     // Make sure we throw if we enqueue anything while the thread is not running
     val time = new MockTime()
-    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1))
 
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)

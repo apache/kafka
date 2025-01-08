@@ -41,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
@@ -455,13 +457,19 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
     }
 
     @Test
-    public void testEnrichedConfigDef() {
+    @SuppressWarnings("rawtypes")
+    public void testEnrichedConfigDef() throws ClassNotFoundException {
         String alias = "hdt";
         String prefix = ConnectorConfig.TRANSFORMS_CONFIG + "." + alias + ".";
         Map<String, String> props = new HashMap<>();
         props.put(ConnectorConfig.TRANSFORMS_CONFIG, alias);
+        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestConnector.class.getName());
         props.put(prefix + "type", HasDuplicateConfigTransformation.class.getName());
-        ConfigDef def = ConnectorConfig.enrich(MOCK_PLUGINS, new ConfigDef(), props, false);
+        Plugins mockPlugins = mock(Plugins.class);
+        when(mockPlugins.newPlugin(HasDuplicateConfigTransformation.class.getName(),
+                null, (ClassLoader) null)).thenReturn(new HasDuplicateConfigTransformation());
+        when(mockPlugins.transformations()).thenReturn(Collections.emptySet());
+        ConfigDef def = ConnectorConfig.enrich(mockPlugins, new ConfigDef(), props, false);
         assertEnrichedConfigDef(def, prefix, HasDuplicateConfigTransformation.MUST_EXIST_KEY, ConfigDef.Type.BOOLEAN);
         assertEnrichedConfigDef(def, prefix, TransformationStage.PREDICATE_CONFIG, ConfigDef.Type.STRING);
         assertEnrichedConfigDef(def, prefix, TransformationStage.NEGATE_CONFIG, ConfigDef.Type.BOOLEAN);
