@@ -21,6 +21,8 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -677,7 +679,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Sends a list of specified offsets to the consumer group coordinator, and also marks
      * those offsets as part of the current transaction. These offsets will be considered
      * committed only if the transaction is committed successfully. The committed offset should
-     * be the next message your application will consume, i.e. lastProcessedMessageOffset + 1.
+     * be the next message your application will consume, i.e. {@code nextRecordToBeProcessed.offset()}
+     * (or {@link ConsumerRecords#nextOffsets()}). You should also add the leader epoch as commit metadata,
+     * which can be obtained from {@link ConsumerRecord#leaderEpoch()} or {@link ConsumerRecords#nextOffsets()}.
      * <p>
      * This method should be used when you need to batch consumed and produced messages
      * together, typically in a consume-transform-produce pattern. Thus, the specified
@@ -1177,16 +1181,19 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * calls made since the previous {@link #beginTransaction()} are completed before the commit.
      * </p>
      * <p>
-     * <b>Important:</b> This method should not be used within the callback provided to
-     * {@link #send(ProducerRecord, Callback)}. Invoking <code>flush()</code> in this context will cause a deadlock.
+     * <b>Important:</b> This method must not be called from within the callback provided to
+     * {@link #send(ProducerRecord, Callback)}. Invoking <code>flush()</code> in this context will result in a
+     * {@link KafkaException} being thrown, as it will cause a deadlock.
      * </p>
      *
      * @throws InterruptException If the thread is interrupted while blocked
+     * @throws KafkaException If the method is invoked inside a {@link #send(ProducerRecord, Callback)} callback
      */
     @Override
     public void flush() {
         if (Thread.currentThread() == this.ioThread) {
-            log.error("KafkaProducer.flush() invocation inside a callback will cause a deadlock.");
+            log.error("KafkaProducer.flush() invocation inside a callback is not permitted because it may lead to deadlock.");
+            throw new KafkaException("KafkaProducer.flush() invocation inside a callback is not permitted because it may lead to deadlock.");
         }
 
         log.trace("Flushing accumulated records in producer.");

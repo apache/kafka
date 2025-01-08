@@ -56,7 +56,7 @@ import scala.jdk.CollectionConverters._
 @Timeout(100)
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
   override def generateConfigs: Seq[KafkaConfig] = {
-    val cfg = TestUtils.createBrokerConfig(0, null)
+    val cfg = TestUtils.createBrokerConfig(0)
     List(KafkaConfig.fromProps(cfg))
   }
 

@@ -36,7 +36,7 @@ abstract class RebootstrapTest extends AbstractConsumerTest {
 
     // In this test, fixed ports are necessary, because brokers must have the
     // same port after the restart.
-    FixedPortTestUtils.createBrokerConfigs(brokerCount, null, enableControlledShutdown = false)
+    FixedPortTestUtils.createBrokerConfigs(brokerCount, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 

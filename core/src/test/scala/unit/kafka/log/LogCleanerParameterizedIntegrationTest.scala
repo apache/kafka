@@ -158,7 +158,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     assertTrue(cleaner.cleanerManager.allCleanerCheckpoints.isEmpty, "Should not have cleaned")
 
     def kafkaConfigWithCleanerConfig(cleanerConfig: CleanerConfig): KafkaConfig = {
-      val props = TestUtils.createBrokerConfig(0, "localhost:2181")
+      val props = TestUtils.createBrokerConfig(0)
       props.put(CleanerConfig.LOG_CLEANER_THREADS_PROP, cleanerConfig.numThreads.toString)
       props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, cleanerConfig.dedupeBufferSize.toString)
       props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP, cleanerConfig.dedupeBufferLoadFactor.toString)

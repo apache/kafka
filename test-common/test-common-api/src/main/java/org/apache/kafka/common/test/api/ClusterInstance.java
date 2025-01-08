@@ -38,9 +38,12 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -164,7 +167,7 @@ public interface ClusterInstance {
         props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaProducer<>(props);
+        return new KafkaProducer<>(setClientSaslConfig(props));
     }
 
     default <K, V> Producer<K, V> producer() {
@@ -178,7 +181,7 @@ public interface ClusterInstance {
         props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaConsumer<>(props);
+        return new KafkaConsumer<>(setClientSaslConfig(props));
     }
 
     default <K, V> Consumer<K, V> consumer() {
@@ -194,7 +197,23 @@ public interface ClusterInstance {
             props.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
             props.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
         }
-        return Admin.create(props);
+        return Admin.create(setClientSaslConfig(props));
+    }
+
+    default Map<String, Object> setClientSaslConfig(Map<String, Object> configs) {
+        Map<String, Object> props = new HashMap<>(configs);
+        if (config().brokerSecurityProtocol() == SecurityProtocol.SASL_PLAINTEXT) {
+            props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
+            props.putIfAbsent(SaslConfigs.SASL_MECHANISM, "PLAIN");
+            props.putIfAbsent(
+                SaslConfigs.SASL_JAAS_CONFIG,
+                String.format(
+                    "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                    JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
+                )
+            );
+        }
+        return props;
     }
 
     default Admin admin(Map<String, Object> configs) {

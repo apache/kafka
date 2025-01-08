@@ -19,8 +19,6 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.ConfigDef;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -98,24 +96,23 @@ public final class ZkConfigs {
     private static final String ZOOKEEPER_CLIENT_CNXN_SOCKET = "zookeeper.clientCnxnSocket";
 
     static {
-        Map<String, String> zkSslConfigToSystemPropertyMap = new HashMap<>();
 
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_CLIENT_ENABLE_CONFIG, SECURE_CLIENT);
-        zkSslConfigToSystemPropertyMap.put(ZK_CLIENT_CNXN_SOCKET_CONFIG, ZOOKEEPER_CLIENT_CNXN_SOCKET);
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_KEY_STORE_LOCATION_CONFIG, "zookeeper.ssl.keyStore.location");
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_KEY_STORE_PASSWORD_CONFIG, "zookeeper.ssl.keyStore.password");
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_KEY_STORE_TYPE_CONFIG, "zookeeper.ssl.keyStore.type");
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_TRUST_STORE_LOCATION_CONFIG, "zookeeper.ssl.trustStore.location");
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_TRUST_STORE_PASSWORD_CONFIG, "zookeeper.ssl.trustStore.password");
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_TRUST_STORE_TYPE_CONFIG, "zookeeper.ssl.trustStore.type");
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_PROTOCOL_CONFIG, "zookeeper.ssl.protocol");
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_ENABLED_PROTOCOLS_CONFIG, "zookeeper.ssl.enabledProtocols");
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_CIPHER_SUITES_CONFIG, "zookeeper.ssl.ciphersuites");
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "zookeeper.ssl.hostnameVerification");
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_CRL_ENABLE_CONFIG, "zookeeper.ssl.crl");
-        zkSslConfigToSystemPropertyMap.put(ZK_SSL_OCSP_ENABLE_CONFIG, "zookeeper.ssl.ocsp");
-
-        ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP = Collections.unmodifiableMap(zkSslConfigToSystemPropertyMap);
+        ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP = Map.ofEntries(
+            Map.entry(ZK_SSL_CLIENT_ENABLE_CONFIG, SECURE_CLIENT),
+            Map.entry(ZK_CLIENT_CNXN_SOCKET_CONFIG, ZOOKEEPER_CLIENT_CNXN_SOCKET),
+            Map.entry(ZK_SSL_KEY_STORE_LOCATION_CONFIG, "zookeeper.ssl.keyStore.location"),
+            Map.entry(ZK_SSL_KEY_STORE_PASSWORD_CONFIG, "zookeeper.ssl.keyStore.password"),
+            Map.entry(ZK_SSL_KEY_STORE_TYPE_CONFIG, "zookeeper.ssl.keyStore.type"),
+            Map.entry(ZK_SSL_TRUST_STORE_LOCATION_CONFIG, "zookeeper.ssl.trustStore.location"),
+            Map.entry(ZK_SSL_TRUST_STORE_PASSWORD_CONFIG, "zookeeper.ssl.trustStore.password"),
+            Map.entry(ZK_SSL_TRUST_STORE_TYPE_CONFIG, "zookeeper.ssl.trustStore.type"),
+            Map.entry(ZK_SSL_PROTOCOL_CONFIG, "zookeeper.ssl.protocol"),
+            Map.entry(ZK_SSL_ENABLED_PROTOCOLS_CONFIG, "zookeeper.ssl.enabledProtocols"),
+            Map.entry(ZK_SSL_CIPHER_SUITES_CONFIG, "zookeeper.ssl.ciphersuites"),
+            Map.entry(ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "zookeeper.ssl.hostnameVerification"),
+            Map.entry(ZK_SSL_CRL_ENABLE_CONFIG, "zookeeper.ssl.crl"),
+            Map.entry(ZK_SSL_OCSP_ENABLE_CONFIG, "zookeeper.ssl.ocsp")
+        );
 
         ZK_SSL_CLIENT_ENABLE_DOC = "Set client to use TLS when connecting to ZooKeeper." +
             " An explicit value overrides any value set via the <code>zookeeper.client.secure</code> system property (note the different name)." +

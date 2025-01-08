@@ -485,7 +485,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 for (FieldSpec field : struct.fields()) {
                     Versions validTaggedVersions = field.versions().intersect(field.taggedVersions());
                     if (!validTaggedVersions.empty()) {
-                        if (!field.tag().isPresent()) {
+                        if (field.tag().isEmpty()) {
                             throw new RuntimeException("Field " + field.name() + " has tagged versions, but no tag.");
                         }
                         buffer.printf("case %d: {%n", field.tag().get());

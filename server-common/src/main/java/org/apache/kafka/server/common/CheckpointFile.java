@@ -163,7 +163,7 @@ public class CheckpointFile<T> {
             line = reader.readLine();
             while (line != null) {
                 Optional<T> maybeEntry = formatter.fromString(line);
-                if (!maybeEntry.isPresent()) {
+                if (maybeEntry.isEmpty()) {
                     throw buildMalformedLineException(line);
                 }
                 entries.add(maybeEntry.get());

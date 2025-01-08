@@ -699,20 +699,11 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
-    val originalLogConfig = logManager.currentDefaultConfig
-    val originalUncleanLeaderElectionEnable = originalLogConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
 
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
 
     updateLogsConfig(newBrokerDefaults.asScala)
-
-    if (logManager.currentDefaultConfig.uncleanLeaderElectionEnable && !originalUncleanLeaderElectionEnable) {
-      server match {
-        case kafkaServer: KafkaServer => kafkaServer.kafkaController.enableDefaultUncleanLeaderElection()
-        case _ =>
-      }
-    }
   }
 }
 
@@ -1068,8 +1059,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
         listenersToMap(newConfig.effectiveAdvertisedBrokerListeners))) {
       verifyListenerRegistrationAlterationSupported()
       server match {
-        case kafkaServer: KafkaServer => kafkaServer.kafkaController.updateBrokerInfo(kafkaServer.createBrokerInfo)
-        case _ => throw new RuntimeException("Unable to handle non-kafkaServer")
+        case _ => throw new RuntimeException("Unable to handle reconfigure")
       }
     }
   }

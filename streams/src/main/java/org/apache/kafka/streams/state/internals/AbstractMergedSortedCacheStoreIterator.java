@@ -59,14 +59,28 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
     public boolean hasNext() {
         // skip over items deleted from cache, and corresponding store items if they have the same key
         while (cacheIterator.hasNext() && isDeletedCacheEntry(cacheIterator.peekNext())) {
-            if (storeIterator.hasNext()) {
-                final KS nextStoreKey = storeIterator.peekNextKey();
-                // advance the store iterator if the key is the same as the deleted cache key
-                if (compare(cacheIterator.peekNextKey(), nextStoreKey) == 0) {
-                    storeIterator.next();
-                }
+            if (!storeIterator.hasNext()) {
+                // if storeIterator is exhausted, we can just skip over every tombstone
+                // in the cache since they don't shadow any valid key
+                cacheIterator.next();
+                continue;
             }
-            cacheIterator.next();
+
+            final KS nextStoreKey = storeIterator.peekNextKey();
+            final int compare = compare(cacheIterator.peekNextKey(), nextStoreKey);
+
+            if (compare == 0) {
+                // next cache entry is a valid tombstone for the next store key
+                storeIterator.next();
+                cacheIterator.next();
+            } else if (compare < 0) {
+                // cache has a tombstone for an entry that doesn't exist in the store
+                cacheIterator.next();
+            } else {
+                // store iterator has a valid entry, but we should not advance the cache
+                // iterator because it may still shadow a future store key
+                return true;
+            }
         }
 
         return cacheIterator.hasNext() || storeIterator.hasNext();

@@ -18,8 +18,10 @@ package org.apache.kafka.tools.consumer.group.share;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.coordinator.share.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKeyJsonConverter;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
@@ -101,13 +103,16 @@ public class ShareGroupStateMessageFormatter implements MessageFormatter {
 
     private Optional<ApiMessage> readToSnapshotMessageKey(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
-        if (version >= ShareSnapshotKey.LOWEST_SUPPORTED_VERSION
-            && version <= ShareSnapshotKey.HIGHEST_SUPPORTED_VERSION) {
-            return Optional.of(new ShareSnapshotKey(new ByteBufferAccessor(byteBuffer), version));
-        } else if (version >= ShareUpdateKey.LOWEST_SUPPORTED_VERSION
-            && version <= ShareUpdateKey.HIGHEST_SUPPORTED_VERSION) {
-            return Optional.of(new ShareUpdateKey(new ByteBufferAccessor(byteBuffer), version));
-        } else {
+        try {
+            switch (CoordinatorRecordType.fromId(version)) {
+                case SHARE_SNAPSHOT:
+                    return Optional.of(new ShareSnapshotKey(new ByteBufferAccessor(byteBuffer), version));
+                case SHARE_UPDATE:
+                    return Optional.of(new ShareUpdateKey(new ByteBufferAccessor(byteBuffer), version));
+                default:
+                    return Optional.empty();
+            }
+        } catch (UnsupportedVersionException ex) {
             return Optional.empty();
         }
     }
@@ -155,13 +160,17 @@ public class ShareGroupStateMessageFormatter implements MessageFormatter {
         // Check the key version here as that will determine which type
         // of value record to fetch. Both share update and share snapshot
         // value records can have the same version.
-        if (keyVersion >= ShareSnapshotKey.LOWEST_SUPPORTED_VERSION
-            && keyVersion <= ShareSnapshotKey.HIGHEST_SUPPORTED_VERSION) {
-            return Optional.of(new ShareSnapshotValue(new ByteBufferAccessor(byteBuffer), version));
-        } else if (keyVersion >= ShareUpdateKey.LOWEST_SUPPORTED_VERSION
-            && keyVersion <= ShareUpdateKey.HIGHEST_SUPPORTED_VERSION) {
-            return Optional.of(new ShareUpdateValue(new ByteBufferAccessor(byteBuffer), version));
+        try {
+            switch (CoordinatorRecordType.fromId(keyVersion)) {
+                case SHARE_SNAPSHOT:
+                    return Optional.of(new ShareSnapshotValue(new ByteBufferAccessor(byteBuffer), version));
+                case SHARE_UPDATE:
+                    return Optional.of(new ShareUpdateValue(new ByteBufferAccessor(byteBuffer), version));
+                default:
+                    return Optional.empty();
+            }
+        } catch (UnsupportedVersionException ex) {
+            return Optional.empty();
         }
-        return Optional.empty();
     }
 }

@@ -52,7 +52,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
   var admin: Admin = _
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(3, null).map(KafkaConfig.fromProps(_, serverProps()))
+    TestUtils.createBrokerConfigs(3).map(KafkaConfig.fromProps(_, serverProps()))
   }
 
   @BeforeEach
