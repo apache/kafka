@@ -98,7 +98,7 @@ import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Test, Disabled}
+import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers._
@@ -433,11 +433,7 @@ class KafkaApisTest extends Logging {
 
     val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(
       Seq(resource), "consumer.session.timeout.ms", "45000").build(requestHeader.apiVersion)
-    val request = buildRequest(incrementalAlterConfigsRequest,
-      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
-
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
+    val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
     createKafkaApis(authorizer = Some(authorizer), raftSupport = true).handleIncrementalAlterConfigsRequest(request)
@@ -709,69 +705,6 @@ class KafkaApisTest extends Logging {
       .thenReturn(Seq(result).asJava)
   }
 
-  private def createConfigsWithAuthorization(authorizer: Authorizer,
-                                             authorizedTopic: String,
-                                             unauthorizedTopic: String): (ConfigResource, ConfigResource) = {
-    val authorizedResource = new ConfigResource(ConfigResource.Type.TOPIC, authorizedTopic)
-
-    val unauthorizedResource = new ConfigResource(ConfigResource.Type.TOPIC, unauthorizedTopic)
-
-    createTopicAuthorization(authorizer, AclOperation.ALTER_CONFIGS, authorizedTopic, unauthorizedTopic)
-    (authorizedResource, unauthorizedResource)
-  }
-
-  @Disabled
-  @Test
-  def testIncrementalAlterConfigsWithAuthorizer(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    val authorizedTopic = "authorized-topic"
-    val unauthorizedTopic = "unauthorized-topic"
-    val (authorizedResource, unauthorizedResource) =
-      createConfigsWithAuthorization(authorizer, authorizedTopic, unauthorizedTopic)
-
-    val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
-
-    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(Seq(authorizedResource, unauthorizedResource))
-      .build(requestHeader.apiVersion)
-    val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
-
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer), raftSupport = true)
-    kafkaApis.handleIncrementalAlterConfigsRequest(request)
-
-    val capturedResponse = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
-    verifyIncrementalAlterConfigResult(capturedResponse, Map(
-      authorizedTopic -> Errors.NONE,
-      unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED
-    ))
-
-    verify(authorizer, times(2)).authorize(any(), any())
-    verify(adminManager).incrementalAlterConfigs(any(), anyBoolean())
-  }
-
-  private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
-    val resourceMap = configResources.map(configResource => {
-      configResource -> Set(
-        new AlterConfigOp(new ConfigEntry("foo", "bar"),
-        OpType.forId(configResource.`type`.id))).asJavaCollection
-    }).toMap.asJava
-
-    new IncrementalAlterConfigsRequest.Builder(resourceMap, false)
-  }
-
-
-  private def verifyIncrementalAlterConfigResult(response: IncrementalAlterConfigsResponse,
-                                                 expectedResults: Map[String, Errors]): Unit = {
-    val responseMap = response.data.responses.asScala.map { resourceResponse =>
-      resourceResponse.resourceName -> Errors.forCode(resourceResponse.errorCode)
-    }.toMap
-    assertEquals(expectedResults, responseMap)
-  }
-
   @Test
   def testAlterClientQuotasWithAuthorizer(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
@@ -1009,18 +942,6 @@ class KafkaApisTest extends Logging {
     val results = response.data.results.asScala
     assertEquals(Some(Errors.NONE), results.find(_.name == "foo").map(result => Errors.forCode(result.errorCode)))
     assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), results.find(_.name == "bar").map(result => Errors.forCode(result.errorCode)))
-  }
-
-  private def createTopicAuthorization(authorizer: Authorizer,
-                                       operation: AclOperation,
-                                       authorizedTopic: String,
-                                       unauthorizedTopic: String,
-                                       logIfAllowed: Boolean = true,
-                                       logIfDenied: Boolean = true): Unit = {
-    authorizeResource(authorizer, operation, ResourceType.TOPIC,
-      authorizedTopic, AuthorizationResult.ALLOWED, logIfAllowed, logIfDenied)
-    authorizeResource(authorizer, operation, ResourceType.TOPIC,
-      unauthorizedTopic, AuthorizationResult.DENIED, logIfAllowed, logIfDenied)
   }
 
   private def createCombinedTopicAuthorization(authorizer: Authorizer,
