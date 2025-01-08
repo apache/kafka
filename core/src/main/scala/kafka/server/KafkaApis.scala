@@ -81,7 +81,6 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPa
 import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
-import java.nio.ByteBuffer
 import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
@@ -233,7 +232,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_PARTITIONS => maybeForwardToController(request, handleCreatePartitionsRequest)
         // Create, renew and expire DelegationTokens must first validate that the connection
         // itself is not authenticated with a delegation token before maybeForwardToController.
-        case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateTokenRequest(request)
+        case ApiKeys.CREATE_DELEGATION_TOKEN => maybeForwardToController(request, null)
         case ApiKeys.RENEW_DELEGATION_TOKEN => handleRenewTokenRequest(request)
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
@@ -2941,76 +2940,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       .setErrorCode(error.code)))
   }
 
-  def handleCreateTokenRequest(request: RequestChannel.Request): Unit = {
-    val createTokenRequest = request.body[CreateDelegationTokenRequest]
-
-    val requester = request.context.principal
-    val ownerPrincipalName = createTokenRequest.data.ownerPrincipalName
-    val owner = if (ownerPrincipalName == null || ownerPrincipalName.isEmpty) {
-      request.context.principal
-    } else {
-      new KafkaPrincipal(createTokenRequest.data.ownerPrincipalType, ownerPrincipalName)
-    }
-    val renewerList = createTokenRequest.data.renewers.asScala.toList.map(entry =>
-      new KafkaPrincipal(entry.principalType, entry.principalName))
-
-    if (!allowTokenRequests(request)) {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
-          Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, owner, requester))
-    } else if (!owner.equals(requester) && !authHelper.authorize(request.context, CREATE_TOKENS, USER, owner.toString)) {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
-          Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED, owner, requester))
-    } else if (renewerList.exists(principal => principal.getPrincipalType != KafkaPrincipal.USER_TYPE)) {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
-          Errors.INVALID_PRINCIPAL_TYPE, owner, requester))
-    } else {
-      maybeForwardToController(request, handleCreateTokenRequestZk)
-    }
-  }
-
-  def handleCreateTokenRequestZk(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-
-    val createTokenRequest = request.body[CreateDelegationTokenRequest]
-
-    // the callback for sending a create token response
-    def sendResponseCallback(createResult: CreateTokenResult): Unit = {
-      trace(s"Sending create token response for correlation id ${request.header.correlationId} " +
-        s"to client ${request.header.clientId}.")
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs, createResult.error, createResult.owner,
-          createResult.tokenRequester, createResult.issueTimestamp, createResult.expiryTimestamp, createResult.maxTimestamp, createResult.tokenId,
-          ByteBuffer.wrap(createResult.hmac)))
-    }
-
-    val ownerPrincipalName = createTokenRequest.data.ownerPrincipalName
-    val owner = if (ownerPrincipalName == null || ownerPrincipalName.isEmpty) {
-      request.context.principal
-    } else {
-      new KafkaPrincipal(createTokenRequest.data.ownerPrincipalType, ownerPrincipalName)
-    }
-    val requester = request.context.principal
-    val renewerList = createTokenRequest.data.renewers.asScala.toList.map(entry =>
-      new KafkaPrincipal(entry.principalType, entry.principalName))
-
-    // DelegationToken changes only need to be executed on the controller during migration
-    if (!zkSupport.controller.isActive) {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
-          Errors.NOT_CONTROLLER, owner, requester))
-    } else {
-      tokenManager.createToken(
-        owner,
-        requester,
-        renewerList,
-        createTokenRequest.data.maxLifetimeMs,
-        sendResponseCallback)
-    }
-  }
-
   def handleRenewTokenRequest(request: RequestChannel.Request): Unit = {
     if (!allowTokenRequests(request)) {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -3020,40 +2949,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
               .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
     } else {
-      maybeForwardToController(request, handleRenewTokenRequestZk)
-    }
-  }
-
-  def handleRenewTokenRequestZk(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-
-    val renewTokenRequest = request.body[RenewDelegationTokenRequest]
-
-    // the callback for sending a renew token response
-    def sendResponseCallback(error: Errors, expiryTimestamp: Long): Unit = {
-      trace("Sending renew token response for correlation id %d to client %s."
-        .format(request.header.correlationId, request.header.clientId))
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new RenewDelegationTokenResponse(
-             new RenewDelegationTokenResponseData()
-               .setThrottleTimeMs(requestThrottleMs)
-               .setErrorCode(error.code)
-               .setExpiryTimestampMs(expiryTimestamp)))
-    }
-    // DelegationToken changes only need to be executed on the controller during migration
-    if (!zkSupport.controller.isActive) {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new RenewDelegationTokenResponse(
-          new RenewDelegationTokenResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-            .setErrorCode(Errors.NOT_CONTROLLER.code)))
-    } else {
-      tokenManager.renewToken(
-        request.context.principal,
-        ByteBuffer.wrap(renewTokenRequest.data.hmac),
-        renewTokenRequest.data.renewPeriodMs,
-        sendResponseCallback
-      )
+      maybeForwardToController(request, null)
     }
   }
 
@@ -3066,40 +2962,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
               .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
     } else {
-      maybeForwardToController(request, handleExpireTokenRequestZk)
-    }
-  }
-
-  def handleExpireTokenRequestZk(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-
-    val expireTokenRequest = request.body[ExpireDelegationTokenRequest]
-
-    // the callback for sending a expire token response
-    def sendResponseCallback(error: Errors, expiryTimestamp: Long): Unit = {
-      trace("Sending expire token response for correlation id %d to client %s."
-        .format(request.header.correlationId, request.header.clientId))
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new ExpireDelegationTokenResponse(
-            new ExpireDelegationTokenResponseData()
-              .setThrottleTimeMs(requestThrottleMs)
-              .setErrorCode(error.code)
-              .setExpiryTimestampMs(expiryTimestamp)))
-    }
-    // DelegationToken changes only need to be executed on the controller during migration
-    if (!zkSupport.controller.isActive) {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new ExpireDelegationTokenResponse(
-          new ExpireDelegationTokenResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-            .setErrorCode(Errors.NOT_CONTROLLER.code)))
-    } else {
-      tokenManager.expireToken(
-        request.context.principal,
-        expireTokenRequest.hmac(),
-        expireTokenRequest.expiryTimePeriod(),
-        sendResponseCallback
-      )
+      maybeForwardToController(request, null)
     }
   }
 
