@@ -37,7 +37,6 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
-import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.{MetadataVersion, ProducerIdsBlock}
@@ -1044,43 +1043,6 @@ object FeatureZNode {
   }
 }
 
-object MigrationZNode {
-  val path = "/migration"
-
-  def encode(migration: ZkMigrationLeadershipState): Array[Byte] = {
-    val jsonMap = Map(
-      "version" -> 0,
-      "kraft_controller_id" -> migration.kraftControllerId(),
-      "kraft_controller_epoch" -> migration.kraftControllerEpoch(),
-      "kraft_metadata_offset" -> migration.kraftMetadataOffset(),
-      "kraft_metadata_epoch" -> migration.kraftMetadataEpoch()
-    )
-    Json.encodeAsBytes(jsonMap.asJava)
-  }
-
-  def decode(bytes: Array[Byte], zkVersion: Int, modifyTimeMs: Long): ZkMigrationLeadershipState = {
-    val jsonDataAsString = bytes.map(_.toChar).mkString
-    Json.parseBytes(bytes).map(_.asJsonObject).flatMap { js =>
-      val version = js("version").to[Int]
-      if (version != 0) {
-        throw new KafkaException(s"Encountered unknown version $version when parsing migration json $jsonDataAsString")
-      }
-      val controllerId = js("kraft_controller_id").to[Int]
-      val controllerEpoch = js("kraft_controller_epoch").to[Int]
-      val metadataOffset = js("kraft_metadata_offset").to[Long]
-      val metadataEpoch = js("kraft_metadata_epoch").to[Int]
-      Some(new ZkMigrationLeadershipState(
-        controllerId,
-        controllerEpoch,
-        metadataOffset,
-        metadataEpoch,
-        modifyTimeMs,
-        zkVersion,
-        ZkMigrationLeadershipState.EMPTY.zkControllerEpoch(),
-        ZkMigrationLeadershipState.EMPTY.zkControllerEpochZkVersion()))
-    }.getOrElse(throw new KafkaException(s"Failed to parse the migration json $jsonDataAsString"))
-  }
-}
 
 object ZkData {
 
@@ -1101,7 +1063,6 @@ object ZkData {
     LogDirEventNotificationZNode.path,
     DelegationTokenAuthZNode.path,
     ExtendedAclZNode.path,
-    MigrationZNode.path,
     FeatureZNode.path) ++ ZkAclStore.securePaths
 
   // These are persistent ZK paths that should exist on kafka broker startup.

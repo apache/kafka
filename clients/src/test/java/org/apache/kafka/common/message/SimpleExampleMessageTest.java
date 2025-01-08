@@ -360,6 +360,8 @@ public class SimpleExampleMessageTest {
         short version
     ) {
         ByteBuffer buf = MessageUtil.toByteBuffer(message, version);
+        // Check size calculation
+        assertEquals(buf.remaining(), message.size(new ObjectSerializationCache(), version));
         return deserialize(buf.duplicate(), version);
     }
 

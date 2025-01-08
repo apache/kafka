@@ -48,6 +48,7 @@ import org.apache.kafka.server.config.ShareCoordinatorConfig;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 
 import org.slf4j.Logger;
 
@@ -60,6 +61,7 @@ import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
@@ -75,6 +77,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
     private final ShareCoordinatorMetrics shareCoordinatorMetrics;
     private volatile int numPartitions = -1; // Number of partitions for __share_group_state. Provided when component is started.
     private final Time time;
+    private final Timer timer;
+    private final PartitionWriter writer;
+    private final Map<TopicPartition, Long> lastPrunedOffsets;
 
     public static class Builder {
         private final int nodeId;
@@ -184,7 +189,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 config,
                 runtime,
                 coordinatorMetrics,
-                time
+                time,
+                timer,
+                writer
             );
         }
     }
@@ -194,12 +201,18 @@ public class ShareCoordinatorService implements ShareCoordinator {
         ShareCoordinatorConfig config,
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime,
         ShareCoordinatorMetrics shareCoordinatorMetrics,
-        Time time) {
+        Time time,
+        Timer timer,
+        PartitionWriter writer
+    ) {
         this.log = logContext.logger(ShareCoordinatorService.class);
         this.config = config;
         this.runtime = runtime;
         this.shareCoordinatorMetrics = shareCoordinatorMetrics;
         this.time = time;
+        this.timer = timer;
+        this.writer = writer;
+        this.lastPrunedOffsets = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -240,7 +253,80 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
         log.info("Starting up.");
         numPartitions = shareGroupTopicPartitionCount.getAsInt();
+        setupRecordPruning();
         log.info("Startup complete.");
+    }
+
+    private void setupRecordPruning() {
+        log.info("Scheduling share-group state topic prune job.");
+        timer.add(new TimerTask(config.shareCoordinatorTopicPruneIntervalMs()) {
+            @Override
+            public void run() {
+                List<CompletableFuture<Void>> futures = new ArrayList<>();
+                runtime.activeTopicPartitions().forEach(tp -> futures.add(performRecordPruning(tp)));
+
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{}))
+                    .whenComplete((res, exp) -> {
+                        if (exp != null) {
+                            log.error("Received error in share-group state topic prune.", exp);
+                        }
+                        // Perpetual recursion, failure or not.
+                        setupRecordPruning();
+                    });
+            }
+        });
+    }
+
+    private CompletableFuture<Void> performRecordPruning(TopicPartition tp) {
+        // This future will always be completed normally, exception or not.
+        CompletableFuture<Void> fut = new CompletableFuture<>();
+
+        runtime.scheduleWriteOperation(
+            "write-state-record-prune",
+            tp,
+            Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
+            ShareCoordinatorShard::lastRedundantOffset
+        ).whenComplete((result, exception) -> {
+            if (exception != null) {
+                log.debug("Last redundant offset for tp {} lookup threw an error.", tp, exception);
+                Errors error = Errors.forException(exception);
+                // These errors might result from partition metadata not loaded
+                // or shard re-election. Will cause unnecessary noise, hence not logging
+                if (!(error.equals(Errors.COORDINATOR_LOAD_IN_PROGRESS) || error.equals(Errors.NOT_COORDINATOR))) {
+                    log.error("Last redundant offset lookup for tp {} threw an error.", tp, exception);
+                    fut.completeExceptionally(exception);
+                    return;
+                }
+                fut.complete(null);
+                return;
+            }
+            if (result.isPresent()) {
+                Long off = result.get();
+                Long lastPrunedOffset = lastPrunedOffsets.get(tp);
+                if (lastPrunedOffset != null && lastPrunedOffset.longValue() == off) {
+                    log.debug("{} already pruned till offset {}", tp, off);
+                    fut.complete(null);
+                    return;
+                }
+
+                log.info("Pruning records in {} till offset {}.", tp, off);
+                writer.deleteRecords(tp, off)
+                    .whenComplete((res, exp) -> {
+                        if (exp != null) {
+                            log.debug("Exception while deleting records in {} till offset {}.", tp, off, exp);
+                            fut.completeExceptionally(exp);
+                            return;
+                        }
+                        fut.complete(null);
+                        // Best effort prevention of issuing duplicate delete calls.
+                        lastPrunedOffsets.put(tp, off);
+                    });
+            } else {
+                log.debug("No offset value for tp {} found.", tp);
+                fut.complete(null);
+            }
+        });
+        return fut;
     }
 
     @Override
@@ -543,8 +629,10 @@ public class ShareCoordinatorService implements ShareCoordinator {
     @Override
     public void onResignation(int partitionIndex, OptionalInt partitionLeaderEpoch) {
         throwIfNotActive();
+        TopicPartition tp = new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, partitionIndex);
+        lastPrunedOffsets.remove(tp);
         runtime.scheduleUnloadOperation(
-            new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, partitionIndex),
+            tp,
             partitionLeaderEpoch
         );
     }

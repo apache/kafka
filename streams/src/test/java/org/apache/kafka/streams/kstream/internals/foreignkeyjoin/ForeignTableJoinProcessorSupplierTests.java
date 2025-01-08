@@ -21,15 +21,15 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -59,7 +59,7 @@ public class ForeignTableJoinProcessorSupplierTests {
         Serdes.String()
     );
 
-    private MockInternalNewProcessorContext<String, SubscriptionResponseWrapper<String>> context = null;
+    private MockInternalProcessorContext<String, SubscriptionResponseWrapper<String>> context = null;
     private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = null;
     private Processor<String, Change<String>, String, SubscriptionResponseWrapper<String>> processor = null;
     private File stateDir;
@@ -68,13 +68,16 @@ public class ForeignTableJoinProcessorSupplierTests {
     public void setUp() {
         stateDir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        context = new MockInternalNewProcessorContext<>(props, new TaskId(0, 0), stateDir);
+        context = new MockInternalProcessorContext<>(props, new TaskId(0, 0), stateDir);
 
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        processor = new ForeignTableJoinProcessorSupplier<String, String, String>(storeBuilder().name(), COMBINED_KEY_SCHEMA).get();
+        processor = new ForeignTableJoinProcessorSupplier<String, String, String>(
+            StoreBuilderWrapper.wrapStoreBuilder(storeBuilder()),
+            COMBINED_KEY_SCHEMA
+        ).get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
-        stateStore.init((StateStoreContext) context, stateStore);
+        stateStore.init(context, stateStore);
         processor.init(context);
     }
 

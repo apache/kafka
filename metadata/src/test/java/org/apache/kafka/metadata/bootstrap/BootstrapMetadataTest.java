@@ -28,9 +28,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
-import static java.util.Collections.unmodifiableList;
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
@@ -40,14 +38,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Timeout(60)
 public class BootstrapMetadataTest {
-    static final List<ApiMessageAndVersion> SAMPLE_RECORDS1 = unmodifiableList(asList(
+    static final List<ApiMessageAndVersion> SAMPLE_RECORDS1 = List.of(
         new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(FEATURE_NAME).
             setFeatureLevel((short) 7), (short) 0),
         new ApiMessageAndVersion(new NoOpRecord(), (short) 0),
         new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(FEATURE_NAME).
-            setFeatureLevel((short) 6), (short) 0)));
+            setFeatureLevel((short) 6), (short) 0));
 
     @Test
     public void testFromVersion() {

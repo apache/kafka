@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
@@ -62,12 +61,12 @@ import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_U
  * ProcessorStateManager is the source of truth for the current offset for each state store,
  * which is either the read offset during restoring, or the written offset during normal processing.
  *
- * The offset is initialized as null when the state store is registered, and then it can be updated by
+ * <p>The offset is initialized as null when the state store is registered, and then it can be updated by
  * loading checkpoint file, restore state stores, or passing from the record collector's written offsets.
  *
- * When checkpointing, if the offset is not null it would be written to the file.
+ * <p>When checkpointing, if the offset is not null it would be written to the file.
  *
- * The manager is also responsible for restoring state stores via their registered restore callback,
+ * <p>The manager is also responsible for restoring state stores via their registered restore callback,
  * which is used for both updating standby tasks as well as restoring active tasks.
  */
 public class ProcessorStateManager implements StateManager {
@@ -256,7 +255,7 @@ public class ProcessorStateManager implements StateManager {
         this.sourcePartitions.addAll(sourcePartitions);
     }
 
-    void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext processorContext) {
+    void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
             if (stores.containsKey(store.name())) {
@@ -264,7 +263,7 @@ public class ProcessorStateManager implements StateManager {
                     maybeRegisterStoreWithChangelogReader(store.name());
                 }
             } else {
-                store.init((StateStoreContext) processorContext, store);
+                store.init(processorContext, store);
             }
             log.trace("Registered state store {}", store.name());
         }
@@ -575,7 +574,7 @@ public class ProcessorStateManager implements StateManager {
                     if (store instanceof TimeOrderedKeyValueBuffer) {
                         store.flush();
                     } else if (store instanceof CachedStateStore) {
-                        ((CachedStateStore) store).flushCache();
+                        ((CachedStateStore<?, ?>) store).flushCache();
                     }
                     log.trace("Flushed cache or buffer {}", store.name());
                 } catch (final RuntimeException exception) {
@@ -679,7 +678,7 @@ public class ProcessorStateManager implements StateManager {
                 final StateStore store = metadata.stateStore;
 
                 if (store instanceof CachedStateStore) {
-                    ((CachedStateStore) store).clearCache();
+                    ((CachedStateStore<?, ?>) store).clearCache();
                 }
                 log.trace("Cleared cache {}", store.name());
             }

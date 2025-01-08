@@ -28,8 +28,11 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -37,20 +40,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.Set;
 
 public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
     ProcessorSupplier<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> {
     private static final Logger LOG = LoggerFactory.getLogger(ForeignTableJoinProcessorSupplier.class);
-    private final String storeName;
+    private final StoreFactory subscriptionStoreFactory;
     private final CombinedKeySchema<KO, K> keySchema;
     private boolean useVersionedSemantics = false;
 
-    public ForeignTableJoinProcessorSupplier(
-        final String storeName,
-        final CombinedKeySchema<KO, K> keySchema) {
-
-        this.storeName = storeName;
+    public ForeignTableJoinProcessorSupplier(final StoreFactory subscriptionStoreFactory,
+                                             final CombinedKeySchema<KO, K> keySchema) {
+        this.subscriptionStoreFactory = subscriptionStoreFactory;
         this.keySchema = keySchema;
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return Collections.singleton(new FactoryWrappingStoreBuilder<>(subscriptionStoreFactory));
     }
 
     @Override
@@ -80,7 +88,7 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
                 internalProcessorContext.taskId().toString(),
                 internalProcessorContext.metrics()
             );
-            subscriptionStore = internalProcessorContext.getStateStore(storeName);
+            subscriptionStore = internalProcessorContext.getStateStore(subscriptionStoreFactory.storeName());
         }
 
         @Override

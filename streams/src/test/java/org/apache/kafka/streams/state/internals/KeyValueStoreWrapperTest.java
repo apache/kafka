@@ -60,15 +60,15 @@ public class KeyValueStoreWrapperTest {
     @Mock
     private VersionedKeyValueStore<String, String> versionedStore;
     @Mock
-    private ProcessorContext context;
+    private ProcessorContext<?, ?> context;
     @Mock
-    private Query query;
+    private Query<?> query;
     @Mock
     private PositionBound positionBound;
     @Mock
     private QueryConfig queryConfig;
     @Mock
-    private QueryResult result;
+    private QueryResult<?> result;
     @Mock
     private Position position;
 
@@ -295,20 +295,20 @@ public class KeyValueStoreWrapperTest {
         assertThat(wrapper.isOpen(), equalTo(false));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldQueryTimestampedStore() {
         givenWrapperWithTimestampedStore();
-        when(timestampedStore.query(query, positionBound, queryConfig)).thenReturn(result);
+        when(timestampedStore.query(query, positionBound, queryConfig)).thenReturn((QueryResult) result);
 
         assertThat(wrapper.query(query, positionBound, queryConfig), equalTo(result));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldQueryVersionedStore() {
         givenWrapperWithVersionedStore();
-        when(versionedStore.query(query, positionBound, queryConfig)).thenReturn(result);
+        when(versionedStore.query(query, positionBound, queryConfig)).thenReturn((QueryResult) result);
 
         assertThat(wrapper.query(query, positionBound, queryConfig), equalTo(result));
     }

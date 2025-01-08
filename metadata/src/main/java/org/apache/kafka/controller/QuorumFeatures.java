@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -55,7 +54,7 @@ public final class QuorumFeatures {
         return Optional.empty();
     }
 
-    public static Map<String, VersionRange> defaultFeatureMap(boolean enableUnstable) {
+    public static Map<String, VersionRange> defaultSupportedFeatureMap(boolean enableUnstable) {
         Map<String, VersionRange> features = new HashMap<>(1);
         features.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                 MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
@@ -108,27 +107,6 @@ public final class QuorumFeatures {
         return reasonNotSupported(newVersion,
             "Local controller " + nodeId,
             localSupportedFeature(featureName));
-    }
-
-    public Optional<String> reasonAllControllersZkMigrationNotReady(
-        MetadataVersion metadataVersion,
-        Map<Integer, ControllerRegistration> controllers
-    ) {
-        if (!metadataVersion.isMigrationSupported()) {
-            return Optional.of("The metadata.version too low at " + metadataVersion);
-        } else if (!metadataVersion.isControllerRegistrationSupported()) {
-            return Optional.empty();
-        }
-        for (int quorumNodeId : quorumNodeIds) {
-            ControllerRegistration registration = controllers.get(quorumNodeId);
-            if (registration == null) {
-                return Optional.of("No registration found for controller " + quorumNodeId);
-            } else if (!registration.zkMigrationReady()) {
-                return Optional.of("Controller " + quorumNodeId + " has not enabled " +
-                        "zookeeper.metadata.migration.enable");
-            }
-        }
-        return Optional.empty();
     }
 
     @Override

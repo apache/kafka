@@ -156,7 +156,10 @@ public class LeaderState<T> implements EpochState {
                 "Current fetched voters are {}, and voters are {}",
                 checkQuorumTimeoutMs,
                 fetchedVoters,
-                voterStates.values().stream().map(voter -> voter.replicaKey)
+                voterStates.values()
+                    .stream()
+                    .map(voter -> voter.replicaKey)
+                    .collect(Collectors.toUnmodifiableSet())
             );
         }
         return remainingMs;
@@ -831,10 +834,11 @@ public class LeaderState<T> implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
+    public boolean canGrantVote(ReplicaKey replicaKey, boolean isLogUpToDate, boolean isPreVote) {
         log.debug(
-            "Rejecting vote request from candidate ({}) since we are already leader in epoch {}",
-            candidateKey,
+            "Rejecting Vote request (preVote={}) from replica ({}) since we are already leader in epoch {}",
+            isPreVote,
+            replicaKey,
             epoch
         );
         return false;

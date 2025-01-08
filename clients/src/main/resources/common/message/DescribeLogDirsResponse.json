@@ -17,11 +17,12 @@
   "apiKey": 35,
   "type": "response",
   "name": "DescribeLogDirsResponse",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
-  "validVersions": "0-4",
   // Version 2 is the first flexible version.
   // Version 3 adds the top-level ErrorCode field
   // Version 4 adds the TotalBytes and UsableBytes fields
+  "validVersions": "1-4",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

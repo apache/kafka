@@ -116,6 +116,14 @@ public class InMemoryPartitionWriter implements PartitionWriter {
     }
 
     @Override
+    public CompletableFuture<Void> deleteRecords(
+        TopicPartition tp,
+        long deleteBeforeOffset
+    ) throws KafkaException {
+        throw new RuntimeException("method not implemented");
+    }
+
+    @Override
     public CompletableFuture<VerificationGuard> maybeStartTransactionVerification(
         TopicPartition tp,
         String transactionalId,

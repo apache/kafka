@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -103,7 +102,7 @@ public class MeteredVersionedKeyValueStoreTest {
     private final Metrics metrics = new Metrics();
     private final Time mockTime = new MockTime();
     private final String threadId = Thread.currentThread().getName();
-    private final InternalProcessorContext context = mock(InternalProcessorContext.class);
+    private final InternalProcessorContext<?, ?> context = mock(InternalProcessorContext.class);
     private Map<String, String> tags;
 
     private MeteredVersionedKeyValueStore<String, String> store;
@@ -123,7 +122,7 @@ public class MeteredVersionedKeyValueStoreTest {
         );
 
         store = newMeteredStore(inner);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
     private MeteredVersionedKeyValueStore<String, String> newMeteredStore(final VersionedBytesStore inner) {
@@ -139,7 +138,7 @@ public class MeteredVersionedKeyValueStoreTest {
     @Test
     public void shouldDelegateInit() {
         // init is already called in setUp()
-        verify(inner).init((StateStoreContext) context, store);
+        verify(inner).init(context, store);
     }
 
     @Test
@@ -176,7 +175,7 @@ public class MeteredVersionedKeyValueStoreTest {
             keySerde,
             valueSerde
         );
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         store.put(KEY, VALUE, TIMESTAMP);
 
@@ -308,14 +307,14 @@ public class MeteredVersionedKeyValueStoreTest {
     }
 
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldDelegateAndAddExecutionInfoOnCustomQuery() {
-        final Query query = mock(Query.class);
+        final Query<?> query = mock(Query.class);
         final PositionBound positionBound = mock(PositionBound.class);
         final QueryConfig queryConfig = mock(QueryConfig.class);
-        final QueryResult result = mock(QueryResult.class);
-        when(inner.query(query, positionBound, queryConfig)).thenReturn(result);
+        final QueryResult<?> result = mock(QueryResult.class);
+        when(inner.query(query, positionBound, queryConfig)).thenReturn((QueryResult) result);
         when(queryConfig.isCollectExecutionInfo()).thenReturn(true);
 
         assertThat(store.query(query, positionBound, queryConfig), is(result));
@@ -359,6 +358,7 @@ public class MeteredVersionedKeyValueStoreTest {
         assertThat(store.getPosition(), is(position));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTrackOpenIteratorsMetric() {
         final MultiVersionedKeyQuery<String, String> query = MultiVersionedKeyQuery.withKey(KEY);
@@ -374,13 +374,14 @@ public class MeteredVersionedKeyValueStoreTest {
 
         final QueryResult<VersionedRecordIterator<String>> result = store.query(query, bound, config);
 
-        try (final VersionedRecordIterator<String> iterator = result.getResult()) {
+        try (final VersionedRecordIterator<String> unused = result.getResult()) {
             assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
         }
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTimeIteratorDuration() {
         final MultiVersionedKeyQuery<String, String> query = MultiVersionedKeyQuery.withKey(KEY);
@@ -398,7 +399,7 @@ public class MeteredVersionedKeyValueStoreTest {
         assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
 
         final QueryResult<VersionedRecordIterator<String>> first = store.query(query, bound, config);
-        try (final VersionedRecordIterator<String> iterator = first.getResult()) {
+        try (final VersionedRecordIterator<String> unused = first.getResult()) {
             // nothing to do, just close immediately
             mockTime.sleep(2);
         }
@@ -407,7 +408,7 @@ public class MeteredVersionedKeyValueStoreTest {
         assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
 
         final QueryResult<VersionedRecordIterator<String>> second = store.query(query, bound, config);
-        try (final VersionedRecordIterator<String> iterator = second.getResult()) {
+        try (final VersionedRecordIterator<String> unused = second.getResult()) {
             // nothing to do, just close immediately
             mockTime.sleep(3);
         }
@@ -416,6 +417,7 @@ public class MeteredVersionedKeyValueStoreTest {
         assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTrackOldestOpenIteratorTimestamp() {
         final MultiVersionedKeyQuery<String, String> query = MultiVersionedKeyQuery.withKey(KEY);
@@ -433,7 +435,7 @@ public class MeteredVersionedKeyValueStoreTest {
         VersionedRecordIterator<String> secondIterator = null;
         final long secondTime;
         try {
-            try (final VersionedRecordIterator<String> iterator = first.getResult()) {
+            try (final VersionedRecordIterator<String> unused = first.getResult()) {
                 final long oldestTimestamp = mockTime.milliseconds();
                 assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
                 mockTime.sleep(100);

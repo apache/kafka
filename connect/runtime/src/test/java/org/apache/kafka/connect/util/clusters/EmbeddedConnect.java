@@ -37,14 +37,15 @@ import org.apache.kafka.connect.util.SinkUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.HttpClient;
-import org.eclipse.jetty.client.api.ContentResponse;
-import org.eclipse.jetty.client.api.Request;
-import org.eclipse.jetty.client.util.StringContentProvider;
+import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.StringRequestContent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -55,7 +56,9 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
+
+import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
 abstract class EmbeddedConnect {
 
@@ -81,6 +84,10 @@ abstract class EmbeddedConnect {
         this.kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps, clientProps);
         this.maskExitProcedures = maskExitProcedures;
         this.httpClient = new HttpClient();
+        // Necessary to prevent the rest request from timing out too early
+        // Before this change,ConnectWorkerIntegrationTest#testPollTimeoutExpiry() was failing
+        // because the request was being stopped by jetty before the framework responded
+        this.httpClient.setIdleTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
         this.assertions = new ConnectAssertions(this);
         // we should keep the original class loader and set it back after connector stopped since the connector will change the class loader,
         // and then, the Mockito will use the unexpected class loader to generate the wrong proxy instance, which makes mock failed
@@ -992,8 +999,8 @@ abstract class EmbeddedConnect {
             Request req = httpClient.newRequest(url);
             req.method(httpMethod);
             if (body != null) {
-                headers.forEach(req::header);
-                req.content(new StringContentProvider(body), "application/json");
+                req.headers(mutable -> headers.forEach(mutable::add));
+                req.body(new StringRequestContent("application/json", body, StandardCharsets.UTF_8));
             }
 
             ContentResponse res = req.send();

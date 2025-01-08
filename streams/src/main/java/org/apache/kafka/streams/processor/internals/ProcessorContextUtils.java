@@ -51,7 +51,7 @@ public final class ProcessorContextUtils {
     public static String changelogFor(final StateStoreContext context, final String storeName, final Boolean newChangelogTopic) {
         final String prefix = topicNamePrefix(context.appConfigs(), context.applicationId());
         if (context instanceof InternalProcessorContext && !newChangelogTopic) {
-            final String changelogTopic = ((InternalProcessorContext) context).changelogFor(storeName);
+            final String changelogTopic = ((InternalProcessorContext<?, ?>) context).changelogFor(storeName);
             if (changelogTopic != null)
                 return changelogTopic;
 
@@ -81,9 +81,10 @@ public final class ProcessorContextUtils {
         }
     }
 
-    public static InternalProcessorContext asInternalProcessorContext(final StateStoreContext context) {
+    @SuppressWarnings("unchecked")
+    public static <K, V> InternalProcessorContext<K, V> asInternalProcessorContext(final StateStoreContext context) {
         if (context instanceof InternalProcessorContext) {
-            return (InternalProcessorContext) context;
+            return (InternalProcessorContext<K, V>) context;
         } else {
             throw new IllegalArgumentException(
                 "This component requires internal features of Kafka Streams and must be disabled for unit tests."

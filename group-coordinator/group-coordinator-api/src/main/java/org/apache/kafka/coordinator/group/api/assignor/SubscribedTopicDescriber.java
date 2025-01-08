@@ -17,18 +17,13 @@
 package org.apache.kafka.coordinator.group.api.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Set;
 
 /**
  * The subscribed topic describer is used by the {@link PartitionAssignor}
  * to obtain topic and partition metadata of the subscribed topics.
- *
- * The interface is kept in an internal module until KIP-848 is fully
- * implemented and ready to be released.
  */
-@InterfaceStability.Unstable
 public interface SubscribedTopicDescriber {
     /**
      * The number of partitions for the given topic Id.

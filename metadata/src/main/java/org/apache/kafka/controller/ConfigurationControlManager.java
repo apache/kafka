@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
@@ -36,6 +37,7 @@ import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.apache.kafka.timeline.TimelineHashSet;
 
 import org.slf4j.Logger;
 
@@ -53,8 +55,10 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
+import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
+import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
@@ -69,9 +73,11 @@ public class ConfigurationControlManager {
     private final Optional<AlterConfigPolicy> alterConfigPolicy;
     private final ConfigurationValidator validator;
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
+    private final TimelineHashSet<Integer> brokersWithConfigs;
     private final Map<String, Object> staticConfig;
     private final ConfigResource currentController;
     private final ReplicationControlAccessor replicationControlAccessor;
+    private final FeatureControlManager featureControl;
 
     static class Builder {
         private LogContext logContext = null;
@@ -83,6 +89,7 @@ public class ConfigurationControlManager {
         private Map<String, Object> staticConfig = Collections.emptyMap();
         private ReplicationControlAccessor replicationControlAccessor;
         private int nodeId = 0;
+        private FeatureControlManager featureControl = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -131,6 +138,11 @@ public class ConfigurationControlManager {
             return this;
         }
 
+        Builder setFeatureControl(FeatureControlManager featureControl) {
+            this.featureControl = featureControl;
+            return this;
+        }
+
         ConfigurationControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -139,6 +151,9 @@ public class ConfigurationControlManager {
             }
             if (replicationControlAccessor == null) {
                 throw new RuntimeException("You must specify ReplicationControlAccessor");
+            }
+            if (featureControl == null) {
+                featureControl = new FeatureControlManager.Builder().build();
             }
             return new ConfigurationControlManager(
                 logContext,
@@ -149,6 +164,7 @@ public class ConfigurationControlManager {
                 validator,
                 staticConfig,
                 nodeId,
+                featureControl,
                 replicationControlAccessor);
         }
     }
@@ -161,6 +177,7 @@ public class ConfigurationControlManager {
             ConfigurationValidator validator,
             Map<String, Object> staticConfig,
             int nodeId,
+            FeatureControlManager featureControl,
             ReplicationControlAccessor replicationControlAccessor) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
@@ -169,9 +186,11 @@ public class ConfigurationControlManager {
         this.alterConfigPolicy = alterConfigPolicy;
         this.validator = validator;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.brokersWithConfigs = new TimelineHashSet<>(snapshotRegistry, 0);
         this.staticConfig = Collections.unmodifiableMap(new HashMap<>(staticConfig));
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
         this.replicationControlAccessor = replicationControlAccessor;
+        this.featureControl = featureControl;
     }
 
     SnapshotRegistry snapshotRegistry() {
@@ -288,10 +307,12 @@ public class ConfigurationControlManager {
         return ApiError.NONE;
     }
 
-    private ApiError validateAlterConfig(ConfigResource configResource,
-                                         List<ApiMessageAndVersion> recordsExplicitlyAltered,
-                                         List<ApiMessageAndVersion> recordsImplicitlyDeleted,
-                                         boolean newlyCreatedResource) {
+    private ApiError validateAlterConfig(
+        ConfigResource configResource,
+        List<ApiMessageAndVersion> recordsExplicitlyAltered,
+        List<ApiMessageAndVersion> recordsImplicitlyDeleted,
+        boolean newlyCreatedResource
+    ) {
         Map<String, String> allConfigs = new HashMap<>();
         Map<String, String> existingConfigsMap = new HashMap<>();
         Map<String, String> alteredConfigsForAlterConfigPolicyCheck = new HashMap<>();
@@ -302,7 +323,11 @@ public class ConfigurationControlManager {
         }
         for (ApiMessageAndVersion newRecord : recordsExplicitlyAltered) {
             ConfigRecord configRecord = (ConfigRecord) newRecord.message();
-            if (configRecord.value() == null) {
+            if (isDisallowedBrokerMinIsrTransition(configRecord)) {
+                return DISALLOWED_BROKER_MIN_ISR_TRANSITION_ERROR;
+            } else if (isDisallowedClusterMinIsrTransition(configRecord)) {
+                return DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR;
+            } else if (configRecord.value() == null) {
                 allConfigs.remove(configRecord.name());
             } else {
                 allConfigs.put(configRecord.name(), configRecord.value());
@@ -311,7 +336,13 @@ public class ConfigurationControlManager {
         }
         for (ApiMessageAndVersion recordImplicitlyDeleted : recordsImplicitlyDeleted) {
             ConfigRecord configRecord = (ConfigRecord) recordImplicitlyDeleted.message();
-            allConfigs.remove(configRecord.name());
+            if (isDisallowedBrokerMinIsrTransition(configRecord)) {
+                return DISALLOWED_BROKER_MIN_ISR_TRANSITION_ERROR;
+            } else if (isDisallowedClusterMinIsrTransition(configRecord)) {
+                return DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR;
+            } else {
+                allConfigs.remove(configRecord.name());
+            }
             // As per KAFKA-14195, do not include implicit deletions caused by using the legacy AlterConfigs API
             // in the list passed to the policy in order to maintain backwards compatibility
         }
@@ -389,13 +420,44 @@ public class ConfigurationControlManager {
                 if (topicToMinIsrValueMap.containsKey(topicName)) {
                     return topicToMinIsrValueMap.get(topicName);
                 } else if (configRemovedTopicSet.contains(topicName) ||
-                    !currentTopicConfig(topicName).containsKey(MIN_IN_SYNC_REPLICAS_CONFIG)) {
+                        !currentTopicConfig(topicName).containsKey(MIN_IN_SYNC_REPLICAS_CONFIG)) {
                     return defaultMinIsr;
                 }
                 return Integer.parseInt(getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value());
             })
         );
         return newRecords;
+    }
+
+    private static final ApiError DISALLOWED_BROKER_MIN_ISR_TRANSITION_ERROR =
+        new ApiError(INVALID_CONFIG, "Broker-level " + MIN_IN_SYNC_REPLICAS_CONFIG +
+            " cannot be altered while ELR is enabled.");
+
+    private static final ApiError DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR =
+            new ApiError(INVALID_CONFIG, "Cluster-level " + MIN_IN_SYNC_REPLICAS_CONFIG +
+                    " cannot be removed while ELR is enabled.");
+
+    boolean isDisallowedBrokerMinIsrTransition(ConfigRecord configRecord) {
+        if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
+                configRecord.resourceType() == BROKER.id() &&
+                !configRecord.resourceName().isEmpty()) {
+            if (featureControl.isElrFeatureEnabled()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    boolean isDisallowedClusterMinIsrTransition(ConfigRecord configRecord) {
+        if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
+                configRecord.resourceType() == BROKER.id() &&
+                configRecord.resourceName().isEmpty() &&
+                configRecord.value() == null) {
+            if (featureControl.isElrFeatureEnabled()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -500,6 +562,9 @@ public class ConfigurationControlManager {
         if (configs == null) {
             configs = new TimelineHashMap<>(snapshotRegistry, 0);
             configData.put(configResource, configs);
+            if (configResource.type().equals(BROKER) && !configResource.name().isEmpty()) {
+                brokersWithConfigs.add(Integer.parseInt(configResource.name()));
+            }
         }
         if (record.value() == null) {
             configs.remove(record.name());
@@ -508,6 +573,9 @@ public class ConfigurationControlManager {
         }
         if (configs.isEmpty()) {
             configData.remove(configResource);
+            if (configResource.type().equals(BROKER) && !configResource.name().isEmpty()) {
+                brokersWithConfigs.remove(Integer.parseInt(configResource.name()));
+            }
         }
         if (configSchema.isSensitive(record)) {
             log.info("Replayed ConfigRecord for {} which set configuration {} to {}",
@@ -524,7 +592,7 @@ public class ConfigurationControlManager {
         if (map == null) {
             return Collections.emptyMap();
         } else {
-            return Collections.unmodifiableMap(new HashMap<>(map));
+            return Map.copyOf(map);
         }
     }
 
@@ -586,6 +654,88 @@ public class ConfigurationControlManager {
         configData.remove(new ConfigResource(Type.TOPIC, name));
     }
 
+    int getStaticallyConfiguredMinInsyncReplicas() {
+        return configSchema.getStaticallyConfiguredMinInsyncReplicas(staticConfig);
+    }
+
+    /**
+     * Generate any configuration records that are needed to make it safe to enable ELR.
+     * Specifically, we need to remove all cluster-level configurations for min.insync.replicas,
+     * and create a cluster-level configuration for min.insync.replicas. It is always safe to call
+     * this function if ELR is already enabled; it will simply do nothing if the necessary
+     * configurations already exist.
+     *
+     * @param outputRecords     A list to add the new records to.
+     *
+     * @return                  The log message to generate.
+     */
+    String maybeGenerateElrSafetyRecords(List<ApiMessageAndVersion> outputRecords) {
+        StringBuilder bld = new StringBuilder();
+        String prefix = "";
+        if (!clusterConfig().containsKey(MIN_IN_SYNC_REPLICAS_CONFIG)) {
+            int minInsyncReplicas = configSchema.getStaticallyConfiguredMinInsyncReplicas(staticConfig);
+            outputRecords.add(new ApiMessageAndVersion(
+                new ConfigRecord().
+                    setResourceType(BROKER.id()).
+                    setResourceName("").
+                    setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
+                    setValue(Integer.toString(minInsyncReplicas)),
+                CONFIG_RECORD.highestSupportedVersion()));
+            bld.append("Generating cluster-level ").append(MIN_IN_SYNC_REPLICAS_CONFIG).
+                append(" of ").append(minInsyncReplicas);
+            prefix = ". ";
+        }
+        prefix = prefix + "Removing broker-level " + MIN_IN_SYNC_REPLICAS_CONFIG + " for brokers: ";
+        for (Integer brokerId : brokersWithConfigs) {
+            ConfigResource configResource = new ConfigResource(BROKER, brokerId.toString());
+            Map<String, String> configs = configData.get(configResource);
+            if (configs.containsKey(MIN_IN_SYNC_REPLICAS_CONFIG)) {
+                outputRecords.add(new ApiMessageAndVersion(
+                    new ConfigRecord().setResourceType(BROKER.id()).setResourceName(configResource.name()).
+                        setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue(null),
+                    CONFIG_RECORD.highestSupportedVersion()));
+                bld.append(prefix).append(brokerId);
+                prefix = ", ";
+            }
+        }
+        if (bld.isEmpty()) {
+            return "";
+        } else {
+            bld.append(".");
+            return bld.toString();
+        }
+    }
+
+    /**
+     * Update a Kafka feature, generating any configuration changes that are required.
+     *
+     * @param updates       The user-requested updates.
+     * @param upgradeTypes  The user-requested upgrade types.
+     * @param validateOnly  True if we should validate the request but not make changes.
+     *
+     * @return              The result.
+     */
+    ControllerResult<ApiError> updateFeatures(
+        Map<String, Short> updates,
+        Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
+        boolean validateOnly
+    ) {
+        ControllerResult<ApiError> result = featureControl.updateFeatures(updates, upgradeTypes, validateOnly);
+        if (result.response().isSuccess() &&
+            !validateOnly &&
+            updates.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) > 0
+        ) {
+            List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+            String logMessage = maybeGenerateElrSafetyRecords(records);
+            if (!logMessage.isEmpty()) {
+                log.info("{}", logMessage);
+            }
+            records.addAll(result.records());
+            return ControllerResult.atomicOf(records, null);
+        }
+        return result;
+    }
+
     /**
      * Check if this topic has "unclean.leader.election.enable" set to true.
      *
@@ -597,7 +747,6 @@ public class ConfigurationControlManager {
         if (!uncleanLeaderElection.isEmpty()) {
             return Boolean.parseBoolean(uncleanLeaderElection);
         }
-
         return false;
     }
 
@@ -624,5 +773,10 @@ public class ConfigurationControlManager {
     @FunctionalInterface
     interface ReplicationControlAccessor {
         ReplicationControlManager get();
+    }
+
+    // Visible to test
+    TimelineHashSet<Integer> brokersWithConfigs() {
+        return brokersWithConfigs;
     }
 }
