@@ -1270,12 +1270,14 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @return A boolean indicating whether all the members use the classic protocol.
      */
     public boolean allMembersUseClassicProtocolExcept(Set<String> memberIds) {
-        for (ConsumerGroupMember member : members().values()) {
-            if (!memberIds.contains(member.memberId()) && !member.useClassicProtocol()) {
-                return false;
+        int numExcludedClassicProtocolMembers = 0;
+        for (String memberId : memberIds) {
+            ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
+            if (member.useClassicProtocol()) {
+                numExcludedClassicProtocolMembers++;
             }
         }
-        return true;
+        return numClassicProtocolMembers() - numExcludedClassicProtocolMembers == members().size() - memberIds.size();
     }
 
     /**
