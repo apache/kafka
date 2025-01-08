@@ -27,7 +27,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.purgatory.DelayedOperation;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
-import org.apache.kafka.server.share.fetch.PartitionMaxBytesDivisionStrategy;
+import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
 import org.apache.kafka.server.share.fetch.ShareFetch;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
@@ -61,7 +61,7 @@ public class DelayedShareFetch extends DelayedOperation {
     private final ShareFetch shareFetch;
     private final ReplicaManager replicaManager;
     private final BiConsumer<SharePartitionKey, Throwable> exceptionHandler;
-    private final PartitionMaxBytesDivisionStrategy partitionMaxBytesDivisionStrategy;
+    private final PartitionMaxBytesStrategy partitionMaxBytesStrategy;
     // The topic partitions that need to be completed for the share fetch request are given by sharePartitions.
     // sharePartitions is a subset of shareFetchData. The order of insertion/deletion of entries in sharePartitions is important.
     private final LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions;
@@ -80,7 +80,7 @@ public class DelayedShareFetch extends DelayedOperation {
         this.partitionsAlreadyFetched = new LinkedHashMap<>();
         this.exceptionHandler = exceptionHandler;
         this.sharePartitions = sharePartitions;
-        partitionMaxBytesDivisionStrategy = new PartitionMaxBytesDivisionStrategy(PartitionMaxBytesDivisionStrategy.StrategyType.EQUAL_DIVISION);
+        this.partitionMaxBytesStrategy = PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM);
     }
 
     @Override
@@ -130,7 +130,7 @@ public class DelayedShareFetch extends DelayedOperation {
             if (partitionsAlreadyFetched.isEmpty())
                 responseData = readFromLog(
                     topicPartitionData,
-                    partitionMaxBytesDivisionStrategy.partitionMaxBytes(shareFetch.fetchParams().maxBytes, topicPartitionData.keySet(), topicPartitionData.size()));
+                    partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes, topicPartitionData.keySet(), topicPartitionData.size()));
             else
                 // There shouldn't be a case when we have a partitionsAlreadyFetched value here and this variable is getting
                 // updated in a different tryComplete thread.
@@ -262,7 +262,7 @@ public class DelayedShareFetch extends DelayedOperation {
         // leftover partitions to starve which will be fetched later.
         return readFromLog(
             partitionsNotMatchingFetchOffsetMetadata,
-            partitionMaxBytesDivisionStrategy.partitionMaxBytes(shareFetch.fetchParams().maxBytes, partitionsNotMatchingFetchOffsetMetadata.keySet(), topicPartitionData.size()));
+            partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes, partitionsNotMatchingFetchOffsetMetadata.keySet(), topicPartitionData.size()));
     }
 
     private void maybeUpdateFetchOffsetMetadata(
@@ -436,7 +436,7 @@ public class DelayedShareFetch extends DelayedOperation {
 
         LinkedHashMap<TopicIdPartition, LogReadResult> missingTopicPartitionsLogReadResponse = readFromLog(
             missingLogReadTopicPartitions,
-            partitionMaxBytesDivisionStrategy.partitionMaxBytes(shareFetch.fetchParams().maxBytes - totalPartitionMaxBytesUsed, missingLogReadTopicPartitions.keySet(), missingLogReadTopicPartitions.size()));
+            partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes - totalPartitionMaxBytesUsed, missingLogReadTopicPartitions.keySet(), missingLogReadTopicPartitions.size()));
         missingTopicPartitionsLogReadResponse.putAll(existingFetchedData);
         return missingTopicPartitionsLogReadResponse;
     }
