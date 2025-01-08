@@ -3008,9 +3008,8 @@ public class GroupMetadataManager {
         T response
     ) {
         List<CoordinatorRecord> records = new ArrayList<>();
-        Set<String> fencedMemberIds = Collections.singleton(member.memberId());
-        if (validateOnlineDowngradeWithFencedMembers(group, fencedMemberIds)) {
-            convertToClassicGroup(group, fencedMemberIds, null, null, records);
+        if (validateOnlineDowngradeWithFencedMembers(group, Set.of(member.memberId()))) {
+            convertToClassicGroup(group, Set.of(member.memberId()), null, null, records);
             return new CoordinatorResult<>(records, response, null, false);
         } else {
             removeMember(records, group.groupId(), member.memberId());
