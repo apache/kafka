@@ -175,16 +175,21 @@ import static org.apache.kafka.controller.QuorumController.ControllerOperationFl
  */
 public final class QuorumController implements Controller {
     /**
-     * The maximum records that the controller will write in a single batch.
+     * The default maximum records that the controller will write in a single batch.
      */
-    private static final int MAX_RECORDS_PER_BATCH = 10000;
+    private static final int DEFAULT_MAX_RECORDS_PER_BATCH = 10000;
+
+    /**
+     * The default minimum event time that can be logged as a slow event.
+     */
+    private static final int DEFAULT_MIN_SLOW_EVENT_TIME_MS = 200;
 
     /**
      * The maximum records any user-initiated operation is allowed to generate.
      *
      * For now, this is set to the maximum records in a single batch.
      */
-    static final int MAX_RECORDS_PER_USER_OP = MAX_RECORDS_PER_BATCH;
+    static final int MAX_RECORDS_PER_USER_OP = DEFAULT_MAX_RECORDS_PER_BATCH;
 
     /**
      * A builder class which creates the QuorumController.
@@ -213,7 +218,9 @@ public final class QuorumController implements Controller {
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
         private Map<String, Object> staticConfig = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = null;
-        private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
+        private int maxRecordsPerBatch = DEFAULT_MAX_RECORDS_PER_BATCH;
+        private long controllerPerformanceSamplePeriodMs = 60000L;
+        private long controllerPerformanceAlwaysLogThresholdMs = 2000L;
         private DelegationTokenCache tokenCache;
         private String tokenSecretKeyString;
         private long delegationTokenMaxLifeMs;
@@ -318,6 +325,16 @@ public final class QuorumController implements Controller {
 
         public Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
             this.maxRecordsPerBatch = maxRecordsPerBatch;
+            return this;
+        }
+
+        public Builder setControllerPerformanceSamplePeriodMs(long controllerPerformanceSamplePeriodMs) {
+            this.controllerPerformanceSamplePeriodMs = controllerPerformanceSamplePeriodMs;
+            return this;
+        }
+
+        public Builder setControllerPerformanceAlwaysLogThresholdMs(long controllerPerformanceAlwaysLogThresholdMs) {
+            this.controllerPerformanceAlwaysLogThresholdMs = controllerPerformanceAlwaysLogThresholdMs;
             return this;
         }
 
@@ -433,7 +450,9 @@ public final class QuorumController implements Controller {
                     delegationTokenExpiryTimeMs,
                     delegationTokenExpiryCheckIntervalMs,
                     uncleanLeaderElectionCheckIntervalMs,
-                    interBrokerListenerName
+                    interBrokerListenerName,
+                    controllerPerformanceSamplePeriodMs,
+                    controllerPerformanceAlwaysLogThresholdMs
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -524,6 +543,7 @@ public final class QuorumController implements Controller {
         long deltaNs = endProcessingTime - startProcessingTimeNs;
         log.debug("Processed {} in {} us", name,
             MICROSECONDS.convert(deltaNs, NANOSECONDS));
+        performanceMonitor.observeEvent(name, deltaNs);
         controllerMetrics.updateEventQueueProcessingTime(NANOSECONDS.toMillis(deltaNs));
     }
 
@@ -536,6 +556,8 @@ public final class QuorumController implements Controller {
         if (startProcessingTimeNs.isPresent()) {
             long endProcessingTime = time.nanoseconds();
             long deltaNs = endProcessingTime - startProcessingTimeNs.getAsLong();
+            performanceMonitor.observeEvent(name, deltaNs);
+            controllerMetrics.updateEventQueueProcessingTime(NANOSECONDS.toMillis(deltaNs));
             deltaUs = OptionalLong.of(MICROSECONDS.convert(deltaNs, NANOSECONDS));
         } else {
             deltaUs = OptionalLong.empty();
@@ -1446,6 +1468,11 @@ public final class QuorumController implements Controller {
      */
     private final RecordRedactor recordRedactor;
 
+    /**
+     * Monitors the performance of controller events and generates logs about it.
+     */
+    private final EventPerformanceMonitor performanceMonitor;
+
     private QuorumController(
         FaultHandler nonFatalFaultHandler,
         FaultHandler fatalFaultHandler,
@@ -1477,7 +1504,9 @@ public final class QuorumController implements Controller {
         long delegationTokenExpiryTimeMs,
         long delegationTokenExpiryCheckIntervalMs,
         long uncleanLeaderElectionCheckIntervalMs,
-        String interBrokerListenerName
+        String interBrokerListenerName,
+        long controllerPerformanceSamplePeriodMs,
+        long controllerPerformanceAlwaysLogThresholdMs
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1574,6 +1603,11 @@ public final class QuorumController implements Controller {
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
         this.recordRedactor = new RecordRedactor(configSchema);
+        this.performanceMonitor = new EventPerformanceMonitor.Builder().
+            setLogContext(logContext).
+            setPeriodNs(TimeUnit.MILLISECONDS.toNanos(controllerPerformanceSamplePeriodMs)).
+            setAlwaysLogThresholdNs(TimeUnit.MILLISECONDS.toNanos(controllerPerformanceAlwaysLogThresholdMs)).
+            build();
         if (maxIdleIntervalNs.isPresent()) {
             registerWriteNoOpRecord(maxIdleIntervalNs.getAsLong());
         }
@@ -1587,7 +1621,7 @@ public final class QuorumController implements Controller {
         }
         registerElectUnclean(TimeUnit.MILLISECONDS.toNanos(uncleanLeaderElectionCheckIntervalMs));
         registerExpireDelegationTokens(MILLISECONDS.toNanos(delegationTokenExpiryCheckIntervalMs));
-
+        registerGeneratePeriodicPerformanceMessage();
         // OffsetControlManager must be initialized last, because its constructor will take the
         // initial in-memory snapshot of all extant timeline data structures.
         this.offsetControl = new OffsetControlManager.Builder().
@@ -1597,7 +1631,6 @@ public final class QuorumController implements Controller {
             setTime(time).
             build();
         log.info("Creating new QuorumController with clusterId {}", clusterId);
-
         this.raftClient.register(metaLogListener);
     }
 
@@ -1679,6 +1712,21 @@ public final class QuorumController implements Controller {
             replicationControl::maybeElectUncleanLeaders,
             checkIntervalNs,
             EnumSet.of(PeriodicTaskFlag.VERBOSE)));
+    }
+
+    /**
+     * Register the generatePeriodicPerformanceMessage task.
+     *
+     * This task periodically logs some statistics about controller performance.
+     */
+    private void registerGeneratePeriodicPerformanceMessage() {
+        periodicControl.registerTask(new PeriodicTask("generatePeriodicPerformanceMessage",
+            () -> {
+                performanceMonitor.generatePeriodicPerformanceMessage();
+                return ControllerResult.of(Collections.emptyList(), false);
+            },
+            performanceMonitor.periodNs(),
+            EnumSet.noneOf(PeriodicTaskFlag.class)));
     }
 
     /**

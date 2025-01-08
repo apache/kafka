@@ -17,28 +17,17 @@
 
 package kafka.cluster
 
-import java.util
 import kafka.common.BrokerEndPointNotAvailableException
-import kafka.server.KafkaConfig
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
-import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.metadata.{BrokerRegistration, VersionRange}
-import org.apache.kafka.server.authorizer.AuthorizerServerInfo
 import org.apache.kafka.server.network.BrokerEndPoint
 
 import scala.collection.Seq
-import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOptional
 
 object Broker {
-  private[kafka] case class ServerInfo(clusterResource: ClusterResource,
-                                         brokerId: Int,
-                                         endpoints: util.List[Endpoint],
-                                         interBrokerEndpoint: Endpoint,
-                                         earlyStartListeners: util.Set[String]) extends AuthorizerServerInfo
 
   def apply(id: Int, endPoints: Seq[EndPoint], rack: Option[String]): Broker = {
     new Broker(id, endPoints, rack, emptySupportedFeatures)
@@ -46,22 +35,6 @@ object Broker {
 
   def apply(id: Int, endPoint: EndPoint, rack: Option[String]): Broker = {
     new Broker(id, Seq(endPoint), rack, emptySupportedFeatures)
-  }
-
-  private def supportedFeatures(features: java.util.Map[String, VersionRange]): java.util
-  .Map[String, SupportedVersionRange] = {
-    features.asScala.map { case (name, range) =>
-      name -> new SupportedVersionRange(range.min(), range.max())
-    }.asJava
-  }
-
-  def fromBrokerRegistration(registration: BrokerRegistration): Broker = {
-    new Broker(
-      registration.id(),
-      registration.listeners().values().asScala.map(EndPoint.fromJava).toSeq,
-      registration.rack().toScala,
-      Features.supportedFeatures(supportedFeatures(registration.supportedFeatures()))
-    )
   }
 }
 
@@ -110,13 +83,5 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], featu
   def endPoint(listenerName: ListenerName): EndPoint = {
     endPointsMap.getOrElse(listenerName,
       throw new BrokerEndPointNotAvailableException(s"End point with listener name ${listenerName.value} not found for broker $id"))
-  }
-
-  def toServerInfo(clusterId: String, config: KafkaConfig): AuthorizerServerInfo = {
-    val clusterResource: ClusterResource = new ClusterResource(clusterId)
-    val interBrokerEndpoint: Endpoint = endPoint(config.interBrokerListenerName).toJava
-    val brokerEndpoints: util.List[Endpoint] = endPoints.toList.map(_.toJava).asJava
-    Broker.ServerInfo(clusterResource, id, brokerEndpoints, interBrokerEndpoint,
-      config.earlyStartListeners.map(_.value()).asJava)
   }
 }

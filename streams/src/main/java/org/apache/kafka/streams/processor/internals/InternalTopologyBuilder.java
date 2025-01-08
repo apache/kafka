@@ -1459,7 +1459,7 @@ public class InternalTopologyBuilder {
             }
         }
         final Set<Set<String>> uniqueCopartitionGroups = new HashSet<>(topicsToCopartitionGroup.values());
-        return Collections.unmodifiableList(new ArrayList<>(uniqueCopartitionGroups));
+        return List.copyOf(uniqueCopartitionGroups);
     }
 
     private List<String> maybeDecorateInternalSourceTopics(final Collection<String> sourceTopics) {

@@ -434,7 +434,6 @@ public class SaslServerAuthenticator implements Authenticator {
             ByteBuffer requestBuffer = ByteBuffer.wrap(clientToken);
             RequestHeader header = RequestHeader.parse(requestBuffer);
             ApiKeys apiKey = header.apiKey();
-            short version = header.apiVersion();
             RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(), Optional.of(clientPort()),
                     KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
@@ -443,7 +442,8 @@ public class SaslServerAuthenticator implements Authenticator {
                 buildResponseOnAuthenticateFailure(requestContext, requestAndSize.request.getErrorResponse(e));
                 throw e;
             }
-            if (!apiKey.isVersionSupported(version)) {
+            short version = header.apiVersion();
+            if (!header.isApiVersionSupported()) {
                 // We cannot create an error response if the request version of SaslAuthenticate is not supported
                 // This should not normally occur since clients typically check supported versions using ApiVersionsRequest
                 throw new UnsupportedVersionException("Version " + version + " is not supported for apiKey " + apiKey);

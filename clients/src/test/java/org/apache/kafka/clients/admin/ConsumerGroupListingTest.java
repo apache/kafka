@@ -14,16 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.security;
+package org.apache.kafka.clients.admin;
 
-import java.security.AlgorithmParameters;
-import java.security.spec.AlgorithmParameterSpec;
-import java.security.spec.InvalidParameterSpecException;
-import java.util.Map;
+import org.apache.kafka.common.ConsumerGroupState;
 
-public interface CipherParamsEncoder {
+import org.junit.jupiter.api.Test;
 
-    Map<String, String> toMap(AlgorithmParameters cipher) throws InvalidParameterSpecException;
+import java.util.Optional;
 
-    AlgorithmParameterSpec toParameterSpec(Map<String, String> paramMap);
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class ConsumerGroupListingTest {
+    @Test
+    public void testState() {
+        for (ConsumerGroupState consumerGroupState : ConsumerGroupState.values()) {
+            ConsumerGroupListing listing = new ConsumerGroupListing(
+                "groupId",
+                false,
+                Optional.of(consumerGroupState)
+            );
+            assertEquals(consumerGroupState, listing.state().get());
+        }
+    }
 }

@@ -82,7 +82,7 @@ class GroupMetadataManagerTest {
   val noExpiration = OptionalLong.empty()
 
   private val offsetConfig = {
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0))
     new OffsetConfig(config.groupCoordinatorConfig.offsetMetadataMaxSize,
       config.groupCoordinatorConfig.offsetsLoadBufferSize,
       config.groupCoordinatorConfig.offsetsRetentionMs,

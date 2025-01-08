@@ -489,7 +489,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     private Throwable commitSyncExceptionForError(Throwable error) {
         if (error instanceof StaleMemberEpochException) {
-            return new CommitFailedException("OffsetCommit failed with stale member epoch."
+            return new CommitFailedException("OffsetCommit failed with stale member epoch. "
                 + Errors.STALE_MEMBER_EPOCH.message());
         }
         return error;

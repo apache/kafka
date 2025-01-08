@@ -67,7 +67,7 @@ class LogLoaderTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, "127.0.0.1:1", port = -1)
+    val props = TestUtils.createBrokerConfig(0, port = -1)
     config = KafkaConfig.fromProps(props)
   }
 

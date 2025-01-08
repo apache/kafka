@@ -68,7 +68,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(quorum: String): Unit = {
-    brokers ++= (0 to 1).map { id => createBroker(fromProps(createBrokerConfig(id, null))) }
+    brokers ++= (0 to 1).map { id => createBroker(fromProps(createBrokerConfig(id))) }
 
     // Given two topics with replication of a single partition
     for (topic <- List(topic1, topic2)) {
@@ -103,7 +103,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   def shouldSendLeaderEpochRequestAndGetAResponse(quorum: String): Unit = {
 
     //3 brokers, put partition on 100/101 and then pretend to be 102
-    brokers ++= (100 to 102).map { id => createBroker(fromProps(createBrokerConfig(id, null))) }
+    brokers ++= (100 to 102).map { id => createBroker(fromProps(createBrokerConfig(id))) }
 
     val assignment1 = Map(0 -> Seq(100), 1 -> Seq(101))
     createTopic(topic1, assignment1)
@@ -150,10 +150,10 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   @ValueSource(strings = Array("kraft"))
   def shouldIncreaseLeaderEpochBetweenLeaderRestarts(quorum: String): Unit = {
     //Setup: we are only interested in the single partition on broker 101
-    brokers += createBroker(fromProps(createBrokerConfig(100, null)))
+    brokers += createBroker(fromProps(createBrokerConfig(100)))
     assertEquals(controllerServer.config.nodeId, waitUntilQuorumLeaderElected(controllerServer))
 
-    brokers += createBroker(fromProps(createBrokerConfig(101, null)))
+    brokers += createBroker(fromProps(createBrokerConfig(101)))
 
     def leo() = brokers(1).replicaManager.localLog(tp).get.logEndOffset
 

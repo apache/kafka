@@ -20,18 +20,29 @@ package org.apache.kafka.common.test.api;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.DescribeAclsOptions;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.TestUtils;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -48,7 +59,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -63,7 +76,9 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_CO
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ClusterTestDefaults(types = {Type.KRAFT}, serverProperties = {
     @ClusterConfigProperty(key = "default.key", value = "default.value"),
@@ -273,12 +288,12 @@ public class ClusterTestExtensionsTest {
         String value = "value";
         try (Admin adminClient = cluster.admin();
              Producer<String, String> producer = cluster.producer(Map.of(
-                     ACKS_CONFIG, "all",
-                     KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
-                     VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()));
+                 ACKS_CONFIG, "all",
+                 KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                 VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()));
              Consumer<String, String> consumer = cluster.consumer(Map.of(
-                     KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
-                     VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()))
+                 KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+                 VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()))
         ) {
             adminClient.createTopics(singleton(new NewTopic(topic, 1, (short) 1)));
             assertNotNull(producer);
@@ -329,6 +344,145 @@ public class ClusterTestExtensionsTest {
         assertEquals("FOO", cluster.controllerListenerName().get().value());
         try (Admin admin = cluster.admin(Map.of(), true)) {
             assertEquals(1, admin.describeMetadataQuorum().quorumInfo().get().nodes().size());
+        }
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT, Type.CO_KRAFT},
+        brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+        controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+        serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+        }
+    )
+    public void testSaslPlaintext(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+        Assertions.assertEquals(SecurityProtocol.SASL_PLAINTEXT, clusterInstance.config().brokerSecurityProtocol());
+
+        // default ClusterInstance#admin helper with admin credentials
+        try (Admin admin = clusterInstance.admin()) {
+            admin.describeAcls(AclBindingFilter.ANY).values().get();
+        }
+        String topic = "sasl-plaintext-topic";
+        clusterInstance.createTopic(topic, 1, (short) 1);
+        try (Producer<byte[], byte[]> producer = clusterInstance.producer()) {
+            producer.send(new ProducerRecord<>(topic, Utils.utf8("key"), Utils.utf8("value"))).get();
+            producer.flush();
+        }
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer()) {
+            consumer.subscribe(List.of(topic));
+            TestUtils.waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
+                return records.count() == 1;
+            }, "Failed to receive message");
+        }
+
+        // client with non-admin credentials
+        Map<String, Object> nonAdminConfig = Map.of(
+            SaslConfigs.SASL_JAAS_CONFIG,
+            String.format(
+                "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD
+            )
+        );
+        try (Admin admin = clusterInstance.admin(nonAdminConfig)) {
+            ExecutionException exception = assertThrows(
+                ExecutionException.class,
+                () -> admin.describeAcls(AclBindingFilter.ANY).values().get()
+            );
+            assertInstanceOf(ClusterAuthorizationException.class, exception.getCause());
+        }
+        try (Producer<byte[], byte[]> producer = clusterInstance.producer(nonAdminConfig)) {
+            ExecutionException exception = assertThrows(
+                ExecutionException.class,
+                () -> producer.send(new ProducerRecord<>(topic, Utils.utf8("key"), Utils.utf8("value"))).get()
+            );
+            assertInstanceOf(TopicAuthorizationException.class, exception.getCause());
+        }
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(nonAdminConfig)) {
+            consumer.subscribe(List.of(topic));
+            AtomicBoolean hasException = new AtomicBoolean(false);
+            TestUtils.waitForCondition(() -> {
+                if (hasException.get()) {
+                    return true;
+                }
+                try {
+                    consumer.poll(Duration.ofMillis(100));
+                } catch (TopicAuthorizationException e) {
+                    hasException.set(true);
+                }
+                return false;
+            }, "Failed to get exception");
+        }
+
+        // client with unknown credentials
+        Map<String, Object> unknownUserConfig = Map.of(
+            SaslConfigs.SASL_JAAS_CONFIG,
+            String.format(
+                "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                "unknown", "unknown"
+            )
+        );
+        try (Admin admin = clusterInstance.admin(unknownUserConfig)) {
+            ExecutionException exception = assertThrows(
+                ExecutionException.class,
+                () -> admin.describeAcls(AclBindingFilter.ANY).values().get()
+            );
+            assertInstanceOf(SaslAuthenticationException.class, exception.getCause());
+        }
+        try (Producer<byte[], byte[]> producer = clusterInstance.producer(unknownUserConfig)) {
+            ExecutionException exception = assertThrows(
+                ExecutionException.class,
+                () -> producer.send(new ProducerRecord<>(topic, Utils.utf8("key"), Utils.utf8("value"))).get()
+            );
+            assertInstanceOf(SaslAuthenticationException.class, exception.getCause());
+        }
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(unknownUserConfig)) {
+            consumer.subscribe(List.of(topic));
+            AtomicBoolean hasException = new AtomicBoolean(false);
+            TestUtils.waitForCondition(() -> {
+                if (hasException.get()) {
+                    return true;
+                }
+                try {
+                    consumer.poll(Duration.ofMillis(100));
+                } catch (SaslAuthenticationException e) {
+                    hasException.set(true);
+                }
+                return false;
+            }, "Failed to get exception");
+        }
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT, Type.CO_KRAFT},
+        brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+        controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+        serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+        }
+    )
+    public void testSaslPlaintextWithController(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+        // test with admin
+        try (Admin admin = clusterInstance.admin(Map.of(), true)) {
+            admin.describeAcls(AclBindingFilter.ANY).values().get();
+        }
+
+        // test with non-admin
+        Map<String, Object> nonAdminConfig = Map.of(
+            SaslConfigs.SASL_JAAS_CONFIG,
+            String.format(
+                "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD
+            )
+        );
+        try (Admin admin = clusterInstance.admin(nonAdminConfig, true)) {
+            ExecutionException exception = assertThrows(
+                ExecutionException.class,
+                () -> admin.describeAcls(AclBindingFilter.ANY, new DescribeAclsOptions().timeoutMs(5000)).values().get()
+            );
+            assertInstanceOf(TimeoutException.class, exception.getCause());
         }
     }
 }
