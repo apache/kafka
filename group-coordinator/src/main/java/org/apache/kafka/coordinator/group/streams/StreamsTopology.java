@@ -27,12 +27,23 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Immutable topology metadata.
+ * Contains all information related to a topology of a Streams group.
+ * <p>
+ * This class is immutable and is fully backed by records stored in the __consumer_offsets topic.
+ *
+ * @param topologyEpoch The epoch of the topology.
+ * @param subtopologies The subtopologies of the topology containing information about source topics,
+ *                      repartition topics, changelog topics, co-partition groups etc.
  */
-public record StreamsTopology (int topologyEpoch,
+ public record StreamsTopology (int topologyEpoch,
                                Map<String, Subtopology> subtopologies) {
 
-    public Set<String> requiredTopics() {
+    /**
+     * Returns the set of topics required by the topology.
+     *
+     * @return set of topics required by the topology
+     */
+     public Set<String> requiredTopics() {
         return subtopologies.values().stream()
             .flatMap(x ->
                 Stream.concat(
@@ -45,6 +56,12 @@ public record StreamsTopology (int topologyEpoch,
             ).collect(Collectors.toSet());
     }
 
+    /**
+     * Creates a instance of StreamsTopology from a StreamsGroupTopologyValue record.
+     *
+     * @param record StreamsGroupTopologyValue record
+     * @return instance of StreamsTopology
+     */
     public static StreamsTopology fromRecord(StreamsGroupTopologyValue record) {
         return new StreamsTopology(
             record.epoch(),
