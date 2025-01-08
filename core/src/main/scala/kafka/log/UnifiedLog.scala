@@ -675,7 +675,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             initializeLeaderEpochCache()
             initializePartitionMetadata()
           } else {
-            leaderEpochCache = null
+            leaderEpochCache.clear()
             partitionMetadataFile = None
           }
         }
@@ -1759,9 +1759,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       lock synchronized {
         localLog.checkIfMemoryMappedBufferClosed()
         producerExpireCheck.cancel(true)
-        // `renameDir` with `shouldReinitialize=false` sets this to `null` and it's usually (but not always) called before this method
-        if (leaderEpochCache != null)
-          leaderEpochCache.clear()
+        leaderEpochCache.clear()
         val deletedSegments = localLog.deleteAllSegments()
         deleteProducerSnapshots(deletedSegments, asyncDelete = false)
         localLog.deleteEmptyDir()

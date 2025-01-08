@@ -1672,9 +1672,7 @@ public class RemoteLogManager implements Closeable {
 
         if (logOptional.isPresent()) {
             LeaderEpochFileCache leaderEpochCache = logOptional.get().leaderEpochCache();
-            if (leaderEpochCache != null) {
-                epoch = leaderEpochCache.epochForOffset(offset);
-            }
+            epoch = leaderEpochCache.epochForOffset(offset);
         }
 
         Optional<RemoteLogSegmentMetadata> rlsMetadataOptional = epoch.isPresent()
@@ -1874,7 +1872,7 @@ public class RemoteLogManager implements Closeable {
      * Visible for testing
      * @param tp The topic partition.
      * @param offset The offset to start the search.
-     * @param leaderEpochCache The leader epoch file cache, this could be null.
+     * @param leaderEpochCache The leader epoch file cache.
      * @return The next segment metadata that contains the transaction index. The transaction index may or may not exist
      * in that segment metadata which depends on the RLMM plugin implementation. The caller of this method should handle
      * for both the cases.
@@ -1883,9 +1881,6 @@ public class RemoteLogManager implements Closeable {
     Optional<RemoteLogSegmentMetadata> findNextSegmentWithTxnIndex(TopicPartition tp,
                                                                    long offset,
                                                                    LeaderEpochFileCache leaderEpochCache) throws RemoteStorageException {
-        if (leaderEpochCache == null) {
-            return Optional.empty();
-        }
         OptionalInt initialEpochOpt = leaderEpochCache.epochForOffset(offset);
         if (initialEpochOpt.isEmpty()) {
             return Optional.empty();
