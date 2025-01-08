@@ -24,7 +24,7 @@ import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import kafka.server.share.SharePartitionManager
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -86,7 +86,7 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
-import java.util.{Collections, Optional, OptionalInt}
+import java.util.{Collections, Optional}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
@@ -197,7 +197,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.FETCH => handleFetchRequest(request)
         case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
         case ApiKeys.METADATA => handleTopicMetadataRequest(request)
-        case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
         case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request, requestLocal)
         case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
         case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request, requestLocal).exceptionally(handleError)
@@ -292,67 +291,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   override def tryCompleteActions(): Unit = {
     replicaManager.tryCompleteActions()
-  }
-
-  def handleStopReplicaRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-    // ensureTopicExists is only for client facing requests
-    // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
-    // stop serving data to clients for the topic being deleted
-    val stopReplicaRequest = request.body[StopReplicaRequest]
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    if (zkSupport.isBrokerEpochStale(stopReplicaRequest.brokerEpoch, stopReplicaRequest.isKRaftController)) {
-      // When the broker restarts very quickly, it is possible for this broker to receive request intended
-      // for its previous generation so the broker should skip the stale request.
-      info(s"Received StopReplica request with broker epoch ${stopReplicaRequest.brokerEpoch} " +
-        s"smaller than the current broker epoch ${zkSupport.controller.brokerEpoch} from " +
-        s"controller ${stopReplicaRequest.controllerId} with epoch ${stopReplicaRequest.controllerEpoch}.")
-      requestHelper.sendResponseExemptThrottle(request, new StopReplicaResponse(
-        new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
-    } else {
-      val partitionStates = stopReplicaRequest.partitionStates().asScala
-      val (result, error) = replicaManager.stopReplicas(
-        request.context.correlationId,
-        stopReplicaRequest.controllerId,
-        stopReplicaRequest.controllerEpoch,
-        partitionStates)
-      // Clear the coordinator caches in case we were the leader. In the case of a reassignment, we
-      // cannot rely on the LeaderAndIsr API for this since it is only sent to active replicas.
-      result.foreachEntry { (topicPartition, error) =>
-        if (error == Errors.NONE) {
-          val partitionState = partitionStates(topicPartition)
-          if (topicPartition.topic == GROUP_METADATA_TOPIC_NAME
-              && partitionState.deletePartition) {
-            val leaderEpoch = if (partitionState.leaderEpoch >= 0)
-              OptionalInt.of(partitionState.leaderEpoch)
-            else
-              OptionalInt.empty
-            groupCoordinator.onResignation(topicPartition.partition, leaderEpoch)
-          } else if (topicPartition.topic == TRANSACTION_STATE_TOPIC_NAME
-                     && partitionState.deletePartition) {
-            val leaderEpoch = if (partitionState.leaderEpoch >= 0)
-              Some(partitionState.leaderEpoch)
-            else
-              None
-            txnCoordinator.onResignation(topicPartition.partition, coordinatorEpoch = leaderEpoch)
-          }
-        }
-      }
-
-      def toStopReplicaPartition(tp: TopicPartition, error: Errors) =
-        new StopReplicaResponseData.StopReplicaPartitionError()
-          .setTopicName(tp.topic)
-          .setPartitionIndex(tp.partition)
-          .setErrorCode(error.code)
-
-      requestHelper.sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData()
-        .setErrorCode(error.code)
-        .setPartitionErrors(result.map {
-          case (tp, error) => toStopReplicaPartition(tp, error)
-        }.toBuffer.asJava)))
-    }
-
-    CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)
   }
 
   def handleUpdateMetadataRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
