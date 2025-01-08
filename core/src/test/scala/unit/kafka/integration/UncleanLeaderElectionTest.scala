@@ -76,8 +76,6 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
 
     for (configProps <- List(configProps1, configProps2)) {
       configProps.put("controlled.shutdown.enable", enableControlledShutdown.toString)
-      configProps.put("controlled.shutdown.max.retries", "1")
-      configProps.put("controlled.shutdown.retry.backoff.ms", "1000")
     }
 
     // temporarily set loggers to a higher level so that tests run quietly
