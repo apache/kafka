@@ -95,7 +95,6 @@ import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.TopicAssignment;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
@@ -1015,11 +1014,6 @@ public class ReplicationControlManager {
         return imbalancedPartitions;
     }
 
-    boolean isElrEnabled() {
-        return featureControl.metadataVersion().isElrSupported() && featureControl.latestFinalizedFeatures().
-            versionOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >= EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
-    }
-
     ControllerResult<AlterPartitionResponseData> alterPartition(
         ControllerRequestContext context,
         AlterPartitionRequestData request
@@ -1085,7 +1079,7 @@ public class ReplicationControlManager {
                     featureControl.metadataVersion(),
                     getTopicEffectiveMinIsr(topic.name)
                 )
-                    .setEligibleLeaderReplicasEnabled(isElrEnabled());
+                    .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1565,7 +1559,7 @@ public class ReplicationControlManager {
             getTopicEffectiveMinIsr(topic)
         )
             .setElection(election)
-            .setEligibleLeaderReplicasEnabled(isElrEnabled())
+            .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
             .setDefaultDirProvider(clusterDescriber)
             .build();
         if (!record.isPresent()) {
@@ -1729,7 +1723,7 @@ public class ReplicationControlManager {
                 getTopicEffectiveMinIsr(topic.name)
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
-                .setEligibleLeaderReplicasEnabled(isElrEnabled())
+                .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
                 .setDefaultDirProvider(clusterDescriber)
                 .build().ifPresent(records::add);
         }
@@ -1998,7 +1992,7 @@ public class ReplicationControlManager {
                 featureControl.metadataVersion(),
                 getTopicEffectiveMinIsr(topic.name)
             );
-            builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
+            builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
@@ -2116,7 +2110,7 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topicName)
         );
-        builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
+        builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -2177,7 +2171,7 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
         );
-        builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
+        builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
         }

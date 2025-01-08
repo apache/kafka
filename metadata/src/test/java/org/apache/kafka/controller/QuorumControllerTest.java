@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -352,6 +353,31 @@ public class QuorumControllerTest {
     }
 
     @Test
+    public  void testElrEnabledByDefault() throws Throwable {
+        long sessionTimeoutMillis = 500;
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+                build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
+                setBootstrapMetadata(BootstrapMetadata.fromRecords(
+                    Arrays.asList(
+                        new ApiMessageAndVersion(new FeatureLevelRecord().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setFeatureLevel(MetadataVersion.IBP_4_0_IV1.featureLevel()), (short) 0),
+                        new ApiMessageAndVersion(new FeatureLevelRecord().
+                            setName(EligibleLeaderReplicasVersion.FEATURE_NAME).
+                            setFeatureLevel(EligibleLeaderReplicasVersion.ELRV_1.featureLevel()), (short) 0)
+                    ),
+                    "test-provided bootstrap ELR enabled"
+                )).
+                build()
+        ) {
+            controlEnv.activeController(true);
+            assertTrue(controlEnv.activeController().configurationControl().clusterConfig().containsKey(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG));
+        }
+    }
+
     public void testUncleanShutdownBrokerElrEnabled() throws Throwable {
         List<Integer> allBrokers = Arrays.asList(1, 2, 3);
         short replicationFactor = (short) allBrokers.size();
@@ -1485,7 +1511,8 @@ public class QuorumControllerTest {
             true,
             -1L,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
-            metadataVersion);
+            metadataVersion,
+            3);
         RecordTestUtils.replayAll(featureControlManager, result.records());
         return featureControlManager;
     }
@@ -1520,7 +1547,8 @@ public class QuorumControllerTest {
             true,
             0L,
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
-            MetadataVersion.IBP_3_6_IV1);
+            MetadataVersion.IBP_3_6_IV1,
+            3);
         assertFalse(result.isAtomic());
         assertTrue(RecordTestUtils.recordAtIndexAs(
             AbortTransactionRecord.class, result.records(), 0).isPresent());
@@ -1568,7 +1596,8 @@ public class QuorumControllerTest {
             false,
             offsetControlManager.transactionStartOffset(),
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
-            MetadataVersion.IBP_3_6_IV1);
+            MetadataVersion.IBP_3_6_IV1,
+            3);
 
         assertTrue(result.isAtomic());
         offsetControlManager.replay(
@@ -1591,7 +1620,7 @@ public class QuorumControllerTest {
                 false,
                 offsetControlManager.transactionStartOffset(),
                 BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
-                MetadataVersion.IBP_3_6_IV0)
-        );
+                MetadataVersion.IBP_3_6_IV0,
+                3));
     }
 }
