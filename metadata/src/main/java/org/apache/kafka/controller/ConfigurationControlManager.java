@@ -339,14 +339,6 @@ public class ConfigurationControlManager {
             if (alterConfigPolicy.isPresent()) {
                 alterConfigPolicy.get().validate(new RequestMetadata(configResource, alteredConfigsForAlterConfigPolicyCheck));
             }
-            if (featureControl.isElrFeatureEnabled()) {
-                if (configResource.type() == Type.BROKER && !configResource.name().isEmpty()) {
-                    for (Entry<String, String> record : allConfigs.entrySet()) {
-                        if (record.getKey().equals(MIN_IN_SYNC_REPLICAS_CONFIG) && record.getValue() != null)
-                            throw new ConfigException("It is not allowed to set broker level min isr config when ELR is enabled.");
-                    }
-                }
-            }
         } catch (ConfigException e) {
             return new ApiError(INVALID_CONFIG, e.getMessage());
         } catch (Throwable e) {

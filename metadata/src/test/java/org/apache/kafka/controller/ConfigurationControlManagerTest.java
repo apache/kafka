@@ -453,7 +453,7 @@ public class ConfigurationControlManagerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void testRejectMinIsrClusterLevelChangeWhenElrEnabled(boolean removal) {
+    public void testRejectMinIsrChangeWhenElrEnabled(boolean removal) {
         FeatureControlManager featureManager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
@@ -474,12 +474,26 @@ public class ConfigurationControlManagerTest {
         RecordTestUtils.replayAll(manager, result.records());
         RecordTestUtils.replayAll(featureManager, result.records());
 
-        result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, ""),
+        // Broker level update is not allowed.
+        result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
                 removal ? entry(DELETE, null) : entry(SET, "3"))),
             true);
         assertEquals(Errors.INVALID_CONFIG, result.response().error());
         assertEquals("Broker-level min.insync.replicas cannot be altered while ELR is enabled.",
             result.response().message());
+
+        // Cluster level removal is not allowed.
+        result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, ""),
+            toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
+                removal ? entry(DELETE, null) : entry(SET, "3"))),
+            true);
+        if (removal) {
+            assertEquals(Errors.INVALID_CONFIG, result.response().error());
+            assertEquals("Cluster-level min.insync.replicas cannot be removed while ELR is enabled.",
+                    result.response().message());
+        } else {
+            assertEquals(Errors.NONE, result.response().error());
+        }
     }
 }

@@ -414,10 +414,7 @@ public class FeatureControlManager {
     }
 
     boolean isElrFeatureEnabled() {
-        return isElrFeatureEnabled(latestFinalizedFeatures().versionOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0));
-    }
-
-    public static boolean isElrFeatureEnabled(short elrFeatureLevel) {
-        return elrFeatureLevel >= EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
+        return latestFinalizedFeatures().versionOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >=
+            EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
     }
 }
