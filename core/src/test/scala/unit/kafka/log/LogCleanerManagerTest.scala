@@ -132,7 +132,7 @@ class LogCleanerManagerTest extends Logging {
       offsets.nextOffsetMetadata, time.scheduler, time, tp, logDirFailureChannel)
     // the exception should be caught and the partition that caused it marked as uncleanable
     class LogMock extends UnifiedLog(offsets.logStartOffset, localLog, new BrokerTopicStats,
-        producerIdExpirationCheckIntervalMs, Some(leaderEpochCache),
+        producerIdExpirationCheckIntervalMs, leaderEpochCache,
         producerStateManager, _topicId = None, keepPartitionMetadataFile = true) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
       override def getFirstBatchTimestampForSegments(segments: util.Collection[LogSegment]): util.Collection[java.lang.Long] =

@@ -67,6 +67,7 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPa
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, PartitionMetadataFile}
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -262,68 +263,6 @@ class ReplicaManagerTest {
         }
       })
     when(cache.getAliveBrokerNodes(any[ListenerName])).thenReturn(aliveBrokers)
-  }
-
-  @Test
-  def testMaybeAddLogDirFetchersWithoutEpochCache(): Unit = {
-    val dir1 = TestUtils.tempDir()
-    val dir2 = TestUtils.tempDir()
-    val props = TestUtils.createBrokerConfig(0)
-    props.put("log.dirs", dir1.getAbsolutePath + "," + dir2.getAbsolutePath)
-    val config = KafkaConfig.fromProps(props)
-    val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(new Properties()))
-    val metadataCache: MetadataCache = mock(classOf[MetadataCache])
-    mockGetAliveBrokerFunctions(metadataCache, Seq(new Node(0, "host0", 0)))
-    when(metadataCache.metadataVersion()).thenReturn(config.interBrokerProtocolVersion)
-    val rm = new ReplicaManager(
-      metrics = metrics,
-      config = config,
-      time = time,
-      scheduler = new MockScheduler(time),
-      logManager = logManager,
-      quotaManagers = quotaManager,
-      metadataCache = metadataCache,
-      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterPartitionManager = alterPartitionManager)
-
-    try {
-      val partition = rm.createPartition(new TopicPartition(topic, 0))
-      partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
-
-      rm.becomeLeaderOrFollower(0, new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrPartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(0)
-          .setIsr(Seq[Integer](0).asJava)
-          .setPartitionEpoch(0)
-          .setReplicas(Seq[Integer](0).asJava)
-          .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, Uuid.randomUuid()),
-        Set(new Node(0, "host1", 0)).asJava).build(), (_, _) => ())
-      appendRecords(rm, new TopicPartition(topic, 0),
-        MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("first message".getBytes()), new SimpleRecord("second message".getBytes())))
-      logManager.maybeUpdatePreferredLogDir(new TopicPartition(topic, 0), dir2.getAbsolutePath)
-
-      partition.createLogIfNotExists(isNew = true, isFutureReplica = true,
-        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
-      // remove cache to disable OffsetsForLeaderEpoch API
-      partition.futureLog.get.leaderEpochCache = None
-
-      // this method should use hw of future log to create log dir fetcher. Otherwise, it causes offset mismatch error
-      rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), _ => None)
-      rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.fetchState(new TopicPartition(topic, 0)).foreach(s => assertEquals(0L, s.fetchOffset)))
-      // make sure alter log dir thread has processed the data
-      rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.doWork())
-      assertEquals(Set.empty, rm.replicaAlterLogDirsManager.failedPartitions.partitions())
-      // the future log becomes the current log, so the partition state should get removed
-      rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => assertEquals(None, t.fetchState(new TopicPartition(topic, 0))))
-    } finally {
-      rm.shutdown(checkpointHW = false)
-    }
   }
 
   @ParameterizedTest(name = "testMaybeAddLogDirFetchersPausingCleaning with futureLogCreated: {0}")
@@ -2928,7 +2867,7 @@ class ReplicaManagerTest {
       localLog = localLog,
       brokerTopicStats = mockBrokerTopicStats,
       producerIdExpirationCheckIntervalMs = 30000,
-      leaderEpochCache = Some(leaderEpochCache),
+      leaderEpochCache = leaderEpochCache,
       producerStateManager = producerStateManager,
       _topicId = topicId,
       keepPartitionMetadataFile = true) {
@@ -4517,7 +4456,7 @@ class ReplicaManagerTest {
     when(mockLog.logStartOffset).thenReturn(endOffset).thenReturn(startOffset)
     when(mockLog.logEndOffset).thenReturn(endOffset)
     when(mockLog.localLogStartOffset()).thenReturn(endOffset - 10)
-    when(mockLog.leaderEpochCache).thenReturn(None)
+    when(mockLog.leaderEpochCache).thenReturn(mock(classOf[LeaderEpochFileCache]))
     when(mockLog.latestEpoch).thenReturn(Some(0))
     val producerStateManager = mock(classOf[ProducerStateManager])
     when(mockLog.producerStateManager).thenReturn(producerStateManager)

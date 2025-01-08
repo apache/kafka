@@ -167,7 +167,7 @@ class LogLoaderTest {
             offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
             logDirFailureChannel)
           new UnifiedLog(offsets.logStartOffset, localLog, brokerTopicStats,
-            this.producerIdExpirationCheckIntervalMs, Some(leaderEpochCache),
+            this.producerIdExpirationCheckIntervalMs, leaderEpochCache,
             producerStateManager, None, true)
         }
       }
@@ -387,7 +387,7 @@ class LogLoaderTest {
         offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
         logDirFailureChannel)
       new UnifiedLog(offsets.logStartOffset, localLog, brokerTopicStats,
-        producerIdExpirationCheckIntervalMs, Some(leaderEpochCache), producerStateManager,
+        producerIdExpirationCheckIntervalMs, leaderEpochCache, producerStateManager,
         None, keepPartitionMetadataFile = true)
     }
 
@@ -455,7 +455,7 @@ class LogLoaderTest {
       localLog,
       brokerTopicStats = brokerTopicStats,
       producerIdExpirationCheckIntervalMs = 30000,
-      leaderEpochCache = Some(leaderEpochCache),
+      leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
       _topicId = None,
       keepPartitionMetadataFile = true)
@@ -565,7 +565,7 @@ class LogLoaderTest {
       localLog,
       brokerTopicStats = brokerTopicStats,
       producerIdExpirationCheckIntervalMs = 30000,
-      leaderEpochCache = Some(leaderEpochCache),
+      leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
       _topicId = None,
       keepPartitionMetadataFile = true)
@@ -1215,7 +1215,7 @@ class LogLoaderTest {
   @Test
   def testLogRecoversForLeaderEpoch(): Unit = {
     val log = createLog(logDir, new LogConfig(new Properties))
-    val leaderEpochCache = log.leaderEpochCache.get
+    val leaderEpochCache = log.leaderEpochCache
     val firstBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1, offset = 0)
     log.appendAsFollower(records = firstBatch)
 
@@ -1237,7 +1237,7 @@ class LogLoaderTest {
 
     // reopen the log and recover from the beginning
     val recoveredLog = createLog(logDir, new LogConfig(new Properties), lastShutdownClean = false)
-    val recoveredLeaderEpochCache = recoveredLog.leaderEpochCache.get
+    val recoveredLeaderEpochCache = recoveredLog.leaderEpochCache
 
     // epoch entries should be recovered
     assertEquals(java.util.Arrays.asList(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), recoveredLeaderEpochCache.epochEntries)

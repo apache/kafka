@@ -331,7 +331,7 @@ class PartitionLockTest extends Logging {
         val localLog = new LocalLog(log.dir, log.config, segments, offsets.recoveryPoint,
           offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, log.topicPartition,
           logDirFailureChannel)
-        new SlowLog(log, offsets.logStartOffset, localLog, Some(leaderEpochCache), producerStateManager, appendSemaphore)
+        new SlowLog(log, offsets.logStartOffset, localLog, leaderEpochCache, producerStateManager, appendSemaphore)
       }
     }
 
@@ -443,7 +443,7 @@ class PartitionLockTest extends Logging {
     log: UnifiedLog,
     logStartOffset: Long,
     localLog: LocalLog,
-    leaderEpochCache: Option[LeaderEpochFileCache],
+    leaderEpochCache: LeaderEpochFileCache,
     producerStateManager: ProducerStateManager,
     appendSemaphore: Semaphore
   ) extends UnifiedLog(

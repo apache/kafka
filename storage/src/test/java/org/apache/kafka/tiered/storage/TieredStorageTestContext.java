@@ -302,11 +302,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     // unused now, but it can be reused later as this is an utility method.
     public Optional<LeaderEpochFileCache> leaderEpochFileCache(int brokerId, TopicPartition partition) {
-        Optional<UnifiedLog> unifiedLogOpt = log(brokerId, partition);
-        if (unifiedLogOpt.isPresent() && unifiedLogOpt.get().leaderEpochCache().isDefined()) {
-            return Optional.of(unifiedLogOpt.get().leaderEpochCache().get());
-        }
-        return Optional.empty();
+        return log(brokerId, partition).map(log -> log.leaderEpochCache());
     }
 
     public List<LocalTieredStorage> remoteStorageManagers() {

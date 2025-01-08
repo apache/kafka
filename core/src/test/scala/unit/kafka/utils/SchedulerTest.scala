@@ -163,7 +163,7 @@ class SchedulerTest {
     val log = new UnifiedLog(logStartOffset = offsets.logStartOffset,
       localLog = localLog,
       brokerTopicStats, producerIdExpirationCheckIntervalMs,
-      Some(leaderEpochCache), producerStateManager,
+      leaderEpochCache, producerStateManager,
       _topicId = None, keepPartitionMetadataFile = true)
     assertTrue(scheduler.taskRunning(log.producerExpireCheck))
     log.close()

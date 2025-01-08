@@ -214,7 +214,7 @@ class LogCleanerTest extends Logging {
                       localLog,
                       brokerTopicStats = new BrokerTopicStats,
                       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
-                      leaderEpochCache = Some(leaderEpochCache),
+                      leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
                       _topicId = None,
                       keepPartitionMetadataFile = true) {
