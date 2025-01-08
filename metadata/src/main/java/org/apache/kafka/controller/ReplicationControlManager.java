@@ -2003,7 +2003,7 @@ public class ReplicationControlManager {
                 topicIdPart.partitionId(),
                 new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
                 featureControl.metadataVersion(),
-                getTopicEffectiveMinIsr(topic.name, getTopicMinIsr)
+                getTopicEffectiveMinIsr(topic.name, getTopicMinIsr.apply(topic.name))
             );
             builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
@@ -2327,18 +2327,16 @@ public class ReplicationControlManager {
 
     // Visible to test.
     int getTopicEffectiveMinIsr(String topicName) {
-        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value();
-        int currentMinIsr = Integer.parseInt(minIsrConfig);
-        Uuid topicId = topicsByName.get(topicName);
-        int replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
-        return Math.min(currentMinIsr, replicationFactor);
+        return getTopicEffectiveMinIsr(
+            topicName,
+            Integer.parseInt(configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value())
+        );
     }
 
-    int getTopicEffectiveMinIsr(String topicName, Function<String, Integer> getTopicMinIsrConfig) {
-        int currentMinIsr = getTopicMinIsrConfig.apply(topicName);
+    int getTopicEffectiveMinIsr(String topicName, int currentConfigMinIsr) {
         Uuid topicId = topicsByName.get(topicName);
         int replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
-        return Math.min(currentMinIsr, replicationFactor);
+        return Math.min(currentConfigMinIsr, replicationFactor);
     }
 
     List<ApiMessageAndVersion> getPartitionElrUpdatesForConfigChanges(

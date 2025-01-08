@@ -368,9 +368,9 @@ public class ConfigurationControlManager {
     }
 
     List<ApiMessageAndVersion> maybeTriggerPartitionUpdateOnMinIsrChange(List<ApiMessageAndVersion> records) {
-        int minIsrRecordCount = 0;
+        boolean hasMinIsrUpdate = false;
         Map<String, Integer> topicToMinIsrValueMap = new HashMap<>();
-        HashSet<String> configRemovedTopicSet = new HashSet<>();
+        HashSet<String> topicConfigRemovedSet = new HashSet<>();
         int currentClusterLevelMinIsr = -1;
         if (clusterConfig().containsKey(MIN_IN_SYNC_REPLICAS_CONFIG)) {
             currentClusterLevelMinIsr = Integer.parseInt(clusterConfig().get(MIN_IN_SYNC_REPLICAS_CONFIG));
@@ -379,35 +379,36 @@ public class ConfigurationControlManager {
         for (ApiMessageAndVersion record : records) {
             ConfigRecord configRecord = (ConfigRecord) record.message();
             if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG)) {
-                minIsrRecordCount += 1;
+                hasMinIsrUpdate = true;
                 if (Type.forId(configRecord.resourceType()) == Type.TOPIC) {
                     if (configRecord.value() != null)
                         topicToMinIsrValueMap.put(configRecord.resourceName(), Integer.parseInt(configRecord.value()));
                     else
-                        configRemovedTopicSet.add(configRecord.resourceName());
+                        topicConfigRemovedSet.add(configRecord.resourceName());
                 } else {
-                    // we already reject the min ISR updates on broker level, so it is a cluster level update, and it
-                    // should be a new value.
+                    // we already reject the min ISR updates on broker level, so it is a cluster level update.
                     clusterLevelMinIsr = Integer.parseInt(configRecord.value());
                 }
             }
         }
 
-        if (minIsrRecordCount == 0) return Collections.emptyList();
+        // Fast exit if there is no min ISR config update.
+        if (!hasMinIsrUpdate) return Collections.emptyList();
+
         List<ApiMessageAndVersion> newRecords = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
-        final Integer defaultMinIsr = clusterLevelMinIsr;
-        if (minIsrRecordCount == topicToMinIsrValueMap.size() + configRemovedTopicSet.size() || currentClusterLevelMinIsr <= clusterLevelMinIsr) {
-            // All the updates are for topic config or the cluster level config increases, we can use a simple path.
+        final Integer newClusterLevelMinIsr = clusterLevelMinIsr;
+        if (currentClusterLevelMinIsr <= newClusterLevelMinIsr) {
+            // Take the simple path when there is no cluster level min ISR decrease.
             if (!topicToMinIsrValueMap.isEmpty()) {
                 newRecords.addAll(replicationControlAccessor.get().getPartitionElrUpdatesForConfigChanges(
                     new ArrayList<>(topicToMinIsrValueMap.keySet()),
                     topicName -> topicToMinIsrValueMap.get(topicName))
                 );
             }
-            if (!configRemovedTopicSet.isEmpty()) {
+            if (!topicConfigRemovedSet.isEmpty()) {
                 newRecords.addAll(replicationControlAccessor.get().getPartitionElrUpdatesForConfigChanges(
-                    new ArrayList<>(configRemovedTopicSet),
-                    topicName -> defaultMinIsr)
+                    new ArrayList<>(topicConfigRemovedSet),
+                    topicName -> newClusterLevelMinIsr)
                 );
             }
             return newRecords;
@@ -419,11 +420,13 @@ public class ConfigurationControlManager {
             topicName -> {
                 if (topicToMinIsrValueMap.containsKey(topicName)) {
                     return topicToMinIsrValueMap.get(topicName);
-                } else if (configRemovedTopicSet.contains(topicName) ||
+                } else if (topicConfigRemovedSet.contains(topicName) ||
                         !currentTopicConfig(topicName).containsKey(MIN_IN_SYNC_REPLICAS_CONFIG)) {
-                    return defaultMinIsr;
+                    // Use the new default min ISR if the topic config is removed or the topic does not have min ISR.
+                    return newClusterLevelMinIsr;
                 }
-                return Integer.parseInt(getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value());
+                // Otherwise, the current update does not affect the topic, use its current topic config.
+                return Integer.parseInt(currentTopicConfig(topicName).get(MIN_IN_SYNC_REPLICAS_CONFIG));
             })
         );
         return newRecords;
