@@ -187,6 +187,7 @@ public class CoordinatorRequestManager implements RequestManager {
                 coordinator.port());
         log.info("Discovered group coordinator {}", coordinator);
         coordinatorRequestState.onSuccessfulAttempt(currentTimeMs);
+        clearFatalError();
     }
 
     private void onFailedResponse(final long currentTimeMs, final Throwable exception) {
@@ -246,10 +247,8 @@ public class CoordinatorRequestManager implements RequestManager {
         return Optional.ofNullable(this.coordinator);
     }
     
-    public Optional<Throwable> getAndClearFatalError() {
-        Optional<Throwable> fatalError = this.fatalError;
+    public void clearFatalError() {
         this.fatalError = Optional.empty();
-        return fatalError;
     }
     
     public Optional<Throwable> fatalError() {

@@ -178,7 +178,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // poll when the coordinator node is known and fatal error is not present
         if (coordinatorRequestManager.coordinator().isEmpty()) {
-            maybeFailPendingRequestsOnCoordinatorFatalError();
+            pendingRequests.maybeFailCoordinatorFatalError();
             return EMPTY;
         }
 
@@ -196,16 +196,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
             findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
         return new NetworkClientDelegate.PollResult(timeUntilNextPoll, requests);
-    }
-
-    private void maybeFailPendingRequestsOnCoordinatorFatalError() {
-        Optional<Throwable> fatalError = coordinatorRequestManager.fatalError();
-        if (fatalError.isPresent()) {
-            log.warn("Failing all unsent commit requests and offset fetches because of coordinator fatal error. ", fatalError.get());
-            pendingRequests.unsentOffsetCommits.forEach(request -> request.future.completeExceptionally(fatalError.get()));
-            pendingRequests.unsentOffsetFetches.forEach(request -> request.future.completeExceptionally(fatalError.get()));
-            pendingRequests.clearAll();
-        }
     }
 
     @Override
@@ -1257,6 +1247,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 .collect(Collectors.toCollection(ArrayList::new));
             clearAll();
             return res;
+        }
+
+        private void maybeFailCoordinatorFatalError() {
+            Optional<Throwable> fatalError = coordinatorRequestManager.fatalError();
+            if (fatalError.isPresent()) {
+                log.warn("Failing all unsent commit requests and offset fetches because of coordinator fatal error. ", fatalError.get());
+                pendingRequests.unsentOffsetCommits.forEach(request -> request.future.completeExceptionally(fatalError.get()));
+                pendingRequests.unsentOffsetFetches.forEach(request -> request.future.completeExceptionally(fatalError.get()));
+                pendingRequests.clearAll();
+            }
         }
     }
 
