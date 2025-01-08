@@ -1254,7 +1254,7 @@ project(':core') {
       if (result)
         println "LIBS LICENSE check succeed !"
       else
-        println "LIBS LICENSE check failed !"
+        throw new GradleException("LIBS LICENSE check failed, some libs' licenses have not been added to the LICENSE-binary file.")
     }
   }
 
