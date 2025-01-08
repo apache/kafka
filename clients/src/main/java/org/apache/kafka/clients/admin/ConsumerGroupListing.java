@@ -49,7 +49,7 @@ public class ConsumerGroupListing {
      * @param groupId                   Group Id.
      * @param isSimpleConsumerGroup     If consumer group is simple or not.
      * @param state                     The state of the consumer group.
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupListing(String, Optional, boolean)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupListing(String, Optional, boolean)} instead.
      */
     @Deprecated
     public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup, Optional<ConsumerGroupState> state) {
@@ -63,7 +63,7 @@ public class ConsumerGroupListing {
      * @param isSimpleConsumerGroup     If consumer group is simple or not.
      * @param state                     The state of the consumer group.
      * @param type                      The type of the consumer group.
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupListing(String, Optional, Optional, boolean)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupListing(String, Optional, Optional, boolean)} instead.
      */
     @Deprecated
     public ConsumerGroupListing(
@@ -133,7 +133,7 @@ public class ConsumerGroupListing {
 
     /**
      * Consumer Group state
-     * @deprecated Since 4.0. Use {@link #groupState()}.
+     * @deprecated Since 4.0. Use {@link #groupState()} instead.
      */
     @Deprecated
     public Optional<ConsumerGroupState> state() {

@@ -28,7 +28,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
+import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, SegmentPosition, ValidOffsetAndEpoch}
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.server.storage.log.FetchIsolation
@@ -81,7 +81,7 @@ final class KafkaMetadataLog private (
 
       new LogOffsetMetadata(
         fetchInfo.fetchOffsetMetadata.messageOffset,
-        Optional.of(SegmentPosition(
+        Optional.of(new SegmentPosition(
           fetchInfo.fetchOffsetMetadata.segmentBaseOffset,
           fetchInfo.fetchOffsetMetadata.relativePositionInSegment))
         )
@@ -155,7 +155,7 @@ final class KafkaMetadataLog private (
     val endOffsetMetadata = log.logEndOffsetMetadata
     new LogOffsetMetadata(
       endOffsetMetadata.messageOffset,
-      Optional.of(SegmentPosition(
+      Optional.of(new SegmentPosition(
         endOffsetMetadata.segmentBaseOffset,
         endOffsetMetadata.relativePositionInSegment)
       )
@@ -226,7 +226,7 @@ final class KafkaMetadataLog private (
   override def highWatermark: LogOffsetMetadata = {
     val hwm = log.fetchOffsetSnapshot.highWatermark
     val segmentPosition: Optional[OffsetMetadata] = if (!hwm.messageOffsetOnly) {
-      Optional.of(SegmentPosition(hwm.segmentBaseOffset, hwm.relativePositionInSegment))
+      Optional.of(new SegmentPosition(hwm.segmentBaseOffset, hwm.relativePositionInSegment))
     } else {
       Optional.empty()
     }

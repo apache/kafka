@@ -22,7 +22,6 @@ import java.util.concurrent.TimeUnit
 import kafka.common._
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback}
-import kafka.coordinator.transaction.ZkProducerIdManager
 import kafka.server._
 import kafka.server.metadata.ZkFinalizedFeatureCache
 import kafka.utils._
@@ -52,7 +51,7 @@ import org.apache.zookeeper.KeeperException.Code
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Try}
 
 sealed trait ElectionTrigger
 case object AutoTriggered extends ElectionTrigger
@@ -2544,17 +2543,6 @@ class KafkaController(val config: KafkaConfig,
       warn(s"Ignoring AllocateProducerIds due to stale broker epoch $brokerEpoch for broker $brokerId")
       callback.apply(Left(Errors.STALE_BROKER_EPOCH))
       return
-    }
-
-    val maybeNewProducerIdsBlock = try {
-      Try(ZkProducerIdManager.getNewProducerIdBlock(brokerId, zkClient, this))
-    } catch {
-      case ke: KafkaException => Failure(ke)
-    }
-
-    maybeNewProducerIdsBlock match {
-      case Failure(exception) => callback.apply(Left(Errors.forException(exception)))
-      case Success(newProducerIdBlock) => callback.apply(Right(newProducerIdBlock))
     }
   }
 

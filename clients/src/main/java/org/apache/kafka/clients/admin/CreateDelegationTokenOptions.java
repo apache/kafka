@@ -54,7 +54,7 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
     }
 
     /**
-     * @deprecated since 4.0 and should not be used any longer.
+     * @deprecated Since 4.0 and should not be used any longer.
      */
     @Deprecated
     public CreateDelegationTokenOptions maxlifeTimeMs(long maxLifetimeMs) {
@@ -68,7 +68,7 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
     }
 
     /**
-     * @deprecated since 4.0 and should not be used any longer.
+     * @deprecated Since 4.0 and should not be used any longer.
      */
     @Deprecated
     public long maxlifeTimeMs() {
