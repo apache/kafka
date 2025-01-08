@@ -45,10 +45,6 @@ import java.lang.{Long => JLong}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
-sealed trait KRaftRegistrationResult
-case class FailedRegistrationResult() extends KRaftRegistrationResult
-case class SuccessfulRegistrationResult(zkControllerEpoch: Int, controllerEpochZkVersion: Int) extends KRaftRegistrationResult
-
 /**
  * Provides higher level Kafka-specific operations on top of the pipelined [[kafka.zookeeper.ZooKeeperClient]].
  *
