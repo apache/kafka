@@ -1339,8 +1339,8 @@ public class ClassicGroup implements Group {
      *
      * @param consumerGroup                 The converted ConsumerGroup.
      * @param leavingMemberIds              The members that will not be converted in the ClassicGroup.
-     * @param replacedMemberId              The member that will be replaced by replacingMember in the ClassicGroup.
      * @param replacingMember               The member that needs to be converted and added to the ClassicGroup.
+     *                                      When not null, leavingMemberIds must contain the single member being replaced.
      * @param logContext                    The logContext to create the ClassicGroup.
      * @param time                          The time to create the ClassicGroup.
      * @param metadataImage                 The MetadataImage.
@@ -1349,12 +1349,17 @@ public class ClassicGroup implements Group {
     public static ClassicGroup fromConsumerGroup(
         ConsumerGroup consumerGroup,
         Set<String> leavingMemberIds,
-        String replacedMemberId,
         ConsumerGroupMember replacingMember,
         LogContext logContext,
         Time time,
         MetadataImage metadataImage
     ) {
+        if (replacingMember != null && leavingMemberIds.size() != 1) {
+            throw new IllegalArgumentException(
+                String.format("replacingMember is not null, but leavingMemberIds contains %d members.", leavingMemberIds.size())
+            );
+        }
+
         ClassicGroup classicGroup = new ClassicGroup(
             logContext,
             consumerGroup.groupId(),
@@ -1368,7 +1373,7 @@ public class ClassicGroup implements Group {
         );
 
         consumerGroup.members().forEach((memberId, member) -> {
-            if (!leavingMemberIds.contains(memberId) && !memberId.equals(replacedMemberId)) {
+            if (!leavingMemberIds.contains(memberId)) {
                 classicGroup.add(
                     new ClassicGroupMember(
                         memberId,
@@ -1412,7 +1417,7 @@ public class ClassicGroup implements Group {
                 // If the downgraded is triggered by the joining static member replacing
                 // the leaving static member, the joining member should take the assignment
                 // of the leaving one.
-                memberId = replacedMemberId;
+                memberId = leavingMemberIds.iterator().next();
             }
             byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(
                 toConsumerProtocolAssignment(

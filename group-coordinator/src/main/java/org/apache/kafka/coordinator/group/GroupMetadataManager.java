@@ -985,23 +985,28 @@ public class GroupMetadataManager {
      *
      * @param consumerGroup     The converted ConsumerGroup.
      * @param leavingMemberIds  The leaving member(s) that triggered the downgrade validation.
-     * @param replacedMemberId  The replaced member if the downgrade is triggered by static member replacement.
      * @param replacingMember   The newly joined member if the downgrade is triggered by static member replacement.
+     *                          When not null, leavingMemberIds must contain the single member being replaced.
      * @param records           The record list to which the conversion records are added.
      */
     private void convertToClassicGroup(
         ConsumerGroup consumerGroup,
         Set<String> leavingMemberIds,
-        String replacedMemberId,
         ConsumerGroupMember replacingMember,
         List<CoordinatorRecord> records
     ) {
+        if (replacingMember != null && leavingMemberIds.size() != 1) {
+            throw new IllegalArgumentException(
+                String.format("replacingMember is not null, but leavingMemberIds contains %d members.", leavingMemberIds.size())
+            );
+        }
+
         if (replacingMember == null) {
             consumerGroup.createGroupTombstoneRecords(records);
         } else {
             // We've already generated the records to replace replacedMemberId with replacingMember,
             // so we need to tombstone replacingMember instead.
-            consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, replacedMemberId, replacingMember.memberId());
+            consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, leavingMemberIds.iterator().next(), replacingMember.memberId());
         }
 
         ClassicGroup classicGroup;
@@ -1009,7 +1014,6 @@ public class GroupMetadataManager {
             classicGroup = ClassicGroup.fromConsumerGroup(
                 consumerGroup,
                 leavingMemberIds,
-                replacedMemberId,
                 replacingMember,
                 logContext,
                 time,
@@ -1032,7 +1036,7 @@ public class GroupMetadataManager {
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
 
         // If the downgrade is triggered by a member leaving the group, a rebalance should be triggered.
-        if (!leavingMemberIds.isEmpty()) {
+        if (replacingMember == null) {
             prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
         }
     }
@@ -1961,8 +1965,7 @@ public class GroupMetadataManager {
         if (downgrade) {
             convertToClassicGroup(
                 group,
-                Collections.emptySet(),
-                existingStaticMemberIdOrNull,
+                Set.of(existingStaticMemberIdOrNull),
                 updatedMember,
                 records
             );
@@ -3009,7 +3012,7 @@ public class GroupMetadataManager {
     ) {
         List<CoordinatorRecord> records = new ArrayList<>();
         if (validateOnlineDowngradeWithFencedMembers(group, Set.of(member.memberId()))) {
-            convertToClassicGroup(group, Set.of(member.memberId()), null, null, records);
+            convertToClassicGroup(group, Set.of(member.memberId()), null, records);
             return new CoordinatorResult<>(records, response, null, false);
         } else {
             removeMember(records, group.groupId(), member.memberId());
@@ -6098,7 +6101,7 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records = new ArrayList<>();
         if (!validLeaveGroupMembers.isEmpty()) {
             if (validateOnlineDowngradeWithFencedMembers(group, validLeaveGroupMemberIds)) {
-                convertToClassicGroup(group, validLeaveGroupMemberIds, null, null, records);
+                convertToClassicGroup(group, validLeaveGroupMemberIds, null, records);
                 return new CoordinatorResult<>(records, new LeaveGroupResponseData().setMembers(memberResponses), null, false);
             } else {
                 for (ConsumerGroupMember member : validLeaveGroupMembers) {
