@@ -985,28 +985,28 @@ public class GroupMetadataManager {
      *
      * @param consumerGroup     The converted ConsumerGroup.
      * @param leavingMemberIds  The leaving member(s) that triggered the downgrade validation.
-     * @param replacingMember   The newly joined member if the downgrade is triggered by static member replacement.
+     * @param joiningMember     The newly joined member if the downgrade is triggered by static member replacement.
      *                          When not null, leavingMemberIds must contain the single member being replaced.
      * @param records           The record list to which the conversion records are added.
      */
     private void convertToClassicGroup(
         ConsumerGroup consumerGroup,
         Set<String> leavingMemberIds,
-        ConsumerGroupMember replacingMember,
+        ConsumerGroupMember joiningMember,
         List<CoordinatorRecord> records
     ) {
-        if (replacingMember != null && leavingMemberIds.size() != 1) {
+        if (joiningMember != null && leavingMemberIds.size() != 1) {
             throw new IllegalArgumentException(
-                String.format("replacingMember is not null, but leavingMemberIds contains %d members.", leavingMemberIds.size())
+                String.format("joiningMember is not null, but leavingMemberIds contains %d members.", leavingMemberIds.size())
             );
         }
 
-        if (replacingMember == null) {
+        if (joiningMember == null) {
             consumerGroup.createGroupTombstoneRecords(records);
         } else {
-            // We've already generated the records to replace replacedMemberId with replacingMember,
-            // so we need to tombstone replacingMember instead.
-            consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, leavingMemberIds.iterator().next(), replacingMember.memberId());
+            // We've already generated the records to replace replacedMemberId with joiningMember,
+            // so we need to tombstone joiningMember instead.
+            consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, leavingMemberIds.iterator().next(), joiningMember.memberId());
         }
 
         ClassicGroup classicGroup;
@@ -1014,7 +1014,7 @@ public class GroupMetadataManager {
             classicGroup = ClassicGroup.fromConsumerGroup(
                 consumerGroup,
                 leavingMemberIds,
-                replacingMember,
+                joiningMember,
                 logContext,
                 time,
                 metadataImage
@@ -1036,7 +1036,7 @@ public class GroupMetadataManager {
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
 
         // If the downgrade is triggered by a member leaving the group, a rebalance should be triggered.
-        if (replacingMember == null) {
+        if (joiningMember == null) {
             prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
         }
     }

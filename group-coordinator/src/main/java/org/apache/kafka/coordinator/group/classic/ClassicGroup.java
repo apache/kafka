@@ -1339,7 +1339,7 @@ public class ClassicGroup implements Group {
      *
      * @param consumerGroup                 The converted ConsumerGroup.
      * @param leavingMemberIds              The members that will not be converted in the ClassicGroup.
-     * @param replacingMember               The member that needs to be converted and added to the ClassicGroup.
+     * @param joiningMember                 The member that needs to be converted and added to the ClassicGroup.
      *                                      When not null, leavingMemberIds must contain the single member being replaced.
      * @param logContext                    The logContext to create the ClassicGroup.
      * @param time                          The time to create the ClassicGroup.
@@ -1349,14 +1349,14 @@ public class ClassicGroup implements Group {
     public static ClassicGroup fromConsumerGroup(
         ConsumerGroup consumerGroup,
         Set<String> leavingMemberIds,
-        ConsumerGroupMember replacingMember,
+        ConsumerGroupMember joiningMember,
         LogContext logContext,
         Time time,
         MetadataImage metadataImage
     ) {
-        if (replacingMember != null && leavingMemberIds.size() != 1) {
+        if (joiningMember != null && leavingMemberIds.size() != 1) {
             throw new IllegalArgumentException(
-                String.format("replacingMember is not null, but leavingMemberIds contains %d members.", leavingMemberIds.size())
+                String.format("joiningMember is not null, but leavingMemberIds contains %d members.", leavingMemberIds.size())
             );
         }
 
@@ -1390,17 +1390,17 @@ public class ClassicGroup implements Group {
             }
         });
 
-        if (replacingMember != null) {
+        if (joiningMember != null) {
             classicGroup.add(
                 new ClassicGroupMember(
-                    replacingMember.memberId(),
-                    Optional.ofNullable(replacingMember.instanceId()),
-                    replacingMember.clientId(),
-                    replacingMember.clientHost(),
-                    replacingMember.rebalanceTimeoutMs(),
-                    replacingMember.classicProtocolSessionTimeout().get(),
+                    joiningMember.memberId(),
+                    Optional.ofNullable(joiningMember.instanceId()),
+                    joiningMember.clientId(),
+                    joiningMember.clientHost(),
+                    joiningMember.rebalanceTimeoutMs(),
+                    joiningMember.classicProtocolSessionTimeout().get(),
                     ConsumerProtocol.PROTOCOL_TYPE,
-                    replacingMember.supportedJoinGroupRequestProtocols(),
+                    joiningMember.supportedJoinGroupRequestProtocols(),
                     null
                 )
             );
@@ -1413,7 +1413,7 @@ public class ClassicGroup implements Group {
             // Set the assignment with serializing the ConsumerGroup's targetAssignment.
             // The serializing version should align with that of the member's JoinGroupRequestProtocol.
             String memberId = classicGroupMember.memberId();
-            if (replacingMember != null && memberId.equals(replacingMember.memberId())) {
+            if (joiningMember != null && memberId.equals(joiningMember.memberId())) {
                 // If the downgraded is triggered by the joining static member replacing
                 // the leaving static member, the joining member should take the assignment
                 // of the leaving one.
