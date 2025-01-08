@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams.topics;
 
+import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
@@ -29,7 +30,6 @@ import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Responsible for configuring the number of partitions in repartitioning topics. It computes a fix-point iteration, deriving the number of
@@ -59,9 +59,14 @@ public class RepartitionTopics {
     }
 
     /**
-     * Returns the set the number of partitions for each repartition topic.
+     * Returns the set of the number of partitions for each repartition topic.
      *
      * @return the map of repartition topics for the requested topology to their required number of partitions.
+     *
+     * @throws TopicConfigurationException if no valid configuration can be found given the broker state, for example, if a source topic
+     *         is missing.
+     * @throws StreamsInvalidTopologyException if the number of partitions for all repartition topics cannot be determined, e.g.
+     *         because of loops, or if a repartition source topic is not a sink topic of any subtopology.
      */
     public Map<String, Integer> setup() {
         final Set<String> missingSourceTopicsForTopology = new HashSet<>();
@@ -71,12 +76,21 @@ public class RepartitionTopics {
             missingSourceTopicsForTopology.addAll(missingSourceTopicsForSubtopology);
         }
 
-        if (missingSourceTopicsForTopology.isEmpty()) {
-            return computeRepartitionSourceTopicPartitionCount();
-        } else {
+        if (!missingSourceTopicsForTopology.isEmpty()) {
             throw TopicConfigurationException.missingSourceTopics(String.format("Missing source topics: %s",
                 String.join(", ", missingSourceTopicsForTopology)));
         }
+
+        final Map<String, Integer> repartitionTopicPartitionCount = computeRepartitionTopicPartitionCount();
+
+        for (final Subtopology subtopology : subtopologies) {
+            if (subtopology.repartitionSourceTopics().stream().anyMatch(repartitionTopic -> !repartitionTopicPartitionCount.containsKey(repartitionTopic.name()))) {
+                throw new StreamsInvalidTopologyException("Failed to compute number of partitions for all repartition topics, because "
+                    + "a repartition source topic is never used as a sink topic.");
+            }
+        }
+
+        return repartitionTopicPartitionCount;
     }
 
     private Set<String> computeMissingExternalSourceTopics(final Subtopology subtopology) {
@@ -91,21 +105,14 @@ public class RepartitionTopics {
     /**
      * Computes the number of partitions and returns it for each repartition topic.
      */
-    private Map<String, Integer> computeRepartitionSourceTopicPartitionCount() {
+    private Map<String, Integer> computeRepartitionTopicPartitionCount() {
         boolean partitionCountNeeded;
-        Map<String, Integer> repartitionSourceTopicPartitionCounts = new HashMap<>();
-        Map<String, Set<String>> repartitionSinkTopics =
-            subtopologies.stream().collect(
-                Collectors.toMap(
-                    Subtopology::subtopologyId,
-                    x -> new HashSet<>(x.repartitionSinkTopics())
-                )
-            );
+        Map<String, Integer> repartitionTopicPartitionCounts = new HashMap<>();
 
         for (final Subtopology subtopology : subtopologies) {
             for (final TopicInfo repartitionSourceTopic : subtopology.repartitionSourceTopics()) {
                 if (repartitionSourceTopic.partitions() != 0) {
-                    repartitionSourceTopicPartitionCounts.put(repartitionSourceTopic.name(), repartitionSourceTopic.partitions());
+                    repartitionTopicPartitionCounts.put(repartitionSourceTopic.name(), repartitionSourceTopic.partitions());
                 }
             }
         }
@@ -116,68 +123,54 @@ public class RepartitionTopics {
             boolean progressMadeThisIteration = false;
 
             for (final Subtopology subtopology : subtopologies) {
-                for (final TopicInfo repartitionSourceTopic : subtopology.repartitionSourceTopics()) {
-                    final Integer repartitionSourceTopicPartitionCount =
-                        repartitionSourceTopicPartitionCounts.get(repartitionSourceTopic.name());
-
-                    if (repartitionSourceTopicPartitionCount == null) {
+                for (final String repartitionSinkTopic : subtopology.repartitionSinkTopics()) {
+                    if (!repartitionTopicPartitionCounts.containsKey(repartitionSinkTopic)) {
                         final Integer numPartitions = computePartitionCount(
-                            repartitionSourceTopicPartitionCounts,
-                            repartitionSourceTopic.name(),
-                            repartitionSinkTopics
+                            repartitionTopicPartitionCounts,
+                            subtopology
                         );
 
                         if (numPartitions == null) {
                             partitionCountNeeded = true;
                             log.trace("Unable to determine number of partitions for {}, another iteration is needed",
-                                repartitionSourceTopic);
+                                repartitionSinkTopic);
                         } else {
                             log.trace("Determined number of partitions for {} to be {}",
-                                repartitionSourceTopic,
+                                repartitionSinkTopic,
                                 numPartitions);
-                            repartitionSourceTopicPartitionCounts.put(repartitionSourceTopic.name(), numPartitions);
+                            repartitionTopicPartitionCounts.put(repartitionSinkTopic, numPartitions);
                             progressMadeThisIteration = true;
                         }
                     }
                 }
             }
             if (!progressMadeThisIteration && partitionCountNeeded) {
-                throw TopicConfigurationException.missingSourceTopics("Failed to compute number of partitions for all " +
-                    "repartition topics, make sure all user input topics are created and all pattern subscriptions " +
-                    "match at least one topic in the cluster");
+                throw new StreamsInvalidTopologyException("Failed to compute number of partitions for all " +
+                    "repartition topics. There may be loops in the topology that cannot be resolved.");
             }
         } while (partitionCountNeeded);
 
-        return repartitionSourceTopicPartitionCounts;
+        return repartitionTopicPartitionCounts;
     }
 
-    private Integer computePartitionCount(final Map<String, Integer> repartitionSourceTopicPartitionCounts,
-                                          final String repartitionSourceTopic,
-                                          Map<String, Set<String>> repartitionSinkTopics) {
+    private Integer computePartitionCount(final Map<String, Integer> repartitionTopicPartitionCounts,
+                                          final Subtopology subtopology) {
         Integer partitionCount = null;
         // try set the number of partitions for this repartition topic if it is not set yet
-        for (final Subtopology subtopology : subtopologies) {
+        // use the maximum of all its source topic partitions as the number of partitions
 
-            if (repartitionSinkTopics.get(subtopology.subtopologyId()).contains(repartitionSourceTopic)) {
-                // if this topic is one of the sink topics of this topology,
-                // use the maximum of all its source topic partitions as the number of partitions
-                for (final String upstreamSourceTopic : subtopology.sourceTopics()) {
-                    // It is possible the sourceTopic is another internal topic, i.e,
-                    // map().join().join(map())
-                    Integer numPartitionsCandidate = repartitionSourceTopicPartitionCounts.get(upstreamSourceTopic);
-                    if (numPartitionsCandidate == null) {
-                        final OptionalInt actualPartitionCount = topicPartitionCountProvider.apply(upstreamSourceTopic);
-                        if (actualPartitionCount.isPresent()) {
-                            numPartitionsCandidate = actualPartitionCount.getAsInt();
-                        }
-                    }
-
-                    if (numPartitionsCandidate != null) {
-                        if (partitionCount == null || numPartitionsCandidate > partitionCount) {
-                            partitionCount = numPartitionsCandidate;
-                        }
-                    }
-                }
+        // It is possible that there is another internal topic, i.e,
+        // map().join().join(map())
+        for (final TopicInfo repartitionSourceTopic : subtopology.repartitionSourceTopics()) {
+            Integer numPartitionsCandidate = repartitionTopicPartitionCounts.get(repartitionSourceTopic.name());
+            if (numPartitionsCandidate != null && (partitionCount == null || numPartitionsCandidate > partitionCount)) {
+                partitionCount = numPartitionsCandidate;
+            }
+        }
+        for (final String externalSourceTopic : subtopology.sourceTopics()) {
+            final OptionalInt actualPartitionCount = topicPartitionCountProvider.apply(externalSourceTopic);
+            if (actualPartitionCount.isPresent() && (partitionCount == null || actualPartitionCount.getAsInt() > partitionCount)) {
+                partitionCount = actualPartitionCount.getAsInt();
             }
         }
         return partitionCount;
