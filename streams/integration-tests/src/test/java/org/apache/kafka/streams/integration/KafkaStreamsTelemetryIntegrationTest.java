@@ -34,6 +34,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
@@ -114,6 +115,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     public static void startCluster() throws IOException {
         final Properties properties = new Properties();
         properties.put("metric.reporters", TelemetryPlugin.class.getName());
+        properties.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
         cluster = new EmbeddedKafkaCluster(NUM_BROKERS, properties);
         cluster.start();
     }
@@ -394,6 +396,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, TestClientSupplier.class);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "classic");
         streamsConfiguration.putAll(extraProperties);
         return streamsConfiguration;
     }

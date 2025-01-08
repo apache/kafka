@@ -146,8 +146,8 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
 import org.apache.kafka.coordinator.group.taskassignor.TaskAssignor;
@@ -2411,30 +2411,9 @@ public class GroupMetadataManager {
                                            List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList) {
         for (Map.Entry<String, Set<Integer>> taskEntry : taskEntrySet) {
             String subtopologyId = taskEntry.getKey();
-            List<Integer> partitions = new ArrayList<>(taskEntry.getValue());
-            Collections.sort(partitions);
-            ConfiguredSubtopology configuredSubtopology = group.configuredTopology().subtopologies().get(subtopologyId);
-            if (configuredSubtopology != null) {
-                List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions = Stream.concat(
-                        configuredSubtopology.sourceTopics().stream(),
-                        configuredSubtopology.repartitionSourceTopics().keySet().stream()
-                ).map(topic -> {
-                    StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
-                    tp.setTopic(topic);
-                    if (tp.partitions().size() < partitions.size()) {
-                        List<Integer> tpPartitions = new ArrayList<>(tp.partitions());
-                        Collections.sort(tpPartitions);
-                        tp.setPartitions(partitions);
-                    } else {
-                       tp.setPartitions(partitions);
-                    }
-                    return tp;
-                }).toList();
-                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
-                endpointToPartitions.setUserEndpoint(responseEndpoint);
-                endpointToPartitions.setPartitions(topicPartitions);
-                endpointToPartitionsList.add(endpointToPartitions);
-            }
+            Set<Integer> taskPartitions = taskEntry.getValue();
+            EndpointToPartitionsManager endpointToPartitionsManager = new EndpointToPartitionsManager(subtopologyId, group, responseEndpoint, taskPartitions);
+            endpointToPartitionsList.add(endpointToPartitionsManager.endpointToPartitions());
         }
     }
 

@@ -120,6 +120,7 @@ public class IQv2VersionedStoreIntegrationTest {
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         configs.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
         configs.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
+        configs.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
         kafkaStreams = IntegrationTestUtils.getStartedStreams(configs, builder, true);
     }
 
