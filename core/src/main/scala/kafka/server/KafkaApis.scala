@@ -172,6 +172,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     maybeForwardToController(request, errorHandler)
   }
 
+  private def forwardToControllerOrThrow(request: RequestChannel.Request,
+                                          createException: RequestChannel.Request => Exception
+                                       ): Unit = {
+    def errorHandler(request: RequestChannel.Request): Unit = {
+      throw createException(request)
+    }
+
+    maybeForwardToController(request, errorHandler)
+  }
+
   /**
    * Top-level method that handles all requests and multiplexes to the right api
    */
