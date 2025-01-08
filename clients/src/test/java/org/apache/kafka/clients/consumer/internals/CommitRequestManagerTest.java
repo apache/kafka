@@ -1500,7 +1500,7 @@ public class CommitRequestManagerTest {
     }
     
     @Test
-    public void testPollWithFatalErrorShouldFailingAllUnsentRequest() {
+    public void testPollWithFatalErrorShouldFailAllUnsentRequests() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 

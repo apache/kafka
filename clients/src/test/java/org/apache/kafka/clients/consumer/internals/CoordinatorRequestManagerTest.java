@@ -195,8 +195,8 @@ public class CoordinatorRequestManagerTest {
 
         time.sleep(1);
         assertEquals(1, coordinatorManager.poll(time.milliseconds()).unsentRequests.size());
-        assertEquals(0, coordinatorManager.poll(time.milliseconds()).unsentRequests.size());
         assertEquals(Optional.empty(), coordinatorManager.coordinator());
+        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
     }
 
     @Test
