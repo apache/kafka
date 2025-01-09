@@ -2349,7 +2349,8 @@ public class GroupMetadataManager {
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs);
+            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs)
+            .setPartitionsByUserEndpoint(endpointToPartitionsList);
 
         // The assignment is only provided in the following cases:
         // 1. The member sent a full request.
@@ -2363,7 +2364,6 @@ public class GroupMetadataManager {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedActiveTasks()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedStandbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedWarmupTasks()));
-            response.setPartitionsByUserEndpoint(endpointToPartitionsList);
         }
 
         Map<String, CreatableTopic> internalTopicsToBeCreated = Collections.emptyMap();
@@ -2390,17 +2390,14 @@ public class GroupMetadataManager {
         final Map<String, StreamsGroupMember> members = group.members();
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
             final String memberIdForAssignment = entry.getKey();
-            // Don't need to provide host info to partitions for itself
-            if (!memberIdForAssignment.equals(memberId)) {
-                final StreamsGroupMemberMetadataValue.Endpoint endpoint = members.get(memberIdForAssignment).userEndpoint();
-                StreamsGroupMember groupMember = entry.getValue();
-                if (endpoint != null) {
-                    final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
-                    responseEndpoint.setHost(endpoint.host());
-                    responseEndpoint.setPort(endpoint.port());
-                    addToEndpointToPartitions(groupMember.assignedActiveTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
-                    addToEndpointToPartitions(groupMember.assignedStandbyTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
-                }
+            final StreamsGroupMemberMetadataValue.Endpoint endpoint = members.get(memberIdForAssignment).userEndpoint();
+            StreamsGroupMember groupMember = entry.getValue();
+            if (endpoint != null) {
+                final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
+                responseEndpoint.setHost(endpoint.host());
+                responseEndpoint.setPort(endpoint.port());
+                addToEndpointToPartitions(groupMember.assignedActiveTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
+                addToEndpointToPartitions(groupMember.assignedStandbyTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
             }
         }
     }

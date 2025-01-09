@@ -49,6 +49,7 @@ public class EndpointToPartitionsManager {
 
     public StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions() {
         ConfiguredSubtopology configuredSubtopology = streamsGroup.configuredTopology().subtopologies().get(subtopologyId);
+        
         final Map<String, TopicMetadata> groupTopicMetadata = streamsGroup.partitionMetadata();
 
         List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionList = Stream.concat(
