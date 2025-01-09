@@ -36,7 +36,7 @@ import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
@@ -1875,7 +1875,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
                   consumer.poll(JDuration.ofSeconds(5))
                   if (!consumer.assignment.isEmpty && latch.getCount > 0L)
                     latch.countDown()
-                  consumer.commitSync()
+                  try {
+                    consumer.commitSync()
+                  } catch {
+                    case _: CommitFailedException => // Ignore and retry on next iteration.
+                  }
                 }
               } catch {
                 case _: InterruptException => // Suppress the output to stderr
@@ -2237,7 +2241,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
                   consumer.poll(JDuration.ofSeconds(5))
                   if (!consumer.assignment.isEmpty && latch.getCount > 0L)
                     latch.countDown()
-                  consumer.commitSync()
+                  try {
+                    consumer.commitSync()
+                  } catch {
+                    case _: CommitFailedException => // Ignore and retry on next iteration.
+                  }
                 }
               } catch {
                 case _: InterruptException => // Suppress the output to stderr

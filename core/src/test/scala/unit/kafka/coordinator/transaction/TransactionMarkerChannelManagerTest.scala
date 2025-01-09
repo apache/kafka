@@ -74,7 +74,7 @@ class TransactionMarkerChannelManagerTest {
   private val time = new MockTime
 
   private val channelManager = new TransactionMarkerChannelManager(
-    KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
+    KafkaConfig.fromProps(TestUtils.createBrokerConfig(1)),
     metadataCache,
     networkClient,
     txnStateManager,
@@ -98,7 +98,7 @@ class TransactionMarkerChannelManagerTest {
     val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
     try {
       val transactionMarkerChannelManager = new TransactionMarkerChannelManager(
-        KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
+        KafkaConfig.fromProps(TestUtils.createBrokerConfig(1)),
         metadataCache,
         networkClient,
         txnStateManager,

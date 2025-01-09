@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.utils.TestInfoUtils;
-import kafka.utils.TestUtils;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -39,16 +36,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 public class ToolsTestUtils {
-    /** @see TestInfoUtils#TestWithParameterizedQuorumAndGroupProtocolNames()  */
-    public static final String TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES = "{displayName}.quorum={0}.groupProtocol={1}";
-
-    private static final int RANDOM_PORT = 0;
 
     public static String captureStandardOut(Runnable runnable) {
         return captureStandardStream(false, runnable);
@@ -77,38 +69,6 @@ public class ToolsTestUtils {
 
             tempStream.close();
         }
-    }
-
-    public static List<Properties> createBrokerProperties(int numConfigs, String zkConnect,
-                                                          Map<Integer, String> rackInfo,
-                                                          int numPartitions,
-                                                          short defaultReplicationFactor) {
-
-        return createBrokerProperties(numConfigs, zkConnect, rackInfo, 1, false, numPartitions,
-            defaultReplicationFactor, 0);
-    }
-
-    /**
-     * Create a test config for the provided parameters.
-     *
-     * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
-     */
-    public static List<Properties> createBrokerProperties(int numConfigs, String zkConnect,
-                                                          Map<Integer, String> rackInfo, int logDirCount,
-                                                          boolean enableToken, int numPartitions, short defaultReplicationFactor,
-                                                          int startingIdNumber) {
-        List<Properties> result = new ArrayList<>();
-        int endingIdNumber = startingIdNumber + numConfigs - 1;
-        for (int node = startingIdNumber; node <= endingIdNumber; node++) {
-            result.add(TestUtils.createBrokerConfig(node, zkConnect, true, true, RANDOM_PORT,
-                scala.Option.empty(),
-                scala.Option.empty(),
-                scala.Option.empty(),
-                true, false, RANDOM_PORT, false, RANDOM_PORT, false, RANDOM_PORT,
-                scala.Option.apply(rackInfo.get(node)),
-                logDirCount, enableToken, numPartitions, defaultReplicationFactor, false));
-        }
-        return result;
     }
 
     /**
