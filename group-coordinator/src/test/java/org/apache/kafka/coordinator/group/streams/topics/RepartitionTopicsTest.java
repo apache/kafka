@@ -155,7 +155,7 @@ public class RepartitionTopicsTest {
         assertEquals(Map.of(
             REPARTITION_TOPIC1.name(), REPARTITION_TOPIC1.partitions(),
             REPARTITION_TOPIC2.name(), REPARTITION_TOPIC2.partitions(),
-            REPARTITION_TOPIC_WITHOUT_PARTITION_COUNT.name(), 3
+            REPARTITION_TOPIC_WITHOUT_PARTITION_COUNT.name(), sourceTopicPartitionCounts(SOURCE_TOPIC_NAME1).getAsInt()
         ), setup);
     }
 
