@@ -165,6 +165,7 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     @SuppressWarnings("unused")
     public static final int DUMMY_THREAD_INDEX = 1;
+
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
 
     // We impose these limitations because client tags are encoded into the subscription info,
@@ -486,7 +487,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final String BUILT_IN_METRICS_VERSION_DOC = "Version of the built-in metrics to use.";
 
     /** {@code cache.max.bytes.buffering}
-     * @deprecated since 3.4.0 Use {@link #STATESTORE_CACHE_MAX_BYTES_CONFIG "statestore.cache.max.bytes"} instead. */
+     * @deprecated Since 3.4. Use {@link #STATESTORE_CACHE_MAX_BYTES_CONFIG "statestore.cache.max.bytes"} instead. */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
@@ -520,7 +521,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * {@code default.deserialization.exception.handler}
-     * @deprecated since 4.0; use {@link #DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG} instead
+     * @deprecated Since 4.0. Use {@link #DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG} instead.
      */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
@@ -535,7 +536,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * {@code default.production.exception.handler}
-     * @deprecated since 4.0; Use {@link #PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG} instead
+     * @deprecated Since 4.0. Use {@link #PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG} instead.
      */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
@@ -546,7 +547,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG = "production.exception.handler";
     private static final String PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
-    /** {@code default.dsl.store} */
+    /**
+     * {@code default.dsl.store}
+     * @deprecated Since 3.7. Use {@link #DSL_STORE_SUPPLIERS_CLASS_CONFIG} instead.
+     */
     @Deprecated
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_DSL_STORE_CONFIG = "default.dsl.store";
@@ -2021,7 +2025,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * @deprecated since kafka 4.0; use {@link #deserializationExceptionHandler()} instead
+     * @deprecated Since 4.0. Use {@link #deserializationExceptionHandler()} instead.
      */
     @Deprecated
     @SuppressWarnings("WeakerAccess")
@@ -2043,7 +2047,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * @deprecated since kafka 4.0; use {@link #productionExceptionHandler()} instead
+     * @deprecated Since 4.0. Use {@link #productionExceptionHandler()} instead.
      */
     @Deprecated
     @SuppressWarnings("WeakerAccess")

@@ -220,7 +220,6 @@ public class LocalLog {
      * @param newConfig the new configuration to be updated to
      */
     public void updateConfig(LogConfig newConfig) {
-        LogConfig oldConfig = config;
         config = newConfig;
     }
 

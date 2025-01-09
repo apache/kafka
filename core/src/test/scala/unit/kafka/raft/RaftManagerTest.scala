@@ -222,25 +222,6 @@ class RaftManagerTest {
     }
   }
 
-  @Test
-  def testKRaftBrokerDoesNotDeleteMetadataLog(): Unit = {
-    val logDirs = Seq(TestUtils.tempDir().toPath)
-    val metadataLogDir = Some(TestUtils.tempDir().toPath)
-    val nodeId = 1
-    val config = createConfig(
-      Set(ProcessRole.BrokerRole),
-      nodeId,
-      logDirs,
-      metadataLogDir
-    )
-    createMetadataLog(config)
-
-    assertThrows(classOf[RuntimeException], () => KafkaRaftManager.maybeDeleteMetadataLogDir(config),
-      "Should not have deleted metadata log")
-    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = true)
-
-  }
-
   private def fileLocked(path: Path): Boolean = {
     Using.resource(FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) { channel =>
       try {
