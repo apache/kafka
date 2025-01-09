@@ -513,7 +513,9 @@ class BrokerServer(
           config,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          clientQuotaMetadataManager),
+          clientQuotaMetadataManager,
+          quotaManagers
+        ),
         new ScramPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,

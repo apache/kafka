@@ -333,7 +333,9 @@ class ControllerServer(
         config,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        clientQuotaMetadataManager))
+        clientQuotaMetadataManager,
+        quotaManagers
+      ))
 
       // Set up the SCRAM publisher.
       metadataPublishers.add(new ScramPublisher(

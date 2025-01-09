@@ -237,10 +237,7 @@ public class BrokerRegistration {
     }
     
     public List<Node> nodes() {
-        List<Node> nodes = new ArrayList<>();
-        listeners.values()
-                .forEach(endpoint -> nodes.add(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null), fenced)));
-        return nodes;
+        return listeners.keySet().stream().flatMap(l -> node(l).stream()).toList();
     }
 
     public Map<String, VersionRange> supportedFeatures() {

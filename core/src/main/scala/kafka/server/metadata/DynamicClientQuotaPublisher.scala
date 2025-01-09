@@ -18,12 +18,11 @@
 package kafka.server.metadata
 
 import kafka.server.KafkaConfig
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.fault.FaultHandler
-import org.apache.kafka.server.quota.ClientQuotaCallback
 
 
 class DynamicClientQuotaPublisher(
@@ -32,6 +31,7 @@ class DynamicClientQuotaPublisher(
   faultHandler: FaultHandler,
   nodeType: String,
   clientQuotaMetadataManager: ClientQuotaMetadataManager,
+  quotaManagers: QuotaManagers
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
   logIdent = s"[${name()}] "
 
@@ -51,14 +51,13 @@ class DynamicClientQuotaPublisher(
   ): Unit = {
     val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
     try {
-        val clientQuotaCallback = conf.getConfiguredInstance(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, classOf[ClientQuotaCallback])
-        if (clientQuotaCallback != null) {
-          val cluster = KRaftMetadataCache.toCluster(clusterId, newImage)
-          clientQuotaCallback.updateClusterMetadata(cluster)
-        }
-        Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
-          clientQuotaMetadataManager.update(clientQuotasDelta)
-        }
+      quotaManagers.clientQuotaCallback().ifPresent(clientQuotaCallback => {
+        val cluster = KRaftMetadataCache.toCluster(clusterId, newImage)
+        clientQuotaCallback.updateClusterMetadata(cluster)
+      })
+      Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
+        clientQuotaMetadataManager.update(clientQuotasDelta)
+      }
     } catch {
       case t: Throwable => faultHandler.handleFault("Uncaught exception while " +
         s"publishing dynamic client quota changes from $deltaName", t)
