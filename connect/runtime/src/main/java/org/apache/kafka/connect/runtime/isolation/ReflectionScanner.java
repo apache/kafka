@@ -78,22 +78,9 @@ public class ReflectionScanner extends PluginScanner {
 
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
-        // By default, java and classgraph uses parent first classloading, hence if a plugin is loaded by the classpath
-        // loader, and then by an isolated plugin loader, the default precedence will always load the classpath version.
-        // This breaks isolation and hence connect uses isolated plugin loaders, which are child first classloaders.
-        // Therefore, we override the classloader order to be child first, so that the isolated plugin loader is used first.
-        // In addition, we need to explicitly specify the full classloader order, to force classgraph to scan classes in
-        // the class path. This does not happen by default as it uses reflections to obtain access to classpath URLs from
-        // the application classloader, which can fail with illegal access exceptions.
-        List<ClassLoader> classLoaderOrder = new ArrayList<>();
-        ClassLoader cl = source.loader();
-        while (cl != null) {
-            classLoaderOrder.add(cl);
-            cl = cl.getParent();
-        }
         ClassGraph classGraphBuilder = new ClassGraph()
             .addClassLoader(source.loader())
-                .overrideClassLoaders(classLoaderOrder.toArray(new ClassLoader[0]))
+                .overrideClassLoaders(classLoaderOrder(source))
                 .enableExternalClasses()
                 .enableClassInfo();
         try (ScanResult classGraph = classGraphBuilder.scan()) {
@@ -119,6 +106,23 @@ public class ReflectionScanner extends PluginScanner {
     @SuppressWarnings({"unchecked"})
     private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(PluginSource source, ScanResult classGraph) {
         return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getPluginDesc(classGraph, PluginType.TRANSFORMATION, source);
+    }
+
+    private ClassLoader[] classLoaderOrder(PluginSource source) {
+        // By default, java and classgraph uses parent first classloading, hence if a plugin is loaded by the classpath
+        // loader, and then by an isolated plugin loader, the default precedence will always load the classpath version.
+        // This breaks isolation and hence connect uses isolated plugin loaders, which are child first classloaders.
+        // Therefore, we override the classloader order to be child first, so that the isolated plugin loader is used first.
+        // In addition, we need to explicitly specify the full classloader order, to force classgraph to scan classes in
+        // the class path. This does not happen by default as it uses reflections to obtain access to classpath URLs from
+        // the application classloader, which can fail with illegal access exceptions.
+        List<ClassLoader> classLoaderOrder = new ArrayList<>();
+        ClassLoader cl = source.loader();
+        while (cl != null) {
+            classLoaderOrder.add(cl);
+            cl = cl.getParent();
+        }
+        return classLoaderOrder.toArray(new ClassLoader[0]);
     }
 
     @SuppressWarnings({"unchecked"})
