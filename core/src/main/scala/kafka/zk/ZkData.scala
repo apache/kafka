@@ -27,6 +27,7 @@ import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpo
 import kafka.server.DelegationTokenManagerZk
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
+import kafka.zookeeper.Stat
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
@@ -36,17 +37,13 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.{MetadataVersion, ProducerIdsBlock}
-import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_2_7_IV0}
 import org.apache.kafka.server.config.ConfigType
-import org.apache.zookeeper.ZooDefs
-import org.apache.zookeeper.data.{ACL, Stat}
 
 import scala.beans.BeanProperty
-import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -113,17 +110,8 @@ object BrokerInfo {
    * any case).
    */
   def apply(broker: Broker, metadataVersion: MetadataVersion, jmxPort: Int): BrokerInfo = {
-    val version = {
-      if (metadataVersion.isAtLeast(IBP_2_7_IV0))
-        5
-      else if (metadataVersion.isAtLeast(IBP_0_10_0_IV1))
-        4
-      else
-        2
-    }
-    BrokerInfo(broker, version, jmxPort)
+    throw new UnsupportedOperationException()
   }
-
 }
 
 case class BrokerInfo(broker: Broker, version: Int, jmxPort: Int) {
@@ -395,20 +383,7 @@ object TopicPartitionStateZNode {
   }
 
   def decode(bytes: Array[Byte], stat: Stat): Option[LeaderIsrAndControllerEpoch] = {
-    Json.parseBytes(bytes).map { js =>
-      val leaderIsrAndEpochInfo = js.asJsonObject
-      val leader = leaderIsrAndEpochInfo("leader").to[Int]
-      val epoch = leaderIsrAndEpochInfo("leader_epoch").to[Int]
-      val isr = leaderIsrAndEpochInfo("isr").to[List[Int]]
-      val recovery = leaderIsrAndEpochInfo
-        .get("leader_recovery_state")
-        .map(jsonValue => LeaderRecoveryState.of(jsonValue.to[Int].toByte))
-        .getOrElse(LeaderRecoveryState.RECOVERED)
-      val controllerEpoch = leaderIsrAndEpochInfo("controller_epoch").to[Int]
-
-      val zkPathVersion = stat.getVersion
-      LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader, epoch, isr.map(Int.box).asJava, recovery, zkPathVersion), controllerEpoch)
-    }
+    throw new UnsupportedOperationException()
   }
 }
 
@@ -763,8 +738,13 @@ case object ExtendedAclChangeStore extends ZkAclChangeStore {
 object ResourceZNode {
   def path(resource: ResourcePattern): String = ZkAclStore(resource.patternType).path(resource.resourceType, resource.name)
 
-  def encode(acls: Set[AclEntry]): Array[Byte] = Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls.asJava))
-  def decode(bytes: Array[Byte], stat: Stat): ZkData.VersionedAcls = ZkData.VersionedAcls(AclEntry.fromBytes(bytes).asScala.toSet, stat.getVersion)
+  def encode(acls: Set[AclEntry]): Array[Byte] = {
+    throw new UnsupportedOperationException()
+  }
+
+  def decode(bytes: Array[Byte], stat: Stat): ZkData.VersionedAcls = {
+    throw new UnsupportedOperationException()
+  }
 }
 
 object ExtendedAclChangeEvent {
@@ -1083,19 +1063,4 @@ object ZkData {
     ConfigEntityTypeZNode.path(ConfigType.BROKER),
     DelegationTokensZNode.path
   )
-
-  def sensitivePath(path: String): Boolean = {
-    path != null && SensitiveRootPaths.exists(path.startsWith)
-  }
-
-  def defaultAcls(isSecure: Boolean, path: String): Seq[ACL] = {
-    //Old Consumer path is kept open as different consumers will write under this node.
-    if (!ConsumerPathZNode.path.equals(path) && isSecure) {
-      val acls = new ArrayBuffer[ACL]
-      acls ++= ZooDefs.Ids.CREATOR_ALL_ACL.asScala
-      if (!sensitivePath(path))
-        acls ++= ZooDefs.Ids.READ_ACL_UNSAFE.asScala
-      acls
-    } else ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala
-  }
 }

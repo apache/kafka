@@ -2492,15 +2492,17 @@ public class SenderTest {
             FutureRecordMetadata future = futureEntry.getValue();
             assertTrue(future.isDone());
 
-            KafkaException exception = TestUtils.assertFutureThrows(future, KafkaException.class);
             Integer index = futureEntry.getKey();
             if (index == 0 || index == 2) {
+                InvalidRecordException exception = TestUtils.assertFutureThrows(future, InvalidRecordException.class);
                 assertInstanceOf(InvalidRecordException.class, exception);
                 assertEquals(index.toString(), exception.getMessage());
             } else if (index == 3) {
+                InvalidRecordException exception = TestUtils.assertFutureThrows(future, InvalidRecordException.class);
                 assertInstanceOf(InvalidRecordException.class, exception);
                 assertEquals(Errors.INVALID_RECORD.message(), exception.getMessage());
             } else {
+                KafkaException exception = TestUtils.assertFutureThrows(future, KafkaException.class);
                 assertEquals(KafkaException.class, exception.getClass());
             }
         }
