@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

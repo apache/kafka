@@ -21,7 +21,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Su
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
