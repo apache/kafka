@@ -37,7 +37,6 @@ public class FetchConfig {
     public final boolean checkCrcs;
     public final String clientRackId;
     public final IsolationLevel isolationLevel;
-    public final TempFetchMode tempFetchMode;
 
     /**
      * Constructs a new {@link FetchConfig} using explicitly provided values. This is provided here for tests that
@@ -60,32 +59,6 @@ public class FetchConfig {
         this.checkCrcs = checkCrcs;
         this.clientRackId = clientRackId;
         this.isolationLevel = isolationLevel;
-        this.tempFetchMode = ConsumerConfig.DEFAULT_TEMP_FETCH_MODE;
-    }
-
-    /**
-     * Constructs a new {@link FetchConfig} using explicitly provided values. This is provided here for tests that
-     * want to exercise different scenarios can construct specific configuration values rather than going through
-     * the hassle of constructing a {@link ConsumerConfig}.
-     */
-    public FetchConfig(int minBytes,
-                       int maxBytes,
-                       int maxWaitMs,
-                       int fetchSize,
-                       int maxPollRecords,
-                       boolean checkCrcs,
-                       String clientRackId,
-                       IsolationLevel isolationLevel,
-                       TempFetchMode tempFetchMode) {
-        this.minBytes = minBytes;
-        this.maxBytes = maxBytes;
-        this.maxWaitMs = maxWaitMs;
-        this.fetchSize = fetchSize;
-        this.maxPollRecords = maxPollRecords;
-        this.checkCrcs = checkCrcs;
-        this.clientRackId = clientRackId;
-        this.isolationLevel = isolationLevel;
-        this.tempFetchMode = tempFetchMode;
     }
 
     /**
@@ -101,7 +74,6 @@ public class FetchConfig {
      *     <li>{@link #checkCrcs}: {@link ConsumerConfig#CHECK_CRCS_CONFIG}</li>
      *     <li>{@link #clientRackId}: {@link ConsumerConfig#CLIENT_RACK_CONFIG}</li>
      *     <li>{@link #isolationLevel}: {@link ConsumerConfig#ISOLATION_LEVEL_CONFIG}</li>
-     *     <li>{@link #tempFetchMode}: {@link ConsumerConfig#TEMP_FETCH_MODE_CONFIG}</li>
      * </ul>
      *
      * @param config Consumer configuration
@@ -115,7 +87,6 @@ public class FetchConfig {
         this.checkCrcs = config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG);
         this.clientRackId = config.getString(ConsumerConfig.CLIENT_RACK_CONFIG);
         this.isolationLevel = configuredIsolationLevel(config);
-        this.tempFetchMode = TempFetchMode.of(config.getInt(ConsumerConfig.TEMP_FETCH_MODE_CONFIG));
     }
 
     @Override
@@ -129,7 +100,6 @@ public class FetchConfig {
                 ", checkCrcs=" + checkCrcs +
                 ", clientRackId='" + clientRackId + '\'' +
                 ", isolationLevel=" + isolationLevel +
-                ", tempFetchMode=" + tempFetchMode +
                 '}';
     }
 }

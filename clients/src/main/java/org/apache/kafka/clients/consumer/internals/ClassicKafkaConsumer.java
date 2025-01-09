@@ -369,8 +369,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 maxPollRecords,
                 checkCrcs,
                 rackId,
-                isolationLevel,
-                ConsumerConfig.DEFAULT_TEMP_FETCH_MODE
+                isolationLevel
         );
         this.fetcher = new Fetcher<>(
             logContext,

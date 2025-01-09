@@ -20,7 +20,6 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.TempFetchMode;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -375,11 +374,6 @@ public class ConsumerConfig extends AbstractConfig {
             " be set to `true` when using brokers older than 0.11.0";
     public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
 
-    /** <code>temp.fetch.mode</code> */
-    public static final String TEMP_FETCH_MODE_CONFIG = "temp.fetch.mode";
-    private static final String TEMP_FETCH_MODE_DOC = "This is a temporary configuration for testing";
-    public static final TempFetchMode DEFAULT_TEMP_FETCH_MODE = TempFetchMode.SKIP_BUFFERED;
-
     /**
      * <code>security.providers</code>
      */
@@ -684,13 +678,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-                                .define(TEMP_FETCH_MODE_CONFIG,
-                                        Type.INT,
-                                        DEFAULT_TEMP_FETCH_MODE.option(),
-                                        (name, optionObj) -> TempFetchMode.of((Integer) optionObj),
-                                        Importance.LOW,
-                                        TEMP_FETCH_MODE_DOC);
+                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
 
     }
 
