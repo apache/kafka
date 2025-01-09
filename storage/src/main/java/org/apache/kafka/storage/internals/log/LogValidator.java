@@ -65,20 +65,15 @@ public class LogValidator {
         public final long logAppendTimeMs;
         public final MemoryRecords validatedRecords;
         public final long maxTimestampMs;
-        // we only maintain batch level offset for max timestamp since we want to align the behavior of updating time
-        // indexing entries. The paths of follower append and replica recovery do not iterate all records, so they have no
-        // idea about record level offset for max timestamp.
-        public final long shallowOffsetOfMaxTimestamp;
         public final boolean messageSizeMaybeChanged;
         public final RecordValidationStats recordValidationStats;
 
         public ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
-                                long shallowOffsetOfMaxTimestamp, boolean messageSizeMaybeChanged,
+                                boolean messageSizeMaybeChanged,
                                 RecordValidationStats recordValidationStats) {
             this.logAppendTimeMs = logAppendTimeMs;
             this.validatedRecords = validatedRecords;
             this.maxTimestampMs = maxTimestampMs;
-            this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
             this.messageSizeMaybeChanged = messageSizeMaybeChanged;
             this.recordValidationStats = recordValidationStats;
         }
@@ -229,7 +224,6 @@ public class LogValidator {
             now,
             convertedRecords,
             info.maxTimestamp,
-            info.shallowOffsetOfMaxTimestamp,
             true,
             recordValidationStats);
     }
@@ -310,7 +304,6 @@ public class LogValidator {
             now,
             records,
             maxTimestamp,
-            shallowOffsetOfMaxTimestamp,
             false,
             RecordValidationStats.EMPTY);
     }
@@ -434,7 +427,6 @@ public class LogValidator {
                 now,
                 records,
                 maxTimestamp,
-                lastOffset,
                 false,
                 recordValidationStats);
         }
@@ -476,7 +468,6 @@ public class LogValidator {
             logAppendTime,
             records,
             info.maxTimestamp,
-            info.shallowOffsetOfMaxTimestamp,
             true,
             recordValidationStats);
     }
