@@ -69,7 +69,7 @@ public class ProducerIntegrationTest {
         @ClusterTest(features = {
             @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)})
     })
-    public void testTransactionWithoutSend(ClusterInstance cluster) {
+    public void testTransactionWithoutAddPartitions(ClusterInstance cluster) {
         Map<String, Object> properties = new HashMap<>();
         properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "foobar");
         properties.put(ProducerConfig.CLIENT_ID_CONFIG, "test");
@@ -114,7 +114,7 @@ public class ProducerIntegrationTest {
         @ClusterTest(features = {
             @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)})
     })
-    public void testTransactionWithData(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+    public void testTransactionWithAddOffset(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         String inputTopic = "my-input-topic";
 
         try (Producer<byte[], byte[]> producer = cluster.producer()) {
