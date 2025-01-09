@@ -1455,7 +1455,7 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
       <tr>
         <td>Message conversion rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name={Produce|Fetch}MessageConversionsPerSec,topic=([-.\w]+)</td>
-        <td>Message format conversion rate, for Produce or Fetch requests, per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
+        <td>Message format conversion rate, for Produce or Fetch requests, per topic. Omitting 'topic=(...)' will yield the all-topic rate. <p>The metric is deprecated since Apache Kafka 4.0. It will be removed in Apache Kafka 5.0.</p></td>
       </tr>
       <tr>
         <td>Request Queue Size</td>
