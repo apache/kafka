@@ -65,7 +65,7 @@ sealed trait MetadataSupport {
   ): Unit = {
     if (!request.isForwarded && canForward()) {
       forwardingManager.get.forwardRequest(request, responseCallback)
-    } else if (handler != null) {
+    } else {
       handler(request)
     }
   }

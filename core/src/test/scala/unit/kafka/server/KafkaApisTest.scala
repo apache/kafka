@@ -10957,6 +10957,33 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  // Test that in KRaft mode, a request that isn't forwarded gets the correct error message.
+  // We skip the pre-forward checks in handleCreateTokenRequest
+  def testRaftShouldAlwaysForwardCreateTokenRequest(): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleCreateTokenRequestZk)
+  }
+
+  @Test
+  def testRaftShouldFailRenewTokenRequest(): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    val request = createMockRequest()
+    val e = assertThrows(classOf[UnsupportedVersionException], () => kafkaApis.handleRenewTokenRequestZk(request))
+    assertEquals(s"Should never receive when using a Raft-based metadata quorum: ${request.header.apiKey()}", e.getMessage)
+  }
+
+  @Test
+  def testRaftShouldFailExpireTokenRequest(): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    val request = createMockRequest()
+    val e = assertThrows(classOf[UnsupportedVersionException], () => kafkaApis.handleExpireTokenRequestZk(request))
+    assertEquals(s"Should never receive when using a Raft-based metadata quorum: ${request.header.apiKey()}", e.getMessage)
+  }
+
+  @Test
   def testRaftShouldAlwaysForwardAlterClientQuotasRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(raftSupport = true)
