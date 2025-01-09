@@ -30,6 +30,7 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsTopologyTest {
@@ -45,6 +46,32 @@ public class StreamsTopologyTest {
     private static final String CHANGELOG_TOPIC_1 = "changelog-1";
     private static final String CHANGELOG_TOPIC_2 = "changelog-2";
     private static final String CHANGELOG_TOPIC_3 = "changelog-3";
+
+    @Test
+    public void subtopologiesMapShouldNotBeNull() {
+        final Exception exception = assertThrows(NullPointerException.class, () -> new StreamsTopology(1, null));
+        assertEquals("Subtopologies cannot be null.", exception.getMessage());
+    }
+
+    @Test
+    public void topologyEpochShouldNotBeNegative() {
+        Map<String, Subtopology> subtopologies = mkMap(
+            mkEntry(SUBTOPOLOGY_ID_1, mkSubtopology1())
+        );
+        final Exception exception = assertThrows(IllegalArgumentException.class, () -> new StreamsTopology(-1, subtopologies));
+        assertEquals("Topology epoch must be non-negative.", exception.getMessage());
+    }
+
+    @Test
+    public void subtopologiesMapShouldBeImmutable() {
+        Map<String, Subtopology> subtopologies = mkMap(
+            mkEntry(SUBTOPOLOGY_ID_1, mkSubtopology1())
+        );
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> new StreamsTopology(1, subtopologies).subtopologies().put("subtopology-2", mkSubtopology2())
+        );
+    }
 
     @Test
     public void requiredTopicsShouldBeCorrect() {

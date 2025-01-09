@@ -20,29 +20,43 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
+import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Contains all information related to a topology of a Streams group.
+ * Contains the topology sent by a Streams client in the Streams heartbeat during initialization.
  * <p>
- * This class is immutable and is fully backed by records stored in the __consumer_offsets topic.
+ * This topology is used together with the partition metadata on the broker to create a
+ * {@link org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology configured topology}.
+ * This class allows to look-up subtopologies by subtopology ID in constant time by getting the subtopologies map.
+ * The information in this class is fully backed by records stored in the __consumer_offsets topic.
  *
- * @param topologyEpoch The epoch of the topology.
+ * @param topologyEpoch The epoch of the topology (must be non-negative).
  * @param subtopologies The subtopologies of the topology containing information about source topics,
- *                      repartition topics, changelog topics, co-partition groups etc.
+ *                      repartition topics, changelog topics, co-partition groups etc. (must be non-null)
  */
- public record StreamsTopology (int topologyEpoch,
-                               Map<String, Subtopology> subtopologies) {
+public record StreamsTopology(int topologyEpoch,
+                              Map<String, Subtopology> subtopologies) {
+
+    public StreamsTopology {
+        if (topologyEpoch < 0) {
+            throw new IllegalArgumentException("Topology epoch must be non-negative.");
+        }
+        subtopologies = Collections.unmodifiableMap(Objects.requireNonNull(subtopologies, "Subtopologies cannot be null."));
+    }
 
     /**
-     * Returns the set of topics required by the topology.
+     * Returns the set of topics that are required by the topology.
+     * <p>
+     * The required topics are used to determine the partition metadata on the brokers needed to configure the topology.
      *
      * @return set of topics required by the topology
      */
-     public Set<String> requiredTopics() {
+    public Set<String> requiredTopics() {
         return subtopologies.values().stream()
             .flatMap(x ->
                 Stream.concat(
@@ -56,10 +70,10 @@ import java.util.stream.Stream;
     }
 
     /**
-     * Creates a instance of StreamsTopology from a StreamsGroupTopologyValue record.
+     * Creates an instance of StreamsTopology from a StreamsGroupTopologyValue record.
      *
-     * @param record StreamsGroupTopologyValue record
-     * @return instance of StreamsTopology
+     * @param record The StreamsGroupTopologyValue record.
+     * @return The instance of StreamsTopology created from the record.
      */
     public static StreamsTopology fromRecord(StreamsGroupTopologyValue record) {
         return new StreamsTopology(
