@@ -28,10 +28,9 @@ import kafka.utils._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zk.{FeatureZNodeStatus, _}
-import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
+import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler, ZooKeeperClientException}
 import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.common.ElectionType
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
@@ -45,8 +44,6 @@ import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.zookeeper.KeeperException
-import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
@@ -1068,21 +1065,7 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def updateReplicaAssignmentForPartition(topicPartition: TopicPartition, assignment: ReplicaAssignment): Unit = {
-    val topicAssignment = mutable.Map() ++=
-      controllerContext.partitionFullReplicaAssignmentForTopic(topicPartition.topic) +=
-      (topicPartition -> assignment)
-
-    val setDataResponse = zkClient.setTopicAssignmentRaw(topicPartition.topic,
-      controllerContext.topicIds.get(topicPartition.topic),
-      topicAssignment, controllerContext.epochZkVersion)
-    setDataResponse.resultCode match {
-      case Code.OK =>
-        info(s"Successfully updated assignment of partition $topicPartition to $assignment")
-      case Code.NONODE =>
-        throw new IllegalStateException(s"Failed to update assignment for $topicPartition since the topic " +
-          "has no current assignment")
-      case _ => throw new KafkaException(setDataResponse.resultException.get)
-    }
+    throw new UnsupportedOperationException()
   }
 
   private def startNewReplicasForReassignedPartition(topicPartition: TopicPartition, newReplicas: Seq[Int]): Unit = {
@@ -1186,7 +1169,7 @@ class KafkaController(val config: KafkaConfig,
       try {
         zkClient.setOrCreatePartitionReassignment(updatedPartitionsBeingReassigned, controllerContext.epochZkVersion)
       } catch {
-        case e: KeeperException => throw new AdminOperationException(e)
+        case e: ZooKeeperClientException => throw new AdminOperationException(e)
       }
     }
   }

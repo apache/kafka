@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import java.util.{Comparator, Properties}
 import java.util.stream.Collectors
 import scala.collection.Seq
-import scala.collection.convert.ImplicitConversions.{`collection AsScalaIterable`, `map AsScala`}
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
@@ -123,11 +122,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def getTopicIds: Map[String, Uuid] = {
-    cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().toMap
+    cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
   }
 
   protected def getBrokers: Seq[KafkaBroker] = {
-    cluster.brokers.values().stream().collect(Collectors.toList[KafkaBroker]).toSeq
+    cluster.brokers.values().stream().collect(Collectors.toList[KafkaBroker]).asScala.toSeq
   }
 
   protected def bootstrapServers(): String = {
