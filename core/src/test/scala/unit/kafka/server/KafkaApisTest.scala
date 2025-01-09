@@ -43,8 +43,7 @@ import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsReso
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => LAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.DescribedGroup
-import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
-import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource, AlterConfigsResourceCollection => IAlterConfigsResourceCollection, AlterableConfig => IAlterableConfig, AlterableConfigCollection => IAlterableConfigCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
@@ -598,14 +597,6 @@ class KafkaApisTest extends Logging {
     )
   }
 
-  private def testForwardableApi(apiKey: ApiKeys, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Unit = {
-    kafkaApis = createKafkaApis(enableForwarding = true)
-    testForwardableApi(kafkaApis = kafkaApis,
-      apiKey,
-      requestBuilder
-    )
-  }
-
   private def testForwardableApi(
     kafkaApis: KafkaApis,
     apiKey: ApiKeys,
@@ -769,12 +760,6 @@ class KafkaApisTest extends Logging {
     verify(clientRequestQuotaManager).maybeRecordAndGetThrottleTimeMs(any(), anyLong)
   }
 
-  @Test
-  def testAlterClientQuotasWithForwarding(): Unit = {
-    val requestBuilder = new AlterClientQuotasRequest.Builder(List.empty.asJava, false)
-    testForwardableApi(ApiKeys.ALTER_CLIENT_QUOTAS, requestBuilder)
-  }
-
   private def verifyAlterClientQuotaResult(response: AlterClientQuotasResponse,
                                            expected: Map[ClientQuotaEntity, Errors]): Unit = {
     val futures = expected.keys.map(quotaEntity => quotaEntity -> new KafkaFutureImpl[Void]()).toMap
@@ -858,16 +843,6 @@ class KafkaApisTest extends Logging {
         Topic.CLUSTER_METADATA_TOPIC_NAME -> Errors.NONE))
   }
 
-  @Test
-  def testCreateTopicsWithForwarding(): Unit = {
-    val requestBuilder = new CreateTopicsRequest.Builder(
-      new CreateTopicsRequestData().setTopics(
-        new CreatableTopicCollection(Collections.singleton(
-          new CreatableTopic().setName("topic").setNumPartitions(1).
-            setReplicationFactor(1.toShort)).iterator())))
-    testForwardableApi(ApiKeys.CREATE_TOPICS, requestBuilder)
-  }
-
   @ParameterizedTest
   @CsvSource(value = Array("0,1500", "1500,0", "3000,1000"))
   def testKRaftControllerThrottleTimeEnforced(
@@ -917,65 +892,6 @@ class KafkaApisTest extends Logging {
     )
 
     assertEquals(expectedThrottleTimeMs, responseData.throttleTimeMs)
-  }
-
-  @Test
-  def testCreatePartitionsAuthorization(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-
-    val timeoutMs = 35000
-    val requestData = new CreatePartitionsRequestData()
-      .setTimeoutMs(timeoutMs)
-      .setValidateOnly(false)
-    val fooCreatePartitionsData = new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(2)
-    val barCreatePartitionsData = new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(10)
-    requestData.topics().add(fooCreatePartitionsData)
-    requestData.topics().add(barCreatePartitionsData)
-
-    val fooResource = new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.LITERAL)
-    val fooAction = new Action(AclOperation.ALTER, fooResource, 1, true, true)
-
-    val barResource = new ResourcePattern(ResourceType.TOPIC, "bar", PatternType.LITERAL)
-    val barAction = new Action(AclOperation.ALTER, barResource, 1, true, true)
-
-    when(authorizer.authorize(
-      any[RequestContext](),
-      any[util.List[Action]]()
-    )).thenAnswer { invocation =>
-      val actions = invocation.getArgument[util.List[Action]](1).asScala
-      val results = actions.map { action =>
-        if (action == fooAction) AuthorizationResult.ALLOWED
-        else if (action == barAction) AuthorizationResult.DENIED
-        else throw new AssertionError(s"Unexpected action $action")
-      }
-      new util.ArrayList[AuthorizationResult](results.asJava)
-    }
-
-    val request = buildRequest(new CreatePartitionsRequest.Builder(requestData).build())
-
-    when(controller.isActive).thenReturn(true)
-    when(controller.isTopicQueuedForDeletion("foo")).thenReturn(false)
-    when(clientControllerQuotaManager.newQuotaFor(
-      ArgumentMatchers.eq(request), ArgumentMatchers.anyShort())
-    ).thenReturn(UnboundedControllerMutationQuota)
-    when(adminManager.createPartitions(
-      timeoutMs = ArgumentMatchers.eq(timeoutMs),
-      newPartitions = ArgumentMatchers.eq(Seq(fooCreatePartitionsData)),
-      validateOnly = ArgumentMatchers.eq(false),
-      controllerMutationQuota = ArgumentMatchers.eq(UnboundedControllerMutationQuota),
-      callback = ArgumentMatchers.any[Map[String, ApiError] => Unit]()
-    )).thenAnswer { invocation =>
-      val callback = invocation.getArgument[Map[String, ApiError] => Unit](4)
-      callback.apply(Map("foo" -> ApiError.NONE))
-    }
-
-    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[CreatePartitionsResponse](request)
-    val results = response.data.results.asScala
-    assertEquals(Some(Errors.NONE), results.find(_.name == "foo").map(result => Errors.forCode(result.errorCode)))
-    assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), results.find(_.name == "bar").map(result => Errors.forCode(result.errorCode)))
   }
 
   private def createTopicAuthorization(authorizer: Authorizer,
@@ -1031,66 +947,6 @@ class KafkaApisTest extends Logging {
     }.toMap
 
     assertEquals(expectedTopicConfigErrorCodes, actualTopicConfigErrorCodes)
-  }
-
-  @Test
-  def testCreateAclWithForwarding(): Unit = {
-    val requestBuilder = new CreateAclsRequest.Builder(new CreateAclsRequestData())
-    testForwardableApi(ApiKeys.CREATE_ACLS, requestBuilder)
-  }
-
-  @Test
-  def testDeleteAclWithForwarding(): Unit = {
-    val requestBuilder = new DeleteAclsRequest.Builder(new DeleteAclsRequestData())
-    testForwardableApi(ApiKeys.DELETE_ACLS, requestBuilder)
-  }
-
-  @Test
-  def testCreateDelegationTokenWithForwarding(): Unit = {
-    val requestBuilder = new CreateDelegationTokenRequest.Builder(new CreateDelegationTokenRequestData())
-    testForwardableApi(ApiKeys.CREATE_DELEGATION_TOKEN, requestBuilder)
-  }
-
-  @Test
-  def testRenewDelegationTokenWithForwarding(): Unit = {
-    val requestBuilder = new RenewDelegationTokenRequest.Builder(new RenewDelegationTokenRequestData())
-    testForwardableApi(ApiKeys.RENEW_DELEGATION_TOKEN, requestBuilder)
-  }
-
-  @Test
-  def testExpireDelegationTokenWithForwarding(): Unit = {
-    val requestBuilder = new ExpireDelegationTokenRequest.Builder(new ExpireDelegationTokenRequestData())
-    testForwardableApi(ApiKeys.EXPIRE_DELEGATION_TOKEN, requestBuilder)
-  }
-
-  @Test
-  def testAlterPartitionReassignmentsWithForwarding(): Unit = {
-    val requestBuilder = new AlterPartitionReassignmentsRequest.Builder(new AlterPartitionReassignmentsRequestData())
-    testForwardableApi(ApiKeys.ALTER_PARTITION_REASSIGNMENTS, requestBuilder)
-  }
-
-  @Test
-  def testCreatePartitionsWithForwarding(): Unit = {
-    val requestBuilder = new CreatePartitionsRequest.Builder(new CreatePartitionsRequestData())
-    testForwardableApi(ApiKeys.CREATE_PARTITIONS, requestBuilder)
-  }
-
-  @Test
-  def testUpdateFeaturesWithForwarding(): Unit = {
-    val requestBuilder = new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
-    testForwardableApi(ApiKeys.UPDATE_FEATURES, requestBuilder)
-  }
-
-  @Test
-  def testDeleteTopicsWithForwarding(): Unit = {
-    val requestBuilder = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData())
-    testForwardableApi(ApiKeys.DELETE_TOPICS, requestBuilder)
-  }
-
-  @Test
-  def testAlterScramWithForwarding(): Unit = {
-    val requestBuilder = new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
-    testForwardableApi(ApiKeys.ALTER_USER_SCRAM_CREDENTIALS, requestBuilder)
   }
 
   @Test
@@ -10509,13 +10365,6 @@ class KafkaApisTest extends Logging {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(raftSupport = true)
     verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleAlterClientQuotasRequest)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardAlterUserScramCredentialsRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleAlterUserScramCredentialsRequest)
   }
 
   @Test
