@@ -105,7 +105,6 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
   private val isActive = new AtomicBoolean(false)
 
   val producerIdManager: ProducerIdManager = createProducerIdManager()
-
   def handleInitProducerId(transactionalId: String,
                            transactionTimeoutMs: Int,
                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
@@ -211,6 +210,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch]): ApiResult[(Int, TxnTransitMetadata)] = {
 
     def isValidProducerId(producerIdAndEpoch: ProducerIdAndEpoch): Boolean = {
+      // 2, 3번 좀 더 확인해볼 것
       // If a producer ID and epoch are provided by the request, fence the producer unless one of the following is true:
       //   1. The producer epoch is equal to -1, which implies that the metadata was just created. This is the case of a
       //      producer recovering from an UNKNOWN_PRODUCER_ID error, and it is safe to return the newly-generated

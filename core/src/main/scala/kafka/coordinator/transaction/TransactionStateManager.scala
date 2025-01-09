@@ -683,7 +683,6 @@ class TransactionStateManager(brokerId: Int,
         // now try to update the cache: we need to update the status in-place instead of
         // overwriting the whole object to ensure synchronization
         getTransactionState(transactionalId) match {
-
           case Left(err) =>
             info(s"Accessing the cached transaction metadata for $transactionalId returns $err error; " +
               s"aborting transition to the new metadata and setting the error in the callback")

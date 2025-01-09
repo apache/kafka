@@ -371,6 +371,7 @@ class BrokerServer(
 
       groupCoordinator = createGroupCoordinator()
 
+      // createProducerIdManager 로 controller에 요청해서 producerID를 받아옴. 구현체 확인해볼 것
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
         config.brokerId,
         time,
