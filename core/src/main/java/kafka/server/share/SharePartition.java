@@ -589,6 +589,7 @@ public class SharePartition {
     @SuppressWarnings("cyclomaticcomplexity") // Consider refactoring to avoid suppression
     public ShareAcquiredRecords acquire(
         String memberId,
+        int batchSize,
         int maxFetchRecords,
         FetchPartitionData fetchPartitionData
     ) {
@@ -627,9 +628,8 @@ public class SharePartition {
             if (subMap.isEmpty()) {
                 log.trace("No cached data exists for the share partition for requested fetch batch: {}-{}",
                     groupId, topicIdPartition);
-                AcquiredRecords acquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                    firstBatch.baseOffset(), lastBatch.lastOffset(), maxFetchRecords);
-                return ShareAcquiredRecords.fromAcquiredRecords(acquiredRecords);
+                return acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                    firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
             }
 
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
@@ -708,11 +708,11 @@ public class SharePartition {
             // missing records as well.
             if (acquiredCount < maxFetchRecords && subMap.lastEntry().getValue().lastOffset() < lastBatch.lastOffset()) {
                 log.trace("There exists another batch which needs to be acquired as well");
-                AcquiredRecords acquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
                     subMap.lastEntry().getValue().lastOffset() + 1,
-                    lastBatch.lastOffset(), maxFetchRecords - acquiredCount);
-                result.add(acquiredRecords);
-                acquiredCount += (int) (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
+                    lastBatch.lastOffset(), batchSize, maxFetchRecords - acquiredCount);
+                result.addAll(shareAcquiredRecords.acquiredRecords());
+                acquiredCount += shareAcquiredRecords.count();
             }
             return new ShareAcquiredRecords(result, acquiredCount);
         } finally {
@@ -1176,11 +1176,12 @@ public class SharePartition {
         };
     }
 
-    private AcquiredRecords acquireNewBatchRecords(
+    private ShareAcquiredRecords acquireNewBatchRecords(
         String memberId,
         Iterable<? extends RecordBatch> batches,
         long firstOffset,
         long lastOffset,
+        int batchSize,
         int maxFetchRecords
     ) {
         lock.writeLock().lock();
@@ -1204,25 +1205,91 @@ public class SharePartition {
                 lastAcquiredOffset = lastOffsetFromBatchWithRequestOffset(batches, firstAcquiredOffset + maxFetchRecords - 1);
             }
 
-            // Schedule acquisition lock timeout for the batch.
-            AcquisitionLockTimerTask timerTask = scheduleAcquisitionLockTimeout(memberId, firstAcquiredOffset, lastAcquiredOffset);
-            // Add the new batch to the in-flight records along with the acquisition lock timeout task for the batch.
-            cachedState.put(firstAcquiredOffset, new InFlightBatch(
-                memberId,
-                firstAcquiredOffset,
-                lastAcquiredOffset,
-                RecordState.ACQUIRED,
-                1,
-                timerTask));
+            // Create batches of acquired records.
+            List<AcquiredRecords> acquiredRecords = createBatches(batches, firstAcquiredOffset, lastAcquiredOffset, memberId, batchSize);
             // if the cachedState was empty before acquiring the new batches then startOffset needs to be updated
             if (cachedState.firstKey() == firstAcquiredOffset)  {
                 startOffset = firstAcquiredOffset;
             }
             endOffset = lastAcquiredOffset;
-            return new AcquiredRecords()
-                .setFirstOffset(firstAcquiredOffset)
-                .setLastOffset(lastAcquiredOffset)
-                .setDeliveryCount((short) 1);
+            return new ShareAcquiredRecords(acquiredRecords, (int) (lastAcquiredOffset - firstAcquiredOffset + 1));
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private List<AcquiredRecords> createBatches(
+        Iterable<? extends RecordBatch> batches,
+        long firstAcquiredOffset,
+        long lastAcquiredOffset,
+        String memberId,
+        int batchSize
+    ) {
+        lock.writeLock().lock();
+        try {
+            List<AcquiredRecords> result = new ArrayList<>();
+            if (lastAcquiredOffset - firstAcquiredOffset + 1 <= batchSize) {
+                // No split of batches is required as the batch size is greater than records which
+                // can be acquired.
+                result.add(new AcquiredRecords()
+                    .setFirstOffset(firstAcquiredOffset)
+                    .setLastOffset(lastAcquiredOffset)
+                    .setDeliveryCount((short) 1));
+            } else {
+                // The batch is split into multiple batches considering batch size.
+                long currentFirstOffset = firstAcquiredOffset;
+                RecordBatch lastBatch = null;
+                // Try reading only the baseOffset of the batch and avoid reading the lastOffset as
+                // lastOffset call of RecordBatch is expensive (loads headers).
+                for (RecordBatch batch : batches) {
+                    long batchBaseOffset = batch.baseOffset();
+                    if (batchBaseOffset < firstAcquiredOffset) {
+                        continue;
+                    }
+
+                    // Track last batch for filling the final batch, if required.
+                    lastBatch = batch;
+                    // Check if the batch is already past the last acquired offset then break.
+                    if (batchBaseOffset > lastAcquiredOffset) {
+                        result.add(new AcquiredRecords()
+                            .setFirstOffset(currentFirstOffset)
+                            .setLastOffset(lastAcquiredOffset)
+                            .setDeliveryCount((short) 1));
+                        lastBatch = null;
+                        break;
+                    }
+
+                    // Create new batch once the batch size is reached.
+                    if (batchBaseOffset - currentFirstOffset >= batchSize) {
+                        result.add(new AcquiredRecords()
+                            .setFirstOffset(currentFirstOffset)
+                            .setLastOffset(batchBaseOffset - 1)
+                            .setDeliveryCount((short) 1));
+                        currentFirstOffset = batchBaseOffset;
+                    }
+                }
+                // Add the last batch if required.
+                if (lastBatch != null) {
+                    result.add(new AcquiredRecords()
+                        .setFirstOffset(currentFirstOffset)
+                        .setLastOffset(lastAcquiredOffset)
+                        .setDeliveryCount((short) 1));
+                }
+            }
+
+            result.forEach(record -> {
+                // Schedule acquisition lock timeout for the batch.
+                AcquisitionLockTimerTask timerTask = scheduleAcquisitionLockTimeout(memberId, record.firstOffset(), record.lastOffset());
+                // Add the new batch to the in-flight records along with the acquisition lock timeout task for the batch.
+                cachedState.put(record.firstOffset(), new InFlightBatch(
+                    memberId,
+                    record.firstOffset(),
+                    record.lastOffset(),
+                    RecordState.ACQUIRED,
+                    1,
+                    timerTask));
+            });
+            return result;
         } finally {
             lock.writeLock().unlock();
         }
