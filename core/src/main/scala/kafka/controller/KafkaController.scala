@@ -21,8 +21,7 @@ import com.yammer.metrics.core.{Meter, Timer}
 import java.util.concurrent.TimeUnit
 import kafka.common._
 import kafka.cluster.Broker
-import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback, ZkMigrationStateMetricName}
-import kafka.coordinator.transaction.ZkProducerIdManager
+import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback}
 import kafka.server._
 import kafka.server.metadata.ZkFinalizedFeatureCache
 import kafka.utils._
@@ -42,7 +41,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
-import org.apache.kafka.metadata.migration.ZkMigrationState
 import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -53,7 +51,7 @@ import org.apache.zookeeper.KeeperException.Code
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Try}
 
 sealed trait ElectionTrigger
 case object AutoTriggered extends ElectionTrigger
@@ -81,11 +79,9 @@ object KafkaController extends Logging {
   private val ReplicasIneligibleToDeleteCountMetricName = "ReplicasIneligibleToDeleteCount"
   private val ActiveBrokerCountMetricName = "ActiveBrokerCount"
   private val FencedBrokerCountMetricName = "FencedBrokerCount"
-  private val ZkMigrationStateMetricName = "ZkMigrationState"
 
   // package private for testing
   private[controller] val MetricNames = Set(
-    ZkMigrationStateMetricName,
     ActiveControllerCountMetricName,
     OfflinePartitionsCountMetricName,
     PreferredReplicaImbalanceCountMetricName,
@@ -117,7 +113,7 @@ class KafkaController(val config: KafkaConfig,
 
   this.logIdent = s"[Controller id=${config.brokerId}] "
 
-  @volatile private var brokerInfo = initialBrokerInfo
+  private val brokerInfo = initialBrokerInfo
   @volatile private var _brokerEpoch = initialBrokerEpoch
 
   private val isAlterPartitionEnabled = config.interBrokerProtocolVersion.isAlterPartitionSupported
@@ -174,7 +170,6 @@ class KafkaController(val config: KafkaConfig,
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(1, true, "delegation-token-cleaner")
 
-  metricsGroup.newGauge(ZkMigrationStateMetricName, () => ZkMigrationState.ZK.value().intValue())
   metricsGroup.newGauge(ActiveControllerCountMetricName, () => if (isActive) 1 else 0)
   metricsGroup.newGauge(OfflinePartitionsCountMetricName, () => offlinePartitionCount)
   metricsGroup.newGauge(PreferredReplicaImbalanceCountMetricName, () => preferredReplicaImbalanceCount)
@@ -247,15 +242,6 @@ class KafkaController(val config: KafkaConfig,
   def controlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {
     val controlledShutdownEvent = ControlledShutdown(id, brokerEpoch, controlledShutdownCallback)
     eventManager.put(controlledShutdownEvent)
-  }
-
-  private[kafka] def updateBrokerInfo(newBrokerInfo: BrokerInfo): Unit = {
-    this.brokerInfo = newBrokerInfo
-    zkClient.updateBrokerInfo(newBrokerInfo)
-  }
-
-  private[kafka] def enableDefaultUncleanLeaderElection(): Unit = {
-    eventManager.put(UncleanLeaderElectionEnable)
   }
 
   private[kafka] def enableTopicUncleanLeaderElection(topic: String): Unit = {
@@ -2558,17 +2544,6 @@ class KafkaController(val config: KafkaConfig,
       callback.apply(Left(Errors.STALE_BROKER_EPOCH))
       return
     }
-
-    val maybeNewProducerIdsBlock = try {
-      Try(ZkProducerIdManager.getNewProducerIdBlock(brokerId, zkClient, this))
-    } catch {
-      case ke: KafkaException => Failure(ke)
-    }
-
-    maybeNewProducerIdsBlock match {
-      case Failure(exception) => callback.apply(Left(Errors.forException(exception)))
-      case Success(newProducerIdBlock) => callback.apply(Right(newProducerIdBlock))
-    }
   }
 
   private def processControllerChange(): Unit = {
@@ -2696,10 +2671,6 @@ class LogDirEventNotificationHandler(eventManager: ControllerEventManager) exten
   override val path: String = LogDirEventNotificationZNode.path
 
   override def handleChildChange(): Unit = eventManager.put(LogDirEventNotification)
-}
-
-object LogDirEventNotificationHandler {
-  val Version: Long = 1L
 }
 
 class PartitionModificationsHandler(eventManager: ControllerEventManager, topic: String) extends ZNodeChangeHandler {

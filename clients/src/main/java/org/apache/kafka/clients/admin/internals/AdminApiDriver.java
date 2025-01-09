@@ -110,7 +110,13 @@ public class AdminApiDriver<K, V> {
             retryBackoffMaxMs,
             CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.log = logContext.logger(AdminApiDriver.class);
-        retryLookup(future.lookupKeys());
+
+        // For any lookup keys for which we do not have cached information, we will need to look up
+        // metadata. For all cached keys, they can proceed straight to the fulfillment map.
+        // Note that the cache is only used on the initial calls, and any errors that result
+        // in additional lookups use the full set of lookup keys.
+        retryLookup(future.uncachedLookupKeys());
+        future.cachedKeyBrokerIdMapping().forEach((key, brokerId) -> fulfillmentMap.put(new FulfillmentScope(brokerId), key));
     }
 
     /**
@@ -333,7 +339,7 @@ public class AdminApiDriver<K, V> {
             }
 
             // Copy the keys to avoid exposing the underlying mutable set
-            Set<K> copyKeys = Collections.unmodifiableSet(new HashSet<>(keys));
+            Set<K> copyKeys = Set.copyOf(keys);
 
             Collection<AdminApiHandler.RequestAndKeys<K>> newRequests = buildRequest.apply(copyKeys, scope);
             if (newRequests.isEmpty()) {

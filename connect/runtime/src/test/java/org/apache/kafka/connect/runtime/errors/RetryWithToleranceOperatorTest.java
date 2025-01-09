@@ -87,7 +87,7 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RetryWithToleranceOperatorTest {
 
-    private static final Map<String, String> PROPERTIES = new HashMap<String, String>() {{
+    private static final Map<String, String> PROPERTIES = new HashMap<>() {{
             put(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG, Objects.toString(2));
             put(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG, Objects.toString(3000));
             put(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());

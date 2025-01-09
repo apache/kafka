@@ -28,8 +28,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -57,8 +55,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 @Tag("integration")
 public class TransformationIntegrationTest {
-
-    private static final Logger log = LoggerFactory.getLogger(TransformationIntegrationTest.class);
 
     private static final int NUM_RECORDS_PRODUCED = 2000;
     private static final int NUM_TOPIC_PARTITIONS = 3;

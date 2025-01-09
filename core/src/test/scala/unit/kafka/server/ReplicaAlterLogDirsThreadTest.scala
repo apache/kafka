@@ -16,13 +16,13 @@
   */
 package kafka.server
 
-import kafka.cluster.{BrokerEndPoint, Partition}
+import kafka.cluster.Partition
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
-import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.ReplicaAlterLogDirsThread.ReassignmentState
 import kafka.server.metadata.ZkMetadataCache
-import kafka.utils.{DelayedItem, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -33,6 +33,7 @@ import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.{BrokerFeatures, common}
 import org.apache.kafka.server.common.{DirectoryEventHandler, MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -76,7 +77,7 @@ class ReplicaAlterLogDirsThreadTest {
   @Test
   def shouldNotAddPartitionIfFutureLogIsNotDefined(): Unit = {
     val brokerId = 1
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId))
 
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
     val quotaManager = Mockito.mock(classOf[ReplicationQuotaManager])
@@ -104,7 +105,7 @@ class ReplicaAlterLogDirsThreadTest {
   def shouldUpdateLeaderEpochAfterFencedEpochError(): Unit = {
     val brokerId = 1
     val partitionId = 0
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId))
 
     val partition = Mockito.mock(classOf[Partition])
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
@@ -204,7 +205,7 @@ class ReplicaAlterLogDirsThreadTest {
   def shouldReplaceCurrentLogDirWhenCaughtUp(): Unit = {
     val brokerId = 1
     val partitionId = 0
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId))
 
     val partition = Mockito.mock(classOf[Partition])
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
@@ -283,7 +284,7 @@ class ReplicaAlterLogDirsThreadTest {
   def shouldReplaceCurrentLogDirWhenCaughtUpWithAfterAssignmentRequestHasBeenCompleted(): Unit = {
     val brokerId = 1
     val partitionId = 0
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId))
 
     val partition = Mockito.mock(classOf[Partition])
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
@@ -380,7 +381,7 @@ class ReplicaAlterLogDirsThreadTest {
   def shouldRevertAnyScheduledAssignmentRequestIfAssignmentIsCancelled(): Unit = {
     val brokerId = 1
     val partitionId = 0
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId))
 
     val partition = Mockito.mock(classOf[Partition])
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
@@ -477,7 +478,7 @@ class ReplicaAlterLogDirsThreadTest {
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
     val directoryEventHandler = mock(classOf[DirectoryEventHandler])
     val quotaManager = Mockito.mock(classOf[ReplicationQuotaManager])
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
     val thread = new ReplicaAlterLogDirsThread(
@@ -530,7 +531,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(replicaManager.fetchMessages(
       params = ArgumentMatchers.eq(expectedFetchParams),
       fetchInfos = ArgumentMatchers.eq(Seq(topicIdPartition -> requestData)),
-      quota = ArgumentMatchers.eq(UnboundedQuota),
+      quota = ArgumentMatchers.eq(UNBOUNDED_QUOTA),
       responseCallback = callbackCaptor.capture(),
     )).thenAnswer(_ => {
       callbackCaptor.getValue.apply(Seq((topicIdPartition, responseData)))
@@ -539,7 +540,7 @@ class ReplicaAlterLogDirsThreadTest {
 
   @Test
   def issuesEpochRequestFromLocalReplica(): Unit = {
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
 
     //Setup all dependencies
 
@@ -613,7 +614,7 @@ class ReplicaAlterLogDirsThreadTest {
 
   @Test
   def fetchEpochsFromLeaderShouldHandleExceptionFromGetLocalReplica(): Unit = {
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
 
     //Setup all dependencies
     val partitionT1p0: Partition = mock(classOf[Partition])
@@ -679,7 +680,7 @@ class ReplicaAlterLogDirsThreadTest {
     val truncateCaptureT1p1: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     // Setup all the dependencies
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val quotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = mock(classOf[LogManager])
     val logT1p0: UnifiedLog = mock(classOf[UnifiedLog])
@@ -771,7 +772,7 @@ class ReplicaAlterLogDirsThreadTest {
     val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     // Setup all the dependencies
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val quotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = mock(classOf[LogManager])
     val log: UnifiedLog = mock(classOf[UnifiedLog])
@@ -857,7 +858,7 @@ class ReplicaAlterLogDirsThreadTest {
     val truncated: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     // Setup all the dependencies
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val quotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = mock(classOf[LogManager])
     val log: UnifiedLog = mock(classOf[UnifiedLog])
@@ -912,7 +913,7 @@ class ReplicaAlterLogDirsThreadTest {
     val truncated: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     // Setup all the dependencies
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val quotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = mock(classOf[LogManager])
     val log: UnifiedLog = mock(classOf[UnifiedLog])
@@ -1001,7 +1002,7 @@ class ReplicaAlterLogDirsThreadTest {
   def shouldFetchLeaderEpochOnFirstFetchOnly(): Unit = {
 
     //Setup all dependencies
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val quotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = mock(classOf[LogManager])
     val log: UnifiedLog = mock(classOf[UnifiedLog])
@@ -1064,7 +1065,7 @@ class ReplicaAlterLogDirsThreadTest {
   def shouldFetchOneReplicaAtATime(): Unit = {
 
     //Setup all dependencies
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val quotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = mock(classOf[LogManager])
     val log: UnifiedLog = mock(classOf[UnifiedLog])
@@ -1116,7 +1117,7 @@ class ReplicaAlterLogDirsThreadTest {
   def shouldFetchNonDelayedAndNonTruncatingReplicas(): Unit = {
 
     //Setup all dependencies
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val quotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = mock(classOf[LogManager])
     val log: UnifiedLog = mock(classOf[UnifiedLog])
@@ -1167,7 +1168,7 @@ class ReplicaAlterLogDirsThreadTest {
     // one partition is ready and one is delayed
     val ResultWithPartitions(fetchRequest2Opt, partitionsWithError2) = thread.leader.buildFetch(Map(
         t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, state = Fetching, lastFetchedEpoch = None),
-        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None)))
+        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = None)))
 
     assertTrue(fetchRequest2Opt.isDefined)
     val fetchRequest2 = fetchRequest2Opt.get
@@ -1180,8 +1181,8 @@ class ReplicaAlterLogDirsThreadTest {
 
     // both partitions are delayed
     val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) = thread.leader.buildFetch(Map(
-        t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None),
-        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None)))
+        t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = None),
+        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = None)))
     assertTrue(fetchRequest3Opt.isEmpty, "Expected no fetch requests since all partitions are delayed")
     assertFalse(partitionsWithError3.nonEmpty)
   }

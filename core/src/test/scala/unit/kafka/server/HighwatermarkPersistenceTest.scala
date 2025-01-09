@@ -32,7 +32,7 @@ import org.apache.kafka.storage.internals.log.{CleanerConfig, LogDirFailureChann
 
 class HighwatermarkPersistenceTest {
 
-  val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps)
+  val configs = TestUtils.createBrokerConfigs(2).map(KafkaConfig.fromProps)
   val topic = "foo"
   val configRepository = new MockConfigRepository()
   val logManagers = configs map { config =>

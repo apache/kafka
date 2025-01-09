@@ -66,7 +66,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)
 
@@ -151,7 +151,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     // Create a DelegationToken with a short lifetime to validate the expire code
     val createResult5 = adminClient.createDelegationToken(new CreateDelegationTokenOptions()
       .renewers(renewer1)
-      .maxlifeTimeMs(1 * 1000))
+      .maxLifetimeMs(1 * 1000))
     val token5 = createResult5.delegationToken().get()
 
     TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 1),

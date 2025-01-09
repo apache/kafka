@@ -57,7 +57,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 /**
  * Provides configuration for Kafka Connect workers running in distributed mode.
  */
-public class DistributedConfig extends WorkerConfig {
+public final class DistributedConfig extends WorkerConfig {
 
     private static final Logger log = LoggerFactory.getLogger(DistributedConfig.class);
 
@@ -102,6 +102,10 @@ public class DistributedConfig extends WorkerConfig {
     public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
     private static final String METADATA_RECOVERY_STRATEGY_DOC = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC;
     public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY;
+
+    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
+    private static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC;
+    public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS;
 
     /**
      * <code>worker.sync.timeout.ms</code>
@@ -526,7 +530,14 @@ public class DistributedConfig extends WorkerConfig {
                     ConfigDef.CaseInsensitiveValidString
                             .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
                     ConfigDef.Importance.LOW,
-                    METADATA_RECOVERY_STRATEGY_DOC);
+                    METADATA_RECOVERY_STRATEGY_DOC)
+            .define(METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
+                    atLeast(0),
+                    ConfigDef.Importance.LOW,
+                    METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
+
     }
 
     private final ExactlyOnceSourceSupport exactlyOnceSourceSupport;
@@ -588,7 +599,6 @@ public class DistributedConfig extends WorkerConfig {
     }
 
     // Visible for testing
-    @SuppressWarnings("this-escape")
     DistributedConfig(Crypto crypto, Map<String, String> props) {
         super(config(crypto), props);
         this.crypto = crypto;

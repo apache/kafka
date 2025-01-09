@@ -71,8 +71,8 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
 
   // Use the latest production MV for this test
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_8_IV0, serverProperties = Array(
-      new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
-      new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "false"),
+    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
+    new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "false"),
   ))
   def testApiVersionsRequestValidationV0(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])

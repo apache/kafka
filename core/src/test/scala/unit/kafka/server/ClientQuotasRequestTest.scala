@@ -171,23 +171,28 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   def testClientQuotasForScramUsers(): Unit = {
     val userName = "user"
 
-    val results = cluster.createAdminClient().alterUserScramCredentials(util.Arrays.asList(
-      new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "password")))
-    results.all.get
+    val admin = cluster.admin()
+    try {
+      val results = admin.alterUserScramCredentials(util.Arrays.asList(
+        new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "password")))
+      results.all.get
 
-    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> userName).asJava)
+      val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> userName).asJava)
 
-    verifyDescribeEntityQuotas(entity, Map.empty)
+      verifyDescribeEntityQuotas(entity, Map.empty)
 
-    alterEntityQuotas(entity, Map(
-      QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(10000.0),
-      QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> Some(20000.0)
-    ), validateOnly = false)
+      alterEntityQuotas(entity, Map(
+        QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(10000.0),
+        QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> Some(20000.0)
+      ), validateOnly = false)
 
-    verifyDescribeEntityQuotas(entity, Map(
-      QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 10000.0,
-      QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0
-    ))
+      verifyDescribeEntityQuotas(entity, Map(
+        QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 10000.0,
+        QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0
+      ))
+    } finally {
+      admin.close()
+    }
   }
 
   @ClusterTest

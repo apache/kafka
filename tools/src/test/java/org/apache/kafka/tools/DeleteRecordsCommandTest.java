@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.nio.file.NoSuchFileException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -52,11 +53,11 @@ public class DeleteRecordsCommandTest {
 
     @ClusterTest
     public void testCommand(ClusterInstance cluster) throws Exception {
-        Properties adminProps = new Properties();
+        Map<String, Object> adminProps = new HashMap<>();
 
         adminProps.put(AdminClientConfig.RETRIES_CONFIG, 1);
 
-        try (Admin admin = cluster.createAdminClient(adminProps)) {
+        try (Admin admin = cluster.admin(adminProps)) {
             assertThrows(
                 AdminCommandFailedException.class,
                 () -> DeleteRecordsCommand.execute(admin, "{\"partitions\":[" +

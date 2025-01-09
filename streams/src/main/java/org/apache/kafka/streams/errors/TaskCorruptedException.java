@@ -24,10 +24,10 @@ import java.util.Set;
 /**
  * Indicates a specific task is corrupted and need to be re-initialized. It can be thrown when:
  *
- * <ol>
+ * <ul>
  *   <li>Under EOS, if the checkpoint file does not contain offsets for corresponding store's changelogs, meaning previously it was not close cleanly.</li>
  *   <li>Out-of-range exception thrown during restoration, meaning that the changelog has been modified and we re-bootstrap the store.</li>
- * </ol>
+ * </ul>
  */
 public class TaskCorruptedException extends StreamsException {
 

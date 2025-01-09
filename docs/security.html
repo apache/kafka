@@ -17,7 +17,7 @@
 
 <script id="security-template" type="text/x-handlebars-template">
     <h3 class="anchor-heading"><a id="security_overview" class="anchor-link"></a><a href="#security_overview">7.1 Security Overview</a></h3>
-    In release 0.9.0.0, the Kafka community added a number of features that, used either separately or together, increases security in a Kafka cluster. The following security measures are currently supported:
+    The following security measures are currently supported:
     <ol>
         <li>Authentication of connections to brokers from clients (producers and consumers), other brokers and tools, using either SSL or SASL. Kafka supports the following SASL mechanisms:
             <ul>
@@ -26,7 +26,6 @@
                 <li>SASL/SCRAM-SHA-256 and SASL/SCRAM-SHA-512 - starting at version 0.10.2.0</li>
                 <li>SASL/OAUTHBEARER - starting at version 2.0</li>
             </ul></li>
-        <li>Authentication of connections from brokers to ZooKeeper</li>
         <li>Encryption of data transferred between brokers and clients, between brokers, or between brokers and tools using SSL (Note that there is a performance degradation when SSL is enabled, the magnitude of which depends on the CPU type and the JVM implementation.)</li>
         <li>Authorization of read / write operations by clients</li>
         <li>Authorization is pluggable and integration with external authorization services is supported</li>
@@ -93,15 +92,6 @@
       partition replication. If not defined, then the inter-broker listener is determined
       by the security protocol defined by <code>security.inter.broker.protocol</code>, which
       defaults to <code>PLAINTEXT</code>.</p>
-    
-    <p>For legacy clusters which rely on Zookeeper to store cluster metadata, it is possible to
-      declare a separate listener to be used for metadata propagation from the active controller
-      to the brokers. This is defined by <code>control.plane.listener.name</code>. The active controller
-      will use this listener when it needs to push metadata updates to the brokers in the cluster.
-      The benefit of using a control plane listener is that it uses a separate processing thread,
-      which makes it less likely for application traffic to impede timely propagation of metadata changes
-      (such as partition leader and ISR updates). Note that the default value is null, which
-      means that the controller will use the same listener defined by <code>inter.broker.listener</code></p>
     
     <p>In a KRaft cluster, a broker is any server which has the <code>broker</code> role enabled
       in <code>process.roles</code> and a controller is any server which has the <code>controller</code>
@@ -542,19 +532,6 @@ $ bin/kafka-console-consumer.sh --bootstrap-server localhost:9093 --topic test -
                     SASL, the section name may be prefixed with the listener name in lower-case
                     followed by a period, e.g. <code>sasl_ssl.KafkaServer</code>.</p>
 
-                    <p><code>Client</code> section is used to authenticate a SASL connection with
-                    zookeeper. It also allows the brokers to set SASL ACL on zookeeper
-                    nodes which locks these nodes down so that only the brokers can
-                    modify it. It is necessary to have the same principal name across all
-                    brokers. If you want to use a section name other than Client, set the
-                    system property <code>zookeeper.sasl.clientconfig</code> to the appropriate
-                    name (<i>e.g.</i>, <code>-Dzookeeper.sasl.clientconfig=ZkClient</code>).</p>
-
-                    <p>ZooKeeper uses "zookeeper" as the service name by default. If you
-                    want to change this, set the system property
-                    <code>zookeeper.sasl.client.username</code> to the appropriate name
-                    (<i>e.g.</i>, <code>-Dzookeeper.sasl.client.username=zk</code>).</p>
-
                     <p>Brokers may also configure JAAS using the broker configuration property <code>sasl.jaas.config</code>.
                     The property name must be prefixed with the listener prefix including the SASL mechanism,
                     i.e. <code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code>. Only one
@@ -576,7 +553,6 @@ listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.p
                         <li><code>{listenerName}.KafkaServer</code> section of static JAAS configuration</li>
                         <li><code>KafkaServer</code> section of static JAAS configuration</li>
                     </ul>
-                    Note that ZooKeeper JAAS config may only be configured using static JAAS configuration.
 
                     <p>See <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
                         <a href="#security_sasl_plain_brokerconfig">PLAIN</a>,
@@ -708,19 +684,10 @@ $ sudo /usr/sbin/kadmin.local -q "ktadd -k /etc/security/keytabs/{keytabname}.ke
     storeKey=true
     keyTab="/etc/security/keytabs/kafka_server.keytab"
     principal="kafka/kafka1.hostname.com@EXAMPLE.COM";
-};
-
-// Zookeeper client authentication
-Client {
-    com.sun.security.auth.module.Krb5LoginModule required
-    useKeyTab=true
-    storeKey=true
-    keyTab="/etc/security/keytabs/kafka_server.keytab"
-    principal="kafka/kafka1.hostname.com@EXAMPLE.COM";
 };</code></pre>
 
                             <code>KafkaServer</code> section in the JAAS file tells the broker which principal to use and the location of the keytab where this principal is stored. It
-                            allows the broker to login using the keytab specified in this section. See <a href="#security_jaas_broker">notes</a> for more details on Zookeeper SASL configuration.
+                            allows the broker to login using the keytab specified in this section.
                         </li>
                         <li>Pass the JAAS and optionally the krb5 file locations as JVM parameters to each Kafka broker (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
                             <pre><code class="language-bash">-Djava.security.krb5.conf=/etc/kafka/krb5.conf
@@ -847,27 +814,27 @@ sasl.mechanism=PLAIN</code></pre></li>
                 Kafka supports <a href="https://tools.ietf.org/html/rfc7677">SCRAM-SHA-256</a> and SCRAM-SHA-512 which
                 can be used with TLS to perform secure authentication. Under the default implementation of <code>principal.builder.class</code>, the username is used as the authenticated
                 <code>Principal</code> for configuration of ACLs etc. The default SCRAM implementation in Kafka
-                stores SCRAM credentials in Zookeeper and is suitable for use in Kafka installations where Zookeeper
-                is on a private network. Refer to <a href="#security_sasl_scram_security">Security Considerations</a>
+                stores SCRAM credentials in the metadata log. Refer to <a href="#security_sasl_scram_security">Security Considerations</a>
                 for more details.</p>
             <ol>
                 <li><h5 class="anchor-heading"><a id="security_sasl_scram_credentials" class="anchor-link"></a><a href="#security_sasl_scram_credentials">Creating SCRAM Credentials</a></h5>
-                    <p>The SCRAM implementation in Kafka uses Zookeeper as credential store. Credentials can be created in
-                        Zookeeper using <code>kafka-configs.sh</code>. For each SCRAM mechanism enabled, credentials must be created
+                    <p>The SCRAM implementation in Kafka uses the metadata log as credential store. Credentials can be created in
+                        the metadata log using <code>kafka-storage.sh</code> or <code>kafka-configs.sh</code>. For each SCRAM mechanism enabled, credentials must be created
                         by adding a config with the mechanism name. Credentials for inter-broker communication must be created
-                        before Kafka brokers are started. Client credentials may be created and updated dynamically and updated
-                        credentials will be used to authenticate new connections.</p>
-                    <p>Create SCRAM credentials for user <i>alice</i> with password <i>alice-secret</i>:
-                    <pre><code class="language-bash">$ bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --add-config 'SCRAM-SHA-256=[iterations=8192,password=alice-secret],SCRAM-SHA-512=[password=alice-secret]' --entity-type users --entity-name alice</code></pre>
-                    <p>The default iteration count of 4096 is used if iterations are not specified. A random salt is created
-                        and the SCRAM identity consisting of salt, iterations, StoredKey and ServerKey are stored in Zookeeper.
+                        before Kafka brokers are started. <code>kafka-storage.sh</code> can format storage with initial credentials.
+                        Client credentials may be created and updated dynamically and updated credentials will be used to authenticate new connections.
+                        <code>kafka-configs.sh</code> can be used to create and update credentials after Kafka brokers are started.</p>
+                    <p>Create initial SCRAM credentials for user <i>admin</i> with password <i>admin-secret</i>:
+                    <pre><code class="language-bash">$ bin/kafka-storage.sh format -t $(bin/kafka-storage.sh random-uuid) -c config/kraft/server.properties --add-scram 'SCRAM-SHA-256=[name="admin",password="admin-secret"]'</code></pre>
+                    <p>Create SCRAM credentials for user <i>alice</i> with password <i>alice-secret</i> (refer to <a href="#security_sasl_scram_clientconfig">Configuring Kafka Clients</a> for client configuration):
+                    <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config 'SCRAM-SHA-256=[iterations=8192,password=alice-secret]' --entity-type users --entity-name alice --command-config client.properties</code></pre>
+                    <p>The default iteration count of 4096 is used if iterations are not specified. A random salt is created if it's not specified.
+                        The SCRAM identity consisting of salt, iterations, StoredKey and ServerKey are stored in the metadata log.
                         See <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a> for details on SCRAM identity and the individual fields.
-                    <p>The following examples also require a user <i>admin</i> for inter-broker communication which can be created using:
-                    <pre><code class="language-bash">$ bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --add-config 'SCRAM-SHA-256=[password=admin-secret],SCRAM-SHA-512=[password=admin-secret]' --entity-type users --entity-name admin</code></pre>
                     <p>Existing credentials may be listed using the <i>--describe</i> option:
-                    <pre><code class="language-bash">$ bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --describe --entity-type users --entity-name alice</code></pre>
+                    <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --describe --entity-type users --entity-name alice --command-config client.properties</code></pre>
                     <p>Credentials may be deleted for one or more SCRAM mechanisms using the <i>--alter --delete-config</i> option:
-                    <pre><code class="language-bash">$ bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --alter --delete-config 'SCRAM-SHA-512' --entity-type users --entity-name alice</code></pre>
+                    <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --delete-config 'SCRAM-SHA-256' --entity-type users --entity-name alice --command-config client.properties</code></pre>
                 </li>
                 <li><h5 class="anchor-heading"><a id="security_sasl_scram_brokerconfig" class="anchor-link"></a><a href="#security_sasl_scram_brokerconfig">Configuring Kafka Brokers</a></h5>
                     <ol>
@@ -915,17 +882,17 @@ sasl.mechanism=SCRAM-SHA-256 (or SCRAM-SHA-512)</code></pre></li>
                 </li>
                 <li><h5><a id="security_sasl_scram_security" href="#security_sasl_scram_security">Security Considerations for SASL/SCRAM</a></h5>
                     <ul>
-                        <li>The default implementation of SASL/SCRAM in Kafka stores SCRAM credentials in Zookeeper. This
-                            is suitable for production use in installations where Zookeeper is secure and on a private network.</li>
+                        <li>The default implementation of SASL/SCRAM in Kafka stores SCRAM credentials in the metadata log. This
+                            is suitable for production use in installations where KRaft controllers are secure and on a private network.</li>
                         <li>Kafka supports only the strong hash functions SHA-256 and SHA-512 with a minimum iteration count
                             of 4096. Strong hash functions combined with strong passwords and high iteration counts protect
-                            against brute force attacks if Zookeeper security is compromised.</li>
+                            against brute force attacks if KRaft controllers security is compromised.</li>
                         <li>SCRAM should be used only with TLS-encryption to prevent interception of SCRAM exchanges. This
-                            protects against dictionary or brute force attacks and against impersonation if Zookeeper is compromised.</li>
+                            protects against dictionary or brute force attacks and against impersonation if KRaft controllers security is compromised.</li>
                         <li>From Kafka version 2.0 onwards, the default SASL/SCRAM credential store may be overridden using custom callback handlers
-                            by configuring <code>sasl.server.callback.handler.class</code> in installations where Zookeeper is not secure.</li>
+                            by configuring <code>sasl.server.callback.handler.class</code> in installations where KRaft controllers are not secure.</li>
                         <li>For more details on security considerations, refer to
-                            <a href="https://tools.ietf.org/html/rfc5802#section-9">RFC 5802</a>.
+                            <a href="https://tools.ietf.org/html/rfc5802#section-9">RFC 5802</a>.</li>
                     </ul>
                 </li>
             </ol>
@@ -1127,7 +1094,7 @@ sasl.mechanism=OAUTHBEARER</code></pre></li>
                     <ul>
                         <li>The default implementation of SASL/OAUTHBEARER in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>.
                             This is suitable only for non-production use.</li>
-                        <li>OAUTHBEARER should be used in production enviromnments only with TLS-encryption to prevent interception of tokens.</li>
+                        <li>OAUTHBEARER should be used in production environments only with TLS-encryption to prevent interception of tokens.</li>
                         <li>The default unsecured SASL/OAUTHBEARER implementation may be overridden (and must be overridden in production environments)
                             using custom login and SASL Server callback handlers as described above.</li>
                         <li>For more details on OAuth 2 security considerations in general, refer to <a href="https://tools.ietf.org/html/rfc6749#section-10">RFC 6749, Section 10</a>.</li>
@@ -1195,14 +1162,12 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
                 <li><h5 class="anchor-heading"><a id="security_token_management" class="anchor-link"></a><a href="#security_token_management">Token Management</a></h5>
                     <p> A secret is used to generate and verify delegation tokens. This is supplied using config
                         option <code>delegation.token.secret.key</code>. The same secret key must be configured across all the brokers.
-                        If using Kafka with KRaft the controllers must also be configured with the secret using the same config option.
+                        The controllers must also be configured with the secret using the same config option.
                         If the secret is not set or set to empty string, delegation token authentication and API operations will fail.</p>
 
-                    <p>When using Kafka with Zookeeper, the token details are stored in Zookeeper and delegation tokens are suitable
-                        for use in Kafka installations where Zookeeper is on a private network. When using Kafka with KRaft, the token
-                        details are stored with the other metadata on the controller nodes and delegation tokens are suitable for use
-                        when the controllers are on a private network or when all commnications between brokers and controllers is
-                        encrypted.  Currently, this secret is stored as plain text in the server.properties config file.
+                    <p>The token details are stored with the other metadata on the controller nodes and delegation tokens are suitable for use
+                        when the controllers are on a private network or when all communications between brokers and controllers is
+                        encrypted. Currently, this secret is stored as plain text in the server.properties config file.
                         We intend to make these configurable in a future Kafka release.</p>
 
                     <p>A token has a current life, and a maximum renewable life. By default, tokens must be renewed once every 24 hours
@@ -1210,7 +1175,7 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
                         and <code>delegation.token.max.lifetime.ms</code> config options.</p>
 
                     <p>Tokens can also be cancelled explicitly.  If a token is not renewed by the token’s expiration time or if token
-                        is beyond the max life time, it will be deleted from all broker caches as well as from zookeeper.</p>
+                        is beyond the max life time, it will be deleted from all broker caches.</p>
                 </li>
 
                 <li><h5 class="anchor-heading"><a id="security_sasl_create_tokens" class="anchor-link"></a><a href="#security_sasl_create_tokens">Creating Delegation Tokens</a></h5>
@@ -1275,10 +1240,8 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
     <h3 class="anchor-heading"><a id="security_authz" class="anchor-link"></a><a href="#security_authz">7.5 Authorization and ACLs</a></h3>
     Kafka ships with a pluggable authorization framework, which is configured with the <code>authorizer.class.name</code> property in the server configuration.
     Configured implementations must extend <code>org.apache.kafka.server.authorizer.Authorizer</code>.
-    Kafka provides default implementations which store ACLs in the cluster metadata (either Zookeeper or the KRaft metadata log).
+    Kafka provides a default implementation which store ACLs in the cluster metadata (KRaft metadata log).
 
-    For Zookeeper-based clusters, the provided implementation is configured as follows:
-    <pre><code class="language-text">authorizer.class.name=kafka.security.authorizer.AclAuthorizer</code></pre>
     For KRaft clusters, use the following configuration on all nodes (brokers, controllers, or combined broker/controller nodes):
     <pre><code class="language-text">authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer</code></pre>
 
@@ -1302,8 +1265,6 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
     <br>All of this implies that Kafka must understand how to serialize and deserialize the client principal. The authentication framework allows for customized principals by overriding the <code>principal.builder.class</code> configuration.
     In order for customized principals to work with KRaft, the configured class must implement <code>org.apache.kafka.common.security.auth.KafkaPrincipalSerde</code> so that Kafka knows how to serialize and deserialize the principals.
     The default implementation <code>org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder</code> uses the Kafka RPC format defined in the source code: <code>clients/src/main/resources/common/message/DefaultPrincipalData.json</code>.
-
-    For more detail about request forwarding in KRaft, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-590%3A+Redirect+Zookeeper+Mutation+Protocols+to+The+Controller">KIP-590</a>
     
     <h5 class="anchor-heading"><a id="security_authz_ssl" class="anchor-link"></a><a href="#security_authz_ssl">Customizing SSL User Name</a></h5>
 
@@ -1563,16 +1524,6 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             <pre><code class="language-bash">$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1 </code></pre>
             Note that for consumer option we must also specify the consumer group.
             In order to remove a principal from producer or consumer role we just need to pass --remove option. </li>
-
-        <li><b>Admin API based acl management</b><br>
-            Users having Alter permission on ClusterResource can use Admin API for ACL management. kafka-acls.sh script supports AdminClient API to manage ACLs without interacting with zookeeper/authorizer directly.
-            All the above examples can be executed by using <b>--bootstrap-server</b> option. For example:
-
-            <pre><code class="language-bash">$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --producer --topic Test-topic
-$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1
-$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --list --topic Test-topic
-$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:tokenRequester --operation CreateTokens --user-principal "owner1"</code></pre></li>
-
     </ul>
 
     <h4 class="anchor-heading"><a id="security_authz_primitives" class="anchor-link"></a><a href="#security_authz_primitives">Authorization Primitives</a></h4>
@@ -1635,7 +1586,7 @@ $ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/admi
             <td>PRODUCE (0)</td>
             <td>Write</td>
             <td>TransactionalId</td>
-            <td>An transactional producer which has its transactional.id set requires this privilege.</td>
+            <td>A transactional producer which has its transactional.id set requires this privilege.</td>
         </tr>
         <tr>
             <td>PRODUCE (0)</td>
@@ -2374,158 +2325,6 @@ security.inter.broker.protocol=SSL</code></pre>
 
     <pre><code class="language-text">listeners=SSL://broker1:9092,SASL_SSL://broker1:9093
 security.inter.broker.protocol=SSL</code></pre>
-
-    ZooKeeper can be secured independently of the Kafka cluster. The steps for doing this are covered in section <a href="#zk_authz_migration">7.7.2</a>.
-
-
-    <h3 class="anchor-heading"><a id="zk_authz" class="anchor-link"></a><a href="#zk_authz">7.7 ZooKeeper Authentication</a></h3>
-    ZooKeeper supports mutual TLS (mTLS) authentication beginning with the 3.5.x versions.
-    Kafka supports authenticating to ZooKeeper with SASL and mTLS -- either individually or both together --
-    beginning with version 2.5. See
-    <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-515%3A+Enable+ZK+client+to+use+the+new+TLS+supported+authentication">KIP-515: Enable ZK client to use the new TLS supported authentication</a>
-    for more details.
-    <p>When using mTLS alone, every broker and any CLI tools (such as the <a href="#zk_authz_migration">ZooKeeper Security Migration Tool</a>)
-        should identify itself with the same Distinguished Name (DN) because it is the DN that is ACL'ed.
-        This can be changed as described below, but it involves writing and deploying a custom ZooKeeper authentication provider.
-        Generally each certificate should have the same DN but a different Subject Alternative Name (SAN)
-        so that hostname verification of the brokers and any CLI tools by ZooKeeper will succeed.
-    </p>
-    <p>
-        When using SASL authentication to ZooKeeper together with mTLS, both the SASL identity and
-        either the DN that created the znode (i.e. the creating broker's certificate)
-        or the DN of the Security Migration Tool (if migration was performed after the znode was created)
-        will be ACL'ed, and all brokers and CLI tools will be authorized even if they all use different DNs
-        because they will all use the same ACL'ed SASL identity.
-        It is only when  using mTLS authentication alone that all the DNs must match (and SANs become critical --
-        again, in the absence of writing and deploying a custom ZooKeeper authentication provider as described below).
-    </p>
-    <p>
-        Use the broker properties file to set TLS configs for brokers as described below.
-    </p>
-    <p>
-        Use the <code>--zk-tls-config-file &lt;file&gt;</code> option to set TLS configs in the Zookeeper Security Migration Tool.
-        The <code>kafka-acls.sh</code> and <code>kafka-configs.sh</code> CLI tools also support the <code>--zk-tls-config-file &lt;file&gt;</code> option.
-    </p>
-    <p>
-        Use the <code>-zk-tls-config-file &lt;file&gt;</code> option (note the single-dash rather than double-dash)
-        to set TLS configs for the <code>zookeeper-shell.sh</code> CLI tool.
-    </p>
-    <h4 class="anchor-heading"><a id="zk_authz_new" class="anchor-link"></a><a href="#zk_authz_new">7.7.1 New clusters</a></h4>
-    <h5 class="anchor-heading"><a id="zk_authz_new_sasl" class="anchor-link"></a><a href="#zk_authz_new_sasl">7.7.1.1 ZooKeeper SASL Authentication</a></h5>
-    To enable ZooKeeper SASL authentication on brokers, there are two necessary steps:
-    <ol>
-        <li> Create a JAAS login file and set the appropriate system property to point to it as described above</li>
-        <li> Set the configuration property <code>zookeeper.set.acl</code> in each broker to true</li>
-    </ol>
-
-    The metadata stored in ZooKeeper for the Kafka cluster is world-readable, but can only be modified by the brokers. The rationale behind this decision is that the data stored in ZooKeeper is not sensitive, but inappropriate manipulation of that data can cause cluster disruption. We also recommend limiting the access to ZooKeeper via network segmentation (only brokers and some admin tools need access to ZooKeeper).
-
-    <h5 class="anchor-heading"><a id="zk_authz_new_mtls" class="anchor-link"></a><a href="#zk_authz_new_mtls">7.7.1.2 ZooKeeper Mutual TLS Authentication</a></h5>
-    ZooKeeper mTLS authentication can be enabled with or without SASL authentication.  As mentioned above,
-    when using mTLS alone, every broker and any CLI tools (such as the <a href="#zk_authz_migration">ZooKeeper Security Migration Tool</a>)
-    must generally identify itself with the same Distinguished Name (DN) because it is the DN that is ACL'ed, which means
-    each certificate should have an appropriate Subject Alternative Name (SAN) so that
-    hostname verification of the brokers and any CLI tool by ZooKeeper will succeed.
-    <p>
-        It is possible to use something other than the DN for the identity of mTLS clients by writing a class that
-        extends <code>org.apache.zookeeper.server.auth.X509AuthenticationProvider</code> and overrides the method
-        <code>protected String getClientId(X509Certificate clientCert)</code>.
-        Choose a scheme name and set <code>authProvider.[scheme]</code> in ZooKeeper to be the fully-qualified class name
-        of the custom implementation; then set <code>ssl.authProvider=[scheme]</code> to use it.
-    </p>
-    Here is a sample (partial) ZooKeeper configuration for enabling TLS authentication.
-    These configurations are described in the
-    <a href="https://zookeeper.apache.org/doc/r3.5.7/zookeeperAdmin.html#sc_authOptions">ZooKeeper Admin Guide</a>.
-    <pre><code class="language-text">secureClientPort=2182
-serverCnxnFactory=org.apache.zookeeper.server.NettyServerCnxnFactory
-authProvider.x509=org.apache.zookeeper.server.auth.X509AuthenticationProvider
-ssl.keyStore.location=/path/to/zk/keystore.jks
-ssl.keyStore.password=zk-ks-passwd
-ssl.trustStore.location=/path/to/zk/truststore.jks
-ssl.trustStore.password=zk-ts-passwd</code></pre>
-    <strong>IMPORTANT</strong>: ZooKeeper does not support setting the key password in the ZooKeeper server keystore
-    to a value different from the keystore password itself.
-    Be sure to set the key password to be the same as the keystore password.
-
-    <p>Here is a sample (partial) Kafka Broker configuration for connecting to ZooKeeper with mTLS authentication.
-        These configurations are described above in <a href="#brokerconfigs">Broker Configs</a>.
-    </p>
-    <pre><code class="language-text"># connect to the ZooKeeper port configured for TLS
-zookeeper.connect=zk1:2182,zk2:2182,zk3:2182
-# required to use TLS to ZooKeeper (default is false)
-zookeeper.ssl.client.enable=true
-# required to use TLS to ZooKeeper
-zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
-# define key/trust stores to use TLS to ZooKeeper; ignored unless zookeeper.ssl.client.enable=true
-zookeeper.ssl.keystore.location=/path/to/kafka/keystore.jks
-zookeeper.ssl.keystore.password=kafka-ks-passwd
-zookeeper.ssl.truststore.location=/path/to/kafka/truststore.jks
-zookeeper.ssl.truststore.password=kafka-ts-passwd
-# tell broker to create ACLs on znodes
-zookeeper.set.acl=true</code></pre>
-    <strong>IMPORTANT</strong>: ZooKeeper does not support setting the key password in the ZooKeeper client (i.e. broker) keystore
-    to a value different from the keystore password itself.
-    Be sure to set the key password to be the same as the keystore password.
-
-    <h4 class="anchor-heading"><a id="zk_authz_migration" class="anchor-link"></a><a href="#zk_authz_migration">7.7.2 Migrating clusters</a></h4>
-    If you are running a version of Kafka that does not support security or simply with security disabled, and you want to make the cluster secure, then you need to execute the following steps to enable ZooKeeper authentication with minimal disruption to your operations:
-    <ol>
-        <li>Enable SASL and/or mTLS authentication on ZooKeeper.  If enabling mTLS, you would now have both a non-TLS port and a TLS port, like this:
-            <pre><code class="language-text">clientPort=2181
-secureClientPort=2182
-serverCnxnFactory=org.apache.zookeeper.server.NettyServerCnxnFactory
-authProvider.x509=org.apache.zookeeper.server.auth.X509AuthenticationProvider
-ssl.keyStore.location=/path/to/zk/keystore.jks
-ssl.keyStore.password=zk-ks-passwd
-ssl.trustStore.location=/path/to/zk/truststore.jks
-ssl.trustStore.password=zk-ts-passwd</code></pre>
-        </li>
-        <li>Perform a rolling restart of brokers setting the JAAS login file and/or defining ZooKeeper mutual TLS configurations (including connecting to the TLS-enabled ZooKeeper port) as required, which enables brokers to authenticate to ZooKeeper. At the end of the rolling restart, brokers are able to manipulate znodes with strict ACLs, but they will not create znodes with those ACLs</li>
-        <li>If you enabled mTLS, disable the non-TLS port in ZooKeeper</li>
-        <li>Perform a second rolling restart of brokers, this time setting the configuration parameter <code>zookeeper.set.acl</code> to true, which enables the use of secure ACLs when creating znodes</li>
-        <li>Execute the ZkSecurityMigrator tool. To execute the tool, there is this script: <code>bin/zookeeper-security-migration.sh</code> with <code>zookeeper.acl</code> set to secure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes. Use the <code>--zk-tls-config-file &lt;file&gt;</code> option if you enable mTLS.</li>
-    </ol>
-    <p>It is also possible to turn off authentication in a secure cluster. To do it, follow these steps:</p>
-    <ol>
-        <li>Perform a rolling restart of brokers setting the JAAS login file and/or defining ZooKeeper mutual TLS configurations, which enables brokers to authenticate, but setting <code>zookeeper.set.acl</code> to false. At the end of the rolling restart, brokers stop creating znodes with secure ACLs, but are still able to authenticate and manipulate all znodes</li>
-        <li>Execute the ZkSecurityMigrator tool. To execute the tool, run this script <code>bin/zookeeper-security-migration.sh</code> with <code>zookeeper.acl</code> set to unsecure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes. Use the <code>--zk-tls-config-file &lt;file&gt;</code> option if you need to set TLS configuration.</li>
-        <li>If you are disabling mTLS, enable the non-TLS port in ZooKeeper</li>
-        <li>Perform a second rolling restart of brokers, this time omitting the system property that sets the JAAS login file and/or removing ZooKeeper mutual TLS configuration (including connecting to the non-TLS-enabled ZooKeeper port) as required</li>
-        <li>If you are disabling mTLS, disable the TLS port in ZooKeeper</li>
-    </ol>
-    Here is an example of how to run the migration tool:
-    <pre><code class="language-bash">$ bin/zookeeper-security-migration.sh --zookeeper.acl=secure --zookeeper.connect=localhost:2181</code></pre>
-    <p>Run this to see the full list of parameters:</p>
-    <pre><code class="language-bash">$ bin/zookeeper-security-migration.sh --help</code></pre>
-    <h4 class="anchor-heading"><a id="zk_authz_ensemble" class="anchor-link"></a><a href="#zk_authz_ensemble">7.7.3 Migrating the ZooKeeper ensemble</a></h4>
-    It is also necessary to enable SASL and/or mTLS authentication on the ZooKeeper ensemble. To do it, we need to perform a rolling restart of the server and set a few properties. See above for mTLS information.  Please refer to the ZooKeeper documentation for more detail:
-    <ol>
-        <li><a href="https://zookeeper.apache.org/doc/r3.5.7/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</a></li>
-        <li><a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Zookeeper+and+SASL">Apache ZooKeeper wiki</a></li>
-    </ol>
-    <h4 class="anchor-heading"><a id="zk_authz_quorum" class="anchor-link"></a><a href="#zk_authz_quorum">7.7.4 ZooKeeper Quorum Mutual TLS Authentication</a></h4>
-    It is possible to enable mTLS authentication between the ZooKeeper servers themselves.
-    Please refer to the <a href="https://zookeeper.apache.org/doc/r3.5.7/zookeeperAdmin.html#Quorum+TLS">ZooKeeper documentation</a> for more detail.
-
-    <h3 class="anchor-heading"><a id="zk_encryption" class="anchor-link"></a><a href="#zk_encryption">7.8 ZooKeeper Encryption</a></h3>
-    ZooKeeper connections that use mutual TLS are encrypted.
-    Beginning with ZooKeeper version 3.5.7 (the version shipped with Kafka version 2.5) ZooKeeper supports a sever-side config
-    <code>ssl.clientAuth</code> (case-insensitively: <code>want</code>/<code>need</code>/<code>none</code> are the valid options, the default is <code>need</code>),
-    and setting this value to <code>none</code> in ZooKeeper allows clients to connect via a TLS-encrypted connection
-    without presenting their own certificate.  Here is a sample (partial) Kafka Broker configuration for connecting to ZooKeeper with just TLS encryption.
-    These configurations are described above in <a href="#brokerconfigs">Broker Configs</a>.
-    <pre><code class="language-text"># connect to the ZooKeeper port configured for TLS
-zookeeper.connect=zk1:2182,zk2:2182,zk3:2182
-# required to use TLS to ZooKeeper (default is false)
-zookeeper.ssl.client.enable=true
-# required to use TLS to ZooKeeper
-zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
-# define trust stores to use TLS to ZooKeeper; ignored unless zookeeper.ssl.client.enable=true
-# no need to set keystore information assuming ssl.clientAuth=none on ZooKeeper
-zookeeper.ssl.truststore.location=/path/to/kafka/truststore.jks
-zookeeper.ssl.truststore.password=kafka-ts-passwd
-# tell broker to create ACLs on znodes (if using SASL authentication, otherwise do not set this)
-zookeeper.set.acl=true</code></pre>
 </script>
 
 <div class="p-security"></div>

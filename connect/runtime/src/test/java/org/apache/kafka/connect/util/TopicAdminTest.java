@@ -525,8 +525,6 @@ public class TopicAdminTest {
         Cluster cluster = createCluster(1, "myTopic", 1);
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
-            Map<TopicPartition, Long> offsetMap = new HashMap<>();
-            offsetMap.put(tp1, offset);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // This error should be treated as non-retriable and cause TopicAdmin::retryEndOffsets to fail
@@ -543,10 +541,7 @@ public class TopicAdminTest {
 
             Throwable cause = exception.getCause();
             assertNotNull(cause, "cause of failure should be preserved");
-            assertTrue(
-                    cause instanceof TopicAuthorizationException,
-                    "cause of failure should be accurately reported; expected topic authorization error, but was " + cause
-            );
+            assertInstanceOf(TopicAuthorizationException.class, cause, "cause of failure should be accurately reported; expected topic authorization error, but was " + cause);
         }
     }
 
@@ -559,8 +554,6 @@ public class TopicAdminTest {
         Cluster cluster = createCluster(1, "myTopic", 1);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
-            Map<TopicPartition, Long> offsetMap = new HashMap<>();
-            offsetMap.put(tp1, offset);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));

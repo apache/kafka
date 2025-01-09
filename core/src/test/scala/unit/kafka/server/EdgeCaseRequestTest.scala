@@ -44,7 +44,7 @@ import scala.jdk.CollectionConverters._
 class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
   def generateConfigs = {
-    val props = TestUtils.createBrokerConfig(1, zkConnectOrNull)
+    val props = TestUtils.createBrokerConfig(1)
     props.setProperty(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false")
     List(KafkaConfig.fromProps(props))
   }
@@ -119,7 +119,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testProduceRequestWithNullClientId(quorum: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
@@ -129,7 +129,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val version = ApiKeys.PRODUCE.latestVersion: Short
     val (serializedBytes, responseHeaderVersion) = {
       val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, version, "", correlationId)
-      val request = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      val request = requests.ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName(topicPartition.topic()).setPartitionData(Collections.singletonList(
@@ -165,25 +165,25 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testHeaderOnlyRequest(quorum: String): Unit = {
     verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, 1))
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testInvalidApiKeyRequest(quorum: String): Unit = {
     verifyDisconnect(requestHeaderBytes(-1, 0))
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testInvalidApiVersionRequest(quorum: String): Unit = {
     verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, -1))
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testMalformedHeaderRequest(quorum: String): Unit = {
     val serializedBytes = {
       // Only send apiKey and apiVersion

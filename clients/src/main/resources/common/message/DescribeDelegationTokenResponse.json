@@ -17,10 +17,11 @@
   "apiKey": 41,
   "type": "response",
   "name": "DescribeDelegationTokenResponse",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   // Version 2 adds flexible version support
   // Version 3 adds token requester details
-  "validVersions": "0-3",
+  "validVersions": "1-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
@@ -48,9 +49,9 @@
       { "name": "Renewers", "type": "[]DescribedDelegationTokenRenewer", "versions": "0+",
         "about": "Those who are able to renew this token before it expires.", "fields": [
         { "name": "PrincipalType", "type": "string", "versions": "0+",
-          "about": "The renewer principal type" },
+          "about": "The renewer principal type." },
         { "name": "PrincipalName", "type": "string", "versions": "0+",
-          "about": "The renewer principal name" }
+          "about": "The renewer principal name." }
       ]}
     ]},
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

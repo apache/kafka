@@ -21,12 +21,11 @@ import org.apache.kafka.test.MockConsumerInterceptor
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.time.Duration
 import java.util
 import java.util.Optional
-import java.util.stream.Stream
 import scala.jdk.CollectionConverters._
 
 /**
@@ -369,12 +368,4 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
     awaitAssignment(consumer, expectedAssignment)
   }
-}
-
-object PlaintextConsumerCommitTest {
-  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly()
-
-  def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
 }

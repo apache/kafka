@@ -17,10 +17,9 @@
   "apiKey": 1,
   "type": "response",
   "name": "FetchResponse",
+  // Versions 0-3 were removed in Apache Kafka 4.0, Version 4 is the new baseline.
   //
-  // Version 1 adds throttle time.
-  //
-  // Version 2 and 3 are the same as version 1.
+  // Version 1 adds throttle time. Version 2 and 3 are the same as version 1.
   //
   // Version 4 adds features for transactional consumption.
   //
@@ -49,7 +48,7 @@
   // Version 16 adds the 'NodeEndpoints' field (KIP-951).
   //
   // Version 17 no changes to the response (KIP-853).
-  "validVersions": "0-17",
+  "validVersions": "4-17",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
@@ -62,7 +61,7 @@
       "about": "The response topics.", "fields": [
       { "name": "Topic", "type": "string", "versions": "0-12", "ignorable": true, "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "TopicId", "type": "uuid", "versions": "13+", "ignorable": true, "about": "The unique topic ID"},
+      { "name": "TopicId", "type": "uuid", "versions": "13+", "ignorable": true, "about": "The unique topic ID."},
       { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
         "about": "The topic partitions.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
@@ -72,28 +71,31 @@
         { "name": "HighWatermark", "type": "int64", "versions": "0+",
           "about": "The current high water mark." },
         { "name": "LastStableOffset", "type": "int64", "versions": "4+", "default": "-1", "ignorable": true,
-          "about": "The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)" },
+          "about": "The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)." },
         { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
           "about": "The current log start offset." },
         { "name": "DivergingEpoch", "type": "EpochEndOffset", "versions": "12+", "taggedVersions": "12+", "tag": 0,
-          "about": "In case divergence is detected based on the `LastFetchedEpoch` and `FetchOffset` in the request, this field indicates the largest epoch and its end offset such that subsequent records are known to diverge",
-          "fields": [
-            { "name": "Epoch", "type": "int32", "versions": "12+", "default": "-1" },
-            { "name": "EndOffset", "type": "int64", "versions": "12+", "default": "-1" }
+          "about": "In case divergence is detected based on the `LastFetchedEpoch` and `FetchOffset` in the request, this field indicates the largest epoch and its end offset such that subsequent records are known to diverge.", "fields": [
+          { "name": "Epoch", "type": "int32", "versions": "12+", "default": "-1",
+            "about": "The largest epoch." },
+          { "name": "EndOffset", "type": "int64", "versions": "12+", "default": "-1",
+            "about": "The end offset of the epoch." }
         ]},
         { "name": "CurrentLeader", "type": "LeaderIdAndEpoch",
-          "versions": "12+", "taggedVersions": "12+", "tag": 1, "fields": [
+          "versions": "12+", "taggedVersions": "12+", "tag": 1,
+          "about": "The current leader of the partition.", "fields": [
           { "name": "LeaderId", "type": "int32", "versions": "12+", "default": "-1", "entityType": "brokerId",
             "about": "The ID of the current leader or -1 if the leader is unknown."},
           { "name": "LeaderEpoch", "type": "int32", "versions": "12+", "default": "-1",
-            "about": "The latest known leader epoch"}
+            "about": "The latest known leader epoch." }
         ]},
         { "name": "SnapshotId", "type": "SnapshotId",
           "versions": "12+", "taggedVersions": "12+", "tag": 2,
-          "about": "In the case of fetching an offset less than the LogStartOffset, this is the end offset and epoch that should be used in the FetchSnapshot request.",
-          "fields": [
-            { "name": "EndOffset", "type": "int64", "versions": "0+", "default": "-1" },
-            { "name": "Epoch", "type": "int32", "versions": "0+", "default": "-1" }
+          "about": "In the case of fetching an offset less than the LogStartOffset, this is the end offset and epoch that should be used in the FetchSnapshot request.", "fields": [
+          { "name": "EndOffset", "type": "int64", "versions": "0+", "default": "-1",
+            "about": "The end offset of the epoch." },
+          { "name": "Epoch", "type": "int32", "versions": "0+", "default": "-1",
+            "about": "The largest epoch." }
         ]},
         { "name": "AbortedTransactions", "type": "[]AbortedTransaction", "versions": "4+", "nullableVersions": "4+", "ignorable": true,
           "about": "The aborted transactions.",  "fields": [
@@ -103,7 +105,7 @@
             "about": "The first offset in the aborted transaction." }
         ]},
         { "name": "PreferredReadReplica", "type": "int32", "versions": "11+", "default": "-1", "ignorable": false, "entityType": "brokerId",
-          "about": "The preferred read replica for the consumer to use on its next fetch request"},
+          "about": "The preferred read replica for the consumer to use on its next fetch request."},
         { "name": "Records", "type": "records", "versions": "0+", "nullableVersions": "0+", "about": "The record data."}
       ]}
     ]},

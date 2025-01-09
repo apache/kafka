@@ -39,7 +39,7 @@ public class DescribeClusterResponse extends AbstractResponse {
 
     public Map<Integer, Node> nodes() {
         return data.brokers().valuesList().stream()
-            .map(b -> new Node(b.brokerId(), b.host(), b.port(), b.rack()))
+            .map(b -> new Node(b.brokerId(), b.host(), b.port(), b.rack(), b.isFenced()))
             .collect(Collectors.toMap(Node::id, Function.identity()));
     }
 

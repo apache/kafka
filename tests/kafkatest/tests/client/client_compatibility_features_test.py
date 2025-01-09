@@ -26,9 +26,9 @@ from ducktape.tests.test import TestContext
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService, quorum
 from ducktape.tests.test import Test
-from kafkatest.version import DEV_BRANCH, LATEST_1_0, LATEST_1_1, \
-    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
-    LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, KafkaVersion
+from kafkatest.version import DEV_BRANCH, \
+    LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
+    LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, KafkaVersion
 
 def get_broker_features(broker_version):
     features = {}
@@ -107,9 +107,6 @@ class ClientCompatibilityFeaturesTest(Test):
 
     @cluster(num_nodes=7)
     @matrix(broker_version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_non_upgrade)
-    @parametrize(broker_version=str(LATEST_1_0))
-    @parametrize(broker_version=str(LATEST_1_1))
-    @parametrize(broker_version=str(LATEST_2_0))
     @parametrize(broker_version=str(LATEST_2_1))
     @parametrize(broker_version=str(LATEST_2_2))
     @parametrize(broker_version=str(LATEST_2_3))
@@ -127,6 +124,7 @@ class ClientCompatibilityFeaturesTest(Test):
     @parametrize(broker_version=str(LATEST_3_6))
     @parametrize(broker_version=str(LATEST_3_7))
     @parametrize(broker_version=str(LATEST_3_8))
+    @parametrize(broker_version=str(LATEST_3_9))
     def run_compatibility_test(self, broker_version, metadata_quorum=quorum.zk):
         if self.zk:
             self.zk.start()

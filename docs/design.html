@@ -160,7 +160,7 @@
     to accumulate no more than a fixed number of messages and to wait no longer than some fixed latency bound (say 64k or 10 ms). This allows the accumulation of more bytes to send, and few larger I/O operations on the
     servers. This buffering is configurable and gives a mechanism to trade off a small amount of additional latency for better throughput.
     <p>
-    Details on <a href="#producerconfigs">configuration</a> and the <a href="https://kafka.apache.org/{{version}}/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html">api</a> for the producer can be found
+    Details on <a href="#producerconfigs">configuration</a> and the <a href="#producerapi">api</a> for the producer can be found
     elsewhere in the documentation.
 
     <h3 class="anchor-heading"><a id="theconsumer" class="anchor-link"></a><a href="#theconsumer">4.5 The Consumer</a></h3>
@@ -333,11 +333,6 @@
     What is meant by an "active session" depends on the cluster configuration. For KRaft clusters, an active session is maintained by 
     sending periodic heartbeats to the controller. If the controller fails to receive a heartbeat before the timeout configured by 
     <code>broker.session.timeout.ms</code> expires, then the node is considered offline.
-    <p>
-    For clusters using Zookeeper, liveness is determined indirectly through the existence of an ephemeral node which is created by the broker on
-    initialization of its Zookeeper session. If the broker loses its session after failing to send heartbeats to Zookeeper before expiration of
-    <code>zookeeper.session.timeout.ms</code>, then the node gets deleted. The controller would then notice the node deletion through a Zookeeper watch
-    and mark the broker offline.
     <p>
     We refer to nodes satisfying these two conditions as being "in sync" to avoid the vagueness of "alive" or "failed". The leader keeps track of the set of "in sync" replicas,
     which is known as the ISR. If either of these conditions fail to be satisfied, then the broker will be removed from the ISR. For example,
@@ -624,7 +619,7 @@
     <p>
         Quota configuration may be defined for (user, client-id), user and client-id groups. It is possible to override the default quota at any of the quota levels that needs a higher (or even lower) quota.
         The mechanism is similar to the per-topic log config overrides.
-        User and (user, client-id) quota overrides are written to ZooKeeper under <i><b>/config/users</b></i> and client-id quota overrides are written under <i><b>/config/clients</b></i>.
+        User and (user, client-id) quota overrides are written to the metadata log.
         These overrides are read by all brokers and are effective immediately. This lets us change quotas without having to do a rolling restart of the entire cluster. See <a href="#quotas">here</a> for details.
         Default quotas for each group may also be updated dynamically using the same mechanism.
     </p>
@@ -632,14 +627,14 @@
         The order of precedence for quota configuration is:
     </p>
         <ol>
-            <li>/config/users/&lt;user&gt;/clients/&lt;client-id&gt;</li>
-            <li>/config/users/&lt;user&gt;/clients/&lt;default&gt;</li>
-            <li>/config/users/&lt;user&gt;</li>
-            <li>/config/users/&lt;default&gt;/clients/&lt;client-id&gt;</li>
-            <li>/config/users/&lt;default&gt;/clients/&lt;default&gt;</li>
-            <li>/config/users/&lt;default&gt;</li>
-            <li>/config/clients/&lt;client-id&gt;</li>
-            <li>/config/clients/&lt;default&gt;</li>
+            <li>matching user and client-id quotas</li>
+            <li>matching user and default client-id quotas</li>
+            <li>matching user quota</li>
+            <li>default user and matching client-id quotas</li>
+            <li>default user and default client-id quotas</li>
+            <li>default user quota</li>
+            <li>matching client-id quota</li>
+            <li>default client-id quota</li>
         </ol>
     <h4 class="anchor-heading"><a id="design_quotasbandwidth" class="anchor-link"></a><a href="#design_quotasbandwidth">Network Bandwidth Quotas</a></h4>
     <p>

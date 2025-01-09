@@ -17,12 +17,13 @@
 package kafka.coordinator.group
 
 import kafka.cluster.PartitionListener
-import kafka.server.{ActionQueue, ReplicaManager, defaultError, genericError}
+import kafka.server.{AddPartitionsToTxnManager, ReplicaManager}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
+import org.apache.kafka.server.ActionQueue
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 
@@ -63,8 +64,8 @@ class CoordinatorPartitionWriter(
   // We use an action queue which directly executes actions. This is possible
   // here because we don't hold any conflicting locks.
   private val directActionQueue = new ActionQueue {
-    override def add(action: () => Unit): Unit = {
-      action()
+    override def add(action: Runnable): Unit = {
+      action.run()
     }
 
     override def tryCompleteActions(): Unit = {}
@@ -109,7 +110,7 @@ class CoordinatorPartitionWriter(
     producerEpoch: Short,
     apiVersion: Short
   ): CompletableFuture[VerificationGuard] = {
-    val transactionSupportedOperation = if (apiVersion >= 4) genericError else defaultError
+    val transactionSupportedOperation = AddPartitionsToTxnManager.txnOffsetCommitRequestVersionToTransactionSupportedOperation(apiVersion)
     val future = new CompletableFuture[VerificationGuard]()
     replicaManager.maybeStartTransactionVerificationForPartition(
       topicPartition = tp,
@@ -163,5 +164,26 @@ class CoordinatorPartitionWriter(
 
     // Required offset.
     partitionResult.lastOffset + 1
+  }
+
+  override def deleteRecords(tp: TopicPartition, deleteBeforeOffset: Long): CompletableFuture[Void] = {
+    val responseFuture: CompletableFuture[Void] = new CompletableFuture[Void]()
+
+    replicaManager.deleteRecords(
+      timeout = 30000L, // 30 seconds.
+      offsetPerPartition = Map(tp -> deleteBeforeOffset),
+      responseCallback = results => {
+        val result = results.get(tp)
+        if (result.isEmpty) {
+          responseFuture.completeExceptionally(new IllegalStateException(s"Delete status $result should have partition $tp."))
+        } else if (result.get.errorCode != Errors.NONE.code) {
+          responseFuture.completeExceptionally(Errors.forCode(result.get.errorCode).exception)
+        } else {
+          responseFuture.complete(null)
+        }
+      },
+      allowInternalTopicDeletion = true
+    )
+    responseFuture
   }
 }

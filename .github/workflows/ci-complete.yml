@@ -43,7 +43,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 23, 11 ]
+        java: [ 23, 17 ]
+        artifact-prefix: [ "build-scan-test-", "build-scan-quarantined-test-"]
     steps:
       - name: Env
         run: printenv
@@ -66,7 +67,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
-          name: build-scan-test-${{ matrix.java }}
+          name: ${{ matrix.artifact-prefix }}${{ matrix.java }}
           path: ~/.gradle/build-scan-data  # This is where Gradle buffers unpublished build scan data when --no-scan is given
       - name: Handle missing scan
         if: ${{ steps.download-build-scan.outcome == 'failure' }}

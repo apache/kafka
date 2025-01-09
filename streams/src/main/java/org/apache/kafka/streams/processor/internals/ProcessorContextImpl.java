@@ -49,7 +49,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.wrapWithReadWriteStore;
 
-public class ProcessorContextImpl extends AbstractProcessorContext<Object, Object> implements RecordCollector.Supplier {
+public final class ProcessorContextImpl extends AbstractProcessorContext<Object, Object> implements RecordCollector.Supplier {
     // the below are null for standby tasks
     private StreamTask streamTask;
     private RecordCollector collector;
@@ -59,7 +59,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
 
     final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
 
-    @SuppressWarnings("this-escape")
     public ProcessorContextImpl(final TaskId id,
                                 final StreamsConfig config,
                                 final ProcessorStateManager stateMgr,

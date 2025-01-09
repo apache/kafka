@@ -31,8 +31,7 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import java.util
@@ -59,8 +58,8 @@ class MetadataCacheControllerNodeProvider(
   val quorumControllerNodeProvider: () => Option[ControllerInformation]
 ) extends ControllerNodeProvider {
 
-  private val zkControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
-  private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
+  private val zkControllerListenerName = config.interBrokerListenerName
+  private val zkControllerSecurityProtocol = config.interBrokerSecurityProtocol
   private val zkControllerSaslMechanism = config.saslMechanismInterBrokerProtocol
 
   val emptyZkControllerInfo =  ControllerInformation(

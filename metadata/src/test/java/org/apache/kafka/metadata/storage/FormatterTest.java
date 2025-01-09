@@ -29,7 +29,7 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TestFeatureVersion;
@@ -331,7 +331,7 @@ public class FormatterTest {
     public void testFeatureFlag(short version) throws Exception {
         try (TestEnv testEnv = new TestEnv(1)) {
             FormatterContext formatter1 = testEnv.newFormatter();
-            formatter1.formatter.setSupportedFeatures(Arrays.asList(Features.values()));
+            formatter1.formatter.setSupportedFeatures(Feature.TEST_AND_PRODUCTION_FEATURES);
             formatter1.formatter.setFeatureLevel(TestFeatureVersion.FEATURE_NAME, version);
             formatter1.formatter.run();
             BootstrapMetadata bootstrapMetadata =
@@ -357,10 +357,11 @@ public class FormatterTest {
     public void testInvalidFeatureFlag() throws Exception {
         try (TestEnv testEnv = new TestEnv(2)) {
             FormatterContext formatter1 = testEnv.newFormatter();
-            formatter1.formatter.setSupportedFeatures(Arrays.asList(Features.values()));
+            formatter1.formatter.setSupportedFeatures(Feature.TEST_AND_PRODUCTION_FEATURES);
             formatter1.formatter.setFeatureLevel("nonexistent.feature", (short) 1);
             assertEquals("Unsupported feature: nonexistent.feature. Supported features " +
-                    "are: group.version, kraft.version, test.feature.version, transaction.version",
+                    "are: eligible.leader.replicas.version, group.version, kraft.version, " +
+                    "test.feature.version, transaction.version",
                 assertThrows(FormatterException.class,
                     () -> formatter1.formatter.run()).
                         getMessage());
@@ -379,6 +380,7 @@ public class FormatterTest {
             formatter1.formatter.setInitialControllers(DynamicVoters.
                 parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             formatter1.formatter.run();
+            assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
             assertEquals(Arrays.asList(
                 String.format("Formatting data directory %s with %s %s.",
                     testEnv.directory(1),
@@ -444,6 +446,70 @@ public class FormatterTest {
                 "metadata.version level 21",
                     assertThrows(IllegalArgumentException.class,
                         () -> formatter1.formatter.run()).getMessage());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testFormatWithNoInitialControllers(boolean specifyKRaftVersion) throws Exception {
+        try (TestEnv testEnv = new TestEnv(2)) {
+            FormatterContext formatter1 = testEnv.newFormatter();
+            if (specifyKRaftVersion) {
+                formatter1.formatter.setFeatureLevel("kraft.version", (short) 1);
+            }
+            formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
+            formatter1.formatter.setNoInitialControllersFlag(true);
+            assertTrue(formatter1.formatter.hasDynamicQuorum());
+
+            formatter1.formatter.run();
+            assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
+            assertEquals(Arrays.asList(
+                    String.format("Formatting data directory %s with %s %s.",
+                        testEnv.directory(1),
+                        MetadataVersion.FEATURE_NAME,
+                        MetadataVersion.latestTesting()),
+                    String.format("Formatting metadata directory %s with %s %s.",
+                        testEnv.directory(0),
+                        MetadataVersion.FEATURE_NAME,
+                        MetadataVersion.latestTesting())),
+                formatter1.outputLines().stream().sorted().collect(Collectors.toList()));
+            MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
+                addLogDirs(testEnv.directories).
+                load();
+            MetaProperties logDirProps0 = ensemble.logDirProps().get(testEnv.directory(0));
+            assertNotNull(logDirProps0);
+            MetaProperties logDirProps1 = ensemble.logDirProps().get(testEnv.directory(1));
+            assertNotNull(logDirProps1);
+        }
+    }
+
+    @Test
+    public void testFormatWithoutNoInitialControllersFailsWithNewerKraftVersion() throws Exception {
+        try (TestEnv testEnv = new TestEnv(2)) {
+            FormatterContext formatter1 = testEnv.newFormatter();
+            formatter1.formatter.setFeatureLevel("kraft.version", (short) 1);
+            formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
+            formatter1.formatter.setNoInitialControllersFlag(false);
+            assertFalse(formatter1.formatter.hasDynamicQuorum());
+            assertEquals("Cannot set kraft.version to 1 unless KIP-853 configuration is present. " +
+                    "Try removing the --feature flag for kraft.version.",
+                assertThrows(FormatterException.class,
+                    formatter1.formatter::run).getMessage());
+        }
+    }
+
+    @Test
+    public void testFormatWithNoInitialControllersFailsWithOlderKraftVersion() throws Exception {
+        try (TestEnv testEnv = new TestEnv(2)) {
+            FormatterContext formatter1 = testEnv.newFormatter();
+            formatter1.formatter.setFeatureLevel("kraft.version", (short) 0);
+            formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
+            formatter1.formatter.setNoInitialControllersFlag(true);
+            assertTrue(formatter1.formatter.hasDynamicQuorum());
+            assertEquals("Cannot set kraft.version to 0 if KIP-853 configuration is present. " +
+                    "Try removing the --feature flag for kraft.version.",
+                assertThrows(FormatterException.class,
+                    formatter1.formatter::run).getMessage());
         }
     }
 }

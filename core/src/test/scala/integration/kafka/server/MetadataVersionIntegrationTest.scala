@@ -40,42 +40,54 @@ class MetadataVersionIntegrationTest {
       new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_4_IV0)
   ))
   def testBasicMetadataVersionUpgrade(clusterInstance: ClusterInstance): Unit = {
-    val admin = clusterInstance.createAdminClient()
-    val describeResult = admin.describeFeatures()
-    val ff = describeResult.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)
-    assertEquals(ff.minVersionLevel(), clusterInstance.config().metadataVersion().featureLevel())
-    assertEquals(ff.maxVersionLevel(), clusterInstance.config().metadataVersion().featureLevel())
+    val admin = clusterInstance.admin()
+    try {
+      val describeResult = admin.describeFeatures()
+      val ff = describeResult.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)
+      assertEquals(ff.minVersionLevel(), clusterInstance.config().metadataVersion().featureLevel())
+      assertEquals(ff.maxVersionLevel(), clusterInstance.config().metadataVersion().featureLevel())
 
-    // Update to new version
-    val updateVersion = MetadataVersion.IBP_3_5_IV1.featureLevel.shortValue
-    val updateResult = admin.updateFeatures(
-      Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
-    updateResult.all().get()
+      // Update to new version
+      val updateVersion = MetadataVersion.IBP_3_5_IV1.featureLevel.shortValue
+      val updateResult = admin.updateFeatures(
+        Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
+      updateResult.all().get()
 
-    // Verify that new version is visible on broker
-    TestUtils.waitUntilTrue(() => {
-      val describeResult2 = admin.describeFeatures()
-      val ff2 = describeResult2.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)
-      ff2.minVersionLevel() == updateVersion && ff2.maxVersionLevel() == updateVersion
-    }, "Never saw metadata.version increase on broker")
+      // Verify that new version is visible on broker
+      TestUtils.waitUntilTrue(() => {
+        val describeResult2 = admin.describeFeatures()
+        val ff2 = describeResult2.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)
+        ff2.minVersionLevel() == updateVersion && ff2.maxVersionLevel() == updateVersion
+      }, "Never saw metadata.version increase on broker")
+    } finally {
+      admin.close()
+    }
   }
 
   @ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV0)
   def testUpgradeSameVersion(clusterInstance: ClusterInstance): Unit = {
-    val admin = clusterInstance.createAdminClient()
-    val updateVersion = MetadataVersion.IBP_3_3_IV0.featureLevel.shortValue
-    val updateResult = admin.updateFeatures(
-      Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
-    updateResult.all().get()
+    val admin = clusterInstance.admin()
+    try {
+      val updateVersion = MetadataVersion.IBP_3_3_IV0.featureLevel.shortValue
+      val updateResult = admin.updateFeatures(
+        Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
+      updateResult.all().get()
+    } finally {
+      admin.close()
+    }
   }
 
   @ClusterTest(types = Array(Type.KRAFT))
   def testDefaultIsLatestVersion(clusterInstance: ClusterInstance): Unit = {
-    val admin = clusterInstance.createAdminClient()
-    val describeResult = admin.describeFeatures()
-    val ff = describeResult.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)
-    assertEquals(ff.minVersionLevel(), MetadataVersion.latestTesting().featureLevel(),
-      "If this test fails, check the default MetadataVersion in the @ClusterTest annotation")
-    assertEquals(ff.maxVersionLevel(), MetadataVersion.latestTesting().featureLevel())
+    val admin = clusterInstance.admin()
+    try {
+      val describeResult = admin.describeFeatures()
+      val ff = describeResult.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME)
+      assertEquals(ff.minVersionLevel(), MetadataVersion.latestTesting().featureLevel(),
+        "If this test fails, check the default MetadataVersion in the @ClusterTest annotation")
+      assertEquals(ff.maxVersionLevel(), MetadataVersion.latestTesting().featureLevel())
+    } finally {
+      admin.close()
+    }
   }
 }

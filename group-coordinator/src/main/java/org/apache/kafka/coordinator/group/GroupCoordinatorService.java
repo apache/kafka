@@ -92,6 +92,7 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
@@ -205,6 +206,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withSerializer(new GroupCoordinatorRecordSerde())
                     .withCompression(Compression.of(config.offsetTopicCompressionType()).build())
                     .withAppendLingerMs(config.appendLingerMs())
+                    .withExecutorService(Executors.newSingleThreadExecutor())
                     .build();
 
             return new GroupCoordinatorService(
@@ -1084,7 +1086,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * See {@link GroupCoordinator#onTransactionCompleted(long, Iterable, TransactionResult)}.
      */
     @Override
-    public void onTransactionCompleted(
+    public CompletableFuture<Void> onTransactionCompleted(
         long producerId,
         Iterable<TopicPartition> partitions,
         TransactionResult transactionResult

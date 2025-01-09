@@ -16,14 +16,15 @@
  */
 package kafka.server
 
-import kafka.log.AsyncOffsetReadFutureHolder
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.requests.ListOffsetsResponse
+import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.util.timer.MockTimer
+import org.apache.kafka.storage.internals.log.{AsyncOffsetReadFutureHolder, OffsetResultHolder}
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.mockito.ArgumentMatchers.anyBoolean
@@ -33,15 +34,16 @@ import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
+import scala.jdk.CollectionConverters._
 
 class DelayedRemoteListOffsetsTest {
 
   val delayMs = 10
   val timer = new MockTimer()
   val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-  type T = Either[Exception, Option[TimestampAndOffset]]
+  type T = OffsetResultHolder.FileRecordsOrError
   val purgatory =
-    new DelayedOperationPurgatory[DelayedRemoteListOffsets]("test-purgatory", timer, purgeInterval = 10)
+    new DelayedOperationPurgatory[DelayedRemoteListOffsets]("test-purgatory", timer, 0, 10, true, true)
 
   @AfterEach
   def afterEach(): Unit = {
@@ -74,13 +76,13 @@ class DelayedRemoteListOffsetsTest {
     })
 
     val statusByPartition = mutable.Map(
-      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus(None, Some(holder)),
-      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus(None, Some(holder)),
-      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus(None, Some(holder))
+      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus(None, Optional.of(holder)),
+      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus(None, Optional.of(holder)),
+      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus(None, Optional.of(holder))
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)
-    val listOffsetsRequestKeys = statusByPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
+    val listOffsetsRequestKeys = statusByPartition.keys.map(new TopicPartitionOperationKey(_)).toList.asJava
     assertEquals(0, DelayedRemoteListOffsetsMetrics.aggregateExpirationMeter.count())
     assertEquals(0, DelayedRemoteListOffsetsMetrics.partitionExpirationMeters.size)
     purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys)
@@ -90,7 +92,7 @@ class DelayedRemoteListOffsetsTest {
     assertEquals(listOffsetsRequestKeys.size, cancelledCount)
     assertEquals(listOffsetsRequestKeys.size, numResponse)
     assertEquals(listOffsetsRequestKeys.size, DelayedRemoteListOffsetsMetrics.aggregateExpirationMeter.count())
-    listOffsetsRequestKeys.foreach(key => {
+    listOffsetsRequestKeys.forEach(key => {
       val tp = new TopicPartition(key.topic, key.partition)
       assertEquals(1, DelayedRemoteListOffsetsMetrics.partitionExpirationMeters.get(tp).count())
     })
@@ -113,7 +115,7 @@ class DelayedRemoteListOffsetsTest {
 
     val timestampAndOffset = new TimestampAndOffset(100L, 100L, Optional.of(50))
     val taskFuture = new CompletableFuture[T]()
-    taskFuture.complete(Right(Some(timestampAndOffset)))
+    taskFuture.complete(new OffsetResultHolder.FileRecordsOrError(Optional.empty(), Optional.of(timestampAndOffset)))
 
     var cancelledCount = 0
     val jobFuture = mock(classOf[CompletableFuture[Void]])
@@ -126,13 +128,13 @@ class DelayedRemoteListOffsetsTest {
     })
 
     val statusByPartition = mutable.Map(
-      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus(None, Some(holder)),
-      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus(None, Some(holder)),
-      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus(None, Some(holder))
+      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus(None, Optional.of(holder)),
+      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus(None, Optional.of(holder)),
+      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus(None, Optional.of(holder))
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)
-    val listOffsetsRequestKeys = statusByPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
+    val listOffsetsRequestKeys = statusByPartition.keys.map(new TopicPartitionOperationKey(_)).toList.asJava
     purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys)
 
     assertEquals(0, cancelledCount)
@@ -163,7 +165,7 @@ class DelayedRemoteListOffsetsTest {
 
     val timestampAndOffset = new TimestampAndOffset(100L, 100L, Optional.of(50))
     val taskFuture = new CompletableFuture[T]()
-    taskFuture.complete(Right(Some(timestampAndOffset)))
+    taskFuture.complete(new OffsetResultHolder.FileRecordsOrError(Optional.empty(), Optional.of(timestampAndOffset)))
 
     var cancelledCount = 0
     val jobFuture = mock(classOf[CompletableFuture[Void]])
@@ -177,18 +179,18 @@ class DelayedRemoteListOffsetsTest {
 
     val errorFutureHolder: AsyncOffsetReadFutureHolder[T] = mock(classOf[AsyncOffsetReadFutureHolder[T]])
     val errorTaskFuture = new CompletableFuture[T]()
-    errorTaskFuture.complete(Left(new TimeoutException("Timed out!")))
+    errorTaskFuture.complete(new OffsetResultHolder.FileRecordsOrError(Optional.of(new TimeoutException("Timed out!")), Optional.empty()))
     when(errorFutureHolder.taskFuture).thenAnswer(_ => errorTaskFuture)
     when(errorFutureHolder.jobFuture).thenReturn(jobFuture)
 
     val statusByPartition = mutable.Map(
-      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus(None, Some(holder)),
-      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus(None, Some(holder)),
-      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus(None, Some(errorFutureHolder))
+      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus(None, Optional.of(holder)),
+      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus(None, Optional.of(holder)),
+      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus(None, Optional.of(errorFutureHolder))
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)
-    val listOffsetsRequestKeys = statusByPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
+    val listOffsetsRequestKeys = statusByPartition.keys.map(new TopicPartitionOperationKey(_)).toList.asJava
     purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys)
 
     assertEquals(0, cancelledCount)
@@ -219,7 +221,7 @@ class DelayedRemoteListOffsetsTest {
 
     val timestampAndOffset = new TimestampAndOffset(100L, 100L, Optional.of(50))
     val taskFuture = new CompletableFuture[T]()
-    taskFuture.complete(Right(Some(timestampAndOffset)))
+    taskFuture.complete(new OffsetResultHolder.FileRecordsOrError(Optional.empty(), Optional.of(timestampAndOffset)))
 
     var cancelledCount = 0
     val jobFuture = mock(classOf[CompletableFuture[Void]])
@@ -239,14 +241,14 @@ class DelayedRemoteListOffsetsTest {
     when(errorFutureHolder.jobFuture).thenReturn(jobFuture)
 
     val statusByPartition = mutable.Map(
-      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus(None, Some(holder)),
-      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus(None, Some(holder)),
-      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus(None, Some(errorFutureHolder)),
-      new TopicPartition("test1", 1) -> ListOffsetsPartitionStatus(None, Some(holder))
+      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus(None, Optional.of(holder)),
+      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus(None, Optional.of(holder)),
+      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus(None, Optional.of(errorFutureHolder)),
+      new TopicPartition("test1", 1) -> ListOffsetsPartitionStatus(None, Optional.of(holder))
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)
-    val listOffsetsRequestKeys = statusByPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
+    val listOffsetsRequestKeys = statusByPartition.keys.map(new TopicPartitionOperationKey(_)).toList.asJava
     purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys)
 
     assertEquals(1, cancelledCount)

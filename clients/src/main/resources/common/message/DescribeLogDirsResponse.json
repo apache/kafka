@@ -17,11 +17,12 @@
   "apiKey": 35,
   "type": "response",
   "name": "DescribeLogDirsResponse",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
-  "validVersions": "0-4",
   // Version 2 is the first flexible version.
   // Version 3 adds the top-level ErrorCode field
   // Version 4 adds the TotalBytes and UsableBytes fields
+  "validVersions": "1-4",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
@@ -35,19 +36,19 @@
       { "name": "LogDir", "type": "string", "versions": "0+",
         "about": "The absolute log directory path." },
       { "name": "Topics", "type": "[]DescribeLogDirsTopic", "versions": "0+",
-        "about": "Each topic.", "fields": [
+        "about": "The topics.", "fields": [
         { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
           "about": "The topic name." },
-        { "name": "Partitions", "type": "[]DescribeLogDirsPartition", "versions": "0+", "fields": [
+        { "name": "Partitions", "type": "[]DescribeLogDirsPartition", "versions": "0+",
+          "about": "The partitions.", "fields": [
           { "name": "PartitionIndex", "type": "int32", "versions": "0+",
             "about": "The partition index." },
           { "name": "PartitionSize", "type": "int64", "versions": "0+",
             "about": "The size of the log segments in this partition in bytes." },
           { "name": "OffsetLag", "type": "int64", "versions": "0+",
-            "about": "The lag of the log's LEO w.r.t. partition's HW (if it is the current log for the partition) or current replica's LEO (if it is the future log for the partition)" },
+            "about": "The lag of the log's LEO w.r.t. partition's HW (if it is the current log for the partition) or current replica's LEO (if it is the future log for the partition)." },
           { "name": "IsFutureKey", "type": "bool", "versions": "0+",
-            "about": "True if this log is created by AlterReplicaLogDirsRequest and will replace the current log of the replica in the future." }
-        ]}
+            "about": "True if this log is created by AlterReplicaLogDirsRequest and will replace the current log of the replica in the future." }]}
       ]},
       { "name": "TotalBytes", "type": "int64", "versions": "4+", "ignorable": true, "default": "-1",
         "about": "The total size in bytes of the volume the log directory is in."

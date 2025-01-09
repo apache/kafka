@@ -19,9 +19,8 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
-import java.util.stream.Stream
 import scala.jdk.CollectionConverters._
 
 /**
@@ -205,9 +204,4 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
   }
 
-}
-
-object PlaintextConsumerAssignTest {
-  def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
 }

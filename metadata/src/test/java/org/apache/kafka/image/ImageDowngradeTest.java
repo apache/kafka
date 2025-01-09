@@ -22,7 +22,6 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.image.writer.UnwritableMetadataException;
@@ -183,7 +182,6 @@ public class ImageDowngradeTest {
                     (short) 2)),
             Arrays.asList(
                 metadataVersionRecord(outputMetadataVersion),
-                new ApiMessageAndVersion(new ZkMigrationStateRecord(), (short) 0),
                 TEST_RECORDS.get(0),
                 new ApiMessageAndVersion(
                     testPartitionRecord.duplicate().setDirectories(Collections.emptyList()),

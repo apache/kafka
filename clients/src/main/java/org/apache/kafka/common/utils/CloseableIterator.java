@@ -29,7 +29,7 @@ public interface CloseableIterator<T> extends Iterator<T>, Closeable {
     void close();
 
     static <R> CloseableIterator<R> wrap(Iterator<R> inner) {
-        return new CloseableIterator<R>() {
+        return new CloseableIterator<>() {
             @Override
             public void close() {}
 

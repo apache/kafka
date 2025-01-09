@@ -21,8 +21,8 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin, JmxTool
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_10_0_0, V_0_11_0_0, V_2_0_0, LATEST_3_7
-from kafkatest.services.kafka.util import fix_opts_for_new_jvm
+from kafkatest.version import DEV_BRANCH, LATEST_3_7, get_version, LATEST_4_0
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm, get_log4j_config_param, get_log4j_config_for_tools
 
 """
 The console consumer is a tool that reads data from Kafka and outputs it to standard output.
@@ -36,7 +36,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "console_consumer.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "console_consumer.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "console_consumer.properties")
     JMX_TOOL_LOG = os.path.join(PERSISTENT_ROOT, "jmx_tool.log")
     JMX_TOOL_ERROR_LOG = os.path.join(PERSISTENT_ROOT, "jmx_tool.err.log")
@@ -59,7 +58,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=True,
+    def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group",
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
                  enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False, print_partition=False,
@@ -72,7 +71,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             num_nodes:                  number of nodes to use (this should be 1)
             kafka:                      kafka service
             topic:                      consume from this topic
-            new_consumer:               use new Kafka consumer if True
             message_validator:          function which returns message or None
             from_beginning:             consume from beginning if True, else from the end
             consumer_timeout_ms:        corresponds to consumer.timeout.ms. consumer process ends if time between
@@ -96,7 +94,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                           root=ConsoleConsumer.PERSISTENT_ROOT)
         BackgroundThreadService.__init__(self, context, num_nodes)
         self.kafka = kafka
-        self.new_consumer = new_consumer
         self.group_id = group_id
         self.args = {
             'topic': topic,
@@ -118,9 +115,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         self.isolation_level = isolation_level
         self.enable_systest_events = enable_systest_events
-        if self.enable_systest_events:
-            # Only available in 0.10.0 and up
-            assert version >= V_0_10_0_0
 
         self.print_timestamp = print_timestamp
         self.jaas_override_variables = jaas_override_variables or {}
@@ -134,10 +128,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         """Return a string which can be used to create a configuration file appropriate for the given node."""
         # Process client configuration
         prop_file = self.render('console_consumer.properties')
-        if hasattr(node, "version") and node.version <= LATEST_0_8_2:
-            # in 0.8.2.X and earlier, console consumer does not have --timeout-ms option
-            # instead, we have to pass it through the config file
-            prop_file += "\nconsumer.timeout.ms=%s\n" % str(self.consumer_timeout_ms)
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.
@@ -152,12 +142,11 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         """Return the start command appropriate for the given node."""
         args = self.args.copy()
         args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
-        if not self.new_consumer:
-            args['zk_connect'] = self.kafka.zk_connect_setting()
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
         args['log_dir'] = ConsoleConsumer.LOG_DIR
-        args['log4j_config'] = ConsoleConsumer.LOG4J_CONFIG
+        args['log4j_param'] = get_log4j_config_param(node)
+        args['log4j_config'] = get_log4j_config_for_tools(node)
         args['config_file'] = ConsoleConsumer.CONFIG_FILE
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['jmx_port'] = self.jmx_port
@@ -171,24 +160,13 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         cmd = fix_opts_for_new_jvm(node)
         cmd += "export JMX_PORT=%(jmx_port)s; " \
               "export LOG_DIR=%(log_dir)s; " \
-              "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j_config)s\"; " \
+              "export KAFKA_LOG4J_OPTS=\"%(log4j_param)s%(log4j_config)s\"; " \
               "export KAFKA_OPTS=%(kafka_opts)s; " \
               "%(console_consumer)s " \
               "--topic %(topic)s " \
               "--consumer.config %(config_file)s " % args
-
-        if self.new_consumer:
-            assert node.version.consumer_supports_bootstrap_server(), \
-                "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(node.version)
-            if node.version <= LATEST_0_10_0:
-                cmd += " --new-consumer"
-            cmd += " --bootstrap-server %(broker_list)s" % args
-            if node.version >= V_0_11_0_0:
-                cmd += " --isolation-level %s" % self.isolation_level
-        else:
-            assert node.version < V_2_0_0, \
-                "new_consumer==false is only supported if version < 2.0.0, version %s" % str(node.version)
-            cmd += " --zookeeper %(zk_connect)s" % args
+        cmd += " --bootstrap-server %(broker_list)s" % args
+        cmd += " --isolation-level %s" % self.isolation_level
 
         if self.from_beginning:
             cmd += " --from-beginning"
@@ -196,8 +174,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         if self.consumer_timeout_ms is not None:
             # version 0.8.X and below do not support --timeout-ms option
             # This will be added in the properties file instead
-            if node.version > LATEST_0_8_2:
-                cmd += " --timeout-ms %s" % self.consumer_timeout_ms
+            cmd += " --timeout-ms %s" % self.consumer_timeout_ms
 
         if self.print_timestamp:
             cmd += " --property print.timestamp=true"
@@ -209,16 +186,12 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             cmd += " --property print.partition=true"
 
         # LoggingMessageFormatter was introduced after 0.9
-        if node.version > LATEST_0_9:
-            if node.version > LATEST_3_7:
-                cmd += " --formatter org.apache.kafka.tools.consumer.LoggingMessageFormatter"
-            else:
-                cmd += " --formatter kafka.tools.LoggingMessageFormatter"
+        if node.version > LATEST_3_7:
+            cmd += " --formatter org.apache.kafka.tools.consumer.LoggingMessageFormatter"
+        else:
+            cmd += " --formatter kafka.tools.LoggingMessageFormatter"
 
         if self.enable_systest_events:
-            # enable systest events is only available in 0.10.0 and later
-            # check the assertion here as well, in case node.version has been modified
-            assert node.version >= V_0_10_0_0
             cmd += " --enable-systest-events"
 
         if self.consumer_properties is not None:
@@ -253,8 +226,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         node.account.create_file(ConsoleConsumer.CONFIG_FILE, prop_file)
 
         # Create and upload log properties
-        log_config = self.render('tools_log4j.properties', log_file=ConsoleConsumer.LOG_FILE)
-        node.account.create_file(ConsoleConsumer.LOG4J_CONFIG, log_config)
+        log_config = self.render(get_log4j_config_for_tools(node), log_file=ConsoleConsumer.LOG_FILE)
+        node.account.create_file(get_log4j_config_for_tools(node), log_config)
 
         # Run and capture output
         cmd = self.start_cmd(node)

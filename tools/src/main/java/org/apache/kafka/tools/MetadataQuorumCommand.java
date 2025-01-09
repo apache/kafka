@@ -107,7 +107,8 @@ public class MetadataQuorumCommand {
             .help("A comma-separated list of host:port pairs to use for establishing the connection to the Kafka controllers.");
         parser.addArgument("--command-config")
             .type(Arguments.fileType())
-            .help("Property file containing configs to be passed to Admin Client.");
+            .help("Property file containing configs to be passed to Admin Client. " +
+                "For add-controller, the file is used to specify the controller properties as well.");
         Subparsers subparsers = parser.addSubparsers().dest("command");
         addDescribeSubParser(subparsers);
         addAddControllerSubParser(subparsers);
@@ -215,10 +216,10 @@ public class MetadataQuorumCommand {
                                                        String status,
                                                        boolean humanReadable) {
         return infos.map(info -> {
-            String lastFetchTimestamp = !info.lastFetchTimestamp().isPresent() ? "-1" :
+            String lastFetchTimestamp = info.lastFetchTimestamp().isEmpty() ? "-1" :
                 humanReadable ? format("%d ms ago", relativeTimeMs(info.lastFetchTimestamp().getAsLong(), "last fetch")) :
                     valueOf(info.lastFetchTimestamp().getAsLong());
-            String lastCaughtUpTimestamp = !info.lastCaughtUpTimestamp().isPresent() ? "-1" :
+            String lastCaughtUpTimestamp = info.lastCaughtUpTimestamp().isEmpty() ? "-1" :
                 humanReadable ? format("%d ms ago", relativeTimeMs(info.lastCaughtUpTimestamp().getAsLong(), "last caught up")) :
                     valueOf(info.lastCaughtUpTimestamp().getAsLong());
             return Stream.of(
@@ -381,7 +382,7 @@ public class MetadataQuorumCommand {
         if (metaProperties == null) {
             throw new TerseException("Unable to read meta.properties from " + metadataDirectory);
         }
-        if (!metaProperties.directoryId().isPresent()) {
+        if (metaProperties.directoryId().isEmpty()) {
             throw new TerseException("No directory id found in " + metadataDirectory);
         }
         return metaProperties.directoryId().get();

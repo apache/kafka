@@ -174,11 +174,27 @@ public class RocksDBMetricsRecorderTest {
     }
 
     @Test
+    public void shouldThrowIfMetricRecorderIsInitialisedWithNullMetrics() {
+        assertThrows(
+            NullPointerException.class,
+            () -> recorder.init(null, TASK_ID1)
+        );
+    }
+
+    @Test
+    public void shouldThrowIfMetricRecorderIsInitialisedWithNullTaskId() {
+        assertThrows(
+            NullPointerException.class,
+            () -> recorder.init(streamsMetrics, null)
+        );
+    }
+
+    @Test
     public void shouldThrowIfMetricRecorderIsReInitialisedWithDifferentStreamsMetrics() {
         assertThrows(
             IllegalStateException.class,
             () -> recorder.init(
-                new StreamsMetricsImpl(new Metrics(), "test-client", new MockTime()),
+                new StreamsMetricsImpl(new Metrics(), "test-client", "processId", new MockTime()),
                 TASK_ID1
             )
         );

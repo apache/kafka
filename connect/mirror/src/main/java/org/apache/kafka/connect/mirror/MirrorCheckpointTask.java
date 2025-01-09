@@ -20,9 +20,10 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
@@ -45,7 +46,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.kafka.connect.mirror.MirrorUtils.adminCall;
 
@@ -195,7 +195,7 @@ public class MirrorCheckpointTask extends SourceTask {
         return upstreamGroupOffsets.entrySet().stream()
             .filter(x -> shouldCheckpointTopic(x.getKey().topic())) // Only perform relevant checkpoints filtered by "topic filter"
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
-            .flatMap(o -> o.map(Stream::of).orElseGet(Stream::empty)) // do not emit checkpoints for partitions that don't have offset-syncs
+            .flatMap(o -> o.stream()) // do not emit checkpoints for partitions that don't have offset-syncs
             .filter(x -> x.downstreamOffset() >= 0)  // ignore offsets we cannot translate accurately
             .filter(this::checkpointIsMoreRecent) // do not emit checkpoints for partitions that have a later checkpoint
             .collect(Collectors.toMap(Checkpoint::topicPartition, Function.identity()));
@@ -297,11 +297,12 @@ public class MirrorCheckpointTask extends SourceTask {
         for (String group : consumerGroups) {
             try {
                 ConsumerGroupDescription consumerGroupDesc = consumerGroupsDesc.get(group).get();
-                ConsumerGroupState consumerGroupState = consumerGroupDesc.state();
+                GroupState consumerGroupState = consumerGroupDesc.groupState();
                 // sync offset to the target cluster only if the state of current consumer group is:
                 // (1) idle: because the consumer at target is not actively consuming the mirrored topic
                 // (2) dead: the new consumer that is recently created at source and never existed at target
-                if (consumerGroupState == ConsumerGroupState.EMPTY) {
+                //           This case will be reported as a GroupIdNotFoundException
+                if (consumerGroupState == GroupState.EMPTY) {
                     idleConsumerGroupsOffset.put(
                             group,
                             adminCall(
@@ -311,8 +312,13 @@ public class MirrorCheckpointTask extends SourceTask {
                     );
                 }
                 // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
-            } catch (InterruptedException | ExecutionException e) {
-                log.error("Error querying for consumer group {} on cluster {}.", group, targetClusterAlias, e);
+            } catch (InterruptedException ie) {
+                log.error("Error querying for consumer group {} on cluster {}.", group, targetClusterAlias, ie);
+            } catch (ExecutionException ee) {
+                // check for non-existent new consumer upstream which will be identified during the offset sync-up
+                if (!(ee.getCause() instanceof GroupIdNotFoundException)) {
+                    log.error("Error querying for consumer group {} on cluster {}.", group, targetClusterAlias, ee);
+                }
             }
         }
     }

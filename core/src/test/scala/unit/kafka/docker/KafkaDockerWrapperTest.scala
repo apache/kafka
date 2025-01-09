@@ -28,8 +28,9 @@ class KafkaDockerWrapperTest {
     val envVars = Map("KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "TRACE",
       "KAFKA_VALID_PROPERTY" -> "Value",
       "SOME_VARIABLE" -> "Some Value",
-      "KAFKA_VALID___PROPERTY__ALL_CASES" -> "All Cases Value")
-    val expected = List("valid.property=Value", "valid-property_all.cases=All Cases Value")
+      "KAFKA_VALID___PROPERTY__ALL_CASES" -> "All Cases Value",
+      "KAFKA_KAFKA_VALID_PROPERTY" -> "Value")
+    val expected = List("valid.property=Value", "valid-property_all.cases=All Cases Value", "kafka.valid.property=Value")
     val actual = KafkaDockerWrapper.getServerConfigsFromEnv(envVars)
     assertEquals(expected, actual)
   }

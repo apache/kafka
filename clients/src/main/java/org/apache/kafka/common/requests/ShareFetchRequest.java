@@ -49,7 +49,7 @@ public class ShareFetchRequest extends AbstractRequest {
         }
 
         public static Builder forConsumer(String groupId, ShareRequestMetadata metadata,
-                                          int maxWait, int minBytes, int maxBytes, int fetchSize,
+                                          int maxWait, int minBytes, int maxBytes, int fetchSize, int batchSize,
                                           List<TopicIdPartition> send, List<TopicIdPartition> forget,
                                           Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareFetchRequestData data = new ShareFetchRequestData();
@@ -67,6 +67,7 @@ public class ShareFetchRequest extends AbstractRequest {
             data.setMaxWaitMs(maxWait);
             data.setMinBytes(minBytes);
             data.setMaxBytes(maxBytes);
+            data.setBatchSize(batchSize);
 
             // Build a map of topics to fetch keyed by topic ID, and within each a map of partitions keyed by index
             Map<Uuid, Map<Integer, ShareFetchRequestData.FetchPartition>> fetchMap = new HashMap<>();
@@ -109,24 +110,29 @@ public class ShareFetchRequest extends AbstractRequest {
                 });
             }
 
+            Builder builder = new Builder(data, true);
             // And finally, forget the topic-partitions that are no longer in the session
             if (!forget.isEmpty()) {
-                Map<Uuid, List<Integer>> forgetMap = new HashMap<>();
-                for (TopicIdPartition tip : forget) {
-                    List<Integer> partList = forgetMap.computeIfAbsent(tip.topicId(), k -> new ArrayList<>());
-                    partList.add(tip.partition());
-                }
                 data.setForgottenTopicsData(new ArrayList<>());
-                forgetMap.forEach((topicId, partList) -> {
-                    ShareFetchRequestData.ForgottenTopic forgetTopic = new ShareFetchRequestData.ForgottenTopic()
-                            .setTopicId(topicId)
-                            .setPartitions(new ArrayList<>());
-                    partList.forEach(index -> forgetTopic.partitions().add(index));
-                    data.forgottenTopicsData().add(forgetTopic);
-                });
+                builder.updateForgottenData(forget);
             }
 
-            return new Builder(data, true);
+            return builder;
+        }
+
+        public void updateForgottenData(List<TopicIdPartition> forget) {
+            Map<Uuid, List<Integer>> forgetMap = new HashMap<>();
+            for (TopicIdPartition tip : forget) {
+                List<Integer> partList = forgetMap.computeIfAbsent(tip.topicId(), k -> new ArrayList<>());
+                partList.add(tip.partition());
+            }
+            forgetMap.forEach((topicId, partList) -> {
+                ShareFetchRequestData.ForgottenTopic forgetTopic = new ShareFetchRequestData.ForgottenTopic()
+                        .setTopicId(topicId)
+                        .setPartitions(new ArrayList<>());
+                partList.forEach(index -> forgetTopic.partitions().add(index));
+                data.forgottenTopicsData().add(forgetTopic);
+            });
         }
 
         public ShareFetchRequestData data() {

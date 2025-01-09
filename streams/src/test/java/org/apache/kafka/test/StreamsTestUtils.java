@@ -35,8 +35,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.mockito.quality.Strictness;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -116,20 +114,16 @@ public final class StreamsTestUtils {
         return getStreamsConfig(UUID.randomUUID().toString());
     }
 
-    public static <K, V> List<KeyValue<K, V>> toList(final Iterator<KeyValue<K, V>> iterator) {
-        final List<KeyValue<K, V>> results = new ArrayList<>();
+    public static <K, V> List<KeyValue<K, V>> toListAndCloseIterator(final KeyValueIterator<K, V> iterator) {
+        try (iterator) {
+            final List<KeyValue<K, V>> results = new ArrayList<>();
 
-        while (iterator.hasNext()) {
-            results.add(iterator.next());
+            while (iterator.hasNext()) {
+                results.add(iterator.next());
+            }
+
+            return results;
         }
-
-        if (iterator instanceof Closeable) {
-            try {
-                ((Closeable) iterator).close();
-            } catch (IOException e) { /* do nothing */ }
-        }
-
-        return results;
     }
 
     public static <K, V> Set<KeyValue<K, V>> toSet(final Iterator<KeyValue<K, V>> iterator) {
@@ -141,13 +135,19 @@ public final class StreamsTestUtils {
         return results;
     }
 
-    public static <K, V> Set<V> valuesToSet(final Iterator<KeyValue<K, V>> iterator) {
+    public static <K, V> Set<V> valuesToSet(final KeyValueIterator<K, V> iterator) {
         final Set<V> results = new HashSet<>();
 
         while (iterator.hasNext()) {
             results.add(iterator.next().value);
         }
         return results;
+    }
+
+    public static <K, V> Set<V> valuesToSetAndCloseIterator(final KeyValueIterator<K, V> iterator) {
+        try (iterator) {
+            return valuesToSet(iterator);
+        }
     }
 
     public static <K> void verifyKeyValueList(final List<KeyValue<K, byte[]>> expected, final List<KeyValue<K, byte[]>> actual) {
@@ -254,8 +254,8 @@ public final class StreamsTestUtils {
     }
 
     /**
-     * Used to keep tests simple, and ignore calls from {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} )}.
-     * @return true if the stack context is within a {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} )} call
+     * Used to keep tests simple, and ignore calls from {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)}.
+     * @return true if the stack context is within a {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} call
      */
     public static boolean isCheckSupplierCall() {
         return Arrays.stream(Thread.currentThread().getStackTrace())

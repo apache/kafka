@@ -24,7 +24,6 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +33,7 @@ import java.util.TreeSet;
  * The specification for a task which connects and disconnects many times a
  * second to stress the broker.
  */
-public class ConnectionStressSpec extends TaskSpec {
+public final class ConnectionStressSpec extends TaskSpec {
     private final List<String> clientNodes;
     private final String bootstrapServers;
     private final Map<String, String> commonClientConf;
@@ -47,7 +46,6 @@ public class ConnectionStressSpec extends TaskSpec {
         FETCH_METADATA
     }
 
-    @SuppressWarnings("this-escape")
     @JsonCreator
     public ConnectionStressSpec(@JsonProperty("startMs") long startMs,
             @JsonProperty("durationMs") long durationMs,
@@ -59,7 +57,7 @@ public class ConnectionStressSpec extends TaskSpec {
             @JsonProperty("action") ConnectionStressAction action) {
         super(startMs, durationMs);
         this.clientNodes = (clientNodes == null) ? Collections.emptyList() :
-            Collections.unmodifiableList(new ArrayList<>(clientNodes));
+            List.copyOf(clientNodes);
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.targetConnectionsPerSec = targetConnectionsPerSec;

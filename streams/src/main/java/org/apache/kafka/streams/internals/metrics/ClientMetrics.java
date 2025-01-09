@@ -40,11 +40,14 @@ public class ClientMetrics {
     private static final String APPLICATION_ID = "application-id";
     private static final String TOPOLOGY_DESCRIPTION = "topology-description";
     private static final String STATE = "state";
+    private static final String CLIENT_STATE = "client-state";
     private static final String ALIVE_STREAM_THREADS = "alive-stream-threads";
     private static final String VERSION_FROM_FILE;
     private static final String COMMIT_ID_FROM_FILE;
     private static final String DEFAULT_VALUE = "unknown";
     private static final String FAILED_STREAM_THREADS = "failed-stream-threads";
+    private static final String RECORDING_LEVEL = "recording-level";
+    
 
     static {
         final Properties props = new Properties();
@@ -67,6 +70,7 @@ public class ClientMetrics {
     private static final String STATE_DESCRIPTION = "The state of the Kafka Streams client";
     private static final String ALIVE_STREAM_THREADS_DESCRIPTION = "The current number of alive stream threads that are running or participating in rebalance";
     private static final String FAILED_STREAM_THREADS_DESCRIPTION = "The number of failed stream threads since the start of the Kafka Streams client";
+    private static final String RECORDING_LEVEL_DESCRIPTION = "The metrics recording level of the Kafka Streams client";
 
     public static String version() {
         return VERSION_FROM_FILE;
@@ -120,6 +124,26 @@ public class ClientMetrics {
             STATE_DESCRIPTION,
             RecordingLevel.INFO,
             stateProvider
+        );
+    }
+
+    public static void addClientStateTelemetryMetric(final StreamsMetricsImpl streamsMetrics,
+                                                     final Gauge<Integer> stateProvider) {
+        streamsMetrics.addClientLevelMutableMetric(
+            CLIENT_STATE,
+            STATE_DESCRIPTION,
+            RecordingLevel.INFO,
+            stateProvider
+        );
+    }
+
+    public static void addClientRecordingLevelMetric(final StreamsMetricsImpl streamsMetrics,
+                                                     final int recordingLevel) {
+        streamsMetrics.addClientLevelImmutableMetric(
+                RECORDING_LEVEL,
+                RECORDING_LEVEL_DESCRIPTION,
+                RecordingLevel.INFO,
+                recordingLevel
         );
     }
 

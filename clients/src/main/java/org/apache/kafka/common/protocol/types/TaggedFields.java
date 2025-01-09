@@ -183,4 +183,11 @@ public class TaggedFields extends DocumentedType {
     public int numFields() {
         return this.fields.size();
     }
+
+    /**
+     * The fields
+     */
+    public Map<Integer, Field> fields() {
+        return this.fields;
+    }
 }

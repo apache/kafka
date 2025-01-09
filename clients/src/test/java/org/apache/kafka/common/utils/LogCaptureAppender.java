@@ -16,33 +16,30 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.log4j.AppenderSkeleton;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.apache.log4j.spi.LoggingEvent;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.core.config.Property;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
-public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseable {
-    private final List<LoggingEvent> events = new LinkedList<>();
-    private final List<LogLevelChange> logLevelChanges = new LinkedList<>();
-
-    public static class LogLevelChange {
-
-        public LogLevelChange(final Level originalLevel, final Class<?> clazz) {
-            this.originalLevel = originalLevel;
-            this.clazz = clazz;
-        }
-
-        private final Level originalLevel;
-
-        private final Class<?> clazz;
-
-    }
-
+public class LogCaptureAppender extends AbstractAppender implements AutoCloseable {
+    private final List<LogEvent> events = new LinkedList<>();
+    private final Map<Class<?>, Level> logLevelChanges = new HashMap<>();
+    private final List<org.apache.logging.log4j.core.Logger> loggers = new ArrayList<>();
+    
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     public static class Event {
         private final String level;
@@ -74,31 +71,44 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
         }
     }
 
+    public LogCaptureAppender() {
+        super("LogCaptureAppender-" + UUID.randomUUID(), null, null, true, Property.EMPTY_ARRAY);
+    }
+
     public static LogCaptureAppender createAndRegister() {
         final LogCaptureAppender logCaptureAppender = new LogCaptureAppender();
-        Logger.getRootLogger().addAppender(logCaptureAppender);
+        Logger logger = LogManager.getRootLogger();
+        logCaptureAppender.addToLogger(logger);
         return logCaptureAppender;
     }
 
     public static LogCaptureAppender createAndRegister(final Class<?> clazz) {
         final LogCaptureAppender logCaptureAppender = new LogCaptureAppender();
-        Logger.getLogger(clazz).addAppender(logCaptureAppender);
+        Logger logger = LogManager.getLogger(clazz);
+        logCaptureAppender.addToLogger(logger);
         return logCaptureAppender;
     }
 
-    public void setClassLogger(final Class<?> clazz, Level level) {
-        logLevelChanges.add(new LogLevelChange(Logger.getLogger(clazz).getLevel(), clazz));
-        Logger.getLogger(clazz).setLevel(level);
+    public void addToLogger(Logger logger) {
+        org.apache.logging.log4j.core.Logger coreLogger = (org.apache.logging.log4j.core.Logger) logger;
+        this.start();
+        coreLogger.addAppender(this);
+        loggers.add(coreLogger);
     }
 
-    public static void unregister(final LogCaptureAppender logCaptureAppender) {
-        Logger.getRootLogger().removeAppender(logCaptureAppender);
+    public void setClassLogger(final Class<?> clazz, Level level) {
+        if (!logLevelChanges.containsKey(clazz)) {
+            Level currentLevel = LogManager.getLogger(clazz).getLevel();
+            logLevelChanges.put(clazz, currentLevel);
+        }
+
+        Configurator.setLevel(clazz.getName(), level);
     }
 
     @Override
-    protected void append(final LoggingEvent event) {
+    public void append(final LogEvent event) {
         synchronized (events) {
-            events.add(event);
+            events.add(event.toImmutable());
         }
     }
 
@@ -110,10 +120,10 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
     }
 
     public List<String> getMessages() {
-        final LinkedList<String> result = new LinkedList<>();
+        final List<String> result = new LinkedList<>();
         synchronized (events) {
-            for (final LoggingEvent event : events) {
-                result.add(event.getRenderedMessage());
+            for (final LogEvent event : events) {
+                result.add(event.getMessage().getFormattedMessage());
             }
         }
         return result;
@@ -122,25 +132,26 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
     public List<Event> getEvents() {
         final LinkedList<Event> result = new LinkedList<>();
         synchronized (events) {
-            for (final LoggingEvent event : events) {
-                final String[] throwableStrRep = event.getThrowableStrRep();
+            for (final LogEvent event : events) {
+                final Throwable throwable = event.getThrown();
                 final Optional<String> throwableString;
                 final Optional<String> throwableClassName;
-                if (throwableStrRep == null) {
+                if (throwable == null) {
                     throwableString = Optional.empty();
                     throwableClassName = Optional.empty();
                 } else {
-                    final StringBuilder throwableStringBuilder = new StringBuilder();
-
-                    for (final String s : throwableStrRep) {
-                        throwableStringBuilder.append(s);
-                    }
-
-                    throwableString = Optional.of(throwableStringBuilder.toString());
-                    throwableClassName = Optional.of(event.getThrowableInformation().getThrowable().getClass().getName());
+                    StringWriter stringWriter = new StringWriter();
+                    PrintWriter printWriter = new PrintWriter(stringWriter);
+                    throwable.printStackTrace(printWriter);
+                    throwableString = Optional.of(stringWriter.toString());
+                    throwableClassName = Optional.of(throwable.getClass().getName());
                 }
 
-                result.add(new Event(event.getLevel().toString(), event.getRenderedMessage(), throwableString, throwableClassName));
+                result.add(new Event(
+                    event.getLevel().toString(),
+                    event.getMessage().getFormattedMessage(),
+                    throwableString,
+                    throwableClassName));
             }
         }
         return result;
@@ -148,15 +159,21 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
 
     @Override
     public void close() {
-        for (final LogLevelChange logLevelChange : logLevelChanges) {
-            Logger.getLogger(logLevelChange.clazz).setLevel(logLevelChange.originalLevel);
+        for (Map.Entry<Class<?>, Level> entry : logLevelChanges.entrySet()) {
+            Class<?> clazz = entry.getKey();
+            Level originalLevel = entry.getValue();
+            Configurator.setLevel(clazz.getName(), originalLevel);
         }
         logLevelChanges.clear();
-        unregister(this);
+
+        unregister();
     }
 
-    @Override
-    public boolean requiresLayout() {
-        return false;
+    public void unregister() {
+        for (org.apache.logging.log4j.core.Logger logger : loggers) {
+            logger.removeAppender(this);
+        }
+        loggers.clear();
+        this.stop();
     }
 }

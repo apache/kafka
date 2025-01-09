@@ -19,11 +19,10 @@ package kafka.server
 
 import java.util.Collections
 import java.util.stream.{Stream => JStream}
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.errors.{AuthenticationException, InvalidUpdateVersionException, OperationNotAttemptedException, UnknownServerException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{AuthenticationException, OperationNotAttemptedException, UnknownServerException, UnsupportedVersionException}
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
 import org.apache.kafka.common.message.{AlterPartitionRequestData, AlterPartitionResponseData}
 import org.apache.kafka.common.metrics.Metrics
@@ -32,8 +31,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AbstractRequest, AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV2, IBP_3_2_IV0, IBP_3_5_IV1}
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
@@ -44,7 +42,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import org.mockito.ArgumentMatcher
-import org.mockito.ArgumentMatchers.{any, anyString}
+import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, reset, times, verify}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
@@ -628,33 +626,6 @@ class AlterPartitionManagerTest {
         new AlterPartitionResponseData.PartitionData()
           .setPartitionIndex(topicIdPartition.partition)
           .setErrorCode(error.code)))
-  }
-
-  @Test
-  def testZkBasic(): Unit = {
-    val scheduler = new MockScheduler(time)
-    scheduler.startup()
-
-    val kafkaZkClient = Mockito.mock(classOf[KafkaZkClient])
-    Mockito.doAnswer(_ => (true, 2))
-      .when(kafkaZkClient)
-      .conditionalUpdatePath(anyString(), any(), ArgumentMatchers.eq(1), any())
-    Mockito.doAnswer(_ => (false, 2))
-      .when(kafkaZkClient)
-      .conditionalUpdatePath(anyString(), any(), ArgumentMatchers.eq(3), any())
-
-    val zkIsrManager = new ZkAlterPartitionManager(scheduler, time, kafkaZkClient)
-    zkIsrManager.start()
-
-    // Correct ZK version
-    val future1 = zkIsrManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 1), 0)
-    assertTrue(future1.isDone)
-    assertEquals(new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 2), future1.get)
-
-    // Wrong ZK version
-    val future2 = zkIsrManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 3), 0)
-    assertTrue(future2.isCompletedExceptionally)
-    assertFutureThrows(future2, classOf[InvalidUpdateVersionException])
   }
 
   private def partitionResponse(

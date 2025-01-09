@@ -17,11 +17,14 @@
 
 package kafka.server
 
+import kafka.utils.Logging
+
+import java.util
 import java.util.concurrent._
 import java.util.function.BiConsumer
-
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.utils.KafkaThread
+import org.apache.kafka.server.purgatory.{DelayedOperation, DelayedOperationKey, DelayedOperationPurgatory}
 
 import scala.collection.Seq
 
@@ -32,7 +35,7 @@ import scala.collection.Seq
 class DelayedFuture[T](timeoutMs: Long,
                        futures: Seq[CompletableFuture[T]],
                        responseCallback: () => Unit)
-  extends DelayedOperation(timeoutMs) {
+  extends DelayedOperation(timeoutMs) with Logging {
 
   /**
    * The operation can be completed if all the futures have completed successfully
@@ -70,19 +73,21 @@ class DelayedFuture[T](timeoutMs: Long,
 }
 
 class DelayedFuturePurgatory(purgatoryName: String, brokerId: Int) {
-  private val purgatory = DelayedOperationPurgatory[DelayedFuture[_]](purgatoryName, brokerId)
+  private val purgatory = new DelayedOperationPurgatory[DelayedFuture[_]](purgatoryName, brokerId)
   private val executor = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
     new LinkedBlockingQueue[Runnable](),
     new ThreadFactory {
       override def newThread(r: Runnable): Thread = new KafkaThread(s"DelayedExecutor-$purgatoryName", r, true)
     })
-  private val purgatoryKey = new Object
+  private val purgatoryKey = new DelayedOperationKey() {
+    override def keyLabel(): String = "delayed-future-key"
+  }
 
   def tryCompleteElseWatch[T](timeoutMs: Long,
                               futures: Seq[CompletableFuture[T]],
                               responseCallback: () => Unit): DelayedFuture[T] = {
     val delayedFuture = new DelayedFuture[T](timeoutMs, futures, responseCallback)
-    val done = purgatory.tryCompleteElseWatch(delayedFuture, Seq(purgatoryKey))
+    val done = purgatory.tryCompleteElseWatch(delayedFuture, util.Collections.singletonList(purgatoryKey))
     if (!done) {
       val callbackAction = new BiConsumer[Void, Throwable]() {
         override def accept(result: Void, exception: Throwable): Unit = delayedFuture.forceComplete()

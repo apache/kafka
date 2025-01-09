@@ -367,7 +367,7 @@ public final class Sensor {
     }
 
     synchronized List<KafkaMetric> metrics() {
-        return unmodifiableList(new ArrayList<>(this.metrics.values()));
+        return List.copyOf(this.metrics.values());
     }
 
     /**

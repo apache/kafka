@@ -21,10 +21,11 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+" },
+    { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+",
+      "about": "The cluster id of the request."},
     { "name": "VoterId", "type": "int32", "versions": "0+",
-      "about": "The replica id of the voter getting removed from the topic partition" },
+      "about": "The replica id of the voter getting removed from the topic partition." },
     { "name": "VoterDirectoryId", "type": "uuid", "versions": "0+",
-      "about": "The directory id of the voter getting removed from the topic partition" }
+      "about": "The directory id of the voter getting removed from the topic partition." }
   ]
 }

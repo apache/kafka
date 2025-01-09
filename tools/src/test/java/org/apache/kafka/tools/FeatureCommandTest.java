@@ -21,7 +21,7 @@ import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith(value = ClusterTestExtensions.class)
 public class FeatureCommandTest {
 
-    private final List<Features> testingFeatures = Arrays.stream(Features.FEATURES).collect(Collectors.toList());
+    private final List<Feature> testingFeatures = Arrays.stream(Feature.FEATURES).collect(Collectors.toList());
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDescribeWithKRaft(ClusterInstance cluster) {
@@ -60,14 +60,16 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
+        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
+        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(2)));
+                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(3)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(3)));
+                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
     }
 
     // Use the first MetadataVersion that supports KIP-919
@@ -80,14 +82,16 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
+        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
+        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(2)));
+                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(3)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(3)));
+                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
@@ -172,7 +176,8 @@ public class FeatureCommandTest {
                         "downgrade", "--release-version", "3.7-IV3"))
 
         );
-        assertEquals("group.version was downgraded to 0.\n" +
+        assertEquals("eligible.leader.replicas.version was downgraded to 0.\n" +
+                "group.version was downgraded to 0.\n" +
                 "kraft.version was downgraded to 0.\n" +
                 "metadata.version was downgraded to 18.\n" +
                 "transaction.version was downgraded to 0.", commandOutput);
@@ -385,8 +390,8 @@ public class FeatureCommandTest {
         assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
             "Output did not contain expected Metadata Version: " + versionMappingOutput);
 
-        for (Features feature : Features.values()) {
-            int featureLevel = feature.defaultValue(metadataVersion);
+        for (Feature feature : Feature.values()) {
+            int featureLevel = feature.defaultLevel(metadataVersion);
             assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
                 "Output did not contain expected feature mapping: " + versionMappingOutput);
         }
@@ -409,8 +414,8 @@ public class FeatureCommandTest {
         assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
             "Output did not contain expected Metadata Version: " + versionMappingOutput);
 
-        for (Features feature : Features.values()) {
-            int featureLevel = feature.defaultValue(metadataVersion);
+        for (Feature feature : Feature.values()) {
+            int featureLevel = feature.defaultLevel(metadataVersion);
             assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
                 "Output did not contain expected feature mapping: " + versionMappingOutput);
         }

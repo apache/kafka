@@ -19,6 +19,9 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
+import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -40,6 +43,7 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -53,7 +57,7 @@ import static org.mockito.Mockito.when;
 
 public class ConsumerNetworkThreadTest {
     private final Time time;
-    private final BlockingQueue<ApplicationEvent> applicationEventsQueue;
+    private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final ApplicationEventProcessor applicationEventProcessor;
     private final OffsetsRequestManager offsetsRequestManager;
     private final ConsumerHeartbeatRequestManager heartbeatRequestManager;
@@ -62,6 +66,7 @@ public class ConsumerNetworkThreadTest {
     private final NetworkClientDelegate networkClientDelegate;
     private final RequestManagers requestManagers;
     private final CompletableEventReaper applicationEventReaper;
+    private final AsyncConsumerMetrics asyncConsumerMetrics;
 
     ConsumerNetworkThreadTest() {
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
@@ -72,17 +77,19 @@ public class ConsumerNetworkThreadTest {
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.applicationEventReaper = mock(CompletableEventReaper.class);
         this.time = new MockTime();
-        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.applicationEventQueue = new LinkedBlockingQueue<>();
+        this.asyncConsumerMetrics = mock(AsyncConsumerMetrics.class);
         LogContext logContext = new LogContext();
 
         this.consumerNetworkThread = new ConsumerNetworkThread(
                 logContext,
                 time,
-                applicationEventsQueue,
+                applicationEventQueue,
                 applicationEventReaper,
                 () -> applicationEventProcessor,
                 () -> networkClientDelegate,
-                () -> requestManagers
+                () -> requestManagers,
+                asyncConsumerMetrics
         );
     }
 
@@ -183,14 +190,18 @@ public class ConsumerNetworkThreadTest {
     public void testCleanupInvokesReaper() {
         LinkedList<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
         when(networkClientDelegate.unsentRequests()).thenReturn(queue);
+        when(applicationEventReaper.reap(applicationEventQueue)).thenReturn(1L);
         consumerNetworkThread.cleanup();
-        verify(applicationEventReaper).reap(applicationEventsQueue);
+        verify(applicationEventReaper).reap(applicationEventQueue);
+        verify(asyncConsumerMetrics).recordApplicationEventExpiredSize(1L);
     }
 
     @Test
     public void testRunOnceInvokesReaper() {
+        when(applicationEventReaper.reap(any(Long.class))).thenReturn(1L);
         consumerNetworkThread.runOnce();
         verify(applicationEventReaper).reap(any(Long.class));
+        verify(asyncConsumerMetrics).recordApplicationEventExpiredSize(1L);
     }
 
     @Test
@@ -198,5 +209,83 @@ public class ConsumerNetworkThreadTest {
         when(networkClientDelegate.hasAnyPendingRequests()).thenReturn(true).thenReturn(true).thenReturn(false);
         consumerNetworkThread.cleanup();
         verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong());
+    }
+
+    @Test
+    public void testRunOnceRecordTimeBetweenNetworkThreadPoll() {
+        try (Metrics metrics = new Metrics();
+             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
+             ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
+                     new LogContext(),
+                     time,
+                     applicationEventQueue,
+                     applicationEventReaper,
+                     () -> applicationEventProcessor,
+                     () -> networkClientDelegate,
+                     () -> requestManagers,
+                     asyncConsumerMetrics
+             )) {
+            consumerNetworkThread.initializeResources();
+
+            consumerNetworkThread.runOnce();
+            time.sleep(10);
+            consumerNetworkThread.runOnce();
+            assertEquals(
+                10,
+                (double) metrics.metric(
+                    metrics.metricName("time-between-network-thread-poll-avg", CONSUMER_METRIC_GROUP)
+                ).metricValue()
+            );
+            assertEquals(
+                10,
+                (double) metrics.metric(
+                    metrics.metricName("time-between-network-thread-poll-max", CONSUMER_METRIC_GROUP)
+                ).metricValue()
+            );
+        }
+    }
+
+    @Test
+    public void testRunOnceRecordApplicationEventQueueSizeAndApplicationEventQueueTime() {
+        try (Metrics metrics = new Metrics();
+             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
+             ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
+                     new LogContext(),
+                     time,
+                     applicationEventQueue,
+                     applicationEventReaper,
+                     () -> applicationEventProcessor,
+                     () -> networkClientDelegate,
+                     () -> requestManagers,
+                     asyncConsumerMetrics
+             )) {
+            consumerNetworkThread.initializeResources();
+
+            PollEvent event = new PollEvent(0);
+            event.setEnqueuedMs(time.milliseconds());
+            applicationEventQueue.add(event);
+            asyncConsumerMetrics.recordApplicationEventQueueSize(1);
+
+            time.sleep(10);
+            consumerNetworkThread.runOnce();
+            assertEquals(
+                0,
+                (double) metrics.metric(
+                    metrics.metricName("application-event-queue-size", CONSUMER_METRIC_GROUP)
+                ).metricValue()
+            );
+            assertEquals(
+                10,
+                (double) metrics.metric(
+                    metrics.metricName("application-event-queue-time-avg", CONSUMER_METRIC_GROUP)
+                ).metricValue()
+            );
+            assertEquals(
+                10,
+                (double) metrics.metric(
+                    metrics.metricName("application-event-queue-time-max", CONSUMER_METRIC_GROUP)
+                ).metricValue()
+            );
+        }
     }
 }

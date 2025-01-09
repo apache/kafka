@@ -32,11 +32,10 @@ import org.apache.kafka.streams.kstream.{
   Materialized => MaterializedJ,
   Reducer,
   StreamJoined => StreamJoinedJ,
-  Transformer,
   ValueJoiner,
   ValueMapper
 }
-import org.apache.kafka.streams.processor.{api, ProcessorContext}
+import org.apache.kafka.streams.processor.api
 import org.apache.kafka.streams.processor.api.{Processor, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.{Serdes => NewSerdes}
@@ -46,7 +45,6 @@ import org.apache.kafka.streams.{KeyValue, StreamsBuilder => StreamsBuilderJ, St
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -276,9 +274,14 @@ class TopologyTest {
     assertEquals(getTopologyScala, getTopologyJava)
   }
 
-  @nowarn
   @Test
-  def shouldBuildIdenticalTopologyInJavaNScalaTransform(): Unit = {
+  def shouldBuildIdenticalTopologyInJavaNScalaProcess(): Unit = {
+    val processorSupplier = new ProcessorSupplier[String, String, String, String] {
+      override def get(): Processor[String, String, String, String] =
+        new api.Processor[String, String, String, String] {
+          override def process(record: api.Record[String, String]): Unit = {}
+        }
+    }
 
     // build the Scala topology
     def getTopologyScala: TopologyDescription = {
@@ -289,35 +292,20 @@ class TopologyTest {
       val textLines = streamBuilder.stream[String, String](inputTopic)
 
       val _: KTable[String, Long] = textLines
-        .transform(() =>
-          new Transformer[String, String, KeyValue[String, String]] {
-            override def init(context: ProcessorContext): Unit = ()
-            override def transform(key: String, value: String): KeyValue[String, String] =
-              new KeyValue(key, value.toLowerCase)
-            override def close(): Unit = ()
-          }
-        )
+        .process(processorSupplier)
         .groupBy((_, v) => v)
         .count()
 
       streamBuilder.build().describe()
     }
 
-    @nowarn
     // build the Java topology
     def getTopologyJava: TopologyDescription = {
 
       val streamBuilder = new StreamsBuilderJ
       val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
 
-      val lowered: KStreamJ[String, String] = textLines.transform(() =>
-        new Transformer[String, String, KeyValue[String, String]] {
-          override def init(context: ProcessorContext): Unit = ()
-          override def transform(key: String, value: String): KeyValue[String, String] =
-            new KeyValue(key, value.toLowerCase)
-          override def close(): Unit = ()
-        }
-      )
+      val lowered: KStreamJ[String, String] = textLines.process(processorSupplier)
 
       val grouped: KGroupedStreamJ[String, String] = lowered.groupBy((_, v) => v)
 

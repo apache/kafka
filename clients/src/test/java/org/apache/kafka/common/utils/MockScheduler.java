@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import org.slf4j.Logger;
@@ -30,7 +29,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 
-public class MockScheduler implements Scheduler, MockTime.Listener {
+public final class MockScheduler implements Scheduler, MockTime.Listener {
     private static final Logger log = LoggerFactory.getLogger(MockScheduler.class);
 
     /**
@@ -43,7 +42,6 @@ public class MockScheduler implements Scheduler, MockTime.Listener {
      */
     private final TreeMap<Long, List<KafkaFutureImpl<Long>>> waiters = new TreeMap<>();
 
-    @SuppressWarnings("this-escape")
     public MockScheduler(MockTime time) {
         this.time = time;
         time.addListener(this);
@@ -85,7 +83,7 @@ public class MockScheduler implements Scheduler, MockTime.Listener {
                                   final Callable<T> callable, long delayMs) {
         final KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
         KafkaFutureImpl<Long> waiter = new KafkaFutureImpl<>();
-        waiter.thenApply((KafkaFuture.BaseFunction<Long, Void>) now -> {
+        waiter.thenApply(now -> {
             executor.submit((Callable<Void>) () -> {
                 // Note: it is possible that we'll execute Callable#call right after
                 // the future is cancelled.  This is a valid sequence of events

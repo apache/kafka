@@ -19,9 +19,9 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
 import org.junit.jupiter.api.AfterEach;
@@ -58,12 +58,12 @@ public class ChangeLoggingSessionBytesStoreTest {
     @BeforeEach
     public void setUp() {
         store = new ChangeLoggingSessionBytesStore(inner);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
     @AfterEach
     public void tearDown() {
-        verify(inner).init((StateStoreContext) context, store);
+        verify(inner).init(context, store);
     }
 
     @Test
@@ -105,60 +105,68 @@ public class ChangeLoggingSessionBytesStoreTest {
         verify(context, times(2)).logChange(store.name(), binaryKey, null, 0L, Position.emptyPosition());
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetching() {
-        store.fetch(bytesKey);
-
-        verify(inner).fetch(bytesKey);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.fetch(bytesKey)) {
+            verify(inner).fetch(bytesKey);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFetching() {
-        store.backwardFetch(bytesKey);
-
-        verify(inner).backwardFetch(bytesKey);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.backwardFetch(bytesKey)) {
+            verify(inner).backwardFetch(bytesKey);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
-        store.fetch(bytesKey, bytesKey);
-
-        verify(inner).fetch(bytesKey, bytesKey);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.fetch(bytesKey, bytesKey)) {
+            verify(inner).fetch(bytesKey, bytesKey);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange() {
-        store.backwardFetch(bytesKey, bytesKey);
-
-        verify(inner).backwardFetch(bytesKey, bytesKey);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.backwardFetch(bytesKey, bytesKey)) {
+            verify(inner).backwardFetch(bytesKey, bytesKey);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFindingSessions() {
-        store.findSessions(bytesKey, 0, 1);
-
-        verify(inner).findSessions(bytesKey, 0, 1);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.findSessions(bytesKey, 0, 1)) {
+            verify(inner).findSessions(bytesKey, 0, 1);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFindingSessions() {
-        store.backwardFindSessions(bytesKey, 0, 1);
-
-        verify(inner).backwardFindSessions(bytesKey, 0, 1);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.backwardFindSessions(bytesKey, 0, 1)) {
+            verify(inner).backwardFindSessions(bytesKey, 0, 1);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFindingSessionRange() {
-        store.findSessions(bytesKey, bytesKey, 0, 1);
-
-        verify(inner).findSessions(bytesKey, bytesKey, 0, 1);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.findSessions(bytesKey, bytesKey, 0, 1)) {
+            verify(inner).findSessions(bytesKey, bytesKey, 0, 1);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFindingSessionRange() {
-        store.backwardFindSessions(bytesKey, bytesKey, 0, 1);
-
-        verify(inner).backwardFindSessions(bytesKey, bytesKey, 0, 1);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.backwardFindSessions(bytesKey, bytesKey, 0, 1)) {
+            verify(inner).backwardFindSessions(bytesKey, bytesKey, 0, 1);
+        }
     }
 
     @Test

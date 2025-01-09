@@ -65,6 +65,56 @@ public class SharePartitionKey {
         return getInstance(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
     }
 
+
+    /**
+     * Returns a SharePartitionKey from input string of format - groupId:topicId:partition
+     * @param key - String in format groupId:topicId:partition
+     * @return object representing SharePartitionKey
+     * @throws IllegalArgumentException if the key is empty or has invalid format
+     */
+    public static SharePartitionKey getInstance(String key) {
+        validate(key);
+        String[] tokens = key.split(":");
+        return new SharePartitionKey(
+                tokens[0].trim(),
+                Uuid.fromString(tokens[1]),
+                Integer.parseInt(tokens[2])
+        );
+    }
+
+    /**
+     * Validates whether the String argument has a valid SharePartitionKey format - groupId:topicId:partition
+     * @param key - String in format groupId:topicId:partition
+     * @throws IllegalArgumentException if the key is empty or has invalid format
+     */
+    public static void validate(String key) {
+        Objects.requireNonNull(key, "Share partition key cannot be null");
+        if (key.isEmpty()) {
+            throw new IllegalArgumentException("Share partition key cannot be empty");
+        }
+
+        String[] tokens = key.split(":");
+        if (tokens.length != 3) {
+            throw new IllegalArgumentException("Invalid key format: expected - groupId:topicId:partition, found -  " + key);
+        }
+
+        if (tokens[0].trim().isEmpty()) {
+            throw new IllegalArgumentException("GroupId must be alphanumeric string");
+        }
+
+        try {
+            Uuid.fromString(tokens[1]);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid topic ID: " + tokens[1], e);
+        }
+
+        try {
+            Integer.parseInt(tokens[2]);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid partition: " + tokens[2], e);
+        }
+    }
+
     public static SharePartitionKey getInstance(String groupId, Uuid topicId, int partition) {
         return new SharePartitionKey(groupId, topicId, partition);
     }
@@ -97,7 +147,7 @@ public class SharePartitionKey {
     @Override
     public String toString() {
         return "SharePartitionKey{" +
-            "groupId='" + groupId +
+            "groupId=" + groupId +
             ", topicIdPartition=" + topicIdPartition +
             '}';
     }

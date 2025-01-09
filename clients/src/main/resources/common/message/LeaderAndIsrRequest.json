@@ -37,13 +37,13 @@
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The current controller ID." },
     { "name": "isKRaftController", "type": "bool", "versions": "7+", "default": "false",
-      "about": "If KRaft controller id is used during migration. See KIP-866" },
+      "about": "If KRaft controller id is used during migration. See KIP-866." },
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The current controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "2+", "ignorable": true, "default": "-1",
       "about": "The current broker epoch." },
     { "name": "Type", "type": "int8", "versions": "5+",
-      "about": "The type that indicates whether all topics are included in the request"},
+      "about": "The type that indicates whether all topics are included in the request."},
     { "name": "UngroupedPartitionStates", "type": "[]LeaderAndIsrPartitionState", "versions": "0-1",
       "about": "The state of each partition, in a v0 or v1 message." },
     // In v0 or v1 requests, each partition is listed alongside its topic name.
@@ -56,7 +56,7 @@
       { "name": "TopicId", "type": "uuid", "versions": "5+", "ignorable": true,
         "about": "The unique topic ID." },
       { "name": "PartitionStates", "type": "[]LeaderAndIsrPartitionState", "versions": "2+",
-        "about": "The state of each partition" }
+        "about": "The state of each partition." }
     ]},
     { "name": "LiveLeaders", "type": "[]LeaderAndIsrLiveLeader", "versions": "0+",
       "about": "The current live leaders.", "fields": [
@@ -83,7 +83,7 @@
       { "name": "Isr", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
         "about": "The in-sync replica IDs." },
       { "name": "PartitionEpoch", "type": "int32", "versions": "0+",
-        "about": "The current epoch for the partition. The epoch is a monotonically increasing value which is incremented after every partition change. (Since the LeaderAndIsr request is only used by the legacy controller, this corresponds to the zkVersion)" },
+        "about": "The current epoch for the partition. The epoch is a monotonically increasing value which is incremented after every partition change. (Since the LeaderAndIsr request is only used by the legacy controller, this corresponds to the zkVersion)." },
       { "name": "Replicas", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
         "about": "The replica IDs." },
       { "name": "AddingReplicas", "type": "[]int32", "versions": "3+", "ignorable": true, "entityType": "brokerId",

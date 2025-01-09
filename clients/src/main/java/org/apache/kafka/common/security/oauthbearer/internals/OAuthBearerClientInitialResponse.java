@@ -136,7 +136,7 @@ public class OAuthBearerClientInitialResponse {
     /**
      * Return the always non-null token value
      * 
-     * @return the always non-null toklen value
+     * @return the always non-null token value
      */
     public String tokenValue() {
         return tokenValue;

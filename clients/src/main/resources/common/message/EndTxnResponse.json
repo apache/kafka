@@ -33,9 +33,9 @@
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },
-    { "name": "ProducerId", "type": "int64", "versions": "5+", "entityType": "producerId", "default": "-1", "ignorable": "true",
+    { "name": "ProducerId", "type": "int64", "versions": "5+", "entityType": "producerId", "default": "-1", "ignorable": true,
       "about": "The producer ID." },
-    { "name": "ProducerEpoch", "type": "int16", "versions": "5+", "default": "-1", "ignorable": "true",
+    { "name": "ProducerEpoch", "type": "int16", "versions": "5+", "default": "-1", "ignorable": true,
       "about": "The current epoch associated with the producer." }
   ]
 }

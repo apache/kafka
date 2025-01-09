@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.Feature;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -83,6 +84,9 @@ class ConsumerGroupCommandTestUtils {
                 .setTypes(Collections.singleton(CO_KRAFT))
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("kraftGroupCoordinator"))
+                .setFeatures(Utils.mkMap(
+                    Utils.mkEntry(Feature.TRANSACTION_VERSION, (short) 2),
+                    Utils.mkEntry(Feature.GROUP_VERSION, (short) 1)))
                 .build());
     }
 
@@ -101,10 +105,12 @@ class ConsumerGroupCommandTestUtils {
                 consumer -> consumer.subscribe(Collections.singleton(topic)));
     }
 
-    private static <T> AutoCloseable buildConsumers(int numberOfConsumers,
-                                                    boolean syncCommit,
-                                                    Supplier<KafkaConsumer<T, T>> consumerSupplier,
-                                                    Consumer<KafkaConsumer<T, T>> setPartitions) {
+    static <T> AutoCloseable buildConsumers(
+        int numberOfConsumers,
+        boolean syncCommit,
+        Supplier<KafkaConsumer<T, T>> consumerSupplier,
+        Consumer<KafkaConsumer<T, T>> setPartitions
+    ) {
         List<KafkaConsumer<T, T>> consumers = new ArrayList<>(numberOfConsumers);
         ExecutorService executor = Executors.newFixedThreadPool(numberOfConsumers);
         AtomicBoolean closed = new AtomicBoolean(false);
@@ -137,7 +143,7 @@ class ConsumerGroupCommandTestUtils {
                                          AtomicBoolean closed) {
         try (KafkaConsumer<T, T> kafkaConsumer = consumerSupplier.get()) {
             while (!closed.get()) {
-                kafkaConsumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                kafkaConsumer.poll(Duration.ofMillis(1000));
                 if (syncCommit)
                     kafkaConsumer.commitSync();
             }
