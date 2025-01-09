@@ -11005,13 +11005,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testRaftShouldAlwaysForwardElectLeaders(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleElectLeaders)
-  }
-
-  @Test
   def testRaftShouldAlwaysForwardListPartitionReassignments(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(raftSupport = true)

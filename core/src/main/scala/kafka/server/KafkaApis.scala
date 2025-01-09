@@ -43,7 +43,6 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsPartitionResult, DeleteRecordsTopicResult}
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
-import org.apache.kafka.common.message.ElectLeadersResponseData.{PartitionResult, ReplicaElectionResult}
 import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
@@ -52,7 +51,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ListenerName}
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
@@ -248,7 +247,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request, requestLocal).exceptionally(handleError)
-        case ApiKeys.ELECT_LEADERS => maybeForwardToController(request, handleElectLeaders)
+        case ApiKeys.ELECT_LEADERS => forwardToControllerOrThrow(request, KafkaApis.shouldAlwaysForward)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigsRequest(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleAlterPartitionReassignmentsRequest)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleListPartitionReassignmentsRequest)
@@ -3160,77 +3159,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       true
   }
 
-  def handleElectLeaders(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-    val electionRequest = request.body[ElectLeadersRequest]
-
-    def sendResponseCallback(
-      error: ApiError
-    )(
-      results: Map[TopicPartition, ApiError]
-    ): Unit = {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        val adjustedResults = if (electionRequest.data.topicPartitions == null) {
-          /* When performing elections across all of the partitions we should only return
-           * partitions for which there was an election or resulted in an error. In other
-           * words, partitions that didn't need election because they ready have the correct
-           * leader are not returned to the client.
-           */
-          results.filter { case (_, error) =>
-            error.error != Errors.ELECTION_NOT_NEEDED
-          }
-        } else results
-
-        val electionResults = new util.ArrayList[ReplicaElectionResult]()
-        adjustedResults
-          .groupBy { case (tp, _) => tp.topic }
-          .foreachEntry { (topic, ps) =>
-            val electionResult = new ReplicaElectionResult()
-
-            electionResult.setTopic(topic)
-            ps.foreachEntry { (topicPartition, error) =>
-              val partitionResult = new PartitionResult()
-              partitionResult.setPartitionId(topicPartition.partition)
-              partitionResult.setErrorCode(error.error.code)
-              partitionResult.setErrorMessage(error.message)
-              electionResult.partitionResult.add(partitionResult)
-            }
-
-            electionResults.add(electionResult)
-          }
-
-        new ElectLeadersResponse(
-          requestThrottleMs,
-          error.error.code,
-          electionResults,
-          electionRequest.version
-        )
-      })
-    }
-
-    if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
-      val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)
-      val partitionErrors: Map[TopicPartition, ApiError] =
-        electionRequest.topicPartitions.asScala.iterator.map(partition => partition -> error).toMap
-
-      sendResponseCallback(error)(partitionErrors)
-    } else {
-      val partitions = if (electionRequest.data.topicPartitions == null) {
-        metadataCache.getAllTopics().flatMap(metadataCache.getTopicPartitions)
-      } else {
-        electionRequest.topicPartitions.asScala
-      }
-
-      replicaManager.electLeaders(
-        zkSupport.controller,
-        partitions,
-        electionRequest.electionType,
-        sendResponseCallback(ApiError.NONE),
-        electionRequest.data.timeoutMs
-      )
-    }
-  }
-
   def handleOffsetDeleteRequest(
     request: RequestChannel.Request,
     requestLocal: RequestLocal
@@ -3411,50 +3339,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterPartitionRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-    val alterPartitionRequest = request.body[AlterPartitionRequest]
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-
-    if (!zkSupport.controller.isActive)
-      requestHelper.sendResponseExemptThrottle(request, alterPartitionRequest.getErrorResponse(
-        AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NOT_CONTROLLER.exception))
-    else
-      zkSupport.controller.alterPartitions(alterPartitionRequest.data, request.context.apiVersion, alterPartitionResp =>
-        requestHelper.sendResponseExemptThrottle(request, new AlterPartitionResponse(alterPartitionResp)))
+    throw KafkaApis.shouldNeverReceive(request)
   }
 
   def handleUpdateFeatures(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-    val updateFeaturesRequest = request.body[UpdateFeaturesRequest]
-
-    def sendResponseCallback(errors: Either[ApiError, Map[String, ApiError]]): Unit = {
-      def createResponse(throttleTimeMs: Int): UpdateFeaturesResponse = {
-        errors match {
-          case Left(topLevelError) =>
-            UpdateFeaturesResponse.createWithErrors(
-              topLevelError,
-              Collections.emptySet(),
-              throttleTimeMs)
-          case Right(featureUpdateErrors) =>
-            // This response is not correct, but since this is ZK specific code it will be removed in 4.0
-            UpdateFeaturesResponse.createWithErrors(
-              ApiError.NONE,
-              featureUpdateErrors.asJava.keySet(),
-              throttleTimeMs)
-        }
-      }
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs))
-    }
-
-    if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
-      sendResponseCallback(Left(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)))
-    } else if (!zkSupport.controller.isActive) {
-      sendResponseCallback(Left(new ApiError(Errors.NOT_CONTROLLER)))
-    } else if (!config.isFeatureVersioningSupported) {
-      sendResponseCallback(Left(new ApiError(Errors.INVALID_REQUEST, "Feature versioning system is disabled.")))
-    } else {
-      zkSupport.controller.updateFeatures(updateFeaturesRequest, sendResponseCallback)
-    }
+    throw KafkaApis.shouldAlwaysForward(request)
   }
 
   def handleDescribeCluster(request: RequestChannel.Request): Unit = {
