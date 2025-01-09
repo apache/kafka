@@ -28,8 +28,6 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
-import org.slf4j.Logger;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,7 +43,6 @@ import java.util.stream.Collectors;
  */
 public class FetchRequestManager extends AbstractFetch implements RequestManager {
 
-    private final Logger log;
     private final NetworkClientDelegate networkClientDelegate;
     private CompletableFuture<Void> pendingFetchRequestFuture;
 
@@ -59,7 +56,6 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                         final NetworkClientDelegate networkClientDelegate,
                         final ApiVersions apiVersions) {
         super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
-        this.log = logContext.logger(FetchRequestManager.class);
         this.networkClientDelegate = networkClientDelegate;
     }
 

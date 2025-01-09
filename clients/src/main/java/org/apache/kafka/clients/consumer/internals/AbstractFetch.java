@@ -72,7 +72,7 @@ public abstract class AbstractFetch implements Closeable {
     protected final BufferSupplier decompressionBufferSupplier;
     protected final Set<Integer> nodesWithPendingFetchRequests;
 
-    protected final Map<Integer, FetchSessionHandler> sessionHandlers;
+    private final Map<Integer, FetchSessionHandler> sessionHandlers;
 
     private final ApiVersions apiVersions;
 
@@ -434,15 +434,15 @@ public abstract class AbstractFetch implements Closeable {
                 });
                 Uuid topicId = topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID);
                 FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(topicId,
-                    position.offset,
-                    FetchRequest.INVALID_LOG_START_OFFSET,
-                    fetchConfig.fetchSize,
-                    position.currentLeader.epoch,
-                    Optional.empty());
+                        position.offset,
+                        FetchRequest.INVALID_LOG_START_OFFSET,
+                        fetchConfig.fetchSize,
+                        position.currentLeader.epoch,
+                        Optional.empty());
                 builder.add(partition, partitionData);
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", fetchConfig.isolationLevel,
-                    partition, position, node);
+                        partition, position, node);
             }
         }
 
