@@ -26,10 +26,9 @@ import javax.management.ObjectName;
 /**
  * Utility class for sanitizing/desanitizing/quoting values used in JMX metric names.
  * <p>
- * User principals and client-ids are URL-encoded using ({@link #sanitize(String)}.
- * User principals are URL-encoded in all metric names as well. All other metric tags 
- * including client-id are quoted if they contain special characters using 
- * {@link #jmxSanitize(String)} when registering in JMX.
+ * User principals are URL-encoded using ({@link #sanitize(String)} in all metric names.
+ * All other metric tags including client-id are quoted if they contain special characters 
+ * using {@link #jmxSanitize(String)} when registering in JMX.
  */
 public class Sanitizer {
 
