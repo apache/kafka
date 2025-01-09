@@ -56,7 +56,8 @@ ARG build_date
 LABEL org.label-schema.name="kafka" \
       org.label-schema.description="Apache Kafka" \
       org.label-schema.build-date="${build_date}" \
-      org.label-schema.vcs-url="https://github.com/apache/kafka"
+      org.label-schema.vcs-url="https://github.com/apache/kafka" \
+      maintainer="Apache Kafka"
       
 MAINTAINER Apache Kafka
 

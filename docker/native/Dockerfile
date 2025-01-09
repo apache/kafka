@@ -51,9 +51,8 @@ ARG build_date
 LABEL org.label-schema.name="kafka" \
       org.label-schema.description="Apache Kafka" \
       org.label-schema.build-date="${build_date}" \
-      org.label-schema.vcs-url="https://github.com/apache/kafka"
-      
-MAINTAINER Apache Kafka
+      org.label-schema.vcs-url="https://github.com/apache/kafka" \
+      maintainer="Apache Kafka"
 
 RUN apk update ; \
     apk add --no-cache gcompat ; \
