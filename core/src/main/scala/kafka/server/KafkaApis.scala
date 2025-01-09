@@ -195,7 +195,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
         case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
         case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request, requestLocal)
-        case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
         case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request, requestLocal).exceptionally(handleError)
         case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request).exceptionally(handleError)
         case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
@@ -244,7 +243,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => maybeForwardToController(request, handleAlterUserScramCredentialsRequest)
         case ApiKeys.ALTER_PARTITION => handleAlterPartitionRequest(request)
         case ApiKeys.UPDATE_FEATURES => maybeForwardToController(request, handleUpdateFeatures)
-        case ApiKeys.ENVELOPE => handleEnvelope(request)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
         case ApiKeys.UNREGISTER_BROKER => forwardToControllerOrFail(request)
@@ -417,10 +415,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseExemptThrottle(request, new UpdateMetadataResponse(
         new UpdateMetadataResponseData().setErrorCode(Errors.NONE.code)))
     }
-  }
-
-  def handleControlledShutdownRequest(request: RequestChannel.Request): Unit = {
-    throw KafkaApis.shouldNeverReceive(request)
   }
 
   /**
@@ -3458,10 +3452,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeClusterResponse(response.setThrottleTimeMs(requestThrottleMs)))
-  }
-
-  def handleEnvelope(request: RequestChannel.Request): Unit = {
-    throw KafkaApis.shouldNeverReceive(request)
   }
 
   def handleDescribeProducersRequest(request: RequestChannel.Request): Unit = {
