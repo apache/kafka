@@ -1566,7 +1566,7 @@ project(':group-coordinator') {
              "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/group/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
-             "-t", "CoordinatorRecordTypeGenerator"
+             "-t", "CoordinatorRecordTypeGenerator", "CoordinatorRecordJsonConvertersGenerator"
     ]
     inputs.dir("src/main/resources/common/message")
         .withPropertyName("messages")
@@ -1828,7 +1828,7 @@ project(':share-coordinator') {
              "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/share/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
-             "-t", "CoordinatorRecordTypeGenerator"
+             "-t", "CoordinatorRecordTypeGenerator", "CoordinatorRecordJsonConvertersGenerator"
     ]
     inputs.dir("src/main/resources/common/message")
             .withPropertyName("messages")
