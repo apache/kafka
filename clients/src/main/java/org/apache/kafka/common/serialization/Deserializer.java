@@ -64,9 +64,13 @@ public interface Deserializer<T> extends Closeable {
 
     /**
      * Deserialize a record value from a {@link ByteBuffer} into a value or object.
-     * <p>
-     * The implementation cannot make any assumptions about the {@link ByteBuffer} like the position, limit, capacity,
-     * etc., or if it is backed by {@link ByteBuffer#hasArray() an array or not}.
+     *
+     * <p>If {@code ByteBufferDeserializer} is used by an application, the application code cannot make any assumptions
+     * about the returned {@link ByteBuffer} like the position, limit, capacity, etc., or if it is backed by
+     * {@link ByteBuffer#hasArray() an array or not}.
+     *
+     * <p>Similarly, if this method is overwritten, the implementation cannot make any assumptions about the
+     * passed in {@link ByteBuffer} either.
      *
      * @param topic topic associated with the data
      * @param headers headers associated with the record; may be empty.
