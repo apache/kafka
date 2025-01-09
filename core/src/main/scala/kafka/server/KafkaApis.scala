@@ -171,16 +171,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     maybeForwardToController(request, errorHandler)
   }
 
-  private def forwardToControllerOrThrow(request: RequestChannel.Request,
-                                          createException: RequestChannel.Request => Exception
-                                       ): Unit = {
-    def errorHandler(request: RequestChannel.Request): Unit = {
-      throw createException(request)
-    }
-
-    maybeForwardToController(request, errorHandler)
-  }
-
   /**
    * Top-level method that handles all requests and multiplexes to the right api
    */
@@ -247,7 +237,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request, requestLocal).exceptionally(handleError)
-        case ApiKeys.ELECT_LEADERS => forwardToControllerOrThrow(request, KafkaApis.shouldAlwaysForward)
+        case ApiKeys.ELECT_LEADERS => maybeForwardToController(request, handleElectLeaders)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigsRequest(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleAlterPartitionReassignmentsRequest)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleListPartitionReassignmentsRequest)
@@ -3157,6 +3147,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       false
     else
       true
+  }
+
+  def handleElectLeaders(request: RequestChannel.Request): Unit = {
+    throw KafkaApis.shouldAlwaysForward(request)
   }
 
   def handleOffsetDeleteRequest(
