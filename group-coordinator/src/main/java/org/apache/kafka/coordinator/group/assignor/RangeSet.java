@@ -160,14 +160,12 @@ class RangeSet implements Set<Integer> {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Set)) return false;
+        if (!(o instanceof Set<?> otherSet)) return false;
 
-        if (o instanceof RangeSet) {
-            RangeSet other = (RangeSet) o;
+        if (o instanceof RangeSet other) {
             return this.from == other.from && this.to == other.to;
         }
 
-        Set<?> otherSet = (Set<?>) o;
         if (otherSet.size() != this.size()) return false;
 
         for (int i = from; i < to; i++) {

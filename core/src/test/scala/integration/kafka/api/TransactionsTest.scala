@@ -172,7 +172,6 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @Flaky("KAFKA-18036")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testReadCommittedConsumerShouldNotSeeUndecidedData(quorum: String, groupProtocol: String): Unit = {
@@ -711,6 +710,7 @@ class TransactionsTest extends IntegrationTestHarness {
     assertThrows(classOf[IllegalStateException], () => producer.initTransactions())
   }
 
+  @Flaky("KAFKA-18035")
   @ParameterizedTest
   @CsvSource(Array(
     "kraft,classic,false",
@@ -850,7 +850,6 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @Flaky("KAFKA-18306")
   @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isTV2Enabled={2}")
   @CsvSource(Array(
     "kraft, classic, false",

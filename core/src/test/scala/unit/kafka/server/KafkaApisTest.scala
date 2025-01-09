@@ -57,7 +57,6 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequ
 import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
 import org.apache.kafka.common.message.ShareFetchRequestData.{AcknowledgementBatch, ForgottenTopic}
 import org.apache.kafka.common.message.ShareFetchResponseData.{AcquiredRecords, PartitionData, ShareFetchableTopicResponse}
-import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
@@ -79,13 +78,11 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.{BrokerFeatures, ClientMetricsManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
@@ -139,7 +136,7 @@ class KafkaApisTest extends Logging {
   private val brokerId = 1
   // KRaft tests should override this with a KRaftMetadataCache
   private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId, MetadataVersion.latestTesting())
-  private var brokerEpochManager: ZkBrokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
+  private val brokerEpochManager: ZkBrokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
@@ -173,15 +170,14 @@ class KafkaApisTest extends Logging {
                       overrideProperties: Map[String, String] = Map.empty,
                       featureVersions: Seq[FeatureVersion] = Seq.empty): KafkaApis = {
     val properties = if (raftSupport) {
-      val properties = TestUtils.createBrokerConfig(brokerId, "")
+      val properties = TestUtils.createBrokerConfig(brokerId)
       properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
       properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
       val voterId = brokerId + 1
       properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
-      properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
       properties
     } else {
-      TestUtils.createBrokerConfig(brokerId, "zk")
+      TestUtils.createBrokerConfig(brokerId)
     }
     overrideProperties.foreach( p => properties.put(p._1, p._2))
     TestUtils.setIbpVersion(properties, interBrokerProtocolVersion)
@@ -737,22 +733,6 @@ class KafkaApisTest extends Logging {
     assertEquals(subscriptionName, describeConfigsResult.resourceName)
     val configs = describeConfigsResult.configs
     assertEquals(cmConfigs.size, configs.size)
-  }
-
-  @Test
-  def testDescribeQuorumNotAllowedForZkClusters(): Unit = {
-    val requestData = DescribeQuorumRequest.singletonRequest(KafkaRaftServer.MetadataPartition)
-    val requestBuilder = new DescribeQuorumRequest.Builder(requestData)
-    val request = buildRequest(requestBuilder.build(DescribeQuorumRequestData.HIGHEST_SUPPORTED_VERSION))
-
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(enableForwarding = true)
-    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[DescribeQuorumResponse](request)
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR.message(), response.data.errorMessage)
   }
 
   @Test
@@ -2969,52 +2949,7 @@ class KafkaApisTest extends Logging {
     checkInvalidPartition(-1)
     checkInvalidPartition(1) // topic has only one partition
   }
-
-  @Test
-  def shouldThrowUnsupportedVersionExceptionOnHandleAddOffsetToTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
-    assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleAddOffsetsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
-  }
-
-  @Test
-  def shouldThrowUnsupportedVersionExceptionOnHandleAddPartitionsToTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
-    assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleAddPartitionsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
-  }
-
-  @Test
-  def shouldThrowUnsupportedVersionExceptionOnHandleTxnOffsetCommitRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
-    assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleAddPartitionsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
-  }
-
-  @Test
-  def shouldThrowUnsupportedVersionExceptionOnHandleEndTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
-    assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleEndTxnRequest(null, RequestLocal.withThreadConfinedCaching))
-  }
-
-  @Test
-  def shouldThrowUnsupportedVersionExceptionOnHandleWriteTxnMarkersRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
-    assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleWriteTxnMarkersRequest(null, RequestLocal.withThreadConfinedCaching))
-  }
-
+  
   @Test
   def requiredAclsNotPresentWriteTxnMarkersThrowsAuthorizationException(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
@@ -3097,99 +3032,7 @@ class KafkaApisTest extends Logging {
     val markersResponse = capturedResponse.getValue
     assertEquals(2, markersResponse.errorsByProducerId.size())
   }
-
-  @Test
-  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndLeaderEpoch(): Unit = {
-    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.INITIAL_LEADER_EPOCH + 2, deletePartition = true)
-  }
-
-  @Test
-  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndDeleteSentinel(): Unit = {
-    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.EPOCH_DURING_DELETE, deletePartition = true)
-  }
-
-  @Test
-  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndNoEpochSentinel(): Unit = {
-    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.NO_EPOCH, deletePartition = true)
-  }
-
-  @Test
-  def shouldNotResignCoordinatorsIfStopReplicaReceivedWithoutDeleteFlag(): Unit = {
-    shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.INITIAL_LEADER_EPOCH + 2, deletePartition = false)
-  }
-
-  def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(leaderEpoch: Int,
-                                                                  deletePartition: Boolean): Unit = {
-    val controllerId = 0
-    val controllerEpoch = 5
-    val brokerEpoch = 230498320L
-
-    val fooPartition = new TopicPartition("foo", 0)
-    val groupMetadataPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
-    val txnStatePartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, 0)
-
-    val topicStates = Seq(
-      new StopReplicaTopicState()
-        .setTopicName(groupMetadataPartition.topic)
-        .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(groupMetadataPartition.partition)
-          .setLeaderEpoch(leaderEpoch)
-          .setDeletePartition(deletePartition)).asJava),
-      new StopReplicaTopicState()
-        .setTopicName(txnStatePartition.topic)
-        .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(txnStatePartition.partition)
-          .setLeaderEpoch(leaderEpoch)
-          .setDeletePartition(deletePartition)).asJava),
-      new StopReplicaTopicState()
-        .setTopicName(fooPartition.topic)
-        .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(fooPartition.partition)
-          .setLeaderEpoch(leaderEpoch)
-          .setDeletePartition(deletePartition)).asJava)
-    ).asJava
-
-    val stopReplicaRequest = new StopReplicaRequest.Builder(
-      ApiKeys.STOP_REPLICA.latestVersion,
-      controllerId,
-      controllerEpoch,
-      brokerEpoch,
-      false,
-      topicStates
-    ).build()
-    val request = buildRequest(stopReplicaRequest)
-
-    when(replicaManager.stopReplicas(
-      ArgumentMatchers.eq(request.context.correlationId),
-      ArgumentMatchers.eq(controllerId),
-      ArgumentMatchers.eq(controllerEpoch),
-      ArgumentMatchers.eq(stopReplicaRequest.partitionStates().asScala)
-    )).thenReturn(
-      (mutable.Map(
-        groupMetadataPartition -> Errors.NONE,
-        txnStatePartition -> Errors.NONE,
-        fooPartition -> Errors.NONE
-      ), Errors.NONE)
-    )
-    when(controller.brokerEpoch).thenReturn(brokerEpoch)
-    kafkaApis = createKafkaApis()
-    kafkaApis.handleStopReplicaRequest(request)
-
-    if (deletePartition) {
-      if (leaderEpoch >= 0) {
-        verify(txnCoordinator).onResignation(txnStatePartition.partition, Some(leaderEpoch))
-        verify(groupCoordinator).onResignation(groupMetadataPartition.partition, OptionalInt.of(leaderEpoch))
-      } else {
-        verify(txnCoordinator).onResignation(txnStatePartition.partition, None)
-        verify(groupCoordinator).onResignation(groupMetadataPartition.partition, OptionalInt.empty)
-      }
-    }
-  }
-
+  
   @Test
   def shouldRespondWithUnknownTopicOrPartitionForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
     val tp1 = new TopicPartition("t", 0)
@@ -8899,107 +8742,6 @@ class KafkaApisTest extends Logging {
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
-  @Test
-  def rejectJoinGroupRequestWhenStaticMembershipNotSupported(): Unit = {
-    val joinGroupRequest = new JoinGroupRequest.Builder(
-      new JoinGroupRequestData()
-        .setGroupId("test")
-        .setMemberId("test")
-        .setGroupInstanceId("instanceId")
-        .setProtocolType("consumer")
-        .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection)
-    ).build()
-
-    val requestChannelRequest = buildRequest(joinGroupRequest)
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleJoinGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[JoinGroupResponse](requestChannelRequest)
-    assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
-  }
-
-  @Test
-  def rejectSyncGroupRequestWhenStaticMembershipNotSupported(): Unit = {
-    val syncGroupRequest = new SyncGroupRequest.Builder(
-      new SyncGroupRequestData()
-        .setGroupId("test")
-        .setMemberId("test")
-        .setGroupInstanceId("instanceId")
-        .setGenerationId(1)
-    ).build()
-
-    val requestChannelRequest = buildRequest(syncGroupRequest)
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleSyncGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[SyncGroupResponse](requestChannelRequest)
-    assertEquals(Errors.UNSUPPORTED_VERSION, response.error)
-  }
-
-  @Test
-  def rejectHeartbeatRequestWhenStaticMembershipNotSupported(): Unit = {
-    val heartbeatRequest = new HeartbeatRequest.Builder(
-      new HeartbeatRequestData()
-        .setGroupId("test")
-        .setMemberId("test")
-        .setGroupInstanceId("instanceId")
-        .setGenerationId(1)
-    ).build()
-    val requestChannelRequest = buildRequest(heartbeatRequest)
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleHeartbeatRequest(requestChannelRequest)
-
-    val response = verifyNoThrottling[HeartbeatResponse](requestChannelRequest)
-    assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
-  }
-
-  @Test
-  def rejectOffsetCommitRequestWhenStaticMembershipNotSupported(): Unit = {
-    val offsetCommitRequest = new OffsetCommitRequest.Builder(
-      new OffsetCommitRequestData()
-        .setGroupId("test")
-        .setMemberId("test")
-        .setGroupInstanceId("instanceId")
-        .setGenerationIdOrMemberEpoch(100)
-        .setTopics(Collections.singletonList(
-          new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setName("test")
-            .setPartitions(Collections.singletonList(
-              new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                .setPartitionIndex(0)
-                .setCommittedOffset(100)
-                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                .setCommittedMetadata("")
-            ))
-        ))
-    ).build()
-
-    val requestChannelRequest = buildRequest(offsetCommitRequest)
-
-    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
-    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleOffsetCommitRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    val expectedTopicErrors = Collections.singletonList(
-      new OffsetCommitResponseData.OffsetCommitResponseTopic()
-        .setName("test")
-        .setPartitions(Collections.singletonList(
-          new OffsetCommitResponseData.OffsetCommitResponsePartition()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-        ))
-    )
-    val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
-    assertEquals(expectedTopicErrors, response.data.topics())
-  }
-
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
   def testHandleLeaveGroupWithMultipleMembers(version: Short): Unit = {
@@ -9754,227 +9496,6 @@ class KafkaApisTest extends Logging {
     assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesOutRate.get.count())
   }
 
-  @Test
-  def rejectInitProducerIdWhenIdButNotEpochProvided(): Unit = {
-    val initProducerIdRequest = new InitProducerIdRequest.Builder(
-      new InitProducerIdRequestData()
-        .setTransactionalId("known")
-        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
-        .setProducerId(10)
-        .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
-    ).build()
-
-    val requestChannelRequest = buildRequest(initProducerIdRequest)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleInitProducerIdRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[InitProducerIdResponse](requestChannelRequest)
-    assertEquals(Errors.INVALID_REQUEST, response.error)
-  }
-
-  @Test
-  def rejectInitProducerIdWhenEpochButNotIdProvided(): Unit = {
-    val initProducerIdRequest = new InitProducerIdRequest.Builder(
-      new InitProducerIdRequestData()
-        .setTransactionalId("known")
-        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
-        .setProducerId(RecordBatch.NO_PRODUCER_ID)
-        .setProducerEpoch(2)
-    ).build()
-    val requestChannelRequest = buildRequest(initProducerIdRequest)
-    kafkaApis = createKafkaApis(IBP_2_2_IV1)
-    kafkaApis.handleInitProducerIdRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[InitProducerIdResponse](requestChannelRequest)
-    assertEquals(Errors.INVALID_REQUEST, response.error)
-  }
-
-  @Test
-  def testUpdateMetadataRequestWithCurrentBrokerEpoch(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testUpdateMetadataRequest(currentBrokerEpoch, currentBrokerEpoch, Errors.NONE)
-  }
-
-  @Test
-  def testUpdateMetadataRequestWithNewerBrokerEpochIsValid(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testUpdateMetadataRequest(currentBrokerEpoch, currentBrokerEpoch + 1, Errors.NONE)
-  }
-
-  @Test
-  def testUpdateMetadataRequestWithStaleBrokerEpochIsRejected(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testUpdateMetadataRequest(currentBrokerEpoch, currentBrokerEpoch - 1, Errors.STALE_BROKER_EPOCH)
-  }
-
-  def testUpdateMetadataRequest(currentBrokerEpoch: Long, brokerEpochInRequest: Long, expectedError: Errors): Unit = {
-    val updateMetadataRequest = createBasicMetadataRequest("topicA", 1, brokerEpochInRequest, 1)
-    val request = buildRequest(updateMetadataRequest)
-
-    val capturedResponse: ArgumentCaptor[UpdateMetadataResponse] = ArgumentCaptor.forClass(classOf[UpdateMetadataResponse])
-
-    when(controller.brokerEpoch).thenReturn(currentBrokerEpoch)
-    when(replicaManager.maybeUpdateMetadataCache(
-      ArgumentMatchers.eq(request.context.correlationId),
-      any()
-    )).thenReturn(
-      Seq()
-    )
-    kafkaApis = createKafkaApis()
-    kafkaApis.handleUpdateMetadataRequest(request, RequestLocal.withThreadConfinedCaching)
-    verify(requestChannel).sendResponse(
-      ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
-    )
-    val updateMetadataResponse = capturedResponse.getValue
-    assertEquals(expectedError, updateMetadataResponse.error())
-    if (expectedError == Errors.NONE) {
-      verify(replicaManager).maybeUpdateMetadataCache(
-        ArgumentMatchers.eq(request.context.correlationId),
-        any()
-      )
-    }
-  }
-
-  @Test
-  def testLeaderAndIsrRequestWithCurrentBrokerEpoch(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testLeaderAndIsrRequest(currentBrokerEpoch, currentBrokerEpoch, Errors.NONE)
-  }
-
-  @Test
-  def testLeaderAndIsrRequestWithNewerBrokerEpochIsValid(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testLeaderAndIsrRequest(currentBrokerEpoch, currentBrokerEpoch + 1, Errors.NONE)
-  }
-
-  @Test
-  def testLeaderAndIsrRequestWithStaleBrokerEpochIsRejected(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testLeaderAndIsrRequest(currentBrokerEpoch, currentBrokerEpoch - 1, Errors.STALE_BROKER_EPOCH)
-  }
-
-  def testLeaderAndIsrRequest(currentBrokerEpoch: Long, brokerEpochInRequest: Long, expectedError: Errors): Unit = {
-    val controllerId = 2
-    val controllerEpoch = 6
-    val capturedResponse: ArgumentCaptor[LeaderAndIsrResponse] = ArgumentCaptor.forClass(classOf[LeaderAndIsrResponse])
-    val partitionStates = Seq(
-      new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
-        .setTopicName("topicW")
-        .setPartitionIndex(1)
-        .setControllerEpoch(1)
-        .setLeader(0)
-        .setLeaderEpoch(1)
-        .setIsr(asList(0, 1))
-        .setPartitionEpoch(2)
-        .setReplicas(asList(0, 1, 2))
-        .setIsNew(false)
-    ).asJava
-    val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(
-      ApiKeys.LEADER_AND_ISR.latestVersion,
-      controllerId,
-      controllerEpoch,
-      brokerEpochInRequest,
-      partitionStates,
-      Collections.singletonMap("topicW", Uuid.randomUuid()),
-      asList(new Node(0, "host0", 9090), new Node(1, "host1", 9091))
-    ).build()
-    val request = buildRequest(leaderAndIsrRequest)
-    val response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-      .setErrorCode(Errors.NONE.code)
-      .setPartitionErrors(asList()), leaderAndIsrRequest.version())
-
-    when(controller.brokerEpoch).thenReturn(currentBrokerEpoch)
-    when(replicaManager.becomeLeaderOrFollower(
-      ArgumentMatchers.eq(request.context.correlationId),
-      any(),
-      any()
-    )).thenReturn(
-      response
-    )
-    kafkaApis = createKafkaApis()
-    kafkaApis.handleLeaderAndIsrRequest(request)
-    verify(requestChannel).sendResponse(
-      ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
-    )
-    val leaderAndIsrResponse = capturedResponse.getValue
-    assertEquals(expectedError, leaderAndIsrResponse.error())
-  }
-
-  @Test
-  def testStopReplicaRequestWithCurrentBrokerEpoch(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testStopReplicaRequest(currentBrokerEpoch, currentBrokerEpoch, Errors.NONE)
-  }
-
-  @Test
-  def testStopReplicaRequestWithNewerBrokerEpochIsValid(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testStopReplicaRequest(currentBrokerEpoch, currentBrokerEpoch + 1, Errors.NONE)
-  }
-
-  @Test
-  def testStopReplicaRequestWithStaleBrokerEpochIsRejected(): Unit = {
-    val currentBrokerEpoch = 1239875L
-    testStopReplicaRequest(currentBrokerEpoch, currentBrokerEpoch - 1, Errors.STALE_BROKER_EPOCH)
-  }
-
-  def testStopReplicaRequest(currentBrokerEpoch: Long, brokerEpochInRequest: Long, expectedError: Errors): Unit = {
-    val controllerId = 0
-    val controllerEpoch = 5
-    val capturedResponse: ArgumentCaptor[StopReplicaResponse] = ArgumentCaptor.forClass(classOf[StopReplicaResponse])
-    val fooPartition = new TopicPartition("foo", 0)
-    val topicStates = Seq(
-      new StopReplicaTopicState()
-        .setTopicName(fooPartition.topic)
-        .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(fooPartition.partition)
-          .setLeaderEpoch(1)
-          .setDeletePartition(false)).asJava)
-    ).asJava
-    val stopReplicaRequest = new StopReplicaRequest.Builder(
-      ApiKeys.STOP_REPLICA.latestVersion,
-      controllerId,
-      controllerEpoch,
-      brokerEpochInRequest,
-      false,
-      topicStates
-    ).build()
-    val request = buildRequest(stopReplicaRequest)
-
-    when(controller.brokerEpoch).thenReturn(currentBrokerEpoch)
-    when(replicaManager.stopReplicas(
-      ArgumentMatchers.eq(request.context.correlationId),
-      ArgumentMatchers.eq(controllerId),
-      ArgumentMatchers.eq(controllerEpoch),
-      ArgumentMatchers.eq(stopReplicaRequest.partitionStates().asScala)
-    )).thenReturn(
-      (mutable.Map(
-        fooPartition -> Errors.NONE
-      ), Errors.NONE)
-    )
-    kafkaApis = createKafkaApis()
-    kafkaApis.handleStopReplicaRequest(request)
-    verify(requestChannel).sendResponse(
-      ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
-    )
-    val stopReplicaResponse = capturedResponse.getValue
-    assertEquals(expectedError, stopReplicaResponse.error())
-    if (expectedError != Errors.STALE_BROKER_EPOCH) {
-      verify(replicaManager).stopReplicas(
-        ArgumentMatchers.eq(request.context.correlationId),
-        ArgumentMatchers.eq(controllerId),
-        ArgumentMatchers.eq(controllerEpoch),
-        ArgumentMatchers.eq(stopReplicaRequest.partitionStates().asScala)
-      )
-    }
-  }
-
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.LIST_GROUPS)
   def testListGroupsRequest(version: Short): Unit = {
@@ -10427,7 +9948,7 @@ class KafkaApisTest extends Logging {
                                          numPartitions: Int,
                                          brokerEpoch: Long,
                                          numBrokers: Int,
-                                         topicId: Uuid = Uuid.ZERO_UUID): UpdateMetadataRequest = {
+                                         topicId: Uuid): UpdateMetadataRequest = {
     val replicas = List(0.asInstanceOf[Integer]).asJava
 
     def createPartitionState(partition: Int) = new UpdateMetadataPartitionState()
@@ -10996,27 +10517,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testRaftShouldNeverHandleLeaderAndIsrRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldNeverHandleErrorMessage(kafkaApis.handleLeaderAndIsrRequest)
-  }
-
-  @Test
-  def testRaftShouldNeverHandleStopReplicaRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldNeverHandleErrorMessage(kafkaApis.handleStopReplicaRequest)
-  }
-
-  @Test
-  def testRaftShouldNeverHandleUpdateMetadataRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldNeverHandleErrorMessage(kafkaApis.handleUpdateMetadataRequest(_, RequestLocal.withThreadConfinedCaching))
-  }
-
-  @Test
   def testRaftShouldNeverHandleControlledShutdownRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(raftSupport = true)
@@ -11427,18 +10927,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testGetTelemetrySubscriptionsNotAllowedForZkClusters(): Unit = {
-    val data = new GetTelemetrySubscriptionsRequestData()
-
-    val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(data, true).build())
-    kafkaApis = createKafkaApis(enableForwarding = true)
-    kafkaApis.handle(request, RequestLocal.noCaching)
-
-    val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
-  }
-
-  @Test
   def testGetTelemetrySubscriptions(): Unit = {
     val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(
       new GetTelemetrySubscriptionsRequestData(), true).build())
@@ -11478,18 +10966,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testPushTelemetryNotAllowedForZkClusters(): Unit = {
-    val data = new PushTelemetryRequestData()
-
-    val request = buildRequest(new PushTelemetryRequest.Builder(data, true).build())
-    kafkaApis = createKafkaApis(enableForwarding = true)
-    kafkaApis.handle(request, RequestLocal.noCaching)
-
-    val response = verifyNoThrottling[PushTelemetryResponse](request)
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
-  }
-
-  @Test
   def testPushTelemetry(): Unit = {
     val request = buildRequest(new PushTelemetryRequest.Builder(new PushTelemetryRequestData(), true).build())
 
@@ -11521,16 +10997,6 @@ class KafkaApisTest extends Logging {
 
     val expectedResponse = new PushTelemetryResponseData().setErrorCode(Errors.INVALID_REQUEST.code)
     assertEquals(expectedResponse, response.data)
-  }
-
-  @Test
-  def testListClientMetricsResourcesNotAllowedForZkClusters(): Unit = {
-    val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
-    kafkaApis = createKafkaApis(enableForwarding = true)
-    kafkaApis.handle(request, RequestLocal.noCaching)
-
-    val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
   }
 
   @Test

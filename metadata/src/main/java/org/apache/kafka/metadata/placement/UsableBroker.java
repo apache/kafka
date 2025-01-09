@@ -54,8 +54,7 @@ public class UsableBroker {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof UsableBroker)) return false;
-        UsableBroker other = (UsableBroker) o;
+        if (!(o instanceof UsableBroker other)) return false;
         return other.id == id && other.rack.equals(rack) && other.fenced == fenced;
     }
 

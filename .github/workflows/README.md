@@ -69,9 +69,11 @@ Unlike trunk, the PR builds _will_ utilize the Gradle cache.
 In order to get the attention of committers, we have a triage workflow for Pull Requests
 opened by non-committers. This workflow consists of two files:
 
-* [pr-update.yml](pr-update.yml) When a PR is created, add the `triage` label if the PR
-  was opened by a non-committer.
-* [pr-reviewed.yml](pr-reviewed.yml) Cron job to remove the `triage` label from PRs which have been reviewed
+* [pr-update.yml](pr-update.yml) When a PR is created, add the `triage` label if 
+  the PR was opened by a non-committer.
+* [pr-labels-cron.yml](pr-labels-cron.yml) Cron job to add `needs-attention` label to community 
+  PRs that have not been reviewed after 7 days. Also includes a cron job to 
+  remove the `triage` and `needs-attention` labels from PRs which have been reviewed. 
 
 _The pr-update.yml workflow includes pull_request_target!_
 
@@ -82,7 +84,8 @@ organization must be public. Here are the steps to take:
 * Find yourself
 * Change "Organization Visibility" to Public
 
-Full documentation for this process can be found in GitHub's docs: https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-your-membership-in-organizations/publicizing-or-hiding-organization-membership
+Full documentation for this process can be found in GitHub's docs: 
+https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-your-membership-in-organizations/publicizing-or-hiding-organization-membership
 
 If you are a committer and do not want your membership in the ASF org listed as public, 
 you will need to remove the `triage` label manually.

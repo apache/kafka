@@ -38,7 +38,7 @@ import org.mockito.Mockito.{mock, when}
 import scala.jdk.CollectionConverters._
 
 class OffsetsForLeaderEpochTest {
-  private val config = TestUtils.createBrokerConfigs(1, TestUtils.MockZkConnect).map(KafkaConfig.fromProps).head
+  private val config = TestUtils.createBrokerConfigs(1).map(KafkaConfig.fromProps).head
   private val time = new MockTime
   private val metrics = new Metrics
   private val alterIsrManager = TestUtils.createAlterIsrManager()

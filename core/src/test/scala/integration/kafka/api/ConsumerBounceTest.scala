@@ -77,7 +77,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   private def generateKafkaConfigs(maxGroupSize: String = maxGroupSize.toString): Seq[KafkaConfig] = {
     val properties = new Properties
     testConfigs.foreachEntry((k, v) => properties.setProperty(k, v))
-    FixedPortTestUtils.createBrokerConfigs(brokerCount, null, enableControlledShutdown = false)
+    FixedPortTestUtils.createBrokerConfigs(brokerCount, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, properties))
   }
 
@@ -341,7 +341,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     for (serverIdx <- brokerServers.indices) {
       killBroker(serverIdx)
       val config = newConfigs(serverIdx)
-      servers(serverIdx) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
+      servers(serverIdx) = createBroker(config, time = brokerTime(config.brokerId))
       restartDeadBrokers()
     }
 

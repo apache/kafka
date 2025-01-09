@@ -659,7 +659,7 @@ public class InternalTopicManager {
         final Set<String> topicsToCreate = new HashSet<>();
         for (final String topicName : topicsToValidate) {
             final Optional<Integer> numberOfPartitions = topicsMap.get(topicName).numberOfPartitions();
-            if (!numberOfPartitions.isPresent()) {
+            if (numberOfPartitions.isEmpty()) {
                 log.error("Found undefined number of partitions for topic {}", topicName);
                 throw new StreamsException("Topic " + topicName + " number of partitions not defined");
             }
