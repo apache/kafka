@@ -89,7 +89,7 @@ public class ProducerIntegrationTest {
         @ClusterTest(features = {
             @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)})
     })
-    public void testTransactionWithSend(ClusterInstance cluster) {
+    public void testTransactionWithAddPartitions(ClusterInstance cluster) {
         Map<String, Object> properties = new HashMap<>();
         properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "foobar");
         properties.put(ProducerConfig.CLIENT_ID_CONFIG, "test");
@@ -98,9 +98,10 @@ public class ProducerIntegrationTest {
         try (Producer<byte[], byte[]> producer = cluster.producer(properties)) {
             producer.initTransactions();
             producer.beginTransaction();
-            producer.send(new ProducerRecord<>("test", "key1".getBytes(), "value1".getBytes()));
-            producer.send(new ProducerRecord<>("test", "key2".getBytes(), "value2".getBytes()));
-            producer.send(new ProducerRecord<>("test", "key3".getBytes(), "value3".getBytes()));
+            producer.send(new ProducerRecord<>("test", "key".getBytes(), "value".getBytes()));
+            producer.commitTransaction();
+
+            producer.beginTransaction();
             producer.commitTransaction();
         }
     }
