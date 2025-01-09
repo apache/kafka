@@ -53,7 +53,6 @@ def run_command(node, cmd, ssh_log_file):
             print(e, flush=True)
             raise
 
-
 class ClientCompatibilityFeaturesTest(Test):
     """
     Tests clients for the presence or absence of specific features when communicating with brokers with various
@@ -118,17 +117,20 @@ class ClientCompatibilityFeaturesTest(Test):
     @parametrize(broker_version=str(LATEST_3_0))
     @parametrize(broker_version=str(LATEST_3_1))
     @parametrize(broker_version=str(LATEST_3_2))
-    @parametrize(broker_version=str(LATEST_3_3))
-    @parametrize(broker_version=str(LATEST_3_4))
-    @parametrize(broker_version=str(LATEST_3_5))
-    @parametrize(broker_version=str(LATEST_3_6))
-    @parametrize(broker_version=str(LATEST_3_7))
-    @parametrize(broker_version=str(LATEST_3_8))
-    @parametrize(broker_version=str(LATEST_3_9))
+    @parametrize(broker_version=str(LATEST_3_3), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_4), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_5), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_6), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_7), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_8), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_9), metadata_quorum=quorum.isolated_kraft)
     def run_compatibility_test(self, broker_version, metadata_quorum=quorum.zk):
         if self.zk:
             self.zk.start()
         self.kafka.set_version(KafkaVersion(broker_version))
+        if metadata_quorum == quorum.isolated_kraft:
+            for node in self.kafka.controller_quorum.nodes:
+                node.version = KafkaVersion(broker_version)
         self.kafka.start()
         features = get_broker_features(broker_version)
         self.invoke_compatibility_program(features)
