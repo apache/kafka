@@ -245,8 +245,7 @@ public class LogSegment implements Closeable {
             LOGGER.trace("Inserting {} bytes at end offset {} at position {} with largest timestamp {} at offset {}",
                 records.sizeInBytes(), largestOffset, log.sizeInBytes(), largestTimestampMs, shallowOffsetOfMaxTimestamp);
             int physicalPosition = log.sizeInBytes();
-            if (physicalPosition == 0)
-                rollingBasedTimestamp = OptionalLong.of(largestTimestampMs);
+            boolean updateRollingBasedTimestamp = physicalPosition == 0;
 
             ensureOffsetInRange(largestOffset);
 
@@ -254,32 +253,31 @@ public class LogSegment implements Closeable {
             long appendedBytes = log.append(records);
             LOGGER.trace("Appended {} to {} at end offset {}", appendedBytes, log.file(), largestOffset);
 
-            long batchMaxTimestamp = RecordBatch.NO_TIMESTAMP;
-            long batchShallowOffsetOfMaxTimestamp = -1L;
-            // append an entry to the index at batches level (if needed)
+            long recordsLargestTimestampMs = RecordBatch.NO_TIMESTAMP;
             for (RecordBatch batch : records.batches()) {
-                if (batch.maxTimestamp() > batchMaxTimestamp) {
-                    batchMaxTimestamp = batch.maxTimestamp();
-                    batchShallowOffsetOfMaxTimestamp = batch.lastOffset();
-                }
-
-                // Update the in memory max timestamp and corresponding offset.
+                long batchMaxTimestamp = batch.maxTimestamp();
+                long batchLastOffset = batch.lastOffset();
+                recordsLargestTimestampMs = Math.max(recordsLargestTimestampMs, batchMaxTimestamp);
+                boolean updateTimeIndex = false;
                 if (batchMaxTimestamp > maxTimestampSoFar()) {
-                    maxTimestampAndOffsetSoFar = new TimestampOffset(batchMaxTimestamp, batchShallowOffsetOfMaxTimestamp);
+                    maxTimestampAndOffsetSoFar = new TimestampOffset(batchMaxTimestamp, batchLastOffset);
+                    updateTimeIndex = true;
                 }
 
                 if (bytesSinceLastIndexEntry > indexIntervalBytes) {
-                    offsetIndex().append(batch.lastOffset(), physicalPosition);
+                    offsetIndex().append(batchLastOffset, physicalPosition);
 
                     // max timestamp may not be monotonic, so we need to check it to avoid the time index append error
-                    if (batchMaxTimestamp >= timeIndex().lastEntry().timestamp)
-                        timeIndex().maybeAppend(batchMaxTimestamp, shallowOffsetOfMaxTimestampSoFar());
+                    if (updateTimeIndex) timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar());
 
                     bytesSinceLastIndexEntry = 0;
                 }
-                physicalPosition += batch.sizeInBytes();
-                bytesSinceLastIndexEntry += batch.sizeInBytes();
+                var sizeInBytes = batch.sizeInBytes();
+                physicalPosition += sizeInBytes;
+                bytesSinceLastIndexEntry += sizeInBytes;
             }
+
+            if (updateRollingBasedTimestamp) rollingBasedTimestamp = OptionalLong.of(recordsLargestTimestampMs);
         }
     }
 

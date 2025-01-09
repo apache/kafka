@@ -344,7 +344,9 @@ public class LogSegmentTest {
         MockTime time = new MockTime();
         try (LogSegment seg = createSegment(40, time)) {
 
-            seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, v1Records(40, "hello", "there"));
+            seg.append(41, RecordBatch.NO_TIMESTAMP, -1L,
+                MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 40, Compression.NONE, TimestampType.CREATE_TIME,
+                    new SimpleRecord("hello there".getBytes())));
 
             // If the segment is empty after truncation, the create time should be reset
             time.sleep(500);
@@ -744,7 +746,8 @@ public class LogSegmentTest {
         try (LogSegment segment = createSegment(1)) {
             assertEquals(Long.MAX_VALUE, segment.getFirstBatchTimestamp());
 
-            segment.append(1, 1000L, 1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord("one".getBytes())));
+            segment.append(1, 1000L, 1,
+                MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord(1000L, "one".getBytes())));
             assertEquals(1000L, segment.getFirstBatchTimestamp());
         }
     }
@@ -832,15 +835,22 @@ public class LogSegmentTest {
         builder.append(0L, "key1".getBytes(), "value1".getBytes());
         builder.close();
 
+        // append third batch to buffer1
+        builder = MemoryRecords.builder(buffer1, Compression.NONE, TimestampType.CREATE_TIME, 2);
+        builder.append(2L, "key1".getBytes(), "value1".getBytes());
+        builder.close();
+
         buffer1.flip();
         MemoryRecords record = MemoryRecords.readableRecords(buffer1);
-        segment.append(1L, 1L, 1L, record);
+        segment.append(2L, 2L, 2L, record);
 
-        assertEquals(1, segment.offsetIndex().entries());
+        assertEquals(2, segment.offsetIndex().entries());
         assertEquals(1, segment.offsetIndex().lookup(1L).offset);
+        assertEquals(2, segment.offsetIndex().lookup(2L).offset);
 
         assertEquals(1, segment.timeIndex().entries());
         assertEquals(0L, segment.timeIndex().lookup(1L).offset);
+        assertEquals(2L, segment.timeIndex().lookup(2L).offset);
     }
 
     private ProducerStateManager newProducerStateManager() throws IOException {
