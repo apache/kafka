@@ -58,8 +58,6 @@ LABEL org.label-schema.name="kafka" \
       org.label-schema.build-date="${build_date}" \
       org.label-schema.vcs-url="https://github.com/apache/kafka" \
       maintainer="Apache Kafka"
-      
-MAINTAINER Apache Kafka
 
 RUN set -eux ; \
     apk update ; \
