@@ -543,12 +543,12 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
     if (protocols.contains(GroupType.CONSUMER)) {
-      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
+      if (!isNewGroupCoordinatorEnabled) {
         warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported with the new group coordinator.")
       }
     }
     if (protocols.contains(GroupType.SHARE)) {
-      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
+      if (!isNewGroupCoordinatorEnabled) {
         warn(s"The new '${GroupType.SHARE}' rebalance protocol is only supported with the new group coordinator.")
       }
       warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
