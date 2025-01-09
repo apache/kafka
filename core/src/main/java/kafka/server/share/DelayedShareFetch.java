@@ -218,8 +218,6 @@ public class DelayedShareFetch extends DelayedOperation {
                 try {
                     // If the share partition is already at capacity, we should not attempt to fetch.
                     if (sharePartition.canAcquireRecords()) {
-                        // We do not know the total partitions that can be acquired at this stage, hence we set maxBytes
-                        // to 0 for now and will update it before doing the replica manager fetch.
                         topicPartitionData.put(topicIdPartition, sharePartition.nextFetchOffset());
                     } else {
                         sharePartition.releaseFetchLock();
@@ -349,7 +347,6 @@ public class DelayedShareFetch extends DelayedOperation {
 
         LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
 
-        // Update the maxBytes for every fetchable topic partition.
         for (Map.Entry<TopicIdPartition, Long> entry : topicPartitionFetchOffsets.entrySet()) {
             TopicIdPartition topicIdPartition = entry.getKey();
             long fetchOffset = entry.getValue();
