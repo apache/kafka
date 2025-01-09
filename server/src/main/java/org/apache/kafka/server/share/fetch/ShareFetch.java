@@ -24,6 +24,7 @@ import org.apache.kafka.server.storage.log.FetchParams;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -55,7 +56,7 @@ public class ShareFetch {
     /**
      * The maximum number of bytes that can be fetched for each partition.
      */
-    private final Map<TopicIdPartition, Integer> partitionMaxBytes;
+    private final LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes;
     /**
      * The batch size of the fetch request.
      */
@@ -74,7 +75,7 @@ public class ShareFetch {
         String groupId,
         String memberId,
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
-        Map<TopicIdPartition, Integer> partitionMaxBytes,
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes,
         int batchSize,
         int maxFetchRecords
     ) {
@@ -95,7 +96,7 @@ public class ShareFetch {
         return memberId;
     }
 
-    public Map<TopicIdPartition, Integer> partitionMaxBytes() {
+    public LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes() {
         return partitionMaxBytes;
     }
 

@@ -23,10 +23,10 @@ import org.apache.kafka.server.storage.log.FetchParams;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.orderedMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -42,7 +42,7 @@ public class ShareFetchTest {
     public void testErrorInAllPartitions() {
         TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, new CompletableFuture<>(),
-            Map.of(topicIdPartition, 10), BATCH_SIZE, 100);
+            orderedMap(10, topicIdPartition), BATCH_SIZE, 100);
         assertFalse(shareFetch.errorInAllPartitions());
 
         shareFetch.addErroneous(topicIdPartition, new RuntimeException());
@@ -54,7 +54,7 @@ public class ShareFetchTest {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, new CompletableFuture<>(),
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100);
+            orderedMap(10, topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100);
         assertFalse(shareFetch.errorInAllPartitions());
 
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
@@ -69,7 +69,7 @@ public class ShareFetchTest {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, new CompletableFuture<>(),
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100);
+            orderedMap(10, topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100);
         Set<TopicIdPartition> result = shareFetch.filterErroneousTopicPartitions(Set.of(topicIdPartition0, topicIdPartition1));
         // No erroneous partitions, hence all partitions should be returned.
         assertEquals(2, result.size());
