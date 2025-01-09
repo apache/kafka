@@ -50,6 +50,7 @@ import java.util.Optional;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -406,4 +407,33 @@ public class FeatureControlManagerTest {
         RecordTestUtils.replayAll(manager, result2.records());
         assertEquals(Optional.empty(), manager.finalizedFeatures(Long.MAX_VALUE).get(Feature.TEST_VERSION.featureName()));
     }
+
+    @Test
+    public void testUpgradeElrFeatureLevel() {
+        Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
+        localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
+            MetadataVersion.IBP_4_0_IV1.featureLevel(), MetadataVersion.latestTesting().featureLevel()));
+        localSupportedFeatures.put(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), VersionRange.of(0, 1));
+        FeatureControlManager manager = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, emptyList())).
+            setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
+                Collections.singletonList(new SimpleImmutableEntry<>(1, Collections.singletonMap(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), VersionRange.of(0, 1)))),
+                emptyList())).
+            setMetadataVersion(MetadataVersion.IBP_4_0_IV1).
+            build();
+        ControllerResult<ApiError> result = manager.updateFeatures(
+            Collections.singletonMap(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), (short) 1),
+            Collections.singletonMap(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), FeatureUpdate.UpgradeType.UPGRADE),
+            false);
+        assertTrue(result.response().isSuccess());
+        assertEquals(Collections.singletonList(new ApiMessageAndVersion(
+            new FeatureLevelRecord().
+                setName(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.featureName()).
+                setFeatureLevel((short) 1), (short) 0)),
+            result.records());
+        RecordTestUtils.replayAll(manager, result.records());
+        assertEquals(Optional.of((short) 1), manager.finalizedFeatures(Long.MAX_VALUE).
+            get(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.featureName()));
+    }
+
 }
