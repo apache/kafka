@@ -561,9 +561,9 @@ public class DelayedShareFetchTest {
             .withSharePartitions(sharePartitions)
             .build();
 
-        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
-        topicPartitionData.put(tp0, mock(FetchRequest.PartitionData.class));
-        topicPartitionData.put(tp1, mock(FetchRequest.PartitionData.class));
+        LinkedHashMap<TopicIdPartition, Long> topicPartitionData = new LinkedHashMap<>();
+        topicPartitionData.put(tp0, 0L);
+        topicPartitionData.put(tp1, 0L);
 
         // Case 1 - logReadResponse contains tp0.
         LinkedHashMap<TopicIdPartition, LogReadResult> logReadResponse = new LinkedHashMap<>();

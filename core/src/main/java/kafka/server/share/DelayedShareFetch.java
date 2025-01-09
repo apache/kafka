@@ -65,7 +65,7 @@ public class DelayedShareFetch extends DelayedOperation {
     // The topic partitions that need to be completed for the share fetch request are given by sharePartitions.
     // sharePartitions is a subset of shareFetchData. The order of insertion/deletion of entries in sharePartitions is important.
     private final LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions;
-    private LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> partitionsAcquired;
+    private LinkedHashMap<TopicIdPartition, Long> partitionsAcquired;
     private LinkedHashMap<TopicIdPartition, LogReadResult> partitionsAlreadyFetched;
 
     DelayedShareFetch(
@@ -102,7 +102,7 @@ public class DelayedShareFetch extends DelayedOperation {
             partitionsAcquired.keySet());
 
         try {
-            LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData;
+            LinkedHashMap<TopicIdPartition, Long> topicPartitionData;
             // tryComplete did not invoke forceComplete, so we need to check if we have any partitions to fetch.
             if (partitionsAcquired.isEmpty())
                 topicPartitionData = acquirablePartitions();
@@ -124,7 +124,7 @@ public class DelayedShareFetch extends DelayedOperation {
         }
     }
 
-    private void completeShareFetchRequest(LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
+    private void completeShareFetchRequest(LinkedHashMap<TopicIdPartition, Long> topicPartitionData) {
         try {
             LinkedHashMap<TopicIdPartition, LogReadResult> responseData;
             if (partitionsAlreadyFetched.isEmpty())
@@ -163,7 +163,7 @@ public class DelayedShareFetch extends DelayedOperation {
      */
     @Override
     public boolean tryComplete() {
-        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = acquirablePartitions();
+        LinkedHashMap<TopicIdPartition, Long> topicPartitionData = acquirablePartitions();
 
         try {
             if (!topicPartitionData.isEmpty()) {
@@ -207,9 +207,9 @@ public class DelayedShareFetch extends DelayedOperation {
      * Prepare fetch request structure for partitions in the share fetch request for which we can acquire records.
      */
     // Visible for testing
-    LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> acquirablePartitions() {
+    LinkedHashMap<TopicIdPartition, Long> acquirablePartitions() {
         // Initialize the topic partitions for which the fetch should be attempted.
-        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, Long> topicPartitionData = new LinkedHashMap<>();
 
         sharePartitions.forEach((topicIdPartition, sharePartition) -> {
             // Add the share partition to the list of partitions to be fetched only if we can
@@ -220,16 +220,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     if (sharePartition.canAcquireRecords()) {
                         // We do not know the total partitions that can be acquired at this stage, hence we set maxBytes
                         // to 0 for now and will update it before doing the replica manager fetch.
-                        topicPartitionData.put(
-                            topicIdPartition,
-                            new FetchRequest.PartitionData(
-                                topicIdPartition.topicId(),
-                                sharePartition.nextFetchOffset(),
-                                0,
-                                0,
-                                Optional.empty()
-                            )
-                        );
+                        topicPartitionData.put(topicIdPartition, sharePartition.nextFetchOffset());
                     } else {
                         sharePartition.releaseFetchLock();
                         log.trace("Record lock partition limit exceeded for SharePartition {}, " +
@@ -245,12 +236,12 @@ public class DelayedShareFetch extends DelayedOperation {
         return topicPartitionData;
     }
 
-    private LinkedHashMap<TopicIdPartition, LogReadResult> maybeReadFromLog(LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
-        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> partitionsNotMatchingFetchOffsetMetadata = new LinkedHashMap<>();
-        topicPartitionData.forEach((topicIdPartition, partitionData) -> {
+    private LinkedHashMap<TopicIdPartition, LogReadResult> maybeReadFromLog(LinkedHashMap<TopicIdPartition, Long> topicPartitionData) {
+        LinkedHashMap<TopicIdPartition, Long> partitionsNotMatchingFetchOffsetMetadata = new LinkedHashMap<>();
+        topicPartitionData.forEach((topicIdPartition, fetchOffset) -> {
             SharePartition sharePartition = sharePartitions.get(topicIdPartition);
-            if (sharePartition.fetchOffsetMetadata(partitionData.fetchOffset).isEmpty()) {
-                partitionsNotMatchingFetchOffsetMetadata.put(topicIdPartition, partitionData);
+            if (sharePartition.fetchOffsetMetadata(fetchOffset).isEmpty()) {
+                partitionsNotMatchingFetchOffsetMetadata.put(topicIdPartition, fetchOffset);
             }
         });
         if (partitionsNotMatchingFetchOffsetMetadata.isEmpty()) {
@@ -266,7 +257,7 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     private void maybeUpdateFetchOffsetMetadata(
-        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData,
+        LinkedHashMap<TopicIdPartition, Long> topicPartitionData,
         LinkedHashMap<TopicIdPartition, LogReadResult> replicaManagerReadResponseData) {
         for (Map.Entry<TopicIdPartition, LogReadResult> entry : replicaManagerReadResponseData.entrySet()) {
             TopicIdPartition topicIdPartition = entry.getKey();
@@ -278,18 +269,18 @@ public class DelayedShareFetch extends DelayedOperation {
                 continue;
             }
             sharePartition.updateFetchOffsetMetadata(
-                topicPartitionData.get(topicIdPartition).fetchOffset,
+                topicPartitionData.get(topicIdPartition),
                 replicaManagerLogReadResult.info().fetchOffsetMetadata);
         }
     }
 
     // minByes estimation currently assumes the common case where all fetched data is acquirable.
-    private boolean isMinBytesSatisfied(LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData,
+    private boolean isMinBytesSatisfied(LinkedHashMap<TopicIdPartition, Long> topicPartitionData,
                                         LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes) {
         long accumulatedSize = 0;
-        for (Map.Entry<TopicIdPartition, FetchRequest.PartitionData> entry : topicPartitionData.entrySet()) {
+        for (Map.Entry<TopicIdPartition, Long> entry : topicPartitionData.entrySet()) {
             TopicIdPartition topicIdPartition = entry.getKey();
-            FetchRequest.PartitionData partitionData = entry.getValue();
+            long fetchOffset = entry.getValue();
 
             LogOffsetMetadata endOffsetMetadata;
             try {
@@ -306,7 +297,7 @@ public class DelayedShareFetch extends DelayedOperation {
 
             SharePartition sharePartition = sharePartitions.get(topicIdPartition);
 
-            Optional<LogOffsetMetadata> optionalFetchOffsetMetadata = sharePartition.fetchOffsetMetadata(partitionData.fetchOffset);
+            Optional<LogOffsetMetadata> optionalFetchOffsetMetadata = sharePartition.fetchOffsetMetadata(fetchOffset);
             if (optionalFetchOffsetMetadata.isEmpty() || optionalFetchOffsetMetadata.get() == LogOffsetMetadata.UNKNOWN_OFFSET_METADATA)
                 continue;
             LogOffsetMetadata fetchOffsetMetadata = optionalFetchOffsetMetadata.get();
@@ -348,25 +339,27 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     private LinkedHashMap<TopicIdPartition, LogReadResult> readFromLog(
-        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData,
+        LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
         LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes) {
         // Filter if there already exists any erroneous topic partition.
-        Set<TopicIdPartition> partitionsToFetch = shareFetch.filterErroneousTopicPartitions(topicPartitionData.keySet());
+        Set<TopicIdPartition> partitionsToFetch = shareFetch.filterErroneousTopicPartitions(topicPartitionFetchOffsets.keySet());
         if (partitionsToFetch.isEmpty()) {
             return new LinkedHashMap<>();
         }
 
+        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
+
         // Update the maxBytes for every fetchable topic partition.
-        for (Map.Entry<TopicIdPartition, FetchRequest.PartitionData> entry : topicPartitionData.entrySet()) {
-            FetchRequest.PartitionData partitionData = entry.getValue();
-            FetchRequest.PartitionData updatedPartitionData = new FetchRequest.PartitionData(
-                partitionData.topicId,
-                partitionData.fetchOffset,
-                partitionData.logStartOffset,
-                partitionMaxBytes.get(entry.getKey()),
-                partitionData.currentLeaderEpoch
-            );
-            entry.setValue(updatedPartitionData);
+        for (Map.Entry<TopicIdPartition, Long> entry : topicPartitionFetchOffsets.entrySet()) {
+            TopicIdPartition topicIdPartition = entry.getKey();
+            long fetchOffset = entry.getValue();
+            topicPartitionData.put(topicIdPartition, new FetchRequest.PartitionData(
+                topicIdPartition.topicId(),
+                fetchOffset,
+                0,
+                partitionMaxBytes.get(topicIdPartition),
+                Optional.empty()
+            ));
         }
 
         Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
@@ -417,12 +410,12 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     // Visible for testing.
-    LinkedHashMap<TopicIdPartition, LogReadResult> combineLogReadResponse(LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData,
+    LinkedHashMap<TopicIdPartition, LogReadResult> combineLogReadResponse(LinkedHashMap<TopicIdPartition, Long> topicPartitionData,
                                                                 LinkedHashMap<TopicIdPartition, LogReadResult> existingFetchedData) {
-        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> missingLogReadTopicPartitions = new LinkedHashMap<>();
-        topicPartitionData.forEach((topicIdPartition, partitionData) -> {
+        LinkedHashMap<TopicIdPartition, Long> missingLogReadTopicPartitions = new LinkedHashMap<>();
+        topicPartitionData.forEach((topicIdPartition, fetchOffset) -> {
             if (!existingFetchedData.containsKey(topicIdPartition)) {
-                missingLogReadTopicPartitions.put(topicIdPartition, partitionData);
+                missingLogReadTopicPartitions.put(topicIdPartition, fetchOffset);
             }
         });
         if (missingLogReadTopicPartitions.isEmpty()) {
