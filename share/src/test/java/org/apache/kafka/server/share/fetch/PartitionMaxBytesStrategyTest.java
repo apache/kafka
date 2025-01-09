@@ -42,8 +42,7 @@ public class PartitionMaxBytesStrategyTest {
     }
 
     @Test
-    public void testMaxBytesThrowsException() {
-        PartitionMaxBytesStrategy partitionMaxBytesStrategy = PartitionMaxBytesStrategy.type(StrategyType.UNIFORM);
+    public void testCheckValidArguments() {
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic1", 0));
         TopicIdPartition topicIdPartition2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic1", 1));
         TopicIdPartition topicIdPartition3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic2", 0));
@@ -53,14 +52,17 @@ public class PartitionMaxBytesStrategyTest {
         partitions.add(topicIdPartition3);
 
         // acquired partitions size is 0.
-        assertThrows(IllegalArgumentException.class, () -> partitionMaxBytesStrategy.maxBytes(
+        assertThrows(IllegalArgumentException.class, () -> PartitionMaxBytesStrategy.checkValidArguments(
             100, partitions, 0));
         // empty partitions set.
-        assertThrows(IllegalArgumentException.class, () -> partitionMaxBytesStrategy.maxBytes(
+        assertThrows(IllegalArgumentException.class, () -> PartitionMaxBytesStrategy.checkValidArguments(
             100, Collections.EMPTY_SET, 20));
         // request max bytes is 0.
-        assertThrows(IllegalArgumentException.class, () -> partitionMaxBytesStrategy.maxBytes(
+        assertThrows(IllegalArgumentException.class, () -> PartitionMaxBytesStrategy.checkValidArguments(
             0, partitions, 20));
+
+        // Valid arguments.
+        assertDoesNotThrow(() -> PartitionMaxBytesStrategy.checkValidArguments(100, partitions, 20));
     }
 
     @Test

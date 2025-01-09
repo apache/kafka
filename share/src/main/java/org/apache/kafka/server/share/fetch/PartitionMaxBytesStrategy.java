@@ -51,19 +51,23 @@ public interface PartitionMaxBytesStrategy {
      * @param acquiredPartitionsSize - The total partitions that have been acquired.
      * @return the partition max bytes for the topic partitions
      */
-    static LinkedHashMap<TopicIdPartition, Integer> uniformPartitionMaxBytes(int requestMaxBytes, Set<TopicIdPartition> partitions, int acquiredPartitionsSize) {
+    private static LinkedHashMap<TopicIdPartition, Integer> uniformPartitionMaxBytes(int requestMaxBytes, Set<TopicIdPartition> partitions, int acquiredPartitionsSize) {
+        checkValidArguments(requestMaxBytes, partitions, acquiredPartitionsSize);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = new LinkedHashMap<>();
+        partitions.forEach(partition -> partitionMaxBytes.put(partition, requestMaxBytes / acquiredPartitionsSize));
+        return partitionMaxBytes;
+    }
+
+    // Visible for testing.
+    static void checkValidArguments(int requestMaxBytes, Set<TopicIdPartition> partitions, int acquiredPartitionsSize) {
         if (partitions == null || partitions.isEmpty()) {
             throw new IllegalArgumentException("Partitions to generate max bytes is null or empty");
         }
         if (requestMaxBytes <= 0) {
-            throw new IllegalArgumentException("Requested max bytes must be greater than 0");
+            throw new IllegalArgumentException("Request max bytes must be greater than 0");
         }
         if (acquiredPartitionsSize <= 0) {
             throw new IllegalArgumentException("Acquired partitions size must be greater than 0");
         }
-
-        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = new LinkedHashMap<>();
-        partitions.forEach(partition -> partitionMaxBytes.put(partition, requestMaxBytes / acquiredPartitionsSize));
-        return partitionMaxBytes;
     }
 }
