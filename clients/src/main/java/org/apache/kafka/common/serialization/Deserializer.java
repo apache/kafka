@@ -63,7 +63,11 @@ public interface Deserializer<T> extends Closeable {
     }
 
     /**
-     * Deserialize a record value from a ByteBuffer into a value or object.
+     * Deserialize a record value from a {@link ByteBuffer} into a value or object.
+     * <p>
+     * The implementation cannot make any assumptions about the {@link ByteBuffer} like the position, limit, capacity,
+     * etc., or if it is backed by {@link ByteBuffer#hasArray() an array or not}.
+     *
      * @param topic topic associated with the data
      * @param headers headers associated with the record; may be empty.
      * @param data serialized ByteBuffer; may be null; implementations are recommended to handle null by returning a value or null rather than throwing an exception.
