@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.KafkaStreams;
@@ -49,7 +50,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
-import java.util.stream.Collectors;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
@@ -62,8 +63,6 @@ public class IQv2EndpointToPartitionsIntegrationTest {
     private String appId;
     private String inputTopicTwoPartitions;
     private String outputTopicTwoPartitions;
-    private String inputTopicOnePartition;
-    private String outputTopicOnePartition;
     private Properties streamsApplicationProperties = new Properties();
     private Properties streamsSecondApplicationProperties = new Properties();
 
@@ -85,12 +84,8 @@ public class IQv2EndpointToPartitionsIntegrationTest {
         appId = safeUniqueTestName(testInfo);
         inputTopicTwoPartitions = appId + "-input-two";
         outputTopicTwoPartitions = appId + "-output-two";
-        inputTopicOnePartition = appId + "-input-one";
-        outputTopicOnePartition = appId + "-output-one";
         cluster.createTopic(inputTopicTwoPartitions, 2, 1);
         cluster.createTopic(outputTopicTwoPartitions, 2, 1);
-        cluster.createTopic(inputTopicOnePartition, 1, 1);
-        cluster.createTopic(outputTopicOnePartition, 1, 1);
     }
 
     @AfterAll
@@ -131,8 +126,17 @@ public class IQv2EndpointToPartitionsIntegrationTest {
             List<StreamsMetadata> streamsMetadataAllClients = new ArrayList<>(streamsOne.metadataForAllStreamsClients());
             assertEquals(1, streamsMetadataAllClients.size());
             StreamsMetadata streamsOneMetadataOne = streamsMetadataAllClients.get(0);
+            Set<TopicPartition> topicPartitions = streamsOneMetadataOne.topicPartitions();
             assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
-            assertEquals(4, streamsOneMetadataOne.topicPartitions().size());
+            assertEquals(4, topicPartitions.size());
+
+            long repartitionTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
+            long sourceTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+            assertEquals(2, repartitionTopicTaskCount);
+            assertEquals(2, sourceTopicTaskCount);
+
+            
+            LOG.info("StreamsMetadata topicPartitions for streamsOne: {}", streamsOneMetadataOne.topicPartitions());
 
             try (final KafkaStreams streamsTwo = new KafkaStreams(topology, streamsSecondApplicationProperties)) {
                 streamsTwo.start();
@@ -143,34 +147,36 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                 streamsMetadataAllClients = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
                 assertEquals(2, streamsMetadataAllClients.size());
                 streamsOneMetadataOne = streamsMetadataAllClients.get(0);
-                assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
-                assertEquals(2, streamsOneMetadataOne.topicPartitions().size());
 
+                Set<TopicPartition> streamsOneTopicPartitions = streamsOneMetadataOne.topicPartitions();
+                LOG.info("StreamsMetadata topicPartitions for streamsOne: {}", streamsOneTopicPartitions);
+                assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
+                assertEquals(2, streamsOneTopicPartitions.size());
+
+                long streamsOneRepartitionTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
+                long streamsOneSourceTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+                assertEquals(1, streamsOneRepartitionTopicTaskCount);
+                assertEquals(1, streamsOneSourceTopicTaskCount);
+                
                 StreamsMetadata streamsOneMetadataTwo = streamsMetadataAllClients.get(1);
+                Set<TopicPartition> streamsTwoTopicPartitions = streamsOneMetadataTwo.topicPartitions();
+                LOG.info("StreamsMetadata topicPartitions for streamsTwo: {}", streamsTwoTopicPartitions);
                 assertEquals(3030, streamsOneMetadataTwo.hostInfo().port());
-                assertEquals(2, streamsOneMetadataTwo.topicPartitions().size());
+                assertEquals(2, streamsTwoTopicPartitions.size());
+
+                long streamsTwoRepartitionTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
+                long streamsTwoSourceTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+                assertEquals(1, streamsTwoRepartitionTopicTaskCount);
+                assertEquals(1, streamsTwoSourceTopicTaskCount);
 
             }
         }
     }
 
-
-
-
-
-    private List<String> getTaskIdsAsStrings(final KafkaStreams streams) {
-        return streams.metadataForLocalThreads().stream()
-                .flatMap(threadMeta -> threadMeta.activeTasks().stream()
-                        .map(taskMeta -> taskMeta.taskId().toString()))
-                .collect(Collectors.toList());
-    }
-
-
     private static Stream<Arguments> groupProtocolParameters() {
         return Stream.of(Arguments.of("streams", "Using STREAMS group protocol"),
                 Arguments.of("classic", "Using CLASSIC group protocol"));
     }
-
 
     private Properties props(final Properties extraProperties) {
         final Properties streamsConfiguration = new Properties();
@@ -195,11 +201,4 @@ public class IQv2EndpointToPartitionsIntegrationTest {
         return builder.build();
     }
 
-    private Topology simpleTopology() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream(inputTopicOnePartition, Consumed.with(Serdes.String(), Serdes.String()))
-                .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
-                .to(outputTopicOnePartition, Produced.with(Serdes.String(), Serdes.String()));
-        return builder.build();
-    }
 }

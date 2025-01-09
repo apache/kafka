@@ -2154,7 +2154,6 @@ public class GroupMetadataManager {
         boolean createIfNotExists = memberEpoch == 0;
         final StreamsGroup group = getOrMaybeCreateStreamsGroup(groupId, createIfNotExists, records);
         throwIfStreamsGroupIsFull(group, memberId);
-        final List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
 
         // Get or create the member.
         StreamsGroupMember member;
@@ -2342,15 +2341,13 @@ public class GroupMetadataManager {
         );
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
-
-        maybeSetHostInfoPartitions(memberId, group, endpointToPartitionsList);
-
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitions = maybeBuildEndpointToPartitions(group);
         // Prepare the response.
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs)
-            .setPartitionsByUserEndpoint(endpointToPartitionsList);
+            .setPartitionsByUserEndpoint(endpointToPartitions);
 
         // The assignment is only provided in the following cases:
         // 1. The member sent a full request.
@@ -2383,9 +2380,9 @@ public class GroupMetadataManager {
         return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated));
     }
 
-    private void maybeSetHostInfoPartitions(String memberId,
-                                            StreamsGroup group,
-                                            List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList) {
+    private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group) {
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
+        EndpointToPartitionsManager endpointToPartitionsManager = new EndpointToPartitionsManager();
         // Build the endpoint to topic partition information
         final Map<String, StreamsGroupMember> members = group.members();
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
@@ -2396,23 +2393,13 @@ public class GroupMetadataManager {
                 final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
                 responseEndpoint.setHost(endpoint.host());
                 responseEndpoint.setPort(endpoint.port());
-                addToEndpointToPartitions(groupMember.assignedActiveTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
-                addToEndpointToPartitions(groupMember.assignedStandbyTasks().entrySet(), group, responseEndpoint, endpointToPartitionsList);
+                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = endpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group);
+                endpointToPartitionsList.add(endpointToPartitions);
             }
         }
+        return endpointToPartitionsList;
     }
 
-    private void addToEndpointToPartitions(Set<Map.Entry<String, Set<Integer>>> taskEntrySet,
-                                           StreamsGroup group,
-                                           StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint,
-                                           List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList) {
-        for (Map.Entry<String, Set<Integer>> taskEntry : taskEntrySet) {
-            String subtopologyId = taskEntry.getKey();
-            Set<Integer> taskPartitions = taskEntry.getValue();
-            EndpointToPartitionsManager endpointToPartitionsManager = new EndpointToPartitionsManager(subtopologyId, group, responseEndpoint, taskPartitions);
-            endpointToPartitionsList.add(endpointToPartitionsManager.endpointToPartitions());
-        }
-    }
 
     private List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
         return taskIds.entrySet().stream()

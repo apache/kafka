@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TopicMetadata;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -51,7 +52,6 @@ class EndpointToPartitionsManagerTest {
     @MethodSource("argsProvider")
     void testEndpointToPartitionsWithTwoTopicsAndDifferentPartitions(int topicAPartitions,
                                                                      int topicBPartitions,
-                                                                     Set<Integer> taskPartitions,
                                                                      List<Integer> topicAExpectedPartitions,
                                                                      List<Integer> topicBExpectedPartitions,
                                                                      String testName
@@ -73,14 +73,9 @@ class EndpointToPartitionsManagerTest {
         streamsGroup.setGroupEpoch(1);
         streamsGroup.setTopology(topology());
 
-        EndpointToPartitionsManager endpointToPartitionsManager = new EndpointToPartitionsManager(
-                "subtopology-1",
-                streamsGroup,
-                endpoint,
-                taskPartitions
-        );
+        EndpointToPartitionsManager endpointToPartitionsManager = new EndpointToPartitionsManager();
 
-        StreamsGroupHeartbeatResponseData.EndpointToPartitions result = endpointToPartitionsManager.endpointToPartitions();
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions result = endpointToPartitionsManager.endpointToPartitions(null, endpoint, streamsGroup);
 
         assertEquals(endpoint, result.userEndpoint());
         assertEquals(2, result.partitions().size());
