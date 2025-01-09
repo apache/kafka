@@ -2580,34 +2580,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterClientQuotasRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-    val alterClientQuotasRequest = request.body[AlterClientQuotasRequest]
-
-    if (authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
-      val result = zkSupport.adminManager.alterClientQuotas(alterClientQuotasRequest.entries.asScala,
-        alterClientQuotasRequest.validateOnly)
-
-      val entriesData = result.iterator.map { case (quotaEntity, apiError) =>
-        val entityData = quotaEntity.entries.asScala.iterator.map { case (key, value) =>
-          new AlterClientQuotasResponseData.EntityData()
-            .setEntityType(key)
-            .setEntityName(value)
-        }.toBuffer
-
-        new AlterClientQuotasResponseData.EntryData()
-          .setErrorCode(apiError.error.code)
-          .setErrorMessage(apiError.message)
-          .setEntity(entityData.asJava)
-      }.toBuffer
-
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new AlterClientQuotasResponse(new AlterClientQuotasResponseData()
-          .setThrottleTimeMs(requestThrottleMs)
-          .setEntries(entriesData.asJava)))
-    } else {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        alterClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
-    }
+    throw KafkaApis.shouldAlwaysForward(request)
   }
 
   def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
@@ -2813,19 +2786,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAllocateProducerIdsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-
-    val allocateProducerIdsRequest = request.body[AllocateProducerIdsRequest]
-
-    if (!zkSupport.controller.isActive)
-      requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs =>
-        allocateProducerIdsRequest.getErrorResponse(throttleTimeMs, Errors.NOT_CONTROLLER.exception))
-    else
-      zkSupport.controller.allocateProducerIds(allocateProducerIdsRequest.data, producerIdsResponse =>
-        requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs =>
-          new AllocateProducerIdsResponse(producerIdsResponse.setThrottleTimeMs(throttleTimeMs)))
-      )
+    throw KafkaApis.shouldNeverReceive(request)
   }
 
   private def groupVersion(): GroupVersion = {
