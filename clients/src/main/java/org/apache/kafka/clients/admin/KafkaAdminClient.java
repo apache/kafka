@@ -862,6 +862,7 @@ public class KafkaAdminClient extends AdminClient {
         public Node provide() {
             if (metadataManager.isReady()) {
                 if (metadataManager.usingBootstrapControllers()) {
+                    System.err.println(metadataManager.controller().id());
                     return metadataManager.controller();
                 } else {
                     // This may return null if all nodes are busy.
@@ -2768,7 +2769,7 @@ public class KafkaAdminClient extends AdminClient {
             Map<ConfigResource, KafkaFutureImpl<Config>> unified = entry.getValue();
 
             runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
-                node != null ? new ConstantNodeIdProvider(node, true) : new LeastLoadedBrokerOrActiveKController()) {
+                new LeastLoadedBrokerOrActiveKController()) {
 
                 @Override
                 DescribeConfigsRequest.Builder createRequest(int timeoutMs) {
