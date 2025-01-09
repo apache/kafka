@@ -394,8 +394,11 @@ public abstract class AbstractFetch implements Closeable {
         // This is the set of partitions that do not have buffered data
         Set<TopicPartition> unbuffered = Set.copyOf(subscriptions.fetchablePartitions(tp -> !buffered.contains(tp)));
 
-        if (unbuffered.isEmpty())
+        if (unbuffered.isEmpty()) {
+            // If there are no partitions that don't already have data locally buffered, there's no need to issue
+            // any fetch requests at the present time.
             return Collections.emptyMap();
+        }
 
         Set<Integer> nodesWithBufferedPartitions = nodesWithBufferedPartitions(buffered, currentTimeMs);
 
@@ -423,8 +426,13 @@ public abstract class AbstractFetch implements Closeable {
                 // going to be failed anyway before being sent, so skip sending the request for now
                 log.trace("Skipping fetch for partition {} because node {} is awaiting reconnect backoff", partition, node);
             } else if (nodesWithPendingFetchRequests.contains(node.id())) {
+                // If there's already an inflight request for this node, don't issue another request.
                 log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, node);
             } else if (nodesWithBufferedPartitions.contains(node.id())) {
+                // While a node has buffered data, don't fetch other partition data from it. Because the buffered
+                // partitions are not included in the fetch request, those partitions will be inadvertently dropped
+                // from the broker fetch session cache. In some cases, that could lead to the entire fetch session
+                // being evicted.
                 log.trace("Skipping fetch for partition {} because its leader node {} hosts buffered partitions", partition, node);
             } else {
                 // if there is a leader and no in-flight requests, issue a new fetch
