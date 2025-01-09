@@ -689,7 +689,7 @@
             InvalidRecordExceptions and UnknownServerExceptions. Upgrading to 3.6.1 or newer or disabling the feature fixes the issue.
         </li>
 	<li>The <code>ByteBufferDeserializer</code> (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=225152035">KIP-863</a>)
-	    was change to avoid unnessary deep-copies of data. This changes the behavior of the deserializer as user code cannot make any assumptions
+	    was changed to avoid unnecessary deep-copies of data. This changes the behavior of the deserializer as user code cannot make any assumptions
 	    about buffer position, limit, capactiy any longer.
         </li>
     </ul>
