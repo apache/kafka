@@ -172,7 +172,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 // those topic partitions.
                 LinkedHashMap<TopicIdPartition, LogReadResult> replicaManagerReadResponse = maybeReadFromLog(topicPartitionData);
                 maybeUpdateFetchOffsetMetadata(topicPartitionData, replicaManagerReadResponse);
-                if (anyPartitionHasLogReadError(replicaManagerReadResponse) || isMinBytesSatisfied(topicPartitionData)) {
+                if (anyPartitionHasLogReadError(replicaManagerReadResponse) || isMinBytesSatisfied(topicPartitionData, partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes, topicPartitionData.keySet(), topicPartitionData.size()))) {
                     partitionsAcquired = topicPartitionData;
                     partitionsAlreadyFetched = replicaManagerReadResponse;
                     boolean completedByMe = forceComplete();
@@ -284,7 +284,8 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     // minByes estimation currently assumes the common case where all fetched data is acquirable.
-    private boolean isMinBytesSatisfied(LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
+    private boolean isMinBytesSatisfied(LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData,
+                                        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes) {
         long accumulatedSize = 0;
         for (Map.Entry<TopicIdPartition, FetchRequest.PartitionData> entry : topicPartitionData.entrySet()) {
             TopicIdPartition topicIdPartition = entry.getKey();
@@ -323,7 +324,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     return true;
                 } else if (fetchOffsetMetadata.onSameSegment(endOffsetMetadata)) {
                     // we take the partition fetch size as upper bound when accumulating the bytes.
-                    long bytesAvailable = Math.min(endOffsetMetadata.positionDiff(fetchOffsetMetadata), shareFetch.fetchParams().maxBytes / topicPartitionData.size());
+                    long bytesAvailable = Math.min(endOffsetMetadata.positionDiff(fetchOffsetMetadata), partitionMaxBytes.get(topicIdPartition));
                     accumulatedSize += bytesAvailable;
                 }
             }

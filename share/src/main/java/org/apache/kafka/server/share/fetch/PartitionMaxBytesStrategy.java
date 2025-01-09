@@ -22,6 +22,9 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * This interface helps identify the max bytes for topic partitions in a share fetch request based on different strategy types.
+ */
 public interface PartitionMaxBytesStrategy {
 
     enum StrategyType {
@@ -33,6 +36,14 @@ public interface PartitionMaxBytesStrategy {
         }
     }
 
+    /**
+     * Returns the partition max bytes for a given partition based on the strategy type.
+     *
+     * @param requestMaxBytes - The total max bytes available for the share fetch request
+     * @param partitions - The topic partitions in the order for which we compute the partition max bytes.
+     * @param acquiredPartitionsSize - The total partitions that have been acquired.
+     * @return the partition max bytes for the topic partitions
+     */
     LinkedHashMap<TopicIdPartition, Integer> maxBytes(int requestMaxBytes, Set<TopicIdPartition> partitions, int acquiredPartitionsSize);
 
     static PartitionMaxBytesStrategy type(StrategyType type) {
@@ -43,14 +54,7 @@ public interface PartitionMaxBytesStrategy {
         };
     }
 
-    /**
-     * Returns the partition max bytes for a given partition based on the uniform strategy type.
-     *
-     * @param requestMaxBytes - The total max bytes available for the share fetch request
-     * @param partitions - The topic partitions in the order for which we compute the partition max bytes.
-     * @param acquiredPartitionsSize - The total partitions that have been acquired.
-     * @return the partition max bytes for the topic partitions
-     */
+
     private static LinkedHashMap<TopicIdPartition, Integer> uniformPartitionMaxBytes(int requestMaxBytes, Set<TopicIdPartition> partitions, int acquiredPartitionsSize) {
         checkValidArguments(requestMaxBytes, partitions, acquiredPartitionsSize);
         LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = new LinkedHashMap<>();
