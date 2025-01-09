@@ -3025,7 +3025,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleRenewTokenRequestZk(request: RequestChannel.Request): Unit = {
-    KafkaApis.shouldNeverReceive(request)
+    throw KafkaApis.shouldNeverReceive(request)
   }
 
   def handleExpireTokenRequest(request: RequestChannel.Request): Unit = {
@@ -3042,7 +3042,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleExpireTokenRequestZk(request: RequestChannel.Request): Unit = {
-    KafkaApis.shouldNeverReceive(request)
+    throw KafkaApis.shouldNeverReceive(request)
   }
 
   def handleDescribeTokensRequest(request: RequestChannel.Request): Unit = {
