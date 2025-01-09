@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +34,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class CopartitionedTopicsEnforcerTest {
 
     private static final LogContext LOG_CONTEXT = new LogContext();
+    private static final String REPARTITION_TOPIC_1 = "repartitioned-1";
+    private static final String REPARTITION_TOPIC_2 = "repartitioned-2";
+    private static final String REPARTITION_TOPIC_3 = "repartitioned-3";
+    private static final String SOURCE_TOPIC_1 = "source-1";
+    private static final String SOURCE_TOPIC_2 = "source-2";
 
     private static Function<String, OptionalInt> topicPartitionProvider(Map<String, Integer> topicPartitionCounts) {
         return topic -> {
@@ -45,99 +49,86 @@ public class CopartitionedTopicsEnforcerTest {
 
     @Test
     public void shouldThrowTopicConfigurationExceptionIfNoPartitionsFoundForCoPartitionedTopic() {
-        final String topic = "topic";
         final Map<String, Integer> topicPartitionCounts = Collections.emptyMap();
         final CopartitionedTopicsEnforcer enforcer =
             new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
 
         final TopicConfigurationException ex = assertThrows(TopicConfigurationException.class, () ->
             enforcer.enforce(
-                Set.of(topic),
+                Set.of(SOURCE_TOPIC_1),
                 Set.of(),
                 Set.of()
             ));
         assertEquals(Status.MISSING_SOURCE_TOPICS, ex.status());
-        assertEquals("Following topics are missing: [topic]", ex.getMessage());
+        assertEquals(String.format("Following topics are missing: [%s]", SOURCE_TOPIC_1), ex.getMessage());
     }
 
     @Test
     public void shouldThrowTopicConfigurationExceptionIfPartitionCountsForCoPartitionedTopicsDontMatch() {
-        final String firstSourceTopic = "first";
-        final String secondSourceTopic = "second";
-        final Map<String, Integer> topicPartitionCounts = Map.of(firstSourceTopic, 2, secondSourceTopic, 1);
+        final Map<String, Integer> topicPartitionCounts = Map.of(SOURCE_TOPIC_1, 2, SOURCE_TOPIC_2, 1);
         final CopartitionedTopicsEnforcer enforcer =
             new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
 
         final TopicConfigurationException ex = assertThrows(TopicConfigurationException.class, () ->
             enforcer.enforce(
-                Set.of(firstSourceTopic, secondSourceTopic),
+                Set.of(SOURCE_TOPIC_1, SOURCE_TOPIC_2),
                 Set.of(),
                 Set.of()
             )
         );
         assertEquals(Status.INCORRECTLY_PARTITIONED_TOPICS, ex.status());
-        assertEquals("Following topics do not have the same number of partitions: " +
-            "[{first=2, second=1}]", ex.getMessage());
+        assertEquals(String.format("Following topics do not have the same number of partitions: " +
+            "[{%s=2, %s=1}]", SOURCE_TOPIC_1, SOURCE_TOPIC_2), ex.getMessage());
     }
-
 
     @Test
     public void shouldEnforceCopartitioningOnRepartitionTopics() {
-        final String firstSourceTopic = "first";
-        final String secondSourceTopic = "second";
-        final String repartitionTopic = "repartitioned";
         final Map<String, Integer> topicPartitionCounts = Map.of(
-            firstSourceTopic, 2,
-            secondSourceTopic, 2,
-            repartitionTopic, 10
+            SOURCE_TOPIC_1, 2,
+            SOURCE_TOPIC_2, 2,
+            REPARTITION_TOPIC_1, 10
         );
         final CopartitionedTopicsEnforcer enforcer =
             new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
 
         final Map<String, Integer> result =
             enforcer.enforce(
-                Set.of(firstSourceTopic, secondSourceTopic, repartitionTopic),
+                Set.of(SOURCE_TOPIC_1, SOURCE_TOPIC_2, REPARTITION_TOPIC_1),
                 Set.of(),
-                Set.of(repartitionTopic)
+                Set.of(REPARTITION_TOPIC_1)
             );
 
-        assertEquals(Map.of(repartitionTopic, 2), result);
+        assertEquals(Map.of(REPARTITION_TOPIC_1, 2), result);
     }
-
 
     @Test
     public void shouldSetNumPartitionsToMaximumPartitionsWhenAllTopicsAreRepartitionTopics() {
-        final String repartitionTopic1 = "repartitionTopic1";
-        final String repartitionTopic2 = "repartitionTopic2";
-        final String repartitionTopic3 = "repartitionTopic3";
         final Map<String, Integer> topicPartitionCounts = Map.of(
-            repartitionTopic1, 1,
-            repartitionTopic2, 15,
-            repartitionTopic3, 5
+            REPARTITION_TOPIC_1, 1,
+            REPARTITION_TOPIC_2, 15,
+            REPARTITION_TOPIC_3, 5
         );
         final CopartitionedTopicsEnforcer enforcer =
             new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
 
         final Map<String, Integer> result = enforcer.enforce(
-            Set.of(repartitionTopic1, repartitionTopic2, repartitionTopic3),
+            Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2, REPARTITION_TOPIC_3),
             Set.of(),
-            Set.of(repartitionTopic1, repartitionTopic2, repartitionTopic3)
+            Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2, REPARTITION_TOPIC_3)
         );
 
         assertEquals(Map.of(
-            repartitionTopic1, 15,
-            repartitionTopic2, 15,
-            repartitionTopic3, 15
+            REPARTITION_TOPIC_1, 15,
+            REPARTITION_TOPIC_2, 15,
+            REPARTITION_TOPIC_3, 15
         ), result);
     }
 
     @Test
     public void shouldThrowAnExceptionIfTopicInfosWithEnforcedNumOfPartitionsHaveDifferentNumOfPartitions() {
-        final String repartitionTopic1 = "repartitioned-1";
-        final String repartitionTopic2 = "repartitioned-2";
         final Map<String, Integer> topicPartitionCounts = Map.of(
-            repartitionTopic1, 10,
-            repartitionTopic2, 5
+            REPARTITION_TOPIC_1, 10,
+            REPARTITION_TOPIC_2, 5
         );
         final CopartitionedTopicsEnforcer enforcer =
             new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
@@ -145,15 +136,14 @@ public class CopartitionedTopicsEnforcerTest {
         final TopicConfigurationException ex = assertThrows(
             TopicConfigurationException.class,
             () -> enforcer.enforce(
-                Set.of(repartitionTopic1, repartitionTopic2),
-                Set.of(repartitionTopic1, repartitionTopic2),
+                Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2),
+                Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2),
                 Set.of()
             )
         );
 
         final TreeMap<String, Integer> sorted = new TreeMap<>(
-            Utils.mkMap(Utils.mkEntry(repartitionTopic1, 10),
-                Utils.mkEntry(repartitionTopic2, 5))
+            Map.of(REPARTITION_TOPIC_1, 10, REPARTITION_TOPIC_2, 5)
         );
         assertEquals(Status.INCORRECTLY_PARTITIONED_TOPICS, ex.status());
         assertEquals(String.format(
@@ -162,35 +152,31 @@ public class CopartitionedTopicsEnforcerTest {
     }
 
     @Test
-    public void shouldNotThrowAnExceptionWhenTopicInfosWithEnforcedNumOfPartitionsAreValid() {
-        final String repartitionTopic1 = "repartitioned-1";
-        final String repartitionTopic2 = "repartitioned-2";
+    public void shouldReturnThePartitionCountsUnchangedWhenTopicInfosWithEnforcedNumOfPartitionsAreValid() {
         final Map<String, Integer> topicPartitionCounts = Map.of(
-            repartitionTopic1, 10,
-            repartitionTopic2, 10
+            REPARTITION_TOPIC_1, 10,
+            REPARTITION_TOPIC_2, 10
         );
         final CopartitionedTopicsEnforcer enforcer =
             new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
 
         final Map<String, Integer> enforced = enforcer.enforce(
-            Set.of(repartitionTopic1, repartitionTopic2),
+            Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2),
             Set.of(),
-            Set.of(repartitionTopic1, repartitionTopic2)
+            Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2)
         );
 
         assertEquals(Map.of(
-            repartitionTopic1, 10,
-            repartitionTopic2, 10
+            REPARTITION_TOPIC_1, 10,
+            REPARTITION_TOPIC_2, 10
         ), enforced);
     }
 
     @Test
     public void shouldThrowAnExceptionWhenNumberOfPartitionsOfNonRepartitionTopicAndRepartitionTopicWithEnforcedNumOfPartitionsDoNotMatch() {
-        final String repartitionTopic1 = "repartitioned-1";
-        final String firstSourceTopic = "first";
         final Map<String, Integer> topicPartitionCounts = Map.of(
-            repartitionTopic1, 10,
-            firstSourceTopic, 2
+            REPARTITION_TOPIC_1, 10,
+            SOURCE_TOPIC_1, 2
         );
         final CopartitionedTopicsEnforcer enforcer =
             new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
@@ -198,8 +184,8 @@ public class CopartitionedTopicsEnforcerTest {
         final TopicConfigurationException ex = assertThrows(
             TopicConfigurationException.class,
             () -> enforcer.enforce(
-                Set.of(repartitionTopic1, firstSourceTopic),
-                Set.of(repartitionTopic1),
+                Set.of(REPARTITION_TOPIC_1, SOURCE_TOPIC_1),
+                Set.of(REPARTITION_TOPIC_1),
                 Set.of())
         );
 
@@ -207,54 +193,49 @@ public class CopartitionedTopicsEnforcerTest {
         assertEquals(String.format("Number of partitions [%s] " +
                 "of repartition topic [%s] " +
                 "doesn't match number of partitions [%s] of the source topic.",
-            10, repartitionTopic1, 2), ex.getMessage());
+            10, REPARTITION_TOPIC_1, 2), ex.getMessage());
     }
 
     @Test
-    public void shouldNotThrowAnExceptionWhenNumberOfPartitionsOfNonRepartitionTopicAndRepartitionTopicWithEnforcedNumOfPartitionsMatch() {
-        final String repartitionTopic1 = "repartitioned-1";
-        final String firstSourceTopic = "first";
+    public void shouldReturnThePartitionCountsUnchangedWhenNumberOfPartitionsOfNonRepartitionTopicAndRepartitionTopicWithEnforcedNumOfPartitionsMatch() {
         final Map<String, Integer> topicPartitionCounts = Map.of(
-            repartitionTopic1, 2,
-            firstSourceTopic, 2
+            REPARTITION_TOPIC_1, 2,
+            SOURCE_TOPIC_1, 2
         );
         final CopartitionedTopicsEnforcer enforcer =
             new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
 
         final Map<String, Integer> enforced = enforcer.enforce(
-            Set.of(repartitionTopic1, firstSourceTopic),
+            Set.of(REPARTITION_TOPIC_1, SOURCE_TOPIC_1),
             Set.of(),
-            Set.of(repartitionTopic1)
+            Set.of(REPARTITION_TOPIC_1)
         );
 
         assertEquals(Map.of(
-            repartitionTopic1, 2
+            REPARTITION_TOPIC_1, 2
         ), enforced);
     }
 
     @Test
     public void shouldDeductNumberOfPartitionsFromRepartitionTopicWithEnforcedNumberOfPartitions() {
-        final String repartitionTopic1 = "repartitioned-1";
-        final String repartitionTopic2 = "repartitioned-2";
-        final String repartitionTopic3 = "repartitioned-3";
         final Map<String, Integer> topicPartitionCounts = Map.of(
-            repartitionTopic1, 2,
-            repartitionTopic2, 5,
-            repartitionTopic3, 2
+            REPARTITION_TOPIC_1, 2,
+            REPARTITION_TOPIC_2, 5,
+            REPARTITION_TOPIC_3, 2
         );
         final CopartitionedTopicsEnforcer enforcer =
             new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
 
         final Map<String, Integer> enforced = enforcer.enforce(
-            Set.of(repartitionTopic1, repartitionTopic2, repartitionTopic3),
-            Set.of(repartitionTopic1, repartitionTopic3),
-            Set.of(repartitionTopic2)
+            Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2, REPARTITION_TOPIC_3),
+            Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_3),
+            Set.of(REPARTITION_TOPIC_2)
         );
 
         assertEquals(Map.of(
-            repartitionTopic1, 2,
-            repartitionTopic2, 2,
-            repartitionTopic3, 2
+            REPARTITION_TOPIC_1, 2,
+            REPARTITION_TOPIC_2, 2,
+            REPARTITION_TOPIC_3, 2
         ), enforced);
     }
 

@@ -61,11 +61,12 @@ public class CopartitionedTopicsEnforcer {
      * Enforces the number of partitions for copartitioned topics.
      *
      * @param copartitionedTopics          The set of copartitioned topics (external source topics and repartition topics).
-     * @param fixedRepartitionTopics       The set of repartition topics whose partition count is fixed by the topology.
+     * @param fixedRepartitionTopics       The set of repartition topics whose partition count is fixed by the topology sent by the
+     *                                     client (in particular, when the user uses `repartition` in the DSL).
      * @param flexibleRepartitionTopics    The set of repartition topics whose partition count is flexible, and can be changed.
      *
      * @throws TopicConfigurationException If source topics are missing, or there are topics in copartitionTopics that are not copartitioned
-     *                                     according to topicPartitionCountProvider are not co-partitioned.
+     *                                     according to topicPartitionCountProvider.
      *
      * @return A map from all repartition topics in copartitionedTopics to their updated partition counts.
      */
