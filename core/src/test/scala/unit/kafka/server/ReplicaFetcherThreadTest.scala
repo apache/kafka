@@ -41,7 +41,7 @@ import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentCaptor
@@ -552,82 +552,6 @@ class ReplicaFetcherThreadTest {
     // Lag is set to Some(0).
     assertEquals(Some(0), thread.fetchState(t1p0).flatMap(_.lag))
     assertEquals(Some(lastFetchedEpoch), thread.fetchState(t1p0).flatMap(_.lastFetchedEpoch))
-  }
-
-  @Disabled("KAFKA-18370")
-  @Test
-  def shouldUseLeaderEndOffsetIfInterBrokerVersionBelow20(): Unit = {
-
-    // Create a capture to track what partitions/offsets are truncated
-    val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
-
-    val props = TestUtils.createBrokerConfig(1)
-    props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "0.11.0")
-    val config = KafkaConfig.fromProps(props)
-
-    // Setup all dependencies
-    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = mock(classOf[LogManager])
-    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
-    val log: UnifiedLog = mock(classOf[UnifiedLog])
-    val partition: Partition = mock(classOf[Partition])
-    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-
-    val initialLEO = 200
-
-    // Stubs
-    when(partition.localLogOrException).thenReturn(log)
-    when(log.highWatermark).thenReturn(initialLEO - 2)
-    when(log.latestEpoch).thenReturn(Some(5))
-    when(log.endOffsetForEpoch(4)).thenReturn(
-      Some(new OffsetAndEpoch(120, 3)))
-    when(log.endOffsetForEpoch(3)).thenReturn(
-      Some(new OffsetAndEpoch(120, 3)))
-    when(log.logEndOffset).thenReturn(initialLEO)
-    when(replicaManager.metadataCache).thenReturn(metadataCache)
-    when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
-    when(replicaManager.logManager).thenReturn(logManager)
-    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
-    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
-    stub(partition, replicaManager, log)
-
-    // Define the offsets for the OffsetsForLeaderEpochResponse with undefined epoch to simulate
-    // older protocol version
-    val offsets = Map(
-      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, UNDEFINED_EPOCH, 155),
-      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, UNDEFINED_EPOCH, 143)).asJava
-
-    // Create the fetcher thread
-    val mockNetwork = new MockBlockingSender(offsets, brokerEndPoint, Time.SYSTEM)
-    val thread = createReplicaFetcherThread(
-      "bob",
-      0,
-      config,
-      failedPartitions,
-      replicaManager,
-      quota,
-      mockNetwork
-    )
-    thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
-
-    // Loop 1 -- both topic partitions will truncate to leader offset even though they don't know
-    // about leader epoch
-    thread.doWork()
-    assertEquals(1, mockNetwork.epochFetchCount)
-    assertEquals(1, mockNetwork.fetchCount)
-    assertEquals(0, mockNetwork.lastUsedOffsetForLeaderEpochVersion, "OffsetsForLeaderEpochRequest version.")
-
-    //Loop 2 we should not fetch epochs
-    thread.doWork()
-    assertEquals(1, mockNetwork.epochFetchCount)
-    assertEquals(2, mockNetwork.fetchCount)
-
-    //We should have truncated to the offsets in the first response
-    verify(partition, times(2)).truncateTo(truncateToCapture.capture(), anyBoolean())
-    assertTrue(truncateToCapture.getAllValues.asScala.contains(155),
-               "Expected " + t1p0 + " to truncate to offset 155 (truncation offsets: " + truncateToCapture.getAllValues + ")")
-    assertTrue(truncateToCapture.getAllValues.asScala.contains(143),
-               "Expected " + t1p1 + " to truncate to offset 143 (truncation offsets: " + truncateToCapture.getAllValues + ")")
   }
 
   @Test

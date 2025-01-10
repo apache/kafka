@@ -229,9 +229,6 @@ class DefaultAlterPartitionManager(
    * supported by the controller. The final decision is taken when the AlterPartitionRequest
    * is built in the network client based on the advertised api versions of the controller.
    *
-   * We could use version 2 or above if all the pending changes have an topic id defined;
-   * otherwise we must use version 1 or below.
-   *
    * @return A tuple containing the AlterPartitionRequest.Builder and a mapping from
    *         topic id to topic name. This mapping is used in the response handling.
    */
