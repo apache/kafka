@@ -102,15 +102,19 @@ public class IQv2EndpointToPartitionsIntegrationTest {
     }
 
 
-    @ParameterizedTest(name = "{1}" )
+    @ParameterizedTest(name = "{2}" )
     @MethodSource("groupProtocolParameters")
-    public void shouldGetCorrectHostPartitionInformation(final String groupProtocolConfig, final String testName) throws Exception {
+    public void shouldGetCorrectHostPartitionInformation(final String groupProtocolConfig, boolean usingStandbyReplicas, final String testName) throws Exception {
 
         final Properties streamOneProperties = new Properties();
         streamOneProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
         streamOneProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
         streamOneProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:2020");
         streamOneProperties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocolConfig);
+        if (usingStandbyReplicas) {
+            streamOneProperties.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
+            streamOneProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        }
         streamsApplicationProperties = props(streamOneProperties);
 
         final Properties streamTwoProperties = new Properties();
@@ -118,6 +122,10 @@ public class IQv2EndpointToPartitionsIntegrationTest {
         streamTwoProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
         streamTwoProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:3030");
         streamTwoProperties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocolConfig);
+        if (usingStandbyReplicas) {
+            streamTwoProperties.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
+            streamTwoProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        }
         streamsSecondApplicationProperties = props(streamTwoProperties);
 
         final Topology topology = complexTopology();
@@ -129,12 +137,13 @@ public class IQv2EndpointToPartitionsIntegrationTest {
             Set<TopicPartition> topicPartitions = streamsOneMetadataOne.topicPartitions();
             assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
             assertEquals(4, topicPartitions.size());
+            // Only one KS client instance should be no standby assigned
+            assertEquals(0, streamsOneMetadataOne.standbyTopicPartitions().size());
 
             long repartitionTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
             long sourceTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
             assertEquals(2, repartitionTopicTaskCount);
             assertEquals(2, sourceTopicTaskCount);
-
             
             LOG.info("StreamsMetadata topicPartitions for streamsOne: {}", streamsOneMetadataOne.topicPartitions());
 
@@ -152,6 +161,8 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                 LOG.info("StreamsMetadata topicPartitions for streamsOne: {}", streamsOneTopicPartitions);
                 assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
                 assertEquals(2, streamsOneTopicPartitions.size());
+                int standbyTopicPartitionCount = usingStandbyReplicas ? 1 : 0;
+                assertEquals(standbyTopicPartitionCount, streamsOneMetadataOne.standbyTopicPartitions().size());
 
                 long streamsOneRepartitionTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
                 long streamsOneSourceTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
@@ -163,19 +174,21 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                 LOG.info("StreamsMetadata topicPartitions for streamsTwo: {}", streamsTwoTopicPartitions);
                 assertEquals(3030, streamsOneMetadataTwo.hostInfo().port());
                 assertEquals(2, streamsTwoTopicPartitions.size());
+                assertEquals(standbyTopicPartitionCount, streamsOneMetadataTwo.standbyTopicPartitions().size());
 
                 long streamsTwoRepartitionTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
                 long streamsTwoSourceTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
                 assertEquals(1, streamsTwoRepartitionTopicTaskCount);
                 assertEquals(1, streamsTwoSourceTopicTaskCount);
-
             }
         }
     }
 
     private static Stream<Arguments> groupProtocolParameters() {
-        return Stream.of(Arguments.of("streams", "Using STREAMS group protocol"),
-                Arguments.of("classic", "Using CLASSIC group protocol"));
+        return Stream.of(Arguments.of("streams", false, "STREAMS protocol No standby"),
+                Arguments.of("classic", false, "CLASSIC protocol No standby"),
+                Arguments.of("streams", true, "STREAMS protocol With standby"),
+                Arguments.of("classic", true, "CLASSIC protocol With standby"));
     }
 
     private Properties props(final Properties extraProperties) {

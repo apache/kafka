@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 
@@ -45,40 +46,42 @@ public class EndpointToPartitionsManager {
             ConfiguredSubtopology configuredSubtopology = entry.getValue();
             endpointToPartitions.setUserEndpoint(responseEndpoint);
             final Map<String, TopicMetadata> groupTopicMetadata = streamsGroup.partitionMetadata();
-            getActiveTaskTopicPartitions(configuredSubtopology, groupTopicMetadata, streamsGroupMember, allTopicPartitions);
+            Set<Map.Entry<String, Set<Integer>>> taskEntrySet = streamsGroupMember.assignedActiveTasks().entrySet();
+            Supplier<Stream<String>> topicNameStreamSupplier = () -> Stream.concat(configuredSubtopology.sourceTopics().stream(),
+                    configuredSubtopology.repartitionSourceTopics().keySet().stream());
+            List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionList = getTopicPartitions(taskEntrySet, topicNameStreamSupplier, groupTopicMetadata);
+            allTopicPartitions.addAll(topicPartitionList);
+
+            Set<Map.Entry<String, Set<Integer>>> standbyTaskEntrySet = streamsGroupMember.assignedStandbyTasks().entrySet();
+            Supplier<Stream<String>> changelogTopicNameStreamSupplier = () -> configuredSubtopology.nonSourceChangelogTopics().stream().map(ConfiguredInternalTopic::name);
+            List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyTopicPartitionList = getTopicPartitions(standbyTaskEntrySet, changelogTopicNameStreamSupplier, groupTopicMetadata);
+            allTopicPartitions.addAll(standbyTopicPartitionList);
         }
         endpointToPartitions.setPartitions(allTopicPartitions);
         return endpointToPartitions;
     }
 
-    private void getActiveTaskTopicPartitions(final ConfiguredSubtopology configuredSubtopology,
-                                              final Map<String, TopicMetadata> groupTopicMetadata,
-                                              final StreamsGroupMember streamsGroupMember,
-                                              final List<StreamsGroupHeartbeatResponseData.TopicPartition> allTopicPartitions) {
-
-        List<String> standbyTopicNames = configuredSubtopology.nonSourceChangelogTopics().stream().map(ConfiguredInternalTopic::name).toList();
-
-        for (Map.Entry<String, Set<Integer>> taskEntry : streamsGroupMember.assignedActiveTasks().entrySet()) {
-            Set<Integer> taskPartitions = taskEntry.getValue();
+    private List<StreamsGroupHeartbeatResponseData.TopicPartition> getTopicPartitions(final Set<Map.Entry<String, Set<Integer>>> taskEntrySet,
+                                                                                      final Supplier<Stream<String>> topicNameStreamSupplier,
+                                                                                      final Map<String, TopicMetadata> groupTopicMetadata) {
+        final List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionsForTasks = new ArrayList<>();
+        for (Map.Entry<String, Set<Integer>> taskEntry : taskEntrySet) {
             List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionList =
-                    Stream.concat(
-                            configuredSubtopology.sourceTopics().stream(),
-                            configuredSubtopology.repartitionSourceTopics().keySet().stream()
-            ).map(topic -> {
-                int numPartitionsForTopic = groupTopicMetadata.get(topic).numPartitions();
-                StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
-                tp.setTopic(topic);
-                List<Integer> tpPartitions = new ArrayList<>(taskPartitions);
-                if (numPartitionsForTopic < taskPartitions.size()) {
-                    Collections.sort(tpPartitions);
-                    tp.setPartitions(tpPartitions.subList(0, numPartitionsForTopic));
-                } else {
-                    tp.setPartitions(tpPartitions);
-                }
-                return tp;
-            }).toList();
-            allTopicPartitions.addAll(topicPartitionList);
+                    topicNameStreamSupplier.get().map(topic -> {
+                        int numPartitionsForTopic = groupTopicMetadata.get(topic).numPartitions();
+                        StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
+                        tp.setTopic(topic);
+                        List<Integer> tpPartitions = new ArrayList<>(taskEntry.getValue());
+                        if (numPartitionsForTopic < taskEntry.getValue().size()) {
+                            Collections.sort(tpPartitions);
+                            tp.setPartitions(tpPartitions.subList(0, numPartitionsForTopic));
+                        } else {
+                            tp.setPartitions(tpPartitions);
+                        }
+                        return tp;
+                    }).toList();
+            topicPartitionsForTasks.addAll(topicPartitionList);
         }
+        return topicPartitionsForTasks;
     }
-
 }
