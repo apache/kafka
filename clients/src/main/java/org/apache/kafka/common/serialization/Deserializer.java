@@ -69,7 +69,7 @@ public interface Deserializer<T> extends Closeable {
      * about the returned {@link ByteBuffer} like the position, limit, capacity, etc., or if it is backed by
      * {@link ByteBuffer#hasArray() an array or not}.
      *
-     * <p>Similarly, if this method is overwritten, the implementation cannot make any assumptions about the
+     * <p>Similarly, if this method is overridden, the implementation cannot make any assumptions about the
      * passed in {@link ByteBuffer} either.
      *
      * @param topic topic associated with the data
