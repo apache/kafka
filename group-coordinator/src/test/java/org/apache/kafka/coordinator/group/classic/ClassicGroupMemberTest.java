@@ -23,8 +23,8 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -194,7 +194,7 @@ public class ClassicGroupMemberTest {
         );
 
         assertThrows(IllegalArgumentException.class, () ->
-            member.vote(Collections.singleton("unknown"))
+            member.vote(Set.of("unknown"))
         );
     }
 
@@ -290,7 +290,7 @@ public class ClassicGroupMemberTest {
 
     @Test
     public void testDescribe() {
-        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(Collections.singletonList(
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(List.of(
             new JoinGroupRequestProtocol()
                 .setName("range")
                 .setMetadata(new byte[]{0})
