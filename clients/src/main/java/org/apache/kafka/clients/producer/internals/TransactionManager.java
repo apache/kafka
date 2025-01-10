@@ -859,8 +859,13 @@ public class TransactionManager {
         if (nextRequestHandler.isEndTxn() && !transactionStarted) {
             nextRequestHandler.result.done();
             if (currentState != State.FATAL_ERROR) {
-                log.debug("Not sending EndTxn for completed transaction since no partitions " +
-                        "or offsets were successfully added");
+                if (isTransactionV2Enabled) {
+                    log.debug("Not sending EndTxn for completed transaction since no send " +
+                            "or sendOffsetsToTransaction were triggered");
+                } else {
+                    log.debug("Not sending EndTxn for completed transaction since no partitions " +
+                            "or offsets were successfully added");
+                }
                 completeTransaction();
             }
             nextRequestHandler = pendingRequests.poll();
