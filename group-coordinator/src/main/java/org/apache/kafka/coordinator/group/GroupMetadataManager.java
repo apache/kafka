@@ -931,13 +931,13 @@ public class GroupMetadataManager {
      * Validates the online downgrade if consumer members are fenced from the consumer group.
      *
      * @param consumerGroup     The ConsumerGroup.
-     * @param fencedMemberIds   The fenced member ids.
+     * @param fencedMembers     The fenced members.
      * @return A boolean indicating whether it's valid to online downgrade the consumer group.
      */
-    private boolean validateOnlineDowngradeWithFencedMembers(ConsumerGroup consumerGroup, Set<String> fencedMemberIds) {
-        if (!consumerGroup.allMembersUseClassicProtocolExcept(fencedMemberIds)) {
+    private boolean validateOnlineDowngradeWithFencedMembers(ConsumerGroup consumerGroup, Set<ConsumerGroupMember> fencedMembers) {
+        if (!consumerGroup.allMembersUseClassicProtocolExcept(fencedMembers)) {
             return false;
-        } else if (consumerGroup.numMembers() - fencedMemberIds.size() <= 0) {
+        } else if (consumerGroup.numMembers() - fencedMembers.size() <= 0) {
             log.debug("Skip downgrading the consumer group {} to classic group because it's empty.",
                 consumerGroup.groupId());
             return false;
@@ -945,7 +945,7 @@ public class GroupMetadataManager {
             log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
                 consumerGroup.groupId());
             return false;
-        } else if (consumerGroup.numMembers() - fencedMemberIds.size() > config.classicGroupMaxSize()) {
+        } else if (consumerGroup.numMembers() - fencedMembers.size() > config.classicGroupMaxSize()) {
             log.info("Cannot downgrade consumer group {} to classic group because its group size is greater than classic group max size.",
                 consumerGroup.groupId());
             return false;
@@ -984,14 +984,14 @@ public class GroupMetadataManager {
      * Creates a ClassicGroup corresponding to the given ConsumerGroup.
      *
      * @param consumerGroup     The converted ConsumerGroup.
-     * @param leavingMemberIds  The leaving member(s) that triggered the downgrade validation.
+     * @param leavingMembers    The leaving member(s) that triggered the downgrade validation.
      * @param joiningMember     The newly joined member if the downgrade is triggered by static member replacement.
      *                          When not null, must have an instanceId that matches an existing member.
      * @param records           The record list to which the conversion records are added.
      */
     private void convertToClassicGroup(
         ConsumerGroup consumerGroup,
-        Set<String> leavingMemberIds,
+        Set<ConsumerGroupMember> leavingMembers,
         ConsumerGroupMember joiningMember,
         List<CoordinatorRecord> records
     ) {
@@ -1008,7 +1008,7 @@ public class GroupMetadataManager {
         try {
             classicGroup = ClassicGroup.fromConsumerGroup(
                 consumerGroup,
-                leavingMemberIds,
+                leavingMembers,
                 joiningMember,
                 logContext,
                 time,
@@ -3027,14 +3027,9 @@ public class GroupMetadataManager {
             return new CoordinatorResult<>(Collections.emptyList(), response);
         }
 
-        Set<String> memberIds = new HashSet<String>();
-        for (ConsumerGroupMember member : members) {
-            memberIds.add(member.memberId());
-        }
-
         List<CoordinatorRecord> records = new ArrayList<>();
-        if (validateOnlineDowngradeWithFencedMembers(group, memberIds)) {
-            convertToClassicGroup(group, memberIds, null, records);
+        if (validateOnlineDowngradeWithFencedMembers(group, members)) {
+            convertToClassicGroup(group, members, null, records);
             return new CoordinatorResult<>(records, response, null, false);
         } else {
             for (ConsumerGroupMember member : members) {

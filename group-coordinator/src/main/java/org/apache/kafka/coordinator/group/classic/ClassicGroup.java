@@ -1338,7 +1338,7 @@ public class ClassicGroup implements Group {
      * Convert the given ConsumerGroup to a corresponding ClassicGroup.
      *
      * @param consumerGroup                 The converted ConsumerGroup.
-     * @param leavingMemberIds              The members that will not be converted in the ClassicGroup.
+     * @param leavingMembers                The members that will not be converted in the ClassicGroup.
      * @param joiningMember                 The member that needs to be converted and added to the ClassicGroup.
      *                                      When not null, must have an instanceId that matches an existing member.
      * @param logContext                    The logContext to create the ClassicGroup.
@@ -1348,7 +1348,7 @@ public class ClassicGroup implements Group {
      */
     public static ClassicGroup fromConsumerGroup(
         ConsumerGroup consumerGroup,
-        Set<String> leavingMemberIds,
+        Set<ConsumerGroupMember> leavingMembers,
         ConsumerGroupMember joiningMember,
         LogContext logContext,
         Time time,
@@ -1367,7 +1367,7 @@ public class ClassicGroup implements Group {
         );
 
         consumerGroup.members().forEach((memberId, member) -> {
-            if (!leavingMemberIds.contains(memberId) &&
+            if (!leavingMembers.contains(member) &&
                 (joiningMember == null || !joiningMember.instanceId().equals(member.instanceId()))) {
                 classicGroup.add(
                     new ClassicGroupMember(
