@@ -2859,12 +2859,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
               .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
     } else {
-      maybeForwardToController(request, handleRenewTokenRequestZk)
+      maybeForwardToController(request, KafkaApis.shouldAlwaysForward)
     }
-  }
-
-  def handleRenewTokenRequestZk(request: RequestChannel.Request): Unit = {
-    throw KafkaApis.shouldNeverReceive(request)
   }
 
   def handleExpireTokenRequest(request: RequestChannel.Request): Unit = {
@@ -2876,12 +2872,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
               .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
     } else {
-      maybeForwardToController(request, handleExpireTokenRequestZk)
+      maybeForwardToController(request, KafkaApis.shouldAlwaysForward)
     }
-  }
-
-  def handleExpireTokenRequestZk(request: RequestChannel.Request): Unit = {
-    throw KafkaApis.shouldNeverReceive(request)
   }
 
   def handleDescribeTokensRequest(request: RequestChannel.Request): Unit = {
