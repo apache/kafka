@@ -31,6 +31,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -102,9 +103,9 @@ public class IQv2EndpointToPartitionsIntegrationTest {
     }
 
 
-    @ParameterizedTest(name = "{2}" )
+    @ParameterizedTest(name = "{2}")
     @MethodSource("groupProtocolParameters")
-    public void shouldGetCorrectHostPartitionInformation(final String groupProtocolConfig, boolean usingStandbyReplicas, final String testName) throws Exception {
+    public void shouldGetCorrectHostPartitionInformation(final String groupProtocolConfig, final boolean usingStandbyReplicas, final String testName) throws Exception {
 
         final Properties streamOneProperties = new Properties();
         streamOneProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
@@ -134,14 +135,14 @@ public class IQv2EndpointToPartitionsIntegrationTest {
             List<StreamsMetadata> streamsMetadataAllClients = new ArrayList<>(streamsOne.metadataForAllStreamsClients());
             assertEquals(1, streamsMetadataAllClients.size());
             StreamsMetadata streamsOneMetadataOne = streamsMetadataAllClients.get(0);
-            Set<TopicPartition> topicPartitions = streamsOneMetadataOne.topicPartitions();
+            final Set<TopicPartition> topicPartitions = streamsOneMetadataOne.topicPartitions();
             assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
             assertEquals(4, topicPartitions.size());
             // Only one KS client instance should be no standby assigned
             assertEquals(0, streamsOneMetadataOne.standbyTopicPartitions().size());
 
-            long repartitionTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
-            long sourceTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+            final long repartitionTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
+            final long sourceTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
             assertEquals(2, repartitionTopicTaskCount);
             assertEquals(2, sourceTopicTaskCount);
             
@@ -157,27 +158,27 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                 assertEquals(2, streamsMetadataAllClients.size());
                 streamsOneMetadataOne = streamsMetadataAllClients.get(0);
 
-                Set<TopicPartition> streamsOneTopicPartitions = streamsOneMetadataOne.topicPartitions();
+                final Set<TopicPartition> streamsOneTopicPartitions = streamsOneMetadataOne.topicPartitions();
                 LOG.info("StreamsMetadata topicPartitions for streamsOne: {}", streamsOneTopicPartitions);
                 assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
                 assertEquals(2, streamsOneTopicPartitions.size());
-                int standbyTopicPartitionCount = usingStandbyReplicas ? 1 : 0;
+                final int standbyTopicPartitionCount = usingStandbyReplicas ? 1 : 0;
                 assertEquals(standbyTopicPartitionCount, streamsOneMetadataOne.standbyTopicPartitions().size());
 
-                long streamsOneRepartitionTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
-                long streamsOneSourceTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+                final long streamsOneRepartitionTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
+                final long streamsOneSourceTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
                 assertEquals(1, streamsOneRepartitionTopicTaskCount);
                 assertEquals(1, streamsOneSourceTopicTaskCount);
                 
-                StreamsMetadata streamsOneMetadataTwo = streamsMetadataAllClients.get(1);
-                Set<TopicPartition> streamsTwoTopicPartitions = streamsOneMetadataTwo.topicPartitions();
+                final StreamsMetadata streamsOneMetadataTwo = streamsMetadataAllClients.get(1);
+                final Set<TopicPartition> streamsTwoTopicPartitions = streamsOneMetadataTwo.topicPartitions();
                 LOG.info("StreamsMetadata topicPartitions for streamsTwo: {}", streamsTwoTopicPartitions);
                 assertEquals(3030, streamsOneMetadataTwo.hostInfo().port());
                 assertEquals(2, streamsTwoTopicPartitions.size());
                 assertEquals(standbyTopicPartitionCount, streamsOneMetadataTwo.standbyTopicPartitions().size());
 
-                long streamsTwoRepartitionTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
-                long streamsTwoSourceTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+                final long streamsTwoRepartitionTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
+                final long streamsTwoSourceTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
                 assertEquals(1, streamsTwoRepartitionTopicTaskCount);
                 assertEquals(1, streamsTwoSourceTopicTaskCount);
             }

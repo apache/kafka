@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TopicMetadata;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -61,10 +62,10 @@ class EndpointToPartitionsManagerTest {
         endpointToPartitionsManager = new EndpointToPartitionsManager();
 
         configuredSubtopology = new ConfiguredSubtopology();
-        configuredSubtopology.setSourceTopics( Set.of( "Topic-A", "Topic-B"));
+        configuredSubtopology.setSourceTopics(Set.of("Topic-A", "Topic-B"));
         ConfiguredInternalTopic stateChangelogTopic = new ConfiguredInternalTopic("StateChangeLog-A");
         ConfiguredInternalTopic stateChangelogTopic2 = new ConfiguredInternalTopic("StateChangeLog-B");
-        configuredSubtopology.setStateChangelogTopics( Map.of( "StateChangeLog-A", stateChangelogTopic, "StateChangeLog-B", stateChangelogTopic2 ) );
+        configuredSubtopology.setStateChangelogTopics(Map.of("StateChangeLog-A", stateChangelogTopic, "StateChangeLog-B", stateChangelogTopic2));
         configuredTopology.subtopologies().put("0", configuredSubtopology);
 
         responseEndpoint.setHost("localhost");
@@ -80,13 +81,13 @@ class EndpointToPartitionsManagerTest {
         topicMetadata.put("StateChangeLog-A", new TopicMetadata(Uuid.randomUuid(), "StateChangeLog-A", 3, Collections.emptyMap()));
         topicMetadata.put("StateChangeLog-B", new TopicMetadata(Uuid.randomUuid(), "StateChangeLog-B", 3, Collections.emptyMap()));
 
-         activeTasks.put("0", Set.of(0, 1, 2));
-         standbyTasks.put("0", Set.of(0, 1, 2));
-         when(streamsGroupMember.assignedActiveTasks()).thenReturn(activeTasks);
-         when(streamsGroupMember.assignedStandbyTasks()).thenReturn(standbyTasks);
-         when((streamsGroup.partitionMetadata())).thenReturn(topicMetadata);
-         when(streamsGroup.configuredTopology()).thenReturn(configuredTopology);
-         when(configuredTopology.subtopologies()).thenReturn(Map.of( "0", configuredSubtopology ) );
+        activeTasks.put("0", Set.of(0, 1, 2));
+        standbyTasks.put("0", Set.of(0, 1, 2));
+        when(streamsGroupMember.assignedActiveTasks()).thenReturn(activeTasks);
+        when(streamsGroupMember.assignedStandbyTasks()).thenReturn(standbyTasks);
+        when((streamsGroup.partitionMetadata())).thenReturn(topicMetadata);
+        when(streamsGroup.configuredTopology()).thenReturn(configuredTopology);
+        when(configuredTopology.subtopologies()).thenReturn(Map.of("0", configuredSubtopology));
 
         // Invoke the method under test
         StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
@@ -96,7 +97,7 @@ class EndpointToPartitionsManagerTest {
         assertEquals(responseEndpoint, result.userEndpoint());
         assertEquals(4, result.partitions().size());
 
-        List< StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions = result.partitions();
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions = result.partitions();
 
         topicPartitions.sort(Comparator.comparing(StreamsGroupHeartbeatResponseData.TopicPartition::topic));
         
@@ -137,7 +138,7 @@ class EndpointToPartitionsManagerTest {
         when(streamsGroupMember.assignedActiveTasks()).thenReturn(activeTasks);
         when(streamsGroup.partitionMetadata()).thenReturn(topicMetadata);
         when(streamsGroup.configuredTopology()).thenReturn(configuredTopology);
-        when(configuredTopology.subtopologies()).thenReturn(Map.of( "0", configuredSubtopology ) );
+        when(configuredTopology.subtopologies()).thenReturn(Map.of("0", configuredSubtopology));
 
         EndpointToPartitionsManager endpointToPartitionsManager = new EndpointToPartitionsManager();
 
