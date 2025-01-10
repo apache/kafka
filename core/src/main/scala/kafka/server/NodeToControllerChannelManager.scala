@@ -58,8 +58,8 @@ class MetadataCacheControllerNodeProvider(
   val quorumControllerNodeProvider: () => Option[ControllerInformation]
 ) extends ControllerNodeProvider {
 
-  private val zkControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
-  private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
+  private val zkControllerListenerName = config.interBrokerListenerName
+  private val zkControllerSecurityProtocol = config.interBrokerSecurityProtocol
   private val zkControllerSaslMechanism = config.saslMechanismInterBrokerProtocol
 
   val emptyZkControllerInfo =  ControllerInformation(

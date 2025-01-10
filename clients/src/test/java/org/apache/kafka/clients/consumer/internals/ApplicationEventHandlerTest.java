@@ -32,8 +32,9 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 public class ApplicationEventHandlerTest {
     private final Time time = new MockTime();
@@ -46,7 +47,7 @@ public class ApplicationEventHandlerTest {
     @Test
     public void testRecordApplicationEventQueueSize() {
         try (Metrics metrics = new Metrics();
-             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
+             AsyncConsumerMetrics asyncConsumerMetrics = spy(new AsyncConsumerMetrics(metrics));
              ApplicationEventHandler applicationEventHandler = new ApplicationEventHandler(
                      new LogContext(),
                      time,
@@ -59,15 +60,7 @@ public class ApplicationEventHandlerTest {
              )) {
             // add event
             applicationEventHandler.add(new PollEvent(time.milliseconds()));
-            assertEquals(
-                1,
-                (double) metrics.metric(
-                    metrics.metricName(
-                        AsyncConsumerMetrics.APPLICATION_EVENT_QUEUE_SIZE_SENSOR_NAME,
-                        ConsumerUtils.CONSUMER_METRIC_GROUP
-                    )
-                ).metricValue()
-            );
+            verify(asyncConsumerMetrics).recordApplicationEventQueueSize(1);
         }
     }
 }

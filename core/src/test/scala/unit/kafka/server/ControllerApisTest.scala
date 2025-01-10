@@ -1286,20 +1286,22 @@ class ControllerApisTest {
 
   @Test
   def testUnauthorizedControllerRegistrationRequest(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => {
+    val exception = assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleControllerRegistration(buildRequest(
         new ControllerRegistrationRequest(new ControllerRegistrationRequestData(), 0.toShort)))
     })
+    assertTrue(exception.getMessage.contains("needs CLUSTER_ACTION permission"))
   }
 
   @Test
   def testUnauthorizedDescribeClusterRequest(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => {
+    val exception = assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleDescribeCluster(buildRequest(
         new DescribeClusterRequest(new DescribeClusterRequestData(), 1.toShort)))
     })
+    assertTrue(exception.getMessage.contains("needs ALTER permission"))
   }
 
   @AfterEach

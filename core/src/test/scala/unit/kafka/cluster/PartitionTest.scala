@@ -445,8 +445,8 @@ class PartitionTest extends AbstractPartitionTest {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-          log.dir, log.topicPartition, logDirFailureChannel, "", None, time.scheduler)
+        val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+          log.dir, log.topicPartition, logDirFailureChannel, None, time.scheduler)
         val maxTransactionTimeoutMs = 5 * 60 * 1000
         val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, true)
         val producerStateManager = new ProducerStateManager(
@@ -467,7 +467,7 @@ class PartitionTest extends AbstractPartitionTest {
           segments,
           0L,
           0L,
-          leaderEpochCache.asJava,
+          leaderEpochCache,
           producerStateManager,
           new ConcurrentHashMap[String, Integer],
           false
@@ -3124,7 +3124,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Some(0L), partition.leaderEpochStartOffsetOpt)
 
     val leaderLog = partition.localLogOrException
-    assertEquals(Optional.of(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.toJava.flatMap(_.latestEntry))
+    assertEquals(Optional.of(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.latestEntry)
 
     // Write to the log to increment the log end offset.
     leaderLog.appendAsLeader(MemoryRecords.withRecords(0L, Compression.NONE, 0,
@@ -3148,7 +3148,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
     assertEquals(Set(leaderId), partition.partitionState.isr)
     assertEquals(Some(0L), partition.leaderEpochStartOffsetOpt)
-    assertEquals(Optional.of(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.toJava.flatMap(_.latestEntry))
+    assertEquals(Optional.of(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.latestEntry)
   }
 
   @Test
@@ -3628,7 +3628,7 @@ class PartitionTest extends AbstractPartitionTest {
     log: UnifiedLog,
     logStartOffset: Long,
     localLog: LocalLog,
-    leaderEpochCache: Option[LeaderEpochFileCache],
+    leaderEpochCache: LeaderEpochFileCache,
     producerStateManager: ProducerStateManager,
     appendSemaphore: Semaphore
   ) extends UnifiedLog(

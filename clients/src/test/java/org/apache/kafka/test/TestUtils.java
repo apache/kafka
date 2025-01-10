@@ -74,7 +74,6 @@ import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -569,8 +568,10 @@ public class TestUtils {
      */
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
         ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        assertInstanceOf(exceptionCauseClass, exception.getCause(),
-            "Unexpected exception cause " + exception.getCause());
+        Throwable cause = exception.getCause();
+        assertEquals(exceptionCauseClass, cause.getClass(),
+            "Expected a " + exceptionCauseClass.getSimpleName() + " exception, but got " +
+                        cause.getClass().getSimpleName());
         return exceptionCauseClass.cast(exception.getCause());
     }
 
@@ -581,19 +582,6 @@ public class TestUtils {
     ) {
         T receivedException = assertFutureThrows(future, expectedCauseClassApiException);
         assertEquals(expectedMessage, receivedException.getMessage());
-    }
-
-    public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
-        throws InterruptedException {
-        try {
-            future.get();
-            fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
-        } catch (ExecutionException ee) {
-            Throwable cause = ee.getCause();
-            assertEquals(exceptionClass, cause.getClass(),
-                "Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
-                    cause.getClass().getSimpleName());
-        }
     }
 
     public static ApiKeys apiKeyFrom(NetworkReceive networkReceive) {
