@@ -1340,7 +1340,7 @@ public class ClassicGroup implements Group {
      * @param consumerGroup                 The converted ConsumerGroup.
      * @param leavingMemberIds              The members that will not be converted in the ClassicGroup.
      * @param joiningMember                 The member that needs to be converted and added to the ClassicGroup.
-     *                                      When not null, leavingMemberIds must contain the single member being replaced.
+     *                                      When not null, must have an instanceId that matches an existing member.
      * @param logContext                    The logContext to create the ClassicGroup.
      * @param time                          The time to create the ClassicGroup.
      * @param metadataImage                 The MetadataImage.
@@ -1354,12 +1354,6 @@ public class ClassicGroup implements Group {
         Time time,
         MetadataImage metadataImage
     ) {
-        if (joiningMember != null && leavingMemberIds.size() != 1) {
-            throw new IllegalArgumentException(
-                String.format("joiningMember is not null, but leavingMemberIds contains %d members.", leavingMemberIds.size())
-            );
-        }
-
         ClassicGroup classicGroup = new ClassicGroup(
             logContext,
             consumerGroup.groupId(),
@@ -1373,7 +1367,8 @@ public class ClassicGroup implements Group {
         );
 
         consumerGroup.members().forEach((memberId, member) -> {
-            if (!leavingMemberIds.contains(memberId)) {
+            if (!leavingMemberIds.contains(memberId) &&
+                (joiningMember == null || !joiningMember.instanceId().equals(member.instanceId()))) {
                 classicGroup.add(
                     new ClassicGroupMember(
                         memberId,
@@ -1417,7 +1412,7 @@ public class ClassicGroup implements Group {
                 // If the downgraded is triggered by the joining static member replacing
                 // the leaving static member, the joining member should take the assignment
                 // of the leaving one.
-                memberId = leavingMemberIds.iterator().next();
+                memberId = consumerGroup.staticMember(joiningMember.instanceId()).memberId();
             }
             byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(
                 toConsumerProtocolAssignment(

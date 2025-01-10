@@ -986,7 +986,7 @@ public class GroupMetadataManager {
      * @param consumerGroup     The converted ConsumerGroup.
      * @param leavingMemberIds  The leaving member(s) that triggered the downgrade validation.
      * @param joiningMember     The newly joined member if the downgrade is triggered by static member replacement.
-     *                          When not null, leavingMemberIds must contain the single member being replaced.
+     *                          When not null, must have an instanceId that matches an existing member.
      * @param records           The record list to which the conversion records are added.
      */
     private void convertToClassicGroup(
@@ -995,18 +995,13 @@ public class GroupMetadataManager {
         ConsumerGroupMember joiningMember,
         List<CoordinatorRecord> records
     ) {
-        if (joiningMember != null && leavingMemberIds.size() != 1) {
-            throw new IllegalArgumentException(
-                String.format("joiningMember is not null, but leavingMemberIds contains %d members.", leavingMemberIds.size())
-            );
-        }
-
         if (joiningMember == null) {
             consumerGroup.createGroupTombstoneRecords(records);
         } else {
             // We've already generated the records to replace replacedMemberId with joiningMember,
             // so we need to tombstone joiningMember instead.
-            consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, leavingMemberIds.iterator().next(), joiningMember.memberId());
+            String replacedMemberId = consumerGroup.staticMember(joiningMember.instanceId()).memberId();
+            consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, replacedMemberId, joiningMember.memberId());
         }
 
         ClassicGroup classicGroup;
@@ -1965,7 +1960,7 @@ public class GroupMetadataManager {
         if (downgrade) {
             convertToClassicGroup(
                 group,
-                Set.of(existingStaticMemberIdOrNull),
+                Collections.emptySet(),
                 updatedMember,
                 records
             );
