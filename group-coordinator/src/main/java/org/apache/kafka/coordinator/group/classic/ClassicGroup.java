@@ -1368,7 +1368,7 @@ public class ClassicGroup implements Group {
 
         consumerGroup.members().forEach((memberId, member) -> {
             if (!leavingMembers.contains(member) &&
-                (joiningMember == null || !joiningMember.instanceId().equals(member.instanceId()))) {
+                (joiningMember == null || joiningMember.instanceId() == null || !joiningMember.instanceId().equals(member.instanceId()))) {
                 classicGroup.add(
                     new ClassicGroupMember(
                         memberId,
@@ -1412,7 +1412,11 @@ public class ClassicGroup implements Group {
                 // If the downgraded is triggered by the joining static member replacing
                 // the leaving static member, the joining member should take the assignment
                 // of the leaving one.
-                memberId = consumerGroup.staticMember(joiningMember.instanceId()).memberId();
+                ConsumerGroupMember replacedMember = consumerGroup.staticMember(joiningMember.instanceId());
+                if (replacedMember == null) {
+                    throw Errors.UNKNOWN_MEMBER_ID.exception("Instance id " + joiningMember.instanceId() + " is unknown.");
+                }
+                memberId = replacedMember.memberId();
             }
             byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(
                 toConsumerProtocolAssignment(

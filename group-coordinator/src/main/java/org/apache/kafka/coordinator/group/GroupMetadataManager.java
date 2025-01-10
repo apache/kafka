@@ -998,10 +998,11 @@ public class GroupMetadataManager {
         if (joiningMember == null) {
             consumerGroup.createGroupTombstoneRecords(records);
         } else {
-            // We've already generated the records to replace replacedMemberId with joiningMember,
+            // We've already generated the records to replace replacedMember with joiningMember,
             // so we need to tombstone joiningMember instead.
-            String replacedMemberId = consumerGroup.staticMember(joiningMember.instanceId()).memberId();
-            consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, replacedMemberId, joiningMember.memberId());
+            ConsumerGroupMember replacedMember = consumerGroup.staticMember(joiningMember.instanceId());
+            throwIfStaticMemberIsUnknown(replacedMember, joiningMember.instanceId());
+            consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, replacedMember.memberId(), joiningMember.memberId());
         }
 
         ClassicGroup classicGroup;
