@@ -55,7 +55,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
@@ -544,8 +543,7 @@ public class GroupCoordinatorRecordHelpersTest {
         group.initNextGeneration();
         CoordinatorRecord groupMetadataRecord = GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
             group,
-            assignment,
-            metadataVersion
+            assignment
         );
 
         assertEquals(expectedRecord, groupMetadataRecord);
@@ -610,8 +608,7 @@ public class GroupCoordinatorRecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
-                Collections.emptyMap(),
-                MetadataVersion.IBP_3_5_IV2
+                Collections.emptyMap()
             ));
     }
 
@@ -661,8 +658,7 @@ public class GroupCoordinatorRecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
-                Collections.emptyMap(),
-                MetadataVersion.IBP_3_5_IV2
+                Collections.emptyMap()
             ));
     }
       
@@ -700,16 +696,20 @@ public class GroupCoordinatorRecordHelpersTest {
 
         group.initNextGeneration();
         CoordinatorRecord groupMetadataRecord = GroupCoordinatorRecordHelpers.newEmptyGroupMetadataRecord(
-            group,
-            metadataVersion
+            group
         );
 
         assertEquals(expectedRecord, groupMetadataRecord);
     }
 
-    @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class)
-    public void testNewOffsetCommitRecord(MetadataVersion metadataVersion) {
+    @Test
+    public void testOffsetCommitValueVersion() {
+        assertEquals((short) 1, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(true));
+        assertEquals((short) 3, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false));
+    }
+
+    @Test
+    public void testNewOffsetCommitRecord() {
         OffsetCommitKey key = new OffsetCommitKey()
             .setGroup("group-id")
             .setTopic("foo")
@@ -727,8 +727,7 @@ public class GroupCoordinatorRecordHelpersTest {
                 (short) 1),
             new ApiMessageAndVersion(
                 value,
-                metadataVersion.offsetCommitValueVersion(false)
-            )
+                GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false))
         );
 
         assertEquals(expectedRecord, GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
@@ -740,8 +739,7 @@ public class GroupCoordinatorRecordHelpersTest {
                 OptionalInt.of(10),
                 "metadata",
                 1234L,
-                OptionalLong.empty()),
-            metadataVersion
+                OptionalLong.empty())
         ));
 
         value.setLeaderEpoch(-1);
@@ -755,14 +753,12 @@ public class GroupCoordinatorRecordHelpersTest {
                 OptionalInt.empty(),
                 "metadata",
                 1234L,
-                OptionalLong.empty()),
-            metadataVersion
+                OptionalLong.empty())
         ));
     }
 
-    @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class)
-    public void testNewOffsetCommitRecordWithExpireTimestamp(MetadataVersion metadataVersion) {
+    @Test
+    public void testNewOffsetCommitRecordWithExpireTimestamp() {
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new OffsetCommitKey()
@@ -790,8 +786,7 @@ public class GroupCoordinatorRecordHelpersTest {
                 OptionalInt.of(10),
                 "metadata",
                 1234L,
-                OptionalLong.of(5678L)),
-            metadataVersion
+                OptionalLong.of(5678L))
         ));
     }
 

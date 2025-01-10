@@ -18,7 +18,6 @@
 package org.apache.kafka.server.common;
 
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.RecordVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -27,7 +26,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import static org.apache.kafka.server.common.MetadataVersion.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -197,18 +195,6 @@ class MetadataVersionTest {
         assertEquals(IBP_4_0_IV1, MetadataVersion.fromVersionString("4.0-IV1"));
         assertEquals(IBP_4_0_IV2, MetadataVersion.fromVersionString("4.0-IV2"));
         assertEquals(IBP_4_0_IV3, MetadataVersion.fromVersionString("4.0-IV3"));
-    }
-
-    @Test
-    public void testMinSupportedVersionFor() {
-        assertEquals(IBP_0_8_0, MetadataVersion.minSupportedFor(RecordVersion.V0));
-        assertEquals(IBP_0_10_0_IV0, MetadataVersion.minSupportedFor(RecordVersion.V1));
-        assertEquals(IBP_0_11_0_IV0, MetadataVersion.minSupportedFor(RecordVersion.V2));
-
-        // Ensure that all record versions have a defined min version so that we remember to update the method
-        for (RecordVersion recordVersion : RecordVersion.values()) {
-            assertNotNull(MetadataVersion.minSupportedFor(recordVersion));
-        }
     }
 
     @Test
@@ -430,42 +416,6 @@ class MetadataVersionTest {
         assertEquals(expectedVersion, metadataVersion.registerBrokerRecordVersion());
     }
 
-    @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class)
-    public void testGroupMetadataValueVersion(MetadataVersion metadataVersion) {
-        final short expectedVersion;
-        if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_3_IV0)) {
-            expectedVersion = 3;
-        } else if (metadataVersion.isAtLeast(IBP_2_1_IV0)) {
-            expectedVersion = 2;
-        } else if (metadataVersion.isAtLeast(IBP_0_10_1_IV0)) {
-            expectedVersion = 1;
-        } else {
-            expectedVersion = 0;
-        }
-        assertEquals(expectedVersion, metadataVersion.groupMetadataValueVersion());
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class)
-    public void testOffsetCommitValueVersion(MetadataVersion metadataVersion) {
-        final short expectedVersion;
-        if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_1_IV1)) {
-            expectedVersion = 3;
-        } else if (metadataVersion.isAtLeast(IBP_2_1_IV0)) {
-            expectedVersion = 2;
-        } else {
-            expectedVersion = 1;
-        }
-        assertEquals(expectedVersion, metadataVersion.offsetCommitValueVersion(false));
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class)
-    public void testOffsetCommitValueVersionWithExpiredTimestamp(MetadataVersion metadataVersion) {
-        assertEquals((short) 1, metadataVersion.offsetCommitValueVersion(true));
-    }
-
     @Test
     public void assertLatestProductionIsLessThanLatest() {
         assertTrue(LATEST_PRODUCTION.ordinal() < MetadataVersion.latestTesting().ordinal(),
@@ -483,8 +433,6 @@ class MetadataVersionTest {
         MetadataVersion mv = MetadataVersion.latestProduction();
         assertTrue(mv.listOffsetRequestVersion() <= ApiKeys.LIST_OFFSETS.latestVersion(false));
         assertTrue(mv.fetchRequestVersion() <= ApiKeys.FETCH.latestVersion(false));
-        assertTrue(mv.offsetForLeaderEpochRequestVersion() <= ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(false));
-        assertTrue(mv.writeTxnMarkersRequestVersion() <= ApiKeys.WRITE_TXN_MARKERS.latestVersion(false));
     }
 
     @Test

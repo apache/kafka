@@ -1445,7 +1445,7 @@ public class ClassicGroup implements Group {
             assignments.put(classicGroupMember.memberId(), classicGroupMember.assignment())
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
+        records.add(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments));
     }
 
     /**

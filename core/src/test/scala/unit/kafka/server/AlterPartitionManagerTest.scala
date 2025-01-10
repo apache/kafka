@@ -99,23 +99,15 @@ class AlterPartitionManagerTest {
       .setTopicName(topic)
       .setTopicId(topicId)
 
-    if (metadataVersion.isTopicIdsSupported) {
-      val newIsrWithBrokerEpoch = new ListBuffer[BrokerState]()
-      newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(1).setBrokerEpoch(101))
-      newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(2).setBrokerEpoch(102))
-      newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(3).setBrokerEpoch(103))
-      topicData.partitions.add(new AlterPartitionRequestData.PartitionData()
-        .setPartitionIndex(0)
-        .setLeaderEpoch(1)
-        .setPartitionEpoch(10)
-        .setNewIsrWithEpochs(newIsrWithBrokerEpoch.toList.asJava))
-    } else {
-      topicData.partitions.add(new AlterPartitionRequestData.PartitionData()
-        .setPartitionIndex(0)
-        .setLeaderEpoch(1)
-        .setPartitionEpoch(10)
-        .setNewIsr(List(1, 2, 3).map(Integer.valueOf).asJava))
-    }
+    val newIsrWithBrokerEpoch = new ListBuffer[BrokerState]()
+    newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(1).setBrokerEpoch(101))
+    newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(2).setBrokerEpoch(102))
+    newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(3).setBrokerEpoch(103))
+    topicData.partitions.add(new AlterPartitionRequestData.PartitionData()
+      .setPartitionIndex(0)
+      .setLeaderEpoch(1)
+      .setPartitionEpoch(10)
+      .setNewIsrWithEpochs(newIsrWithBrokerEpoch.toList.asJava))
 
     expectedAlterPartitionData.topics.add(topicData)
 
@@ -422,11 +414,7 @@ class AlterPartitionManagerTest {
   @ParameterizedTest
   @MethodSource(Array("provideMetadataVersions"))
   def testPartitionMissingInResponse(metadataVersion: MetadataVersion): Unit = {
-    val expectedVersion = if (metadataVersion.isTopicIdsSupported) {
-      ApiKeys.ALTER_PARTITION.latestVersion
-    } else {
-      1.toShort
-    }
+    val expectedVersion = ApiKeys.ALTER_PARTITION.latestVersion
     val leaderAndIsr = new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10)
     val controlledEpoch = 0
     val brokerEpoch = 2

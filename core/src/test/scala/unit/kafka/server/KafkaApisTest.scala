@@ -3000,7 +3000,7 @@ class KafkaApisTest extends Logging {
     // This test verifies the response will not be sent prematurely because of calling replicaManager append
     // with no records.
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
-    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
       asList(
         new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, asList(topicPartition)),
         new TxnMarkerEntry(2, 1.toShort, 0, TransactionResult.COMMIT, asList(topicPartition)),
@@ -3134,7 +3134,6 @@ class KafkaApisTest extends Logging {
     )
 
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       List(
         new TxnMarkerEntry(
           1L,
@@ -3260,7 +3259,6 @@ class KafkaApisTest extends Logging {
     )
 
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       List(
         new TxnMarkerEntry(
           1L,
@@ -3386,7 +3384,6 @@ class KafkaApisTest extends Logging {
     val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
 
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       List(
         new TxnMarkerEntry(
           1L,
@@ -9866,7 +9863,7 @@ class KafkaApisTest extends Logging {
   }
 
   private def createWriteTxnMarkersRequest(partitions: util.List[TopicPartition]) = {
-    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
       asList(new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions))).build()
     (writeTxnMarkersRequest, buildRequest(writeTxnMarkersRequest))
   }

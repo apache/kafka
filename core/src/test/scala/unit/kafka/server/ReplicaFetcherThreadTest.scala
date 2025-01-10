@@ -131,10 +131,6 @@ class ReplicaFetcherThreadTest {
       testingVersion.fetchRequestVersion
     )
     assertEquals(
-      ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(true),
-      testingVersion.offsetForLeaderEpochRequestVersion
-    )
-    assertEquals(
       ApiKeys.LIST_OFFSETS.latestVersion(true),
       testingVersion.listOffsetRequestVersion
     )

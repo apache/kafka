@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.common;
 
-import org.apache.kafka.common.record.RecordVersion;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -290,34 +289,6 @@ public enum MetadataVersion {
         return featureLevel;
     }
 
-    public boolean isSaslInterBrokerHandshakeRequestEnabled() {
-        return this.isAtLeast(IBP_0_10_0_IV1);
-    }
-
-    public boolean isOffsetForLeaderEpochSupported() {
-        return this.isAtLeast(IBP_0_11_0_IV2);
-    }
-
-    public boolean isFeatureVersioningSupported() {
-        return this.isAtLeast(IBP_2_7_IV0);
-    }
-
-    public boolean isTruncationOnFetchSupported() {
-        return this.isAtLeast(IBP_2_7_IV1);
-    }
-
-    public boolean isAlterPartitionSupported() {
-        return this.isAtLeast(IBP_2_7_IV2);
-    }
-
-    public boolean isTopicIdsSupported() {
-        return this.isAtLeast(IBP_2_8_IV0);
-    }
-
-    public boolean isAllocateProducerIdsSupported() {
-        return this.isAtLeast(IBP_3_0_IV0);
-    }
-
     public boolean isLeaderRecoverySupported() {
         return this.isAtLeast(IBP_3_2_IV0);
     }
@@ -356,16 +327,6 @@ public enum MetadataVersion {
 
     public boolean isKRaftSupported() {
         return this.featureLevel > 0;
-    }
-
-    public RecordVersion highestSupportedRecordVersion() {
-        if (this.isLessThan(IBP_0_10_0_IV0)) {
-            return RecordVersion.V0;
-        } else if (this.isLessThan(IBP_0_11_0_IV0)) {
-            return RecordVersion.V1;
-        } else {
-            return RecordVersion.V2;
-        }
     }
 
     public boolean isBrokerRegistrationChangeRecordSupported() {
@@ -438,43 +399,8 @@ public enum MetadataVersion {
             return 14;
         } else if (this.isAtLeast(IBP_3_1_IV0)) {
             return 13;
-        } else if (this.isAtLeast(IBP_2_7_IV1)) {
-            return 12;
-        } else if (this.isAtLeast(IBP_2_3_IV1)) {
-            return 11;
-        } else if (this.isAtLeast(IBP_2_1_IV2)) {
-            return 10;
-        } else if (this.isAtLeast(IBP_2_0_IV1)) {
-            return 8;
-        } else if (this.isAtLeast(IBP_1_1_IV0)) {
-            return 7;
-        } else if (this.isAtLeast(IBP_0_11_0_IV1)) {
-            return 5;
-        } else if (this.isAtLeast(IBP_0_11_0_IV0)) {
-            return 4;
-        } else if (this.isAtLeast(IBP_0_10_1_IV1)) {
-            return 3;
-        } else if (this.isAtLeast(IBP_0_10_0_IV0)) {
-            return 2;
-        } else if (this.isAtLeast(IBP_0_9_0)) {
-            return 1;
-        } else {
-            return 0;
         }
-    }
-
-    public short offsetForLeaderEpochRequestVersion() {
-        if (this.isAtLeast(IBP_2_8_IV0)) {
-            return 4;
-        } else if (this.isAtLeast(IBP_2_3_IV1)) {
-            return 3;
-        } else if (this.isAtLeast(IBP_2_1_IV1)) {
-            return 2;
-        } else if (this.isAtLeast(IBP_2_0_IV0)) {
-            return 1;
-        } else {
-            return 0;
-        }
+        return 12;
     }
 
     public short listOffsetRequestVersion() {
@@ -486,47 +412,8 @@ public enum MetadataVersion {
             return 8;
         } else if (this.isAtLeast(IBP_3_0_IV1)) {
             return 7;
-        } else if (this.isAtLeast(IBP_2_8_IV0)) {
-            return 6;
-        } else if (this.isAtLeast(IBP_2_2_IV1)) {
-            return 5;
-        } else if (this.isAtLeast(IBP_2_1_IV1)) {
-            return 4;
-        } else if (this.isAtLeast(IBP_2_0_IV1)) {
-            return 3;
-        } else if (this.isAtLeast(IBP_0_11_0_IV0)) {
-            return 2;
-        } else if (this.isAtLeast(IBP_0_10_1_IV2)) {
-            return 1;
-        } else {
-            return 0;
         }
-    }
-
-    public short groupMetadataValueVersion() {
-        if (this.isLessThan(IBP_0_10_1_IV0)) {
-            return 0;
-        } else if (this.isLessThan(IBP_2_1_IV0)) {
-            return 1;
-        } else if (this.isLessThan(IBP_2_3_IV0)) {
-            return 2;
-        } else {
-            // Serialize with the highest supported non-flexible version
-            // until a tagged field is introduced or the version is bumped.
-            return 3;
-        }
-    }
-
-    public short offsetCommitValueVersion(boolean expireTimestampMs) {
-        if (isLessThan(MetadataVersion.IBP_2_1_IV0) || expireTimestampMs) {
-            return 1;
-        } else if (isLessThan(MetadataVersion.IBP_2_1_IV1)) {
-            return 2;
-        } else {
-            // Serialize with the highest supported non-flexible version
-            // until a tagged field is introduced or the version is bumped.
-            return  3;
-        }
+        return 6;
     }
 
     private static final Map<String, MetadataVersion> IBP_VERSIONS;
@@ -600,22 +487,6 @@ public enum MetadataVersion {
         throw new IllegalArgumentException("No MetadataVersion with feature level " + version);
     }
 
-    /**
-     * Return the minimum `MetadataVersion` that supports `RecordVersion`.
-     */
-    public static MetadataVersion minSupportedFor(RecordVersion recordVersion) {
-        switch (recordVersion) {
-            case V0:
-                return IBP_0_8_0;
-            case V1:
-                return IBP_0_10_0_IV0;
-            case V2:
-                return IBP_0_11_0_IV0;
-            default:
-                throw new IllegalArgumentException("Invalid message format version " + recordVersion);
-        }
-    }
-
     // Testing only
     public static MetadataVersion latestTesting() {
         return VERSIONS[VERSIONS.length - 1];
@@ -652,14 +523,6 @@ public enum MetadataVersion {
             }
         }
         return version != lowVersion;
-    }
-
-    public short writeTxnMarkersRequestVersion() {
-        if (isAtLeast(IBP_2_8_IV0)) {
-            return 1;
-        } else {
-            return 0;
-        }
     }
 
     public boolean isAtLeast(MetadataVersion otherVersion) {

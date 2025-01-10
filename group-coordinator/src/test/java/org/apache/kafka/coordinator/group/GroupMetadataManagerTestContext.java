@@ -238,7 +238,7 @@ public class GroupMetadataManagerTestContext {
             ),
             new ApiMessageAndVersion(
                 value,
-                metadataVersion.groupMetadataValueVersion()
+                (short) 3
             )
         );
     }
@@ -850,7 +850,7 @@ public class GroupMetadataManagerTestContext {
             .build());
 
         assertEquals(
-            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
+            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment())),
             syncResult.records
         );
         // Simulate a successful write to the log.
@@ -1058,7 +1058,7 @@ public class GroupMetadataManagerTestContext {
         ));
         assertEquals(
             List.of(
-                GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, groupAssignment, MetadataVersion.latestTesting())),
+                GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, groupAssignment)),
             leaderSyncResult.records
         );
 
@@ -1118,7 +1118,7 @@ public class GroupMetadataManagerTestContext {
 
         // Now the group is stable, with the one member that joined above
         assertEquals(
-            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
+            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment())),
             syncResult.records
         );
         // Simulate a successful write to log.
@@ -1156,7 +1156,7 @@ public class GroupMetadataManagerTestContext {
         syncResult = sendClassicGroupSync(syncRequest.setGenerationId(nextGenerationId));
 
         assertEquals(
-            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
+            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment())),
             syncResult.records
         );
         // Simulate a successful write to log.

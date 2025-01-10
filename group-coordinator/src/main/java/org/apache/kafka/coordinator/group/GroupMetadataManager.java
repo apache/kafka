@@ -4411,7 +4411,7 @@ public class GroupMetadataManager {
             });
 
             records.add(
-                GroupCoordinatorRecordHelpers.newEmptyGroupMetadataRecord(group, metadataImage.features().metadataVersion())
+                GroupCoordinatorRecordHelpers.newEmptyGroupMetadataRecord(group)
             );
 
             return new CoordinatorResult<>(records, appendFuture, false);
@@ -4841,7 +4841,7 @@ public class GroupMetadataManager {
                 });
 
                 List<CoordinatorRecord> records = Collections.singletonList(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
-                    group, Collections.emptyMap(), metadataImage.features().metadataVersion()));
+                    group, Collections.emptyMap()));
 
                 return new CoordinatorResult<>(records, appendFuture, false);
 
@@ -5503,7 +5503,7 @@ public class GroupMetadataManager {
                 });
 
                 List<CoordinatorRecord> records = Collections.singletonList(
-                    GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, groupAssignment, metadataImage.features().metadataVersion())
+                    GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, groupAssignment)
                 );
 
                 return new CoordinatorResult<>(records, appendFuture, false);
@@ -5650,7 +5650,7 @@ public class GroupMetadataManager {
                 });
 
                 List<CoordinatorRecord> records = Collections.singletonList(
-                    GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, assignment, metadataImage.features().metadataVersion())
+                    GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, assignment)
                 );
                 return new CoordinatorResult<>(records, appendFuture, false);
             }

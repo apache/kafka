@@ -3307,8 +3307,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(Left(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)))
     } else if (!zkSupport.controller.isActive) {
       sendResponseCallback(Left(new ApiError(Errors.NOT_CONTROLLER)))
-    } else if (!config.isFeatureVersioningSupported) {
-      sendResponseCallback(Left(new ApiError(Errors.INVALID_REQUEST, "Feature versioning system is disabled.")))
     } else {
       zkSupport.controller.updateFeatures(updateFeaturesRequest, sendResponseCallback)
     }
