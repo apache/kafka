@@ -94,7 +94,6 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
-import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -3719,8 +3718,7 @@ public class GroupMetadataManagerTest {
                 .setLeader("member-0")
                 .setProtocolType("consumer")
                 .setProtocol("range")
-                .setCurrentStateTimestamp(context.time.milliseconds()),
-            MetadataVersion.latestTesting());
+                .setCurrentStateTimestamp(context.time.milliseconds()));
 
         context.replay(groupMetadataRecord);
         ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
@@ -3777,8 +3775,7 @@ public class GroupMetadataManagerTest {
                 .setLeader("member-0")
                 .setProtocolType("consumer")
                 .setProtocol("range")
-                .setCurrentStateTimestamp(context.time.milliseconds()),
-            MetadataVersion.latestTesting());
+                .setCurrentStateTimestamp(context.time.milliseconds()));
 
         context.replay(groupMetadataRecord);
         context.groupMetadataManager.onLoaded();
@@ -3817,8 +3814,7 @@ public class GroupMetadataManagerTest {
                 .setLeader("member-0")
                 .setProtocolType("consumer")
                 .setProtocol("range")
-                .setCurrentStateTimestamp(context.time.milliseconds()),
-            MetadataVersion.latestTesting());
+                .setCurrentStateTimestamp(context.time.milliseconds()));
 
         context.replay(groupMetadataRecord);
         context.groupMetadataManager.onLoaded();
@@ -5536,8 +5532,7 @@ public class GroupMetadataManagerTest {
                 .setLeader(null)
                 .setProtocolType("consumer")
                 .setProtocol(null)
-                .setCurrentStateTimestamp(context.time.milliseconds()),
-            MetadataVersion.latestTesting())
+                .setCurrentStateTimestamp(context.time.milliseconds()))
         );
 
         assertEquals(1, timeouts.size());
@@ -8497,8 +8492,7 @@ public class GroupMetadataManagerTest {
                 .setLeader(null)
                 .setProtocolType("classic")
                 .setProtocol("range")
-                .setCurrentStateTimestamp(context.time.milliseconds()),
-            MetadataVersion.latestTesting()));
+                .setCurrentStateTimestamp(context.time.milliseconds())));
         // Create one share group record.
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(shareGroupId, 6));
         context.commit();
@@ -8792,8 +8786,7 @@ public class GroupMetadataManagerTest {
 
         context.replay(GroupMetadataManagerTestContext.newGroupMetadataRecord(
             "group-id",
-            groupMetadataValue,
-            MetadataVersion.latestTesting()
+            groupMetadataValue
         ));
         context.verifyDescribeGroupsReturnsDeadGroup("group-id");
         context.commit();
@@ -8841,8 +8834,7 @@ public class GroupMetadataManagerTest {
 
         context.replay(GroupMetadataManagerTestContext.newGroupMetadataRecord(
             "group-id",
-            groupMetadataValue,
-            MetadataVersion.latestTesting()
+            groupMetadataValue
         ));
         ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
         context.groupMetadataManager.prepareRebalance(group, "trigger rebalance");

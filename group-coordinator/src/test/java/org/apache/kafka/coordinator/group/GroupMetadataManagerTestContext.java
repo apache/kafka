@@ -95,7 +95,6 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import java.net.InetAddress;
@@ -227,8 +226,7 @@ public class GroupMetadataManagerTestContext {
 
     public static CoordinatorRecord newGroupMetadataRecord(
         String groupId,
-        GroupMetadataValue value,
-        MetadataVersion metadataVersion
+        GroupMetadataValue value
     ) {
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
@@ -1219,8 +1217,7 @@ public class GroupMetadataManagerTestContext {
                 .setLeader(null)
                 .setProtocolType("consumer")
                 .setProtocol(null)
-                .setCurrentStateTimestamp(time.milliseconds()),
-            MetadataVersion.latestTesting()
+                .setCurrentStateTimestamp(time.milliseconds())
         ));
 
 
