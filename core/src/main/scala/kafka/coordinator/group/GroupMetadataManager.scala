@@ -1084,13 +1084,14 @@ object GroupMetadataManager {
    * Generates the payload for offset commit message from given offset and metadata
    *
    * @param offsetAndMetadata consumer's current offset and metadata
-   * @param maxVersion the naxinu -  // Serialize with the highest supported non-flexible version
-      // until a tagged field is introduced or the version is bumped. FIXME
+   * @param maxVersion the highest version allowed, we may use a lower version for compatibility reasons
+   *                   we serialize with the highest supported non-flexible version until a tagged field is introduced
+   *                   or the version is bumped.
    * @return payload for offset commit message
    */
   def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata, maxVersion: Short = 3): Array[Byte] = {
     val version =
-      if (offsetAndMetadata.expireTimestampMs.isPresent) 1.toShort
+      if (offsetAndMetadata.expireTimestampMs.isPresent) Math.min(1, maxVersion).toShort
       else maxVersion
     MessageUtil.toVersionPrefixedBytes(version, new OffsetCommitValue()
       .setOffset(offsetAndMetadata.committedOffset)
