@@ -97,10 +97,10 @@ public class RetryWithToleranceOperatorTest {
             put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         }};
 
-    public static <T> RetryWithToleranceOperator<T> noopOperator() {
+    public static <T> RetryWithToleranceOperator<T> noneOperator() {
         return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, new ErrorHandlingMetrics(
-                new ConnectorTaskId("noop-connector", -1),
-                new ConnectMetrics("noop-worker", new TestableWorkerConfig(PROPERTIES),
+                new ConnectorTaskId("errors-none-tolerate-connector", -1),
+                new ConnectMetrics("errors-none-tolerate-worker", new TestableWorkerConfig(PROPERTIES),
                         Time.SYSTEM, "test-cluster")));
     }
 
@@ -147,56 +147,77 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testHandleExceptionInTransformations() {
-        testHandleExceptionInStage(Stage.TRANSFORMATION, new Exception());
+        testHandleExceptionInStage(Stage.TRANSFORMATION, new Exception(), ALL);
     }
 
     @Test
+    public void testHandleRetriableExceptionInTransformationsToleranceNone() {
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.TRANSFORMATION, new RetriableException("Test"), NONE));
+    }
+
+
+    @Test
     public void testHandleExceptionInHeaderConverter() {
-        testHandleExceptionInStage(Stage.HEADER_CONVERTER, new Exception());
+        testHandleExceptionInStage(Stage.HEADER_CONVERTER, new Exception(), ALL);
+    }
+
+    @Test
+    public void testHandleRetriableExceptionInHeaderConverterToleranceNone() {
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.HEADER_CONVERTER, new RetriableException("Test"), NONE));
     }
 
     @Test
     public void testHandleExceptionInValueConverter() {
-        testHandleExceptionInStage(Stage.VALUE_CONVERTER, new Exception());
+        testHandleExceptionInStage(Stage.VALUE_CONVERTER, new Exception(), ALL);
+    }
+
+    @Test
+    public void testHandleRetriableExceptionInValueConverterToleranceNone() {
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.VALUE_CONVERTER, new RetriableException("Test"), NONE));
     }
 
     @Test
     public void testHandleExceptionInKeyConverter() {
-        testHandleExceptionInStage(Stage.KEY_CONVERTER, new Exception());
+        testHandleExceptionInStage(Stage.KEY_CONVERTER, new Exception(), ALL);
+    }
+
+    @Test
+    public void testHandleRetriableExceptionInKeyConverterToleranceNone() {
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.KEY_CONVERTER, new RetriableException("Test"), NONE));
     }
 
     @Test
     public void testHandleExceptionInTaskPut() {
-        testHandleExceptionInStage(Stage.TASK_PUT, new org.apache.kafka.connect.errors.RetriableException("Test"));
+        testHandleExceptionInStage(Stage.TASK_PUT, new org.apache.kafka.connect.errors.RetriableException("Test"), ALL);
     }
 
     @Test
     public void testHandleExceptionInTaskPoll() {
-        testHandleExceptionInStage(Stage.TASK_POLL, new org.apache.kafka.connect.errors.RetriableException("Test"));
+        testHandleExceptionInStage(Stage.TASK_POLL, new org.apache.kafka.connect.errors.RetriableException("Test"), ALL);
     }
 
     @Test
     public void testThrowExceptionInTaskPut() {
-        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.TASK_PUT, new Exception()));
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.TASK_PUT, new Exception(), ALL));
     }
 
     @Test
     public void testThrowExceptionInTaskPoll() {
-        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.TASK_POLL, new Exception()));
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.TASK_POLL, new Exception(), ALL));
     }
 
     @Test
     public void testThrowExceptionInKafkaConsume() {
-        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.KAFKA_CONSUME, new Exception()));
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.KAFKA_CONSUME, new Exception(), ALL));
     }
 
     @Test
     public void testThrowExceptionInKafkaProduce() {
-        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.KAFKA_PRODUCE, new Exception()));
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.KAFKA_PRODUCE, new Exception(), ALL));
     }
 
-    private void testHandleExceptionInStage(Stage type, Exception ex) {
-        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = setupExecutor();
+    private void testHandleExceptionInStage(Stage type, Exception ex, ToleranceType toleranceType) {
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = setupExecutor(toleranceType);
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         Operation<?> exceptionThrower = () -> {
             throw ex;
@@ -205,8 +226,8 @@ public class RetryWithToleranceOperatorTest {
         assertTrue(context.failed());
     }
 
-    private <T> RetryWithToleranceOperator<T> setupExecutor() {
-        return genericOperator(0, ALL, errorHandlingMetrics);
+    private <T> RetryWithToleranceOperator<T> setupExecutor(ToleranceType toleranceType) {
+        return genericOperator(0, toleranceType, errorHandlingMetrics);
     }
 
     @Test

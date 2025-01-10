@@ -104,7 +104,6 @@ class SocketServerTest {
     logLevelToRestore = kafkaLogger.getLevel
     Configurator.setLevel(kafkaLogger.getName, Level.TRACE)
 
-    assertTrue(server.controlPlaneRequestChannelOpt.isEmpty)
   }
 
   @AfterEach
@@ -1541,8 +1540,6 @@ class SocketServerTest {
     props ++= sslServerProps
     val testableServer = new TestableSocketServer(time = time)
     testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
-
-    assertTrue(testableServer.controlPlaneRequestChannelOpt.isEmpty)
 
     val proxyServer = new ProxyServer(testableServer)
     try {

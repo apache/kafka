@@ -247,9 +247,7 @@ public class TierStateMachine {
 
         // Build leader epoch cache.
         List<EpochEntry> epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata);
-        if (unifiedLog.leaderEpochCache().isDefined()) {
-            unifiedLog.leaderEpochCache().get().assign(epochs);
-        }
+        unifiedLog.leaderEpochCache().assign(epochs);
 
         log.info("Updated the epoch cache from remote tier till offset: {} with size: {} for {}", leaderLocalLogStartOffset, epochs.size(), partition);
 

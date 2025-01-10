@@ -1456,7 +1456,7 @@ public class KafkaProducerTest {
 
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
-            TestUtils.assertFutureError(producer.send(largeRecord), RecordTooLargeException.class);
+            TestUtils.assertFutureThrows(producer.send(largeRecord), RecordTooLargeException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1493,7 +1493,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureError(producer.send(record), TimeoutException.class);
+            TestUtils.assertFutureThrows(producer.send(record), TimeoutException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1530,7 +1530,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureError(producer.send(record), TimeoutException.class);
+            TestUtils.assertFutureThrows(producer.send(record), TimeoutException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1569,7 +1569,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureError(producer.send(record), InvalidTopicException.class);
+            TestUtils.assertFutureThrows(producer.send(record), InvalidTopicException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -2008,7 +2008,7 @@ public class KafkaProducerTest {
 
         assertEquals(Collections.singleton(invalidTopicName),
                 metadata.fetch().invalidTopics(), "Cluster has incorrect invalid topic list.");
-        TestUtils.assertFutureError(future, InvalidTopicException.class);
+        TestUtils.assertFutureThrows(future, InvalidTopicException.class);
 
         producer.close(Duration.ofMillis(0));
     }
