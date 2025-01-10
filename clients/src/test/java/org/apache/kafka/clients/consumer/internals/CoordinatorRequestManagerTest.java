@@ -192,10 +192,11 @@ public class CoordinatorRequestManagerTest {
         expectFindCoordinatorRequest(coordinatorManager, Errors.GROUP_AUTHORIZATION_FAILED);
 
         time.sleep(RETRY_BACKOFF_MS - 1);
+        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
 
+        time.sleep(1);
         assertEquals(1, coordinatorManager.poll(time.milliseconds()).unsentRequests.size());
         assertEquals(Optional.empty(), coordinatorManager.coordinator());
-        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
     }
 
     @Test
