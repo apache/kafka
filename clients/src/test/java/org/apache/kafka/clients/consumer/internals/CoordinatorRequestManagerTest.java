@@ -193,7 +193,6 @@ public class CoordinatorRequestManagerTest {
 
         time.sleep(RETRY_BACKOFF_MS - 1);
 
-        time.sleep(1);
         assertEquals(1, coordinatorManager.poll(time.milliseconds()).unsentRequests.size());
         assertEquals(Optional.empty(), coordinatorManager.coordinator());
         assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
@@ -235,6 +234,21 @@ public class CoordinatorRequestManagerTest {
         time.sleep(1);
         res2 = coordinatorManager.poll(time.milliseconds());
         assertEquals(1, res2.unsentRequests.size());
+    }
+    
+    @Test
+    public void testClearFatalErrorWhenReceivingSuccessfulResponse() {
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
+        expectFindCoordinatorRequest(coordinatorManager, Errors.GROUP_AUTHORIZATION_FAILED);
+        assertTrue(coordinatorManager.fatalError().isPresent());
+
+        time.sleep(RETRY_BACKOFF_MS);
+        // there are no successful responses, so the fatal error should persist
+        assertTrue(coordinatorManager.fatalError().isPresent());
+        
+        // receiving a successful response should clear the fatal error
+        expectFindCoordinatorRequest(coordinatorManager, Errors.NONE);
+        assertTrue(coordinatorManager.fatalError().isEmpty());
     }
 
     private void expectFindCoordinatorRequest(

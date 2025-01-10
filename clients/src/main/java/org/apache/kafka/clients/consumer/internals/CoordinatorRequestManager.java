@@ -115,6 +115,7 @@ public class CoordinatorRequestManager implements RequestManager {
         );
 
         return unsentRequest.whenComplete((clientResponse, throwable) -> {
+            clearFatalError();
             if (clientResponse != null) {
                 FindCoordinatorResponse response = (FindCoordinatorResponse) clientResponse.responseBody();
                 onResponse(clientResponse.receivedTimeMs(), response);
@@ -187,7 +188,6 @@ public class CoordinatorRequestManager implements RequestManager {
                 coordinator.port());
         log.info("Discovered group coordinator {}", coordinator);
         coordinatorRequestState.onSuccessfulAttempt(currentTimeMs);
-        clearFatalError();
     }
 
     private void onFailedResponse(final long currentTimeMs, final Throwable exception) {
