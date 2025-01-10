@@ -40,4 +40,15 @@ public class OffsetsForLeaderEpochRequestTest {
             assertEquals(OffsetsForLeaderEpochRequest.CONSUMER_REPLICA_ID, request.replicaId());
         }
     }
+
+    @Test
+    public void testForFollower() {
+        short version = 4;
+        int replicaId = 1;
+        OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forFollower(
+                new OffsetForLeaderTopicCollection(), replicaId);
+        OffsetsForLeaderEpochRequest request = builder.build();
+        OffsetsForLeaderEpochRequest parsed = OffsetsForLeaderEpochRequest.parse(request.serialize(), version);
+        assertEquals(replicaId, parsed.replicaId());
+    }
 }
