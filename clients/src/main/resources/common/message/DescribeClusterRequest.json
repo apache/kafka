@@ -16,7 +16,7 @@
 {
   "apiKey": 60,
   "type": "request",
-  "listeners": ["zkBroker", "broker", "controller"],
+  "listeners": ["broker", "controller"],
   "name": "DescribeClusterRequest",
   //
   // Version 1 adds EndpointType for KIP-919 support.
