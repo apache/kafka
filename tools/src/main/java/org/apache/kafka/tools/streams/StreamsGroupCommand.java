@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.admin.StreamsGroupMemberAssignment;
 import org.apache.kafka.clients.admin.StreamsGroupMemberDescription;
+import org.apache.kafka.clients.admin.StreamsGroupSubtopologyDescription;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
@@ -205,23 +206,23 @@ public class StreamsGroupCommand {
                     System.out.printf(fmt, "GROUP", "MEMBER", "PROCESS", "CLIENT-ID", "ACTIVE-TASKS", "STANDBY-TASKS", "WARMUP-TASKS");
                     for (StreamsGroupMemberDescription member : members) {
                         System.out.printf(fmt, description.groupId(), member.memberId(), member.processId(), member.clientId(),
-                            getTopicPartitions(member.assignment().activeTasks()).stream().map(tp -> tp.topic() + ":" + tp.partition()).collect(Collectors.joining(",")),
-                            getTopicPartitions(member.assignment().standbyTasks()).stream().map(tp -> tp.topic() + ":" + tp.partition()).collect(Collectors.joining(",")),
-                            getTopicPartitions(member.assignment().warmupTasks()).stream().map(tp -> tp.topic() + ":" + tp.partition()).collect(Collectors.joining(",")));
+                            member.assignment().activeTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
+                            member.assignment().standbyTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
+                            member.assignment().warmupTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")));
                     }
                 } else {
-                    String fmt = "%" + -groupLen + "s %-15s%" + -maxMemberIdLen + "s %s %15s %" + -maxHostLen + "s %" + -maxClientIdLen + "s\n"
+                    String fmt = "%" + -groupLen + "s %-15s% %-15s%" + -maxMemberIdLen + "s %s %15s %" + -maxHostLen + "s %" + -maxClientIdLen + "s\n"
                         + "%s %s %s %s %s %s\n\n";
-                    System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT",
+                    System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT",
                         "ACTIVE-TASKS", "STANDBY-TASKS", "WARMUP-TASKS", "TARGET-ACTIVE-TASKS", "TARGET-STANDBY-TASKS", "TARGET-WARMUP-TASKS");
                     for (StreamsGroupMemberDescription member : members) {
-                        System.out.printf(fmt, description.groupId(), description.targetAssignmentEpoch(), member.memberId(), member.isClassic() ? "Classic Protocol" : "New Protocol", member.memberEpoch(), member.processId(), member.clientId(),
-                            getTopicPartitions(member.assignment().activeTasks()).stream().map(tp -> tp.topic() + ":" + tp.partition()).collect(Collectors.joining(",")),
-                            getTopicPartitions(member.assignment().standbyTasks()).stream().map(tp -> tp.topic() + ":" + tp.partition()).collect(Collectors.joining(",")),
-                            getTopicPartitions(member.assignment().warmupTasks()).stream().map(tp -> tp.topic() + ":" + tp.partition()).collect(Collectors.joining(",")),
-                            getTopicPartitions(member.targetAssignment().activeTasks()).stream().map(tp -> tp.topic() + ":" + tp.partition()).collect(Collectors.joining(",")),
-                            getTopicPartitions(member.targetAssignment().standbyTasks()).stream().map(tp -> tp.topic() + ":" + tp.partition()).collect(Collectors.joining(",")),
-                            getTopicPartitions(member.targetAssignment().warmupTasks()).stream().map(tp -> tp.topic() + ":" + tp.partition()).collect(Collectors.joining(",")));
+                        System.out.printf(fmt, description.groupId(), description.targetAssignmentEpoch(), description.topologyEpoch(), member.memberId(), member.isClassic() ? "classic" : "streams", member.memberEpoch(), member.processId(), member.clientId(),
+                            member.assignment().activeTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
+                            member.assignment().standbyTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
+                            member.assignment().warmupTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
+                            member.targetAssignment().activeTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
+                            member.targetAssignment().standbyTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
+                            member.targetAssignment().warmupTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")));
                     }
                 }
             }
@@ -246,7 +247,7 @@ public class StreamsGroupCommand {
         }
 
         private void printOffsets(StreamsGroupDescription description, boolean verbose) throws ExecutionException, InterruptedException {
-            Map<TopicPartition, Long> offsets = getOffsets(description.members());
+            Map<TopicPartition, Long> offsets = getOffsets(description.members(), description);
             if (maybePrintEmptyGroupState(description.groupId(), description.groupState(), offsets.size())) {
                 int groupLen = Math.max(15, description.groupId().length());
                 int maxTopicLen = 15;
@@ -270,10 +271,10 @@ public class StreamsGroupCommand {
             }
         }
 
-        Map<TopicPartition, Long> getOffsets(Collection<StreamsGroupMemberDescription> members) throws ExecutionException, InterruptedException {
+        Map<TopicPartition, Long> getOffsets(Collection<StreamsGroupMemberDescription> members, StreamsGroupDescription description) throws ExecutionException, InterruptedException {
             Set<TopicPartition> allTp = new HashSet<>();
             for (StreamsGroupMemberDescription memberDescription : members) {
-                allTp.addAll(getTopicPartitions(memberDescription.assignment().activeTasks()));
+                allTp.addAll(getTopicPartitions(memberDescription.assignment().activeTasks(), description));
             }
             // fetch latest and earliest offsets
             Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
@@ -309,11 +310,22 @@ public class StreamsGroupCommand {
             return !state.equals(GroupState.DEAD) && numRows > 0;
         }
 
-        private static Set<TopicPartition> getTopicPartitions(List<StreamsGroupMemberAssignment.TaskIds> taskIds) {
+        private static Set<TopicPartition> getTopicPartitions(List<StreamsGroupMemberAssignment.TaskIds> taskIds, StreamsGroupDescription description) {
+            Map<String, List<String>> allSourceTopics = new HashMap<>();
+            for (StreamsGroupSubtopologyDescription subtopologyDescription : description.subtopologies()) {
+                allSourceTopics.put(subtopologyDescription.subtopologyId(), subtopologyDescription.sourceTopics());
+            }
             Set<TopicPartition> topicPartitions = new HashSet<>();
+
             for (StreamsGroupMemberAssignment.TaskIds task : taskIds) {
-                for (Integer partition : task.partitions()) {
-                    topicPartitions.add(new TopicPartition(task.subtopologyId(), partition));
+                List<String> sourceTopics = allSourceTopics.get(task.subtopologyId());
+                if (sourceTopics == null) {
+                    throw new IllegalArgumentException("Subtopology " + task.subtopologyId() + " not found in group description!");
+                }
+                for (String topic : sourceTopics) {
+                    for (Integer partition : task.partitions()) {
+                        topicPartitions.add(new TopicPartition(topic, partition));
+                    }
                 }
             }
             return topicPartitions;

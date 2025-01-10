@@ -182,8 +182,18 @@ public class StreamsGroupCommandUnitTest {
             Optional.empty(), Map.of(), List.of(), List.of(),
             new StreamsGroupMemberAssignment(List.of(), List.of(), List.of()), new StreamsGroupMemberAssignment(List.of(), List.of(), List.of()),
             false);
+        StreamsGroupDescription x = new StreamsGroupDescription(
+            "group1",
+            0,
+            0,
+            0,
+            List.of(new StreamsGroupSubtopologyDescription("id", List.of("topic1"), List.of(), Map.of(), Map.of())),
+            List.of(description),
+            GroupState.STABLE,
+            new Node(0, "host", 0),
+            null);
         StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(null, adminClient);
-        Map<TopicPartition, Long> lags = service.getOffsets(List.of(description));
+        Map<TopicPartition, Long> lags = service.getOffsets(List.of(description), x);
         assertEquals(1, lags.size());
         assertEquals(20, lags.get(new TopicPartition("topic1", 0)));
         service.close();
