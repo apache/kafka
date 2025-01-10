@@ -25,11 +25,11 @@ import org.apache.kafka.coordinator.share.generated.CoordinatorRecordType;
 
 public class ShareCoordinatorRecordSerde extends CoordinatorRecordSerde {
     @Override
-    protected ApiMessage apiMessageKeyFor(short recordVersion) {
+    protected ApiMessage apiMessageKeyFor(short recordType) {
         try {
-            return CoordinatorRecordType.fromId(recordVersion).newRecordKey();
+            return CoordinatorRecordType.fromId(recordType).newRecordKey();
         } catch (UnsupportedVersionException ex) {
-            throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+            throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
         }
     }
 
