@@ -296,7 +296,7 @@ public class RaftEventSimulationTest {
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void leadershipWillNotChangeIfMajorityIsReachable(
+    void leadershipAssignedOnlyOnceWithNetworkPartitionIfThereExistsMajority(
         @ForAll int seed,
         @ForAll @IntRange(min = 0, max = 3) int numObservers
     ) {
@@ -305,7 +305,66 @@ public class RaftEventSimulationTest {
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-        scheduler.addInvariant(new StableLeadershipWhenMajorityReachable(cluster));
+        scheduler.addInvariant(new StableLeadership(cluster));
+
+        // Create network partition which would result in ping-pong of leadership between nodes 2 and 3 without PreVote
+        // Scenario explained in detail in KIP-996
+        // 0   1
+        // |   |
+        // 2 - 3
+        //  \ /
+        //   4
+        router.filter(
+            0,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(1, 3, 4)))
+        );
+        router.filter(
+            1,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 2, 4)))
+        );
+        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(1))));
+        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0))));
+        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+
+        // Start cluster
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 1);
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+
+        // Wait for majority to process some data
+        int leaderId = cluster.latestLeader().getAsInt();
+        Set<Integer> majorityQuorum = new HashSet<>(Set.of(0, 1, 2, 3, 4));
+        switch (leaderId) {
+            case 2 -> majorityQuorum.remove(1);
+            case 3 -> majorityQuorum.remove(0);
+            case 4 -> {
+                majorityQuorum.remove(0);
+                majorityQuorum.remove(1);
+            }
+            default -> throw new IllegalStateException("Unexpected leader: " + leaderId);
+        }
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, majorityQuorum));
+
+        // All nodes should be on the same epoch
+        int leaderEpoch = cluster.epoch(leaderId);
+        for (int nodeId : cluster.nodeIds()) {
+            assertEquals(leaderEpoch, cluster.epoch(nodeId));
+        }
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void leadershipWillNotChangeDuringNetworkPartitionIfMajorityStillReachable(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 0, max = 3) int numObservers
+    ) {
+        int numVoters = 5;
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, numObservers, random);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+        scheduler.addInvariant(new StableLeadership(cluster));
 
         // Seed the cluster with some data
         cluster.startAll();
@@ -322,6 +381,7 @@ public class RaftEventSimulationTest {
         int leaderEpoch = cluster.epoch(leaderId);
 
         // Create network partition which would result in ping-pong of leadership between nodes C and D without PreVote
+        // Scenario explained in detail in KIP-996
         // A   B
         // |   |
         // C - D  (have leader start in position C)
@@ -1126,12 +1186,17 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class StableLeadershipWhenMajorityReachable implements Invariant {
+    /**
+     * This invariant currently checks that the leader does not change after the first successful election
+     * and should only be applied to tests where we expect leadership not to change (e.g. non-impactful
+     * routing filter changes, no network jitter)
+     */
+    private static class StableLeadership implements Invariant {
         final Cluster cluster;
         OptionalInt epochWithFirstLeader = OptionalInt.empty();
         OptionalInt firstLeaderId = OptionalInt.empty();
 
-        private StableLeadershipWhenMajorityReachable(Cluster cluster) {
+        private StableLeadership(Cluster cluster) {
             this.cluster = cluster;
         }
 
