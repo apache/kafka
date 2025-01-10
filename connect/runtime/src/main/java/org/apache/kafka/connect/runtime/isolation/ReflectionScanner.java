@@ -79,7 +79,6 @@ public class ReflectionScanner extends PluginScanner {
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
         ClassGraph classGraphBuilder = new ClassGraph()
-            .addClassLoader(source.loader())
                 .overrideClassLoaders(classLoaderOrder(source))
                 .enableExternalClasses()
                 .enableClassInfo();
@@ -109,13 +108,11 @@ public class ReflectionScanner extends PluginScanner {
     }
 
     private ClassLoader[] classLoaderOrder(PluginSource source) {
-        // By default, java and classgraph uses parent first classloading, hence if a plugin is loaded by the classpath
-        // loader, and then by an isolated plugin loader, the default precedence will always load the classpath version.
-        // This breaks isolation and hence connect uses isolated plugin loaders, which are child first classloaders.
-        // Therefore, we override the classloader order to be child first, so that the isolated plugin loader is used first.
-        // In addition, we need to explicitly specify the full classloader order, to force classgraph to scan classes in
-        // the class path. This does not happen by default as it uses reflections to obtain access to classpath URLs from
-        // the application classloader, which can fail with illegal access exceptions.
+        // Classgraph will first scan all the class URLs from the provided classloader chain and use said chain during classloading.
+        // We compute and provide the classloader chain starting from the isolated PluginClassLoader to ensure that it adheres
+        // to the child first delegation model used in connect. In addition, classgraph can fail to find URLs from the
+        // application classloader as it uses an illegal reflections access. Providing the entire chain of classloaders
+        // which included the application classloader forces classpath URLs to be scanned separately.
         List<ClassLoader> classLoaderOrder = new ArrayList<>();
         ClassLoader cl = source.loader();
         while (cl != null) {
