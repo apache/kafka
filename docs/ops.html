@@ -3475,7 +3475,7 @@ customized state stores; for built-in state stores, currently we have:
     </tr>
     <tr>
       <td>number-open-files</td>
-      <td>The number of current open files.</td>
+      <td>This metric will return constant -1 because the RocksDB's counter NO_FILE_CLOSES has been removed in RocksDB 9.7.3</td>
       <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
     </tr>
     <tr>

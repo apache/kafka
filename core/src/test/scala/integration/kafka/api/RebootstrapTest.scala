@@ -20,6 +20,7 @@ import kafka.server.{KafkaBroker, KafkaConfig}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import java.util.Properties
 
@@ -29,10 +30,21 @@ abstract class RebootstrapTest extends AbstractConsumerTest {
   def server0: KafkaBroker = serverForId(0).get
   def server1: KafkaBroker = serverForId(1).get
 
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.doSetup(testInfo, createOffsetsTopic = true)
+
+    // Enable unclean leader election for the test topic
+    val topicProps = new Properties
+    topicProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+
+    // create the test topic with all the brokers as replicas
+    createTopic(topic, 2, brokerCount, adminClientConfig = this.adminClientConfig, topicConfig = topicProps)
+  }
+
   override def generateConfigs: Seq[KafkaConfig] = {
     val overridingProps = new Properties()
     overridingProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, brokerCount.toString)
-    overridingProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
 
     // In this test, fixed ports are necessary, because brokers must have the
     // same port after the restart.
