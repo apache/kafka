@@ -38,9 +38,17 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
 
         self.topic = "test_topic"
         self.zk = ZookeeperService(test_context, num_nodes=3) if quorum.for_test(test_context) == quorum.zk else None
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics={self.topic:{
-                                                                    "partitions": 10,
-                                                                    "replication-factor": 2}})
+        self.kafka = KafkaService(
+            test_context,
+            num_nodes=3,
+            zk=self.zk,
+            topics={
+                self.topic:{
+                    "partitions": 10,
+                    "replication-factor": 2
+                }
+            },
+        )
         self.num_partitions = 10
         self.timeout_sec = 60
         self.producer_throughput = 1000
@@ -69,16 +77,19 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     @parametrize(broker_version=str(LATEST_3_0))
     @parametrize(broker_version=str(LATEST_3_1))
     @parametrize(broker_version=str(LATEST_3_2))
-    @parametrize(broker_version=str(LATEST_3_3))
-    @parametrize(broker_version=str(LATEST_3_4))
-    @parametrize(broker_version=str(LATEST_3_5))
-    @parametrize(broker_version=str(LATEST_3_6))
-    @parametrize(broker_version=str(LATEST_3_7))
-    @parametrize(broker_version=str(LATEST_3_8))
-    @parametrize(broker_version=str(LATEST_3_9))
+    @parametrize(broker_version=str(LATEST_3_3), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_4), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_5), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_6), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_7), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_8), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_3_9), metadata_quorum=quorum.isolated_kraft)
     def test_produce_consume(self, broker_version, metadata_quorum=quorum.zk):
         print("running producer_consumer_compat with broker_version = %s" % broker_version, flush=True)
         self.kafka.set_version(KafkaVersion(broker_version))
+        if metadata_quorum == quorum.isolated_kraft:
+            for node in self.kafka.controller_quorum.nodes:
+                node.version = KafkaVersion(broker_version)
         self.kafka.security_protocol = "PLAINTEXT"
         self.kafka.interbroker_security_protocol = self.kafka.security_protocol
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,

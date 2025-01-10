@@ -22,7 +22,6 @@ import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
 import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
-import org.apache.commons.io.FileUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
@@ -57,7 +56,7 @@ import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.nio.charset.StandardCharsets
-import java.nio.file.{FileSystems, Files, Path}
+import java.nio.file.{FileSystems, Files, Path, Paths}
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
@@ -1435,6 +1434,15 @@ class KRaftClusterTest {
     }
   }
 
+  def copyDirectory(src: String, dest: String): Unit = {
+    Files.walk(Paths.get(src)).forEach(p => {
+      val out = Paths.get(dest, p.toString().substring(src.length()))
+      if (!p.toString().equals(src)) {
+        Files.copy(p, out);
+      }
+    });
+  }
+
   @Test
   def testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
@@ -1476,7 +1484,8 @@ class KRaftClusterTest {
         val parentDir = log.parentDir
         val targetParentDir = broker0.config.logDirs.filter(_ != parentDir).head
         val targetDirFile = new File(targetParentDir, log.dir.getName)
-        FileUtils.copyDirectory(log.dir, targetDirFile)
+        targetDirFile.mkdir()
+        copyDirectory(log.dir.toString(), targetDirFile.toString())
         assertTrue(targetDirFile.exists())
 
         // Rename original log to a future

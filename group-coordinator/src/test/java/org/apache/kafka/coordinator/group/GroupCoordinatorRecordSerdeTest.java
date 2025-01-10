@@ -20,38 +20,9 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
-import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.junit.jupiter.api.Test;
@@ -245,23 +216,9 @@ public class GroupCoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserializeAllRecordTypes() {
-        roundTrip((short) 0, new OffsetCommitKey(), new OffsetCommitValue());
-        roundTrip((short) 1, new OffsetCommitKey(), new OffsetCommitValue());
-        roundTrip((short) 2, new GroupMetadataKey(), new GroupMetadataValue());
-        roundTrip((short) 3, new ConsumerGroupMetadataKey(), new ConsumerGroupMetadataValue());
-        roundTrip((short) 4, new ConsumerGroupPartitionMetadataKey(), new ConsumerGroupPartitionMetadataValue());
-        roundTrip((short) 5, new ConsumerGroupMemberMetadataKey(), new ConsumerGroupMemberMetadataValue());
-        roundTrip((short) 6, new ConsumerGroupTargetAssignmentMetadataKey(), new ConsumerGroupTargetAssignmentMetadataValue());
-        roundTrip((short) 7, new ConsumerGroupTargetAssignmentMemberKey(), new ConsumerGroupTargetAssignmentMemberValue());
-        roundTrip((short) 8, new ConsumerGroupCurrentMemberAssignmentKey(), new ConsumerGroupCurrentMemberAssignmentValue());
-        roundTrip((short) 9, new ShareGroupPartitionMetadataKey(), new ShareGroupPartitionMetadataValue());
-        roundTrip((short) 10, new ShareGroupMemberMetadataKey(), new ShareGroupMemberMetadataValue());
-        roundTrip((short) 11, new ShareGroupMetadataKey(), new ShareGroupMetadataValue());
-        roundTrip((short) 12, new ShareGroupTargetAssignmentMetadataKey(), new ShareGroupTargetAssignmentMetadataValue());
-        roundTrip((short) 13, new ShareGroupTargetAssignmentMemberKey(), new ShareGroupTargetAssignmentMemberValue());
-        roundTrip((short) 14, new ShareGroupCurrentMemberAssignmentKey(), new ShareGroupCurrentMemberAssignmentValue());
-        roundTrip((short) 15, new ShareGroupStatePartitionMetadataKey(), new ShareGroupStatePartitionMetadataValue());
-        roundTrip((short) 16, new ConsumerGroupRegularExpressionKey(), new ConsumerGroupRegularExpressionValue());
+        for (CoordinatorRecordType record : CoordinatorRecordType.values()) {
+            roundTrip(record.id(), record.newRecordKey(), record.newRecordValue());
+        }
     }
 
     private void roundTrip(
