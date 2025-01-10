@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -441,6 +442,11 @@ public class RecordCollectorImpl implements RecordCollector {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
                 "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, productionException));
+        } else if (productionException instanceof TransactionAbortedException) {
+            // swallow silently
+            //
+            // TransactionAbortedException is only thrown after `abortTransaction()` was called,
+            // so it's only a followup error, and Kafka Streams is already handling the original error
         } else {
             final ProductionExceptionHandlerResponse response;
             try {
