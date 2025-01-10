@@ -940,7 +940,6 @@ class TransactionsTest extends IntegrationTestHarness {
     producer.abortTransaction()
   }
 
-
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
                                                       start: Int, end: Int, willBeCommitted: Boolean): Unit = {
     for (i <- start until end) {
