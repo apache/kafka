@@ -473,71 +473,6 @@ class AlterPartitionManagerTest {
     assertFutureThrows(future2, classOf[UnknownServerException])
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("provideMetadataVersions"))
-  def testPartialTopicIds(metadataVersion: MetadataVersion): Unit = {
-    val foo = new TopicIdPartition(Uuid.ZERO_UUID, 0, "foo")
-    val bar = new TopicIdPartition(Uuid.randomUuid(), 0, "bar")
-    val zar = new TopicIdPartition(Uuid.randomUuid(), 0, "zar")
-
-    val leaderAndIsr = new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10)
-    val controlledEpoch = 0
-    val brokerEpoch = 2
-    val scheduler = new MockScheduler(time)
-    val brokerToController = Mockito.mock(classOf[NodeToControllerChannelManager])
-    val alterPartitionManager = new DefaultAlterPartitionManager(
-      brokerToController,
-      scheduler,
-      time,
-      brokerId,
-      () => brokerEpoch,
-      () => metadataVersion
-    )
-    alterPartitionManager.start()
-
-    // Submits an alter isr update with zar, which has a topic id.
-    val future1 = alterPartitionManager.submit(zar, leaderAndIsr, controlledEpoch)
-
-    val callback1 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
-      expectedTopicPartitions = Set(zar),
-      expectedVersion = ApiKeys.ALTER_PARTITION.latestVersion
-    ))
-
-    // Submits two additional alter isr changes with foo and bar while the previous one
-    // is still inflight. foo has no topic id, bar has one.
-    val future2 = alterPartitionManager.submit(foo, leaderAndIsr, controlledEpoch)
-    val future3 = alterPartitionManager.submit(bar, leaderAndIsr, controlledEpoch)
-
-    // Completes the first request. That triggers the next one.
-    callback1.onComplete(makeClientResponse(
-      response = makeAlterPartition(Seq(makeAlterPartitionTopicData(zar, Errors.NONE))),
-      version = ApiKeys.ALTER_PARTITION.latestVersion
-    ))
-
-    assertTrue(future1.isDone)
-    assertFalse(future2.isDone)
-    assertFalse(future3.isDone)
-
-    // Version 1 is expected because foo does not have a topic id.
-    val callback2 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
-      expectedTopicPartitions = Set(foo, bar),
-      expectedVersion = 1
-    ))
-
-    // Completes the second request.
-    callback2.onComplete(makeClientResponse(
-      response = makeAlterPartition(Seq(
-        makeAlterPartitionTopicData(foo, Errors.NONE),
-        makeAlterPartitionTopicData(bar, Errors.NONE),
-      )),
-      version = 1
-    ))
-
-    assertTrue(future1.isDone)
-    assertTrue(future2.isDone)
-    assertTrue(future3.isDone)
-  }
-
   private def verifySendRequest(
     brokerToController: NodeToControllerChannelManager,
     expectedRequest: ArgumentMatcher[AbstractRequest.Builder[_ <: AbstractRequest]]
@@ -591,25 +526,6 @@ class AlterPartitionManagerTest {
       // not contain ignorable fields used by other versions.
       AlterPartitionResponse.parse(MessageUtil.toByteBuffer(response.data, version), version)
     )
-  }
-
-  private def makeAlterPartition(
-    topics: Seq[AlterPartitionResponseData.TopicData]
-  ): AlterPartitionResponse = {
-    new AlterPartitionResponse(new AlterPartitionResponseData().setTopics(topics.asJava))
-  }
-
-  private def makeAlterPartitionTopicData(
-    topicIdPartition: TopicIdPartition,
-    error: Errors
-  ): AlterPartitionResponseData.TopicData = {
-    new AlterPartitionResponseData.TopicData()
-      .setTopicName(topicIdPartition.topic)
-      .setTopicId(topicIdPartition.topicId)
-      .setPartitions(Collections.singletonList(
-        new AlterPartitionResponseData.PartitionData()
-          .setPartitionIndex(topicIdPartition.partition)
-          .setErrorCode(error.code)))
   }
 
   private def partitionResponse(
