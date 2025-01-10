@@ -1435,8 +1435,8 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member2);
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept("member-1"));
-        assertTrue(consumerGroup.allMembersUseClassicProtocolExcept("member-2"));
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept(member1));
+        assertTrue(consumerGroup.allMembersUseClassicProtocolExcept(member2));
 
         // The group has member 2 (using the consumer protocol) and member 3 (using the consumer protocol).
         consumerGroup.removeMember(member1.memberId());
@@ -1444,7 +1444,7 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member3);
         assertEquals(0, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept("member-2"));
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept(member2));
 
         // The group has member 2 (using the classic protocol).
         consumerGroup.removeMember(member2.memberId());

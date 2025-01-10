@@ -958,15 +958,15 @@ public class GroupMetadataManager {
      * static member is replaced by another new one uses the classic protocol.
      *
      * @param consumerGroup     The group to downgrade.
-     * @param replacedMemberId  The replaced member id.
+     * @param replacedMember    The replaced member.
      *
      * @return A boolean indicating whether it's valid to online downgrade the consumer group.
      */
-    private boolean validateOnlineDowngradeWithReplacedMemberId(
+    private boolean validateOnlineDowngradeWithReplacedMember(
         ConsumerGroup consumerGroup,
-        String replacedMemberId
+        ConsumerGroupMember replacedMember
     ) {
-        if (!consumerGroup.allMembersUseClassicProtocolExcept(replacedMemberId)) {
+        if (!consumerGroup.allMembersUseClassicProtocolExcept(replacedMember)) {
             return false;
         } else if (!config.consumerGroupMigrationPolicy().isDowngradeEnabled()) {
             log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
@@ -1954,9 +1954,9 @@ public class GroupMetadataManager {
 
         // 4. Maybe downgrade the consumer group if the last static member using the
         // consumer protocol is replaced by the joining static member.
-        String existingStaticMemberIdOrNull = group.staticMemberId(request.groupInstanceId());
-        boolean downgrade = existingStaticMemberIdOrNull != null &&
-            validateOnlineDowngradeWithReplacedMemberId(group, existingStaticMemberIdOrNull);
+        ConsumerGroupMember existingStaticMemberOrNull = group.staticMember(request.groupInstanceId());
+        boolean downgrade = existingStaticMemberOrNull != null &&
+            validateOnlineDowngradeWithReplacedMember(group, existingStaticMemberOrNull);
         if (downgrade) {
             convertToClassicGroup(
                 group,
