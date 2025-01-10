@@ -54,7 +54,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
 
-import org.apache.log4j.Level;
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -231,7 +231,7 @@ public class WorkerSourceTaskTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.noopOperator());
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.noneOperator());
     }
 
     private void createWorkerTaskWithErrorToleration() {
@@ -239,7 +239,7 @@ public class WorkerSourceTaskTest {
     }
 
     private void createWorkerTask(TargetState initialState) {
-        createWorkerTask(initialState, RetryWithToleranceOperatorTest.noopOperator());
+        createWorkerTask(initialState, RetryWithToleranceOperatorTest.noneOperator());
     }
 
     private void createWorkerTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator) {

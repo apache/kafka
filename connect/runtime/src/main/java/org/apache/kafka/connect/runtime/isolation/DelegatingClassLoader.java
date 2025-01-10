@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.apache.maven.artifact.versioning.ArtifactVersion;
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.slf4j.Logger;
@@ -28,6 +27,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -127,7 +127,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         return aliases.getOrDefault(classOrAlias, classOrAlias);
     }
 
-    String latestVersion(String classOrAlias) {
+    PluginDesc<?> pluginDesc(String classOrAlias, String preferredLocation, Set<PluginType> allowedTypes) {
         if (classOrAlias == null) {
             return null;
         }
@@ -136,7 +136,17 @@ public class DelegatingClassLoader extends URLClassLoader {
         if (inner == null) {
             return null;
         }
-        return inner.lastKey().version();
+        PluginDesc<?> result = null;
+        for (Map.Entry<PluginDesc<?>, ClassLoader> entry : inner.entrySet()) {
+            if (!allowedTypes.contains(entry.getKey().type())) {
+                continue;
+            }
+            result = entry.getKey();
+            if (result.location().equals(preferredLocation)) {
+                return result;
+            }
+        }
+        return result;
     }
 
     private ClassLoader findPluginLoader(
@@ -153,7 +163,6 @@ public class DelegatingClassLoader extends URLClassLoader {
                         + "Provided soft version: %s ", range));
             }
 
-            ArtifactVersion version = null;
             ClassLoader loader = null;
             for (Map.Entry<PluginDesc<?>, ClassLoader> entry : loaders.entrySet()) {
                 // the entries should be in sorted order of versions so this should end up picking the latest version which matches the range
@@ -210,40 +219,44 @@ public class DelegatingClassLoader extends URLClassLoader {
             if (range == null) {
                 return plugin;
             }
-            verifyClasspathVersionedPlugin(name, plugin, range);
+            verifyClasspathVersionedPlugin(fullName, plugin, range);
         }
         return plugin;
     }
 
-    private void verifyClasspathVersionedPlugin(String name, Class<?> plugin, VersionRange range) throws VersionedPluginLoadingException {
+    private void verifyClasspathVersionedPlugin(String fullName, Class<?> plugin, VersionRange range) throws VersionedPluginLoadingException {
         String pluginVersion;
-        SortedMap<PluginDesc<?>, ClassLoader> scannedPlugin = pluginLoaders.get(name);
+        SortedMap<PluginDesc<?>, ClassLoader> scannedPlugin = pluginLoaders.get(fullName);
 
         if (scannedPlugin == null) {
             throw new VersionedPluginLoadingException(String.format(
                     "Plugin %s is not part of Connect's plugin loading mechanism (ClassPath or Plugin Path)",
-                    name
+                    fullName
             ));
         }
 
-        List<PluginDesc<?>> classpathPlugins = scannedPlugin.keySet().stream()
+        // if a plugin implements two interfaces (like JsonConverter implements both converter and header converter)
+        // it will have two entries under classpath, one for each scan. Hence, we count distinct by version.
+        List<String> classpathPlugins = scannedPlugin.keySet().stream()
                 .filter(pluginDesc -> pluginDesc.location().equals("classpath"))
+                .map(PluginDesc::version)
+                .distinct()
                 .collect(Collectors.toList());
 
         if (classpathPlugins.size() > 1) {
             throw new VersionedPluginLoadingException(String.format(
                     "Plugin %s has multiple versions specified in class path, "
                             + "only one version is allowed in class path for loading a plugin with version range",
-                    name
+                    fullName
             ));
         } else if (classpathPlugins.isEmpty()) {
             throw new VersionedPluginLoadingException("Invalid plugin found in classpath");
         } else {
-            pluginVersion = classpathPlugins.get(0).version();
+            pluginVersion = classpathPlugins.get(0);
             if (!range.containsVersion(new DefaultArtifactVersion(pluginVersion))) {
                 throw new VersionedPluginLoadingException(String.format(
                         "Plugin %s has version %s which does not match the required version range %s",
-                        name,
+                        fullName,
                         pluginVersion,
                         range
                 ), Collections.singletonList(pluginVersion));

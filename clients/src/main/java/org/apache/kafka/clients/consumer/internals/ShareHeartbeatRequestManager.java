@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -50,6 +51,9 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
      */
     private final HeartbeatState heartbeatState;
 
+    public static final String SHARE_PROTOCOL_NOT_SUPPORTED_MSG = "The cluster does not support the share group protocol. " +
+        "To use share groups, the cluster must have the share group protocol enabled.";
+
     public ShareHeartbeatRequestManager(
             final LogContext logContext,
             final Time time,
@@ -80,6 +84,45 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             new HeartbeatMetricsManager(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX));
         this.membershipManager = membershipManager;
         this.heartbeatState = heartbeatState;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean handleSpecificFailure(Throwable exception) {
+        boolean errorHandled = false;
+        if (exception instanceof UnsupportedVersionException) {
+            logger.error("{} failed due to {}: {}", heartbeatRequestName(), exception.getMessage(), SHARE_PROTOCOL_NOT_SUPPORTED_MSG);
+            handleFatalFailure(new UnsupportedVersionException(SHARE_PROTOCOL_NOT_SUPPORTED_MSG, exception));
+            errorHandled = true;
+        }
+        return errorHandled;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean handleSpecificExceptionInResponse(final ShareGroupHeartbeatResponse response, final long currentTimeMs) {
+        Errors error = errorForResponse(response);
+        boolean errorHandled;
+
+        switch (error) {
+            // Broker responded with HB not supported, meaning the new protocol is not enabled, so propagate
+            // custom message for it. Note that the case where the protocol is not supported at all should fail
+            // on the client side when building the request and checking supporting APIs (handled on onFailure).
+            case UNSUPPORTED_VERSION:
+                logger.error("{} failed due to unsupported version: {}", 
+                    heartbeatRequestName(), SHARE_PROTOCOL_NOT_SUPPORTED_MSG);
+                handleFatalFailure(error.exception(SHARE_PROTOCOL_NOT_SUPPORTED_MSG));
+                errorHandled = true;
+                break;
+
+            default:
+                errorHandled = false;
+        }
+        return errorHandled;
     }
 
     /**

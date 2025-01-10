@@ -33,6 +33,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.UUIDSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -132,7 +133,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     @Mock
     private RocksDBMetricsRecorder metricsRecorder;
 
-    InternalMockProcessorContext context;
+    InternalMockProcessorContext<?, ?> context;
     RocksDBStore rocksDBStore;
 
     @BeforeEach
@@ -178,14 +179,14 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         return new RocksDBStore(DB_NAME, DB_FILE_DIR, metricsRecorder, false);
     }
 
-    private InternalMockProcessorContext getProcessorContext(final Properties streamsProps) {
-        return new InternalMockProcessorContext(
+    private InternalMockProcessorContext<?, ?> getProcessorContext(final Properties streamsProps) {
+        return new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsProps)
         );
     }
 
-    private InternalMockProcessorContext getProcessorContext(
+    private InternalMockProcessorContext<?, ?> getProcessorContext(
         final RecordingLevel recordingLevel,
         final Class<? extends RocksDBConfigSetter> rocksDBConfigSetterClass) {
 
@@ -195,7 +196,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         return getProcessorContext(streamsProps);
     }
 
-    private InternalMockProcessorContext getProcessorContext(final RecordingLevel recordingLevel) {
+    private InternalMockProcessorContext<?, ?> getProcessorContext(final RecordingLevel recordingLevel) {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel.name());
         return getProcessorContext(streamsProps);
@@ -361,7 +362,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() {
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.put(new Bytes("existingKey".getBytes(UTF_8)), "existingValue".getBytes(UTF_8));
         rocksDBStore.flush();
 
@@ -388,14 +389,14 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         final Object param = new Object();
         props.put("abc.def", param);
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
             dir,
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props)
         );
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
 
         assertTrue(MockRocksDbConfigSetter.called);
         assertThat(MockRocksDbConfigSetter.configMap.get("abc.def"), equalTo(param));
@@ -404,7 +405,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() {
         final File tmpDir = TestUtils.tempDirectory();
-        final InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir, new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        final InternalMockProcessorContext<?, ?> tmpContext = new InternalMockProcessorContext<>(tmpDir, new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
 
         assertTrue(tmpDir.setReadOnly());
 
@@ -424,7 +425,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             new Bytes(stringSerializer.serialize(null, "3")),
             stringSerializer.serialize(null, "c")));
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.putAll(entries);
         rocksDBStore.flush();
 
@@ -447,7 +448,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldMatchPositionAfterPut() {
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
 
         context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
         rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "one")), stringSerializer.serialize(null, "A"));
@@ -483,7 +484,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             new Bytes(stringSerializer.serialize(null, "prefix_1")),
             stringSerializer.serialize(null, "f")));
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.putAll(entries);
         rocksDBStore.flush();
 
@@ -518,7 +519,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             new Bytes(stringSerializer.serialize(null, "abce")),
             stringSerializer.serialize(null, "f")));
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.putAll(entries);
         rocksDBStore.flush();
 
@@ -537,7 +538,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldAllowCustomManagedIterators() {
         rocksDBStore = getRocksDBStoreWithCustomManagedIterators();
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         final Set<KeyValueIterator<Bytes, byte[]>> openIterators = new HashSet<>();
 
         final KeyValueIterator<Bytes, byte[]> prefixScanIterator = rocksDBStore.prefixScan("abcd", stringSerializer, openIterators);
@@ -566,10 +567,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         assertThat(openIterators.size(), is(0));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldRequireOpenIteratorsWhenUsingCustomManagedIterators() {
         rocksDBStore = getRocksDBStoreWithCustomManagedIterators();
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
 
         assertThrows(IllegalStateException.class,
             () -> rocksDBStore.prefixScan("abcd", stringSerializer));
@@ -581,10 +583,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         assertThrows(IllegalStateException.class, () -> rocksDBStore.reverseAll());
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators() {
         rocksDBStore = getRocksDBStore();
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         final Set<KeyValueIterator<Bytes, byte[]>> openIterators = new HashSet<>();
 
         assertThrows(IllegalStateException.class,
@@ -597,10 +600,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         assertThrows(IllegalStateException.class, () -> rocksDBStore.reverseAll(openIterators));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldReturnUUIDsWithStringPrefix() {
         final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
-        final Serializer<UUID> uuidSerializer = Serdes.UUID().serializer();
+        final UUIDSerializer uuidSerializer = new UUIDSerializer();
         final UUID uuid1 = UUID.randomUUID();
         final UUID uuid2 = UUID.randomUUID();
         final String prefix = uuid1.toString().substring(0, 4);
@@ -613,7 +617,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             new Bytes(uuidSerializer.serialize(null, uuid2)),
             stringSerializer.serialize(null, "b")));
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.putAll(entries);
         rocksDBStore.flush();
 
@@ -648,7 +652,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         entries.add(new KeyValue<>(
             new Bytes(stringSerializer.serialize(null, "c")),
             stringSerializer.serialize(null, "e")));
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.putAll(entries);
         rocksDBStore.flush();
 
@@ -667,7 +671,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     public void shouldRestoreAll() {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
 
         assertEquals(
@@ -689,7 +693,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldPutOnlyIfAbsentValue() {
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         final Bytes keyBytes = new Bytes(stringSerializer.serialize(null, "one"));
         final byte[] valueBytes = stringSerializer.serialize(null, "A");
         final byte[] valueBytesUpdate = stringSerializer.serialize(null, "B");
@@ -706,7 +710,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
         entries.add(new KeyValue<>("1".getBytes(UTF_8), null));
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
 
         try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all()) {
@@ -731,7 +735,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         // this will restore key "1" as WriteBatch applies updates in order
         entries.add(new KeyValue<>("1".getBytes(UTF_8), "restored".getBytes(UTF_8)));
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
 
         try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all()) {
@@ -765,7 +769,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     public void shouldRestoreThenDeleteOnRestoreAll() {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
 
         context.restore(rocksDBStore.name(), entries);
 
@@ -806,7 +810,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldThrowNullPointerExceptionOnNullPut() {
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         assertThrows(
             NullPointerException.class,
             () -> rocksDBStore.put(null, stringSerializer.serialize(null, "someVal")));
@@ -814,7 +818,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldThrowNullPointerExceptionOnNullPutAll() {
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         assertThrows(
             NullPointerException.class,
             () -> rocksDBStore.put(null, stringSerializer.serialize(null, "someVal")));
@@ -822,7 +826,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldThrowNullPointerExceptionOnNullGet() {
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         assertThrows(
             NullPointerException.class,
             () -> rocksDBStore.get(null));
@@ -830,7 +834,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldThrowNullPointerExceptionOnDelete() {
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         assertThrows(
             NullPointerException.class,
             () -> rocksDBStore.delete(null));
@@ -838,7 +842,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldReturnValueOnRange() {
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
 
         final KeyValue<String, String> kv0 = new KeyValue<>("0", "zero");
         final KeyValue<String, String> kv1 = new KeyValue<>("1", "one");
@@ -859,7 +863,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldThrowProcessorStateExceptionOnPutDeletedDir() throws IOException {
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         Utils.delete(dir);
         rocksDBStore.put(
             new Bytes(stringSerializer.serialize(null, "anyKey")),
@@ -872,13 +876,13 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestingBloomFilterRocksDBConfigSetter.class);
         dir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(dir,
+        context = new InternalMockProcessorContext<>(dir,
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));
 
         enableBloomFilters = false;
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
 
         final List<String> expectedValues = new ArrayList<>();
         expectedValues.add("a");
@@ -903,7 +907,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         // reopen with Bloom Filters enabled
         // should open fine without errors
         enableBloomFilters = true;
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
 
         for (final KeyValue<byte[], byte[]> keyValue : keyValues) {
             final byte[] valBytes = rocksDBStore.get(new Bytes(keyValue.key));
@@ -930,7 +934,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final MonotonicProcessorRecordContext processorRecordContext = new MonotonicProcessorRecordContext("test", 0);
         when(context.recordMetadata()).thenReturn(Optional.of(processorRecordContext));
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         final byte[] key = "hello".getBytes();
         final byte[] value = "world".getBytes();
         rocksDBStore.put(Bytes.wrap(key), value);
@@ -963,7 +967,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final MonotonicProcessorRecordContext processorRecordContext = new MonotonicProcessorRecordContext("test", 0);
         when(context.recordMetadata()).thenReturn(Optional.of(processorRecordContext));
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         final byte[] key = "hello".getBytes();
         final byte[] value = "world".getBytes();
         rocksDBStore.put(Bytes.wrap(key), value);
@@ -993,7 +997,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         when(context.appConfigs()).thenReturn(new StreamsConfig(props).originals());
         when(context.stateDir()).thenReturn(dir);
 
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
 
         final List<String> propertyNames = Arrays.asList(
             "num-entries-active-mem-table",
@@ -1068,10 +1072,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
             store.close();
 
-            assertThrows(InvalidStateStoreException.class, () -> iteratorOne.hasNext());
-            assertThrows(InvalidStateStoreException.class, () -> iteratorOne.next());
-            assertThrows(InvalidStateStoreException.class, () -> iteratorTwo.hasNext());
-            assertThrows(InvalidStateStoreException.class, () -> iteratorTwo.next());
+            assertThrows(InvalidStateStoreException.class, iteratorOne::hasNext);
+            assertThrows(InvalidStateStoreException.class, iteratorOne::next);
+            assertThrows(InvalidStateStoreException.class, iteratorTwo::hasNext);
+            assertThrows(InvalidStateStoreException.class, iteratorTwo::next);
         }
     }
 
@@ -1088,7 +1092,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 Serdes.String(),
                 new StreamsConfig(props)
         );
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         context.restoreWithHeaders(rocksDBStore.name(), entries);
 
         assertEquals(
@@ -1125,7 +1129,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 Serdes.String(),
                 new StreamsConfig(props)
         );
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         context.restoreWithHeaders(rocksDBStore.name(), entries);
 
         assertEquals(
@@ -1164,7 +1168,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 Serdes.String(),
                 new StreamsConfig(props)
         );
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         context.restoreWithHeaders(rocksDBStore.name(), entries);
 
         assertNull(stringDeserializer.deserialize(
@@ -1188,7 +1192,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 Serdes.String(),
                 new StreamsConfig(props)
         );
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
         assertThat(rocksDBStore.getPosition(), is(Position.emptyPosition()));
     }
@@ -1281,8 +1285,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     private List<KeyValue<String, String>> getDeserializedList(final KeyValueIterator<Bytes, byte[]> iter) {
         final List<KeyValue<Bytes, byte[]>> bytes = Utils.toList(iter);
-        final List<KeyValue<String, String>> result = bytes.stream().map(kv -> new KeyValue<String, String>(kv.key.toString(), stringDeserializer.deserialize(null, kv.value))).collect(Collectors.toList());
-        return result;
+        return bytes.stream().map(kv -> new KeyValue<>(kv.key.toString(), stringDeserializer.deserialize(null, kv.value))).collect(Collectors.toList());
     }
 
     private Statistics getStatistics(final RocksDBStore rocksDBStore) throws Exception {

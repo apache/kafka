@@ -36,7 +36,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -66,8 +65,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
     @ClusterConfigProperty(key = "auto.leader.rebalance.enable", value = "false"),
     @ClusterConfigProperty(key = "controlled.shutdown.enable", value = "true"),
-    @ClusterConfigProperty(key = "controlled.shutdown.max.retries", value = "1"),
-    @ClusterConfigProperty(key = "controlled.shutdown.retry.backoff.ms", value = "1000"),
     @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "2")
 })
 public class LeaderElectionCommandTest {
@@ -325,7 +322,7 @@ public class LeaderElectionCommandTest {
 
         String jsonString = stringifyTopicPartitions(new HashSet<>(partitions));
 
-        Files.write(file.toPath(), jsonString.getBytes(StandardCharsets.UTF_8));
+        Files.writeString(file.toPath(), jsonString);
 
         return file.toPath();
     }
@@ -333,7 +330,7 @@ public class LeaderElectionCommandTest {
     private Path tempAdminConfig(String defaultApiTimeoutMs, String requestTimeoutMs) throws Exception {
         String content = "default.api.timeout.ms=" + defaultApiTimeoutMs + "\nrequest.timeout.ms=" + requestTimeoutMs;
         java.io.File file = TestUtils.tempFile("admin-config", ".properties");
-        Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
+        Files.writeString(file.toPath(), content);
         return file.toPath();
     }
 

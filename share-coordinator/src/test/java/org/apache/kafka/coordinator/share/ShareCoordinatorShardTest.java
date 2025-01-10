@@ -52,6 +52,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -79,11 +80,12 @@ class ShareCoordinatorShardTest {
         private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         private MetadataImage metadataImage = null;
         private Map<String, String> configOverrides = new HashMap<>();
+        ShareCoordinatorOffsetsManager offsetsManager = mock(ShareCoordinatorOffsetsManager.class);
 
         ShareCoordinatorShard build() {
             if (metadataImage == null) metadataImage = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
             if (config == null) {
-                config = ShareCoordinatorConfigTest.createConfig(ShareCoordinatorConfigTest.testConfigMap(configOverrides));
+                config = ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap(configOverrides));
             }
 
             ShareCoordinatorShard shard = new ShareCoordinatorShard(
@@ -91,7 +93,8 @@ class ShareCoordinatorShardTest {
                 config,
                 coordinatorMetrics,
                 metricsShard,
-                snapshotRegistry
+                snapshotRegistry,
+                offsetsManager
             );
             when(metadataImage.topics().getTopic((Uuid) any())).thenReturn(mock(TopicImage.class));
             when(metadataImage.topics().getPartition(any(), anyInt())).thenReturn(mock(PartitionRegistration.class));
@@ -101,6 +104,11 @@ class ShareCoordinatorShardTest {
 
         public ShareCoordinatorShardBuilder setConfigOverrides(Map<String, String> configOverrides) {
             this.configOverrides = configOverrides;
+            return this;
+        }
+
+        public ShareCoordinatorShardBuilder setOffsetsManager(ShareCoordinatorOffsetsManager offsetsManager) {
+            this.offsetsManager = offsetsManager;
             return this;
         }
     }
@@ -794,6 +802,17 @@ class ShareCoordinatorShardTest {
         ).value().message()), shard.getShareStateMapValue(shareCoordinatorKey));
         assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
         verify(shard.getMetricsShard(), times(3)).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
+    }
+
+    @Test
+    public void testLastRedundantOffset() {
+        ShareCoordinatorOffsetsManager manager = mock(ShareCoordinatorOffsetsManager.class);
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder()
+            .setOffsetsManager(manager)
+            .build();
+
+        when(manager.lastRedundantOffset()).thenReturn(Optional.of(10L));
+        assertEquals(new CoordinatorResult<>(Collections.emptyList(), Optional.of(10L)), shard.lastRedundantOffset());
     }
 
     @Test

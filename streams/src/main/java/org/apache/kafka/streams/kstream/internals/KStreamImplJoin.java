@@ -146,13 +146,13 @@ class KStreamImplJoin {
             otherWindowStore = joinWindowStoreBuilderFromSupplier(otherStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
         }
 
-        final KStreamJoinWindow<K, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.storeName());
+        final KStreamJoinWindow<K, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore);
 
         final ProcessorParameters<K, V1, ?, ?> thisWindowStreamProcessorParams = new ProcessorParameters<>(thisWindowedStream, thisWindowStreamProcessorName);
         final ProcessorGraphNode<K, V1> thisWindowedStreamsNode = new WindowedStreamProcessorNode<>(thisWindowStore.storeName(), thisWindowStreamProcessorParams);
         builder.addGraphNode(thisGraphNode, thisWindowedStreamsNode);
 
-        final KStreamJoinWindow<K, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindowStore.storeName());
+        final KStreamJoinWindow<K, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindowStore);
 
         final ProcessorParameters<K, V2, ?, ?> otherWindowStreamProcessorParams = new ProcessorParameters<>(otherWindowedStream, otherWindowStreamProcessorName);
         final ProcessorGraphNode<K, V2> otherWindowedStreamsNode = new WindowedStreamProcessorNode<>(otherWindowStore.storeName(), otherWindowStreamProcessorParams);
@@ -173,25 +173,25 @@ class KStreamImplJoin {
 
         final JoinWindowsInternal internalWindows = new JoinWindowsInternal(windows);
         final KStreamKStreamJoinLeftSide<K, V1, V2, VOut> joinThis = new KStreamKStreamJoinLeftSide<>(
-            otherWindowStore.storeName(),
             internalWindows,
             joiner,
             leftOuter,
-            outerJoinWindowStore.map(StoreFactory::storeName),
-            sharedTimeTrackerSupplier
+            sharedTimeTrackerSupplier,
+            otherWindowStore,
+            outerJoinWindowStore
         );
 
         final KStreamKStreamJoinRightSide<K, V1, V2, VOut> joinOther = new KStreamKStreamJoinRightSide<>(
-            thisWindowStore.storeName(),
             internalWindows,
             AbstractStream.reverseJoinerWithKey(joiner),
             rightOuter,
-            outerJoinWindowStore.map(StoreFactory::storeName),
-            sharedTimeTrackerSupplier
+            sharedTimeTrackerSupplier,
+            thisWindowStore,
+            outerJoinWindowStore
         );
 
         final KStreamKStreamSelfJoin<K, V1, V2, VOut> selfJoin = new KStreamKStreamSelfJoin<>(
-            thisWindowStore.storeName(),
+            thisWindowStore,
             internalWindows,
             joiner,
             windows.size() + windows.gracePeriodMs()
@@ -209,18 +209,11 @@ class KStreamImplJoin {
         joinBuilder.withJoinMergeProcessorParameters(joinMergeProcessorParams)
                    .withJoinThisProcessorParameters(joinThisProcessorParams)
                    .withJoinOtherProcessorParameters(joinOtherProcessorParams)
-                   .withThisWindowStoreBuilder(thisWindowStore)
-                   .withOtherWindowStoreBuilder(otherWindowStore)
-                   .withThisWindowedStreamProcessorParameters(thisWindowStreamProcessorParams)
-                   .withOtherWindowedStreamProcessorParameters(otherWindowStreamProcessorParams)
-                   .withOuterJoinWindowStoreBuilder(outerJoinWindowStore)
+                   .withSelfJoinProcessorParameters(selfJoinProcessorParams)
+                   .withThisWindowedStreamProcessorName(thisWindowStreamProcessorParams.processorName())
+                   .withOtherWindowedStreamProcessorName(otherWindowStreamProcessorParams.processorName())
                    .withValueJoiner(joiner)
-                   .withNodeName(joinMergeName)
-                   .withSelfJoinProcessorParameters(selfJoinProcessorParams);
-
-        if (internalWindows.spuriousResultFixEnabled()) {
-            joinBuilder.withSpuriousResultFixEnabled();
-        }
+                   .withNodeName(joinMergeName);
 
         final GraphNode joinGraphNode = joinBuilder.build();
 

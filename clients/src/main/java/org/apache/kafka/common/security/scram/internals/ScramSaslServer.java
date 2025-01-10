@@ -148,7 +148,7 @@ public class ScramSaslServer implements SaslServer {
                 case RECEIVE_CLIENT_FINAL_MESSAGE:
                     try {
                         ClientFinalMessage clientFinalMessage = new ClientFinalMessage(response);
-                        if (!clientFinalMessage.nonce().endsWith(serverFirstMessage.nonce())) {
+                        if (!clientFinalMessage.nonce().equals(serverFirstMessage.nonce())) {
                             throw new SaslException("Invalid client nonce in the final client message.");
                         }
                         verifyClientProof(clientFinalMessage);

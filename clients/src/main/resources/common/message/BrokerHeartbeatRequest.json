@@ -31,7 +31,7 @@
       "about": "True if the broker wants to be fenced, false otherwise." },
     { "name": "WantShutDown", "type": "bool", "versions": "0+",
       "about": "True if the broker wants to be shut down, false otherwise." },
-    { "name": "OfflineLogDirs", "type":  "[]uuid", "versions": "1+", "taggedVersions": "1+", "tag": "0",
+    { "name": "OfflineLogDirs", "type":  "[]uuid", "versions": "1+", "taggedVersions": "1+", "tag": 0,
       "about": "Log directories that failed and went offline." }
   ]
 }

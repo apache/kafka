@@ -563,7 +563,16 @@ class ConnectDistributedTest(Test):
         # have been discarded
         self._restart_worker(worker)
         restarted_loggers = self.cc.get_all_loggers(worker)
-        assert initial_loggers == restarted_loggers
+
+        for loggerName in restarted_loggers:
+            logger = self.cc.get_logger(worker, loggerName)
+            level = logger['level']
+            # ConsumerConfig logger is pre-defined in log4j2 config with ERROR level,
+            # while other loggers should be set to DEBUG level
+            if loggerName == 'org.apache.kafka.clients.consumer.ConsumerConfig':
+                assert level == 'ERROR'
+            else:
+                assert level == 'DEBUG'
 
     def _different_level(self, current_level):
         return 'INFO' if current_level is None or current_level.upper() != 'INFO' else 'WARN'

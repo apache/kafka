@@ -903,9 +903,7 @@ public interface Admin extends AutoCloseable {
      * @return The ListConsumerGroupOffsetsResult
      */
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
-        @SuppressWarnings("deprecation")
-        ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
-            .topicPartitions(options.topicPartitions());
+        ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec();
 
         // We can use the provided options with the batched API, which uses topic partitions from
         // the group spec and ignores any topic partitions set in the options.
@@ -1445,14 +1443,23 @@ public interface Admin extends AutoCloseable {
      * error code for each supplied {@link FeatureUpdate}, and the code indicates if the update
      * succeeded or failed in the controller.
      * <ul>
-     * <li>Downgrade of feature version level is not a regular operation/intent. It is only allowed
-     * in the controller if the {@link FeatureUpdate} has the allowDowngrade flag set. Setting this
-     * flag conveys user intent to attempt downgrade of a feature max version level. Note that
-     * despite the allowDowngrade flag being set, certain downgrades may be rejected by the
-     * controller if it is deemed impossible.</li>
-     * <li>Deletion of a finalized feature version is not a regular operation/intent. It could be
-     * done by setting the allowDowngrade flag to true in the {@link FeatureUpdate}, and, setting
-     * the max version level to a value less than 1.</li>
+     * <li>Downgrading a feature version level is not a common operation and should only be
+     * performed when necessary. It is permitted only if the {@link FeatureUpdate} specifies the
+     * {@code upgradeType} as either {@link FeatureUpdate.UpgradeType#SAFE_DOWNGRADE} or
+     * {@link FeatureUpdate.UpgradeType#UNSAFE_DOWNGRADE}.
+     * <ul>
+     * <li>{@code SAFE_DOWNGRADE}: Allows downgrades that do not lead to metadata loss.</li>
+     * <li>{@code UNSAFE_DOWNGRADE}: Permits downgrades that might result in metadata loss.</li>
+     * </ul>
+     * Note that even with these settings, certain downgrades may still be rejected by the controller
+     * if they are considered unsafe or impossible.</li>
+     * <li>Deleting a finalized feature version is also not a common operation. To delete a feature,
+     * set the {@code maxVersionLevel} to zero and specify the {@code upgradeType} as either
+     * {@link FeatureUpdate.UpgradeType#SAFE_DOWNGRADE} or
+     * {@link FeatureUpdate.UpgradeType#UNSAFE_DOWNGRADE}.</li>
+     * <li>The {@link FeatureUpdate.UpgradeType#UPGRADE} type cannot be used when the
+     * {@code maxVersionLevel} is zero. Attempting to do so will result in an
+     * {@link IllegalArgumentException}.</li>
      * </ul>
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures

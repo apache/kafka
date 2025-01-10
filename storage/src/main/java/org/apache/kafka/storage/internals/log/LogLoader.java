@@ -56,7 +56,7 @@ public class LogLoader {
     private final LogSegments segments;
     private final long logStartOffsetCheckpoint;
     private final long recoveryPointCheckpoint;
-    private final Optional<LeaderEpochFileCache> leaderEpochCache;
+    private final LeaderEpochFileCache leaderEpochCache;
     private final ProducerStateManager producerStateManager;
     private final ConcurrentMap<String, Integer> numRemainingSegments;
     private final boolean isRemoteLogEnabled;
@@ -74,7 +74,7 @@ public class LogLoader {
      * @param segments The {@link LogSegments} instance into which segments recovered from disk will be populated
      * @param logStartOffsetCheckpoint The checkpoint of the log start offset
      * @param recoveryPointCheckpoint The checkpoint of the offset at which to begin the recovery
-     * @param leaderEpochCache An optional {@link LeaderEpochFileCache} instance to be updated during recovery
+     * @param leaderEpochCache A {@link LeaderEpochFileCache} instance to be updated during recovery
      * @param producerStateManager The {@link ProducerStateManager} instance to be updated during recovery
      * @param numRemainingSegments The remaining segments to be recovered in this log keyed by recovery thread name
      * @param isRemoteLogEnabled Boolean flag to indicate whether the remote storage is enabled or not
@@ -90,7 +90,7 @@ public class LogLoader {
             LogSegments segments,
             long logStartOffsetCheckpoint,
             long recoveryPointCheckpoint,
-            Optional<LeaderEpochFileCache> leaderEpochCache,
+            LeaderEpochFileCache leaderEpochCache,
             ProducerStateManager producerStateManager,
             ConcurrentMap<String, Integer> numRemainingSegments,
             boolean isRemoteLogEnabled) {
@@ -215,13 +215,13 @@ public class LogLoader {
             recoveryOffsets = new RecoveryOffsets(0L, 0L);
         }
 
-        leaderEpochCache.ifPresent(lec -> lec.truncateFromEndAsyncFlush(recoveryOffsets.nextOffset));
+        leaderEpochCache.truncateFromEndAsyncFlush(recoveryOffsets.nextOffset);
         long newLogStartOffset = isRemoteLogEnabled
             ? logStartOffsetCheckpoint
             : Math.max(logStartOffsetCheckpoint, segments.firstSegment().get().baseOffset());
 
         // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
-        leaderEpochCache.ifPresent(lec -> lec.truncateFromStartAsyncFlush(logStartOffsetCheckpoint));
+        leaderEpochCache.truncateFromStartAsyncFlush(logStartOffsetCheckpoint);
 
         // Any segment loading or recovery code must not use producerStateManager, so that we can build the full state here
         // from scratch.
@@ -238,7 +238,6 @@ public class LogLoader {
                 segments,
                 newLogStartOffset,
                 recoveryOffsets.nextOffset,
-                config.recordVersion(),
                 time,
                 hadCleanShutdown,
                 logPrefix);
@@ -408,7 +407,6 @@ public class LogLoader {
                 segments,
                 logStartOffsetCheckpoint,
                 segment.baseOffset(),
-                config.recordVersion(),
                 time,
                 false,
                 logPrefix);
@@ -430,7 +428,7 @@ public class LogLoader {
                         "is smaller than logStartOffset {}. " +
                         "This could happen if segment files were deleted from the file system.", logEndOffset, logStartOffsetCheckpoint);
                 removeAndDeleteSegmentsAsync(segments.values());
-                leaderEpochCache.ifPresent(LeaderEpochFileCache::clearAndFlush);
+                leaderEpochCache.clearAndFlush();
                 producerStateManager.truncateFullyAndStartAt(logStartOffsetCheckpoint);
                 return Optional.empty();
             }

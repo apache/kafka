@@ -47,7 +47,7 @@ public class ConsumerGroupDescription {
     private final Optional<Integer> targetAssignmentEpoch;
 
     /**
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
     @Deprecated
     public ConsumerGroupDescription(String groupId,
@@ -60,7 +60,7 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
     @Deprecated
     public ConsumerGroupDescription(String groupId,
@@ -74,7 +74,7 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
     @Deprecated
     public ConsumerGroupDescription(String groupId,
@@ -90,7 +90,7 @@ public class ConsumerGroupDescription {
         this.members = members == null ? Collections.emptyList() : List.copyOf(members);
         this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
         this.type = type;
-        this.groupState = GroupState.parse(state.name());
+        this.groupState = GroupState.parse(state.toString());
         this.coordinator = coordinator;
         this.authorizedOperations = authorizedOperations;
         this.groupEpoch = Optional.empty();
@@ -184,7 +184,7 @@ public class ConsumerGroupDescription {
      */
     @Deprecated
     public ConsumerGroupState state() {
-        return ConsumerGroupState.parse(groupState.name());
+        return ConsumerGroupState.parse(groupState.toString());
     }
 
     /**

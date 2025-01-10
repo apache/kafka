@@ -25,13 +25,12 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTemplate;
@@ -47,7 +46,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Properties;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -226,19 +224,13 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     }
 
     private void produceRecord(String topic) {
-        try (KafkaProducer<byte[], byte[]> producer = createProducer()) {
+        try (Producer<byte[], byte[]> producer = createProducer()) {
             assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(topic, 0, null, null)).get());
         }
     }
 
-    private KafkaProducer<byte[], byte[]> createProducer() {
-        Properties config = new Properties();
-        config.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        config.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1");
-        config.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        config.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-
-        return new KafkaProducer<>(config);
+    private Producer<byte[], byte[]> createProducer() {
+        return clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"));
     }
 
     private Consumer<byte[], byte[]> createConsumer(String group, GroupProtocol groupProtocol) {

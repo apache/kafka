@@ -67,13 +67,13 @@ Unlike trunk, the PR builds _will_ utilize the Gradle cache.
 ### PR Triage
 
 In order to get the attention of committers, we have a triage workflow for Pull Requests
-opened by non-committers. This workflow consists of three files:
+opened by non-committers. This workflow consists of two files:
 
-* [pr-update.yml](pr-update.yml) When a PR is created add the `triage` label if the PR
-  was opened by a non-committer.
-* [pr-reviewed-trigger.yml](pr-reviewed-trigger.yml) Runs when any PR is reviewed. 
-  Used as a trigger for the next workflow
-* [pr-reviewed.yml](pr-reviewed.yml) Remove the `triage` label after a PR has been reviewed
+* [pr-update.yml](pr-update.yml) When a PR is created, add the `triage` label if 
+  the PR was opened by a non-committer.
+* [pr-labels-cron.yml](pr-labels-cron.yml) Cron job to add `needs-attention` label to community 
+  PRs that have not been reviewed after 7 days. Also includes a cron job to 
+  remove the `triage` and `needs-attention` labels from PRs which have been reviewed. 
 
 _The pr-update.yml workflow includes pull_request_target!_
 
@@ -84,7 +84,8 @@ organization must be public. Here are the steps to take:
 * Find yourself
 * Change "Organization Visibility" to Public
 
-Full documentation for this process can be found in GitHub's docs: https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-your-membership-in-organizations/publicizing-or-hiding-organization-membership
+Full documentation for this process can be found in GitHub's docs: 
+https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-your-membership-in-organizations/publicizing-or-hiding-organization-membership
 
 If you are a committer and do not want your membership in the ASF org listed as public, 
 you will need to remove the `triage` label manually.
@@ -100,7 +101,7 @@ There are two files related to this workflow:
 
 * [pr-labeled.yml](pr-labeled.yml) approves a pending approval for PRs that have
 been labeled with `ci-approved`
-* [ci-requested.yml](ci-requested.yml) approves future CI requests automatically
+* [ci-requested.yml](ci-requested.yml) approves future workflow requests automatically
 if the PR has the `ci-approved` label
 
 _The pr-labeled.yml workflow includes pull_request_target!_

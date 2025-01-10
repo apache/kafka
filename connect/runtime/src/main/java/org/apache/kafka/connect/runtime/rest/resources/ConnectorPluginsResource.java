@@ -20,6 +20,7 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
+import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
@@ -29,8 +30,10 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.StagedTimeoutException;
 
+import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
+import org.apache.maven.artifact.versioning.VersionRange;
+
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -145,7 +148,7 @@ public class ConnectorPluginsResource {
                         .filter(p -> PluginType.SINK.toString().equals(p.type()) || PluginType.SOURCE.toString().equals(p.type()))
                         .collect(Collectors.toList()));
             } else {
-                return Collections.unmodifiableList(new ArrayList<>(connectorPlugins));
+                return List.copyOf(connectorPlugins);
             }
         }
     }
@@ -153,9 +156,18 @@ public class ConnectorPluginsResource {
     @GET
     @Path("/{pluginName}/config")
     @Operation(summary = "Get the configuration definition for the specified pluginName")
-    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") String pluginName) {
+    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") String pluginName,
+                                                     final @QueryParam("version") @DefaultValue("latest") String version) {
+
+        VersionRange range = null;
+        try {
+            range = PluginUtils.connectorVersionRequirement(version);
+        } catch (InvalidVersionSpecificationException e) {
+            throw new BadRequestException("Invalid version specification: " + version, e);
+        }
+
         synchronized (this) {
-            return herder.connectorPluginConfig(pluginName);
+            return herder.connectorPluginConfig(pluginName, range);
         }
     }
 

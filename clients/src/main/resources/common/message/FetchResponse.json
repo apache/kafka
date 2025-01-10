@@ -17,10 +17,9 @@
   "apiKey": 1,
   "type": "response",
   "name": "FetchResponse",
+  // Versions 0-3 were removed in Apache Kafka 4.0, Version 4 is the new baseline.
   //
-  // Version 1 adds throttle time.
-  //
-  // Version 2 and 3 are the same as version 1.
+  // Version 1 adds throttle time. Version 2 and 3 are the same as version 1.
   //
   // Version 4 adds features for transactional consumption.
   //
@@ -49,7 +48,7 @@
   // Version 16 adds the 'NodeEndpoints' field (KIP-951).
   //
   // Version 17 no changes to the response (KIP-853).
-  "validVersions": "0-17",
+  "validVersions": "4-17",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,

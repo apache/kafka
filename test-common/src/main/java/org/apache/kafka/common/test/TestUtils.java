@@ -53,7 +53,6 @@ public class TestUtils {
 
     private static final long DEFAULT_POLL_INTERVAL_MS = 100;
     private static final long DEFAULT_MAX_WAIT_MS = 15_000;
-    private static final long DEFAULT_TIMEOUT_MS = 60_000;
 
     /**
      * Create an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
@@ -117,40 +116,26 @@ public class TestUtils {
      */
     public static void waitForCondition(final Supplier<Boolean> testCondition, 
                                         final long maxWaitMs, 
-                                        String conditionDetails
-    ) throws InterruptedException {
-        retryOnExceptionWithTimeout(() -> {
-            String conditionDetail = conditionDetails == null ? "" : conditionDetails;
-            if (!testCondition.get())
-                throw new TimeoutException("Condition not met within timeout " + maxWaitMs + ". " + conditionDetail);
-        });
-    }
-
-    /**
-     * Wait for the given runnable to complete successfully, i.e. throw now {@link Exception}s or
-     * {@link AssertionError}s, or for the given timeout to expire. If the timeout expires then the
-     * last exception or assertion failure will be thrown thus providing context for the failure.
-     *
-     * @param runnable the code to attempt to execute successfully.
-     * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
-     */
-    static void retryOnExceptionWithTimeout(final Runnable runnable) throws InterruptedException {
-        final long expectedEnd = System.currentTimeMillis() + DEFAULT_TIMEOUT_MS;
+                                        String conditionDetails) throws InterruptedException {
+        final long expectedEnd = System.currentTimeMillis() + maxWaitMs;
 
         while (true) {
             try {
-                runnable.run();
-                return;
+                if (testCondition.get()) {
+                    return;
+                }
+                String conditionDetail = conditionDetails == null ? "" : conditionDetails;
+                throw new TimeoutException("Condition not met: " + conditionDetail);
             } catch (final AssertionError t) {
                 if (expectedEnd <= System.currentTimeMillis()) {
                     throw t;
                 }
             } catch (final Exception e) {
                 if (expectedEnd <= System.currentTimeMillis()) {
-                    throw new AssertionError(format("Assertion failed with an exception after %s ms", DEFAULT_TIMEOUT_MS), e);
+                    throw new AssertionError(format("Assertion failed with an exception after %s ms", maxWaitMs), e);
                 }
             }
-            Thread.sleep(DEFAULT_POLL_INTERVAL_MS);
+            Thread.sleep(Math.min(DEFAULT_POLL_INTERVAL_MS, maxWaitMs));
         }
     }
 

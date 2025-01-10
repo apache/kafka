@@ -60,8 +60,9 @@ public class PluginDesc<T> implements Comparable<PluginDesc<?>> {
                 ", location='" + location + '\'' +
                 '}';
     }
+
     @JsonIgnore
-    DefaultArtifactVersion encodedVersion() {
+    public DefaultArtifactVersion encodedVersion() {
         return encodedVersion;
     }
 
@@ -102,10 +103,9 @@ public class PluginDesc<T> implements Comparable<PluginDesc<?>> {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof PluginDesc)) {
+        if (!(o instanceof PluginDesc<?> that)) {
             return false;
         }
-        PluginDesc<?> that = (PluginDesc<?>) o;
         return Objects.equals(klass, that.klass) &&
                 Objects.equals(version, that.version) &&
                 type == that.type;

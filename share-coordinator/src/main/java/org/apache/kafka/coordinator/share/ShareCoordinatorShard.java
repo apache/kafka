@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
@@ -38,6 +39,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilder;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
+import org.apache.kafka.coordinator.share.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
@@ -73,6 +75,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private final TimelineHashMap<SharePartitionKey, Integer> snapshotUpdateCount;
     private final TimelineHashMap<SharePartitionKey, Integer> stateEpochMap;
     private MetadataImage metadataImage;
+    private final ShareCoordinatorOffsetsManager offsetsManager;
 
     public static final Exception NULL_TOPIC_ID = new Exception("The topic id cannot be null.");
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
@@ -163,6 +166,17 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         CoordinatorMetricsShard metricsShard,
         SnapshotRegistry snapshotRegistry
     ) {
+        this(logContext, config, coordinatorMetrics, metricsShard, snapshotRegistry, new ShareCoordinatorOffsetsManager(snapshotRegistry));
+    }
+
+    ShareCoordinatorShard(
+        LogContext logContext,
+        ShareCoordinatorConfig config,
+        CoordinatorMetrics coordinatorMetrics,
+        CoordinatorMetricsShard metricsShard,
+        SnapshotRegistry snapshotRegistry,
+        ShareCoordinatorOffsetsManager offsetsManager
+    ) {
         this.log = logContext.logger(ShareCoordinatorShard.class);
         this.config = config;
         this.coordinatorMetrics = coordinatorMetrics;
@@ -171,6 +185,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         this.leaderEpochMap = new TimelineHashMap<>(snapshotRegistry, 0);
         this.snapshotUpdateCount = new TimelineHashMap<>(snapshotRegistry, 0);
         this.stateEpochMap = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.offsetsManager = offsetsManager;
     }
 
     @Override
@@ -193,19 +208,23 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         ApiMessageAndVersion key = record.key();
         ApiMessageAndVersion value = record.value();
 
-        switch (key.version()) {
-            case ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION: // ShareSnapshot
-                handleShareSnapshot((ShareSnapshotKey) key.message(), (ShareSnapshotValue) messageOrNull(value));
-                break;
-            case ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION: // ShareUpdate
-                handleShareUpdate((ShareUpdateKey) key.message(), (ShareUpdateValue) messageOrNull(value));
-                break;
-            default:
-                // Noop
+        try {
+            switch (CoordinatorRecordType.fromId(key.version())) {
+                case SHARE_SNAPSHOT:
+                    handleShareSnapshot((ShareSnapshotKey) key.message(), (ShareSnapshotValue) messageOrNull(value), offset);
+                    break;
+                case SHARE_UPDATE:
+                    handleShareUpdate((ShareUpdateKey) key.message(), (ShareUpdateValue) messageOrNull(value));
+                    break;
+                default:
+                    // Noop
+            }
+        } catch (UnsupportedVersionException ex) {
+            // Ignore
         }
     }
 
-    private void handleShareSnapshot(ShareSnapshotKey key, ShareSnapshotValue value) {
+    private void handleShareSnapshot(ShareSnapshotKey key, ShareSnapshotValue value, long offset) {
         SharePartitionKey mapKey = SharePartitionKey.getInstance(key.groupId(), key.topicId(), key.partition());
         maybeUpdateLeaderEpochMap(mapKey, value.leaderEpoch());
         maybeUpdateStateEpochMap(mapKey, value.stateEpoch());
@@ -219,6 +238,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 snapshotUpdateCount.put(mapKey, 0);
             }
         }
+
+        offsetsManager.updateState(mapKey, offset);
     }
 
     private void handleShareUpdate(ShareUpdateKey key, ShareUpdateValue value) {
@@ -379,9 +400,21 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Method which returns the last known redundant offset from the partition
+     * led by this shard.
+     * @return CoordinatorResult containing empty record list and an Optional<Long> representing the offset.
+     */
+    public CoordinatorResult<Optional<Long>, CoordinatorRecord> lastRedundantOffset() {
+        return new CoordinatorResult<>(
+            Collections.emptyList(),
+            this.offsetsManager.lastRedundantOffset()
+        );
+    }
+
+    /**
      * Util method to generate a ShareSnapshot or ShareUpdate type record for a key, based on various conditions.
      * <p>
-     * if no snapshot has been created for the key => create a new ShareSnapshot record
+     * If no snapshot has been created for the key => create a new ShareSnapshot record
      * else if number of ShareUpdate records for key >= max allowed per snapshot per key => create a new ShareSnapshot record
      * else create a new ShareUpdate record
      *
