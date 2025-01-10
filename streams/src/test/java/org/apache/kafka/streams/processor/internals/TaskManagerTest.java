@@ -4980,7 +4980,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public StateStore store(final String name) {
+        public StateStore getStore(final String name) {
             return null;
         }
 
