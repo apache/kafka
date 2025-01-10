@@ -84,7 +84,6 @@ class AbstractPartitionTest {
     alterPartitionListener = createIsrChangeListener()
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,

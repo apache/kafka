@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AbstractRequest, AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV2, IBP_3_2_IV0, IBP_3_5_IV1}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_3_0_IV1, IBP_3_2_IV0, IBP_3_5_IV1}
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
@@ -140,7 +140,6 @@ class AlterPartitionManagerTest {
   @ParameterizedTest
   @MethodSource(Array("provideMetadataVersions"))
   def testOverwriteWithinBatch(metadataVersion: MetadataVersion): Unit = {
-    val canUseTopicIds = metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV0)
     val capture: ArgumentCaptor[AbstractRequest.Builder[AlterPartitionRequest]] = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
@@ -160,7 +159,7 @@ class AlterPartitionManagerTest {
     val alterPartitionResp = partitionResponse()
     val resp = makeClientResponse(
       response = alterPartitionResp,
-      version = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
+      version = ApiKeys.ALTER_PARTITION.latestVersion
     )
     verify(brokerToController).sendRequest(capture.capture(), callbackCapture.capture())
     callbackCapture.getValue.onComplete(resp)
@@ -477,7 +476,6 @@ class AlterPartitionManagerTest {
   @ParameterizedTest
   @MethodSource(Array("provideMetadataVersions"))
   def testPartialTopicIds(metadataVersion: MetadataVersion): Unit = {
-    val canUseTopicIds = metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV0)
     val foo = new TopicIdPartition(Uuid.ZERO_UUID, 0, "foo")
     val bar = new TopicIdPartition(Uuid.randomUuid(), 0, "bar")
     val zar = new TopicIdPartition(Uuid.randomUuid(), 0, "zar")
@@ -500,11 +498,9 @@ class AlterPartitionManagerTest {
     // Submits an alter isr update with zar, which has a topic id.
     val future1 = alterPartitionManager.submit(zar, leaderAndIsr, controlledEpoch)
 
-    // The latest version is expected if all the submitted partitions
-    // have topic ids and IBP >= 2.8; version 1 should be used otherwise.
     val callback1 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
       expectedTopicPartitions = Set(zar),
-      expectedVersion = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
+      expectedVersion = ApiKeys.ALTER_PARTITION.latestVersion
     ))
 
     // Submits two additional alter isr changes with foo and bar while the previous one
@@ -515,7 +511,7 @@ class AlterPartitionManagerTest {
     // Completes the first request. That triggers the next one.
     callback1.onComplete(makeClientResponse(
       response = makeAlterPartition(Seq(makeAlterPartitionTopicData(zar, Errors.NONE))),
-      version = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
+      version = ApiKeys.ALTER_PARTITION.latestVersion
     ))
 
     assertTrue(future1.isDone)
@@ -648,7 +644,7 @@ object AlterPartitionManagerTest {
       // Supports KIP-704: unclean leader recovery
       IBP_3_2_IV0,
       // Supports KIP-497: alter partition
-      IBP_2_7_IV2
+      IBP_3_0_IV1
     )
   }
 

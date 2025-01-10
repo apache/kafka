@@ -50,12 +50,8 @@ import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -69,7 +65,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedAssignment;
@@ -453,21 +448,8 @@ public class GroupCoordinatorRecordHelpersTest {
         ));
     }
 
-    private static Stream<Arguments> metadataToExpectedGroupMetadataValue() {
-        return Stream.of(
-            Arguments.arguments(MetadataVersion.IBP_0_10_0_IV0, (short) 0),
-            Arguments.arguments(MetadataVersion.IBP_1_1_IV0, (short) 1),
-            Arguments.arguments(MetadataVersion.IBP_2_2_IV0, (short) 2),
-            Arguments.arguments(MetadataVersion.IBP_3_5_IV0, (short) 3)
-        );
-    }
-
-    @ParameterizedTest
-    @MethodSource("metadataToExpectedGroupMetadataValue")
-    public void testNewGroupMetadataRecord(
-        MetadataVersion metadataVersion,
-        short expectedGroupMetadataValueVersion
-    ) {
+    @Test
+    public void testNewGroupMetadataRecord() {
         Time time = new MockTime();
 
         List<GroupMetadataValue.MemberMetadata> expectedMembers = new ArrayList<>();
@@ -508,7 +490,7 @@ public class GroupCoordinatorRecordHelpersTest {
                     .setGeneration(1)
                     .setCurrentStateTimestamp(time.milliseconds())
                     .setMembers(expectedMembers),
-                expectedGroupMetadataValueVersion));
+                (short) 3));
 
         ClassicGroup group = new ClassicGroup(
             new LogContext(),
@@ -662,12 +644,8 @@ public class GroupCoordinatorRecordHelpersTest {
             ));
     }
       
-    @ParameterizedTest
-    @MethodSource("metadataToExpectedGroupMetadataValue")
-    public void testEmptyGroupMetadataRecord(
-        MetadataVersion metadataVersion,
-        short expectedGroupMetadataValueVersion
-    ) {
+    @Test
+    public void testEmptyGroupMetadataRecord() {
         Time time = new MockTime();
 
         List<GroupMetadataValue.MemberMetadata> expectedMembers = Collections.emptyList();
@@ -685,7 +663,7 @@ public class GroupCoordinatorRecordHelpersTest {
                     .setGeneration(0)
                     .setCurrentStateTimestamp(time.milliseconds())
                     .setMembers(expectedMembers),
-                expectedGroupMetadataValueVersion));
+                (short) 3));
 
         ClassicGroup group = new ClassicGroup(
             new LogContext(),
