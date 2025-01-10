@@ -10039,6 +10039,27 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testRaftShouldAlwaysForwardCreateTopicsRequest(): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleCreateTopicsRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardCreatePartitionsRequest(): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleCreatePartitionsRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardDeleteTopicsRequest(): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleDeleteTopicsRequest)
+  }
+
+  @Test
   def testRaftShouldAlwaysForwardCreateAcls(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(raftSupport = true)
