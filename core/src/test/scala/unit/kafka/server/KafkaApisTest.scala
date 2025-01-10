@@ -135,8 +135,7 @@ class KafkaApisTest extends Logging {
   private val metrics = new Metrics()
   private val brokerId = 1
   // KRaft tests should override this with a KRaftMetadataCache
-  private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId, MetadataVersion.latestTesting())
-  private val brokerEpochManager: ZkBrokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
+  private var metadataCache: MetadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
@@ -183,25 +182,7 @@ class KafkaApisTest extends Logging {
     TestUtils.setIbpVersion(properties, interBrokerProtocolVersion)
     val config = new KafkaConfig(properties)
 
-    val forwardingManagerOpt = if (enableForwarding)
-      Some(this.forwardingManager)
-    else
-      None
-
-    val metadataSupport = if (raftSupport) {
-      // it will be up to the test to replace the default ZkMetadataCache implementation
-      // with a KRaftMetadataCache instance
-      metadataCache match {
-        case cache: KRaftMetadataCache => RaftSupport(forwardingManager, cache)
-        case _ => throw new IllegalStateException("Test must set an instance of KRaftMetadataCache")
-      }
-    } else {
-      metadataCache match {
-        case zkMetadataCache: ZkMetadataCache =>
-          ZkSupport(adminManager, controller, zkClient, forwardingManagerOpt, zkMetadataCache, brokerEpochManager)
-        case _ => throw new IllegalStateException("Test must set an instance of ZkMetadataCache")
-      }
-    }
+    val metadataSupport = RaftSupport(forwardingManager, metadataCache.asInstanceOf[KRaftMetadataCache])
 
     val listenerType = if (raftSupport) ListenerType.BROKER else ListenerType.ZK_BROKER
     val enabledApis = if (enableForwarding) {
@@ -617,13 +598,6 @@ class KafkaApisTest extends Logging {
     val apiRequest = requestBuilder.build(topicHeader.apiVersion)
     val request = buildRequest(apiRequest)
 
-    if (kafkaApis.metadataSupport.isInstanceOf[ZkSupport]) {
-      // The controller check only makes sense for ZK clusters. For KRaft,
-      // controller requests are handled on a separate listener, so there
-      // is no choice but to forward them.
-      when(controller.isActive).thenReturn(false)
-    }
-
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
     val forwardCallback: ArgumentCaptor[Option[AbstractResponse] => Unit] = ArgumentCaptor.forClass(classOf[Option[AbstractResponse] => Unit])
@@ -641,10 +615,6 @@ class KafkaApisTest extends Logging {
 
     val capturedResponse = verifyNoThrottling[AbstractResponse](request)
     assertEquals(expectedResponse.data, capturedResponse.data)
-
-    if (kafkaApis.metadataSupport.isInstanceOf[ZkSupport]) {
-      verify(controller).isActive
-    }
   }
 
   private def authorizeResource(authorizer: Authorizer,
