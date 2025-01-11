@@ -57,6 +57,9 @@ public class PartitionMaxBytesStrategyTest {
         // empty partitions set.
         assertThrows(IllegalArgumentException.class, () -> PartitionMaxBytesStrategy.checkValidArguments(
             100, Collections.EMPTY_SET, 20));
+        // partitions is null.
+        assertThrows(IllegalArgumentException.class, () -> PartitionMaxBytesStrategy.checkValidArguments(
+            100, null, 20));
         // request max bytes is 0.
         assertThrows(IllegalArgumentException.class, () -> PartitionMaxBytesStrategy.checkValidArguments(
             0, partitions, 20));
