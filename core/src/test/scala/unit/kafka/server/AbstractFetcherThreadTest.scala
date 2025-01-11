@@ -391,43 +391,6 @@ class AbstractFetcherThreadTest {
   }
 
   @Test
-  def testTruncateToHighWatermarkIfLeaderEpochRequestNotSupported(): Unit = {
-    val highWatermark = 2L
-    val partition = new TopicPartition("topic", 0)
-    val mockLeaderEndPoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version) {
-      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] =
-        throw new UnsupportedOperationException
-
-      override val isTruncationOnFetchSupported: Boolean = false
-    }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint)
-    val fetcher = new MockFetcherThread(mockLeaderEndPoint, mockTierStateMachine) {
-        override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
-          assertEquals(highWatermark, truncationState.offset)
-          assertTrue(truncationState.truncationCompleted)
-          super.truncate(topicPartition, truncationState)
-        }
-        override protected val isOffsetForLeaderEpochSupported: Boolean = false
-      }
-
-    val replicaLog = Seq(
-      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
-      mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
-      mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
-
-    val replicaState = PartitionState(replicaLog, leaderEpoch = 5, highWatermark)
-    fetcher.setReplicaState(partition, replicaState)
-    fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), highWatermark, leaderEpoch = 5)))
-    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
-
-    fetcher.doWork()
-
-    assertEquals(highWatermark, replicaState.logEndOffset)
-    assertEquals(highWatermark, fetcher.fetchState(partition).get.fetchOffset)
-    assertTrue(fetcher.fetchState(partition).get.isReadyForFetch)
-  }
-
-  @Test
   def testTruncateToHighWatermarkIfLeaderEpochInfoNotAvailable(): Unit = {
     val highWatermark = 2L
     val partition = new TopicPartition("topic", 0)

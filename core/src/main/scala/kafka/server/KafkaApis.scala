@@ -24,7 +24,7 @@ import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import kafka.server.share.SharePartitionManager
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -52,7 +52,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ListenerName}
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
@@ -71,9 +71,7 @@ import org.apache.kafka.coordinator.group.{Group, GroupCoordinator}
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.{GroupVersion, MetadataVersion, RequestLocal, TransactionVersion}
-import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
-import org.apache.kafka.server.purgatory.TopicPartitionOperationKey
+import org.apache.kafka.server.common.{GroupVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, SharePartitionKey}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
@@ -86,12 +84,11 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
-import java.util.{Collections, Optional, OptionalInt}
+import java.util.{Collections, Optional}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
-import scala.util.{Failure, Success, Try}
 
 /**
  * Logic to handle the various Kafka requests
@@ -136,10 +133,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   def close(): Unit = {
     aclApis.close()
     info("Shutdown complete.")
-  }
-
-  private def isForwardingEnabled(request: RequestChannel.Request): Boolean = {
-    metadataSupport.forwardingManager.isDefined && request.context.principalSerde.isPresent
   }
 
   private def maybeForwardToController(
@@ -197,10 +190,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.FETCH => handleFetchRequest(request)
         case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
         case ApiKeys.METADATA => handleTopicMetadataRequest(request)
-        case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
-        case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
-        case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request, requestLocal)
-        case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
         case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request, requestLocal).exceptionally(handleError)
         case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request).exceptionally(handleError)
         case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
@@ -249,7 +238,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => maybeForwardToController(request, handleAlterUserScramCredentialsRequest)
         case ApiKeys.ALTER_PARTITION => handleAlterPartitionRequest(request)
         case ApiKeys.UPDATE_FEATURES => maybeForwardToController(request, handleUpdateFeatures)
-        case ApiKeys.ENVELOPE => handleEnvelope(request, requestLocal)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
         case ApiKeys.UNREGISTER_BROKER => forwardToControllerOrFail(request)
@@ -295,156 +283,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     replicaManager.tryCompleteActions()
   }
 
-  def handleLeaderAndIsrRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-    // ensureTopicExists is only for client facing requests
-    // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
-    // stop serving data to clients for the topic being deleted
-    val correlationId = request.header.correlationId
-    val leaderAndIsrRequest = request.body[LeaderAndIsrRequest]
-
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    if (zkSupport.isBrokerEpochStale(leaderAndIsrRequest.brokerEpoch, leaderAndIsrRequest.isKRaftController)) {
-      // When the broker restarts very quickly, it is possible for this broker to receive request intended
-      // for its previous generation so the broker should skip the stale request.
-      info(s"Received LeaderAndIsr request with broker epoch ${leaderAndIsrRequest.brokerEpoch} " +
-        s"smaller than the current broker epoch ${zkSupport.controller.brokerEpoch} from " +
-        s"controller ${leaderAndIsrRequest.controllerId} with epoch ${leaderAndIsrRequest.controllerEpoch}.")
-      requestHelper.sendResponseExemptThrottle(request, leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_BROKER_EPOCH.exception))
-    } else {
-      val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest,
-        RequestHandlerHelper.onLeadershipChange(groupCoordinator, txnCoordinator, _, _))
-      requestHelper.sendResponseExemptThrottle(request, response)
-    }
-  }
-
-  def handleStopReplicaRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-    // ensureTopicExists is only for client facing requests
-    // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
-    // stop serving data to clients for the topic being deleted
-    val stopReplicaRequest = request.body[StopReplicaRequest]
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    if (zkSupport.isBrokerEpochStale(stopReplicaRequest.brokerEpoch, stopReplicaRequest.isKRaftController)) {
-      // When the broker restarts very quickly, it is possible for this broker to receive request intended
-      // for its previous generation so the broker should skip the stale request.
-      info(s"Received StopReplica request with broker epoch ${stopReplicaRequest.brokerEpoch} " +
-        s"smaller than the current broker epoch ${zkSupport.controller.brokerEpoch} from " +
-        s"controller ${stopReplicaRequest.controllerId} with epoch ${stopReplicaRequest.controllerEpoch}.")
-      requestHelper.sendResponseExemptThrottle(request, new StopReplicaResponse(
-        new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
-    } else {
-      val partitionStates = stopReplicaRequest.partitionStates().asScala
-      val (result, error) = replicaManager.stopReplicas(
-        request.context.correlationId,
-        stopReplicaRequest.controllerId,
-        stopReplicaRequest.controllerEpoch,
-        partitionStates)
-      // Clear the coordinator caches in case we were the leader. In the case of a reassignment, we
-      // cannot rely on the LeaderAndIsr API for this since it is only sent to active replicas.
-      result.foreachEntry { (topicPartition, error) =>
-        if (error == Errors.NONE) {
-          val partitionState = partitionStates(topicPartition)
-          if (topicPartition.topic == GROUP_METADATA_TOPIC_NAME
-              && partitionState.deletePartition) {
-            val leaderEpoch = if (partitionState.leaderEpoch >= 0)
-              OptionalInt.of(partitionState.leaderEpoch)
-            else
-              OptionalInt.empty
-            groupCoordinator.onResignation(topicPartition.partition, leaderEpoch)
-          } else if (topicPartition.topic == TRANSACTION_STATE_TOPIC_NAME
-                     && partitionState.deletePartition) {
-            val leaderEpoch = if (partitionState.leaderEpoch >= 0)
-              Some(partitionState.leaderEpoch)
-            else
-              None
-            txnCoordinator.onResignation(topicPartition.partition, coordinatorEpoch = leaderEpoch)
-          }
-        }
-      }
-
-      def toStopReplicaPartition(tp: TopicPartition, error: Errors) =
-        new StopReplicaResponseData.StopReplicaPartitionError()
-          .setTopicName(tp.topic)
-          .setPartitionIndex(tp.partition)
-          .setErrorCode(error.code)
-
-      requestHelper.sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData()
-        .setErrorCode(error.code)
-        .setPartitionErrors(result.map {
-          case (tp, error) => toStopReplicaPartition(tp, error)
-        }.toBuffer.asJava)))
-    }
-
-    CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)
-  }
-
-  def handleUpdateMetadataRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-    val correlationId = request.header.correlationId
-    val updateMetadataRequest = request.body[UpdateMetadataRequest]
-
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    if (zkSupport.isBrokerEpochStale(updateMetadataRequest.brokerEpoch, updateMetadataRequest.isKRaftController)) {
-      // When the broker restarts very quickly, it is possible for this broker to receive request intended
-      // for its previous generation so the broker should skip the stale request.
-      info(s"Received UpdateMetadata request with broker epoch ${updateMetadataRequest.brokerEpoch} " +
-        s"smaller than the current broker epoch ${zkSupport.controller.brokerEpoch} from " +
-        s"controller ${updateMetadataRequest.controllerId} with epoch ${updateMetadataRequest.controllerEpoch}.")
-      requestHelper.sendResponseExemptThrottle(request,
-        new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
-    } else {
-      val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
-      if (deletedPartitions.nonEmpty) {
-        groupCoordinator.onPartitionsDeleted(deletedPartitions.asJava, requestLocal.bufferSupplier)
-      }
-
-      if (zkSupport.adminManager.hasDelayedTopicOperations) {
-        updateMetadataRequest.partitionStates.forEach { partitionState =>
-          zkSupport.adminManager.tryCompleteDelayedTopicOperations(partitionState.topicName)
-        }
-      }
-
-      quotas.clientQuotaCallback.ifPresent { callback =>
-        if (callback.updateClusterMetadata(metadataCache.getClusterMetadata(clusterId, request.context.listenerName))) {
-          quotas.fetch.updateQuotaMetricConfigs()
-          quotas.produce.updateQuotaMetricConfigs()
-          quotas.request.updateQuotaMetricConfigs()
-          quotas.controllerMutation.updateQuotaMetricConfigs()
-        }
-      }
-      if (replicaManager.hasDelayedElectionOperations) {
-        updateMetadataRequest.partitionStates.forEach { partitionState =>
-          val tp = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
-          replicaManager.tryCompleteElection(new TopicPartitionOperationKey(tp))
-        }
-      }
-      requestHelper.sendResponseExemptThrottle(request, new UpdateMetadataResponse(
-        new UpdateMetadataResponseData().setErrorCode(Errors.NONE.code)))
-    }
-  }
-
-  def handleControlledShutdownRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-    // ensureTopicExists is only for client facing requests
-    // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
-    // stop serving data to clients for the topic being deleted
-    val controlledShutdownRequest = request.body[ControlledShutdownRequest]
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-
-    def controlledShutdownCallback(controlledShutdownResult: Try[Set[TopicPartition]]): Unit = {
-      val response = controlledShutdownResult match {
-        case Success(partitionsRemaining) =>
-         ControlledShutdownResponse.prepareResponse(Errors.NONE, partitionsRemaining.asJava)
-
-        case Failure(throwable) =>
-          controlledShutdownRequest.getErrorResponse(throwable)
-      }
-      requestHelper.sendResponseExemptThrottle(request, response)
-    }
-    zkSupport.controller.controlledShutdown(controlledShutdownRequest.data.brokerId, controlledShutdownRequest.data.brokerEpoch, controlledShutdownCallback)
-  }
-
   /**
    * Handle an offset commit request
    */
@@ -457,12 +295,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     // Reject the request if not authorized to the group
     if (!authHelper.authorize(request.context, READ, GROUP, offsetCommitRequest.data.groupId)) {
       requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else if (offsetCommitRequest.data.groupInstanceId != null && metadataCache.metadataVersion().isLessThan(IBP_2_3_IV0)) {
-      // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
-      // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
-      // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
       val authorizedTopics = authHelper.filterByAuthorized(
@@ -1598,13 +1430,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   ): CompletableFuture[Unit] = {
     val joinGroupRequest = request.body[JoinGroupRequest]
 
-    if (joinGroupRequest.data.groupInstanceId != null && metadataCache.metadataVersion().isLessThan(IBP_2_3_IV0)) {
-      // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
-      // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
-      // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else if (!authHelper.authorize(request.context, READ, GROUP, joinGroupRequest.data.groupId)) {
+    if (!authHelper.authorize(request.context, READ, GROUP, joinGroupRequest.data.groupId)) {
       requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
@@ -1628,13 +1454,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   ): CompletableFuture[Unit] = {
     val syncGroupRequest = request.body[SyncGroupRequest]
 
-    if (syncGroupRequest.data.groupInstanceId != null && metadataCache.metadataVersion().isLessThan(IBP_2_3_IV0)) {
-      // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
-      // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
-      // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else if (!syncGroupRequest.areMandatoryProtocolTypeAndNamePresent()) {
+    if (!syncGroupRequest.areMandatoryProtocolTypeAndNamePresent()) {
       // Starting from version 5, ProtocolType and ProtocolName fields are mandatory.
       requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.INCONSISTENT_GROUP_PROTOCOL.exception))
       CompletableFuture.completedFuture[Unit](())
@@ -1697,13 +1517,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleHeartbeatRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val heartbeatRequest = request.body[HeartbeatRequest]
 
-    if (heartbeatRequest.data.groupInstanceId != null && metadataCache.metadataVersion().isLessThan(IBP_2_3_IV0)) {
-      // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
-      // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
-      // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      requestHelper.sendMaybeThrottle(request, heartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else if (!authHelper.authorize(request.context, READ, GROUP, heartbeatRequest.data.groupId)) {
+    if (!authHelper.authorize(request.context, READ, GROUP, heartbeatRequest.data.groupId)) {
       requestHelper.sendMaybeThrottle(request, heartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
@@ -2127,7 +1941,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val endTxnRequest = request.body[EndTxnRequest]
     val transactionalId = endTxnRequest.data.transactionalId
 
@@ -2171,7 +1984,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleWriteTxnMarkersRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    ensureInterBrokerVersion(IBP_0_11_0_IV0)
     // We are checking for AlterCluster permissions first. If it is not present, we are authorizing cluster operation
     // The latter will throw an exception if it is denied.
     if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME, logIfDenied = false)) {
@@ -2344,13 +2156,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseExemptThrottle(request, new WriteTxnMarkersResponse(errors))
   }
 
-  def ensureInterBrokerVersion(version: MetadataVersion): Unit = {
-    if (metadataCache.metadataVersion().isLessThan(version))
-      throw new UnsupportedVersionException(s"metadata.version: ${metadataCache.metadataVersion()} is less than the required version: ${version}")
-  }
-
   def handleAddPartitionsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val addPartitionsToTxnRequest =
       if (request.context.apiVersion() < 4)
         request.body[AddPartitionsToTxnRequest].normalizeRequest()
@@ -2463,7 +2269,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAddOffsetsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val addOffsetsToTxnRequest = request.body[AddOffsetsToTxnRequest]
     val transactionalId = addOffsetsToTxnRequest.data.transactionalId
     val groupId = addOffsetsToTxnRequest.data.groupId
@@ -2517,7 +2322,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     request: RequestChannel.Request,
     requestLocal: RequestLocal
   ): CompletableFuture[Unit] = {
-    ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val txnOffsetCommitRequest = request.body[TxnOffsetCommitRequest]
 
     def sendResponse(response: TxnOffsetCommitResponse): Unit = {
@@ -3440,8 +3244,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(Left(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)))
     } else if (!zkSupport.controller.isActive) {
       sendResponseCallback(Left(new ApiError(Errors.NOT_CONTROLLER)))
-    } else if (!config.isFeatureVersioningSupported) {
-      sendResponseCallback(Left(new ApiError(Errors.INVALID_REQUEST, "Feature versioning system is disabled.")))
     } else {
       zkSupport.controller.updateFeatures(updateFeaturesRequest, sendResponseCallback)
     }
@@ -3480,35 +3282,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeClusterResponse(response.setThrottleTimeMs(requestThrottleMs)))
-  }
-
-  def handleEnvelope(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-
-    // If forwarding is not yet enabled or this request has been received on an invalid endpoint,
-    // then we treat the request as unparsable and close the connection.
-    if (!isForwardingEnabled(request)) {
-      info(s"Closing connection ${request.context.connectionId} because it sent an `Envelope` " +
-        "request even though forwarding has not been enabled")
-      requestChannel.closeConnection(request, Collections.emptyMap())
-      return
-    } else if (!request.context.fromPrivilegedListener) {
-      info(s"Closing connection ${request.context.connectionId} from listener ${request.context.listenerName} " +
-        s"because it sent an `Envelope` request, which is only accepted on the inter-broker listener " +
-        s"${config.interBrokerListenerName}.")
-      requestChannel.closeConnection(request, Collections.emptyMap())
-      return
-    } else if (!authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
-      requestHelper.sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
-        s"Principal ${request.context.principal} does not have required CLUSTER_ACTION for envelope"))
-      return
-    } else if (!zkSupport.controller.isActive) {
-      requestHelper.sendErrorResponseMaybeThrottle(request, new NotControllerException(
-        s"Broker $brokerId is not the active controller"))
-      return
-    }
-
-    EnvelopeUtils.handleEnvelopeRequest(request, requestChannel.metrics, handle(_, requestLocal))
   }
 
   def handleDescribeProducersRequest(request: RequestChannel.Request): Unit = {

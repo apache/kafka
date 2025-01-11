@@ -32,7 +32,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 class ConsumerRebootstrapTest extends RebootstrapTest {
-  @Disabled("KAFKA-17986")
   @ParameterizedTest(name = RebootstrapTestName)
   @MethodSource(Array("rebootstrapTestParams"))
   def testRebootstrap(quorum: String, groupProtocol: String, useRebootstrapTriggerMs: Boolean): Unit = {
