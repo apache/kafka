@@ -174,11 +174,7 @@ public class BrokersToElrs {
         PartitionsIterator(int brokerId) {
             mapIterator = null;
             Map<Uuid, int[]> topicMap = elrMembers.get(brokerId);
-            if (topicMap == null) {
-                this.iterator = null;
-            } else {
-                this.iterator = topicMap.entrySet().iterator();
-            }
+            this.iterator = topicMap == null ? null : topicMap.entrySet().iterator();
         }
 
         @Override
