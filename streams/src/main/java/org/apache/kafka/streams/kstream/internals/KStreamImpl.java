@@ -1164,8 +1164,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final String bufferName = name + "-Buffer";
             bufferStoreBuilder = Optional.of(new RocksDBTimeOrderedKeyValueBuffer.Builder<>(
                 bufferName,
-                joinedInternal.keySerde(),
-                joinedInternal.leftValueSerde(),
+                joinedInternal.keySerde() != null ? joinedInternal.keySerde() : keySerde,
+                joinedInternal.leftValueSerde() != null ? joinedInternal.leftValueSerde() : valueSerde,
                 joinedInternal.gracePeriod(),
                 name)
             );
