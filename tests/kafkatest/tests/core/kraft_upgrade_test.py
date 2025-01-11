@@ -138,6 +138,9 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
         - Perform rolling downgrade.
         - Finally, validate that every message acked by the producer was consumed by the consumer.
         """
+
+        # Due to 3.3 compatability issue we need to set one folder
+        # see https://github.com/apache/kafka/pull/13130
         server_prop_overrides = None
         if starting_kafka_version == str(LATEST_3_3):
             server_prop_overrides = [[config_property.LOG_DIRS, "/mnt/kafka/kafka-metadata-logs"], [config_property.METADATA_LOG_DIR, ""]]
