@@ -625,7 +625,8 @@ class KafkaApisTest extends Logging {
       .build(requestHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer), raftSupport = true)
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
 
     verify(authorizer, times(1)).authorize(any(), any())
