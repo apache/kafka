@@ -32,7 +32,7 @@ import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.quota._
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -101,7 +101,6 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
       kafkaClientSaslMechanism, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
-  @Disabled("KAFKA-18213")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testCustomQuotaCallback(quorum: String, groupProtocol: String): Unit = {
