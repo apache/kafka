@@ -780,8 +780,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         #update template configs with test override configs
         configs.update(override_configs)
-
-        prop_file = self.render_configs(configs)
+        filtered_configs = {k: v for k, v in configs.items() if v not in [None, ""]}
+        prop_file = self.render_configs(filtered_configs)
         return prop_file
 
     def render_configs(self, configs):

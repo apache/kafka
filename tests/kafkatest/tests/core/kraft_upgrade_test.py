@@ -17,7 +17,7 @@ from ducktape.mark import parametrize, matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import config_property, KafkaService
 from kafkatest.services.kafka.quorum import isolated_kraft, combined_kraft
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
@@ -144,6 +144,9 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
         - Perform rolling downgrade.
         - Finally, validate that every message acked by the producer was consumed by the consumer.
         """
+        configs = None
+        if starting_kafka_version == str(LATEST_3_3):
+            configs = [[config_property.LOG_DIRS, "/mnt/kafka/kafka-metadata-logs"], [config_property.METADATA_LOG_DIR, ""]]
         fromKafkaVersion = KafkaVersion(starting_kafka_version)
         self.kafka = KafkaService(self.test_context,
                                   num_nodes=3,
@@ -151,7 +154,8 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
                                   version=fromKafkaVersion,
                                   topics={self.topic: {"partitions": self.partitions,
                                                        "replication-factor": self.replication_factor,
-                                                       'configs': {"min.insync.replicas": 2}}})
+                                                       'configs': {"min.insync.replicas": 2}}},
+                                  server_prop_overrides = configs)
         self.kafka.start()
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
                                            self.topic, throughput=self.producer_throughput,
