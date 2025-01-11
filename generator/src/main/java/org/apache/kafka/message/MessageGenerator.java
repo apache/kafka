@@ -58,6 +58,8 @@ public final class MessageGenerator {
 
     static final String COORDINATOR_RECORD_TYPE_JAVA = "CoordinatorRecordType.java";
 
+    static final String COORDINATOR_RECORD_JSON_CONVERTERS_JAVA = "CoordinatorRecordJsonConverters.java";
+
     static final String METADATA_RECORD_TYPE_JAVA = "MetadataRecordType.java";
 
     static final String METADATA_JSON_CONVERTERS_JAVA = "MetadataJsonConverters.java";
@@ -197,6 +199,9 @@ public final class MessageGenerator {
                     break;
                 case "CoordinatorRecordTypeGenerator":
                     generators.add(new CoordinatorRecordTypeGenerator(packageName));
+                    break;
+                case "CoordinatorRecordJsonConvertersGenerator":
+                    generators.add(new CoordinatorRecordJsonConvertersGenerator(packageName));
                     break;
                 default:
                     throw new RuntimeException("Unknown type class generator type '" + type + "'");

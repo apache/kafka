@@ -18,11 +18,10 @@ package org.apache.kafka.message;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
-public class CoordinatorRecordTypeGenerator implements TypeClassGenerator {
+public class CoordinatorRecordJsonConvertersGenerator implements TypeClassGenerator {
     private final HeaderGenerator headerGenerator;
     private final CodeBuffer buffer;
     private final TreeMap<Short, CoordinatorRecord> records;
@@ -37,7 +36,7 @@ public class CoordinatorRecordTypeGenerator implements TypeClassGenerator {
         }
     }
 
-    public CoordinatorRecordTypeGenerator(String packageName) {
+    public CoordinatorRecordJsonConvertersGenerator(String packageName) {
         this.headerGenerator = new HeaderGenerator(packageName);
         this.records = new TreeMap<>();
         this.buffer = new CodeBuffer();
@@ -45,7 +44,7 @@ public class CoordinatorRecordTypeGenerator implements TypeClassGenerator {
 
     @Override
     public String outputName() {
-        return MessageGenerator.COORDINATOR_RECORD_TYPE_JAVA;
+        return MessageGenerator.COORDINATOR_RECORD_JSON_CONVERTERS_JAVA;
     }
 
     @Override
@@ -82,177 +81,129 @@ public class CoordinatorRecordTypeGenerator implements TypeClassGenerator {
 
     @Override
     public void generateAndWrite(BufferedWriter writer) throws IOException {
-        generate();
-        write(writer);
-    }
-
-    private void generate() {
-        buffer.printf("public enum CoordinatorRecordType {%n");
+        buffer.printf("public class CoordinatorRecordJsonConverters {%n");
         buffer.incrementIndent();
-        generateEnumValues();
+        generateWriteKeyJson();
         buffer.printf("%n");
-        generateInstanceVariables();
+        generateWriteValueJson();
         buffer.printf("%n");
-        generateEnumConstructor();
+        generateReadKeyFromJson();
         buffer.printf("%n");
-        generateFromApiKey();
+        generateReadValueFromJson();
         buffer.printf("%n");
-        generateNewRecordKey();
-        buffer.printf("%n");
-        generateNewRecordValue();
-        buffer.printf("%n");
-        generateAccessor("id", "short");
-        buffer.printf("%n");
-        generateAccessor("lowestSupportedVersion", "short");
-        buffer.printf("%n");
-        generateAccessor("highestSupportedVersion", "short");
-        buffer.printf("%n");
-        generateToString();
         buffer.decrementIndent();
         buffer.printf("}%n");
         headerGenerator.generate();
-    }
 
-    private String cleanName(String name) {
-        return name
-            .replace("Key", "")
-            .replace("Value", "");
-    }
-
-    private void generateEnumValues() {
-        int numProcessed = 0;
-        for (Map.Entry<Short, CoordinatorRecord> entry : records.entrySet()) {
-            MessageSpec key = entry.getValue().key;
-            if (key == null) {
-                throw new RuntimeException("Coordinator record " + entry.getKey() + " has not key.");
-            }
-            MessageSpec value = entry.getValue().value;
-            if (value == null) {
-                throw new RuntimeException("Coordinator record " + entry.getKey() + " has not key.");
-            }
-            String name = cleanName(key.name());
-            numProcessed++;
-            buffer.printf("%s(\"%s\", (short) %d, (short) %d, (short) %d)%s%n",
-                MessageGenerator.toSnakeCase(name).toUpperCase(Locale.ROOT),
-                MessageGenerator.capitalizeFirst(name),
-                entry.getKey(),
-                value.validVersions().lowest(),
-                value.validVersions().highest(),
-                (numProcessed == records.size()) ? ";" : ",");
-        }
-    }
-
-    private void generateInstanceVariables() {
-        buffer.printf("private final String name;%n");
-        buffer.printf("private final short id;%n");
-        buffer.printf("private final short lowestSupportedVersion;%n");
-        buffer.printf("private final short highestSupportedVersion;%n");
-    }
-
-    private void generateEnumConstructor() {
-        buffer.printf("CoordinatorRecordType(String name, short id, short lowestSupportedVersion, short highestSupportedVersion) {%n");
-        buffer.incrementIndent();
-        buffer.printf("this.name = name;%n");
-        buffer.printf("this.id = id;%n");
-        buffer.printf("this.lowestSupportedVersion = lowestSupportedVersion;%n");
-        buffer.printf("this.highestSupportedVersion = highestSupportedVersion;%n");
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void generateFromApiKey() {
-        buffer.printf("public static CoordinatorRecordType fromId(short id) {%n");
-        buffer.incrementIndent();
-        buffer.printf("switch (id) {%n");
-        buffer.incrementIndent();
-        for (Map.Entry<Short, CoordinatorRecord> entry : records.entrySet()) {
-            buffer.printf("case %d:%n", entry.getKey());
-            buffer.incrementIndent();
-            buffer.printf("return %s;%n", MessageGenerator.
-                toSnakeCase(cleanName(entry.getValue().key.name())).toUpperCase(Locale.ROOT));
-            buffer.decrementIndent();
-        }
-        buffer.printf("default:%n");
-        buffer.incrementIndent();
-        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-        buffer.printf("throw new UnsupportedVersionException(\"Unknown record id \"" +
-            " + id);%n");
-        buffer.decrementIndent();
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void generateNewRecordKey() {
-        headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
-        buffer.printf("public ApiMessage newRecordKey() {%n");
-        buffer.incrementIndent();
-        buffer.printf("switch (id) {%n");
-        buffer.incrementIndent();
-        for (Map.Entry<Short, CoordinatorRecord> entry : records.entrySet()) {
-            buffer.printf("case %d:%n", entry.getKey());
-            buffer.incrementIndent();
-            buffer.printf("return new %s();%n",
-                MessageGenerator.capitalizeFirst(entry.getValue().key.name()));
-            buffer.decrementIndent();
-        }
-        buffer.printf("default:%n");
-        buffer.incrementIndent();
-        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-        buffer.printf("throw new UnsupportedVersionException(\"Unknown record id \"" +
-            " + id);%n");
-        buffer.decrementIndent();
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void generateNewRecordValue() {
-        headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
-        buffer.printf("public ApiMessage newRecordValue() {%n");
-        buffer.incrementIndent();
-        buffer.printf("switch (id) {%n");
-        buffer.incrementIndent();
-        for (Map.Entry<Short, CoordinatorRecord> entry : records.entrySet()) {
-            buffer.printf("case %d:%n", entry.getKey());
-            buffer.incrementIndent();
-            buffer.printf("return new %s();%n",
-                MessageGenerator.capitalizeFirst(entry.getValue().value.name()));
-            buffer.decrementIndent();
-        }
-        buffer.printf("default:%n");
-        buffer.incrementIndent();
-        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-        buffer.printf("throw new UnsupportedVersionException(\"Unknown record id \"" +
-            " + id);%n");
-        buffer.decrementIndent();
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void generateAccessor(String name, String type) {
-        buffer.printf("public %s %s() {%n", type, name);
-        buffer.incrementIndent();
-        buffer.printf("return this.%s;%n", name);
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void generateToString() {
-        buffer.printf("@Override%n");
-        buffer.printf("public String toString() {%n");
-        buffer.incrementIndent();
-        buffer.printf("return this.name();%n");
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void write(BufferedWriter writer) throws IOException {
         headerGenerator.buffer().write(writer);
         buffer.write(writer);
+    }
+
+    private void generateWriteKeyJson() {
+        headerGenerator.addImport(MessageGenerator.JSON_NODE_CLASS);
+        headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
+
+        buffer.printf("public static JsonNode writeRecordKeyAsJson(ApiMessage key) {%n");
+        buffer.incrementIndent();
+        buffer.printf("switch (key.apiKey()) {%n");
+        buffer.incrementIndent();
+        for (Map.Entry<Short, CoordinatorRecord> entry : records.entrySet()) {
+            String apiMessageClassName = MessageGenerator.capitalizeFirst(entry.getValue().key.name());
+            buffer.printf("case %d:%n", entry.getKey());
+            buffer.incrementIndent();
+            buffer.printf("return %sJsonConverter.write((%s) key, (short) 0);%n", apiMessageClassName, apiMessageClassName);
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unknown record id \"" +
+            " + key.apiKey());%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateWriteValueJson() {
+        headerGenerator.addImport(MessageGenerator.JSON_NODE_CLASS);
+        headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
+
+        buffer.printf("public static JsonNode writeRecordValueAsJson(ApiMessage value, short version) {%n");
+        buffer.incrementIndent();
+        buffer.printf("switch (value.apiKey()) {%n");
+        buffer.incrementIndent();
+        for (Map.Entry<Short, CoordinatorRecord> entry : records.entrySet()) {
+            String apiMessageClassName = MessageGenerator.capitalizeFirst(entry.getValue().value.name());
+            buffer.printf("case %d:%n", entry.getKey());
+            buffer.incrementIndent();
+            buffer.printf("return %sJsonConverter.write((%s) value, version);%n", apiMessageClassName, apiMessageClassName);
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unknown record id \"" +
+            " + value.apiKey());%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateReadKeyFromJson() {
+        headerGenerator.addImport(MessageGenerator.JSON_NODE_CLASS);
+        headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
+
+        buffer.printf("public static ApiMessage readRecordKeyFromJson(JsonNode json, short apiKey) {%n");
+        buffer.incrementIndent();
+        buffer.printf("switch (apiKey) {%n");
+        buffer.incrementIndent();
+        for (Map.Entry<Short, CoordinatorRecord> entry : records.entrySet()) {
+            String apiMessageClassName = MessageGenerator.capitalizeFirst(entry.getValue().key.name());
+            buffer.printf("case %d:%n", entry.getKey());
+            buffer.incrementIndent();
+            buffer.printf("return %sJsonConverter.read(json, (short) 0);%n", apiMessageClassName);
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unknown record id \"" +
+            " + apiKey);%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateReadValueFromJson() {
+        headerGenerator.addImport(MessageGenerator.JSON_NODE_CLASS);
+        headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
+
+        buffer.printf("public static ApiMessage readRecordValueFromJson(JsonNode json, short apiKey, short version) {%n");
+        buffer.incrementIndent();
+        buffer.printf("switch (apiKey) {%n");
+        buffer.incrementIndent();
+        for (Map.Entry<Short, CoordinatorRecord> entry : records.entrySet()) {
+            String apiMessageClassName = MessageGenerator.capitalizeFirst(entry.getValue().value.name());
+            buffer.printf("case %d:%n", entry.getKey());
+            buffer.incrementIndent();
+            buffer.printf("return %sJsonConverter.read(json, version);%n", apiMessageClassName);
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unknown record id \"" +
+            " + apiKey);%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
     }
 }

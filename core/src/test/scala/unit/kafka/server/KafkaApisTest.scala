@@ -323,167 +323,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testEnvelopeRequestHandlingAsController(): Unit = {
-    testEnvelopeRequestWithAlterConfig(
-      alterConfigHandler = () => ApiError.NONE,
-      expectedError = Errors.NONE
-    )
-  }
-
-  @Test
-  def testEnvelopeRequestWithAlterConfigUnhandledError(): Unit = {
-    testEnvelopeRequestWithAlterConfig(
-      alterConfigHandler = () => throw new IllegalStateException(),
-      expectedError = Errors.UNKNOWN_SERVER_ERROR
-    )
-  }
-
-  private def testEnvelopeRequestWithAlterConfig(
-    alterConfigHandler: () => ApiError,
-    expectedError: Errors
-  ): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    authorizeResource(authorizer, AclOperation.CLUSTER_ACTION, ResourceType.CLUSTER, Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
-
-    val operation = AclOperation.ALTER_CONFIGS
-    val resourceName = "topic-1"
-    val requestHeader = new RequestHeader(ApiKeys.ALTER_CONFIGS, ApiKeys.ALTER_CONFIGS.latestVersion,
-      clientId, 0)
-
-    when(controller.isActive).thenReturn(true)
-
-    authorizeResource(authorizer, operation, ResourceType.TOPIC, resourceName, AuthorizationResult.ALLOWED)
-
-    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
-    when(adminManager.alterConfigs(any(), ArgumentMatchers.eq(false)))
-      .thenAnswer(_ => {
-        Map(configResource -> alterConfigHandler.apply())
-      })
-
-    val configs = Map(
-      configResource -> new AlterConfigsRequest.Config(
-        Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
-    val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion)
-
-    val startTimeNanos = time.nanoseconds()
-    val queueDurationNanos = 5 * 1000 * 1000
-    val request = TestUtils.buildEnvelopeRequest(
-      alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, startTimeNanos, startTimeNanos + queueDurationNanos)
-
-    val capturedResponse: ArgumentCaptor[AlterConfigsResponse] = ArgumentCaptor.forClass(classOf[AlterConfigsResponse])
-    val capturedRequest: ArgumentCaptor[RequestChannel.Request] = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer), enableForwarding = true)
-    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
-
-    verify(requestChannel).sendResponse(
-      capturedRequest.capture(),
-      capturedResponse.capture(),
-      any()
-    )
-    assertEquals(Some(request), capturedRequest.getValue.envelope)
-    // the dequeue time of forwarded request should equals to envelop request
-    assertEquals(request.requestDequeueTimeNanos, capturedRequest.getValue.requestDequeueTimeNanos)
-    val innerResponse = capturedResponse.getValue
-    val responseMap = innerResponse.data.responses().asScala.map { resourceResponse =>
-      resourceResponse.resourceName -> Errors.forCode(resourceResponse.errorCode)
-    }.toMap
-
-    assertEquals(Map(resourceName -> expectedError), responseMap)
-
-    verify(controller).isActive
-    verify(adminManager).alterConfigs(any(), ArgumentMatchers.eq(false))
-  }
-
-  @Test
-  def testInvalidEnvelopeRequestWithNonForwardableAPI(): Unit = {
-    val requestHeader = new RequestHeader(ApiKeys.LEAVE_GROUP, ApiKeys.LEAVE_GROUP.latestVersion,
-      clientId, 0)
-    val leaveGroupRequest = new LeaveGroupRequest.Builder("group",
-      Collections.singletonList(new MemberIdentity())).build(requestHeader.apiVersion)
-
-    when(controller.isActive).thenReturn(true)
-
-    val request = TestUtils.buildEnvelopeRequest(
-      leaveGroupRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds())
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(enableForwarding = true)
-    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
-
-    val response = verifyNoThrottling[EnvelopeResponse](request)
-    assertEquals(Errors.INVALID_REQUEST, response.error())
-  }
-
-  @Test
-  def testEnvelopeRequestWithNotFromPrivilegedListener(): Unit = {
-    testInvalidEnvelopeRequest(Errors.NONE, fromPrivilegedListener = false,
-      shouldCloseConnection = true)
-  }
-
-  @Test
-  def testEnvelopeRequestNotAuthorized(): Unit = {
-    testInvalidEnvelopeRequest(Errors.CLUSTER_AUTHORIZATION_FAILED,
-      performAuthorize = true, authorizeResult = AuthorizationResult.DENIED)
-  }
-
-  @Test
-  def testEnvelopeRequestNotControllerHandling(): Unit = {
-    testInvalidEnvelopeRequest(Errors.NOT_CONTROLLER, performAuthorize = true, isActiveController = false)
-  }
-
-  private def testInvalidEnvelopeRequest(expectedError: Errors,
-                                         fromPrivilegedListener: Boolean = true,
-                                         shouldCloseConnection: Boolean = false,
-                                         performAuthorize: Boolean = false,
-                                         authorizeResult: AuthorizationResult = AuthorizationResult.ALLOWED,
-                                         isActiveController: Boolean = true): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    if (performAuthorize) {
-      authorizeResource(authorizer, AclOperation.CLUSTER_ACTION, ResourceType.CLUSTER, Resource.CLUSTER_NAME, authorizeResult)
-    }
-
-    val resourceName = "topic-1"
-    val requestHeader = new RequestHeader(ApiKeys.ALTER_CONFIGS, ApiKeys.ALTER_CONFIGS.latestVersion,
-      clientId, 0)
-
-    when(controller.isActive).thenReturn(isActiveController)
-
-    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
-
-    val configs = Map(
-      configResource -> new AlterConfigsRequest.Config(
-        Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
-    val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false)
-      .build(requestHeader.apiVersion)
-
-    val request = TestUtils.buildEnvelopeRequest(
-      alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds(), fromPrivilegedListener = fromPrivilegedListener)
-
-    val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer), enableForwarding = true)
-    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
-
-    if (shouldCloseConnection) {
-      verify(requestChannel).closeConnection(
-        ArgumentMatchers.eq(request),
-        ArgumentMatchers.eq(java.util.Collections.emptyMap())
-      )
-    } else {
-      verify(requestChannel).sendResponse(
-        ArgumentMatchers.eq(request),
-        capturedResponse.capture(),
-        ArgumentMatchers.eq(None))
-      val response = capturedResponse.getValue.asInstanceOf[EnvelopeResponse]
-      assertEquals(expectedError, response.error)
-    }
-    if (performAuthorize) {
-      verify(authorizer).authorize(any(), any())
-    }
-  }
-
-  @Test
   def testAlterConfigsWithAuthorizer(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
 
@@ -3000,7 +2839,7 @@ class KafkaApisTest extends Logging {
     // This test verifies the response will not be sent prematurely because of calling replicaManager append
     // with no records.
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
-    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
       asList(
         new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, asList(topicPartition)),
         new TxnMarkerEntry(2, 1.toShort, 0, TransactionResult.COMMIT, asList(topicPartition)),
@@ -3134,7 +2973,6 @@ class KafkaApisTest extends Logging {
     )
 
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       List(
         new TxnMarkerEntry(
           1L,
@@ -3260,7 +3098,6 @@ class KafkaApisTest extends Logging {
     )
 
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       List(
         new TxnMarkerEntry(
           1L,
@@ -3386,7 +3223,6 @@ class KafkaApisTest extends Logging {
     val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
 
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       List(
         new TxnMarkerEntry(
           1L,
@@ -9866,7 +9702,7 @@ class KafkaApisTest extends Logging {
   }
 
   private def createWriteTxnMarkersRequest(partitions: util.List[TopicPartition]) = {
-    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
       asList(new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions))).build()
     (writeTxnMarkersRequest, buildRequest(writeTxnMarkersRequest))
   }
@@ -10517,24 +10353,10 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testRaftShouldNeverHandleControlledShutdownRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldNeverHandleErrorMessage(kafkaApis.handleControlledShutdownRequest)
-  }
-
-  @Test
   def testRaftShouldNeverHandleAlterPartitionRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(raftSupport = true)
     verifyShouldNeverHandleErrorMessage(kafkaApis.handleAlterPartitionRequest)
-  }
-
-  @Test
-  def testRaftShouldNeverHandleEnvelope(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldNeverHandleErrorMessage(kafkaApis.handleEnvelope(_, RequestLocal.withThreadConfinedCaching))
   }
 
   @Test

@@ -23,11 +23,8 @@ import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiMessageType.ListenerType;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
-import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
@@ -103,7 +100,6 @@ public class ApiVersionsResponseTest {
 
         ApiVersionCollection commonResponse = ApiVersionsResponse.intersectForwardableApis(
             ApiMessageType.ListenerType.ZK_BROKER,
-            RecordVersion.current(),
             activeControllerApiVersions,
             true,
             false
@@ -115,63 +111,12 @@ public class ApiVersionsResponseTest {
             ApiKeys.JOIN_GROUP.latestVersion(), commonResponse);
     }
 
-    @Test
-    public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() {
-        ApiVersionsResponse response = new ApiVersionsResponse.Builder().
-            setThrottleTimeMs(10).
-            setApiVersions(ApiVersionsResponse.filterApis(
-                RecordVersion.V1,
-                ListenerType.ZK_BROKER,
-                true,
-                true)).
-            setSupportedFeatures(Features.emptySupportedFeatures()).
-            setFinalizedFeatures(Collections.emptyMap()).
-            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
-            build();
-        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
-        assertEquals(10, response.throttleTimeMs());
-        assertTrue(response.data().supportedFeatures().isEmpty());
-        assertTrue(response.data().finalizedFeatures().isEmpty());
-        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data().finalizedFeaturesEpoch());
-    }
-
-    @Test
-    public void shouldReturnFeatureKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
-        ApiVersionsResponse response = new ApiVersionsResponse.Builder().
-            setThrottleTimeMs(10).
-            setApiVersions(ApiVersionsResponse.filterApis(
-                RecordVersion.V1,
-                ListenerType.ZK_BROKER,
-                true,
-                true)).
-            setSupportedFeatures(Features.supportedFeatures(
-                Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange((short) 1, (short) 4))))).
-            setFinalizedFeatures(Utils.mkMap(Utils.mkEntry("feature", (short) 3))).
-            setFinalizedFeaturesEpoch(10L).
-            build();
-
-        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
-        assertEquals(10, response.throttleTimeMs());
-        assertEquals(1, response.data().supportedFeatures().size());
-        SupportedFeatureKey sKey = response.data().supportedFeatures().find("feature");
-        assertNotNull(sKey);
-        assertEquals(1, sKey.minVersion());
-        assertEquals(4, sKey.maxVersion());
-        assertEquals(1, response.data().finalizedFeatures().size());
-        FinalizedFeatureKey fKey = response.data().finalizedFeatures().find("feature");
-        assertNotNull(fKey);
-        assertEquals(3, fKey.minVersionLevel());
-        assertEquals(3, fKey.maxVersionLevel());
-        assertEquals(10, response.data().finalizedFeaturesEpoch());
-    }
-
     @ParameterizedTest
     @EnumSource(names = {"ZK_BROKER", "BROKER"})
-    public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle(ListenerType listenerType) {
+    public void shouldReturnAllKeysWhenThrottleMsIsDefaultThrottle(ListenerType listenerType) {
         ApiVersionsResponse response = new ApiVersionsResponse.Builder().
             setThrottleTimeMs(AbstractResponse.DEFAULT_THROTTLE_TIME).
             setApiVersions(ApiVersionsResponse.filterApis(
-                RecordVersion.current(),
                 listenerType,
                 true,
                 true)).
@@ -191,7 +136,6 @@ public class ApiVersionsResponseTest {
         ApiVersionsResponse response = new ApiVersionsResponse.Builder().
             setThrottleTimeMs(10).
             setApiVersions(ApiVersionsResponse.filterApis(
-                RecordVersion.V1,
                 ListenerType.BROKER,
                 true,
                 true)).
@@ -207,7 +151,6 @@ public class ApiVersionsResponseTest {
         ApiVersionsResponse response = new ApiVersionsResponse.Builder().
             setThrottleTimeMs(10).
             setApiVersions(ApiVersionsResponse.filterApis(
-                RecordVersion.V1,
                 ListenerType.BROKER,
                 true,
                 false)).
@@ -223,7 +166,6 @@ public class ApiVersionsResponseTest {
         ApiVersionsResponse response = new ApiVersionsResponse.Builder().
             setThrottleTimeMs(AbstractResponse.DEFAULT_THROTTLE_TIME).
             setApiVersions(ApiVersionsResponse.filterApis(
-                RecordVersion.current(),
                 ListenerType.ZK_BROKER,
                 true,
                 true)).
@@ -278,7 +220,6 @@ public class ApiVersionsResponseTest {
                 new SupportedVersionRange((short) 0, (short) 1)));
         ApiVersionsResponse response = new ApiVersionsResponse.Builder().
             setApiVersions(ApiVersionsResponse.filterApis(
-                RecordVersion.current(),
                 ListenerType.BROKER,
                 true,
                 true)).
