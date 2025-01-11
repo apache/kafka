@@ -415,15 +415,9 @@ public class DelayedShareFetch extends DelayedOperation {
             return existingFetchedData;
         }
 
-        // Computing the total bytes that has already been fetched for the existing fetched data.
-        int totalPartitionMaxBytesUsed = 0;
-        for (LogReadResult logReadResult : existingFetchedData.values()) {
-            totalPartitionMaxBytesUsed += logReadResult.info().records.sizeInBytes();
-        }
-
         LinkedHashMap<TopicIdPartition, LogReadResult> missingTopicPartitionsLogReadResponse = readFromLog(
             missingLogReadTopicPartitions,
-            partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes - totalPartitionMaxBytesUsed, missingLogReadTopicPartitions.keySet(), missingLogReadTopicPartitions.size()));
+            partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes, missingLogReadTopicPartitions.keySet(), topicPartitionData.size()));
         missingTopicPartitionsLogReadResponse.putAll(existingFetchedData);
         return missingTopicPartitionsLogReadResponse;
     }
