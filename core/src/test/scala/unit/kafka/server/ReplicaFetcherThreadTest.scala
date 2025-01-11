@@ -247,6 +247,7 @@ class ReplicaFetcherThreadTest {
 
     // Create a capture to track what partitions/offsets are truncated
     val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
+
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
 
     // Setup all dependencies
@@ -583,7 +584,6 @@ class ReplicaFetcherThreadTest {
     val tid2p1 = new TopicIdPartition(topicId2, t2p1)
 
     val props = TestUtils.createBrokerConfig(1)
-
     val config = KafkaConfig.fromProps(props)
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
