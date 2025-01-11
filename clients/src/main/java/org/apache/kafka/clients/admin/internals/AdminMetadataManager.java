@@ -23,11 +23,10 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
-import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
@@ -277,23 +276,21 @@ public class AdminMetadataManager {
         // We depend on pending calls to request another metadata update
         this.state = State.QUIESCENT;
 
-        if (exception instanceof AuthenticationException) {
-            log.warn("Metadata update failed due to authentication error", exception);
-            this.fatalException = (ApiException) exception;
-        } else if (exception instanceof MismatchedEndpointTypeException) {
-            log.warn("Metadata update failed due to mismatched endpoint type error", exception);
-            this.fatalException = (ApiException) exception;
-        } else if (exception instanceof UnsupportedEndpointTypeException) {
-            log.warn("Metadata update failed due to unsupported endpoint type error", exception);
-            this.fatalException = (ApiException) exception;
-        } else if (exception instanceof UnsupportedVersionException) {
-            if (usingBootstrapControllers) {
-                log.warn("The remote node is not a CONTROLLER that supports the KIP-919 " +
-                    "DESCRIBE_CLUSTER api.", exception);
-            } else {
-                log.warn("The remote node is not a BROKER that supports the METADATA api.", exception);
+        if (RequestUtils.isFatalException(exception)) {
+            log.warn("Fatal error during metadata update", exception);
+            // avoid unchecked/unconfirmed cast to ApiException
+            if (exception instanceof  ApiException) {
+                this.fatalException = (ApiException) exception;
             }
-            this.fatalException = (ApiException) exception;
+
+            if (exception instanceof UnsupportedVersionException) {
+                if (usingBootstrapControllers) {
+                    log.warn("The remote node is not a CONTROLLER that supports the KIP-919 " +
+                        "DESCRIBE_CLUSTER api.", exception);
+                } else {
+                    log.warn("The remote node is not a BROKER that supports the METADATA api.", exception);
+                }
+            }
         } else {
             log.info("Metadata update failed", exception);
         }

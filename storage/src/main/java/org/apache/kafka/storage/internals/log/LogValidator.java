@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
-import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -40,7 +39,6 @@ import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.PrimitiveRef.LongRef;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.common.MetadataVersion;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -48,8 +46,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV0;
 
 public class LogValidator {
 
@@ -110,7 +106,6 @@ public class LogValidator {
     private final long timestampAfterMaxMs;
     private final int partitionLeaderEpoch;
     private final AppendOrigin origin;
-    private final MetadataVersion interBrokerProtocolVersion;
 
     public LogValidator(MemoryRecords records,
                         TopicPartition topicPartition,
@@ -123,8 +118,7 @@ public class LogValidator {
                         long timestampBeforeMaxMs,
                         long timestampAfterMaxMs,
                         int partitionLeaderEpoch,
-                        AppendOrigin origin,
-                        MetadataVersion interBrokerProtocolVersion) {
+                        AppendOrigin origin) {
         this.records = records;
         this.topicPartition = topicPartition;
         this.time = time;
@@ -137,7 +131,6 @@ public class LogValidator {
         this.timestampAfterMaxMs = timestampAfterMaxMs;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.origin = origin;
-        this.interBrokerProtocolVersion = interBrokerProtocolVersion;
     }
 
     /**
@@ -332,10 +325,6 @@ public class LogValidator {
     public ValidationResult validateMessagesAndAssignOffsetsCompressed(LongRef offsetCounter,
                                                                        MetricsRecorder metricsRecorder,
                                                                        BufferSupplier bufferSupplier) {
-        if (targetCompression.type() == CompressionType.ZSTD && interBrokerProtocolVersion.isLessThan(IBP_2_1_IV0))
-            throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
-                "are not allowed to use ZStandard compression");
-
         // No in place assignment situation 1
         boolean inPlaceAssignment = sourceCompressionType == targetCompression.type();
         long now = time.milliseconds();
