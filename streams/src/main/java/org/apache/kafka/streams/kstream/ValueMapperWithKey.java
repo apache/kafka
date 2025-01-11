@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream;
 /**
  * The {@code ValueMapperWithKey} interface for mapping a value to a new value of arbitrary type.
  * This is a stateless record-by-record operation, i.e, {@link #apply(Object, Object)} is invoked individually for each
- * record of a stream (cf. {@link ValueTransformer} for stateful value transformation).
- * If {@code ValueMapperWithKey} is applied to a {@link org.apache.kafka.streams.KeyValue key-value pair} record the
+ * record of a stream (cf. {@link org.apache.kafka.streams.processor.api.FixedKeyProcessor} for stateful value transformation).
+ * If {@code ValueMapperWithKey} is applied to a {@link org.apache.kafka.streams.processor.api.Record} the
  * record's key is preserved.
  * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
  * If a record's key and value should be modified {@link KeyValueMapper} can be used.
@@ -29,8 +29,7 @@ package org.apache.kafka.streams.kstream;
  * @param <V>  value type
  * @param <VR> mapped value type
  * @see KeyValueMapper
- * @see ValueTransformer
- * @see ValueTransformerWithKey
+ * @see org.apache.kafka.streams.processor.api.FixedKeyProcessor
  * @see KStream#mapValues(ValueMapper)
  * @see KStream#mapValues(ValueMapperWithKey)
  * @see KStream#flatMapValues(ValueMapper)

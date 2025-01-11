@@ -174,7 +174,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
                 " as the store is not connected to the processor. If you add stores manually via '.addStateStore()' " +
                 "make sure to connect the added store to the processor by providing the processor name to " +
                 "'.addStateStore()' or connect them via '.connectProcessorAndStateStores()'. " +
-                "DSL users need to provide the store name to '.process()', '.transform()', or '.transformValues()' " +
+                "DSL users need to provide the store name to '.process()', '.processValues()', or '.transformValues()' " +
                 "to connect the store to the corresponding operator, or they can provide a StoreBuilder by implementing " +
                 "the stores() method on the Supplier itself. If you do not add stores manually, " +
                 "please file a bug report at https://issues.apache.org/jira/projects/KAFKA.");
@@ -236,8 +236,8 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
         if (previousNode == null) {
             throw new StreamsException("Current node is unknown. This can happen if 'forward()' is called " +
-                    "in an illegal scope. The root cause could be that a 'Processor' or 'Transformer' instance" +
-                    " is shared. To avoid this error, make sure that your suppliers return new instances " +
+                    "in an illegal scope. The root cause could be that a 'Processor' instance " +
+                    "is shared. To avoid this error, make sure that your suppliers return new instances " +
                     "each time 'get()' of Supplier is called and do not return the same object reference " +
                     "multiple times.");
         }
