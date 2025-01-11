@@ -276,7 +276,7 @@ public class CustomMaxAggregator implements Processor&lt;String, Long&gt; {
             <p>
                 To begin with, instantiate your processor and initialize it with the mock context:
             <pre class="line-numbers"><code class="language-java">final Processor processorUnderTest = ...;
-final MockProcessorContext&lt;String, Long&gt; context = new MockProcessorContext<&gt;();
+final MockProcessorContext&lt;String, Long&gt; context = new MockProcessorContext&lt;&gt;();
 processorUnderTest.init(context);</code></pre>
             If you need to pass configuration to your processor or set the default serdes, you can create the mock with
             config:
