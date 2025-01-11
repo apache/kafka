@@ -444,6 +444,11 @@ public class ConfigurationControlManagerTest {
                 // When the default config is set in step 5.
                 assertEquals(3, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
                 return Collections.emptyList();
+            })
+            .thenAnswer(invocation -> {
+                // When the default config and topic config are set in step 6.
+                assertEquals(5, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
+                return Collections.emptyList();
             });
 
         // Step 1. Set the cluster level config
@@ -454,7 +459,7 @@ public class ConfigurationControlManagerTest {
         assertEquals(1, records.size());
         manager.replay((ConfigRecord) result.records().get(0).message());
 
-        // Step 2. Set a topic level config.
+        // Step 2. Set a topic level config. This should not trigger any update.
         result = manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "2"))))),
             true);
@@ -485,6 +490,17 @@ public class ConfigurationControlManagerTest {
         records = result.records();
         assertEquals(1, records.size());
         manager.replay((ConfigRecord) result.records().get(0).message());
+
+        // Step 6. Decrease the cluster level config and add topic level config in the same update
+        result = manager.incrementalAlterConfigs(toMap(
+                entry(new ConfigResource(BROKER, ""), toMap(
+                        entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "2")))),
+                entry(MYTOPIC, toMap(
+                        entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "5"))))),
+                true);
+        records = result.records();
+        assertEquals(2, records.size());
+        manager.replay((ConfigRecord) result.records().get(0).message());
     }
 
     @Test
@@ -513,9 +529,14 @@ public class ConfigurationControlManagerTest {
                 // When the default config is set in step 5.
                 assertEquals(3, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
                 return Collections.emptyList();
+            })
+            .thenAnswer(invocation -> {
+                // When the default config is set in step 5.
+                assertEquals(5, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
+                return Collections.emptyList();
             });
 
-        // Step 1.
+        // Step 1. Set the cluster level config. This should not trigger any update.
         ControllerResult<Map<ConfigResource, ApiError>> result =
             manager.legacyAlterConfigs(toMap(entry(new ConfigResource(BROKER, ""), toMap(
                     entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "4")))),
@@ -524,7 +545,7 @@ public class ConfigurationControlManagerTest {
         assertEquals(1, records.size());
         manager.replay((ConfigRecord) result.records().get(0).message());
 
-        // Step 2.
+        // Step 2. Set a topic level config.
         result = manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")))),
             true);
@@ -532,7 +553,7 @@ public class ConfigurationControlManagerTest {
         assertEquals(1, records.size());
         manager.replay((ConfigRecord) result.records().get(0).message());
 
-        // Step 3.
+        // Step 3. remove the topic level config.
         result = manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap())),
             false);
         records = result.records();
@@ -553,6 +574,17 @@ public class ConfigurationControlManagerTest {
             true);
         records = result.records();
         assertEquals(1, records.size());
+        manager.replay((ConfigRecord) result.records().get(0).message());
+
+        // Step 6. Decrease the cluster level config and add topic level config in the same update
+        result = manager.legacyAlterConfigs(toMap(
+            entry(new ConfigResource(BROKER, ""), toMap(
+                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"))),
+            entry(MYTOPIC, toMap(
+                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "5")))),
+            true);
+        records = result.records();
+        assertEquals(2, records.size());
         manager.replay((ConfigRecord) result.records().get(0).message());
     }
 

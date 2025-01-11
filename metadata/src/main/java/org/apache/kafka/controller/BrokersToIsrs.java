@@ -55,8 +55,7 @@ public class BrokersToIsrs {
     private static final int REPLICA_MASK = 0x7fff_ffff;
 
     static class PartitionsOnReplicaIterator implements Iterator<TopicIdPartition> {
-        private final Iterator<Map<Uuid, int[]>> topicMapIterator;
-        private Iterator<Entry<Uuid, int[]>> iterator;
+        private final Iterator<Entry<Uuid, int[]>> iterator;
         private final boolean leaderOnly;
         private int offset = 0;
         Uuid uuid = Uuid.ZERO_UUID;
@@ -64,14 +63,7 @@ public class BrokersToIsrs {
         private TopicIdPartition next = null;
 
         PartitionsOnReplicaIterator(Map<Uuid, int[]> topicMap, boolean leaderOnly) {
-            this.topicMapIterator = null;
             this.iterator = topicMap.entrySet().iterator();
-            this.leaderOnly = leaderOnly;
-        }
-
-        PartitionsOnReplicaIterator(Iterator<Map<Uuid, int[]>> topicMapIterator, boolean leaderOnly) {
-            this.topicMapIterator = topicMapIterator;
-            this.iterator = null;
             this.leaderOnly = leaderOnly;
         }
 
@@ -80,10 +72,7 @@ public class BrokersToIsrs {
             if (next != null) return true;
             while (true) {
                 if (offset >= replicas.length) {
-                    while (iterator == null || !iterator.hasNext()) {
-                        if (topicMapIterator == null || !topicMapIterator.hasNext()) return false;
-                        iterator = topicMapIterator.next().entrySet().iterator();
-                    }
+                    if (!iterator.hasNext()) return false;
                     offset = 0;
                     Entry<Uuid, int[]> entry = iterator.next();
                     uuid = entry.getKey();

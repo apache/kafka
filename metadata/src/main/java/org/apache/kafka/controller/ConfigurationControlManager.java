@@ -65,6 +65,9 @@ import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_
 
 public class ConfigurationControlManager {
     public static final ConfigResource DEFAULT_NODE = new ConfigResource(Type.BROKER, "");
+    // When handle the min ISR updates, we could end up with a large size of partition change records. If the records
+    // size is large enough, we should add the records non-atomically.
+    private final int maximumAtomicApplyRecordsSize = 1000;
 
     private final Logger log;
     private final SnapshotRegistry snapshotRegistry;
@@ -225,6 +228,18 @@ public class ConfigurationControlManager {
                 outputRecords);
             outputResults.put(resourceEntry.getKey(), apiError);
         }
+
+        List<ApiMessageAndVersion> partitionChangeRecords = maybeTriggerPartitionUpdateOnMinIsrChange(outputRecords);
+        if (!partitionChangeRecords.isEmpty()) {
+            // The partition change records should be applied before config records. Also, the partition records can be
+            // huge, we should add the config records to the partition change records.
+            partitionChangeRecords.addAll(outputRecords);
+            outputRecords = partitionChangeRecords;
+        }
+
+        if (outputRecords.size() >= maximumAtomicApplyRecordsSize) {
+            return ControllerResult.of(outputRecords, outputResults);
+        }
         return ControllerResult.atomicOf(outputRecords, outputResults);
     }
 
@@ -239,6 +254,18 @@ public class ConfigurationControlManager {
             keyToOps,
             newlyCreatedResource,
             outputRecords);
+
+        List<ApiMessageAndVersion> partitionChangeRecords = maybeTriggerPartitionUpdateOnMinIsrChange(outputRecords);
+        if (!partitionChangeRecords.isEmpty()) {
+            // The partition change records should be applied before config records. Also, the partition records can be
+            // huge, we should add the config records to the partition change records.
+            partitionChangeRecords.addAll(outputRecords);
+            outputRecords = partitionChangeRecords;
+        }
+
+        if (outputRecords.size() >= maximumAtomicApplyRecordsSize) {
+            return ControllerResult.of(outputRecords, apiError);
+        }
         return ControllerResult.atomicOf(outputRecords, apiError);
     }
 
@@ -302,7 +329,6 @@ public class ConfigurationControlManager {
         if (error.isFailure()) {
             return error;
         }
-        outputRecords.addAll(maybeTriggerPartitionUpdateOnMinIsrChange(newRecords));
         outputRecords.addAll(newRecords);
         return ApiError.NONE;
     }
@@ -487,6 +513,17 @@ public class ConfigurationControlManager {
                 outputRecords,
                 outputResults);
         }
+
+        List<ApiMessageAndVersion> partitionChangeRecords = maybeTriggerPartitionUpdateOnMinIsrChange(outputRecords);
+        if (!partitionChangeRecords.isEmpty()) {
+            // The partition change records should be applied before config records. Also, the partition records can be
+            // huge, we should add the config records to the partition change records.
+            partitionChangeRecords.addAll(outputRecords);
+            outputRecords = partitionChangeRecords;
+        }
+        if (outputRecords.size() >= maximumAtomicApplyRecordsSize) {
+            return ControllerResult.of(outputRecords, outputResults);
+        }
         return ControllerResult.atomicOf(outputRecords, outputResults);
     }
 
@@ -528,11 +565,8 @@ public class ConfigurationControlManager {
             outputResults.put(configResource, error);
             return;
         }
-        List<ApiMessageAndVersion> newRecords = new ArrayList<>();
-        newRecords.addAll(recordsExplicitlyAltered);
-        newRecords.addAll(recordsImplicitlyDeleted);
-        outputRecords.addAll(maybeTriggerPartitionUpdateOnMinIsrChange(newRecords));
-        outputRecords.addAll(newRecords);
+        outputRecords.addAll(recordsExplicitlyAltered);
+        outputRecords.addAll(recordsImplicitlyDeleted);
         outputResults.put(configResource, ApiError.NONE);
     }
 

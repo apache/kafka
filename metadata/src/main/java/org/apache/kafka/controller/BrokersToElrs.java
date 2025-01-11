@@ -19,12 +19,15 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 import static org.apache.kafka.metadata.Replicas.NONE;
 
@@ -151,16 +154,65 @@ public class BrokersToElrs {
         }
     }
 
-    BrokersToIsrs.PartitionsOnReplicaIterator partitionsWithBrokerInElr(int brokerId) {
-        Map<Uuid, int[]> topicMap = elrMembers.get(brokerId);
-        if (topicMap == null) {
-            topicMap = Collections.emptyMap();
-        }
-        return new BrokersToIsrs.PartitionsOnReplicaIterator(topicMap, false);
+    PartitionsIterator partitionsWithBrokerInElr(int brokerId) {
+        return new PartitionsIterator(brokerId);
     }
 
-    @SuppressWarnings("unchecked")
-    BrokersToIsrs.PartitionsOnReplicaIterator partitionsWithElr() {
-        return new BrokersToIsrs.PartitionsOnReplicaIterator(elrMembers.values().stream().map(m -> (Map<Uuid, int[]>) m).iterator(), false);
+    class PartitionsIterator implements Iterator<TopicIdPartition> {
+        private Iterator<Map.Entry<Integer, TimelineHashMap<Uuid, int[]>>> mapIterator;
+        private Iterator<Map.Entry<Uuid, int[]>> iterator;
+        private int offset = 0;
+        Uuid uuid = Uuid.ZERO_UUID;
+        int[] replicas = NONE;
+        private TopicIdPartition next = null;
+
+        PartitionsIterator() {
+            mapIterator = elrMembers.entrySet().iterator();
+            this.iterator = null;
+        }
+
+        PartitionsIterator(int brokerId) {
+            mapIterator = null;
+            Map<Uuid, int[]> topicMap = elrMembers.get(brokerId);
+            if (topicMap == null) {
+                this.iterator = null;
+            } else {
+                this.iterator = topicMap.entrySet().iterator();
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (next != null) return true;
+            while (true) {
+                if (offset >= replicas.length) {
+                    while (iterator == null || !iterator.hasNext()) {
+                        if (mapIterator == null || !mapIterator.hasNext()) return false;
+                        iterator = mapIterator.next().getValue().entrySet().iterator();
+                    }
+                    offset = 0;
+                    Map.Entry<Uuid, int[]> entry = iterator.next();
+                    uuid = entry.getKey();
+                    replicas = entry.getValue();
+                }
+                int replica = replicas[offset++];
+                next = new TopicIdPartition(uuid, replica);
+                return true;
+            }
+        }
+
+        @Override
+        public TopicIdPartition next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            TopicIdPartition result = next;
+            next = null;
+            return result;
+        }
+    }
+
+    PartitionsIterator partitionsWithElr() {
+        return new PartitionsIterator();
     }
 }
