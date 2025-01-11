@@ -105,11 +105,6 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
         - Upgrade cluster to the latest metadata.version.
         - Finally, validate that every message acked by the producer was consumed by the consumer.
         """
-        server_prop_overrides = None
-        if from_kafka_version == str(LATEST_3_3):
-            server_prop_overrides = [[config_property.LOG_DIRS, "/mnt/kafka/kafka-metadata-logs"], [config_property.METADATA_LOG_DIR, ""]]
-
-
         fromKafkaVersion = KafkaVersion(from_kafka_version)
         self.kafka = KafkaService(self.test_context,
                                   num_nodes=3,
@@ -117,8 +112,7 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
                                   version=fromKafkaVersion,
                                   topics={self.topic: {"partitions": self.partitions,
                                                        "replication-factor": self.replication_factor,
-                                                       'configs': {"min.insync.replicas": 2}}},
-                                  server_prop_overrides = server_prop_overrides)
+                                                       'configs': {"min.insync.replicas": 2}}})
         self.kafka.start()
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
                                            self.topic, throughput=self.producer_throughput,
