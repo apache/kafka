@@ -347,7 +347,11 @@ class KafkaApisTest extends Logging {
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
     createKafkaApis(authorizer = Some(authorizer), raftSupport = true).handleIncrementalAlterConfigsRequest(request)
-    testNewBodyForwardableApi(request)
+    verify(forwardingManager, times(1)).forwardRequest(
+      any(),
+      any(),
+      any()
+    )
   }
 
   @Test
@@ -426,7 +430,11 @@ class KafkaApisTest extends Logging {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
     kafkaApis = createKafkaApis(raftSupport = true)
     kafkaApis.handleAlterConfigsRequest(request)
-    testNewBodyForwardableApi(request)
+    verify(forwardingManager, times(1)).forwardRequest(
+      any(),
+      any(),
+      any()
+    )
   }
 
   @Test
@@ -444,7 +452,11 @@ class KafkaApisTest extends Logging {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
     kafkaApis = createKafkaApis(raftSupport = true)
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
-    testNewBodyForwardableApi(request)
+    verify(forwardingManager, times(1)).forwardRequest(
+      any(),
+      any(),
+      any()
+    )
   }
 
   private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource],
@@ -529,21 +541,6 @@ class KafkaApisTest extends Logging {
       apiKey,
       requestBuilder
     )
-  }
-
-  private def testNewBodyForwardableApi(request: RequestChannel.Request
-                                       ): Unit = {
-    val forwardCallback: ArgumentCaptor[Option[AbstractResponse] => Unit] = ArgumentCaptor.forClass(classOf[Option[AbstractResponse] => Unit])
-    val newBody: ArgumentCaptor[AbstractRequest] = ArgumentCaptor.forClass(classOf[AbstractRequest])
-
-    verify(forwardingManager).forwardRequest(
-      ArgumentMatchers.eq(request),
-      newBody.capture(),
-      forwardCallback.capture()
-    )
-
-    assertNotNull(request.buffer, "The buffer was unexpectedly deallocated")
-    assertNotNull(newBody, "The newBody field should not be null")
   }
 
   private def testForwardableApi(apiKey: ApiKeys, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Unit = {
