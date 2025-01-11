@@ -1110,7 +1110,8 @@ object GroupMetadataManager {
    * @param groupMetadata current group metadata
    * @param assignment the assignment for the rebalancing generation
    * @param version the version to serialize it with, the default is `3`, the highest supported non-flexible version
-   *        until a tagged version is bumped. The default should always be used outside of tests
+   *                until a tagged field is introduced or the version is bumped. The default should always be used
+   *                outside of tests
    * @return payload for offset commit message
    */
   def groupMetadataValue(groupMetadata: GroupMetadata,
