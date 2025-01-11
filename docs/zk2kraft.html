@@ -144,5 +144,16 @@
                 <li><code>ExpiredConnectionsKilledCount</code></li>
             </ul>
         </li>
+        <li>
+            <p>
+                Remove the metrics which is monitoring the latency in milliseconds for ZooKeeper requests from broker.
+            </p>
+            <ul>
+                <li><code>kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs</code></li>
+            </ul>
+            <p>
+                In Kraft mode, Zookeeper is not used, so the metrics is removed.
+            </p>
+        </li>
     </ul>
 </div>
