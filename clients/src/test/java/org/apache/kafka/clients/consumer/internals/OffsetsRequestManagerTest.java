@@ -134,7 +134,6 @@ public class OffsetsRequestManagerTest {
                 false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
         Map<TopicPartition, OffsetAndTimestampInternal> expectedOffsets = Collections.singletonMap(
                 TEST_PARTITION_1,
@@ -153,8 +152,7 @@ public class OffsetsRequestManagerTest {
             requestManager.fetchOffsets(timestampsToSearch, false);
 
         assertEquals(0, requestManager.requestsToSend());
-        assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(1, requestManager.requestsToRetryOnMetadataUpdate());
+        assertEquals(1, requestManager.requestsToRetry());
         verify(metadata).requestUpdate(true);
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
@@ -180,7 +178,6 @@ public class OffsetsRequestManagerTest {
                         false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
         Map<TopicPartition, OffsetAndTimestampInternal> expectedOffsets = timestampsToSearch.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey,
@@ -195,14 +192,12 @@ public class OffsetsRequestManagerTest {
                         false);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
         NetworkClientDelegate.PollResult pollResult = requestManager.poll(time.milliseconds());
         assertTrue(pollResult.unsentRequests.isEmpty());
 
         assertEquals(0, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
         assertTrue(result.isDone());
         assertFalse(result.isCompletedExceptionally());
@@ -221,7 +216,6 @@ public class OffsetsRequestManagerTest {
                 false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
         List<ListOffsetsResponseData.ListOffsetsTopicResponse> topicResponses = Collections.singletonList(
                 mockUnknownOffsetResponse(TEST_PARTITION_1));
@@ -246,8 +240,7 @@ public class OffsetsRequestManagerTest {
         CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsetsFuture =
             requestManager.fetchOffsets(timestampsToSearch, false);
         assertEquals(0, requestManager.requestsToSend());
-        assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(1, requestManager.requestsToRetryOnMetadataUpdate());
+        assertEquals(1, requestManager.requestsToRetry());
         verify(metadata).requestUpdate(true);
 
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
@@ -278,7 +271,6 @@ public class OffsetsRequestManagerTest {
                 false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
         // Request successfully sent to single broker
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
@@ -292,24 +284,17 @@ public class OffsetsRequestManagerTest {
                 Collections.singletonMap(TEST_PARTITION_1, error));
         clientResponse.onComplete();
         assertFalse(fetchOffsetsFuture.isDone());
-        assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
+        assertEquals(0, requestManager.requestsToSend());
 
-        // Cluster metadata update won't retry requests in requestsToRetry
+        // Cluster metadata update. Failed requests should be retried and succeed
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         requestManager.onUpdate(new ClusterResource(""));
-        assertEquals(0, requestManager.requestsToSend());
-        assertEquals(1, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
+        assertEquals(1, requestManager.requestsToSend());
 
-        // Following poll should send the retry request and get a successful response
         Map<TopicPartition, OffsetAndTimestampInternal> expectedOffsets =
                 Collections.singletonMap(TEST_PARTITION_1, new OffsetAndTimestampInternal(5L, -1, Optional.empty()));
         verifySuccessfulPollAndResponseReceived(fetchOffsetsFuture, expectedOffsets);
-        assertEquals(0, requestManager.requestsToSend());
-        assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
     }
 
     @Test
@@ -335,7 +320,6 @@ public class OffsetsRequestManagerTest {
                 false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
         // Request successfully sent to single broker
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
@@ -376,7 +360,6 @@ public class OffsetsRequestManagerTest {
                 false);
         assertEquals(2, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
         // Requests successfully sent to both brokers
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
@@ -399,20 +382,15 @@ public class OffsetsRequestManagerTest {
         clientResponse2.onComplete();
 
         assertFalse(fetchOffsetsFuture.isDone());
-        assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
-        // Cluster metadata update won't retry requests in requestsToRetry
+        // Cluster metadata update. Failed requests should be retried
         mockSuccessfulRequest(partitionLeaders);
         requestManager.onUpdate(new ClusterResource(""));
-        assertEquals(0, requestManager.requestsToSend());
-        assertEquals(1, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToSend());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
+        assertEquals(1, requestManager.requestsToSend());
 
-        // Following poll should send the retry request and get a successful response
+        // Following poll should send the request and get a successful response
         NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(time.milliseconds());
         verifySuccessfulPollAwaitingResponse(retriedPoll);
         NetworkClientDelegate.UnsentRequest unsentRequest = retriedPoll.unsentRequests.get(0);
@@ -440,7 +418,6 @@ public class OffsetsRequestManagerTest {
                         false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
         // Request successfully sent
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
@@ -455,7 +432,6 @@ public class OffsetsRequestManagerTest {
         verifyRequestCompletedWithErrorResponse(fetchOffsetsFuture, TopicAuthorizationException.class);
         assertEquals(0, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
     }
 
     @Test
@@ -471,7 +447,6 @@ public class OffsetsRequestManagerTest {
                         false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
         // Request successfully sent
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
@@ -489,7 +464,6 @@ public class OffsetsRequestManagerTest {
         // Request completed with error. Nothing pending to be sent or retried
         assertEquals(0, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
     }
 
     @Test
@@ -506,7 +480,6 @@ public class OffsetsRequestManagerTest {
 
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
 
         // Request successfully sent
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
@@ -527,7 +500,6 @@ public class OffsetsRequestManagerTest {
 
         assertEquals(0, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
-        assertEquals(0, requestManager.requestsToRetryOnMetadataUpdate());
     }
 
     @Test

@@ -86,7 +86,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final SubscriptionState subscriptionState;
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
-    private final Set<ListOffsetsRequestState> requestsToRetryOnMetadataUpdate;
     private final List<NetworkClientDelegate.UnsentRequest> requestsToSend;
     private final int requestTimeoutMs;
     private final Time time;
@@ -133,7 +132,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.isolationLevel = isolationLevel;
         this.log = logContext.logger(getClass());
         this.requestsToRetry = new HashSet<>();
-        this.requestsToRetryOnMetadataUpdate = new HashSet<>();
         this.requestsToSend = new ArrayList<>();
         this.subscriptionState = subscriptionState;
         this.time = time;
@@ -144,7 +142,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptionState,
                 time, retryBackoffMs, apiVersions);
         // Register the cluster metadata update callback. Note this only relies on the
-        // requestsToRetryOnMetadataUpdate initialized above, and won't be invoked until all managers are
+        // requestsToRetry initialized above, and won't be invoked until all managers are
         // initialized and the network thread started.
         this.metadata.addClusterUpdateListener(this);
         this.commitRequestManager = commitRequestManager;
@@ -169,8 +167,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // Copy the outgoing request list and clear it.
-        maybeRetryListOffsetsRequests(false);
-
         List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>(requestsToSend);
         requestsToSend.clear();
         return new NetworkClientDelegate.PollResult(unsentRequests);
@@ -525,28 +521,17 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                     timestampsToSearch, requireTimestamps, listOffsetsRequestState);
             requestsToSend.addAll(unsentRequests);
         } catch (StaleMetadataException e) {
-            requestsToRetryOnMetadataUpdate.add(listOffsetsRequestState);
+            requestsToRetry.add(listOffsetsRequestState);
         }
     }
 
     @Override
     public void onUpdate(ClusterResource clusterResource) {
-        // Retry requests on metadata update
-        maybeRetryListOffsetsRequests(true);
-    }
-
-    private void maybeRetryListOffsetsRequests(boolean onMetadataUpdate) {
-        // Process a copy of the list to avoid errors, given that the list of requestsToRetry
-        // may be modified from the fetchOffsetsByTimes call if any of the requests being retried fails
-        List<ListOffsetsRequestState> requestsToProcess;
-        if (onMetadataUpdate) {
-            requestsToProcess = new ArrayList<>(requestsToRetryOnMetadataUpdate);
-            requestsToRetryOnMetadataUpdate.clear();
-        } else {
-            requestsToProcess = new ArrayList<>(requestsToRetry);
-            requestsToRetry.clear();
-        }
-
+        // Retry requests that were awaiting a metadata update. Process a copy of the list to
+        // avoid errors, given that the list of requestsToRetry may be modified from the
+        // fetchOffsetsByTimes call if any of the requests being retried fails
+        List<ListOffsetsRequestState> requestsToProcess = new ArrayList<>(requestsToRetry);
+        requestsToRetry.clear();
         requestsToProcess.forEach(requestState -> {
             Map<TopicPartition, Long> timestampsToSearch =
                     new HashMap<>(requestState.remainingToSearch);
@@ -929,11 +914,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     // Visible for testing
     int requestsToRetry() {
         return requestsToRetry.size();
-    }
-
-    // Visible for testing
-    int requestsToRetryOnMetadataUpdate() {
-        return requestsToRetryOnMetadataUpdate.size();
     }
 
     // Visible for testing
