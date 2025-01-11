@@ -33,6 +33,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Collections;
 import java.util.List;
@@ -237,8 +239,9 @@ public class CoordinatorRequestManagerTest {
         assertEquals(1, res2.unsentRequests.size());
     }
     
-    @Test
-    public void testClearFatalErrorWhenReceivingSuccessfulResponse() {
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"NONE", "COORDINATOR_NOT_AVAILABLE"})
+    public void testClearFatalErrorWhenReceivingSuccessfulResponse(Errors error) {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
         expectFindCoordinatorRequest(coordinatorManager, Errors.GROUP_AUTHORIZATION_FAILED);
         assertTrue(coordinatorManager.fatalError().isPresent());
@@ -248,7 +251,7 @@ public class CoordinatorRequestManagerTest {
         assertTrue(coordinatorManager.fatalError().isPresent());
         
         // receiving a successful response should clear the fatal error
-        expectFindCoordinatorRequest(coordinatorManager, Errors.NONE);
+        expectFindCoordinatorRequest(coordinatorManager, error);
         assertTrue(coordinatorManager.fatalError().isEmpty());
     }
 
