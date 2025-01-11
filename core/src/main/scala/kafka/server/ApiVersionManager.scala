@@ -150,14 +150,12 @@ class DefaultApiVersionManager(
     }
     val apiVersions = if (controllerApiVersions.isDefined) {
       ApiVersionsResponse.controllerApiVersions(
-        finalizedFeatures.metadataVersion().highestSupportedRecordVersion,
         controllerApiVersions.get,
         listenerType,
         enableUnstableLastVersion,
         clientTelemetryEnabled)
     } else {
       ApiVersionsResponse.brokerApiVersions(
-        finalizedFeatures.metadataVersion().highestSupportedRecordVersion,
         listenerType,
         enableUnstableLastVersion,
         clientTelemetryEnabled)

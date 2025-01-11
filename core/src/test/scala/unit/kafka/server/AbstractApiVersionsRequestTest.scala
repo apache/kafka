@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
 import org.apache.kafka.common.message.ApiMessageType
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.record.RecordVersion
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, RequestUtils}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, GroupVersion, MetadataVersion, TransactionVersion}
@@ -95,7 +94,6 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     } else {
       ApiVersionsResponse.intersectForwardableApis(
         ApiMessageType.ListenerType.BROKER,
-        RecordVersion.current,
         NodeApiVersions.create(ApiKeys.controllerApis().asScala.map(ApiVersionsResponse.toApiVersion).asJava).allSupportedApiVersions(),
         enableUnstableLastVersion,
         clientTelemetryEnabled

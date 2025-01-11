@@ -24,4 +24,5 @@
     <allow pkg="org" />
     <allow pkg="kafka" />
     <allow pkg="scala.jdk.javaapi" />
+    <allow pkg="javax.security" />
 </import-control>

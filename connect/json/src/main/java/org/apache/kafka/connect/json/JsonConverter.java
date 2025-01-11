@@ -149,10 +149,9 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
         LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public JsonNode toJson(final Schema schema, final Object value, final JsonConverterConfig config) {
-                if (!(value instanceof BigDecimal))
+                if (!(value instanceof BigDecimal decimal))
                     throw new DataException("Invalid type for Decimal, expected BigDecimal but was " + value.getClass());
 
-                final BigDecimal decimal = (BigDecimal) value;
                 switch (config.decimalFormat()) {
                     case NUMERIC:
                         return JSON_NODE_FACTORY.numberNode(decimal);

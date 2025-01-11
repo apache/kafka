@@ -109,10 +109,6 @@ class ReplicaFetcherThreadTest {
       testingVersion.fetchRequestVersion
     )
     assertEquals(
-      ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(true),
-      testingVersion.offsetForLeaderEpochRequestVersion
-    )
-    assertEquals(
       ApiKeys.LIST_OFFSETS.latestVersion(true),
       testingVersion.listOffsetRequestVersion
     )
@@ -143,7 +139,7 @@ class ReplicaFetcherThreadTest {
 
   @Test
   def shouldHandleExceptionFromBlockingSend(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, null)
+    val props = TestUtils.createBrokerConfig(1)
     val config = KafkaConfig.fromProps(props)
     val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
     when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
@@ -185,7 +181,7 @@ class ReplicaFetcherThreadTest {
   }
 
   private def verifyFetchLeaderEpochOnFirstFetch(ibp: MetadataVersion, epochFetchCount: Int): Unit = {
-    val props = TestUtils.createBrokerConfig(1, null)
+    val props = TestUtils.createBrokerConfig(1)
     props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, ibp.version)
     val config = KafkaConfig.fromProps(props)
 
@@ -251,8 +247,7 @@ class ReplicaFetcherThreadTest {
 
     // Create a capture to track what partitions/offsets are truncated
     val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
-
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, null))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
 
     // Setup all dependencies
     val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
@@ -360,7 +355,7 @@ class ReplicaFetcherThreadTest {
 
   @Test
   def testTruncateOnFetchDoesNotUpdateHighWatermark(): Unit = {
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, null))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = mock(classOf[LogManager])
     val log: UnifiedLog = mock(classOf[UnifiedLog])
@@ -444,7 +439,7 @@ class ReplicaFetcherThreadTest {
 
   @Test
   def testLagIsUpdatedWhenNoRecords(): Unit = {
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, null))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = mock(classOf[LogManager])
     val log: UnifiedLog = mock(classOf[UnifiedLog])
@@ -539,7 +534,7 @@ class ReplicaFetcherThreadTest {
 
   @Test
   def shouldCatchExceptionFromBlockingSendWhenShuttingDownReplicaFetcherThread(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, null)
+    val props = TestUtils.createBrokerConfig(1)
     val config = KafkaConfig.fromProps(props)
 
     val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
@@ -587,7 +582,8 @@ class ReplicaFetcherThreadTest {
     val tid1p1 = new TopicIdPartition(topicId1, t1p1)
     val tid2p1 = new TopicIdPartition(topicId2, t2p1)
 
-    val props = TestUtils.createBrokerConfig(1, null)
+    val props = TestUtils.createBrokerConfig(1)
+
     val config = KafkaConfig.fromProps(props)
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
@@ -665,7 +661,7 @@ class ReplicaFetcherThreadTest {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testLocalFetchCompletionIfHighWatermarkUpdated(highWatermarkUpdated: Boolean): Unit = {
-    val props = TestUtils.createBrokerConfig(1, null)
+    val props = TestUtils.createBrokerConfig(1)
     val config = KafkaConfig.fromProps(props)
     val highWatermarkReceivedFromLeader = 100L
 
@@ -752,7 +748,7 @@ class ReplicaFetcherThreadTest {
   }
 
   private def assertProcessPartitionDataWhen(isReassigning: Boolean): Unit = {
-    val props = TestUtils.createBrokerConfig(1, null)
+    val props = TestUtils.createBrokerConfig(1)
     val config = KafkaConfig.fromProps(props)
 
     val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])

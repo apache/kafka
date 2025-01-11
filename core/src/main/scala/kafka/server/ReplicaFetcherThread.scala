@@ -47,8 +47,6 @@ class ReplicaFetcherThread(name: String,
   // Visible for testing
   private[server] val partitionsWithNewHighWatermark = mutable.Buffer[TopicPartition]()
 
-  override protected val isOffsetForLeaderEpochSupported: Boolean = metadataVersionSupplier().isOffsetForLeaderEpochSupported
-
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
     replicaMgr.localLogOrException(topicPartition).latestEpoch
   }

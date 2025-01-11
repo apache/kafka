@@ -111,7 +111,7 @@ public class FeatureTest {
         assertThrows(IllegalArgumentException.class,
             () -> Feature.validateVersion(
                 TestFeatureVersion.TEST_1,
-                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_2_8_IV0.featureLevel())
+                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_0_IV1.featureLevel())
             )
         );
 

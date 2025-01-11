@@ -276,7 +276,7 @@ public class CustomMaxAggregator implements Processor&lt;String, Long&gt; {
             <p>
                 To begin with, instantiate your processor and initialize it with the mock context:
             <pre class="line-numbers"><code class="language-java">final Processor processorUnderTest = ...;
-final MockProcessorContext context = new MockProcessorContext();
+final MockProcessorContext&lt;String, Long&gt; context = new MockProcessorContext&lt;&gt;();
 processorUnderTest.init(context);</code></pre>
             If you need to pass configuration to your processor or set the default serdes, you can create the mock with
             config:
@@ -284,15 +284,15 @@ processorUnderTest.init(context);</code></pre>
 props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
 props.put(&quot;some.other.config&quot;, &quot;some config value&quot;);
-final MockProcessorContext context = new MockProcessorContext(props);</code></pre>
+final MockProcessorContext&lt;String, Long&gt; context = new MockProcessorContext&lt;&gt;(props);
             </p>
             <b>Captured data</b>
             <p>
                 The mock will capture any values that your processor forwards. You can make assertions on them:
             <pre class="line-numbers"><code class="language-java">processorUnderTest.process("key", "value");
 
-final Iterator&lt;CapturedForward&gt; forwarded = context.forwarded().iterator();
-assertEquals(forwarded.next().keyValue(), new KeyValue&lt;&gt;(..., ...));
+final Iterator&lt;CapturedForward&lt;? extends String, ? extends Long&gt;&gt; forwarded = context.forwarded().iterator();
+assertEquals(forwarded.next().record(), new Record&lt;&gt;(..., ...));
 assertFalse(forwarded.hasNext());
 
 // you can reset forwards to clear the captured data. This may be helpful in constructing longer scenarios.
@@ -301,7 +301,7 @@ context.resetForwards();
 assertEquals(context.forwarded().size(), 0);</code></pre>
             If your processor forwards to specific child processors, you can query the context for captured data by
             child name:
-            <pre class="line-numbers"><code class="language-java">final List&lt;CapturedForward&gt; captures = context.forwarded("childProcessorName");</code></pre>
+            <pre class="line-numbers"><code class="language-java">final List&lt;CapturedForward&lt;? extends String, ? extends Long&gt;&gt; captures = context.forwarded("childProcessorName");</code></pre>
             The mock also captures whether your processor has called <code>commit()</code> on the context:
             <pre class="line-numbers"><code class="language-java">assertTrue(context.committed());
 
@@ -312,13 +312,9 @@ assertFalse(context.committed());</code></pre>
             </p>
             <b>Setting record metadata</b>
             <p>
-                In case your processor logic depends on the record metadata (topic, partition, offset, or timestamp),
-                you can set them on the context, either all together or individually:
-            <pre class="line-numbers"><code class="language-java">context.setRecordMetadata(&quot;topicName&quot;, /*partition*/ 0, /*offset*/ 0L, /*timestamp*/ 0L);
-context.setTopic(&quot;topicName&quot;);
-context.setPartition(0);
-context.setOffset(0L);
-context.setTimestamp(0L);</code></pre>
+                In case your processor logic depends on the record metadata (topic, partition, offset),
+                you can set them on the context:
+            <pre class="line-numbers"><code class="language-java">context.setRecordMetadata(&quot;topicName&quot;, /*partition*/ 0, /*offset*/ 0L);</code></pre>
             Once these are set, the context will continue returning the same values, until you set new ones.
             </p>
             <b>State stores</b>

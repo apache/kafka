@@ -172,7 +172,6 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @Flaky("KAFKA-18036")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testReadCommittedConsumerShouldNotSeeUndecidedData(quorum: String, groupProtocol: String): Unit = {
@@ -711,6 +710,7 @@ class TransactionsTest extends IntegrationTestHarness {
     assertThrows(classOf[IllegalStateException], () => producer.initTransactions())
   }
 
+  @Flaky("KAFKA-18035")
   @ParameterizedTest
   @CsvSource(Array(
     "kraft,classic,false",
@@ -850,7 +850,6 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @Flaky("KAFKA-18306")
   @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isTV2Enabled={2}")
   @CsvSource(Array(
     "kraft, classic, false",
@@ -923,6 +922,22 @@ class TransactionsTest extends IntegrationTestHarness {
     } else {
       assertTrue((initialProducerEpoch + 1).toShort <= producerStateEntry.producerEpoch)
     }
+  }
+
+  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isTV2Enabled={2}")
+  @CsvSource(Array(
+    "kraft, consumer, true",
+  ))
+  def testEmptyAbortAfterCommit(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+    val producer = transactionalProducers.head
+
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 1, "4", "4", willBeCommitted = false))
+    producer.commitTransaction()
+
+    producer.beginTransaction()
+    producer.abortTransaction()
   }
 
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
