@@ -1007,7 +1007,7 @@ public class RequestResponseTest {
             case DELETE_TOPICS: return createDeleteTopicsRequest(version);
             case DELETE_RECORDS: return createDeleteRecordsRequest(version);
             case INIT_PRODUCER_ID: return createInitPidRequest(version);
-            case OFFSET_FOR_LEADER_EPOCH: return createLeaderEpochRequestForReplica(version, 1);
+            case OFFSET_FOR_LEADER_EPOCH: return createLeaderEpochRequestForReplica(1);
             case ADD_PARTITIONS_TO_TXN: return createAddPartitionsToTxnRequest(version);
             case ADD_OFFSETS_TO_TXN: return createAddOffsetsToTxnRequest(version);
             case END_TXN: return createEndTxnRequest(version);
@@ -1747,7 +1747,7 @@ public class RequestResponseTest {
                 .setTopicName("topic1")
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(singletonList(partitionData))));
-        return new AlterPartitionRequest.Builder(data, version >= 1).build(version);
+        return new AlterPartitionRequest.Builder(data).build(version);
     }
 
     private AlterPartitionResponse createAlterPartitionResponse(int version) {
@@ -2905,9 +2905,9 @@ public class RequestResponseTest {
         return OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs).build();
     }
 
-    private OffsetsForLeaderEpochRequest createLeaderEpochRequestForReplica(short version, int replicaId) {
+    private OffsetsForLeaderEpochRequest createLeaderEpochRequestForReplica(int replicaId) {
         OffsetForLeaderTopicCollection epochs = createOffsetForLeaderTopicCollection();
-        return OffsetsForLeaderEpochRequest.Builder.forFollower(version, epochs, replicaId).build();
+        return OffsetsForLeaderEpochRequest.Builder.forFollower(epochs, replicaId).build();
     }
 
     private OffsetsForLeaderEpochResponse createLeaderEpochResponse() {
@@ -3010,7 +3010,7 @@ public class RequestResponseTest {
     private WriteTxnMarkersRequest createWriteTxnMarkersRequest(short version) {
         List<TopicPartition> partitions = singletonList(new TopicPartition("topic", 73));
         WriteTxnMarkersRequest.TxnMarkerEntry txnMarkerEntry = new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, 73, TransactionResult.ABORT, partitions);
-        return new WriteTxnMarkersRequest.Builder(WRITE_TXN_MARKERS.latestVersion(), singletonList(txnMarkerEntry)).build(version);
+        return new WriteTxnMarkersRequest.Builder(singletonList(txnMarkerEntry)).build(version);
     }
 
     private WriteTxnMarkersResponse createWriteTxnMarkersResponse() {
