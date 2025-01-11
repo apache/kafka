@@ -157,7 +157,6 @@ class NodeToControllerChannelManagerImpl(
         controllerInfo.listenerName,
         controllerInfo.saslMechanism,
         time,
-        config.saslInterBrokerHandshakeRequestEnable,
         logContext
       )
       channelBuilder match {
