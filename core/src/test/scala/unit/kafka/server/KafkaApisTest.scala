@@ -616,6 +616,35 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testIncrementalAlterConfigsWithAuthorizer(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+
+    val authorizedResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "authorizedResource")
+    val unauthorizedResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "unauthorizedResource")
+
+    val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
+
+    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(Seq(authorizedResource, unauthorizedResource))
+      .build(requestHeader.apiVersion)
+    val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
+
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleIncrementalAlterConfigsRequest(request)
+
+    verify(authorizer, times(2)).authorize(any(), any())
+  }
+
+  private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
+    val resourceMap = configResources.map(configResource => {
+      configResource -> Set(
+        new AlterConfigOp(new ConfigEntry("foo", "bar"),
+        OpType.SET)).asJavaCollection
+    }).toMap.asJava
+
+    new IncrementalAlterConfigsRequest.Builder(resourceMap, false)
+  }
+
+  @Test
   def testAlterClientQuotasWithAuthorizer(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
 
