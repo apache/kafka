@@ -616,19 +616,24 @@ class KafkaApisTest extends Logging {
   def testIncrementalAlterConfigsWithAuthorizer(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
 
-    val authorizedResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "authorizedResource")
-    val unauthorizedResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "unauthorizedResource")
+    val localResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "localResource")
+    val forwardedResource = new ConfigResource(ConfigResource.Type.GROUP, "forwardedResource")
 
     val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
 
-    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(Seq(authorizedResource, unauthorizedResource))
+    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(Seq(localResource, forwardedResource))
       .build(requestHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
 
-    verify(authorizer, times(2)).authorize(any(), any())
+    verify(authorizer, times(1)).authorize(any(), any())
+    verify(forwardingManager, times(1)).forwardRequest(
+      any(),
+      any(),
+      any()
+    )
   }
 
   private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
