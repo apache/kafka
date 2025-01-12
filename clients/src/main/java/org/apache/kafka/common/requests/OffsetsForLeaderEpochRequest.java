@@ -65,11 +65,12 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             return new Builder((short) 3, ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), data);
         }
 
-        public static Builder forFollower(short version, OffsetForLeaderTopicCollection epochsByPartition, int replicaId) {
+        public static Builder forFollower(OffsetForLeaderTopicCollection epochsByPartition, int replicaId) {
             OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
             data.setReplicaId(replicaId);
             data.setTopics(epochsByPartition);
-            return new Builder(version, version, data);
+            // If we introduce new versions, we should gate them behind the appropriate metadata version
+            return new Builder((short) 4, (short) 4, data);
         }
 
         @Override
