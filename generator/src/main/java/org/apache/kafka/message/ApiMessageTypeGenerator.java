@@ -355,16 +355,6 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 buffer.decrementIndent();
                 continue;
             }
-            if (type.equals("request") && apiKey == 7) {
-                buffer.printf("// Version 0 of ControlledShutdownRequest has a non-standard request header%n");
-                buffer.printf("// which does not include clientId.  Version 1 of ControlledShutdownRequest%n");
-                buffer.printf("// and later use the standard request header.%n");
-                buffer.printf("if (_version == 0) {%n");
-                buffer.incrementIndent();
-                buffer.printf("return (short) 0;%n");
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
             ApiData data = entry.getValue();
             MessageSpec spec;
             if (type.equals("request")) {
