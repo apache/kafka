@@ -321,7 +321,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
         error = flushError.get();
         if (error != null) {
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.milliseconds() - started);
             offsetWriter.cancelFlush();
             throw maybeWrapProducerSendException(
                     "Failed to flush offsets and/or records for task " + id,

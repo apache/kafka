@@ -22,11 +22,10 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyConfig;
-import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
+import org.apache.kafka.streams.internals.AutoOffsetResetInternal;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -44,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -149,13 +149,21 @@ public class InternalTopologyBuilder {
     // all global topics
     private final Set<String> globalTopics = new HashSet<>();
 
+    private final Set<String> noneResetTopics = new HashSet<>();
+
     private final Set<String> earliestResetTopics = new HashSet<>();
 
     private final Set<String> latestResetTopics = new HashSet<>();
 
+    private final Map<String, Duration> durationResetTopics = new HashMap<>();
+
+    private final Set<Pattern> noneResetPatterns = new HashSet<>();
+
     private final Set<Pattern> earliestResetPatterns = new HashSet<>();
 
     private final Set<Pattern> latestResetPatterns = new HashSet<>();
+
+    private final Map<Pattern, Duration> durationResetPatterns = new HashMap<>();
 
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
 
@@ -334,7 +342,7 @@ public class InternalTopologyBuilder {
 
         @Override
         Source describe() {
-            return new Source(name, topics.size() == 0 ? null : new HashSet<>(topics), pattern);
+            return new Source(name, topics.isEmpty() ? null : new HashSet<>(topics), pattern);
         }
     }
 
@@ -433,13 +441,13 @@ public class InternalTopologyBuilder {
         // build global state stores
         for (final StoreFactory storeFactory : globalStateBuilders.values()) {
             storeFactory.configure(config);
-            globalStateStores.put(storeFactory.name(), storeFactory.build());
+            globalStateStores.put(storeFactory.storeName(), storeFactory.builder().build());
         }
 
         return this;
     }
 
-    public final void addSource(final Topology.AutoOffsetReset offsetReset,
+    public final void addSource(final AutoOffsetResetInternal offsetReset,
                                 final String name,
                                 final TimestampExtractor timestampExtractor,
                                 final Deserializer<?> keyDeserializer,
@@ -456,7 +464,7 @@ public class InternalTopologyBuilder {
         for (final String topic : topics) {
             Objects.requireNonNull(topic, "topic names cannot be null");
             validateTopicNotAlreadyRegistered(topic);
-            maybeAddToResetList(earliestResetTopics, latestResetTopics, offsetReset, topic);
+            maybeAddToResetList(noneResetTopics, earliestResetTopics, latestResetTopics, durationResetTopics, offsetReset, topic);
             rawSourceTopicNames.add(topic);
         }
 
@@ -466,7 +474,7 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public final void addSource(final Topology.AutoOffsetReset offsetReset,
+    public final void addSource(final AutoOffsetResetInternal offsetReset,
                                 final String name,
                                 final TimestampExtractor timestampExtractor,
                                 final Deserializer<?> keyDeserializer,
@@ -485,7 +493,7 @@ public class InternalTopologyBuilder {
             }
         }
 
-        maybeAddToResetList(earliestResetPatterns, latestResetPatterns, offsetReset, topicPattern);
+        maybeAddToResetList(noneResetPatterns, earliestResetPatterns, latestResetPatterns, durationResetPatterns, offsetReset, topicPattern);
 
         nodeFactories.put(name, new SourceNodeFactory<>(name, null, topicPattern, timestampExtractor, keyDeserializer, valDeserializer));
         nodeToSourcePatterns.put(name, topicPattern);
@@ -620,20 +628,20 @@ public class InternalTopologyBuilder {
                                     final boolean allowOverride,
                                     final String... processorNames) {
         Objects.requireNonNull(storeFactory, "stateStoreFactory can't be null");
-        final StoreFactory stateFactory = stateFactories.get(storeFactory.name());
+        final StoreFactory stateFactory = stateFactories.get(storeFactory.storeName());
         if (!allowOverride && stateFactory != null && !stateFactory.isCompatibleWith(storeFactory)) {
-            throw new TopologyException("A different StateStore has already been added with the name " + storeFactory.name());
+            throw new TopologyException("A different StateStore has already been added with the name " + storeFactory.storeName());
         }
-        if (globalStateBuilders.containsKey(storeFactory.name())) {
-            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeFactory.name());
+        if (globalStateBuilders.containsKey(storeFactory.storeName())) {
+            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeFactory.storeName());
         }
 
-        stateFactories.put(storeFactory.name(), storeFactory);
+        stateFactories.put(storeFactory.storeName(), storeFactory);
 
         if (processorNames != null) {
             for (final String processorName : processorNames) {
                 Objects.requireNonNull(processorName, "processor name must not be null");
-                connectProcessorAndStateStore(processorName, storeFactory.name());
+                connectProcessorAndStateStore(processorName, storeFactory.storeName());
             }
         }
         nodeGroups = null;
@@ -660,7 +668,7 @@ public class InternalTopologyBuilder {
                                      topic,
                                      processorName,
                                      stateUpdateSupplier,
-                                     storeFactory.name(),
+                                     storeFactory.storeName(),
                                      storeFactory.loggingEnabled());
         validateTopicNotAlreadyRegistered(topic);
 
@@ -682,18 +690,18 @@ public class InternalTopologyBuilder {
             keyDeserializer,
             valueDeserializer)
         );
-        storeNameToReprocessOnRestore.put(storeFactory.name(),
+        storeNameToReprocessOnRestore.put(storeFactory.storeName(),
             reprocessOnRestore ?
                 Optional.of(new ReprocessFactory<>(stateUpdateSupplier, keyDeserializer, valueDeserializer))
                 : Optional.empty());
         nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
         nodeGrouper.add(sourceName);
-        nodeFactory.addStateStore(storeFactory.name());
+        nodeFactory.addStateStore(storeFactory.storeName());
         nodeFactories.put(processorName, nodeFactory);
         nodeGrouper.add(processorName);
         nodeGrouper.unite(processorName, predecessors);
-        globalStateBuilders.put(storeFactory.name(), storeFactory);
-        connectSourceStoreAndTopic(storeFactory.name(), topic);
+        globalStateBuilders.put(storeFactory.storeName(), storeFactory);
+        connectSourceStoreAndTopic(storeFactory.storeName(), topic);
         nodeGroups = null;
     }
 
@@ -913,20 +921,27 @@ public class InternalTopologyBuilder {
                 Collections.unmodifiableSet(sourcePatterns)
             );
         }
-
     }
 
-    private <T> void maybeAddToResetList(final Collection<T> earliestResets,
+    private <T> void maybeAddToResetList(final Collection<T> noneResets,
+                                         final Collection<T> earliestResets,
                                          final Collection<T> latestResets,
-                                         final Topology.AutoOffsetReset offsetReset,
+                                         final Map<T, Duration> durationReset,
+                                         final AutoOffsetResetInternal offsetReset,
                                          final T item) {
         if (offsetReset != null) {
-            switch (offsetReset) {
+            switch (offsetReset.offsetResetStrategy()) {
+                case NONE:
+                    noneResets.add(item);
+                    break;
                 case EARLIEST:
                     earliestResets.add(item);
                     break;
                 case LATEST:
                     latestResets.add(item);
+                    break;
+                case BY_DURATION:
+                    durationReset.put(item, offsetReset.duration());
                     break;
                 default:
                     throw new TopologyException(String.format("Unrecognized reset format %s", offsetReset));
@@ -1158,7 +1173,7 @@ public class InternalTopologyBuilder {
                     if (topologyConfigs != null) {
                         storeFactory.configure(topologyConfigs.applicationConfigs);
                     }
-                    store = storeFactory.build();
+                    store = storeFactory.builder().build();
                     stateStoreMap.put(stateStoreName, store);
                 } else {
                     store = globalStateStores.get(stateStoreName);
@@ -1258,8 +1273,8 @@ public class InternalTopologyBuilder {
                 // if the node is connected to a state store whose changelog topics are not predefined,
                 // add to the changelog topics
                 for (final StoreFactory stateFactory : stateFactories.values()) {
-                    if (stateFactory.connectedProcessorNames().contains(node) && storeToChangelogTopic.containsKey(stateFactory.name())) {
-                        final String topicName = storeToChangelogTopic.get(stateFactory.name());
+                    if (stateFactory.connectedProcessorNames().contains(node) && storeToChangelogTopic.containsKey(stateFactory.storeName())) {
+                        final String topicName = storeToChangelogTopic.get(stateFactory.storeName());
                         if (!stateChangelogTopics.containsKey(topicName)) {
                             final InternalTopicConfig internalTopicConfig =
                                 createChangelogTopicConfig(stateFactory, topicName);
@@ -1345,19 +1360,30 @@ public class InternalTopologyBuilder {
     }
 
     public boolean hasOffsetResetOverrides() {
-        return !(earliestResetTopics.isEmpty() && earliestResetPatterns.isEmpty()
-            && latestResetTopics.isEmpty() && latestResetPatterns.isEmpty());
+        return noneResetTopics.size() + noneResetPatterns.size()
+            + earliestResetTopics.size() + earliestResetPatterns.size()
+            + latestResetTopics.size() + latestResetPatterns.size()
+            + durationResetTopics.size() + durationResetPatterns.size() > 0;
     }
 
     public AutoOffsetResetStrategy offsetResetStrategy(final String topic) {
-        if (maybeDecorateInternalSourceTopics(earliestResetTopics).contains(topic) ||
+        final Optional<Duration> resetDuration;
+
+        if (maybeDecorateInternalSourceTopics(noneResetTopics).contains(topic) ||
+            noneResetPatterns.stream().anyMatch(p -> p.matcher(topic).matches())) {
+            return AutoOffsetResetStrategy.NONE;
+        } else if (maybeDecorateInternalSourceTopics(earliestResetTopics).contains(topic) ||
             earliestResetPatterns.stream().anyMatch(p -> p.matcher(topic).matches())) {
             return AutoOffsetResetStrategy.EARLIEST;
         } else if (maybeDecorateInternalSourceTopics(latestResetTopics).contains(topic) ||
             latestResetPatterns.stream().anyMatch(p -> p.matcher(topic).matches())) {
             return AutoOffsetResetStrategy.LATEST;
+        } else if (maybeDecorateInternalSourceTopics(durationResetTopics.keySet()).contains(topic)) {
+            return AutoOffsetResetStrategy.fromString("by_duration:" + durationResetTopics.get(topic).toString());
+        } else if ((resetDuration = findDuration(topic)).isPresent()) {
+            return AutoOffsetResetStrategy.fromString("by_duration:" + resetDuration.get());
         } else if (containsTopic(topic)) {
-            return AutoOffsetResetStrategy.NONE;
+            return null;
         } else {
             throw new IllegalStateException(String.format(
                 "Unable to lookup offset reset strategy for the following topic as it does not exist in the topology%s: %s",
@@ -1365,6 +1391,19 @@ public class InternalTopologyBuilder {
                 topic)
             );
         }
+    }
+
+    private Optional<Duration> findDuration(final String topic) {
+        final List<Duration> resetDuration = durationResetPatterns.entrySet().stream()
+            .filter(e -> e.getKey().matcher(topic).matches())
+            .map(Map.Entry::getValue)
+            .collect(Collectors.toList());
+
+        if (resetDuration.size() > 1) {
+            throw new IllegalStateException("Found more than one reset duration for topic: " + topic);
+        }
+
+        return resetDuration.isEmpty() ? Optional.empty() : resetDuration.stream().findAny();
     }
 
     /**
@@ -1420,7 +1459,7 @@ public class InternalTopologyBuilder {
             }
         }
         final Set<Set<String>> uniqueCopartitionGroups = new HashSet<>(topicsToCopartitionGroup.values());
-        return Collections.unmodifiableList(new ArrayList<>(uniqueCopartitionGroups));
+        return List.copyOf(uniqueCopartitionGroups);
     }
 
     private List<String> maybeDecorateInternalSourceTopics(final Collection<String> sourceTopics) {
@@ -1448,9 +1487,10 @@ public class InternalTopologyBuilder {
                                             + "applicationId hasn't been set. Call "
                                             + "setApplicationId first");
         }
-        final String prefix = topologyConfigs == null ?
-                                applicationId :
-                                ProcessorContextUtils.topicNamePrefix(topologyConfigs.applicationConfigs.originals(), applicationId);
+
+        final String prefix = topologyConfigs == null
+            ? applicationId
+            : ProcessorContextUtils.topicNamePrefix(topologyConfigs.applicationConfigs.originals(), applicationId);
 
         if (hasNamedTopology()) {
             return prefix + "-" + topologyName + "-" + topic;
@@ -1458,7 +1498,6 @@ public class InternalTopologyBuilder {
             return prefix + "-" + topic;
         }
     }
-
 
     void initializeSubscription() {
         if (usesPatternSubscription()) {

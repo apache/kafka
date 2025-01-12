@@ -46,13 +46,9 @@ import java.util.Set;
  *     to {@link org.apache.kafka.streams.StreamsBuilder#StreamsBuilder(TopologyConfig)}</li>
  * </ul>
  */
-public interface StoreFactory {
+public interface StoreFactory extends ConfigurableStore {
 
-    default void configure(final StreamsConfig config) {
-        // do nothing
-    }
-
-    StateStore build();
+    StoreBuilder<?> builder();
 
     long retentionPeriod();
 
@@ -62,7 +58,7 @@ public interface StoreFactory {
 
     boolean loggingEnabled();
 
-    String name();
+    String storeName();
 
     boolean isWindowStore();
 
@@ -76,7 +72,7 @@ public interface StoreFactory {
 
     boolean isCompatibleWith(StoreFactory storeFactory);
 
-    class FactoryWrappingStoreBuilder<T extends StateStore> implements StoreBuilder<T> {
+    class FactoryWrappingStoreBuilder<T extends StateStore> implements StoreBuilder<T>, ConfigurableStore {
 
         private final StoreFactory storeFactory;
 
@@ -86,6 +82,10 @@ public interface StoreFactory {
 
         public StoreFactory storeFactory() {
             return storeFactory;
+        }
+
+        public void configure(final StreamsConfig config) {
+            storeFactory.configure(config);
         }
 
         @Override
@@ -132,7 +132,7 @@ public interface StoreFactory {
         @SuppressWarnings("unchecked")
         @Override
         public T build() {
-            return (T) storeFactory.build();
+            return (T) storeFactory.builder().build();
         }
 
         @Override
@@ -147,7 +147,7 @@ public interface StoreFactory {
 
         @Override
         public String name() {
-            return storeFactory.name();
+            return storeFactory.storeName();
         }
     }
 

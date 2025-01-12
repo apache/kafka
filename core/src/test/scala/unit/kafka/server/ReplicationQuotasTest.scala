@@ -33,7 +33,7 @@ import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, 
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT
 import org.apache.kafka.controller.ControllerRequestContextUtil
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
@@ -88,7 +88,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       * regular replication works as expected.
       */
 
-    brokers = (100 to 105).map { id => createBroker(fromProps(createBrokerConfig(id, zkConnectOrNull))) }
+    brokers = (100 to 105).map { id => createBroker(fromProps(createBrokerConfig(id))) }
 
     //Given six partitions, led on nodes 0,1,2,3,4,5 but with followers on node 6,7 (not started yet)
     //And two extra partitions 6,7, which we don't intend on throttling.
@@ -202,7 +202,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       */
 
     //2 brokers with 1MB Segment Size & 1 partition
-    val config: Properties = createBrokerConfig(100, zkConnectOrNull)
+    val config: Properties = createBrokerConfig(100)
     config.put("log.segment.bytes", (1024 * 1024).toString)
     brokers = Seq(createBroker(fromProps(config)))
 
@@ -231,7 +231,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
     //Start the new broker (and hence start replicating)
     debug("Starting new broker")
-    brokers = brokers :+ createBroker(fromProps(createBrokerConfig(101, zkConnectOrNull)))
+    brokers = brokers :+ createBroker(fromProps(createBrokerConfig(101)))
     val start = System.currentTimeMillis()
 
     waitForOffsetsToMatch(msgCount, 0, 101)
@@ -261,7 +261,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
   def createBrokers(brokerIds: Seq[Int]): Unit = {
     brokerIds.foreach { id =>
-      brokers = brokers :+ createBroker(fromProps(createBrokerConfig(id, zkConnectOrNull)))
+      brokers = brokers :+ createBroker(fromProps(createBrokerConfig(id)))
     }
   }
 
@@ -282,7 +282,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       .setName(MetadataVersion.FEATURE_NAME)
       .setMinSupportedVersion(MetadataVersion.latestProduction().featureLevel())
       .setMaxSupportedVersion(MetadataVersion.latestTesting().featureLevel()))
-    Features.PRODUCTION_FEATURES.forEach { feature =>
+    Feature.PRODUCTION_FEATURES.forEach { feature =>
       features.add(new BrokerRegistrationRequestData.Feature()
         .setName(feature.featureName())
         .setMinSupportedVersion(feature.minimumProduction())

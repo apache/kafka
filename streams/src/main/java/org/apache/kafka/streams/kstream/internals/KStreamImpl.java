@@ -41,7 +41,6 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode.BaseRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
@@ -61,8 +60,8 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
-import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
 
@@ -120,8 +119,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     private static final String PRINTING_NAME = "KSTREAM-PRINTER-";
 
     private static final String KEY_SELECT_NAME = "KSTREAM-KEY-SELECT-";
-
-    private static final String TRANSFORMVALUES_NAME = "KSTREAM-TRANSFORMVALUES-";
 
     private static final String FOREACH_NAME = "KSTREAM-FOREACH-";
 
@@ -662,8 +659,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(tableSource, name);
         final GraphNode tableNode = new StreamToTableNode<>(
             name,
-            processorParameters,
-            materializedInternal
+            processorParameters
         );
         tableNode.setOutputVersioned(materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier);
 
@@ -1127,7 +1123,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             leftJoin);
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode =
-            new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null, null, Optional.empty());
+            new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null, null);
 
         if (leftJoin) {
             streamTableJoinNode.labels().add(GraphNode.Label.NULL_KEY_RELAXED_JOIN);
@@ -1159,16 +1155,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
 
-        Optional<String> bufferStoreName = Optional.empty();
+        Optional<StoreBuilder<?>> bufferStoreBuilder = Optional.empty();
 
         if (joinedInternal.gracePeriod() != null) {
             if (!((KTableImpl<K, ?, VO>) table).graphNode.isOutputVersioned().orElse(true)) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
-            bufferStoreName = Optional.of(name + "-Buffer");
-            final RocksDBTimeOrderedKeyValueBuffer.Builder<Object, Object> storeBuilder =
-                    new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName.get(), joinedInternal.gracePeriod(), name);
-            builder.addStateStore(StoreBuilderWrapper.wrapStoreBuilder(storeBuilder));
+            final String bufferName = name + "-Buffer";
+            bufferStoreBuilder = Optional.of(new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferName, joinedInternal.gracePeriod(), name));
         }
 
         final ProcessorSupplier<K, V, K, ? extends VR> processorSupplier = new KStreamKTableJoin<>(
@@ -1176,7 +1170,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             joiner,
             leftJoin,
             Optional.ofNullable(joinedInternal.gracePeriod()),
-            bufferStoreName);
+            bufferStoreBuilder
+        );
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(
@@ -1184,8 +1179,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             processorParameters,
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
             this.name,
-            joinedInternal.gracePeriod(),
-            bufferStoreName
+            joinedInternal.gracePeriod()
         );
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
@@ -1202,104 +1196,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             false,
             streamTableJoinNode,
             builder);
-    }
-
-    @Override
-    @Deprecated
-    public <VR> KStream<K, VR> flatTransformValues(final org.apache.kafka.streams.kstream.ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
-                                                   final String... stateStoreNames) {
-        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-        return doFlatTransformValues(
-            toValueTransformerWithKeySupplier(valueTransformerSupplier),
-            NamedInternal.empty(),
-            stateStoreNames);
-    }
-
-    @Override
-    @Deprecated
-    public <VR> KStream<K, VR> flatTransformValues(final org.apache.kafka.streams.kstream.ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
-                                                   final Named named,
-                                                   final String... stateStoreNames) {
-        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-        return doFlatTransformValues(
-            toValueTransformerWithKeySupplier(valueTransformerSupplier),
-            named,
-            stateStoreNames);
-    }
-
-    @Override
-    @Deprecated
-    public <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
-                                                   final String... stateStoreNames) {
-        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-        return doFlatTransformValues(valueTransformerSupplier, NamedInternal.empty(), stateStoreNames);
-    }
-
-    @Override
-    @Deprecated
-    public <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
-                                                   final Named named,
-                                                   final String... stateStoreNames) {
-        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-        return doFlatTransformValues(valueTransformerSupplier, named, stateStoreNames);
-    }
-
-    private <VR> KStream<K, VR> doFlatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerWithKeySupplier,
-                                                      final Named named,
-                                                      final String... stateStoreNames) {
-        Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
-        for (final String stateStoreName : stateStoreNames) {
-            Objects.requireNonNull(stateStoreName, "stateStoreNames can't contain `null` as store name");
-        }
-        ApiUtils.checkSupplier(valueTransformerWithKeySupplier);
-
-        final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, TRANSFORMVALUES_NAME);
-        final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
-            name,
-            new ProcessorParameters<>(new KStreamFlatTransformValues<>(valueTransformerWithKeySupplier), name),
-            stateStoreNames);
-        transformNode.setValueChangingOperation(true);
-
-        builder.addGraphNode(graphNode, transformNode);
-
-        // cannot inherit value serde
-        return new KStreamImpl<>(
-            name,
-            keySerde,
-            null,
-            subTopologySourceNodes,
-            repartitionRequired,
-            transformNode,
-            builder);
-    }
-
-    @Override
-    @Deprecated
-    public void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
-                        final String... stateStoreNames) {
-        process(processorSupplier, Named.as(builder.newProcessorName(PROCESSOR_NAME)), stateStoreNames);
-    }
-
-    @Override
-    @Deprecated
-    public void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
-                        final Named named,
-                        final String... stateStoreNames) {
-        Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
-        Objects.requireNonNull(named, "named can't be null");
-        Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
-        ApiUtils.checkSupplier(processorSupplier);
-        for (final String stateStoreName : stateStoreNames) {
-            Objects.requireNonNull(stateStoreName, "stateStoreNames can't be null");
-        }
-
-        final String name = new NamedInternal(named).name();
-        final StatefulProcessorNode<? super K, ? super V> processNode = new StatefulProcessorNode<>(
-            name,
-            new ProcessorParameters<>(processorSupplier, name),
-            stateStoreNames);
-
-        builder.addGraphNode(graphNode, processNode);
     }
 
     @Override

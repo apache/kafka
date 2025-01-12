@@ -66,6 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -332,6 +333,30 @@ public class ApplicationEventProcessorTest {
         // verify member state doesn't transition to JOINING.
         verify(membershipManager, never()).onConsumerPoll();
         assertDoesNotThrow(() -> event.future().get());
+    }
+
+    @Test
+    public void testTopicPatternSubscriptionTriggersJoin() {
+        TopicPatternSubscriptionChangeEvent event = new TopicPatternSubscriptionChangeEvent(
+            Pattern.compile("topic.*"), Optional.of(new MockRebalanceListener()), 12345);
+        setupProcessor(true);
+        Cluster cluster = mock(Cluster.class);
+        when(metadata.fetch()).thenReturn(cluster);
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+
+        // Initial subscription where no topics match the pattern. Membership manager
+        // should still be notified so it joins if not in the group (with empty subscription).
+        when(subscriptionState.subscribeFromPattern(any())).thenReturn(false);
+        processor.process(event);
+        verify(membershipManager).onSubscriptionUpdated();
+
+        clearInvocations(membershipManager);
+
+        // Subscription where some topics match so subscription is updated. Membership manager
+        // should be notified so it joins if not in the group.
+        when(subscriptionState.subscribeFromPattern(any())).thenReturn(true);
+        processor.process(event);
+        verify(membershipManager).onSubscriptionUpdated();
     }
 
     @Test

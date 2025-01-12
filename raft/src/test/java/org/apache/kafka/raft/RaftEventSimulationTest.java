@@ -35,7 +35,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -793,7 +793,7 @@ public class RaftEventSimulationTest {
                 clusterId,
                 Collections.emptyList(),
                 endpointsFromId(nodeId, channel.listenerName()),
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
                 quorumConfig
@@ -958,8 +958,7 @@ public class RaftEventSimulationTest {
          */
         @Override
         public boolean acceptOutbound(RaftMessage message) {
-            if (message instanceof RaftRequest.Outbound) {
-                RaftRequest.Outbound request = (RaftRequest.Outbound) message;
+            if (message instanceof RaftRequest.Outbound request) {
                 InetSocketAddress destination = InetSocketAddress.createUnresolved(
                     request.destination().host(),
                     request.destination().port()

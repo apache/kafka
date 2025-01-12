@@ -142,13 +142,24 @@ final class KafkaMetadataLogTest {
 
     // Test finding the first epoch
     log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords, firstEpoch)).get().close()
-    log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, firstEpoch)).get().close()
-    log.createNewSnapshot(new OffsetAndEpoch(1, firstEpoch)).get().close()
 
     // Test finding the second epoch
     log.createNewSnapshot(new OffsetAndEpoch(2 * numberOfRecords, secondEpoch)).get().close()
-    log.createNewSnapshot(new OffsetAndEpoch(2 * numberOfRecords - 1, secondEpoch)).get().close()
-    log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords + 1, secondEpoch)).get().close()
+  }
+
+  @Test
+  def testCreateSnapshotInMiddleOfBatch(): Unit = {
+    val numberOfRecords = 10
+    val epoch = 1
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    append(log, numberOfRecords, epoch)
+    log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords))
+
+    assertThrows(
+      classOf[IllegalArgumentException],
+      () => log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, epoch))
+    )
   }
 
   @Test
@@ -206,7 +217,7 @@ final class KafkaMetadataLogTest {
     val snapshotId = new OffsetAndEpoch(numberOfRecords-4, epoch)
     val log = buildMetadataLog(tempDir, mockTime)
 
-    append(log, numberOfRecords, epoch)
+    (1 to numberOfRecords).foreach(_ => append(log, 1, epoch))
     log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords))
     createNewSnapshot(log, snapshotId)
 
@@ -282,7 +293,7 @@ final class KafkaMetadataLogTest {
   def testCreateExistingSnapshot(): Unit = {
     val numberOfRecords = 10
     val epoch = 1
-    val snapshotId = new OffsetAndEpoch(numberOfRecords - 1, epoch)
+    val snapshotId = new OffsetAndEpoch(numberOfRecords, epoch)
     val log = buildMetadataLog(tempDir, mockTime)
 
     append(log, numberOfRecords, epoch)

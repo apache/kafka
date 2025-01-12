@@ -135,7 +135,7 @@ public class RocksDBMetricsRecorder {
     public void init(final StreamsMetricsImpl streamsMetrics,
                      final TaskId taskId) {
         Objects.requireNonNull(streamsMetrics, "Streams metrics must not be null");
-        Objects.requireNonNull(streamsMetrics, "task ID must not be null");
+        Objects.requireNonNull(taskId, "task ID must not be null");
         if (this.taskId != null && !this.taskId.equals(taskId)) {
             throw new IllegalStateException("Metrics recorder is re-initialised with different task: previous task is " +
                 this.taskId + " whereas current task is " + taskId + ". This is a bug in Kafka Streams. " +
@@ -462,8 +462,7 @@ public class RocksDBMetricsRecorder {
             writeStallDuration += valueProviders.statistics.getAndResetTickerCount(TickerType.STALL_MICROS);
             bytesWrittenDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES);
             bytesReadDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES);
-            numberOfOpenFiles += valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_OPENS)
-                - valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_CLOSES);
+            numberOfOpenFiles = -1;
             numberOfFileErrors += valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_ERRORS);
             final HistogramData memtableFlushTimeData = valueProviders.statistics.getHistogramData(HistogramType.FLUSH_TIME);
             memtableFlushTimeSum += memtableFlushTimeData.getSum();

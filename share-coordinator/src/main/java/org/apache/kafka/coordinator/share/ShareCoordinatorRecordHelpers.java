@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.share.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
@@ -33,7 +34,7 @@ public class ShareCoordinatorRecordHelpers {
                 .setGroupId(groupId)
                 .setTopicId(topicId)
                 .setPartition(partitionId),
-                ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION),
+                CoordinatorRecordType.SHARE_SNAPSHOT.id()),
             new ApiMessageAndVersion(new ShareSnapshotValue()
                 .setSnapshotEpoch(offsetData.snapshotEpoch())
                 .setStateEpoch(offsetData.stateEpoch())
@@ -46,7 +47,7 @@ public class ShareCoordinatorRecordHelpers {
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
                     .collect(Collectors.toList())),
-                ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION)
+                (short) 0)
         );
     }
 
@@ -56,7 +57,7 @@ public class ShareCoordinatorRecordHelpers {
                 .setGroupId(groupId)
                 .setTopicId(topicId)
                 .setPartition(partitionId),
-                ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
+                CoordinatorRecordType.SHARE_UPDATE.id()),
             new ApiMessageAndVersion(new ShareUpdateValue()
                 .setSnapshotEpoch(offsetData.snapshotEpoch())
                 .setLeaderEpoch(offsetData.leaderEpoch())
@@ -68,7 +69,7 @@ public class ShareCoordinatorRecordHelpers {
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
                     .collect(Collectors.toList())),
-                ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION)
+                (short) 0)
         );
     }
 }

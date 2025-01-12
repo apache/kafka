@@ -37,10 +37,10 @@
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },
     { "name": "isKRaftController", "type": "bool", "versions": "8+", "default": "false",
-      "about": "If KRaft controller id is used during migration. See KIP-866" },
+      "about": "If KRaft controller id is used during migration. See KIP-866." },
     { "name": "Type", "type": "int8", "versions": "8+",
       "default": 0, "tag": 0, "taggedVersions": "8+",
-      "about": "Indicates if this request is a Full metadata snapshot (2), Incremental (1), or Unknown (0). Using during ZK migration, see KIP-866"},
+      "about": "Indicates if this request is a Full metadata snapshot (2), Incremental (1), or Unknown (0). Using during ZK migration, see KIP-866."},
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "5+", "ignorable": true, "default": "-1",
@@ -55,7 +55,8 @@
       { "name": "PartitionStates", "type": "[]UpdateMetadataPartitionState", "versions": "5+",
         "about": "The partition that we would like to update." }
     ]},
-    { "name": "LiveBrokers", "type": "[]UpdateMetadataBroker", "versions": "0+", "fields": [
+    { "name": "LiveBrokers", "type": "[]UpdateMetadataBroker", "versions": "0+",
+      "about": "The brokers that we know about.", "fields": [
         { "name": "Id", "type": "int32", "versions": "0+", "entityType": "brokerId",
           "about": "The broker id." },
         // Version 0 of the protocol only allowed specifying a single host and
@@ -67,9 +68,9 @@
         { "name": "Endpoints", "type": "[]UpdateMetadataEndpoint", "versions": "1+", "ignorable": true,
           "about": "The broker endpoints.", "fields": [
           { "name": "Port", "type": "int32", "versions": "1+",
-            "about": "The port of this endpoint" },
+            "about": "The port of this endpoint." },
           { "name": "Host", "type": "string", "versions": "1+",
-            "about": "The hostname of this endpoint" },
+            "about": "The hostname of this endpoint." },
           { "name": "Listener", "type": "string", "versions": "3+", "ignorable": true,
             "about": "The listener name." },
           { "name": "SecurityProtocol", "type": "int16", "versions": "1+",

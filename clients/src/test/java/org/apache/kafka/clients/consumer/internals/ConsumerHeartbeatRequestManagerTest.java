@@ -31,6 +31,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -65,6 +66,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
 
+import static org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager.CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -602,6 +605,61 @@ public class ConsumerHeartbeatRequestManagerTest {
         }
     }
 
+    /**
+     * This validates the UnsupportedApiVersion the client generates while building a HB if:
+     * 1. HB API is not supported.
+     * 2. Required HB API version is not available.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG})
+    public void testUnsupportedVersionFromBroker(String errorMsg) {
+        mockResponseWithException(new UnsupportedVersionException(errorMsg), true);
+        ArgumentCaptor<ErrorEvent> errorEventArgumentCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
+        verify(backgroundEventHandler).add(errorEventArgumentCaptor.capture());
+        ErrorEvent errorEvent = errorEventArgumentCaptor.getValue();
+        assertInstanceOf(Errors.UNSUPPORTED_VERSION.exception().getClass(), errorEvent.error());
+        assertEquals(errorMsg, errorEvent.error().getMessage());
+        clearInvocations(backgroundEventHandler);
+    }
+
+    /**
+     * This validates the UnsupportedApiVersion the client generates while building a HB if:
+     * REGEX_RESOLUTION_NOT_SUPPORTED_MSG only generated on the client side.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG, REGEX_RESOLUTION_NOT_SUPPORTED_MSG})
+    public void testUnsupportedVersionFromClient(String errorMsg) {
+        mockResponseWithException(new UnsupportedVersionException(errorMsg), false);
+        ArgumentCaptor<ErrorEvent> errorEventArgumentCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
+        verify(backgroundEventHandler).add(errorEventArgumentCaptor.capture());
+        ErrorEvent errorEvent = errorEventArgumentCaptor.getValue();
+        assertInstanceOf(Errors.UNSUPPORTED_VERSION.exception().getClass(), errorEvent.error());
+        assertEquals(errorMsg, errorEvent.error().getMessage());
+        clearInvocations(backgroundEventHandler);
+    }
+
+    private void mockErrorResponse(Errors error, String exceptionCustomMsg) {
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
+        ClientResponse response = createHeartbeatResponse(
+            result.unsentRequests.get(0), error, exceptionCustomMsg);
+        result.unsentRequests.get(0).handler().onComplete(response);
+    }
+
+    private void mockResponseWithException(UnsupportedVersionException exception, boolean isFromBroker) {
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
+        ClientResponse response = createHeartbeatResponseWithException(
+            result.unsentRequests.get(0), exception, isFromBroker);
+        result.unsentRequests.get(0).handler().onComplete(response);
+    }
+
     private void assertNextHeartbeatTiming(long expectedTimeToNextHeartbeatMs) {
         long currentTimeMs = time.milliseconds();
         assertEquals(expectedTimeToNextHeartbeatMs, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
@@ -969,9 +1027,15 @@ public class ConsumerHeartbeatRequestManagerTest {
             Arguments.of(Errors.GROUP_MAX_SIZE_REACHED, true));
     }
 
+    private ClientResponse createHeartbeatResponse(NetworkClientDelegate.UnsentRequest request,
+                                                   Errors error) {
+        return createHeartbeatResponse(request, error, "stubbed error message");
+    }
+
     private ClientResponse createHeartbeatResponse(
         final NetworkClientDelegate.UnsentRequest request,
-        final Errors error
+        final Errors error,
+        final String msg
     ) {
         ConsumerGroupHeartbeatResponseData data = new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(error.code())
@@ -979,7 +1043,7 @@ public class ConsumerHeartbeatRequestManagerTest {
             .setMemberId(DEFAULT_MEMBER_ID)
             .setMemberEpoch(DEFAULT_MEMBER_EPOCH);
         if (error != Errors.NONE) {
-            data.setErrorMessage("stubbed error message");
+            data.setErrorMessage(msg);
         }
         ConsumerGroupHeartbeatResponse response = new ConsumerGroupHeartbeatResponse(data);
         return new ClientResponse(
@@ -994,6 +1058,27 @@ public class ConsumerHeartbeatRequestManagerTest {
             response);
     }
 
+    private ClientResponse createHeartbeatResponseWithException(
+        final NetworkClientDelegate.UnsentRequest request,
+        final UnsupportedVersionException exception,
+        final boolean isFromBroker
+    ) {
+        ConsumerGroupHeartbeatResponse response = null;
+        if (isFromBroker) {
+            response = new ConsumerGroupHeartbeatResponse(null);
+        }
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.CONSUMER_GROUP_HEARTBEAT, ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(), "client-id", 1),
+            request.handler(),
+            "0",
+            time.milliseconds(),
+            time.milliseconds(),
+            false,
+            exception,
+            null,
+            response);
+    }
+
     private ConsumerConfig config() {
         Properties prop = new Properties();
         prop.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -1003,7 +1088,6 @@ public class ConsumerHeartbeatRequestManagerTest {
         prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS));
         prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MS));
         prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MAX_MS));
-        prop.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_HEARTBEAT_INTERVAL_MS));
         return new ConsumerConfig(prop);
     }
 

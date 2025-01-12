@@ -103,12 +103,6 @@ public class ForwardingAdmin implements Admin {
         return delegate.describeConfigs(resources, options);
     }
 
-    @Deprecated
-    @Override
-    public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
-        return delegate.alterConfigs(configs, options);
-    }
-
     @Override
     public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
         return delegate.incrementalAlterConfigs(configs, options);

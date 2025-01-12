@@ -98,8 +98,7 @@ final class Assignment {
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || (!(o instanceof Assignment))) return false;
-        Assignment other = (Assignment) o;
+        if (o == null || (!(o instanceof Assignment other))) return false;
         return topicIdPartition.equals(other.topicIdPartition) &&
             directoryId.equals(other.directoryId) &&
             submissionTimeNs == other.submissionTimeNs &&

@@ -144,7 +144,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for the specified topics
      */
     public synchronized <K, V> KStream<K, V> stream(final Collection<String> topics) {
-        return stream(topics, Consumed.with(null, null, null, null));
+        return stream(topics, Consumed.with(null, null));
     }
 
     /**
@@ -288,7 +288,7 @@ public class StreamsBuilder {
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic) {
-        return table(topic, new ConsumedInternal<>());
+        return table(topic, Consumed.with(null, null));
     }
 
     /**

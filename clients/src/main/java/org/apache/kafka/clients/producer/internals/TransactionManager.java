@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -210,7 +211,7 @@ public class TransactionManager {
                 case UNINITIALIZED:
                     return source == READY || source == ABORTABLE_ERROR;
                 case INITIALIZING:
-                    return source == UNINITIALIZED || source == ABORTING_TRANSACTION;
+                    return source == UNINITIALIZED || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
                 case READY:
                     return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
                 case IN_TRANSACTION:
@@ -311,7 +312,6 @@ public class TransactionManager {
         throwIfPendingState("beginTransaction");
         maybeFailWithError();
         transitionTo(State.IN_TRANSACTION);
-        maybeUpdateTransactionV2Enabled();
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
@@ -347,10 +347,17 @@ public class TransactionManager {
             isTransactionV2Enabled
         );
 
+        // Maybe update the transaction version here before we enqueue the EndTxn request so there are no races with
+        // completion of the EndTxn request. Since this method may update clientSideEpochBumpRequired, we want to update
+        // before the check below, but we also want to call it after the EndTxnRequest.Builder so we complete the transaction
+        // with the same version as it started.
+        maybeUpdateTransactionV2Enabled(false);
+
         EndTxnHandler handler = new EndTxnHandler(builder);
         enqueueRequest(handler);
 
         // If an epoch bump is required for recovery, initialize the transaction after completing the EndTxn request.
+        // If we are upgrading to TV2 transactions on the next transaction, also bump the epoch.
         if (clientSideEpochBumpRequired) {
             return initializeTransactions(this.producerIdAndEpoch);
         }
@@ -369,15 +376,22 @@ public class TransactionManager {
                 "(currentState= " + currentState + ")");
         }
 
-        log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
-        AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
-            new AddOffsetsToTxnRequestData()
-                .setTransactionalId(transactionalId)
-                .setProducerId(producerIdAndEpoch.producerId)
-                .setProducerEpoch(producerIdAndEpoch.epoch)
-                .setGroupId(groupMetadata.groupId())
-        );
-        AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
+        // In transaction V2, the client will skip sending AddOffsetsToTxn before sending txnOffsetCommit.
+        TxnRequestHandler handler;
+        if (isTransactionV2Enabled()) {
+            log.debug("Begin adding offsets {} for consumer group {} to transaction with transaction protocol V2", offsets, groupMetadata);
+            handler = txnOffsetCommitHandler(null, offsets, groupMetadata);
+        } else {
+            log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
+            AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
+                    new AddOffsetsToTxnRequestData()
+                            .setTransactionalId(transactionalId)
+                            .setProducerId(producerIdAndEpoch.producerId)
+                            .setProducerEpoch(producerIdAndEpoch.epoch)
+                            .setGroupId(groupMetadata.groupId())
+            );
+            handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
+        }
 
         enqueueRequest(handler);
         return handler.result;
@@ -394,7 +408,10 @@ public class TransactionManager {
             } else if (currentState != State.IN_TRANSACTION) {
                 throw new IllegalStateException("Cannot add partition " + topicPartition +
                     " to transaction while in state  " + currentState);
-            } else if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition)) {
+            } else if (isTransactionV2Enabled()) {
+                txnPartitionMap.getOrCreate(topicPartition);
+                partitionsInTransaction.add(topicPartition);
+            } else if (transactionContainsPartition(topicPartition) || isPartitionPendingAdd(topicPartition)) {
                 return;
             } else {
                 log.debug("Begin adding new partition {} to transaction", topicPartition);
@@ -426,15 +443,26 @@ public class TransactionManager {
         return transactionalId != null;
     }
 
-    // Check all the finalized features from apiVersions to whether the transaction V2 is enabled.
-    public synchronized void maybeUpdateTransactionV2Enabled() {
+    /**
+     *  Check all the finalized features from apiVersions to verify whether the transaction V2 is enabled.
+     *  Sets clientSideEpochBumpRequired if upgrading to V2 since we need to bump the epoch.
+     *  This is because V2 no longer adds partitions explicitly and there are some edge cases on upgrade
+     *  that can be avoided by fencing the old V1 transaction epoch. For example, we won't consider
+     *  partitions from the previous transaction as already added to the new V2 transaction if the epoch is fenced.
+     */
+
+    public synchronized void maybeUpdateTransactionV2Enabled(boolean onInitiatialization) {
         if (latestFinalizedFeaturesEpoch >= apiVersions.getMaxFinalizedFeaturesEpoch()) {
             return;
         }
         ApiVersions.FinalizedFeaturesInfo info = apiVersions.getFinalizedFeaturesInfo();
         latestFinalizedFeaturesEpoch = info.finalizedFeaturesEpoch;
         Short transactionVersion = info.finalizedFeatures.get("transaction.version");
+        boolean wasTransactionV2Enabled = isTransactionV2Enabled;
         isTransactionV2Enabled = transactionVersion != null && transactionVersion >= 2;
+        log.debug("Updating isTV2 enabled to {} with FinalizedFeaturesEpoch {}", isTransactionV2Enabled, latestFinalizedFeaturesEpoch);
+        if (!onInitiatialization && !wasTransactionV2Enabled && isTransactionV2Enabled)
+            clientSideEpochBumpRequired = true;
     }
 
     public boolean isTransactionV2Enabled() {
@@ -495,11 +523,6 @@ public class TransactionManager {
         } else {
             transitionToFatalError(fatalException);
         }
-    }
-
-    // visible for testing
-    synchronized boolean isPartitionAdded(TopicPartition partition) {
-        return partitionsInTransaction.contains(partition);
     }
 
     // visible for testing
@@ -695,7 +718,8 @@ public class TransactionManager {
         if (exception instanceof ClusterAuthorizationException
                 || exception instanceof TransactionalIdAuthorizationException
                 || exception instanceof ProducerFencedException
-                || exception instanceof UnsupportedVersionException) {
+                || exception instanceof UnsupportedVersionException
+                || exception instanceof InvalidPidMappingException) {
             transitionToFatalError(exception);
         } else if (isTransactional()) {
             if (needToTriggerEpochBumpFromClient() && !isCompleting()) {
@@ -830,7 +854,7 @@ public class TransactionManager {
             return null;
         }
 
-        if (nextRequestHandler.isEndTxn() && !transactionStarted) {
+        if (nextRequestHandler.isEndTxn() && (!isTransactionV2Enabled() && !transactionStarted)) {
             nextRequestHandler.result.done();
             if (currentState != State.FATAL_ERROR) {
                 log.debug("Not sending EndTxn for completed transaction since no partitions " +
@@ -908,7 +932,7 @@ public class TransactionManager {
     }
 
     // visible for testing
-    synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
+    public synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
         return partitionsInTransaction.contains(topicPartition);
     }
 
@@ -1142,8 +1166,13 @@ public class TransactionManager {
                 pendingTxnOffsetCommits,
                 groupMetadata.memberId(),
                 groupMetadata.generationId(),
-                groupMetadata.groupInstanceId()
+                groupMetadata.groupInstanceId(),
+                isTransactionV2Enabled()
             );
+        if (result == null) {
+            // In this case, transaction V2 is in use.
+            return new TxnOffsetCommitHandler(builder);
+        }
         return new TxnOffsetCommitHandler(result, builder);
     }
 
@@ -1640,6 +1669,8 @@ public class TransactionManager {
                 // When Transaction Version 2 is enabled, the end txn request 5+ is used,
                 // it mandates bumping the epoch after every transaction.
                 // If the epoch overflows, a new producerId is returned with epoch set to 0.
+                // Note, we still may see EndTxn TV1 (< 5) responses when the producer has upgraded to TV2 due to the upgrade
+                // occurring at the end of beginCompletingTransaction. The next transaction started should be TV2.
                 if (endTxnResponse.data().producerId() != -1) {
                     ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
                         endTxnResponse.data().producerId(),
@@ -1738,6 +1769,11 @@ public class TransactionManager {
         private TxnOffsetCommitHandler(TransactionalRequestResult result,
                                        TxnOffsetCommitRequest.Builder builder) {
             super(result);
+            this.builder = builder;
+        }
+
+        private TxnOffsetCommitHandler(TxnOffsetCommitRequest.Builder builder) {
+            super("TxnOffsetCommitHandler");
             this.builder = builder;
         }
 

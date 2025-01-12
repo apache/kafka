@@ -20,7 +20,7 @@ import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.message.DescribeGroupsResponseData.{DescribedGroup, DescribedGroupMember}
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -106,6 +106,8 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
           new DescribedGroup()
             .setGroupId("grp-unknown")
             .setGroupState(ClassicGroupState.DEAD.toString) // Return DEAD group when the group does not exist.
+            .setErrorCode(if (version >= 6) Errors.GROUP_ID_NOT_FOUND.code() else Errors.NONE.code())
+            .setErrorMessage(if (version >= 6) "Group grp-unknown not found." else null)
         ),
         describeGroups(
           groupIds = List("grp-1", "grp-2", "grp-unknown"),

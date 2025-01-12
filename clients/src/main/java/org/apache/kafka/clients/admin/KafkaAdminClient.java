@@ -182,8 +182,6 @@ import org.apache.kafka.common.requests.AddRaftVoterRequest;
 import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasRequest;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
-import org.apache.kafka.common.requests.AlterConfigsRequest;
-import org.apache.kafka.common.requests.AlterConfigsResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsRequest;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
@@ -2506,10 +2504,14 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 if (!useMetadataRequest) {
+                    if (metadataManager.usingBootstrapControllers() && options.includeFencedBrokers()) {
+                        throw new IllegalArgumentException("Cannot request fenced brokers from controller endpoint");
+                    }
                     return new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
                         .setIncludeClusterAuthorizedOperations(options.includeAuthorizedOperations())
                         .setEndpointType(metadataManager.usingBootstrapControllers() ?
-                                EndpointType.CONTROLLER.id() : EndpointType.BROKER.id()));
+                                EndpointType.CONTROLLER.id() : EndpointType.BROKER.id())
+                        .setIncludeFencedBrokers(options.includeFencedBrokers()));
                 } else {
                     // Since this only requests node information, it's safe to pass true for allowAutoTopicCreation (and it
                     // simplifies communication with older brokers)
@@ -2525,7 +2527,6 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 if (!useMetadataRequest) {
                     DescribeClusterResponse response = (DescribeClusterResponse) abstractResponse;
-
                     Errors error = Errors.forCode(response.data().errorCode());
                     if (error != Errors.NONE) {
                         ApiError apiError = new ApiError(error, response.data().errorMessage());
@@ -2570,6 +2571,12 @@ public class KafkaAdminClient extends AdminClient {
                     return false;
                 }
                 if (useMetadataRequest) {
+                    return false;
+                }
+
+                // If unsupportedVersion exception was caused by the option to include fenced brokers (only supported for version 2+)
+                // then we should not fall back to the metadataRequest.
+                if (options.includeFencedBrokers()) {
                     return false;
                 }
 
@@ -2866,72 +2873,6 @@ public class KafkaAdminClient extends AdminClient {
                 throw new IllegalArgumentException("Unexpected config source " + source);
         }
         return configSource;
-    }
-
-    @Override
-    @Deprecated
-    public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
-        final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
-        // We must make a separate AlterConfigs request for every BROKER resource we want to alter
-        // and send the request to that specific node. Other resources are grouped together into
-        // a single request that may be sent to any node.
-        final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
-
-        for (ConfigResource resource : configs.keySet()) {
-            Integer node = nodeFor(resource);
-            if (node != null) {
-                NodeProvider nodeProvider = new ConstantBrokerOrActiveKController(node);
-                allFutures.putAll(alterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
-            } else
-                unifiedRequestResources.add(resource);
-        }
-        if (!unifiedRequestResources.isEmpty())
-          allFutures.putAll(alterConfigs(configs, options, unifiedRequestResources, new LeastLoadedBrokerOrActiveKController()));
-        return new AlterConfigsResult(new HashMap<>(allFutures));
-    }
-
-    private Map<ConfigResource, KafkaFutureImpl<Void>> alterConfigs(Map<ConfigResource, Config> configs,
-                                                                    final AlterConfigsOptions options,
-                                                                    Collection<ConfigResource> resources,
-                                                                    NodeProvider nodeProvider) {
-        final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>();
-        final Map<ConfigResource, AlterConfigsRequest.Config> requestMap = new HashMap<>(resources.size());
-        for (ConfigResource resource : resources) {
-            List<AlterConfigsRequest.ConfigEntry> configEntries = new ArrayList<>();
-            for (ConfigEntry configEntry: configs.get(resource).entries())
-                configEntries.add(new AlterConfigsRequest.ConfigEntry(configEntry.name(), configEntry.value()));
-            requestMap.put(resource, new AlterConfigsRequest.Config(configEntries));
-            futures.put(resource, new KafkaFutureImpl<>());
-        }
-
-        final long now = time.milliseconds();
-        runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
-
-            @Override
-            public AlterConfigsRequest.Builder createRequest(int timeoutMs) {
-                return new AlterConfigsRequest.Builder(requestMap, options.shouldValidateOnly());
-            }
-
-            @Override
-            public void handleResponse(AbstractResponse abstractResponse) {
-                AlterConfigsResponse response = (AlterConfigsResponse) abstractResponse;
-                for (Map.Entry<ConfigResource, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
-                    KafkaFutureImpl<Void> future = entry.getValue();
-                    ApiException exception = response.errors().get(entry.getKey()).exception();
-                    if (exception != null) {
-                        future.completeExceptionally(exception);
-                    } else {
-                        future.complete(null);
-                    }
-                }
-            }
-
-            @Override
-            void handleFailure(Throwable throwable) {
-                completeAllExceptionally(futures.values(), throwable);
-            }
-        }, now);
-        return futures;
     }
 
     @Override
@@ -4890,12 +4831,12 @@ public class KafkaAdminClient extends AdminClient {
                         setHost(endpoint.host()).
                         setPort(endpoint.port())));
                 return new AddRaftVoterRequest.Builder(
-                   new AddRaftVoterRequestData().
-                       setClusterId(options.clusterId().orElse(null)).
-                       setTimeoutMs(timeoutMs).
-                       setVoterId(voterId) .
-                       setVoterDirectoryId(voterDirectoryId).
-                       setListeners(listeners));
+                        new AddRaftVoterRequestData().
+                            setClusterId(options.clusterId().orElse(null)).
+                            setTimeoutMs(timeoutMs).
+                            setVoterId(voterId) .
+                            setVoterDirectoryId(voterDirectoryId).
+                            setListeners(listeners));
             }
 
             @Override

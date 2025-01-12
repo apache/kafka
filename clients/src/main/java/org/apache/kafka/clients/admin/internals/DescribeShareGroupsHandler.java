@@ -37,7 +37,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -122,7 +121,8 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                     groupMember.memberId(),
                     groupMember.clientId(),
                     groupMember.clientHost(),
-                    new ShareMemberAssignment(convertAssignment(groupMember.assignment()))
+                    new ShareMemberAssignment(convertAssignment(groupMember.assignment())),
+                    groupMember.memberEpoch()
                 ))
             );
 
@@ -131,6 +131,8 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                     memberDescriptions,
                     GroupState.parse(describedGroup.groupState()),
                     coordinator,
+                    describedGroup.groupEpoch(),
+                    describedGroup.assignmentEpoch(),
                     authorizedOperations);
             completed.put(groupIdKey, shareGroupDescription);
         }
@@ -177,17 +179,9 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                 break;
 
             case GROUP_ID_NOT_FOUND:
-                // In order to maintain compatibility with describeConsumerGroups, an unknown group ID is
-                // reported as a DEAD share group, and the admin client operation did not fail
                 log.debug("`DescribeShareGroups` request for group id {} failed because the group does not exist. {}",
                     groupId.idValue, errorMsg != null ? errorMsg : "");
-                final ShareGroupDescription shareGroupDescription =
-                    new ShareGroupDescription(groupId.idValue,
-                        Collections.emptySet(),
-                        GroupState.DEAD,
-                        coordinator,
-                        validAclOperations(describedGroup.authorizedOperations()));
-                completed.put(groupId, shareGroupDescription);
+                failed.put(groupId, error.exception(errorMsg));
                 break;
 
             default:

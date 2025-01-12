@@ -29,7 +29,7 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TestFeatureVersion;
@@ -331,7 +331,7 @@ public class FormatterTest {
     public void testFeatureFlag(short version) throws Exception {
         try (TestEnv testEnv = new TestEnv(1)) {
             FormatterContext formatter1 = testEnv.newFormatter();
-            formatter1.formatter.setSupportedFeatures(Arrays.asList(Features.values()));
+            formatter1.formatter.setSupportedFeatures(Feature.TEST_AND_PRODUCTION_FEATURES);
             formatter1.formatter.setFeatureLevel(TestFeatureVersion.FEATURE_NAME, version);
             formatter1.formatter.run();
             BootstrapMetadata bootstrapMetadata =
@@ -357,7 +357,7 @@ public class FormatterTest {
     public void testInvalidFeatureFlag() throws Exception {
         try (TestEnv testEnv = new TestEnv(2)) {
             FormatterContext formatter1 = testEnv.newFormatter();
-            formatter1.formatter.setSupportedFeatures(Arrays.asList(Features.values()));
+            formatter1.formatter.setSupportedFeatures(Feature.TEST_AND_PRODUCTION_FEATURES);
             formatter1.formatter.setFeatureLevel("nonexistent.feature", (short) 1);
             assertEquals("Unsupported feature: nonexistent.feature. Supported features " +
                     "are: eligible.leader.replicas.version, group.version, kraft.version, " +

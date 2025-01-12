@@ -24,7 +24,7 @@
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." },
     { "name": "Topics", "type": "[]OffsetDeleteRequestTopic", "versions": "0+",
-      "about": "The topics to delete offsets for", "fields": [
+      "about": "The topics to delete offsets for.", "fields": [
         { "name": "Name",  "type": "string",  "versions": "0+", "mapKey": true, "entityType": "topicName",
           "about": "The topic name." },
         { "name": "Partitions", "type": "[]OffsetDeleteRequestPartition", "versions": "0+",

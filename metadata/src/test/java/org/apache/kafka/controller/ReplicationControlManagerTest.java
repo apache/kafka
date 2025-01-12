@@ -236,15 +236,10 @@ public class ReplicationControlManagerTest {
             Map<String, Object> staticConfig
         ) {
             this.time = time;
-            this.configurationControl = new ConfigurationControlManager.Builder().
-                setSnapshotRegistry(snapshotRegistry).
-                setStaticConfig(staticConfig).
-                setKafkaConfigSchema(FakeKafkaConfigSchema.INSTANCE).
-                build();
             this.featureControl = new FeatureControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
                 setQuorumFeatures(new QuorumFeatures(0,
-                    QuorumFeatures.defaultFeatureMap(true),
+                    QuorumFeatures.defaultSupportedFeatureMap(true),
                     Collections.singletonList(0))).
                 setMetadataVersion(metadataVersion).
                 build();
@@ -262,6 +257,12 @@ public class ReplicationControlManagerTest {
                 setReplicaPlacer(new StripedReplicaPlacer(random)).
                 setFeatureControlManager(featureControl).
                 setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
+                build();
+            this.configurationControl = new ConfigurationControlManager.Builder().
+                setSnapshotRegistry(snapshotRegistry).
+                setFeatureControl(featureControl).
+                setStaticConfig(staticConfig).
+                setKafkaConfigSchema(FakeKafkaConfigSchema.INSTANCE).
                 build();
             this.offsetControlManager = new OffsetControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
@@ -1800,7 +1801,7 @@ public class ReplicationControlManagerTest {
                             setReplicas(asList(0, 2, 1)),
                         new ReassignablePartition().setPartitionIndex(2).
                             setReplicas(asList(0, 2, 1)))),
-                new ReassignableTopic().setName("bar"))));
+                    new ReassignableTopic().setName("bar"))));
         assertEquals(new AlterPartitionReassignmentsResponseData().
                 setErrorMessage(null).setResponses(asList(
                     new ReassignableTopicResponse().setName("foo").setPartitions(asList(
@@ -1885,7 +1886,7 @@ public class ReplicationControlManagerTest {
                         setNewIsrWithEpochs(isrWithDefaultEpoch(3, 0, 2, 1))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
             requestContext,
-            new AlterPartitionRequest.Builder(alterPartitionRequestData, version > 1).build(version).data());
+            new AlterPartitionRequest.Builder(alterPartitionRequestData).build(version).data());
         Errors expectedError = version > 1 ? NEW_LEADER_ELECTED : FENCED_LEADER_EPOCH;
         assertEquals(new AlterPartitionResponseData().setTopics(singletonList(
             new AlterPartitionResponseData.TopicData().
@@ -1949,7 +1950,7 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult =
-            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest, version > 1).build(version).data());
+            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest).build(version).data());
 
         Errors expectedError = version <= 1 ? OPERATION_NOT_ATTEMPTED : INELIGIBLE_REPLICA;
         assertEquals(
@@ -2034,7 +2035,7 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult =
-            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest, version > 1).build(version).data());
+            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest).build(version).data());
 
         // The late arrived AlterPartition request should be rejected when version >= 3.
         if (version >= 3) {
@@ -2099,7 +2100,7 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult =
-            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest, version > 1).build(version).data());
+            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest).build(version).data());
 
         Errors expectedError = version <= 1 ? OPERATION_NOT_ATTEMPTED : INELIGIBLE_REPLICA;
         assertEquals(
@@ -2151,27 +2152,21 @@ public class ReplicationControlManagerTest {
                             setReplicas(asList(5, 6, 7)),
                         new ReassignablePartition().setPartitionIndex(3).
                             setReplicas(Collections.emptyList()))),
-                new ReassignableTopic().setName("bar").setPartitions(singletonList(
+                    new ReassignableTopic().setName("bar").setPartitions(singletonList(
                         new ReassignablePartition().setPartitionIndex(0).
                             setReplicas(asList(1, 2, 3, 4, 0)))))));
         assertEquals(new AlterPartitionReassignmentsResponseData().
-                setErrorMessage(null).setResponses(asList(
-            new ReassignableTopicResponse().setName("foo").setPartitions(asList(
-                new ReassignablePartitionResponse().setPartitionIndex(0).
-                    setErrorMessage(null),
-                new ReassignablePartitionResponse().setPartitionIndex(1).
-                    setErrorMessage(null),
-                new ReassignablePartitionResponse().setPartitionIndex(2).
-                    setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
-                    setErrorMessage("The manual partition assignment includes broker 5, " +
-                        "but no such broker is registered."),
-                new ReassignablePartitionResponse().setPartitionIndex(3).
-                    setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
-                    setErrorMessage("The manual partition assignment includes an empty " +
-                        "replica list."))),
-            new ReassignableTopicResponse().setName("bar").setPartitions(singletonList(
-                new ReassignablePartitionResponse().setPartitionIndex(0).
-                    setErrorMessage(null))))),
+                setErrorMessage(null).
+                setResponses(asList(
+                    new ReassignableTopicResponse().setName("foo").setPartitions(asList(
+                        new ReassignablePartitionResponse().setPartitionIndex(0).setErrorMessage(null), 
+                        new ReassignablePartitionResponse().setPartitionIndex(1).setErrorMessage(null), 
+                        new ReassignablePartitionResponse().setPartitionIndex(2).setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
+                            setErrorMessage("The manual partition assignment includes broker 5, but no such broker is registered."), 
+                        new ReassignablePartitionResponse().setPartitionIndex(3).setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
+                            setErrorMessage("The manual partition assignment includes an empty replica list."))),
+                    new ReassignableTopicResponse().setName("bar").setPartitions(singletonList(
+                        new ReassignablePartitionResponse().setPartitionIndex(0).setErrorMessage(null))))),
             alterResult.response());
         ctx.replay(alterResult.records());
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 4}).setIsr(new int[] {1, 2, 4}).
@@ -2960,7 +2955,7 @@ public class ReplicationControlManagerTest {
                     setNewIsrWithEpochs(isrWithDefaultEpoch(0, 1, 2))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
             anonymousContextFor(ApiKeys.ALTER_PARTITION),
-            new AlterPartitionRequest.Builder(alterPartitionRequestData, true).build().data());
+            new AlterPartitionRequest.Builder(alterPartitionRequestData).build().data());
         assertEquals(new AlterPartitionResponseData().setTopics(singletonList(
             new AlterPartitionResponseData.TopicData().
                 setTopicId(topicId).
@@ -3035,7 +3030,7 @@ public class ReplicationControlManagerTest {
                     setNewIsrWithEpochs(isrWithDefaultEpoch(0, 1, 2, 3, 4, 5))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResultTwo = replication.alterPartition(
             anonymousContextFor(ApiKeys.ALTER_PARTITION),
-            new AlterPartitionRequest.Builder(alterPartitionRequestDataTwo, true).build().data());
+            new AlterPartitionRequest.Builder(alterPartitionRequestDataTwo).build().data());
         assertEquals(new AlterPartitionResponseData().setTopics(singletonList(
                 new AlterPartitionResponseData.TopicData().
                     setTopicId(topicId).

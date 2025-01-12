@@ -34,6 +34,7 @@ import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ServerConf
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -216,7 +217,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.UNKNOWN, AclPermissionType.ALLOW))
     val results2 = client.createAcls(List(aclUnknown).asJava)
     assertEquals(Set(aclUnknown), results2.values.keySet().asScala)
-    assertFutureExceptionTypeEquals(results2.all, classOf[InvalidRequestException])
+    assertFutureThrows(results2.all, classOf[InvalidRequestException])
     val results3 = client.deleteAcls(List(acl.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
     assertEquals(Set(acl.toFilter, acl2.toFilter, acl3.toFilter), results3.keySet.asScala)
     assertEquals(0, results3.get(acl.toFilter).get.values.size())
@@ -403,8 +404,8 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
     val results = client.createAcls(List(clusterAcl, emptyResourceNameAcl).asJava, new CreateAclsOptions())
     assertEquals(Set(clusterAcl, emptyResourceNameAcl), results.values.keySet().asScala)
-    assertFutureExceptionTypeEquals(results.values.get(clusterAcl), classOf[InvalidRequestException])
-    assertFutureExceptionTypeEquals(results.values.get(emptyResourceNameAcl), classOf[InvalidRequestException])
+    assertFutureThrows(results.values.get(clusterAcl), classOf[InvalidRequestException])
+    assertFutureThrows(results.values.get(emptyResourceNameAcl), classOf[InvalidRequestException])
   }
 
   @ParameterizedTest
@@ -601,9 +602,9 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, compressionConfig.value)
       assertEquals(ConfigEntry.ConfigSource.DEFAULT_CONFIG, compressionConfig.source)
 
-      assertFutureExceptionTypeEquals(result.numPartitions(topic2), classOf[TopicAuthorizationException])
-      assertFutureExceptionTypeEquals(result.replicationFactor(topic2), classOf[TopicAuthorizationException])
-      assertFutureExceptionTypeEquals(result.config(topic2), classOf[TopicAuthorizationException])
+      assertFutureThrows(result.numPartitions(topic2), classOf[TopicAuthorizationException])
+      assertFutureThrows(result.replicationFactor(topic2), classOf[TopicAuthorizationException])
+      assertFutureThrows(result.config(topic2), classOf[TopicAuthorizationException])
     }
     validateMetadataAndConfigs(validateResult)
 
@@ -614,7 +615,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     val topicIds = getTopicIds()
     assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic1).get())
     assertEquals(topicIds(topic1), createResult.topicId(topic1).get())
-    assertFutureExceptionTypeEquals(createResult.topicId(topic2), classOf[TopicAuthorizationException])
+    assertFutureThrows(createResult.topicId(topic2), classOf[TopicAuthorizationException])
     
     val createResponseConfig = createResult.config(topic1).get().entries.asScala
 
@@ -637,7 +638,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     val createDelegationTokenOptions = new CreateDelegationTokenOptions().maxLifetimeMs(5000)
 
     // Test expiration for non-exists token
-    TestUtils.assertFutureExceptionTypeEquals(
+    assertFutureThrows(
       client.expireDelegationToken("".getBytes()).expiryTimestamp(),
       classOf[DelegationTokenNotFoundException]
     )
@@ -650,7 +651,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     val token2 = client.createDelegationToken(createDelegationTokenOptions.maxLifetimeMs(1000)).delegationToken().get()
     // Ensure current time > maxLifeTimeMs of token
     Thread.sleep(1000)
-    TestUtils.assertFutureExceptionTypeEquals(
+    assertFutureThrows(
       client.expireDelegationToken(token2.hmac(), new ExpireDelegationTokenOptions().expiryTimePeriodMs(1)).expiryTimestamp(),
       classOf[DelegationTokenExpiredException]
     )

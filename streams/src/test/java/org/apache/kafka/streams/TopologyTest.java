@@ -46,6 +46,7 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper;
+import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper.WrapperRecorder;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -2256,7 +2257,7 @@ public class TopologyTest {
 
     private TopologyDescription.Source addSource(final String sourceName,
                                                  final String... sourceTopic) {
-        topology.addSource(null, sourceName, null, null, null, sourceTopic);
+        topology.addSource((Topology.AutoOffsetReset) null, sourceName, null, null, null, sourceTopic);
         final StringBuilder allSourceTopics = new StringBuilder(sourceTopic[0]);
         for (int i = 1; i < sourceTopic.length; ++i) {
             allSourceTopics.append(", ").append(sourceTopic[i]);
@@ -2266,7 +2267,7 @@ public class TopologyTest {
 
     private TopologyDescription.Source addSource(final String sourceName,
                                                  final Pattern sourcePattern) {
-        topology.addSource(null, sourceName, null, null, null, sourcePattern);
+        topology.addSource((Topology.AutoOffsetReset) null, sourceName, null, null, null, sourcePattern);
         return new InternalTopologyBuilder.Source(sourceName, null, sourcePattern);
     }
 
@@ -2427,8 +2428,8 @@ public class TopologyTest {
         final Map<Object, Object> props = dummyStreamsConfigMap();
         props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
 
-        final Set<String> wrappedProcessors = Collections.synchronizedSet(new HashSet<>());
-        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, wrappedProcessors);
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
 
         final Topology topology = new Topology(new TopologyConfig(new StreamsConfig(props)));
 
@@ -2453,8 +2454,8 @@ public class TopologyTest {
             () -> (Processor<Object, Object, Object, Object>) record -> System.out.println("Processing: " + random.nextInt()),
             "p2"
         );
-        assertThat(wrappedProcessors.size(), is(3));
-        assertThat(wrappedProcessors, Matchers.containsInAnyOrder("p1", "p2", "p3"));
+        assertThat(counter.numWrappedProcessors(), is(3));
+        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder("p1", "p2", "p3"));
     }
 
     @SuppressWarnings("deprecation")

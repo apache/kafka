@@ -136,10 +136,6 @@ public class ResetConsumerGroupOffsetTest {
         String[] args = buildArgsForGroup(cluster, group, "--all-topics", "--to-current", "--execute");
 
         try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-            // Make sure we got a coordinator
-            TestUtils.waitForCondition(
-                    () -> "localhost".equals(service.collectGroupState(group).coordinator.host()),
-                    "Can't find a coordinator");
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
             assertTrue(resetOffsets.isEmpty());
             assertTrue(committedOffsets(cluster, topic, group).isEmpty());

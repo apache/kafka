@@ -35,6 +35,7 @@ import org.eclipse.jgit.treewalk.filter.PathFilter;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -78,7 +79,7 @@ class CheckerUtils {
         FieldSpec field,
         Versions topLevelFlexibleVersions
     ) {
-        if (!field.flexibleVersions().isPresent()) {
+        if (field.flexibleVersions().isEmpty()) {
             if (!topLevelFlexibleVersions.contains(field.taggedVersions())) {
                 throw new RuntimeException("Tagged versions for " + what + " " +
                         field.name() + " are " + field.taggedVersions() + ", but top " +
@@ -122,13 +123,18 @@ class CheckerUtils {
     /**
      * Read a MessageSpec file from remote git repo.
      *
-     * @param filePath   The file to read from remote git repo.
-     * @return                     The file contents.
+     * @param filePath The file to read from remote git repo.
+     * @param ref The specific git reference to be used for testing.
+     * @return The file contents.
      */
-    static String GetDataFromGit(String filePath, Path gitPath) throws IOException {
+    static String getDataFromGit(String filePath, Path gitPath, String ref) throws IOException {
         Git git = Git.open(new File(gitPath + "/.git"));
         Repository repository = git.getRepository();
-        Ref head = git.getRepository().getRefDatabase().firstExactRef("refs/heads/trunk");
+        Ref head = repository.getRefDatabase().findRef(ref);
+        if (head == null) {
+            throw new IllegalStateException("Cannot find " + ref + " in the repository.");
+        }
+
         try (RevWalk revWalk = new RevWalk(repository)) {
             RevCommit commit = revWalk.parseCommit(head.getObjectId());
             RevTree tree = commit.getTree();
@@ -141,7 +147,7 @@ class CheckerUtils {
                 }
                 ObjectId objectId = treeWalk.getObjectId(0);
                 ObjectLoader loader = repository.open(objectId);
-                return new String(loader.getBytes(), "UTF-8");
+                return new String(loader.getBytes(), StandardCharsets.UTF_8);
             }
         }
     }

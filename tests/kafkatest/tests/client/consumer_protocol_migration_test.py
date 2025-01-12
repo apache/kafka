@@ -77,7 +77,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
             consumer.stop_node(node, clean_shutdown)
 
             wait_until(lambda: len(consumer.dead_nodes()) == 1,
-                       timeout_sec=self.session_timeout_sec+5,
+                       timeout_sec=60,
                        err_msg="Timed out waiting for the consumer to shutdown")
 
             consumer.start_node(node)

@@ -30,7 +30,6 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -119,7 +118,7 @@ public class TestKitNodes {
         public Builder setPerServerProperties(Map<Integer, Map<String, String>> perServerProperties) {
             this.perServerProperties = Collections.unmodifiableMap(
                 perServerProperties.entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> Collections.unmodifiableMap(new HashMap<>(e.getValue())))));
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> Map.copyOf(e.getValue()))));
             return this;
         }
 
@@ -159,8 +158,9 @@ public class TestKitNodes {
                 throw new IllegalArgumentException("Invalid value for numDisksPerBroker");
             }
             // TODO: remove this assertion after https://issues.apache.org/jira/browse/KAFKA-16680 is finished
-            if (brokerSecurityProtocol != SecurityProtocol.PLAINTEXT || controllerSecurityProtocol != SecurityProtocol.PLAINTEXT) {
-                throw new IllegalArgumentException("Currently only support PLAINTEXT security protocol");
+            if ((brokerSecurityProtocol != SecurityProtocol.PLAINTEXT && brokerSecurityProtocol != SecurityProtocol.SASL_PLAINTEXT) ||
+                (controllerSecurityProtocol != SecurityProtocol.PLAINTEXT && controllerSecurityProtocol != SecurityProtocol.SASL_PLAINTEXT)) {
+                throw new IllegalArgumentException("Currently only support PLAINTEXT / SASL_PLAINTEXT security protocol");
             }
             if (baseDirectory == null) {
                 this.baseDirectory = TestUtils.tempDirectory().toPath();

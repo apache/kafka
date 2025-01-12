@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -35,6 +35,7 @@ import java.util.Set;
  */
 public class StoreBuilderWrapper implements StoreFactory {
 
+
     private final StoreBuilder<?> builder;
     private final Set<String> connectedProcessorNames = new HashSet<>();
 
@@ -51,8 +52,15 @@ public class StoreBuilderWrapper implements StoreFactory {
     }
 
     @Override
-    public StateStore build() {
-        return builder.build();
+    public void configure(final StreamsConfig config) {
+        if (builder instanceof ConfigurableStore) {
+            ((ConfigurableStore) builder).configure(config);
+        }
+    }
+
+    @Override
+    public StoreBuilder<?> builder() {
+        return builder;
     }
 
     @Override
@@ -90,7 +98,7 @@ public class StoreBuilderWrapper implements StoreFactory {
     }
 
     @Override
-    public String name() {
+    public String storeName() {
         return builder.name();
     }
 

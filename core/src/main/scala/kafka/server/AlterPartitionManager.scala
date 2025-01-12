@@ -20,7 +20,6 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import kafka.utils.Logging
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.TopicPartition
@@ -99,17 +98,6 @@ object AlterPartitionManager {
       brokerEpochSupplier = brokerEpochSupplier,
       metadataVersionSupplier = () => metadataCache.metadataVersion()
     )
-  }
-
-  /**
-   * Factory for ZK based implementation, used when IBP < 2.7-IV2
-   */
-  def apply(
-    scheduler: Scheduler,
-    time: Time,
-    zkClient: KafkaZkClient
-  ): AlterPartitionManager = {
-    new ZkAlterPartitionManager(scheduler, time, zkClient)
   }
 }
 
@@ -241,9 +229,6 @@ class DefaultAlterPartitionManager(
    * supported by the controller. The final decision is taken when the AlterPartitionRequest
    * is built in the network client based on the advertised api versions of the controller.
    *
-   * We could use version 2 or above if all the pending changes have an topic id defined;
-   * otherwise we must use version 1 or below.
-   *
    * @return A tuple containing the AlterPartitionRequest.Builder and a mapping from
    *         topic id to topic name. This mapping is used in the response handling.
    */
@@ -257,9 +242,6 @@ class DefaultAlterPartitionManager(
     // the metadata cache is updated after the partition state so it might not know
     // yet about a topic id already used here.
     val topicNamesByIds = mutable.HashMap[Uuid, String]()
-    // We can use topic ids only if all the pending changed have one defined and
-    // we use IBP 2.8 or above.
-    var canUseTopicIds = metadataVersion.isTopicIdsSupported
 
     val message = new AlterPartitionRequestData()
       .setBrokerId(brokerId)
@@ -267,7 +249,6 @@ class DefaultAlterPartitionManager(
 
     inflightAlterPartitionItems.groupBy(_.topicIdPartition.topic).foreach { case (topicName, items) =>
       val topicId = items.head.topicIdPartition.topicId
-      canUseTopicIds &= topicId != Uuid.ZERO_UUID
       topicNamesByIds(topicId) = topicName
 
       // Both the topic name and the topic id are set here because at this stage
@@ -292,8 +273,7 @@ class DefaultAlterPartitionManager(
       }
     }
 
-    // If we cannot use topic ids, the builder will ensure that no version higher than 1 is used.
-    (new AlterPartitionRequest.Builder(message, canUseTopicIds), topicNamesByIds)
+    (new AlterPartitionRequest.Builder(message), topicNamesByIds)
   }
 
   private def handleAlterPartitionResponse(

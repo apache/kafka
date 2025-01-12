@@ -136,7 +136,10 @@ public class DescribeClassicGroupsHandler extends AdminApiHandler.Batched<Coordi
                     Optional.ofNullable(groupMember.groupInstanceId()),
                     groupMember.clientId(),
                     groupMember.clientHost(),
-                    new MemberAssignment(partitions)));
+                    new MemberAssignment(partitions),
+                    Optional.empty(),
+                    Optional.empty(),
+                    Optional.empty()));
             });
 
             final ClassicGroupDescription classicGroupDescription =

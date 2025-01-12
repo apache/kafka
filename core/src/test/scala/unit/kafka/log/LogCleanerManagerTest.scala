@@ -37,7 +37,6 @@ import java.lang.{Long => JLong}
 import java.util
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.mutable
-import scala.jdk.OptionConverters.RichOption
 
 /**
   * Unit tests for the log cleaning logic
@@ -110,8 +109,8 @@ class LogCleanerManagerTest extends Logging {
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
     val segments = new LogSegments(tp)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      tpDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, time.scheduler)
+    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+      tpDir, topicPartition, logDirFailureChannel, None, time.scheduler)
     val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxTransactionTimeoutMs, producerStateManagerConfig, time)
     val offsets = new LogLoader(
       tpDir,
@@ -124,7 +123,7 @@ class LogCleanerManagerTest extends Logging {
       segments,
       0L,
       0L,
-      leaderEpochCache.toJava,
+      leaderEpochCache,
       producerStateManager,
       new ConcurrentHashMap[String, Integer],
       false

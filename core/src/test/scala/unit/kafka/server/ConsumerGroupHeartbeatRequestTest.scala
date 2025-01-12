@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, Consu
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
-import org.apache.kafka.server.common.Features
+import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull}
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -60,7 +60,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest(
     features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 0)
+      new ClusterFeature(feature = Feature.GROUP_VERSION, version = 0)
     )
   )
   def testConsumerGroupHeartbeatIsInaccessibleWhenFeatureFlagNotEnabled(): Unit = {
@@ -271,6 +271,61 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
       // Verify the response.
       assertEquals(Errors.INVALID_REGULAR_EXPRESSION.code, consumerGroupHeartbeatResponse.data.errorCode)
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest
+  def testConsumerGroupHeartbeatWithEmptySubscription(): Unit = {
+    val admin = cluster.admin()
+
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      // Heartbeat request to join the group.
+      var consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+        new ConsumerGroupHeartbeatRequestData()
+          .setGroupId("grp")
+          .setMemberId(Uuid.randomUuid().toString)
+          .setMemberEpoch(0)
+          .setRebalanceTimeoutMs(5 * 60 * 1000)
+          .setSubscribedTopicRegex("")
+          .setTopicPartitions(List.empty.asJava)
+      ).build()
+
+      // Send the request until receiving a successful response. There is a delay
+      // here because the group coordinator is loaded in the background.
+      var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+        consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+      }, msg = s"Did not receive the expected successful response. Last response $consumerGroupHeartbeatResponse.")
+
+      // Heartbeat request to join the group.
+      consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+        new ConsumerGroupHeartbeatRequestData()
+          .setGroupId("grp")
+          .setMemberId(Uuid.randomUuid().toString)
+          .setMemberEpoch(0)
+          .setRebalanceTimeoutMs(5 * 60 * 1000)
+          .setSubscribedTopicNames(List.empty.asJava)
+          .setTopicPartitions(List.empty.asJava)
+      ).build()
+
+      // Send the request until receiving a successful response. There is a delay
+      // here because the group coordinator is loaded in the background.
+      consumerGroupHeartbeatResponse = null
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+        consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+      }, msg = s"Did not receive the expected successful response. Last response $consumerGroupHeartbeatResponse.")
     } finally {
       admin.close()
     }

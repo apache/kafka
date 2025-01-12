@@ -18,10 +18,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,12 +59,12 @@ public class ChangeLoggingWindowBytesStoreTest {
     @BeforeEach
     public void setUp() {
         store = new ChangeLoggingWindowBytesStore(inner, false, WindowKeySchema::toStoreKeyBinary);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
     @AfterEach
     public void tearDown() {
-        verify(inner).init((StateStoreContext) context, store);
+        verify(inner).init(context, store);
     }
 
     @Test
@@ -92,38 +94,42 @@ public class ChangeLoggingWindowBytesStoreTest {
         verify(context).logChange(store.name(), key, value, 0L, POSITION);
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetching() {
-        store.fetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
-
-        verify(inner).fetch(bytesKey, 0, 10);
+        try (final WindowStoreIterator<byte[]> unused = store.fetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10))) {
+            verify(inner).fetch(bytesKey, 0, 10);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFetching() {
-        store.backwardFetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
-
-        verify(inner).backwardFetch(bytesKey, 0, 10);
+        try (final WindowStoreIterator<byte[]> unused = store.backwardFetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10))) {
+            verify(inner).backwardFetch(bytesKey, 0, 10);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
-        store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
-
-        verify(inner).fetch(bytesKey, bytesKey, 0, 1);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1))) {
+            verify(inner).fetch(bytesKey, bytesKey, 0, 1);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange() {
-        store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
-
-        verify(inner).backwardFetch(bytesKey, bytesKey, 0, 1);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused =  store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1))) {
+            verify(inner).backwardFetch(bytesKey, bytesKey, 0, 1);
+        }
     }
 
     @Test
     public void shouldRetainDuplicatesWhenSet() {
         store = new ChangeLoggingWindowBytesStore(inner, true, WindowKeySchema::toStoreKeyBinary);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());
 
         final Bytes key1 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1);

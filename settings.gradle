@@ -19,24 +19,20 @@ plugins {
 }
 
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
-def isJenkins = System.getenv('JENKINS_URL') != null
-def isCI = isGithubActions || isJenkins
 def currentJvm = JavaVersion.current()
 
 develocity {
     server = "https://ge.apache.org"
     projectId = "kafka"
     buildScan {
-        uploadInBackground = !isCI
+        uploadInBackground = !isGithubActions
         publishing.onlyIf { it.authenticated }
         obfuscation {
             // This obfuscates the IP addresses of the build machine in the build scan.
             // Alternatively, the build scan will provide the hostname for troubleshooting host-specific issues.
             ipAddresses { addresses -> addresses.collect { address -> "0.0.0.0"} }
         }
-        if (isJenkins) {
-            tag "jenkins"
-        } else if (isGithubActions) {
+        if (isGithubActions) {
             tag "github"
         } else {
             tag "local"
@@ -49,7 +45,7 @@ buildCache {
     local {
         // This allows the build cache to be used locally or on GitHub Actions.
         // Using the cache on GH should be safe since each job is run on a new VM
-        enabled = !isJenkins
+        enabled = true
     }
 
     remote(develocity.buildCache) {
@@ -88,9 +84,6 @@ include 'clients',
     'streams:integration-tests',
     'streams:streams-scala',
     'streams:test-utils',
-    'streams:upgrade-system-tests-0100',
-    'streams:upgrade-system-tests-0101',
-    'streams:upgrade-system-tests-0102',
     'streams:upgrade-system-tests-0110',
     'streams:upgrade-system-tests-10',
     'streams:upgrade-system-tests-11',

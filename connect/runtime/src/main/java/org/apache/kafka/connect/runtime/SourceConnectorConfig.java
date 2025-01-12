@@ -125,10 +125,10 @@ public final class SourceConnectorConfig extends ConnectorConfig {
     private final EnrichedSourceConnectorConfig enrichedSourceConfig;
     private final String offsetsTopic;
 
-    public static ConfigDef configDef() {
+    private static ConfigDef configDef(ConfigDef baseConfigDef) {
         ConfigDef.Validator atLeastZero = ConfigDef.Range.atLeast(0);
         int orderInGroup = 0;
-        return new ConfigDef(ConnectorConfig.configDef())
+        return new ConfigDef(baseConfigDef)
                 .define(
                         TOPIC_CREATION_GROUPS_CONFIG,
                         ConfigDef.Type.LIST,
@@ -203,6 +203,18 @@ public final class SourceConnectorConfig extends ConnectorConfig {
                         OFFSETS_TOPIC_DISPLAY);
     }
 
+    public static ConfigDef configDef() {
+        return configDef(ConnectorConfig.configDef());
+    }
+
+    public static ConfigDef enrichedConfigDef(Plugins plugins, Map<String, String> connProps, WorkerConfig workerConfig) {
+        return configDef(ConnectorConfig.enrichedConfigDef(plugins, connProps, workerConfig));
+    }
+
+    public static ConfigDef enrichedConfigDef(Plugins plugins, String connectorClass) {
+        return configDef(ConnectorConfig.enrichedConfigDef(plugins, connectorClass));
+    }
+
     public static ConfigDef embedDefaultGroup(ConfigDef baseConfigDef) {
         String defaultGroup = "default";
         ConfigDef newDefaultDef = new ConfigDef(baseConfigDef);
@@ -236,10 +248,9 @@ public final class SourceConnectorConfig extends ConnectorConfig {
         short defaultGroupReplicationFactor = defaultGroupConfig.getShort(defaultGroupPrefix + REPLICATION_FACTOR_CONFIG);
         int defaultGroupPartitions = defaultGroupConfig.getInt(defaultGroupPrefix + PARTITIONS_CONFIG);
         topicCreationGroups.stream().distinct().forEach(group -> {
-            if (!(group instanceof String)) {
+            if (!(group instanceof String alias)) {
                 throw new ConfigException("Item in " + TOPIC_CREATION_GROUPS_CONFIG + " property is not of type String");
             }
-            String alias = (String) group;
             String prefix = TOPIC_CREATION_PREFIX + alias + ".";
             String configGroup = TOPIC_CREATION_GROUP + ": " + alias;
             newDef.embed(prefix, configGroup, 0,

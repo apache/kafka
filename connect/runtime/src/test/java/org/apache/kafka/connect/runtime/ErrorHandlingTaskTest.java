@@ -74,8 +74,6 @@ import org.mockito.quality.Strictness;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -406,15 +404,6 @@ public class ErrorHandlingTaskTest {
         ConnectMetrics.MetricGroup sinkTaskGroup = errorHandlingMetrics.metricGroup();
         double measured = metrics.currentMetricValueAsDouble(sinkTaskGroup, name);
         assertEquals(expected, measured, 0.001d);
-    }
-
-    private void verifyCloseSource() throws IOException {
-        verify(producer).close(any(Duration.class));
-        verify(admin).close(any(Duration.class));
-        verify(offsetReader).close();
-        verify(offsetStore).stop();
-        // headerConverter.close() can throw IOException
-        verify(headerConverter).close();
     }
 
     private void expectTopicCreation(String topic) {

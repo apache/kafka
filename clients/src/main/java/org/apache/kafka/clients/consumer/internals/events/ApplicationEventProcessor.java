@@ -27,18 +27,22 @@ import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
@@ -178,6 +182,18 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
             case SEEK_UNVALIDATED:
                 process((SeekUnvalidatedEvent) event);
+                return;
+
+            case PAUSE_PARTITIONS:
+                process((PausePartitionsEvent) event);
+                return;
+
+            case RESUME_PARTITIONS:
+                process((ResumePartitionsEvent) event);
+                return;
+
+            case CURRENT_LAG:
+                process((CurrentLagEvent) event);
                 return;
 
             default:
@@ -544,6 +560,87 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         manager.setAcknowledgementCommitCallbackRegistered(event.isCallbackRegistered());
     }
 
+    private void process(final SeekUnvalidatedEvent event) {
+        try {
+            event.offsetEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(event.partition(), epoch));
+            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                event.offset(),
+                event.offsetEpoch(),
+                metadata.currentLeader(event.partition())
+            );
+            subscriptions.seekUnvalidated(event.partition(), newPosition);
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
+    }
+
+    private void process(final PausePartitionsEvent event) {
+        try {
+            Collection<TopicPartition> partitions = event.partitions();
+            log.debug("Pausing partitions {}", partitions);
+
+            for (TopicPartition partition : partitions) {
+                subscriptions.pause(partition);
+            }
+
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
+    }
+
+    private void process(final ResumePartitionsEvent event) {
+        try {
+            Collection<TopicPartition> partitions = event.partitions();
+            log.debug("Resuming partitions {}", partitions);
+
+            for (TopicPartition partition : partitions) {
+                subscriptions.resume(partition);
+            }
+
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
+    }
+
+    private void process(final CurrentLagEvent event) {
+        try {
+            final TopicPartition topicPartition = event.partition();
+            final IsolationLevel isolationLevel = event.isolationLevel();
+            final Long lag = subscriptions.partitionLag(topicPartition, isolationLevel);
+
+            final OptionalLong lagOpt;
+            if (lag == null) {
+                if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null &&
+                    !subscriptions.partitionEndOffsetRequested(topicPartition)) {
+                    // If the log end offset is unknown and there isn't already an in-flight list offset
+                    // request, issue one with the goal that the lag will be available the next time the
+                    // user calls currentLag().
+                    log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
+                    subscriptions.requestPartitionEndOffset(topicPartition);
+
+                    // Emulates the Consumer.endOffsets() logic...
+                    Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(
+                        topicPartition,
+                        ListOffsetsRequest.LATEST_TIMESTAMP
+                    );
+
+                    requestManagers.offsetsRequestManager.fetchOffsets(timestampToSearch, false);
+                }
+
+                lagOpt = OptionalLong.empty();
+            } else {
+                lagOpt = OptionalLong.of(lag);
+            }
+
+            event.future().complete(lagOpt);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
+    }
+
     private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> b) {
         return (value, exception) -> {
             if (exception != null)
@@ -575,21 +672,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         };
     }
 
-    private void process(final SeekUnvalidatedEvent event) {
-        try {
-            event.offsetEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(event.partition(), epoch));
-            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
-                    event.offset(),
-                    event.offsetEpoch(),
-                    metadata.currentLeader(event.partition())
-            );
-            subscriptions.seekUnvalidated(event.partition(), newPosition);
-            event.future().complete(null);
-        } catch (Exception e) {
-            event.future().completeExceptionally(e);
-        }
-    }
-
     /**
      * This function evaluates the regex that the consumer subscribed to
      * against the list of topic names from metadata, and updates
@@ -608,9 +690,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
             this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
 
-            // Join the group if not already part of it, or just send the new subscription to the broker on the next poll.
-            requestManagers.consumerHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
         }
+        // Join the group if not already part of it, or just send the updated subscription
+        // to the broker on the next poll. Note that this is done even if no topics matched
+        // the regex, to ensure the member joins the group if needed (with empty subscription).
+        requestManagers.consumerHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
     }
 
     // Visible for testing

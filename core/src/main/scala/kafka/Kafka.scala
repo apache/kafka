@@ -19,7 +19,7 @@ package kafka
 
 import java.util.Properties
 import joptsimple.OptionParser
-import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
+import kafka.server.{KafkaConfig, KafkaRaftServer, Server}
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.{Exit, Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
@@ -61,27 +61,12 @@ object Kafka extends Logging {
     props
   }
 
-  // For Zk mode, the API forwarding is currently enabled only under migration flag. We can
-  // directly do a static IBP check to see API forwarding is enabled here because IBP check is
-  // static in Zk mode.
-  private def enableApiForwarding(config: KafkaConfig) =
-    config.migrationEnabled && config.interBrokerProtocolVersion.isApiForwardingEnabled
-
   private def buildServer(props: Properties): Server = {
     val config = KafkaConfig.fromProps(props, doLog = false)
-    if (config.requiresZookeeper) {
-      new KafkaServer(
-        config,
-        Time.SYSTEM,
-        threadNamePrefix = None,
-        enableForwarding = enableApiForwarding(config)
-      )
-    } else {
-      new KafkaRaftServer(
-        config,
-        Time.SYSTEM,
-      )
-    }
+    new KafkaRaftServer(
+      config,
+      Time.SYSTEM,
+    )
   }
 
   def main(args: Array[String]): Unit = {
@@ -112,7 +97,7 @@ object Kafka extends Logging {
       try server.startup()
       catch {
         case e: Throwable =>
-          // KafkaServer.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
+          // KafkaBroker.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
           fatal("Exiting Kafka due to fatal exception during startup.", e)
           Exit.exit(1)
       }

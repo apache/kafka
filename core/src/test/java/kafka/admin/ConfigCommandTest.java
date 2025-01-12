@@ -420,7 +420,7 @@ public class ConfigCommandTest {
         assertEquals("[[1, 2], [3, 4]]", addedProps.getProperty("nested"));
     }
 
-    public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String...args) {
+    public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String... args) {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
         createOpts.checkArgs();
         assertEquals(createOpts.entityTypes().toSeq(), seq(expectedTypes));
@@ -1017,15 +1017,14 @@ public class ConfigCommandTest {
                 return describeResult;
             }
 
-            @SuppressWarnings("deprecation")
             @Override
-            public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
+            public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
                 assertEquals(1, configs.size());
-                Map.Entry<ConfigResource, Config> entry = configs.entrySet().iterator().next();
+                Map.Entry<ConfigResource, Collection<AlterConfigOp>> entry = configs.entrySet().iterator().next();
                 ConfigResource res = entry.getKey();
-                Config config = entry.getValue();
+                Collection<AlterConfigOp> config = entry.getValue();
                 assertEquals(ConfigResource.Type.BROKER, res.type());
-                config.entries().forEach(e -> brokerConfigs.put(e.name(), e.value()));
+                config.forEach(e -> brokerConfigs.put(e.configEntry().name(), e.configEntry().value()));
                 return alterResult;
             }
         };
@@ -1115,9 +1114,9 @@ public class ConfigCommandTest {
                 assertEquals(3, alterConfigOps.size());
 
                 List<AlterConfigOp> expectedConfigOps = Arrays.asList(
-                    new AlterConfigOp(new ConfigEntry("kafka.log.LogCleaner", "DEBUG"), AlterConfigOp.OpType.SET),
                     new AlterConfigOp(new ConfigEntry("kafka.server.ReplicaManager", ""), AlterConfigOp.OpType.DELETE),
-                    new AlterConfigOp(new ConfigEntry("kafka.server.KafkaApi", ""), AlterConfigOp.OpType.DELETE)
+                    new AlterConfigOp(new ConfigEntry("kafka.server.KafkaApi", ""), AlterConfigOp.OpType.DELETE),
+                    new AlterConfigOp(new ConfigEntry("kafka.log.LogCleaner", "DEBUG"), AlterConfigOp.OpType.SET)
                 );
                 assertEquals(expectedConfigOps.size(), alterConfigOps.size());
                 Iterator<AlterConfigOp> alterConfigOpsIter = alterConfigOps.iterator();
@@ -1248,9 +1247,9 @@ public class ConfigCommandTest {
                 assertEquals(3, alterConfigOps.size());
 
                 List<AlterConfigOp> expectedConfigOps = Arrays.asList(
+                    new AlterConfigOp(new ConfigEntry("interval.ms", ""), AlterConfigOp.OpType.DELETE),
                     new AlterConfigOp(new ConfigEntry("match", "client_software_name=kafka.python,client_software_version=1\\.2\\..*"), AlterConfigOp.OpType.SET),
-                    new AlterConfigOp(new ConfigEntry("metrics", "org.apache.kafka.consumer."), AlterConfigOp.OpType.SET),
-                    new AlterConfigOp(new ConfigEntry("interval.ms", ""), AlterConfigOp.OpType.DELETE)
+                    new AlterConfigOp(new ConfigEntry("metrics", "org.apache.kafka.consumer."), AlterConfigOp.OpType.SET)
                 );
                 assertEquals(expectedConfigOps.size(), alterConfigOps.size());
                 Iterator<AlterConfigOp> alterConfigOpsIter = alterConfigOps.iterator();
@@ -1358,8 +1357,8 @@ public class ConfigCommandTest {
                 assertEquals(2, alterConfigOps.size());
 
                 List<AlterConfigOp> expectedConfigOps = Arrays.asList(
-                    new AlterConfigOp(new ConfigEntry("consumer.heartbeat.interval.ms", "6000"), AlterConfigOp.OpType.SET),
-                    new AlterConfigOp(new ConfigEntry("consumer.session.timeout.ms", ""), AlterConfigOp.OpType.DELETE)
+                    new AlterConfigOp(new ConfigEntry("consumer.session.timeout.ms", ""), AlterConfigOp.OpType.DELETE),
+                    new AlterConfigOp(new ConfigEntry("consumer.heartbeat.interval.ms", "6000"), AlterConfigOp.OpType.SET)
                 );
                 assertEquals(expectedConfigOps.size(), alterConfigOps.size());
                 Iterator<AlterConfigOp> alterConfigOpsIter = alterConfigOps.iterator();
@@ -1435,7 +1434,7 @@ public class ConfigCommandTest {
     }
 
     @SafeVarargs
-    public static <K, V> Map<K, V> concat(Map<K, V>...maps) {
+    public static <K, V> Map<K, V> concat(Map<K, V>... maps) {
         Map<K, V> res = new HashMap<>();
         Stream.of(maps)
             .map(Map::entrySet)
@@ -1457,11 +1456,6 @@ public class ConfigCommandTest {
 
         @Override
         public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
-            return mock(AlterConfigsResult.class);
-        }
-
-        @Override
-        public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
             return mock(AlterConfigsResult.class);
         }
 

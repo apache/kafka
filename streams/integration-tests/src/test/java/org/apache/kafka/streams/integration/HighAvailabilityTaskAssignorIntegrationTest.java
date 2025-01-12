@@ -97,9 +97,10 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY})
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldScaleOutWithWarmupTasksAndInMemoryStores(final String rackAwareStrategy, final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
@@ -108,9 +109,10 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY})
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldScaleOutWithWarmupTasksAndPersistentStores(final String rackAwareStrategy, final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
@@ -285,11 +287,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
     }
 
     private static String getKiloByteValue() {
-        final StringBuilder kiloBuilder = new StringBuilder(1000);
-        for (int i = 0; i < 1000; i++) {
-            kiloBuilder.append('0');
-        }
-        return kiloBuilder.toString();
+        return "0".repeat(1000);
     }
 
     private static void assertFalseNoRetry(final boolean assertion, final String message) {

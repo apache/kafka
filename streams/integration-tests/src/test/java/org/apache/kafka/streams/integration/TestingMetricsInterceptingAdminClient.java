@@ -37,7 +37,6 @@ import org.apache.kafka.clients.admin.AlterReplicaLogDirsOptions;
 import org.apache.kafka.clients.admin.AlterReplicaLogDirsResult;
 import org.apache.kafka.clients.admin.AlterUserScramCredentialsOptions;
 import org.apache.kafka.clients.admin.AlterUserScramCredentialsResult;
-import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.CreateAclsOptions;
 import org.apache.kafka.clients.admin.CreateAclsResult;
 import org.apache.kafka.clients.admin.CreateDelegationTokenOptions;
@@ -212,12 +211,6 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     @Override
     public DescribeConfigsResult describeConfigs(final Collection<ConfigResource> resources, final DescribeConfigsOptions options) {
         return adminDelegate.describeConfigs(resources, options);
-    }
-
-    @Override
-    @SuppressWarnings("deprecation")
-    public AlterConfigsResult alterConfigs(final Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
-        return adminDelegate.alterConfigs(configs, options);
     }
 
     @Override

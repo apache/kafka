@@ -26,7 +26,7 @@
     { "name": "Topics", "type": "[]ListPartitionReassignmentsTopics", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "The topics to list partition reassignments for, or null to list everything.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name" },
+        "about": "The topic name." },
       { "name": "PartitionIndexes", "type": "[]int32", "versions": "0+",
         "about": "The partitions to list partition reassignments for." }
     ]}

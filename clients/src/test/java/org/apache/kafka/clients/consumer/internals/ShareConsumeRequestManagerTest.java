@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -95,8 +96,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -113,6 +116,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -369,6 +373,64 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testServerDisconnectedOnShareAcknowledge() throws InterruptedException {
+        buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        fetchRecords();
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+
+        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        Acknowledgements acknowledgements2 = Acknowledgements.empty();
+        acknowledgements2.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements2));
+
+        client.prepareResponse(null, true);
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR, completedAcknowledgements.get(0).get(tip0).getAcknowledgeErrorCode());
+        completedAcknowledgements.clear();
+
+        assertEquals(1, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
+
+        TestUtils.retryOnExceptionWithTimeout(() -> {
+            assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
+            // We expect the remaining acknowledgements to be cleared due to share session epoch being set to 0.
+            assertNull(shareConsumeRequestManager.requestStates(0));
+            // The callback for these unsent acknowledgements will be invoked with an error code.
+            assertEquals(Collections.singletonMap(tip0, acknowledgements2), completedAcknowledgements.get(0));
+            assertEquals(Errors.SHARE_SESSION_NOT_FOUND, completedAcknowledgements.get(0).get(tip0).getAcknowledgeErrorCode());
+        });
+
+        // Attempt a normal fetch to check if nodesWithPendingRequests is empty.
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+    }
+
+    @Test
     public void testAcknowledgeOnClose() {
         buildRequestManager();
         // Enabling the config so that background event is sent when the acknowledgement response is received.
@@ -486,6 +548,89 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
+    }
+
+    @Test
+    public void testResultHandlerOnCommitAsync() {
+        buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(null, Optional.empty());
+
+        // Passing null acknowledgements should mean we do not send the background event at all.
+        resultHandler.complete(tip0, null, true);
+        assertEquals(0, completedAcknowledgements.size());
+
+        // Setting isCommitAsync to false should still not send any background event
+        // as we have initialized remainingResults to null.
+        resultHandler.complete(tip0, acknowledgements, false);
+        assertEquals(0, completedAcknowledgements.size());
+
+        // Sending non-null acknowledgements means we do send the background event
+        resultHandler.complete(tip0, acknowledgements, true);
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+    }
+
+    @Test
+    public void testResultHandlerOnCommitSync() {
+        buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        final CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future = new CompletableFuture<>();
+
+        // Initializing resultCount to 3.
+        AtomicInteger resultCount = new AtomicInteger(3);
+
+        ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(resultCount, Optional.of(future));
+
+        // We only send the background event after all results have been completed.
+        resultHandler.complete(tip0, acknowledgements, false);
+        assertEquals(0, completedAcknowledgements.size());
+        assertFalse(future.isDone());
+
+        resultHandler.complete(t2ip0, null, false);
+        assertEquals(0, completedAcknowledgements.size());
+        assertFalse(future.isDone());
+
+        // After third response is received, we send the background event.
+        resultHandler.complete(tip1, acknowledgements, false);
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(2, completedAcknowledgements.get(0).size());
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(3, completedAcknowledgements.get(0).get(tip1).size());
+        assertTrue(future.isDone());
+    }
+
+    @Test
+    public void testResultHandlerCompleteIfEmpty() {
+        buildRequestManager();
+
+        final CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future = new CompletableFuture<>();
+
+        // Initializing resultCount to 1.
+        AtomicInteger resultCount = new AtomicInteger(1);
+
+        ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(resultCount, Optional.of(future));
+
+        resultHandler.completeIfEmpty();
+        assertFalse(future.isDone());
+
+        resultCount.decrementAndGet();
+
+        resultHandler.completeIfEmpty();
+        assertTrue(future.isDone());
     }
 
     @Test
@@ -1189,7 +1334,7 @@ public class ShareConsumeRequestManagerTest {
                 new SimpleRecord(null, "value".getBytes()));
 
         // Remove the last record to simulate compaction
-        MemoryRecords.FilterResult result = records.filterTo(tp0, new MemoryRecords.RecordFilter(0, 0) {
+        MemoryRecords.FilterResult result = records.filterTo(new MemoryRecords.RecordFilter(0, 0) {
             @Override
             protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new BatchRetentionResult(BatchRetention.DELETE_EMPTY, false);
@@ -1199,7 +1344,7 @@ public class ShareConsumeRequestManagerTest {
             protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return record.key() != null;
             }
-        }, ByteBuffer.allocate(1024), Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        }, ByteBuffer.allocate(1024), BufferSupplier.NO_CACHING);
         result.outputBuffer().flip();
         MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.outputBuffer());
 
@@ -1598,7 +1743,7 @@ public class ShareConsumeRequestManagerTest {
                 subscriptions,
                 fetchConfig,
                 deserializers);
-        BackgroundEventHandler backgroundEventHandler = new TestableBackgroundEventHandler(completedAcknowledgements);
+        BackgroundEventHandler backgroundEventHandler = new TestableBackgroundEventHandler(time, completedAcknowledgements);
         shareConsumeRequestManager = spy(new TestableShareConsumeRequestManager<>(
                 logContext,
                 groupId,
@@ -1629,7 +1774,9 @@ public class ShareConsumeRequestManagerTest {
         properties.setProperty(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs));
         properties.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs));
         ConsumerConfig config = new ConsumerConfig(properties);
-        networkClientDelegate = spy(new TestableNetworkClientDelegate(time, config, logContext, client, metadata, new BackgroundEventHandler(new LinkedBlockingQueue<>())));
+        networkClientDelegate = spy(new TestableNetworkClientDelegate(
+            time, config, logContext, client, metadata,
+            new BackgroundEventHandler(new LinkedBlockingQueue<>(), time, mock(AsyncConsumerMetrics.class)), false));
     }
 
     private class TestableShareConsumeRequestManager<K, V> extends ShareConsumeRequestManager {
@@ -1668,6 +1815,11 @@ public class ShareConsumeRequestManagerTest {
             return pollResult.unsentRequests.size();
         }
 
+        public ResultHandler buildResultHandler(final AtomicInteger remainingResults,
+                                                final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future) {
+            return new ResultHandler(remainingResults, future);
+        }
+
         public Tuple<AcknowledgeRequestState> requestStates(int nodeId) {
             return super.requestStates(nodeId);
         }
@@ -1681,8 +1833,9 @@ public class ShareConsumeRequestManagerTest {
                                              LogContext logContext,
                                              KafkaClient client,
                                              Metadata metadata,
-                                             BackgroundEventHandler backgroundEventHandler) {
-            super(time, config, logContext, client, metadata, backgroundEventHandler);
+                                             BackgroundEventHandler backgroundEventHandler,
+                                             boolean notifyMetadataErrorsViaErrorQueue) {
+            super(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class));
         }
 
         @Override
@@ -1777,8 +1930,8 @@ public class ShareConsumeRequestManagerTest {
     private static class TestableBackgroundEventHandler extends BackgroundEventHandler {
         List<Map<TopicIdPartition, Acknowledgements>> completedAcknowledgements;
 
-        public TestableBackgroundEventHandler(List<Map<TopicIdPartition, Acknowledgements>> completedAcknowledgements) {
-            super(new LinkedBlockingQueue<>());
+        public TestableBackgroundEventHandler(Time time, List<Map<TopicIdPartition, Acknowledgements>> completedAcknowledgements) {
+            super(new LinkedBlockingQueue<>(), time, mock(AsyncConsumerMetrics.class));
             this.completedAcknowledgements = completedAcknowledgements;
         }
 

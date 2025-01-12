@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
@@ -50,7 +49,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-@SuppressWarnings("rawtypes")
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ChangeLoggingVersionedKeyValueBytesStoreTest {
@@ -61,7 +59,7 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
     private static final long HISTORY_RETENTION = 1000L;
 
     private final MockRecordCollector collector = new MockRecordCollector();
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<String, Long> context;
     private VersionedBytesStore inner;
     private ChangeLoggingVersionedKeyValueBytesStore store;
 
@@ -72,10 +70,10 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
 
         context = mockContext();
         context.setTime(0);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
-    private InternalMockProcessorContext mockContext() {
+    private InternalMockProcessorContext<String, Long> mockContext() {
         return new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -103,9 +101,9 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         final VersionedBytesStore mockInner = mock(VersionedBytesStore.class);
         store = new ChangeLoggingVersionedKeyValueBytesStore(mockInner);
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
-        verify(mockInner).init((StateStoreContext) context, store);
+        verify(mockInner).init(context, store);
     }
 
     @Test

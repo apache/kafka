@@ -37,11 +37,11 @@ import org.opentest4j.AssertionFailedError;
 
 import java.nio.ByteBuffer;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -64,13 +64,6 @@ public class Assertions {
         ShareGroupPartitionMetadataValue.class, Assertions::assertShareGroupPartitionMetadataValue
     );
 
-    public static <T> void assertUnorderedListEquals(
-        List<T> expected,
-        List<T> actual
-    ) {
-        assertEquals(new HashSet<>(expected), new HashSet<>(actual));
-    }
-
     public static void assertResponseEquals(
         ApiMessage expected,
         ApiMessage actual
@@ -92,6 +85,48 @@ public class Assertions {
                 CoordinatorRecord actualRecord = actualRecords.get(i);
                 assertRecordEquals(expectedRecord, actualRecord);
             }
+        } catch (AssertionFailedError e) {
+            assertionFailure()
+                .expected(expectedRecords)
+                .actual(actualRecords)
+                .buildAndThrow();
+        }
+    }
+
+    /**
+     * Assert that the expected records are equal to the provided records.
+     *
+     * @param expectedRecords   An ordered list of groupings. Each grouping
+     *                          defines a list of records that must be present,
+     *                          but they could be in any order.
+     * @param actualRecords     An ordered list of records.
+     * @throws AssertionFailedError if the expected and the actual records do
+     *                              not match.
+     */
+    public static void assertUnorderedRecordsEquals(
+        List<List<CoordinatorRecord>> expectedRecords,
+        List<CoordinatorRecord> actualRecords
+    ) {
+        try {
+            int i = 0, j = 0;
+            while (i < expectedRecords.size()) {
+                List<CoordinatorRecord> slice = expectedRecords.get(i);
+                assertRecordsEquals(
+                    slice
+                        .stream()
+                        .sorted(Comparator.comparing(Object::toString))
+                        .collect(Collectors.toList()),
+                    actualRecords
+                        .subList(j, j + slice.size())
+                        .stream()
+                        .sorted(Comparator.comparing(Object::toString))
+                        .collect(Collectors.toList())
+                );
+
+                j += slice.size();
+                i++;
+            }
+            assertEquals(j, actualRecords.size());
         } catch (AssertionFailedError e) {
             assertionFailure()
                 .expected(expectedRecords)

@@ -20,7 +20,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -370,7 +370,7 @@ public final class VoterSetTest {
                     )
                 )
             ),
-            Features.KRAFT_VERSION.supportedVersionRange()
+            Feature.KRAFT_VERSION.supportedVersionRange()
         );
     }
 
