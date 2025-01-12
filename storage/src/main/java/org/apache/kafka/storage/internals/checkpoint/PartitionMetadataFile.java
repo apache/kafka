@@ -71,6 +71,7 @@ public class PartitionMetadataFile {
         dirtyTopicIdOpt = Optional.of(topicId);
     }
 
+    // what is maybe means?
     public void maybeFlush() {
         // We check dirtyTopicId first to avoid having to take the lock unnecessarily in the frequently called log append path
         if (dirtyTopicIdOpt.isPresent()) {

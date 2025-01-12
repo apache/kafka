@@ -734,6 +734,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /**
    * Append this message set to the active segment of the local log, rolling over to a fresh segment if necessary.
+   * Append this message set to the active segment of the local log, rolling over to a fresh segment if necessary.
    *
    * This method will generally be responsible for assigning offsets to the messages,
    * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.

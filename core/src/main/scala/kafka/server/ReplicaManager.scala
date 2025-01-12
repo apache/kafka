@@ -776,6 +776,8 @@ class ReplicaManager(val config: KafkaConfig,
   def addToActionQueue(action: Runnable): Unit = defaultActionQueue.add(action)
 
   /**
+   * Why `appendRecords` is in ReplicaManager?
+   *
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied;
    * if the callback function itself is already synchronized on some object then pass this object to avoid deadlock.
@@ -957,7 +959,7 @@ class ReplicaManager(val config: KafkaConfig,
   ): Map[TopicPartition, ProducePartitionStatus] = {
     results.map { case (topicPartition, result) =>
       topicPartition -> ProducePartitionStatus(
-        result.info.lastOffset + 1, // required offset
+        result.info.lastOffset + 1, // required offset -> what is required offset ?
         new PartitionResponse(
           result.error,
           result.info.firstOffset,
