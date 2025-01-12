@@ -213,7 +213,7 @@ class ZkAdminManager(val config: KafkaConfig,
           CreatePartitionsMetadata(topic.name, assignments.keySet)
         } else {
           controllerMutationQuota.record(assignments.size)
-          adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false, config.usesTopicId)
+          adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false)
           populateIds(includeConfigsAndMetadata, topic.name)
           CreatePartitionsMetadata(topic.name, assignments.keySet)
         }

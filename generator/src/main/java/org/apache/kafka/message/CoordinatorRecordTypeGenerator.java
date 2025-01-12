@@ -97,6 +97,10 @@ public class CoordinatorRecordTypeGenerator implements TypeClassGenerator {
         buffer.printf("%n");
         generateFromApiKey();
         buffer.printf("%n");
+        generateNewRecordKey();
+        buffer.printf("%n");
+        generateNewRecordValue();
+        buffer.printf("%n");
         generateAccessor("id", "short");
         buffer.printf("%n");
         generateAccessor("lowestSupportedVersion", "short");
@@ -171,7 +175,57 @@ public class CoordinatorRecordTypeGenerator implements TypeClassGenerator {
         buffer.printf("default:%n");
         buffer.incrementIndent();
         headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-        buffer.printf("throw new UnsupportedVersionException(\"Unknown metadata id \"" +
+        buffer.printf("throw new UnsupportedVersionException(\"Unknown record id \"" +
+            " + id);%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateNewRecordKey() {
+        headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
+        buffer.printf("public ApiMessage newRecordKey() {%n");
+        buffer.incrementIndent();
+        buffer.printf("switch (id) {%n");
+        buffer.incrementIndent();
+        for (Map.Entry<Short, CoordinatorRecord> entry : records.entrySet()) {
+            buffer.printf("case %d:%n", entry.getKey());
+            buffer.incrementIndent();
+            buffer.printf("return new %s();%n",
+                MessageGenerator.capitalizeFirst(entry.getValue().key.name()));
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unknown record id \"" +
+            " + id);%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateNewRecordValue() {
+        headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
+        buffer.printf("public ApiMessage newRecordValue() {%n");
+        buffer.incrementIndent();
+        buffer.printf("switch (id) {%n");
+        buffer.incrementIndent();
+        for (Map.Entry<Short, CoordinatorRecord> entry : records.entrySet()) {
+            buffer.printf("case %d:%n", entry.getKey());
+            buffer.incrementIndent();
+            buffer.printf("return new %s();%n",
+                MessageGenerator.capitalizeFirst(entry.getValue().value.name()));
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unknown record id \"" +
             " + id);%n");
         buffer.decrementIndent();
         buffer.decrementIndent();

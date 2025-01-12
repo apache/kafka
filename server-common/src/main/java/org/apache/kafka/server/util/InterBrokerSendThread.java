@@ -43,13 +43,13 @@ import java.util.Set;
  */
 public abstract class InterBrokerSendThread extends ShutdownableThread {
 
-    protected volatile KafkaClient networkClient;
+    protected final KafkaClient networkClient;
 
     private final int requestTimeoutMs;
     private final Time time;
     private final UnsentRequests unsentRequests;
 
-    public InterBrokerSendThread(
+    protected InterBrokerSendThread(
         String name,
         KafkaClient networkClient,
         int requestTimeoutMs,
@@ -58,7 +58,7 @@ public abstract class InterBrokerSendThread extends ShutdownableThread {
         this(name, networkClient, requestTimeoutMs, time, true);
     }
 
-    public InterBrokerSendThread(
+    protected InterBrokerSendThread(
         String name,
         KafkaClient networkClient,
         int requestTimeoutMs,
