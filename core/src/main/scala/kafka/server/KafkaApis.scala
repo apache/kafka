@@ -2512,14 +2512,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     response
   }
 
-  def handleAlterPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
-    throw KafkaApis.shouldNeverReceive(request)
-  }
-
-  def handleListPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
-    throw KafkaApis.shouldNeverReceive(request)
-  }
-
   private def configsAuthorizationApiError(resource: ConfigResource): ApiError = {
     val error = resource.`type` match {
       case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER => Errors.CLUSTER_AUTHORIZATION_FAILED

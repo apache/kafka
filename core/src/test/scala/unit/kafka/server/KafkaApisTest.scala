@@ -10289,15 +10289,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testRaftShouldAlwaysFailAlterPartitionReassignmentsRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    val request = createMockRequest()
-    val e = assertThrows(classOf[UnsupportedVersionException], () => kafkaApis.handleAlterPartitionReassignmentsRequest(request))
-    assertEquals(s"Should never receive when using a Raft-based metadata quorum: ${request.header.apiKey()}", e.getMessage)
-  }
-
-  @Test
   def testEmptyIncrementalAlterConfigsRequestWithKRaft(): Unit = {
     val request = buildRequest(new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData(), 1.toShort))
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
@@ -10381,15 +10372,6 @@ class KafkaApisTest extends Logging {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(raftSupport = true)
     verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleElectLeaders)
-  }
-
-  @Test
-  def testRaftShouldFailListPartitionReassignments(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    val request = createMockRequest()
-    val e = assertThrows(classOf[UnsupportedVersionException], () => kafkaApis.handleListPartitionReassignmentsRequest(request))
-    assertEquals(s"Should never receive when using a Raft-based metadata quorum: ${request.header.apiKey()}", e.getMessage)
   }
 
   @Test
