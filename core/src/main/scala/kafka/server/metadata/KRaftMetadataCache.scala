@@ -540,34 +540,33 @@ object KRaftMetadataCache {
       .filter(broker => !broker.fenced())
       .forEach { broker => brokerToNodes.put(broker.id(), broker.nodes()) }
 
-    def nodes(id: Int): java.util.List[Node] = brokerToNodes.get(id)
+    def getNodes(id: Int): java.util.List[Node] = brokerToNodes.get(id)
 
     val partitionInfos = new util.ArrayList[PartitionInfo]
     val internalTopics = new util.HashSet[String]
     
     def toArray(replicas: Array[Int]): Array[Node] = {
       util.Arrays.stream(replicas)
-        .mapToObj(replica => nodes(replica))
+        .mapToObj(replica => getNodes(replica))
         .flatMap(replica => replica.stream()).toArray(size => new Array[Node](size))
     }
-
-
+    
     val topicImages = image.topics().topicsByName().values()
     if (topicImages != null) {
       topicImages.forEach { topic =>
         topic.partitions().forEach { (key, value) =>
           val partitionId = key
           val partition = value
-          val nodes1 = nodes(partition.leader)
-          if (nodes1 != null) {
-            nodes1.forEach(node => {
+          val nodes = getNodes(partition.leader)
+          if (nodes != null) {
+            nodes.forEach(node => {
               partitionInfos.add(new PartitionInfo(topic.name(),
                 partitionId,
                 node,
                 toArray(partition.replicas),
                 toArray(partition.isr),
                 getOfflineReplicas(image, partition).stream()
-                  .map(replica => nodes(replica))
+                  .map(replica => getNodes(replica))
                   .flatMap(replica => replica.stream()).toArray(size => new Array[Node](size))))
             })
             if (Topic.isInternal(topic.name())) {
@@ -578,7 +577,7 @@ object KRaftMetadataCache {
       }
     }
 
-    val controllerNode = nodes(getRandomAliveBroker(image).getOrElse(-1)) match {
+    val controllerNode = getNodes(getRandomAliveBroker(image).getOrElse(-1)) match {
       case null => Node.noNode()
       case nodes => nodes.get(0)
     }
