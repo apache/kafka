@@ -133,17 +133,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     info("Shutdown complete.")
   }
 
-  private def maybeForwardToController(
-    request: RequestChannel.Request,
-    handler: RequestChannel.Request => Unit
-  ): Unit = {
+  private def forwardToController(request: RequestChannel.Request): Unit = {
     def responseCallback(responseOpt: Option[AbstractResponse]): Unit = {
       responseOpt match {
         case Some(response) => requestHelper.sendForwardedResponse(request, response)
         case None => handleInvalidVersionsDuringForwarding(request)
       }
     }
-    metadataSupport.maybeForward(request, handler, responseCallback)
+
+    metadataSupport.forward(request, responseCallback)
   }
 
   private def handleInvalidVersionsDuringForwarding(request: RequestChannel.Request): Unit = {
@@ -151,16 +149,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       s"unsupported version exception during $request forwarding. " +
       s"This could happen when the controller changed after the connection was established.")
     requestChannel.closeConnection(request, Collections.emptyMap())
-  }
-
-  private def forwardToControllerOrFail(
-    request: RequestChannel.Request
-  ): Unit = {
-    def errorHandler(request: RequestChannel.Request): Unit = {
-      throw new IllegalStateException(s"Unable to forward $request to the controller")
-    }
-
-    maybeForwardToController(request, errorHandler)
   }
 
   /**
@@ -199,8 +187,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request).exceptionally(handleError)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
-        case ApiKeys.CREATE_TOPICS => maybeForwardToController(request, handleCreateTopicsRequest)
-        case ApiKeys.DELETE_TOPICS => maybeForwardToController(request, handleDeleteTopicsRequest)
+        case ApiKeys.CREATE_TOPICS => forwardToController(request)
+        case ApiKeys.DELETE_TOPICS => forwardToController(request)
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
         case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request, requestLocal)
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
@@ -210,14 +198,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request, requestLocal)
         case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request, requestLocal).exceptionally(handleError)
         case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
-        case ApiKeys.CREATE_ACLS => maybeForwardToController(request, handleCreateAcls)
-        case ApiKeys.DELETE_ACLS => maybeForwardToController(request, handleDeleteAcls)
+        case ApiKeys.CREATE_ACLS => forwardToController(request)
+        case ApiKeys.DELETE_ACLS => forwardToController(request)
         case ApiKeys.ALTER_CONFIGS => handleAlterConfigsRequest(request)
         case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
         case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
         case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
-        case ApiKeys.CREATE_PARTITIONS => maybeForwardToController(request, handleCreatePartitionsRequest)
+        case ApiKeys.CREATE_PARTITIONS => forwardToController(request)
         // Create, renew and expire DelegationTokens must first validate that the connection
         // itself is not authenticated with a delegation token before maybeForwardToController.
         case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateTokenRequest(request)
@@ -225,32 +213,32 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request, requestLocal).exceptionally(handleError)
-        case ApiKeys.ELECT_LEADERS => maybeForwardToController(request, handleElectLeaders)
+        case ApiKeys.ELECT_LEADERS => forwardToController(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigsRequest(request)
-        case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleAlterPartitionReassignmentsRequest)
-        case ApiKeys.LIST_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleListPartitionReassignmentsRequest)
+        case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => forwardToController(request)
+        case ApiKeys.LIST_PARTITION_REASSIGNMENTS => forwardToController(request)
         case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request, requestLocal).exceptionally(handleError)
         case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
-        case ApiKeys.ALTER_CLIENT_QUOTAS => maybeForwardToController(request, handleAlterClientQuotasRequest)
+        case ApiKeys.ALTER_CLIENT_QUOTAS => forwardToController(request)
         case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
-        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => maybeForwardToController(request, handleAlterUserScramCredentialsRequest)
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => forwardToController(request)
         case ApiKeys.ALTER_PARTITION => handleAlterPartitionRequest(request)
-        case ApiKeys.UPDATE_FEATURES => maybeForwardToController(request, handleUpdateFeatures)
+        case ApiKeys.UPDATE_FEATURES => forwardToController(request)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
-        case ApiKeys.UNREGISTER_BROKER => forwardToControllerOrFail(request)
+        case ApiKeys.UNREGISTER_BROKER => forwardToController(request)
         case ApiKeys.DESCRIBE_TRANSACTIONS => handleDescribeTransactionsRequest(request)
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
         case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
-        case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
+        case ApiKeys.DESCRIBE_QUORUM => forwardToController(request)
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT => handleConsumerGroupHeartbeat(request).exceptionally(handleError)
         case ApiKeys.CONSUMER_GROUP_DESCRIBE => handleConsumerGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.DESCRIBE_TOPIC_PARTITIONS => handleDescribeTopicPartitionsRequest(request)
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
         case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
-        case ApiKeys.ADD_RAFT_VOTER => forwardToControllerOrFail(request)
-        case ApiKeys.REMOVE_RAFT_VOTER => forwardToControllerOrFail(request)
+        case ApiKeys.ADD_RAFT_VOTER => forwardToController(request)
+        case ApiKeys.REMOVE_RAFT_VOTER => forwardToController(request)
         case ApiKeys.SHARE_GROUP_HEARTBEAT => handleShareGroupHeartbeat(request).exceptionally(handleError)
         case ApiKeys.SHARE_GROUP_DESCRIBE => handleShareGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.SHARE_FETCH => handleShareFetchRequest(request)
@@ -2691,7 +2679,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
           Errors.INVALID_PRINCIPAL_TYPE, owner, requester))
     } else {
-      maybeForwardToController(request, handleCreateTokenRequestZk)
+      forwardToController(request)
     }
   }
 
@@ -2744,7 +2732,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
               .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
     } else {
-      maybeForwardToController(request, handleRenewTokenRequestZk)
+      forwardToController(request)
     }
   }
 
@@ -2790,7 +2778,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
               .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
     } else {
-      maybeForwardToController(request, handleExpireTokenRequestZk)
+      forwardToController(request)
     }
   }
 
@@ -3093,34 +3081,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         describeUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
       metadataSupport match {
-        case ZkSupport(adminManager, controller, zkClient, forwardingManager, metadataCache, _) =>
-          val result = adminManager.describeUserScramCredentials(
-            Option(describeUserScramCredentialsRequest.data.users).map(_.asScala.map(_.name).toList))
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
         case RaftSupport(_, metadataCache) =>
           val result = metadataCache.describeScramCredentials(describeUserScramCredentialsRequest.data())
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
+        case _ =>
+         throw KafkaApis.shouldNeverReceive(request)
       }
-    }
-  }
-
-  def handleAlterUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-    val alterUserScramCredentialsRequest = request.body[AlterUserScramCredentialsRequest]
-
-    if (!zkSupport.controller.isActive) {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception))
-    } else if (authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
-      val result = zkSupport.adminManager.alterUserScramCredentials(
-        alterUserScramCredentialsRequest.data.upsertions().asScala, alterUserScramCredentialsRequest.data.deletions().asScala)
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new AlterUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
-    } else {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     }
   }
 

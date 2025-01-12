@@ -66,11 +66,11 @@ class ForwardingManagerTest {
   }
 
   private def controllerInfo = {
-    ControllerInformation(Some(new Node(0, "host", 1234)), new ListenerName(""), SecurityProtocol.PLAINTEXT, "", isZkController = true)
+    ControllerInformation(Some(new Node(0, "host", 1234)), new ListenerName(""), SecurityProtocol.PLAINTEXT, "")
   }
 
   private def emptyControllerInfo = {
-    ControllerInformation(None, new ListenerName(""), SecurityProtocol.PLAINTEXT, "", isZkController = true)
+    ControllerInformation(None, new ListenerName(""), SecurityProtocol.PLAINTEXT, "")
   }
 
   @Test
