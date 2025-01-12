@@ -3474,10 +3474,10 @@ public class FetchRequestManagerTest {
             sendFetches(),
             "The first fetch should issue requests to node 0 or node 1 since neither has buffered data"
         );
-        prepareFetchResponses(node0, node0Partitions);
-        prepareFetchResponses(node1, node1Partitions);
+        prepareFetchResponses(node0, node0Partitions, records);
+        prepareFetchResponses(node1, node1Partitions, records);
         networkClientDelegate.poll(time.timer(0));
-        assertFetchedPartition(node0Partitions.remove(0), partitions);
+        assertCollected(node0Partitions.remove(0), partitions);
 
         // sendFetches() call #2.
         assertEquals(
@@ -3486,7 +3486,7 @@ public class FetchRequestManagerTest {
             "The second fetch shouldn't issue requests to either node 0 or node 1 since they both have buffered data"
         );
         networkClientDelegate.poll(time.timer(0));
-        assertFetchedPartition(node1Partitions.remove(0), partitions);
+        assertCollected(node1Partitions.remove(0), partitions);
 
         // sendFetches() call #3.
         assertEquals(
@@ -3495,7 +3495,10 @@ public class FetchRequestManagerTest {
             "The third fetch shouldn't issue requests to either node 0 or node 1 since they both have buffered data"
         );
         networkClientDelegate.poll(time.timer(0));
-        assertFetchedPartition(node0Partitions.remove(0), partitions);
+        assertCollected(node0Partitions.remove(0), partitions);
+
+        // Node 0's partitions have all been collected, so validate that and then reset the list of partitions
+        // from which to fetch data so the next pass should request can fetch more data.
         assertTrue(node0Partitions.isEmpty());
         node0Partitions = partitionsForNode(node0, partitions);
 
@@ -3505,9 +3508,11 @@ public class FetchRequestManagerTest {
             sendFetches(),
             "The fourth fetch should issue a request to node 0 since its buffered data was collected"
         );
-        prepareFetchResponses(node0, node0Partitions);
+        prepareFetchResponses(node0, node0Partitions, nextRecords);
         networkClientDelegate.poll(time.timer(0));
-        assertFetchedPartition(node1Partitions.remove(0), partitions);
+        assertCollected(node1Partitions.remove(0), partitions);
+
+        // Node 1's partitions have likewise all been collected, so validate that and reset.
         assertTrue(node1Partitions.isEmpty());
         node1Partitions = partitionsForNode(node1, partitions);
 
@@ -3517,8 +3522,18 @@ public class FetchRequestManagerTest {
             sendFetches(),
             "The fifth fetch should issue a request to node 1 since its buffered data was collected"
         );
-        prepareFetchResponses(node1, node1Partitions);
+        prepareFetchResponses(node1, node1Partitions, nextRecords);
         networkClientDelegate.poll(time.timer(0));
+
+        Map<TopicPartition, List<ConsumerRecord<String, String>>> fetchedRecords = fetchRecords();
+
+        assertEquals(
+            partitions,
+            fetchedRecords.keySet(),
+            "Records from all partitions should have been collected"
+        );
+
+        assertTrue(fetcher.fetchBuffer.isEmpty(), "There was still data remaining in the fetch buffer");
     }
 
     private List<TopicPartition> partitionsForNode(Node node, Set<TopicPartition> partitions) {
@@ -3534,7 +3549,7 @@ public class FetchRequestManagerTest {
         return partitionsForNode;
     }
 
-    private void prepareFetchResponses(Node node, Collection<TopicPartition> partitions) {
+    private void prepareFetchResponses(Node node, Collection<TopicPartition> partitions, MemoryRecords records) {
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
 
         partitions.forEach(tp -> {
@@ -3552,9 +3567,9 @@ public class FetchRequestManagerTest {
         );
     }
 
-    private void assertFetchedPartition(TopicPartition expected, Set<TopicPartition> partitions) {
+    private void assertCollected(TopicPartition expected, Set<TopicPartition> partitions) {
         // Pause any remaining partitions so that when fetchRecords() is called, only the records for the
-        // "fetched" partition will be returned, leaving the remaining in the fetch buffer.
+        // "fetched" partition are collected, leaving the remaining in the fetch buffer.
         partitions.stream()
             .filter(tp -> !tp.equals(expected))
             .forEach(tp -> subscriptions.pause(tp));
@@ -3570,7 +3585,7 @@ public class FetchRequestManagerTest {
         assertEquals(
             Set.of(expected),
             fetchedRecords.keySet(),
-            "Only one partition should have been fetched"
+            "Only one partition should have been collected"
         );
     }
 
