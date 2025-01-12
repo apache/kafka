@@ -3474,10 +3474,12 @@ public class FetchRequestManagerTest {
             sendFetches(),
             "The first fetch should issue requests to node 0 or node 1 since neither has buffered data"
         );
-        prepareFetchResponses(node0, node0Partitions, records);
-        prepareFetchResponses(node1, node1Partitions, records);
+        prepareFetchResponses(node0, node0Partitions, buildRecords(0, 10, 1));
+        prepareFetchResponses(node1, node1Partitions, buildRecords(0, 10, 1));
         networkClientDelegate.poll(time.timer(0));
+        assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
         assertCollected(node0Partitions.remove(0), partitions);
+        assertEquals(3, fetcher.fetchBuffer.bufferedPartitions().size());
 
         // sendFetches() call #2.
         assertEquals(
@@ -3487,6 +3489,7 @@ public class FetchRequestManagerTest {
         );
         networkClientDelegate.poll(time.timer(0));
         assertCollected(node1Partitions.remove(0), partitions);
+        assertEquals(2, fetcher.fetchBuffer.bufferedPartitions().size());
 
         // sendFetches() call #3.
         assertEquals(
@@ -3496,6 +3499,7 @@ public class FetchRequestManagerTest {
         );
         networkClientDelegate.poll(time.timer(0));
         assertCollected(node0Partitions.remove(0), partitions);
+        assertEquals(1, fetcher.fetchBuffer.bufferedPartitions().size());
 
         // Node 0's partitions have all been collected, so validate that and then reset the list of partitions
         // from which to fetch data so the next pass should request can fetch more data.
@@ -3508,9 +3512,10 @@ public class FetchRequestManagerTest {
             sendFetches(),
             "The fourth fetch should issue a request to node 0 since its buffered data was collected"
         );
-        prepareFetchResponses(node0, node0Partitions, nextRecords);
+        prepareFetchResponses(node0, node0Partitions, buildRecords(10, 10, 1));
         networkClientDelegate.poll(time.timer(0));
         assertCollected(node1Partitions.remove(0), partitions);
+        assertEquals(2, fetcher.fetchBuffer.bufferedPartitions().size());
 
         // Node 1's partitions have likewise all been collected, so validate that and reset.
         assertTrue(node1Partitions.isEmpty());
@@ -3522,18 +3527,44 @@ public class FetchRequestManagerTest {
             sendFetches(),
             "The fifth fetch should issue a request to node 1 since its buffered data was collected"
         );
-        prepareFetchResponses(node1, node1Partitions, nextRecords);
+        prepareFetchResponses(node1, node1Partitions, buildRecords(10, 10, 1));
         networkClientDelegate.poll(time.timer(0));
-
-        Map<TopicPartition, List<ConsumerRecord<String, String>>> fetchedRecords = fetchRecords();
+        assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
 
         assertEquals(
             partitions,
-            fetchedRecords.keySet(),
+            fetchRecords().keySet(),
             "Records from all partitions should have been collected"
         );
 
-        assertTrue(fetcher.fetchBuffer.isEmpty(), "There was still data remaining in the fetch buffer");
+        assertEquals(
+            0,
+            fetcher.fetchBuffer.bufferedPartitions().size(),
+            "There was still data remaining in the fetch buffer"
+        );
+
+        // sendFetches() call #6.
+        assertEquals(
+            2,
+            sendFetches(),
+            "The sixth fetch should issue a request to nodes 0 and 1 since its buffered data was collected"
+        );
+        prepareFetchResponses(node0, node0Partitions, buildRecords(20, 10, 1));
+        prepareFetchResponses(node1, node1Partitions, buildRecords(20, 10, 1));
+        networkClientDelegate.poll(time.timer(0));
+        assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        assertEquals(
+            partitions,
+            fetchRecords().keySet(),
+            "Records from all partitions should have been collected"
+        );
+
+        assertEquals(
+            0,
+            fetcher.fetchBuffer.bufferedPartitions().size(),
+            "There was still data remaining in the fetch buffer"
+        );
     }
 
     private List<TopicPartition> partitionsForNode(Node node, Set<TopicPartition> partitions) {
