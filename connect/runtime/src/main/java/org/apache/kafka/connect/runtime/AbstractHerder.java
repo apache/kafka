@@ -65,7 +65,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.TemporaryStage;
 
-import org.apache.logging.log4j.Level;
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.slf4j.Logger;
@@ -164,7 +163,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
         this.connectorExecutor = Executors.newCachedThreadPool();
         this.time = time;
-        this.loggers = new Loggers(time);
+        this.loggers = Loggers.newInstance(time);
         this.cachedConnectors = new CachedConnectors(worker.getPlugins());
     }
 
@@ -1261,13 +1260,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public List<String> setWorkerLoggerLevel(String namespace, String desiredLevelStr) {
-        Level level = Level.toLevel(desiredLevelStr.toUpperCase(Locale.ROOT), null);
+        String normalizedLevel = desiredLevelStr.toUpperCase(Locale.ROOT);
 
-        if (level == null) {
+        if (!loggers.isValidLevel(normalizedLevel)) {
             log.warn("Ignoring request to set invalid level '{}' for namespace {}", desiredLevelStr, namespace);
             return Collections.emptyList();
         }
 
-        return loggers.setLevel(namespace, level);
+        return loggers.setLevel(namespace, normalizedLevel);
     }
 }
