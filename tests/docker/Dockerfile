@@ -46,7 +46,7 @@ RUN if [ "$KAFKA_MODE" = "native" ]; then \
 
 FROM $jdk_version
 
-LABEL maintainer="Apache Kafka dev@kafka.apache.org"
+LABEL org.opencontainers.image.authors="Apache Kafka dev@kafka.apache.org"
 VOLUME ["/opt/kafka-dev"]
 
 # Set the timezone.
