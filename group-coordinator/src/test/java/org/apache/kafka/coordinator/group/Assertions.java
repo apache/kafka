@@ -140,7 +140,8 @@ public class Assertions {
         CoordinatorRecord actual
     ) {
         try {
-            assertApiMessageAndVersionEquals(expected.key(), actual.key());
+            assertEquals(expected.type(), actual.type());
+            assertApiMessage(expected.key(), actual.key());
             assertApiMessageAndVersionEquals(expected.value(), actual.value());
         } catch (AssertionFailedError e) {
             assertionFailure()
@@ -188,6 +189,18 @@ public class Assertions {
         normalize.accept(actual);
 
         assertEquals(expected, actual);
+    }
+
+    private static void assertApiMessage(
+        ApiMessage expected,
+        ApiMessage actual
+    ) {
+        if (expected == actual) return;
+        assertNotNull(expected);
+        assertNotNull(actual);
+        BiConsumer<ApiMessage, ApiMessage> asserter = API_MESSAGE_COMPARATORS
+            .getOrDefault(expected.getClass(), API_MESSAGE_DEFAULT_COMPARATOR);
+        asserter.accept(expected, actual);
     }
 
     private static void assertApiMessageAndVersionEquals(

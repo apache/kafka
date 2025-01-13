@@ -35,7 +35,7 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
-import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
+import org.apache.kafka.common.protocol.{ApiMessage, ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordBatch, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
@@ -649,8 +649,8 @@ class DumpLogSegmentsTest {
     val serde = new GroupCoordinatorRecordSerde()
     val parser = new OffsetsMessageParser()
 
-    def serializedRecord(key: ApiMessageAndVersion, value: ApiMessageAndVersion): Record = {
-      val record = new CoordinatorRecord(key, value)
+    def serializedRecord(recordType: Short, key: ApiMessage, value: ApiMessageAndVersion): Record = {
+      val record = new CoordinatorRecord(recordType, key, value)
       TestUtils.singletonRecords(
         key = serde.serializeKey(record),
         value = serde.serializeValue(record)
@@ -673,11 +673,9 @@ class DumpLogSegmentsTest {
         Some("{\"version\":\"0\",\"data\":{\"epoch\":10}}")
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new ConsumerGroupMetadataKey()
-            .setGroupId("group"),
-          3.toShort
-        ),
+        3.toShort,
+        new ConsumerGroupMetadataKey()
+          .setGroupId("group"),
         new ApiMessageAndVersion(
           new ConsumerGroupMetadataValue()
             .setEpoch(10),
@@ -699,11 +697,9 @@ class DumpLogSegmentsTest {
              "[{\"topic\":\"foo\",\"partitions\":[0]}],\"userData\":null}}]}}")
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new GroupMetadataKey()
-            .setGroup("group"),
-          2.toShort
-        ),
+        2.toShort,
+        new GroupMetadataKey()
+          .setGroup("group"),
         new ApiMessageAndVersion(
           new GroupMetadataValue()
             .setProtocolType("consumer")
@@ -744,11 +740,9 @@ class DumpLogSegmentsTest {
              "\"assignment\":\"QXNzaWdubWVudA==\"}]}}")
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new GroupMetadataKey()
-            .setGroup("group"),
-          2.toShort
-        ),
+        2.toShort,
+        new GroupMetadataKey()
+          .setGroup("group"),
         new ApiMessageAndVersion(
           new GroupMetadataValue()
             .setProtocolType("consumer")
@@ -778,11 +772,9 @@ class DumpLogSegmentsTest {
         Some("<DELETE>")
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new ConsumerGroupMetadataKey()
-            .setGroupId("group"),
-          3.toShort
-        ),
+        3.toShort,
+        new ConsumerGroupMetadataKey()
+          .setGroupId("group"),
         null
       ))
     )
@@ -796,11 +788,9 @@ class DumpLogSegmentsTest {
         None
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new ConsumerGroupMetadataKey()
-            .setGroupId("group"),
-          Short.MaxValue // Invalid record id.
-        ),
+        Short.MaxValue, // Invalid record id.
+        new ConsumerGroupMetadataKey()
+          .setGroupId("group"),
         new ApiMessageAndVersion(
           new ConsumerGroupMetadataValue()
             .setEpoch(10),
@@ -819,11 +809,9 @@ class DumpLogSegmentsTest {
         None
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new ConsumerGroupMetadataKey()
-            .setGroupId("group"),
-          3.toShort
-        ),
+        3.toShort,
+        new ConsumerGroupMetadataKey()
+          .setGroupId("group"),
         new ApiMessageAndVersion(
           new ConsumerGroupMemberMetadataValue(), // The value does correspond to the record id.
           0.toShort
@@ -837,8 +825,8 @@ class DumpLogSegmentsTest {
     val serde = new TransactionCoordinatorRecordSerde()
     val parser = new TransactionLogMessageParser()
 
-    def serializedRecord(key: ApiMessageAndVersion, value: ApiMessageAndVersion): Record = {
-      val record = new CoordinatorRecord(key, value)
+    def serializedRecord(recordType: Short, key: ApiMessage, value: ApiMessageAndVersion): Record = {
+      val record = new CoordinatorRecord(recordType, key, value)
       TestUtils.singletonRecords(
         key = serde.serializeKey(record),
         value = serde.serializeValue(record)
@@ -863,11 +851,9 @@ class DumpLogSegmentsTest {
              "\"transactionStartTimestampMs\":0}}")
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new TransactionLogKey()
-            .setTransactionalId("txnId"),
-          0.toShort
-        ),
+        0.toShort,
+        new TransactionLogKey()
+          .setTransactionalId("txnId"),
         new ApiMessageAndVersion(
           new TransactionLogValue()
             .setProducerId(123L),
@@ -883,11 +869,9 @@ class DumpLogSegmentsTest {
         Some("<DELETE>")
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new TransactionLogKey()
-            .setTransactionalId("txnId"),
-          0.toShort
-        ),
+        0.toShort,
+        new TransactionLogKey()
+          .setTransactionalId("txnId"),
         null
       ))
     )
@@ -899,11 +883,9 @@ class DumpLogSegmentsTest {
         None
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new TransactionLogKey()
-            .setTransactionalId("txnId"),
-          Short.MaxValue // Invalid record id.
-        ),
+        Short.MaxValue, // Invalid record id.
+        new TransactionLogKey()
+          .setTransactionalId("txnId"),
         new ApiMessageAndVersion(
           new TransactionLogValue(),
           0.toShort
@@ -922,11 +904,9 @@ class DumpLogSegmentsTest {
              "\"transactionStartTimestampMs\":13}}")
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new TransactionLogKey()
-            .setTransactionalId("txnId"),
-          0.toShort
-        ),
+        0.toShort,
+        new TransactionLogKey()
+          .setTransactionalId("txnId"),
         new ApiMessageAndVersion(
           new TransactionLogValue()
             .setClientTransactionVersion(0.toShort)
@@ -1091,8 +1071,8 @@ class DumpLogSegmentsTest {
     val serde = new ShareCoordinatorRecordSerde()
     val parser = new ShareGroupStateMessageParser()
 
-    def serializedRecord(key: ApiMessageAndVersion, value: ApiMessageAndVersion): Record = {
-      val record = new CoordinatorRecord(key, value)
+    def serializedRecord(recordType: Short, key: ApiMessage, value: ApiMessageAndVersion): Record = {
+      val record = new CoordinatorRecord(recordType, key, value)
       TestUtils.singletonRecords(
         key = serde.serializeKey(record),
         value = serde.serializeValue(record)
@@ -1115,11 +1095,11 @@ class DumpLogSegmentsTest {
         Some("{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(new ShareSnapshotKey()
+        CoordinatorRecordType.SHARE_SNAPSHOT.id(),
+        new ShareSnapshotKey()
           .setGroupId("gs1")
           .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
           .setPartition(0),
-          CoordinatorRecordType.SHARE_SNAPSHOT.id()),
         new ApiMessageAndVersion(new ShareSnapshotValue()
           .setSnapshotEpoch(0)
           .setStateEpoch(0)
@@ -1143,11 +1123,11 @@ class DumpLogSegmentsTest {
         Some("{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(new ShareUpdateKey()
+        CoordinatorRecordType.SHARE_UPDATE.id(),
+        new ShareUpdateKey()
           .setGroupId("gs1")
           .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
           .setPartition(0),
-          CoordinatorRecordType.SHARE_UPDATE.id()),
         new ApiMessageAndVersion(new ShareUpdateValue()
           .setSnapshotEpoch(0)
           .setLeaderEpoch(0)
@@ -1170,13 +1150,11 @@ class DumpLogSegmentsTest {
         Some("<DELETE>")
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new ShareSnapshotKey()
-            .setGroupId("gs1")
-            .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
-            .setPartition(0),
-          CoordinatorRecordType.SHARE_SNAPSHOT.id()
-        ),
+        CoordinatorRecordType.SHARE_SNAPSHOT.id(),
+        new ShareSnapshotKey()
+          .setGroupId("gs1")
+          .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
+          .setPartition(0),
         null
       ))
     )
@@ -1190,13 +1168,11 @@ class DumpLogSegmentsTest {
         None
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new ShareSnapshotKey()
-            .setGroupId("group")
-            .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
-            .setPartition(0),
-          Short.MaxValue // Invalid record id.
-        ),
+        Short.MaxValue, // Invalid record id.
+        new ShareSnapshotKey()
+          .setGroupId("group")
+          .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
+          .setPartition(0),
         new ApiMessageAndVersion(
           new ShareSnapshotValue()
             .setSnapshotEpoch(0),
@@ -1215,13 +1191,11 @@ class DumpLogSegmentsTest {
         None
       ),
       parser.parse(serializedRecord(
-        new ApiMessageAndVersion(
-          new ShareUpdateKey()
-            .setGroupId("group")
-            .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
-            .setPartition(0),
-          1.toShort
-        ),
+        1.toShort,
+        new ShareUpdateKey()
+          .setGroupId("group")
+          .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
+          .setPartition(0),
         new ApiMessageAndVersion(
           new ShareSnapshotValue(), // incorrect class to deserialize the snapshot update value
           0.toShort

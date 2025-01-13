@@ -29,32 +29,33 @@ import static org.mockito.Mockito.mock;
 public class CoordinatorRecordTest {
     @Test
     public void testAttributes() {
-        ApiMessageAndVersion key = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
+        ApiMessage key = mock(ApiMessage.class);
         ApiMessageAndVersion value = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
-        CoordinatorRecord record = new CoordinatorRecord(key, value);
+        CoordinatorRecord record = new CoordinatorRecord((short) 0, key, value);
+        assertEquals((short) 0, record.type());
         assertEquals(key, record.key());
         assertEquals(value, record.value());
     }
 
     @Test
     public void testKeyCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new CoordinatorRecord(null, null));
+        assertThrows(NullPointerException.class, () -> new CoordinatorRecord((short) 0, null, null));
     }
 
     @Test
     public void testValueCanBeNull() {
-        ApiMessageAndVersion key = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
-        CoordinatorRecord record = new CoordinatorRecord(key, null);
+        ApiMessage key = mock(ApiMessage.class);
+        CoordinatorRecord record = new CoordinatorRecord((short) 0, key, null);
         assertEquals(key, record.key());
         assertNull(record.value());
     }
 
     @Test
     public void testEquals() {
-        ApiMessageAndVersion key = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
+        ApiMessage key = mock(ApiMessage.class);
         ApiMessageAndVersion value = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
-        CoordinatorRecord record1 = new CoordinatorRecord(key, value);
-        CoordinatorRecord record2 = new CoordinatorRecord(key, value);
+        CoordinatorRecord record1 = new CoordinatorRecord((short) 0, key, value);
+        CoordinatorRecord record2 = new CoordinatorRecord((short) 0, key, value);
         assertEquals(record1, record2);
     }
 }

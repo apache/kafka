@@ -40,19 +40,17 @@ public class TransactionCoordinatorRecordSerdeTest {
     public void testSerializeKey() {
         TransactionCoordinatorRecordSerde serializer = new TransactionCoordinatorRecordSerde();
         CoordinatorRecord record = new CoordinatorRecord(
-                new ApiMessageAndVersion(
-                        new TransactionLogKey().setTransactionalId("txnId"),
-                        (short) 0
-                ),
-                new ApiMessageAndVersion(
-                        new TransactionLogValue(),
-                        (short) 0
-                )
+            (short) 0,
+            new TransactionLogKey().setTransactionalId("txnId"),
+            new ApiMessageAndVersion(
+                new TransactionLogValue(),
+                (short) 0
+            )
         );
 
         assertArrayEquals(
-                MessageUtil.toVersionPrefixedBytes(record.key().version(), record.key().message()),
-                serializer.serializeKey(record)
+            MessageUtil.toVersionPrefixedBytes(record.type(), record.key()),
+            serializer.serializeKey(record)
         );
     }
 
@@ -60,14 +58,12 @@ public class TransactionCoordinatorRecordSerdeTest {
     public void testSerializeValue() {
         TransactionCoordinatorRecordSerde serializer = new TransactionCoordinatorRecordSerde();
         CoordinatorRecord record = new CoordinatorRecord(
-                new ApiMessageAndVersion(
-                        new TransactionLogKey().setTransactionalId("txnId"),
-                        (short) 0
-                ),
-                new ApiMessageAndVersion(
-                        new TransactionLogValue(),
-                        (short) 0
-                )
+            (short) 0,
+            new TransactionLogKey().setTransactionalId("txnId"),
+            new ApiMessageAndVersion(
+                new TransactionLogValue(),
+                (short) 0
+            )
         );
 
         assertArrayEquals(
@@ -80,11 +76,9 @@ public class TransactionCoordinatorRecordSerdeTest {
     public void testSerializeNullValue() {
         TransactionCoordinatorRecordSerde serializer = new TransactionCoordinatorRecordSerde();
         CoordinatorRecord record = new CoordinatorRecord(
-                new ApiMessageAndVersion(
-                        new TransactionLogKey().setTransactionalId("txnId"),
-                        (short) 0
-                ),
-                null
+            (short) 0,
+            new TransactionLogKey().setTransactionalId("txnId"),
+            null
         );
 
         assertNull(serializer.serializeValue(record));

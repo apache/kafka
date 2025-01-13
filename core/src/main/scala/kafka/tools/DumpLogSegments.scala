@@ -504,7 +504,7 @@ object DumpLogSegments {
       try {
         val r = serde.deserialize(record.key, record.value)
         (
-          Some(prepareKey(r.key.message)),
+          Some(prepareKey(r.key)),
           Option(r.value).map(v => prepareValue(v.message, v.version)).orElse(Some("<DELETE>"))
         )
       } catch {
@@ -561,7 +561,7 @@ object DumpLogSegments {
       try {
         val r = serde.deserialize(record.key, record.value)
         (
-          Some(prepareKey(r.key.message, r.key.version)),
+          Some(prepareKey(r.key, r.`type`())),
           Option(r.value).map(v => prepareValue(v.message, v.version)).orElse(Some("<DELETE>"))
         )
       } catch {
@@ -647,7 +647,7 @@ object DumpLogSegments {
       try {
         val r = serde.deserialize(record.key, record.value)
         (
-          Some(prepareKey(r.key.message)),
+          Some(prepareKey(r.key)),
           Option(r.value).map(v => prepareValue(v.message, v.version)).orElse(Some("<DELETE>"))
         )
       } catch {

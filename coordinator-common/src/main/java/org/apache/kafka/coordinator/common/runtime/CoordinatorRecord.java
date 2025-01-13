@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.coordinator.common.runtime;
 
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.Objects;
 
 /**
- * A Record which contains an {{@link ApiMessageAndVersion}} as key and
+ * A Record which contains a type, an {{@link ApiMessage}} as key and
  * an {{@link ApiMessageAndVersion}} as value. The value could be null to
  * represent a tombstone.
  *
@@ -29,9 +30,14 @@ import java.util.Objects;
  */
 public class CoordinatorRecord {
     /**
+     * The type of the record.
+     */
+    private final short type;
+
+    /**
      * The key of the record.
      */
-    private final ApiMessageAndVersion key;
+    private final ApiMessage key;
 
     /**
      * The value of the record or null if the record is
@@ -46,17 +52,26 @@ public class CoordinatorRecord {
      * @param value A key or null.
      */
     public CoordinatorRecord(
-        ApiMessageAndVersion key,
+        short type,
+        ApiMessage key,
         ApiMessageAndVersion value
     ) {
+        this.type = type;
         this.key = Objects.requireNonNull(key);
         this.value = value;
     }
 
     /**
+     * @return The type.
+     */
+    public short type() {
+        return this.type;
+    }
+
+    /**
      * @return The key.
      */
-    public ApiMessageAndVersion key() {
+    public ApiMessage key() {
         return this.key;
     }
 
@@ -71,22 +86,17 @@ public class CoordinatorRecord {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
-        CoordinatorRecord record = (CoordinatorRecord) o;
-
-        if (!Objects.equals(key, record.key)) return false;
-        return Objects.equals(value, record.value);
+        CoordinatorRecord that = (CoordinatorRecord) o;
+        return type == that.type && Objects.equals(key, that.key) && Objects.equals(value, that.value);
     }
 
     @Override
     public int hashCode() {
-        int result = key.hashCode();
-        result = 31 * result + (value != null ? value.hashCode() : 0);
-        return result;
+        return Objects.hash(type, key, value);
     }
 
     @Override
     public String toString() {
-        return "CoordinatorRecord(key=" + key + ", value=" + value + ")";
+        return "CoordinatorRecord(short=" + type + ", key=" + key + ", value=" + value + ")";
     }
 }

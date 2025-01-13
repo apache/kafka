@@ -44,8 +44,8 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
     public byte[] serializeKey(CoordinatorRecord record) {
         // Record does not accept a null key.
         return MessageUtil.toCoordinatorTypePrefixedBytes(
-            record.key().version(),
-            record.key().message()
+            record.type(),
+            record.key()
         );
     }
 
@@ -72,7 +72,7 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
         readMessage(keyMessage, keyBuffer, recordType, "key");
 
         if (valueBuffer == null) {
-            return new CoordinatorRecord(new ApiMessageAndVersion(keyMessage, recordType), null);
+            return new CoordinatorRecord(recordType, keyMessage, null);
         }
 
         final ApiMessage valueMessage = apiMessageValueFor(recordType);
@@ -80,7 +80,8 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
         readMessage(valueMessage, valueBuffer, valueVersion, "value");
 
         return new CoordinatorRecord(
-            new ApiMessageAndVersion(keyMessage, recordType),
+            recordType,
+            keyMessage,
             new ApiMessageAndVersion(valueMessage, valueVersion)
         );
     }

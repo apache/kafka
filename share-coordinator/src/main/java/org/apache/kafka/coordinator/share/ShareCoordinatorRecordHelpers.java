@@ -30,11 +30,11 @@ import java.util.stream.Collectors;
 public class ShareCoordinatorRecordHelpers {
     public static CoordinatorRecord newShareSnapshotRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
         return new CoordinatorRecord(
-            new ApiMessageAndVersion(new ShareSnapshotKey()
+            CoordinatorRecordType.SHARE_SNAPSHOT.id(),
+            new ShareSnapshotKey()
                 .setGroupId(groupId)
                 .setTopicId(topicId)
                 .setPartition(partitionId),
-                CoordinatorRecordType.SHARE_SNAPSHOT.id()),
             new ApiMessageAndVersion(new ShareSnapshotValue()
                 .setSnapshotEpoch(offsetData.snapshotEpoch())
                 .setStateEpoch(offsetData.stateEpoch())
@@ -53,11 +53,11 @@ public class ShareCoordinatorRecordHelpers {
 
     public static CoordinatorRecord newShareSnapshotUpdateRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
         return new CoordinatorRecord(
-            new ApiMessageAndVersion(new ShareUpdateKey()
+            CoordinatorRecordType.SHARE_UPDATE.id(),
+            new ShareUpdateKey()
                 .setGroupId(groupId)
                 .setTopicId(topicId)
                 .setPartition(partitionId),
-                CoordinatorRecordType.SHARE_UPDATE.id()),
             new ApiMessageAndVersion(new ShareUpdateValue()
                 .setSnapshotEpoch(offsetData.snapshotEpoch())
                 .setLeaderEpoch(offsetData.leaderEpoch())
