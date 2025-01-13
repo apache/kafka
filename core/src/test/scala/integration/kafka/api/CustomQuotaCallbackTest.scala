@@ -226,7 +226,15 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def createTopic(topic: String, numPartitions: Int, leader: Int): Unit = {
-    TestUtils.createTopicWithAdmin(createAdminClient(), topic, brokers, controllerServers, numPartitions)
+    val assignment = (0 until numPartitions).map { i => i -> Seq(leader) }.toMap
+    TestUtils.createTopicWithAdmin(
+      createAdminClient(),
+      topic,
+      brokers,
+      controllerServers,
+      numPartitions,
+      replicaAssignment = assignment
+    )
   }
 
   private def createAdminClient(): Admin = {
