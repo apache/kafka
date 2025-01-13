@@ -35,7 +35,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.LeaderAndIsr
-import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.MockTime
@@ -275,7 +275,6 @@ class PartitionLockTest extends Logging {
     logManager.startup(Set.empty)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => 1L,
       mockTime,
@@ -457,8 +456,8 @@ class PartitionLockTest extends Logging {
     keepPartitionMetadataFile = true) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
-                                interBrokerProtocolVersion: MetadataVersion, requestLocal: RequestLocal, verificationGuard: VerificationGuard): LogAppendInfo = {
-      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion, requestLocal, verificationGuard)
+                                requestLocal: RequestLocal, verificationGuard: VerificationGuard): LogAppendInfo = {
+      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, requestLocal, verificationGuard)
       appendSemaphore.acquire()
       appendInfo
     }

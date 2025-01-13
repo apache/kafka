@@ -62,7 +62,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     private static final String EXPORT_DOC = "Export operation execution to a CSV file. Supported operations: reset-offsets.";
     private static final String RESET_TO_OFFSET_DOC = "Reset offsets to a specific offset.";
     private static final String RESET_FROM_FILE_DOC = "Reset offsets to values defined in CSV file.";
-    private static final String RESET_TO_DATETIME_DOC = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'";
+    private static final String RESET_TO_DATETIME_DOC = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'";
     private static final String RESET_BY_DURATION_DOC = "Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'";
     private static final String RESET_TO_EARLIEST_DOC = "Reset offsets to earliest offset.";
     private static final String RESET_TO_LATEST_DOC = "Reset offsets to latest offset.";

@@ -431,7 +431,6 @@ class PartitionTest extends AbstractPartitionTest {
     partition = new Partition(
       topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -1270,7 +1269,6 @@ class PartitionTest extends AbstractPartitionTest {
     configRepository.setTopicConfig(topicPartition.topic, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -1361,7 +1359,6 @@ class PartitionTest extends AbstractPartitionTest {
     val mockMetadataCache: KRaftMetadataCache = mock(classOf[KRaftMetadataCache])
     val partition = spy(new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -1593,7 +1590,6 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = new Partition(
       topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -1701,7 +1697,6 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = new Partition(
       topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -1808,7 +1803,6 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = new Partition(
       topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -1900,7 +1894,6 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = new Partition(
       topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -1966,7 +1959,6 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = new Partition(
       topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -2122,7 +2114,6 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = new Partition(
       topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -2205,7 +2196,6 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = new Partition(
       topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.IBP_3_7_IV2,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -2578,12 +2568,11 @@ class PartitionTest extends AbstractPartitionTest {
       time = time,
       brokerId = brokerId,
       brokerEpochSupplier = () => 0,
-      metadataVersionSupplier = () => MetadataVersion.IBP_3_0_IV0
+      metadataVersionSupplier = () => MetadataVersion.IBP_3_0_IV1
     )
 
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -2730,7 +2719,6 @@ class PartitionTest extends AbstractPartitionTest {
     // Create new Partition object for same topicPartition
     val partition2 = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -2775,7 +2763,6 @@ class PartitionTest extends AbstractPartitionTest {
     // Create new Partition object for same topicPartition
     val partition2 = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -2858,7 +2845,7 @@ class PartitionTest extends AbstractPartitionTest {
   def testUpdateAssignmentAndIsr(): Unit = {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
-      topicPartition, 1000, MetadataVersion.latestTesting, 0, () => defaultBrokerEpoch(0),
+      topicPartition, 1000, 0, () => defaultBrokerEpoch(0),
       Time.SYSTEM, mock(classOf[AlterPartitionListener]), mock(classOf[DelayedOperations]),
       mock(classOf[KRaftMetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterPartitionManager]))
 
@@ -2933,7 +2920,6 @@ class PartitionTest extends AbstractPartitionTest {
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -2972,7 +2958,6 @@ class PartitionTest extends AbstractPartitionTest {
 
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -3014,7 +2999,6 @@ class PartitionTest extends AbstractPartitionTest {
 
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -3766,7 +3750,6 @@ class PartitionTest extends AbstractPartitionTest {
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -3812,7 +3795,6 @@ class PartitionTest extends AbstractPartitionTest {
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -3858,7 +3840,6 @@ class PartitionTest extends AbstractPartitionTest {
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -3904,7 +3885,6 @@ class PartitionTest extends AbstractPartitionTest {
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -3950,7 +3930,6 @@ class PartitionTest extends AbstractPartitionTest {
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -3997,7 +3976,6 @@ class PartitionTest extends AbstractPartitionTest {
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
@@ -4052,7 +4030,6 @@ class PartitionTest extends AbstractPartitionTest {
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,
