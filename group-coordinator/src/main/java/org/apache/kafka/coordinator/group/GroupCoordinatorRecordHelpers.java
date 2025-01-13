@@ -57,7 +57,6 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -70,6 +69,9 @@ import java.util.Set;
  * the __consumer_offsets topic.
  */
 public class GroupCoordinatorRecordHelpers {
+
+    private static final short GROUP_METADATA_VALUE_VERSION = 3;
+
     private GroupCoordinatorRecordHelpers() {}
 
     /**
@@ -443,13 +445,11 @@ public class GroupCoordinatorRecordHelpers {
      *
      * @param group              The classic group.
      * @param assignment         The classic group assignment.
-     * @param metadataVersion    The metadata version.
      * @return The record.
      */
     public static CoordinatorRecord newGroupMetadataRecord(
         ClassicGroup group,
-        Map<String, byte[]> assignment,
-        MetadataVersion metadataVersion
+        Map<String, byte[]> assignment
     ) {
         List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>(group.allMembers().size());
         group.allMembers().forEach(member -> {
@@ -491,7 +491,7 @@ public class GroupCoordinatorRecordHelpers {
                     .setLeader(group.leaderOrNull())
                     .setCurrentStateTimestamp(group.currentStateTimestampOrDefault())
                     .setMembers(members),
-                metadataVersion.groupMetadataValueVersion()
+                GROUP_METADATA_VALUE_VERSION
             )
         );
     }
@@ -519,12 +519,10 @@ public class GroupCoordinatorRecordHelpers {
      * Creates an empty GroupMetadata record.
      *
      * @param group              The classic group.
-     * @param metadataVersion    The metadata version.
      * @return The record.
      */
     public static CoordinatorRecord newEmptyGroupMetadataRecord(
-        ClassicGroup group,
-        MetadataVersion metadataVersion
+        ClassicGroup group
     ) {
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
@@ -540,7 +538,7 @@ public class GroupCoordinatorRecordHelpers {
                     .setLeader(null)
                     .setCurrentStateTimestamp(group.currentStateTimestampOrDefault())
                     .setMembers(Collections.emptyList()),
-                metadataVersion.groupMetadataValueVersion()
+                GROUP_METADATA_VALUE_VERSION
             )
         );
     }
@@ -552,17 +550,15 @@ public class GroupCoordinatorRecordHelpers {
      * @param topic             The topic name.
      * @param partitionId       The partition id.
      * @param offsetAndMetadata The offset and metadata.
-     * @param metadataVersion   The metadata version.
      * @return The record.
      */
     public static CoordinatorRecord newOffsetCommitRecord(
         String groupId,
         String topic,
         int partitionId,
-        OffsetAndMetadata offsetAndMetadata,
-        MetadataVersion metadataVersion
+        OffsetAndMetadata offsetAndMetadata
     ) {
-        short version = metadataVersion.offsetCommitValueVersion(offsetAndMetadata.expireTimestampMs.isPresent());
+        short version = offsetCommitValueVersion(offsetAndMetadata.expireTimestampMs.isPresent());
 
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
@@ -583,6 +579,16 @@ public class GroupCoordinatorRecordHelpers {
                 version
             )
         );
+    }
+
+    static short offsetCommitValueVersion(boolean expireTimestampMs) {
+        if (expireTimestampMs) {
+            return 1;
+        } else {
+            // Serialize with the highest supported non-flexible version
+            // until a tagged field is introduced or the version is bumped.
+            return  3;
+        }
     }
 
     /**

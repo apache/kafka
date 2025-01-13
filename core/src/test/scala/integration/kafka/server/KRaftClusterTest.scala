@@ -443,7 +443,7 @@ class KRaftClusterTest {
       "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
         new KafkaClusterTestKit.Builder(
           new TestKitNodes.Builder().
-            setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).
+            setBootstrapMetadataVersion(MetadataVersion.IBP_3_0_IV1).
             setNumBrokerNodes(1).
             setNumControllerNodes(1).build()).build()
     }).getMessage)

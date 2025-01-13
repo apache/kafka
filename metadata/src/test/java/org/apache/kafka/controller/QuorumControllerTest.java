@@ -718,7 +718,7 @@ public class QuorumControllerTest {
             alterPartitionRequest.topics().add(topicData);
 
             active.alterPartition(ANONYMOUS_CONTEXT, new AlterPartitionRequest
-                .Builder(alterPartitionRequest, false).build((short) 0).data()).get();
+                .Builder(alterPartitionRequest).build((short) 0).data()).get();
 
             AtomicLong lastHeartbeatMs = new AtomicLong(getMonotonicMs(active.time()));
             sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);

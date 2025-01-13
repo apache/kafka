@@ -41,7 +41,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
-import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
@@ -154,7 +154,6 @@ object Partition {
     new Partition(topicPartition,
       _topicId = topicId,
       replicaLagTimeMaxMs = replicaManager.config.replicaLagTimeMaxMs,
-      interBrokerProtocolVersion = replicaManager.metadataCache.metadataVersion(),
       localBrokerId = replicaManager.config.brokerId,
       localBrokerEpochSupplier = replicaManager.brokerEpochSupplier,
       time = time,
@@ -307,7 +306,6 @@ case class CommittedPartitionState(
  */
 class Partition(val topicPartition: TopicPartition,
                 val replicaLagTimeMaxMs: Long,
-                interBrokerProtocolVersion: MetadataVersion,
                 localBrokerId: Int,
                 localBrokerEpochSupplier: () => Long,
                 time: Time,
@@ -1404,7 +1402,7 @@ class Partition(val topicPartition: TopicPartition,
           }
 
           val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
-            interBrokerProtocolVersion, requestLocal, verificationGuard)
+            requestLocal, verificationGuard)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))
