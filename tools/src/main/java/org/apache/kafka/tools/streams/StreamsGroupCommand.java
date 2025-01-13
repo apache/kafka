@@ -201,31 +201,37 @@ public class StreamsGroupCommand {
                 }
 
                 if (!verbose) {
-                    String fmt = "%" + -groupLen + "s %" + -maxMemberIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s\n"
-                        + "%s %s %s\n\n";
-                    System.out.printf(fmt, "GROUP", "MEMBER", "PROCESS", "CLIENT-ID", "ACTIVE-TASKS", "STANDBY-TASKS", "WARMUP-TASKS");
+                    String fmt = "%" + -groupLen + "s %" + -maxMemberIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s\n";
                     for (StreamsGroupMemberDescription member : members) {
-                        System.out.printf(fmt, description.groupId(), member.memberId(), member.processId(), member.clientId(),
-                            member.assignment().activeTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
-                            member.assignment().standbyTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
-                            member.assignment().warmupTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")));
+                        System.out.printf(fmt, "GROUP", "MEMBER", "PROCESS", "CLIENT-ID");
+                        System.out.printf(fmt, description.groupId(), member.memberId(), member.processId(), member.clientId());
+                        printTasks(member.assignment(), false);
+                        System.out.println();
                     }
                 } else {
-                    String fmt = "%" + -groupLen + "s %-15s% %-15s%" + -maxMemberIdLen + "s %s %15s %" + -maxHostLen + "s %" + -maxClientIdLen + "s\n"
-                        + "%s %s %s %s %s %s\n\n";
-                    System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT",
-                        "ACTIVE-TASKS", "STANDBY-TASKS", "WARMUP-TASKS", "TARGET-ACTIVE-TASKS", "TARGET-STANDBY-TASKS", "TARGET-WARMUP-TASKS");
+                    String fmt = "%" + -groupLen + "s %-15s% %-15s%" + -maxMemberIdLen + "s %s %15s %" + -maxHostLen + "s %" + -maxClientIdLen + "s\n";
+                    System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT");
                     for (StreamsGroupMemberDescription member : members) {
-                        System.out.printf(fmt, description.groupId(), description.targetAssignmentEpoch(), description.topologyEpoch(), member.memberId(), member.isClassic() ? "classic" : "streams", member.memberEpoch(), member.processId(), member.clientId(),
-                            member.assignment().activeTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
-                            member.assignment().standbyTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
-                            member.assignment().warmupTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
-                            member.targetAssignment().activeTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
-                            member.targetAssignment().standbyTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")),
-                            member.targetAssignment().warmupTasks().stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")));
+                        System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT");
+                        System.out.printf(fmt, description.groupId(), description.targetAssignmentEpoch(), description.topologyEpoch(), member.memberId(),
+                            member.isClassic() ? "classic" : "streams", member.memberEpoch(), member.processId(), member.clientId());
+                        printTasks(member.assignment(), false);
+                        printTasks(member.targetAssignment(), true);
+                        System.out.println();
                     }
                 }
             }
+        }
+
+        private void printTaskType(List<StreamsGroupMemberAssignment.TaskIds> tasks, String taskType) {
+            System.out.printf("%s\n", taskType + ":" + tasks.stream().map(taskId -> taskId.subtopologyId() + ":" + taskId.partitions()).collect(Collectors.joining(",")));
+        }
+
+        private void printTasks(StreamsGroupMemberAssignment assignment, boolean isTarget) {
+            String typePrefix = isTarget ? "TARGET-" : "";
+            printTaskType(assignment.activeTasks(), typePrefix + "ACTIVE-TASKS:");
+            printTaskType(assignment.standbyTasks(), typePrefix + "STANDBY-TASKS:");
+            printTaskType(assignment.warmupTasks(), typePrefix + "WARMUP-TASKS:");
         }
 
         private void printStates(StreamsGroupDescription description, boolean verbose) {
