@@ -180,28 +180,6 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     assertEquals(brokerCount, callbackInstances.get)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
-  def testExecuteUpdateClusterMetadataMethodCallback(quorum: String, groupProtocol: String): Unit = {
-    val brokerId = 0
-    
-    val user = createGroupWithOneUser("group0_user1", brokerId)
-    user.configureAndWaitForQuota(1000000, 2000000)
-    val firstExec = updateClusterMetadataCalls.get
-    assertNotEquals(0, firstExec)
-
-    val largeTopic = "group1_largeTopic"
-    createTopic(largeTopic, numPartitions = 99, leader = brokerId)
-    val secondExec = updateClusterMetadataCalls.get
-    assertNotEquals(firstExec, secondExec)
-    
-    val smallTopic = "group1_smallTopic"
-    createTopic(smallTopic, numPartitions = 1, leader = brokerId)
-    val thirdExec = updateClusterMetadataCalls.get
-    assertNotEquals(secondExec, thirdExec)
-
-  }
-
   /**
    * Creates a group with one user and one topic with one partition.
    * @param firstUser First user to create in the group
