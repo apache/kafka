@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.{lang, util}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
@@ -209,6 +210,19 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     createTopic(user.topic, numPartitions = 1, brokerId)
     user.configureAndWaitForQuota(defaultProduceQuota, defaultConsumeQuota, group = None)
     user
+  }
+
+  override def deleteTopic(
+    topic: String, 
+    listenerName: ListenerName = listenerName
+  ): Unit = {
+    Using.resource(createAdminClient()) { admin =>
+      TestUtils.deleteTopicWithAdmin(
+        admin = admin,
+        topic = topic,
+        brokers = aliveBrokers,
+        controllers = controllerServers)
+    }
   }
 
   private def createTopic(topic: String, numPartitions: Int, leader: Int): Unit = {
