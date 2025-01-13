@@ -16,7 +16,7 @@
 {
   "apiKey": 5,
   "type": "request",
-  // TODO: The generator should not generate the empty collection, It will reslove it in KAFKA-14552
+  // TODO: The generator should not generate an empty collection, it will resolve in KAFKA-14552
   "listeners": ["zkBroker"],
   "name": "StopReplicaRequest",
   // Version 1 adds the broker epoch and reorganizes the partitions to be stored
