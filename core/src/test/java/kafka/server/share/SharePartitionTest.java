@@ -1192,7 +1192,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireWithBatchSizeWithBatchSize() {
+    public void testAcquireWithBatchSizeAndMaxFetchRecords() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         // Create 2 batches of records.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
