@@ -156,17 +156,6 @@
     </p>
 
     <p>
-        For better observability and performance, analysis are provided by additional metrics in Kafka clients and new methods added to the Admin,
-        Consumer, and Producer interfaces. Additionally, the inclusion of numeric metrics for client-level and thread-level states enables
-        explicit status tracking, providing clear insights into the application's health.
-        Moreover, a new constructor method with next offsets is added to
-        the ConsumerRecords class to ensure accurate offset management.
-        Also, a new method in the Java and Scala APIs allows foreign key
-        extraction from both the key and value in KTable joins, reducing storage overhead and improving API usability.
-        Finally, the topology can be configured to enable access to any processor, with the option to wrap or replace it. This flexibility is useful for scenarios such as logging, tracing, testing, or debugging.
-    </p>
-
-    <p>
         In this release the <code>ClientInstanceIds</code> instance stores the global consumer<code>Uuid</code> for the
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-714%3A+Client+metrics+and+observability#KIP714:Clientmetricsandobservability-Clientidentificationandtheclientinstanceid">KIP-714</a>
         id with a key of global stream-thread name appended with <code>"-global-consumer"</code> where before it was only the global stream-thread name.
