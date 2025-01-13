@@ -38,7 +38,6 @@ import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, Transacti
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion.IBP_0_8_2
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
@@ -613,16 +612,16 @@ class KafkaConfigTest {
     val conf = KafkaConfig.fromProps(props)
     assertEquals(MetadataVersion.latestProduction, conf.interBrokerProtocolVersion)
 
-    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "0.8.2.0")
+    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0.0-IV1")
     val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(IBP_0_8_2, conf2.interBrokerProtocolVersion)
+    assertEquals(MetadataVersion.IBP_3_0_IV1, conf2.interBrokerProtocolVersion)
 
-    // check that 0.8.2.0 is the same as 0.8.2.1
-    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "0.8.2.1")
+    // check that patch version doesn't affect equality
+    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0.1-IV1")
     val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(IBP_0_8_2, conf3.interBrokerProtocolVersion)
+    assertEquals(MetadataVersion.IBP_3_0_IV1, conf3.interBrokerProtocolVersion)
 
-    //check that latest is newer than 0.8.2
+    //check that latest is newer than 3.0.1-IV0
     assertTrue(MetadataVersion.latestTesting.isAtLeast(conf3.interBrokerProtocolVersion))
   }
 
@@ -1638,15 +1637,6 @@ class KafkaConfigTest {
       val config = new KafkaConfig(props)
       assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_KRAFT_VERSION)
     }
-  }
-
-  @Test
-  def testInvalidInterBrokerProtocolVersionKRaft(): Unit = {
-    val props = new Properties()
-    props.putAll(kraftProps())
-    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
-    assertEquals("A non-KRaft version 2.8 given for inter.broker.protocol.version. The minimum version is 3.0-IV1",
-      assertThrows(classOf[ConfigException], () => new KafkaConfig(props)).getMessage)
   }
 
   @Test
