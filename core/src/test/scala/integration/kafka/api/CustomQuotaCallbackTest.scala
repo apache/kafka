@@ -148,9 +148,11 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     // Create large number of partitions on another broker, should result in throttling on first partition
     val largeTopic = "group1_largeTopic"
     createTopic(largeTopic, numPartitions = 99, leader = 0)
+    user.removeThrottleMetrics()
     user.waitForQuotaUpdate(8000, 2500, defaultRequestQuota)
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)
 
+    user.removeQuotaOverrides()
     // Remove quota override and test default quota applied with scaling based on partitions
     user = addUser("group1_user2", brokerId)
     user.waitForQuotaUpdate(defaultProduceQuota / 100, defaultConsumeQuota / 100, defaultRequestQuota)
