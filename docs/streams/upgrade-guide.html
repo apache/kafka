@@ -179,7 +179,7 @@
 
     <p>
         Kafka Streams introduced the <code>RETRY</code> return option the <code>ProductionExceptionHandler</code> (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=311627309">KIP-1065</a>).
-        This feature addresses the issue of infinite retry loops caused by <code>TimeoutException</code> when an output topic might be missing.
+        This feature addresses the issue of infinite retry loops caused by <code>TimeoutException</code>, for example when an output topic does not exist.
         Now the application is enabled to attempt the action again instead of either crashing or dropping records.
         This change aims to enhance the robustness and reliability of Kafka Streams by providing a more flexible error-handling mechanism.
     </p>
