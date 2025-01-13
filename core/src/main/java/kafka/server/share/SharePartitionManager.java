@@ -289,7 +289,7 @@ public class SharePartitionManager implements AutoCloseable {
         Map<TopicIdPartition, CompletableFuture<Throwable>> futures = new HashMap<>();
         acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
             // Update share acknowledgement metrics.
-            brokerTopicStats.topicStats(topicIdPartition.topicPartition().topic()).totalShareAcknowledgementRequestRate().mark();
+            brokerTopicStats.topicStats(topicIdPartition.topic()).totalShareAcknowledgementRequestRate().mark();
             SharePartitionKey sharePartitionKey = sharePartitionKey(groupId, topicIdPartition);
             SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey);
             if (sharePartition != null) {
@@ -576,7 +576,7 @@ public class SharePartitionManager implements AutoCloseable {
         List<DelayedShareFetchKey> delayedShareFetchWatchKeys = new ArrayList<>();
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         for (TopicIdPartition topicIdPartition : shareFetch.partitionMaxBytes().keySet()) {
-            brokerTopicStats.topicStats(topicIdPartition.topicPartition().topic()).totalShareFetchRequestRate().mark();
+            brokerTopicStats.topicStats(topicIdPartition.topic()).totalShareFetchRequestRate().mark();
             SharePartitionKey sharePartitionKey = sharePartitionKey(
                 shareFetch.groupId(),
                 topicIdPartition
@@ -726,7 +726,7 @@ public class SharePartitionManager implements AutoCloseable {
         return (topicIdPartitions, allTopicPartitionsFailed) -> {
             // Update failed share fetch request metric.
             topicIdPartitions.forEach(topicIdPartition ->
-                brokerTopicStats.topicStats(topicIdPartition.topicPartition().topic()).failedShareFetchRequestRate().mark());
+                brokerTopicStats.topicStats(topicIdPartition.topic()).failedShareFetchRequestRate().mark());
             if (allTopicPartitionsFailed) {
                 brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().mark();
             }

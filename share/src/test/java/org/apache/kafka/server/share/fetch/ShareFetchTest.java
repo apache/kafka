@@ -97,7 +97,7 @@ public class ShareFetchTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void testMayBeCompleteWithErroneousTopicPartitions() {
+    public void testMaybeCompleteWithErroneousTopicPartitions() {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
@@ -119,7 +119,7 @@ public class ShareFetchTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void testMayBeCompleteWithPartialErroneousTopicPartitions() {
+    public void testMaybeCompleteWithPartialErroneousTopicPartitions() {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
@@ -141,7 +141,7 @@ public class ShareFetchTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void testMayBeCompleteWithException() {
+    public void testMaybeCompleteWithException() {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
@@ -160,7 +160,7 @@ public class ShareFetchTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void testMayBeCompleteWithExceptionPartialFailure() {
+    public void testMaybeCompleteWithExceptionPartialFailure() {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
@@ -178,7 +178,7 @@ public class ShareFetchTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void testMayBeCompleteWithExceptionWithExistingErroneousTopicPartition() {
+    public void testMaybeCompleteWithExceptionWithExistingErroneousTopicPartition() {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
