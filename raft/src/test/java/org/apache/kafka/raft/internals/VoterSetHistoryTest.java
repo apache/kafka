@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.VoterSetTest;
 
@@ -33,7 +34,7 @@ public final class VoterSetHistoryTest {
     @Test
     void testStaticVoterSet() {
         VoterSet staticVoterSet = VoterSet.fromMap(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
-        VoterSetHistory votersHistory = new VoterSetHistory(staticVoterSet);
+        VoterSetHistory votersHistory = voterSetHistory(staticVoterSet);
 
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(0));
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(100));
@@ -54,7 +55,7 @@ public final class VoterSetHistoryTest {
 
     @Test
     void TestNoStaticVoterSet() {
-        VoterSetHistory votersHistory = new VoterSetHistory(VoterSet.empty());
+        VoterSetHistory votersHistory = voterSetHistory(VoterSet.empty());
 
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(0));
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(100));
@@ -65,7 +66,7 @@ public final class VoterSetHistoryTest {
     void testAddAt() {
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2, 3), true);
         VoterSet staticVoterSet = VoterSet.fromMap(new HashMap<>(voterMap));
-        VoterSetHistory votersHistory = new VoterSetHistory(staticVoterSet);
+        VoterSetHistory votersHistory = voterSetHistory(staticVoterSet);
 
         assertThrows(
             IllegalArgumentException.class,
@@ -95,7 +96,7 @@ public final class VoterSetHistoryTest {
     void testBootstrapAddAt() {
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2, 3), true);
         VoterSet bootstrapVoterSet = VoterSet.fromMap(new HashMap<>(voterMap));
-        VoterSetHistory votersHistory = new VoterSetHistory(VoterSet.empty());
+        VoterSetHistory votersHistory = voterSetHistory(VoterSet.empty());
 
         votersHistory.addAt(-1, bootstrapVoterSet);
         assertEquals(bootstrapVoterSet, votersHistory.lastValue());
@@ -124,7 +125,7 @@ public final class VoterSetHistoryTest {
 
     @Test
     void testAddAtNonOverlapping() {
-        VoterSetHistory votersHistory = new VoterSetHistory(VoterSet.empty());
+        VoterSetHistory votersHistory = voterSetHistory(VoterSet.empty());
 
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2, 3), true);
         VoterSet voterSet = VoterSet.fromMap(new HashMap<>(voterMap));
@@ -132,35 +133,30 @@ public final class VoterSetHistoryTest {
         // Add a starting voter to the history
         votersHistory.addAt(100, voterSet);
 
-        // Remove voter so that it doesn't overlap
-        VoterSet nonoverlappingRemovedSet = voterSet
+        // Assert multiple voters can be removed at a time
+        VoterSet nonOverlappingRemovedSet = voterSet
             .removeVoter(voterMap.get(1).voterKey()).get()
             .removeVoter(voterMap.get(2).voterKey()).get();
 
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> votersHistory.addAt(200, nonoverlappingRemovedSet)
-        );
-        assertEquals(voterSet, votersHistory.lastValue());
+        votersHistory.addAt(200, nonOverlappingRemovedSet);
 
+        assertEquals(nonOverlappingRemovedSet, votersHistory.lastValue());
 
-        // Add voters so that it doesn't overlap
-        VoterSet nonoverlappingAddSet = voterSet
-            .addVoter(VoterSetTest.voterNode(4, true)).get()
-            .addVoter(VoterSetTest.voterNode(5, true)).get();
+        // Assert multiple voters can be added at a time
+        VoterSet nonOverlappingAddSet = nonOverlappingRemovedSet
+            .addVoter(VoterSetTest.voterNode(1, true)).get()
+            .addVoter(VoterSetTest.voterNode(2, true)).get();
 
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> votersHistory.addAt(200, nonoverlappingAddSet)
-        );
-        assertEquals(voterSet, votersHistory.lastValue());
+        votersHistory.addAt(300, nonOverlappingAddSet);
+
+        assertEquals(nonOverlappingAddSet, votersHistory.lastValue());
     }
 
     @Test
     void testNonoverlappingFromStaticVoterSet() {
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2, 3), true);
         VoterSet staticVoterSet = VoterSet.fromMap(new HashMap<>(voterMap));
-        VoterSetHistory votersHistory = new VoterSetHistory(VoterSet.empty());
+        VoterSetHistory votersHistory = voterSetHistory(VoterSet.empty());
 
         // Remove voter so that it doesn't overlap
         VoterSet nonoverlappingRemovedSet = staticVoterSet
@@ -175,7 +171,7 @@ public final class VoterSetHistoryTest {
     void testTruncateTo() {
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2, 3), true);
         VoterSet staticVoterSet = VoterSet.fromMap(new HashMap<>(voterMap));
-        VoterSetHistory votersHistory = new VoterSetHistory(staticVoterSet);
+        VoterSetHistory votersHistory = voterSetHistory(staticVoterSet);
 
         // Add voter 4 to the voter set and voter set history
         voterMap.put(4, VoterSetTest.voterNode(4, true));
@@ -201,7 +197,7 @@ public final class VoterSetHistoryTest {
     void testTrimPrefixTo() {
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2, 3), true);
         VoterSet staticVoterSet = VoterSet.fromMap(new HashMap<>(voterMap));
-        VoterSetHistory votersHistory = new VoterSetHistory(staticVoterSet);
+        VoterSetHistory votersHistory = voterSetHistory(staticVoterSet);
 
         // Add voter 4 to the voter set and voter set history
         voterMap.put(4, VoterSetTest.voterNode(4, true));
@@ -234,7 +230,7 @@ public final class VoterSetHistoryTest {
     void testClear() {
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2, 3), true);
         VoterSet staticVoterSet = VoterSet.fromMap(new HashMap<>(voterMap));
-        VoterSetHistory votersHistory = new VoterSetHistory(staticVoterSet);
+        VoterSetHistory votersHistory = voterSetHistory(staticVoterSet);
 
         // Add voter 4 to the voter set and voter set history
         voterMap.put(4, VoterSetTest.voterNode(4, true));
@@ -249,5 +245,9 @@ public final class VoterSetHistoryTest {
         votersHistory.clear();
 
         assertEquals(staticVoterSet, votersHistory.lastValue());
+    }
+
+    private VoterSetHistory voterSetHistory(VoterSet staticVoterSet) {
+        return new VoterSetHistory(staticVoterSet, new LogContext());
     }
 }
