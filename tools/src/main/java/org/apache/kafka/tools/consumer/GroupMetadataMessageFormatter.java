@@ -50,7 +50,7 @@ public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    protected JsonNode readToValueJson(ByteBuffer byteBuffer) {
+    protected JsonNode readToValueJson(ByteBuffer byteBuffer, short keyVersion) {
         short version = byteBuffer.getShort();
         if (version >= GroupMetadataValue.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataValue.HIGHEST_SUPPORTED_VERSION) {
             return GroupMetadataValueJsonConverter.write(new GroupMetadataValue(new ByteBufferAccessor(byteBuffer), version), version);

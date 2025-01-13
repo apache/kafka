@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tools.consumer.group.share;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -30,79 +28,29 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKeyJsonConverter;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValueJsonConverter;
+import org.apache.kafka.tools.consumer.ApiMessageFormatter;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 
-import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.ByteBuffer;
-import java.util.Objects;
 import java.util.Optional;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * Formatter for records of in __share_group_state topic.
  */
-public class ShareGroupStateMessageFormatter implements MessageFormatter {
-
-    private static final String VERSION = "version";
-    private static final String DATA = "data";
-    private static final String KEY = "key";
-    private static final String VALUE = "value";
-    private static final String UNKNOWN = "unknown";
+public class ShareGroupStateMessageFormatter extends ApiMessageFormatter {
 
     @Override
-    public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
-        ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
-
-        byte[] key = consumerRecord.key();
-        short keyVersion = -1;
-        if (Objects.nonNull(key)) {
-            keyVersion = ByteBuffer.wrap(key).getShort();
-            JsonNode dataNode = readToKeyJson(ByteBuffer.wrap(key), keyVersion);
-
-            if (dataNode instanceof NullNode) {
-                return;
-            }
-            json.putObject(KEY)
-                .put(VERSION, keyVersion)
-                .set(DATA, dataNode);
-        } else {
-            json.set(KEY, NullNode.getInstance());
-        }
-
-        byte[] value = consumerRecord.value();
-        if (Objects.nonNull(value)) {
-            short valueVersion = ByteBuffer.wrap(value).getShort();
-            JsonNode dataNode = readToValueJson(ByteBuffer.wrap(value), keyVersion, valueVersion);
-
-            json.putObject(VALUE)
-                .put(VERSION, valueVersion)
-                .set(DATA, dataNode);
-        } else {
-            json.set(VALUE, NullNode.getInstance());
-        }
-
-        try {
-            output.write(json.toString().getBytes(UTF_8));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private JsonNode readToKeyJson(ByteBuffer byteBuffer, short version) {
-        return readToSnapshotMessageKey(byteBuffer)
-            .map(logKey -> transferKeyMessageToJsonNode(logKey, version))
-            .orElseGet(() -> new TextNode(UNKNOWN));
-    }
-
-    private Optional<ApiMessage> readToSnapshotMessageKey(ByteBuffer byteBuffer) {
+    protected JsonNode readToKeyJson(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
+        return readToSnapshotMessageKey(byteBuffer, version)
+                .map(logKey -> transferKeyMessageToJsonNode(logKey, version))
+                .orElseGet(NullNode::getInstance);
+    }
+
+    private Optional<ApiMessage> readToSnapshotMessageKey(ByteBuffer byteBuffer, short version) {
         try {
             switch (CoordinatorRecordType.fromId(version)) {
                 case SHARE_SNAPSHOT:
@@ -131,17 +79,16 @@ public class ShareGroupStateMessageFormatter implements MessageFormatter {
      * This is because both {@link ShareSnapshotValue} and {@link ShareUpdateValue} have version 0
      * as per RPC spec.
      * To differentiate, we need to use the corresponding key versions. This is acceptable as
-     * the records will always appear in pairs (key, value). However, this means that we cannot
-     * extend {@link org.apache.kafka.tools.consumer.ApiMessageFormatter} as it requires overriding
-     * readToValueJson whose signature does not allow for passing keyversion.
+     * the records will always appear in pairs (key, value).
      *
      * @param byteBuffer - Represents the raw data read from the topic
      * @param keyVersion - Version of the actual key component of the data read from topic
-     * @param valueVersion - Version of the actual value component of the data read from topic
      * @return JsonNode corresponding to the raw data value component
      */
-    protected JsonNode readToValueJson(ByteBuffer byteBuffer, short keyVersion, short valueVersion) {
-        return readToSnapshotMessageValue(byteBuffer, keyVersion)
+    @Override
+    protected JsonNode readToValueJson(ByteBuffer byteBuffer, short keyVersion) {
+        short valueVersion = byteBuffer.getShort();
+        return readToSnapshotMessageValue(byteBuffer, keyVersion, valueVersion)
             .map(logValue -> transferValueMessageToJsonNode(logValue, valueVersion))
             .orElseGet(() -> new TextNode(UNKNOWN));
     }
@@ -155,17 +102,16 @@ public class ShareGroupStateMessageFormatter implements MessageFormatter {
         return new TextNode(UNKNOWN);
     }
 
-    private Optional<ApiMessage> readToSnapshotMessageValue(ByteBuffer byteBuffer, short keyVersion) {
-        short version = byteBuffer.getShort();
+    private Optional<ApiMessage> readToSnapshotMessageValue(ByteBuffer byteBuffer, short keyVersion, short valueVersion) {
         // Check the key version here as that will determine which type
         // of value record to fetch. Both share update and share snapshot
         // value records can have the same version.
         try {
             switch (CoordinatorRecordType.fromId(keyVersion)) {
                 case SHARE_SNAPSHOT:
-                    return Optional.of(new ShareSnapshotValue(new ByteBufferAccessor(byteBuffer), version));
+                    return Optional.of(new ShareSnapshotValue(new ByteBufferAccessor(byteBuffer), valueVersion));
                 case SHARE_UPDATE:
-                    return Optional.of(new ShareUpdateValue(new ByteBufferAccessor(byteBuffer), version));
+                    return Optional.of(new ShareUpdateValue(new ByteBufferAccessor(byteBuffer), valueVersion));
                 default:
                     return Optional.empty();
             }

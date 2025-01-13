@@ -137,23 +137,23 @@ public class ShareGroupStateMessageFormatterTest {
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_VALUE).array(),
-                "{\"key\":{\"version\":0,\"data\":{\"groupId\":\"gs1\",\"topicId\":\"gtb2stGYRk-vWZ2zAozmoA\",\"partition\":0}},\"value\":{\"version\":0,\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":1,\"leaderEpoch\":20,\"startOffset\":50,\"stateBatches\":[{\"firstOffset\":100,\"lastOffset\":200,\"deliveryState\":1,\"deliveryCount\":10},{\"firstOffset\":201,\"lastOffset\":210,\"deliveryState\":2,\"deliveryCount\":10}]}}}"
+                "{\"key\":{\"type\":0,\"data\":{\"groupId\":\"gs1\",\"topicId\":\"gtb2stGYRk-vWZ2zAozmoA\",\"partition\":0}},\"value\":{\"version\":0,\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":1,\"leaderEpoch\":20,\"startOffset\":50,\"stateBatches\":[{\"firstOffset\":100,\"lastOffset\":200,\"deliveryState\":1,\"deliveryCount\":10},{\"firstOffset\":201,\"lastOffset\":210,\"deliveryState\":2,\"deliveryCount\":10}]}}}"
             ),
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 1, SHARE_UPDATE_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_UPDATE_VALUE).array(),
-                "{\"key\":{\"version\":1,\"data\":{\"groupId\":\"gs2\",\"topicId\":\"r9Nq4xGAQf28jvu36t7gQQ\",\"partition\":0}},\"value\":{\"version\":0,\"data\":{\"snapshotEpoch\":1,\"leaderEpoch\":25,\"startOffset\":55,\"stateBatches\":[{\"firstOffset\":100,\"lastOffset\":150,\"deliveryState\":1,\"deliveryCount\":12},{\"firstOffset\":151,\"lastOffset\":200,\"deliveryState\":2,\"deliveryCount\":15}]}}}"
+                "{\"key\":{\"type\":1,\"data\":{\"groupId\":\"gs2\",\"topicId\":\"r9Nq4xGAQf28jvu36t7gQQ\",\"partition\":0}},\"value\":{\"version\":0,\"data\":{\"snapshotEpoch\":1,\"leaderEpoch\":25,\"startOffset\":55,\"stateBatches\":[{\"firstOffset\":100,\"lastOffset\":150,\"deliveryState\":1,\"deliveryCount\":12},{\"firstOffset\":151,\"lastOffset\":200,\"deliveryState\":2,\"deliveryCount\":15}]}}}"
             ),
             // wrong versions
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 10, SHARE_SNAPSHOT_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_VALUE).array(),
-                "{\"key\":{\"version\":10,\"data\":\"unknown\"},\"value\":{\"version\":0,\"data\":\"unknown\"}}"
+                ""
             ),
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 15, SHARE_UPDATE_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_UPDATE_VALUE).array(),
-                "{\"key\":{\"version\":15,\"data\":\"unknown\"},\"value\":{\"version\":0,\"data\":\"unknown\"}}"
+                ""
             )
         );
     }

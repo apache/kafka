@@ -39,7 +39,7 @@ public class TransactionLogMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    protected JsonNode readToValueJson(ByteBuffer byteBuffer) {
+    protected JsonNode readToValueJson(ByteBuffer byteBuffer, short keyVersion) {
         short version = byteBuffer.getShort();
         if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
             return TransactionLogValueJsonConverter.write(new TransactionLogValue(new ByteBufferAccessor(byteBuffer), version), version);

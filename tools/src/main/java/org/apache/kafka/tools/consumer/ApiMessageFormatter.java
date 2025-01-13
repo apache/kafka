@@ -38,7 +38,7 @@ public abstract class ApiMessageFormatter implements MessageFormatter {
     private static final String DATA = "data";
     private static final String KEY = "key";
     private static final String VALUE = "value";
-    static final String UNKNOWN = "unknown";
+    public static final String UNKNOWN = "unknown";
 
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
@@ -62,7 +62,7 @@ public abstract class ApiMessageFormatter implements MessageFormatter {
         byte[] value = consumerRecord.value();
         if (Objects.nonNull(value)) {
             short valueVersion = ByteBuffer.wrap(value).getShort();
-            JsonNode dataNode = readToValueJson(ByteBuffer.wrap(value));
+            JsonNode dataNode = readToValueJson(ByteBuffer.wrap(value), ByteBuffer.wrap(key).getShort());
 
             json.putObject(VALUE)
                     .put(VERSION, valueVersion)
@@ -79,5 +79,5 @@ public abstract class ApiMessageFormatter implements MessageFormatter {
     }
 
     protected abstract JsonNode readToKeyJson(ByteBuffer byteBuffer);
-    protected abstract JsonNode readToValueJson(ByteBuffer byteBuffer);
-}  
+    protected abstract JsonNode readToValueJson(ByteBuffer byteBuffer, short keyVersion);
+}

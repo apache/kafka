@@ -55,7 +55,7 @@ public class OffsetsMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    protected JsonNode readToValueJson(ByteBuffer byteBuffer) {
+    protected JsonNode readToValueJson(ByteBuffer byteBuffer, short keyVersion) {
         short version = byteBuffer.getShort();
         if (version >= OffsetCommitValue.LOWEST_SUPPORTED_VERSION && version <= OffsetCommitValue.HIGHEST_SUPPORTED_VERSION) {
             return OffsetCommitValueJsonConverter.write(new OffsetCommitValue(new ByteBufferAccessor(byteBuffer), version), version);
