@@ -32,6 +32,7 @@ import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
+import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
 import org.apache.kafka.server.storage.log.FetchIsolation;
@@ -184,6 +185,7 @@ public class DelayedShareFetchTest {
             .withSharePartitions(sharePartitions)
             .withReplicaManager(replicaManager)
             .withExceptionHandler(exceptionHandler)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build());
         assertFalse(delayedShareFetch.isCompleted());
 
@@ -288,6 +290,7 @@ public class DelayedShareFetchTest {
             .withShareFetchData(shareFetch)
             .withSharePartitions(sharePartitions)
             .withReplicaManager(replicaManager)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build());
         assertFalse(delayedShareFetch.isCompleted());
 
@@ -330,6 +333,7 @@ public class DelayedShareFetchTest {
             .withShareFetchData(shareFetch)
             .withReplicaManager(replicaManager)
             .withSharePartitions(sharePartitions)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build());
         assertFalse(delayedShareFetch.isCompleted());
         delayedShareFetch.forceComplete();
@@ -377,6 +381,7 @@ public class DelayedShareFetchTest {
             .withShareFetchData(shareFetch)
             .withReplicaManager(replicaManager)
             .withSharePartitions(sharePartitions)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build());
         assertFalse(delayedShareFetch.isCompleted());
         delayedShareFetch.forceComplete();
@@ -509,6 +514,7 @@ public class DelayedShareFetchTest {
             .withShareFetchData(shareFetch2)
             .withReplicaManager(replicaManager)
             .withSharePartitions(sharePartitions2)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build());
 
         // sp1 can be acquired now
@@ -559,6 +565,7 @@ public class DelayedShareFetchTest {
             .withShareFetchData(shareFetch)
             .withReplicaManager(replicaManager)
             .withSharePartitions(sharePartitions)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build();
 
         LinkedHashMap<TopicIdPartition, Long> topicPartitionData = new LinkedHashMap<>();
@@ -626,6 +633,7 @@ public class DelayedShareFetchTest {
             .withSharePartitions(sharePartitions)
             .withReplicaManager(replicaManager)
             .withExceptionHandler(exceptionHandler)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build());
 
         // Try complete should return false as the share partition has errored out.
@@ -714,6 +722,44 @@ public class DelayedShareFetchTest {
         delayedShareFetch.lock().unlock();
     }
 
+    @Test
+    public void testTryCompleteWhenPartitionMaxBytesStrategyThrowsException() {
+        String groupId = "grp";
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        SharePartition sp0 = mock(SharePartition.class);
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+
+        when(sp0.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+
+        ShareFetch shareFetch = new ShareFetch(
+            new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
+                2, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
+
+        // partitionMaxBytesStrategy.maxBytes() function throws an exception
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy = mock(PartitionMaxBytesStrategy.class);
+        when(partitionMaxBytesStrategy.maxBytes(anyInt(), any(), anyInt())).thenThrow(new IllegalArgumentException("Exception thrown"));
+
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withSharePartitions(sharePartitions)
+            .withExceptionHandler(mockExceptionHandler())
+            .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .build());
+
+        assertFalse(delayedShareFetch.isCompleted());
+        assertTrue(delayedShareFetch.tryComplete());
+        assertTrue(delayedShareFetch.isCompleted());
+        // releasePartitionLocks is called twice - first time from tryComplete and second time from onComplete
+        Mockito.verify(delayedShareFetch, times(2)).releasePartitionLocks(any());
+        assertTrue(delayedShareFetch.lock().tryLock());
+        delayedShareFetch.lock().unlock();
+    }
+
     static void mockTopicIdPartitionToReturnDataEqualToMinBytes(ReplicaManager replicaManager, TopicIdPartition topicIdPartition, int minBytes) {
         LogOffsetMetadata hwmOffsetMetadata = new LogOffsetMetadata(1, 1, minBytes);
         LogOffsetSnapshot endOffsetSnapshot = new LogOffsetSnapshot(1, mock(LogOffsetMetadata.class),
@@ -743,6 +789,7 @@ public class DelayedShareFetchTest {
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
         private BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
         private LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = mock(LinkedHashMap.class);
+        private PartitionMaxBytesStrategy partitionMaxBytesStrategy = mock(PartitionMaxBytesStrategy.class);
 
         DelayedShareFetchBuilder withShareFetchData(ShareFetch shareFetch) {
             this.shareFetch = shareFetch;
@@ -764,6 +811,11 @@ public class DelayedShareFetchTest {
             return this;
         }
 
+        DelayedShareFetchBuilder withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy partitionMaxBytesStrategy) {
+            this.partitionMaxBytesStrategy = partitionMaxBytesStrategy;
+            return this;
+        }
+
         public static DelayedShareFetchBuilder builder() {
             return new DelayedShareFetchBuilder();
         }
@@ -773,7 +825,8 @@ public class DelayedShareFetchTest {
                 shareFetch,
                 replicaManager,
                 exceptionHandler,
-                sharePartitions);
+                sharePartitions,
+                partitionMaxBytesStrategy);
         }
     }
 }

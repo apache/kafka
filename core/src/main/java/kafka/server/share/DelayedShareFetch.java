@@ -73,6 +73,15 @@ public class DelayedShareFetch extends DelayedOperation {
             ReplicaManager replicaManager,
             BiConsumer<SharePartitionKey, Throwable> exceptionHandler,
             LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions) {
+        this(shareFetch, replicaManager, exceptionHandler, sharePartitions, PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM));
+    }
+
+    DelayedShareFetch(
+        ShareFetch shareFetch,
+        ReplicaManager replicaManager,
+        BiConsumer<SharePartitionKey, Throwable> exceptionHandler,
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy) {
         super(shareFetch.fetchParams().maxWaitMs, Optional.empty());
         this.shareFetch = shareFetch;
         this.replicaManager = replicaManager;
@@ -80,7 +89,7 @@ public class DelayedShareFetch extends DelayedOperation {
         this.partitionsAlreadyFetched = new LinkedHashMap<>();
         this.exceptionHandler = exceptionHandler;
         this.sharePartitions = sharePartitions;
-        this.partitionMaxBytesStrategy = PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM);
+        this.partitionMaxBytesStrategy = partitionMaxBytesStrategy;
     }
 
     @Override
@@ -345,15 +354,14 @@ public class DelayedShareFetch extends DelayedOperation {
 
         LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
 
-        topicPartitionFetchOffsets.forEach((topicIdPartition, fetchOffset) -> {
-            topicPartitionData.put(topicIdPartition, new FetchRequest.PartitionData(
+        topicPartitionFetchOffsets.forEach((topicIdPartition, fetchOffset) -> topicPartitionData.put(topicIdPartition,
+            new FetchRequest.PartitionData(
                 topicIdPartition.topicId(),
                 fetchOffset,
                 0,
                 partitionMaxBytes.get(topicIdPartition),
-                Optional.empty()
-            ));
-        });
+                Optional.empty())
+        ));
 
         Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
             shareFetch.fetchParams(),
