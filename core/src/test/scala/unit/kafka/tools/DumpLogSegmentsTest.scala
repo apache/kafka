@@ -858,7 +858,7 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some("{\"type\":\"0\",\"data\":{\"transactionalId\":\"txnId\"}}"),
-        Some("{\"type\":\"0\",\"data\":{\"producerId\":123,\"producerEpoch\":0,\"transactionTimeoutMs\":0," +
+        Some("{\"version\":\"0\",\"data\":{\"producerId\":123,\"producerEpoch\":0,\"transactionTimeoutMs\":0," +
              "\"transactionStatus\":0,\"transactionPartitions\":[],\"transactionLastUpdateTimestampMs\":0," +
              "\"transactionStartTimestampMs\":0}}")
       ),
@@ -915,7 +915,7 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some("{\"type\":\"0\",\"data\":{\"transactionalId\":\"txnId\"}}"),
-        Some("{\"type\":\"1\",\"data\":{\"producerId\":12,\"previousProducerId\":11,\"nextProducerId\":10," +
+        Some("{\"version\":\"1\",\"data\":{\"producerId\":12,\"previousProducerId\":11,\"nextProducerId\":10," +
              "\"producerEpoch\":2,\"transactionTimeoutMs\":14,\"transactionStatus\":0," +
              "\"transactionPartitions\":[{\"topic\":\"topic1\",\"partitionIds\":[0,1,2]}," +
              "{\"topic\":\"topic2\",\"partitionIds\":[3,4,5]}],\"transactionLastUpdateTimestampMs\":123," +

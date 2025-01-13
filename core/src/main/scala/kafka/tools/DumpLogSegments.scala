@@ -548,7 +548,7 @@ object DumpLogSegments {
       }
 
       val json = new ObjectNode(JsonNodeFactory.instance)
-      json.set("type", new TextNode(version.toString))
+      json.set("version", new TextNode(version.toString))
       json.set("data", messageAsJson)
       json.toString
     }
