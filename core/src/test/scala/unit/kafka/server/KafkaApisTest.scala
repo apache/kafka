@@ -9997,13 +9997,6 @@ class KafkaApisTest extends Logging {
         setResourceType(BROKER_LOGGER.id()))),
       response.data())
   }
-  
-  @Test
-  def testRaftShouldAlwaysForwardAlterClientQuotasRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleAlterClientQuotasRequest)
-  }
 
   @Test
   def testRaftShouldAlwaysForwardUpdateFeatures(): Unit = {

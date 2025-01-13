@@ -2579,10 +2579,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleAlterClientQuotasRequest(request: RequestChannel.Request): Unit = {
-    throw KafkaApis.shouldAlwaysForward(request)
-  }
-
   def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
     val describeUserScramCredentialsRequest = request.body[DescribeUserScramCredentialsRequest]
 
