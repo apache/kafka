@@ -24,10 +24,10 @@ import org.apache.kafka.common.metrics.Sensor;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class PluginMetricsImpl implements PluginMetrics, Closeable {
 
@@ -35,9 +35,9 @@ public class PluginMetricsImpl implements PluginMetrics, Closeable {
 
     private final Metrics metrics;
     private final Map<String, String> tags;
-    private final Set<MetricName> metricNames = new HashSet<>();
-    private final Set<String> sensors = new HashSet<>();
-    private boolean closing = false;
+    private final Set<MetricName> metricNames = ConcurrentHashMap.newKeySet();
+    private final Set<String> sensors = ConcurrentHashMap.newKeySet();
+    private volatile boolean closing = false;
 
     public PluginMetricsImpl(Metrics metrics, Map<String, String> tags) {
         this.metrics = metrics;
