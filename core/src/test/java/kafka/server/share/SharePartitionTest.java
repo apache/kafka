@@ -633,6 +633,57 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testMaybeInitializeStateBatchesWithGaps() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                PartitionFactory.newPartitionAllData(0, 3, 10L, Errors.NONE.code(), Errors.NONE.message(),
+                    Arrays.asList(
+                        new PersisterStateBatch(15L, 20L, RecordState.ACKNOWLEDGED.id, (short) 2),
+                        new PersisterStateBatch(30L, 40L, RecordState.ARCHIVED.id, (short) 3)))))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+        assertFalse(sharePartition.cachedState().isEmpty());
+        assertEquals(10, sharePartition.startOffset());
+        assertEquals(40, sharePartition.endOffset());
+        assertEquals(3, sharePartition.stateEpoch());
+        assertEquals(10, sharePartition.nextFetchOffset());
+
+        assertEquals(4, sharePartition.cachedState().size());
+        assertNotNull(sharePartition.cachedState().get(10L));
+        assertNotNull(sharePartition.cachedState().get(15L));
+        assertNotNull(sharePartition.cachedState().get(21L));
+        assertNotNull(sharePartition.cachedState().get(30L));
+
+        assertEquals(14, sharePartition.cachedState().get(10L).lastOffset());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(0, sharePartition.cachedState().get(10L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(10L).offsetState());
+
+        assertEquals(20, sharePartition.cachedState().get(15L).lastOffset());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(15L).batchState());
+        assertEquals(2, sharePartition.cachedState().get(15L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(15L).offsetState());
+
+        assertEquals(29, sharePartition.cachedState().get(21L).lastOffset());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(21L).batchState());
+        assertEquals(0, sharePartition.cachedState().get(21L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(21L).offsetState());
+
+        assertEquals(40, sharePartition.cachedState().get(30L).lastOffset());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(30L).batchState());
+        assertEquals(3, sharePartition.cachedState().get(30L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(30L).offsetState());
+    }
+
+    @Test
     public void testMaybeInitializeWithErrorPartitionResponse() {
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);

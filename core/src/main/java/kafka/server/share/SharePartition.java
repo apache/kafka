@@ -456,6 +456,17 @@ public class SharePartition {
                         stateBatch.lastOffset(), RecordState.forId(stateBatch.deliveryState()), stateBatch.deliveryCount(), null);
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
                 }
+
+                long initialOffset = startOffset;
+                for (InFlightBatch currentStateBatch : cachedState.values()) {
+                    if (startOffset != currentStateBatch.firstOffset()) {
+                        InFlightBatch newBatch = new InFlightBatch(EMPTY_MEMBER_ID, initialOffset, currentStateBatch.firstOffset() - 1,
+                            RecordState.AVAILABLE, (short) 0, null);
+                        cachedState.put(initialOffset, newBatch);
+                    }
+                    initialOffset = currentStateBatch.lastOffset() + 1;
+                }
+
                 // Update the endOffset of the partition.
                 if (!cachedState.isEmpty()) {
                     // If the cachedState is not empty, findNextFetchOffset flag is set to true so that any AVAILABLE records
