@@ -113,7 +113,6 @@ public class IQv2EndpointToPartitionsIntegrationTest {
         streamOneProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:2020");
         streamOneProperties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocolConfig);
         if (usingStandbyReplicas) {
-            streamOneProperties.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
             streamOneProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         }
         streamsApplicationProperties = props(streamOneProperties);
@@ -124,7 +123,6 @@ public class IQv2EndpointToPartitionsIntegrationTest {
         streamTwoProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:3030");
         streamTwoProperties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocolConfig);
         if (usingStandbyReplicas) {
-            streamTwoProperties.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
             streamTwoProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         }
         streamsSecondApplicationProperties = props(streamTwoProperties);
