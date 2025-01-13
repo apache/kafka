@@ -188,7 +188,7 @@
 
     </p>
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1076%3A++Metrics+for+client+applications+KIP-714+extension">KIP-1076</a>
-        proposes adding methods to the Admin, Consumer, and Producer interfaces to allow applications embedding Kafka clients to register and push application-specific metrics,
+       adds new methods <code>registerMetricForSubscription(KafkaMetric)</code> and <code>unregisterMetricFromSubscription(KafkaMetric)</code> to the Admin, Consumer, and Producer interfaces to allow applications embedding Kafka clients to register application-specific metrics for pushing them to the broker,
         supplementing the client metrics introduced in KIP-714.
 
     <p>
