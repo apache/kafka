@@ -50,8 +50,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import scala.Tuple2;
-import scala.jdk.javaapi.CollectionConverters;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -65,6 +63,9 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+
+import scala.Tuple2;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static kafka.server.share.SharePartitionManagerTest.DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL;
 import static kafka.server.share.SharePartitionManagerTest.PARTITION_MAX_BYTES;
