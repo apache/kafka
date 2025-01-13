@@ -402,10 +402,19 @@ if __name__ == "__main__":
     print("<hr/>")
 
     # Print special message if there was a timeout
-    exit_code = get_env("GRADLE_EXIT_CODE", int)
-    if exit_code == 124:
+    test_exit_code = get_env("GRADLE_TEST_EXIT_CODE", int)
+    quarantined_test_exit_code = get_env("GRADLE_QUARANTINED_TEST_EXIT_CODE", int)
+
+    if test_exit_code == 124 or quarantined_test_exit_code == 124:
+        # Special handling for timeouts. The exit code 124 is emitted by 'timeout' command used in build.yml.
+        # A watchdog script "thread-dump.sh" will use jstack to force a thread dump for any Gradle process
+        # still running after the timeout. We capture the exit codes of the two test tasks and pass them to
+        # this script. If either "test" or "quarantinedTest" fails due to timeout, we want to fail the overall build.
         thread_dump_url = get_env("THREAD_DUMP_URL")
-        logger.debug(f"Gradle command timed out. These are partial results!")
+        if test_exit_code == 124:
+            logger.debug(f"Gradle task for 'test' timed out. These are partial results!")
+        else:
+            logger.debug(f"Gradle task for 'quarantinedTest' timed out. These are partial results!")
         logger.debug(summary)
         if thread_dump_url:
             print(f"\nThe JUnit tests were cancelled due to a timeout. Thread dumps were generated before the job was cancelled. "
@@ -414,7 +423,7 @@ if __name__ == "__main__":
         else:
             logger.debug(f"Failing this step because the tests timed out. Thread dumps were not archived, check logs in JUnit step.")
         exit(1)
-    elif exit_code in (0, 1):
+    elif test_exit_code in (0, 1):
         logger.debug(summary)
         if total_failures > 0:
             logger.debug(f"Failing this step due to {total_failures} test failures")
@@ -425,5 +434,5 @@ if __name__ == "__main__":
         else:
             exit(0)
     else:
-        logger.debug(f"Gradle had unexpected exit code {exit_code}. Failing this step")
+        logger.debug(f"Gradle had unexpected exit code {test_exit_code}. Failing this step")
         exit(1)

@@ -50,8 +50,7 @@ public final class ErroneousCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof ErroneousCommandHandler)) return false;
-        ErroneousCommandHandler o = (ErroneousCommandHandler) other;
+        if (!(other instanceof ErroneousCommandHandler o)) return false;
         return Objects.equals(o.message, message);
     }
 

@@ -24,8 +24,7 @@ package org.apache.kafka.common.errors;
  * satisfied by a leader or follower, this exception indicates that the broker is not a replica
  * of the topic partition.
  */
-@SuppressWarnings("deprecation")
-public class NotLeaderOrFollowerException extends NotLeaderForPartitionException {
+public class NotLeaderOrFollowerException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;
 

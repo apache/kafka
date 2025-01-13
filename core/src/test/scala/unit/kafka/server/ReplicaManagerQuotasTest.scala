@@ -42,7 +42,7 @@ import org.mockito.{AdditionalMatchers, ArgumentMatchers}
 import scala.jdk.CollectionConverters._
 
 class ReplicaManagerQuotasTest {
-  val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, new Properties()))
+  val configs = TestUtils.createBrokerConfigs(2).map(KafkaConfig.fromProps(_, new Properties()))
   val time = new MockTime
   val metrics = new Metrics
   val record = new SimpleRecord("some-data-in-a-message".getBytes())

@@ -33,6 +33,7 @@ from kafkatest.services.security.listener_security_config import ListenerSecurit
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH
 from kafkatest.version import KafkaVersion
+from kafkatest.version import get_version
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm, get_log4j_config_param, get_log4j_config
 
 
@@ -205,6 +206,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  use_new_coordinator=None,
                  consumer_group_migration_policy=None,
                  dynamicRaftQuorum=False,
+                 use_transactions_v2=False
                  ):
         """
         :param context: test context
@@ -268,6 +270,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param use_new_coordinator: When true, use the new implementation of the group coordinator as per KIP-848. If this is None, the default existing group coordinator is used.
         :param consumer_group_migration_policy: The config that enables converting the non-empty classic group using the consumer embedded protocol to the non-empty consumer group using the consumer group protocol and vice versa.
         :param dynamicRaftQuorum: When true, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
+        :param use_transactions_v2: When true, uses transaction.version=2 which utilizes the new transaction protocol introduced in KIP-890
         """
 
         self.zk = zk
@@ -292,6 +295,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         
         # Assign the determined value.
         self.use_new_coordinator = use_new_coordinator
+        self.use_transactions_v2 = use_transactions_v2
 
         # Set consumer_group_migration_policy based on context and arguments.
         if consumer_group_migration_policy is None:
@@ -598,12 +602,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                         nodes_for_kdc += other_service.nodes
                     self.minikdc = MiniKdc(self.context, nodes_for_kdc, extra_principals = add_principals)
                     self.minikdc.start()
-        else:
-            self.minikdc = None
-            if self.quorum_info.using_kraft:
-                self.controller_quorum.minikdc = None
-                if self.isolated_kafka:
-                    self.isolated_kafka.minikdc = None
 
     def alive(self, node):
         return len(self.pids(node)) > 0
@@ -887,6 +885,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     else:
                         cmd += " --standalone"
                         self.standalone_controller_bootstrapped = True
+            if self.use_transactions_v2:
+                cmd += " --feature transaction.version=2"
+            else:
+                if get_version(node).supports_feature_command():
+                    cmd += " --feature transaction.version=0"
             self.logger.info("Running log directory format command...\n%s" % cmd)
             node.account.ssh(cmd)
 
@@ -920,24 +923,29 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             raise Exception("No process ids recorded on node %s" % node.account.hostname)
 
     def upgrade_metadata_version(self, new_version):
-        self.run_features_command("upgrade", new_version)
+        self.run_metadata_features_command("upgrade", new_version)
 
     def downgrade_metadata_version(self, new_version):
-        self.run_features_command("downgrade", new_version)
+        self.run_metadata_features_command("downgrade", new_version)
 
-    def run_features_command(self, op, new_version):
+    def run_metadata_features_command(self, op, new_version):
         cmd = self.path.script("kafka-features.sh ")
         cmd += "--bootstrap-server %s " % self.bootstrap_servers()
         cmd += "%s --metadata %s" % (op, new_version)
         self.logger.info("Running %s command...\n%s" % (op, cmd))
         self.nodes[0].account.ssh(cmd)
 
+    def run_features_command(self, op, feature, new_version):
+        cmd = self.path.script("kafka-features.sh ")
+        cmd += "--bootstrap-server %s " % self.bootstrap_servers()
+        cmd += "%s --feature %s=%s" % (op, feature, new_version)
+        self.logger.info("Running %s command...\n%s" % (op, cmd))
+        self.nodes[0].account.ssh(cmd)
+
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
-            cmd = "ps ax | grep -i %s | grep -v grep | awk '{print $1}'" % self.java_class_name()
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
+            return node.account.java_pids(self.java_class_name())
         except (RemoteCommandError, ValueError) as e:
             return []
 
@@ -1919,4 +1927,4 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return output
 
     def java_class_name(self):
-        return "kafka.Kafka"
+        return "kafka\.Kafka"

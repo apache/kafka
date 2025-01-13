@@ -26,7 +26,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -37,18 +36,14 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QuorumFeaturesTest {
-    private static final Map<String, VersionRange> LOCAL;
+    private static final Map<String, VersionRange> LOCAL = Map.of(
+        "foo", VersionRange.of(0, 3),
+        "bar", VersionRange.of(0, 4),
+        "baz", VersionRange.of(2, 2)
+    );
 
-    private static final QuorumFeatures QUORUM_FEATURES;
-
-    static {
-        Map<String, VersionRange> local = new HashMap<>();
-        local.put("foo", VersionRange.of(0, 3));
-        local.put("bar", VersionRange.of(0, 4));
-        local.put("baz", VersionRange.of(2, 2));
-        LOCAL = Collections.unmodifiableMap(local);
-        QUORUM_FEATURES = new QuorumFeatures(0, LOCAL, Arrays.asList(0, 1, 2));
-    }
+    private static final QuorumFeatures QUORUM_FEATURES = new QuorumFeatures(0, LOCAL,
+        Arrays.asList(0, 1, 2));
 
     @Test
     public void testDefaultFeatureMap() {
@@ -57,7 +52,7 @@ public class QuorumFeaturesTest {
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         for (Feature feature : Feature.PRODUCTION_FEATURES) {
-            short maxVersion = feature.defaultLevel(MetadataVersion.LATEST_PRODUCTION);
+            short maxVersion = feature.latestProduction();
             if (maxVersion > 0) {
                 expectedFeatures.put(feature.featureName(), VersionRange.of(
                     feature.minimumProduction(),
@@ -65,7 +60,7 @@ public class QuorumFeaturesTest {
                 ));
             }
         }
-        assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(false));
+        assertEquals(expectedFeatures, QuorumFeatures.defaultSupportedFeatureMap(false));
     }
 
     @Test
@@ -83,13 +78,13 @@ public class QuorumFeaturesTest {
                 ));
             }
         }
-        assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));
+        assertEquals(expectedFeatures, QuorumFeatures.defaultSupportedFeatureMap(true));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void ensureDefaultSupportedFeaturesRangeMaxNotZero(boolean unstableVersionsEnabled) {
-        Map<String, VersionRange> quorumFeatures = QuorumFeatures.defaultFeatureMap(unstableVersionsEnabled);
+        Map<String, VersionRange> quorumFeatures = QuorumFeatures.defaultSupportedFeatureMap(unstableVersionsEnabled);
         for (VersionRange range : quorumFeatures.values()) {
             assertNotEquals(0, range.max());
         }

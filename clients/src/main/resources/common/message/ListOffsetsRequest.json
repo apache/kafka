@@ -18,6 +18,8 @@
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "ListOffsetsRequest",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
+  //
   // Version 1 removes MaxNumOffsets.  From this version forward, only a single
   // offset can be returned.
   //
@@ -38,8 +40,7 @@
   // Version 9 enables listing offsets by last tiered offset (KIP-1005).
   //
   // Version 10 enables async remote list offsets support (KIP-1075)
-  "validVersions": "0-10",
-  "deprecatedVersions": "0",
+  "validVersions": "1-10",
   "flexibleVersions": "6+",
   "latestVersionUnstable": false,
   "fields": [
@@ -58,9 +59,7 @@
         { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "4+", "default": "-1", "ignorable": true,
           "about": "The current leader epoch." },
         { "name": "Timestamp", "type": "int64", "versions": "0+",
-          "about": "The current timestamp." },
-        { "name": "MaxNumOffsets", "type": "int32", "versions": "0", "default": "1",
-          "about": "The maximum number of offsets to report." }
+          "about": "The current timestamp." }
       ]}
     ]},
     { "name": "TimeoutMs", "type": "int32", "versions": "10+", "ignorable": true,

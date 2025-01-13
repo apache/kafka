@@ -24,7 +24,7 @@ import kafka.utils.{Logging, TestUtils}
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import com.yammer.metrics.core.Gauge
-import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -50,7 +50,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
 
   @volatile private var running = true
 
-  override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum, zkConnectOrNull)
+  override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @BeforeEach
@@ -146,7 +146,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
       for (t <- topics if running) {
           try {
             deleteTopic(t)
-            TestUtils.verifyTopicDeletion(null, t, partitionNum, servers)
+            TestUtils.verifyTopicDeletion(t, partitionNum, servers)
           } catch {
           case e: Exception => e.printStackTrace()
           }

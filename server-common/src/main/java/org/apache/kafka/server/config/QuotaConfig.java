@@ -20,9 +20,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -115,12 +113,12 @@ public class QuotaConfig {
             .define(QuotaConfig.ALTER_LOG_DIRS_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, INT, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT, atLeast(1), LOW, QuotaConfig.ALTER_LOG_DIRS_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_DOC)
             .define(QuotaConfig.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, INT, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT, atLeast(1), LOW, QuotaConfig.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_DOC)
             .define(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, CLASS, null, LOW, QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_DOC);
-    private static final Set<String> USER_AND_CLIENT_QUOTA_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+    private static final Set<String> USER_AND_CLIENT_QUOTA_NAMES = Set.of(
             PRODUCER_BYTE_RATE_OVERRIDE_CONFIG,
             CONSUMER_BYTE_RATE_OVERRIDE_CONFIG,
             REQUEST_PERCENTAGE_OVERRIDE_CONFIG,
             CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG
-    )));
+    );
 
     private static void buildUserClientQuotaConfigDef(ConfigDef configDef) {
         configDef.define(PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, ConfigDef.Type.LONG, Long.MAX_VALUE,

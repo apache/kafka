@@ -163,6 +163,4 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       assertEquals(expectedEpoch, fetchState(partition).flatMap(_.lastFetchedEpoch))
     }
   }
-
-  override protected val isOffsetForLeaderEpochSupported: Boolean = true
 }

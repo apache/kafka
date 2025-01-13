@@ -82,7 +82,7 @@ public class GroupCoordinatorConfig {
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
         "wait for writes to accumulate before flushing them to disk. Transactional writes are not accumulated.";
-    public static final int GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT = 10;
+    public static final int GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT = 5;
 
     public static final String GROUP_COORDINATOR_NUM_THREADS_CONFIG = "group.coordinator.threads";
     public static final String GROUP_COORDINATOR_NUM_THREADS_DOC = "The number of threads used by the group coordinator.";

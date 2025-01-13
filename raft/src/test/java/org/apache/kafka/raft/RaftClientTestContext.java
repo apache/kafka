@@ -793,8 +793,7 @@ public final class RaftClientTestContext {
     ) {
         List<RaftRequest.Outbound> voteRequests = new ArrayList<>();
         for (RaftRequest.Outbound raftMessage : channel.drainSendQueue()) {
-            if (raftMessage.data() instanceof VoteRequestData) {
-                VoteRequestData request = (VoteRequestData) raftMessage.data();
+            if (raftMessage.data() instanceof VoteRequestData request) {
                 VoteRequestData.PartitionData partitionRequest = unwrap(request);
 
                 assertEquals(epoch, partitionRequest.replicaEpoch());
@@ -1247,8 +1246,7 @@ public final class RaftClientTestContext {
             .map(list -> list.stream().map(ReplicaKey::id).collect(Collectors.toList()));
 
         for (RaftRequest.Outbound raftMessage : channel.drainSendQueue()) {
-            if (raftMessage.data() instanceof EndQuorumEpochRequestData) {
-                EndQuorumEpochRequestData request = (EndQuorumEpochRequestData) raftMessage.data();
+            if (raftMessage.data() instanceof EndQuorumEpochRequestData request) {
 
                 EndQuorumEpochRequestData.PartitionData partitionRequest =
                     request.topics().get(0).partitions().get(0);

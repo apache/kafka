@@ -110,9 +110,9 @@ public class StreamsProducerTest {
     );
 
     private final MockProducer<byte[], byte[]> nonEosMockProducer
-        = new MockProducer<>(cluster, true, new ByteArraySerializer(), new ByteArraySerializer());
+        = new MockProducer<>(cluster, true, new org.apache.kafka.clients.producer.RoundRobinPartitioner(), new ByteArraySerializer(), new ByteArraySerializer());
     private final MockProducer<byte[], byte[]> eosMockProducer
-        = new MockProducer<>(cluster, true, new ByteArraySerializer(), new ByteArraySerializer());
+        = new MockProducer<>(cluster, true, new org.apache.kafka.clients.producer.RoundRobinPartitioner(), new ByteArraySerializer(), new ByteArraySerializer());
 
     private StreamsProducer nonEosStreamsProducer;
     private StreamsProducer eosStreamsProducer;

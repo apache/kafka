@@ -61,9 +61,9 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         if (root != null) {
-            context.register(root, null);
+            stateStoreContext.register(root, null);
         }
 
         this.open = true;

@@ -30,23 +30,13 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MetadataRequestTest {
 
     @Test
-    public void testEmptyMeansAllTopicsV0() {
-        MetadataRequestData data = new MetadataRequestData();
-        MetadataRequest parsedRequest = new MetadataRequest(data, (short) 0);
-        assertTrue(parsedRequest.isAllTopics());
-        assertNull(parsedRequest.topics());
-    }
-
-    @Test
-    public void testEmptyMeansEmptyForVersionsAboveV0() {
-        for (int i = 1; i < MetadataRequestData.SCHEMAS.length; i++) {
+    public void testEmptyMeansEmptyForAllVersions() {
+        for (int i = ApiKeys.METADATA.oldestVersion(); i < MetadataRequestData.SCHEMAS.length; i++) {
             MetadataRequestData data = new MetadataRequestData();
             data.setAllowAutoTopicCreation(true);
             MetadataRequest parsedRequest = new MetadataRequest(data, (short) i);

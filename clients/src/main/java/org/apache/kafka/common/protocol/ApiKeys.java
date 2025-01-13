@@ -130,7 +130,10 @@ public enum ApiKeys {
     READ_SHARE_GROUP_STATE(ApiMessageType.READ_SHARE_GROUP_STATE, true),
     WRITE_SHARE_GROUP_STATE(ApiMessageType.WRITE_SHARE_GROUP_STATE, true),
     DELETE_SHARE_GROUP_STATE(ApiMessageType.DELETE_SHARE_GROUP_STATE, true),
-    READ_SHARE_GROUP_STATE_SUMMARY(ApiMessageType.READ_SHARE_GROUP_STATE_SUMMARY, true);
+    READ_SHARE_GROUP_STATE_SUMMARY(ApiMessageType.READ_SHARE_GROUP_STATE_SUMMARY, true),
+    STREAMS_GROUP_HEARTBEAT(ApiMessageType.STREAMS_GROUP_HEARTBEAT),
+    STREAMS_GROUP_DESCRIBE(ApiMessageType.STREAMS_GROUP_DESCRIBE);
+    
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
@@ -194,7 +197,7 @@ public enum ApiKeys {
     private static boolean shouldRetainsBufferReference(Schema[] requestSchemas) {
         boolean requestRetainsBufferReference = false;
         for (Schema requestVersionSchema : requestSchemas) {
-            if (retainsBufferReference(requestVersionSchema)) {
+            if (requestVersionSchema != null && retainsBufferReference(requestVersionSchema)) {
                 requestRetainsBufferReference = true;
                 break;
             }

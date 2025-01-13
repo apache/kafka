@@ -96,8 +96,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -546,6 +548,89 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
+    }
+
+    @Test
+    public void testResultHandlerOnCommitAsync() {
+        buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(null, Optional.empty());
+
+        // Passing null acknowledgements should mean we do not send the background event at all.
+        resultHandler.complete(tip0, null, true);
+        assertEquals(0, completedAcknowledgements.size());
+
+        // Setting isCommitAsync to false should still not send any background event
+        // as we have initialized remainingResults to null.
+        resultHandler.complete(tip0, acknowledgements, false);
+        assertEquals(0, completedAcknowledgements.size());
+
+        // Sending non-null acknowledgements means we do send the background event
+        resultHandler.complete(tip0, acknowledgements, true);
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+    }
+
+    @Test
+    public void testResultHandlerOnCommitSync() {
+        buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        final CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future = new CompletableFuture<>();
+
+        // Initializing resultCount to 3.
+        AtomicInteger resultCount = new AtomicInteger(3);
+
+        ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(resultCount, Optional.of(future));
+
+        // We only send the background event after all results have been completed.
+        resultHandler.complete(tip0, acknowledgements, false);
+        assertEquals(0, completedAcknowledgements.size());
+        assertFalse(future.isDone());
+
+        resultHandler.complete(t2ip0, null, false);
+        assertEquals(0, completedAcknowledgements.size());
+        assertFalse(future.isDone());
+
+        // After third response is received, we send the background event.
+        resultHandler.complete(tip1, acknowledgements, false);
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(2, completedAcknowledgements.get(0).size());
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(3, completedAcknowledgements.get(0).get(tip1).size());
+        assertTrue(future.isDone());
+    }
+
+    @Test
+    public void testResultHandlerCompleteIfEmpty() {
+        buildRequestManager();
+
+        final CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future = new CompletableFuture<>();
+
+        // Initializing resultCount to 1.
+        AtomicInteger resultCount = new AtomicInteger(1);
+
+        ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(resultCount, Optional.of(future));
+
+        resultHandler.completeIfEmpty();
+        assertFalse(future.isDone());
+
+        resultCount.decrementAndGet();
+
+        resultHandler.completeIfEmpty();
+        assertTrue(future.isDone());
     }
 
     @Test
@@ -1249,7 +1334,7 @@ public class ShareConsumeRequestManagerTest {
                 new SimpleRecord(null, "value".getBytes()));
 
         // Remove the last record to simulate compaction
-        MemoryRecords.FilterResult result = records.filterTo(tp0, new MemoryRecords.RecordFilter(0, 0) {
+        MemoryRecords.FilterResult result = records.filterTo(new MemoryRecords.RecordFilter(0, 0) {
             @Override
             protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new BatchRetentionResult(BatchRetention.DELETE_EMPTY, false);
@@ -1259,7 +1344,7 @@ public class ShareConsumeRequestManagerTest {
             protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return record.key() != null;
             }
-        }, ByteBuffer.allocate(1024), Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        }, ByteBuffer.allocate(1024), BufferSupplier.NO_CACHING);
         result.outputBuffer().flip();
         MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.outputBuffer());
 
@@ -1728,6 +1813,11 @@ public class ShareConsumeRequestManagerTest {
             NetworkClientDelegate.PollResult pollResult = poll(time.milliseconds());
             networkClientDelegate.addAll(pollResult.unsentRequests);
             return pollResult.unsentRequests.size();
+        }
+
+        public ResultHandler buildResultHandler(final AtomicInteger remainingResults,
+                                                final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future) {
+            return new ResultHandler(remainingResults, future);
         }
 
         public Tuple<AcknowledgeRequestState> requestStates(int nodeId) {

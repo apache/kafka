@@ -184,8 +184,7 @@ public class StandaloneWorkerIntegrationTest {
                 newLevels,
                 e -> hasNamespace(e, namespace)
                         && (!level(e).equals(level)
-                            || !isModified(e)
-                            || lastModified(e) < requestTime
+                            || (isModified(e) && lastModified(e) < requestTime)
                         )
         );
         assertEquals(

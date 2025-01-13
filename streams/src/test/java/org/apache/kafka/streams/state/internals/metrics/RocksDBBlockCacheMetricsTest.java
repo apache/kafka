@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.BlockBasedTableConfigWithAccessibleCache;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.streams.state.internals.RocksDBTimestampedStore;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -58,8 +58,8 @@ public class RocksDBBlockCacheMetricsTest {
     public static Stream<Arguments> stores() {
         final File stateDir = TestUtils.tempDirectory("state");
         return Stream.of(
-            Arguments.of(new RocksDBStore(STORE_NAME, METRICS_SCOPE), new MockInternalNewProcessorContext<>(new Properties(), TASK_ID, stateDir)),
-            Arguments.of(new RocksDBTimestampedStore(STORE_NAME, METRICS_SCOPE), new MockInternalNewProcessorContext<>(new Properties(), TASK_ID, stateDir))
+            Arguments.of(new RocksDBStore(STORE_NAME, METRICS_SCOPE), new MockInternalProcessorContext<>(new Properties(), TASK_ID, stateDir)),
+            Arguments.of(new RocksDBTimestampedStore(STORE_NAME, METRICS_SCOPE), new MockInternalProcessorContext<>(new Properties(), TASK_ID, stateDir))
         );
     }
 

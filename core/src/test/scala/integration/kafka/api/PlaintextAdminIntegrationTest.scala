@@ -36,7 +36,7 @@ import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
@@ -1810,7 +1810,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * Test the consumer group APIs.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_17960"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testConsumerGroups(quorum: String, groupProtocol: String): Unit = {
     val config = createConfig
     client = Admin.create(config)
@@ -1875,7 +1875,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
                   consumer.poll(JDuration.ofSeconds(5))
                   if (!consumer.assignment.isEmpty && latch.getCount > 0L)
                     latch.countDown()
-                  consumer.commitSync()
+                  try {
+                    consumer.commitSync()
+                  } catch {
+                    case _: CommitFailedException => // Ignore and retry on next iteration.
+                  }
                 }
               } catch {
                 case _: InterruptException => // Suppress the output to stderr
@@ -1938,8 +1942,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           // Test that we can get information about the test consumer group.
           assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
           var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
-          assertEquals(groupType == GroupType.CLASSIC, testGroupDescription.groupEpoch.isEmpty)
-          assertEquals(groupType == GroupType.CLASSIC, testGroupDescription.targetAssignmentEpoch.isEmpty)
+          if (groupType == GroupType.CLASSIC) {
+            assertTrue(testGroupDescription.groupEpoch.isEmpty)
+            assertTrue(testGroupDescription.targetAssignmentEpoch.isEmpty)
+          } else {
+            assertEquals(Optional.of(3), testGroupDescription.groupEpoch)
+            assertEquals(Optional.of(3), testGroupDescription.targetAssignmentEpoch)
+          }
 
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup)
@@ -2167,7 +2176,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * Test the consumer group APIs.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_17960"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testConsumerGroupsDeprecatedConsumerGroupState(quorum: String, groupProtocol: String): Unit = {
     val config = createConfig
     client = Admin.create(config)
@@ -2232,7 +2241,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
                   consumer.poll(JDuration.ofSeconds(5))
                   if (!consumer.assignment.isEmpty && latch.getCount > 0L)
                     latch.countDown()
-                  consumer.commitSync()
+                  try {
+                    consumer.commitSync()
+                  } catch {
+                    case _: CommitFailedException => // Ignore and retry on next iteration.
+                  }
                 }
               } catch {
                 case _: InterruptException => // Suppress the output to stderr

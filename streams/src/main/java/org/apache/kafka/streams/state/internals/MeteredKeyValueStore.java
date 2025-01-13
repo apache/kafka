@@ -92,7 +92,7 @@ public class MeteredKeyValueStore<K, V>
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
     protected Sensor iteratorDurationSensor;
-    protected InternalProcessorContext context;
+    protected InternalProcessorContext<?, ?> internalContext;
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
 
@@ -125,19 +125,19 @@ public class MeteredKeyValueStore<K, V>
     }
 
     @Override
-    public void init(final StateStoreContext context,
+    public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
-        this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext<?, ?>) context : null;
-        taskId = context.taskId();
-        initStoreSerde(context);
-        streamsMetrics = (StreamsMetricsImpl) context.metrics();
+        internalContext = stateStoreContext instanceof InternalProcessorContext ? (InternalProcessorContext<?, ?>) stateStoreContext : null;
+        taskId = stateStoreContext.taskId();
+        initStoreSerde(stateStoreContext);
+        streamsMetrics = (StreamsMetricsImpl) stateStoreContext.metrics();
 
         registerMetrics();
         final Sensor restoreSensor =
             StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
-        maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
+        maybeMeasureLatency(() -> super.init(stateStoreContext, root), time, restoreSensor);
     }
 
     private void registerMetrics() {
@@ -428,9 +428,9 @@ public class MeteredKeyValueStore<K, V>
     protected void maybeRecordE2ELatency() {
         // Context is null if the provided context isn't an implementation of InternalProcessorContext.
         // In that case, we _can't_ get the current timestamp, so we don't record anything.
-        if (e2eLatencySensor.shouldRecord() && context != null) {
+        if (e2eLatencySensor.shouldRecord() && internalContext != null) {
             final long currentTime = time.milliseconds();
-            final long e2eLatency =  currentTime - context.timestamp();
+            final long e2eLatency =  currentTime - internalContext.timestamp();
             e2eLatencySensor.record(e2eLatency, currentTime);
         }
     }
