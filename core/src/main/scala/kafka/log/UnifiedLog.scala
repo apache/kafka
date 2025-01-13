@@ -1157,7 +1157,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     else
       OptionalInt.empty()
 
-    new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, RecordBatch.NO_TIMESTAMP, logStartOffset, RecordValidationStats.EMPTY, sourceCompression, validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], LeaderHwChange.NONE)
+    new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp,
+      RecordBatch.NO_TIMESTAMP, logStartOffset, RecordValidationStats.EMPTY, sourceCompression,
+      validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], LeaderHwChange.NONE)
   }
 
   /**

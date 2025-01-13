@@ -241,7 +241,6 @@ public class LogSegment implements Closeable {
             LOGGER.trace("Inserting {} bytes at end offset {} at position {}",
                 records.sizeInBytes(), largestOffset, log.sizeInBytes());
             int physicalPosition = log.sizeInBytes();
-            boolean updateRollingBasedTimestamp = physicalPosition == 0;
 
             ensureOffsetInRange(largestOffset);
 
@@ -249,22 +248,16 @@ public class LogSegment implements Closeable {
             long appendedBytes = log.append(records);
             LOGGER.trace("Appended {} to {} at end offset {}", appendedBytes, log.file(), largestOffset);
 
-            long recordsLargestTimestampMs = RecordBatch.NO_TIMESTAMP;
             for (RecordBatch batch : records.batches()) {
                 long batchMaxTimestamp = batch.maxTimestamp();
                 long batchLastOffset = batch.lastOffset();
-                recordsLargestTimestampMs = Math.max(recordsLargestTimestampMs, batchMaxTimestamp);
-                boolean updateTimeIndex = false;
                 if (batchMaxTimestamp > maxTimestampSoFar()) {
                     maxTimestampAndOffsetSoFar = new TimestampOffset(batchMaxTimestamp, batchLastOffset);
-                    updateTimeIndex = true;
                 }
 
                 if (bytesSinceLastIndexEntry > indexIntervalBytes) {
                     offsetIndex().append(batchLastOffset, physicalPosition);
-
-                    // max timestamp may not be monotonic, so we need to check it to avoid the time index append error
-                    if (updateTimeIndex) timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar());
+                    timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar());
 
                     bytesSinceLastIndexEntry = 0;
                 }
@@ -272,8 +265,6 @@ public class LogSegment implements Closeable {
                 physicalPosition += sizeInBytes;
                 bytesSinceLastIndexEntry += sizeInBytes;
             }
-
-            if (updateRollingBasedTimestamp) rollingBasedTimestamp = OptionalLong.of(recordsLargestTimestampMs);
         }
     }
 

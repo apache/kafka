@@ -848,9 +848,9 @@ public class LogSegmentTest {
         assertEquals(1, segment.offsetIndex().lookup(1L).offset);
         assertEquals(2, segment.offsetIndex().lookup(2L).offset);
 
-        assertEquals(1, segment.timeIndex().entries());
-        assertEquals(0L, segment.timeIndex().lookup(1L).offset);
-        assertEquals(2L, segment.timeIndex().lookup(2L).offset);
+        assertEquals(2, segment.timeIndex().entries());
+        assertEquals(new TimestampOffset(1, 0), segment.timeIndex().entry(0));
+        assertEquals(new TimestampOffset(2, 2), segment.timeIndex().entry(1));
     }
 
     private ProducerStateManager newProducerStateManager() throws IOException {
