@@ -25,10 +25,11 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
-import org.apache.kafka.storage.internals.log.CleanerConfig
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
@@ -135,6 +136,131 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
+  def testCleanerWithMessageFormatV0V1V2(compressionType: CompressionType): Unit = {
+    val compression = Compression.of(compressionType).build()
+    val largeMessageKey = 20
+    val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.MAGIC_VALUE_V0, compression)
+    val maxMessageSize = compression match {
+      case Compression.NONE => largeMessageSet.sizeInBytes
+      case _ =>
+        // the broker assigns absolute offsets for message format 0 which potentially causes the compressed size to
+        // increase because the broker offsets are larger than the ones assigned by the client
+        // adding `6` to the message set size is good enough for this test: it covers the increased message size while
+        // still being less than the overhead introduced by the conversion from message format version 0 to 1
+        largeMessageSet.sizeInBytes + 6
+    }
+
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize)
+
+    val log = cleaner.logs.get(topicPartitions(0))
+    val props = logConfigProperties(maxMessageSize = maxMessageSize)
+    props.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.LOG_APPEND_TIME.name)
+    val logConfig = new LogConfig(props)
+    log.updateConfig(logConfig)
+
+    val appends1 = writeDups(numKeys = 100, numDups = 3, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V0)
+    val startSize = log.size
+    cleaner.startup()
+
+    val firstDirty = log.activeSegment.baseOffset
+    checkLastCleaned("log", 0, firstDirty)
+    val compactedSize = log.logSegments.asScala.map(_.size).sum
+    assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
+
+    checkLogAfterAppendingDups(log, startSize, appends1)
+
+    val dupsV0 = writeDups(numKeys = 40, numDups = 3, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V0)
+    val appendInfo = log.appendAsLeaderWithRecordVersion(largeMessageSet, leaderEpoch = 0, recordVersion = RecordVersion.V0)
+    // move LSO forward to increase compaction bound
+    log.updateHighWatermark(log.logEndOffset)
+    val largeMessageOffset = appendInfo.firstOffset
+
+    // also add some messages with version 1 and version 2 to check that we handle mixed format versions correctly
+    val dupsV1 = writeDups(startKey = 30, numKeys = 40, numDups = 3, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V1)
+    val dupsV2 = writeDups(startKey = 15, numKeys = 5, numDups = 3, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V2)
+
+    val v0RecordKeysWithNoV1V2Updates = (appends1.map(_._1).toSet -- dupsV1.map(_._1) -- dupsV2.map(_._1)).map(_.toString)
+    val appends2: Seq[(Int, String, Long)] =
+      appends1 ++ dupsV0 ++ Seq((largeMessageKey, largeMessageValue, largeMessageOffset)) ++ dupsV1 ++ dupsV2
+
+    // roll the log so that all appended messages can be compacted
+    log.roll()
+    val firstDirty2 = log.activeSegment.baseOffset
+    checkLastCleaned("log", 0, firstDirty2)
+
+    checkLogAfterAppendingDups(log, startSize, appends2)
+    checkLogAfterConvertingToV2(compressionType, log, logConfig.messageTimestampType, v0RecordKeysWithNoV1V2Updates)
+  }
+
+  @ParameterizedTest
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
+  def testCleaningNestedMessagesWithV0V1(compressionType: CompressionType): Unit = {
+    val compression = Compression.of(compressionType).build()
+    val maxMessageSize = 192
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, segmentSize = 256)
+
+    val log = cleaner.logs.get(topicPartitions(0))
+    val logConfig = new LogConfig(logConfigProperties(maxMessageSize = maxMessageSize, segmentSize = 256))
+    log.updateConfig(logConfig)
+
+    // with compression enabled, these messages will be written as a single message containing all the individual messages
+    var appendsV0 = writeDupsSingleMessageSet(numKeys = 2, numDups = 3, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V0)
+    appendsV0 ++= writeDupsSingleMessageSet(numKeys = 2, startKey = 3, numDups = 2, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V0)
+
+    var appendsV1 = writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V1)
+    appendsV1 ++= writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V1)
+    appendsV1 ++= writeDupsSingleMessageSet(startKey = 6, numKeys = 2, numDups = 2, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V1)
+
+    val appends = appendsV0 ++ appendsV1
+
+    val v0RecordKeysWithNoV1V2Updates = (appendsV0.map(_._1).toSet -- appendsV1.map(_._1)).map(_.toString)
+
+    // roll the log so that all appended messages can be compacted
+    log.roll()
+    val startSize = log.size
+    cleaner.startup()
+
+    val firstDirty = log.activeSegment.baseOffset
+    assertTrue(firstDirty >= appends.size) // ensure we clean data from V0 and V1
+
+    checkLastCleaned("log", 0, firstDirty)
+    val compactedSize = log.logSegments.asScala.map(_.size).sum
+    assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
+
+    checkLogAfterAppendingDups(log, startSize, appends)
+    checkLogAfterConvertingToV2(compressionType, log, logConfig.messageTimestampType, v0RecordKeysWithNoV1V2Updates)
+  }
+
+  private def checkLogAfterConvertingToV2(compressionType: CompressionType, log: UnifiedLog, timestampType: TimestampType,
+                                          keysForV0RecordsWithNoV1V2Updates: Set[String]): Unit = {
+    for (segment <- log.logSegments.asScala; recordBatch <- segment.log.batches.asScala) {
+      // Uncompressed v0/v1 records are always converted into single record v2 batches via compaction if they are retained
+      // Compressed v0/v1 record batches are converted into record batches v2 with one or more records (depending on the
+      // number of retained records after compaction)
+      assertEquals(RecordVersion.V2.value, recordBatch.magic)
+      if (compressionType == CompressionType.NONE)
+        assertEquals(1, recordBatch.iterator().asScala.size)
+      else
+        assertTrue(recordBatch.iterator().asScala.size >= 1)
+
+      val firstRecordKey = TestUtils.readString(recordBatch.iterator().next().key())
+      if (keysForV0RecordsWithNoV1V2Updates.contains(firstRecordKey))
+        assertEquals(TimestampType.CREATE_TIME, recordBatch.timestampType)
+      else
+        assertEquals(timestampType, recordBatch.timestampType)
+
+      recordBatch.iterator.asScala.foreach { record =>
+        val recordKey = TestUtils.readString(record.key)
+        if (keysForV0RecordsWithNoV1V2Updates.contains(recordKey))
+          assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp, "Record " + recordKey + " with unexpected timestamp ")
+        else
+          assertNotEquals(RecordBatch.NO_TIMESTAMP, record.timestamp, "Record " + recordKey + " with unexpected timestamp " + RecordBatch.NO_TIMESTAMP)
+      }
+    }
+  }
+
+  @ParameterizedTest
   @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.AllCompressions])
   def cleanerConfigUpdateTest(compressionType: CompressionType): Unit = {
     val codec: Compression = Compression.of(compressionType).build()
@@ -213,6 +339,28 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
       (key, value, deepLogEntry.offset)
     }
   }
+
+  private def writeDupsSingleMessageSet(numKeys: Int, numDups: Int, log: UnifiedLog, codec: Compression,
+                                        startKey: Int = 0, magicValue: Byte): Seq[(Int, String, Long)] = {
+    val kvs = for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
+      val payload = counter.toString
+      incCounter()
+      (key, payload)
+    }
+
+    val records = kvs.map { case (key, payload) =>
+      new SimpleRecord(Time.SYSTEM.milliseconds(), key.toString.getBytes, payload.getBytes)
+    }
+
+    val appendInfo = log.appendAsLeaderWithRecordVersion(MemoryRecords.withRecords(magicValue, codec, records: _*),
+      leaderEpoch = 0, recordVersion = RecordVersion.lookup(magicValue))
+    // move LSO forward to increase compaction bound
+    log.updateHighWatermark(log.logEndOffset)
+    val offsets = appendInfo.firstOffset to appendInfo.lastOffset
+
+    kvs.zip(offsets).map { case (kv, offset) => (kv._1, kv._2, offset) }
+  }
+
 }
 
 object LogCleanerParameterizedIntegrationTest {

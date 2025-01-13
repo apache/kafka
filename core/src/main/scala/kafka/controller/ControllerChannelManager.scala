@@ -128,7 +128,6 @@ class ControllerChannelManager(controllerEpoch: () => Int,
         controllerToBrokerListenerName,
         config.saslMechanismInterBrokerProtocol,
         time,
-        config.saslInterBrokerHandshakeRequestEnable,
         logContext
       )
       val reconfigurableChannelBuilder = channelBuilder match {
@@ -516,12 +515,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     val leaderAndIsrRequestVersion: Short =
       if (metadataVersion.isAtLeast(IBP_3_4_IV0)) 7
       else if (metadataVersion.isAtLeast(IBP_3_2_IV0)) 6
-      else if (metadataVersion.isAtLeast(IBP_2_8_IV1)) 5
-      else if (metadataVersion.isAtLeast(IBP_2_4_IV1)) 4
-      else if (metadataVersion.isAtLeast(IBP_2_4_IV0)) 3
-      else if (metadataVersion.isAtLeast(IBP_2_2_IV0)) 2
-      else if (metadataVersion.isAtLeast(IBP_1_0_IV0)) 1
-      else 0
+      else 5
 
     leaderAndIsrRequestMap.foreachEntry { (broker, leaderAndIsrPartitionStates) =>
       if (metadataInstance.liveOrShuttingDownBrokerIds.contains(broker)) {
@@ -579,14 +573,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     val metadataVersion = metadataVersionProvider.apply()
     val updateMetadataRequestVersion: Short =
       if (metadataVersion.isAtLeast(IBP_3_4_IV0)) 8
-      else if (metadataVersion.isAtLeast(IBP_2_8_IV1)) 7
-      else if (metadataVersion.isAtLeast(IBP_2_4_IV1)) 6
-      else if (metadataVersion.isAtLeast(IBP_2_2_IV0)) 5
-      else if (metadataVersion.isAtLeast(IBP_1_0_IV0)) 4
-      else if (metadataVersion.isAtLeast(IBP_0_10_2_IV0)) 3
-      else if (metadataVersion.isAtLeast(IBP_0_10_0_IV1)) 2
-      else if (metadataVersion.isAtLeast(IBP_0_9_0)) 1
-      else 0
+      else 7
 
     val liveBrokers = metadataInstance.liveOrShuttingDownBrokers.iterator.map { broker =>
       val endpoints = if (updateMetadataRequestVersion == 0) {
@@ -648,10 +635,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     val metadataVersion = metadataVersionProvider.apply()
     val stopReplicaRequestVersion: Short =
       if (metadataVersion.isAtLeast(IBP_3_4_IV0)) 4
-      else if (metadataVersion.isAtLeast(IBP_2_6_IV0)) 3
-      else if (metadataVersion.isAtLeast(IBP_2_4_IV1)) 2
-      else if (metadataVersion.isAtLeast(IBP_2_2_IV0)) 1
-      else 0
+      else 3
 
     def responseCallback(brokerId: Int, isPartitionDeleted: TopicPartition => Boolean)
                         (response: AbstractResponse): Unit = {

@@ -197,7 +197,7 @@ final class KafkaMetadataLog private (
   }
 
   override def initializeLeaderEpoch(epoch: Int): Unit = {
-    log.maybeAssignEpochStartOffset(epoch, log.logEndOffset)
+    log.assignEpochStartOffset(epoch, log.logEndOffset)
   }
 
   override def updateHighWatermark(offsetMetadata: LogOffsetMetadata): Unit = {

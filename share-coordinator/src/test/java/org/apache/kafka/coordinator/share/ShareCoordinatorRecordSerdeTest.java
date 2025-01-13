@@ -24,8 +24,6 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.share.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
-import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
-import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -199,8 +197,9 @@ public class ShareCoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserializeAllRecordTypes() {
-        roundTrip((short) 0, new ShareSnapshotKey(), new ShareSnapshotValue());
-        roundTrip((short) 1, new ShareUpdateKey(), new ShareUpdateValue());
+        for (CoordinatorRecordType record : CoordinatorRecordType.values()) {
+            roundTrip(record.id(), record.newRecordKey(), record.newRecordValue());
+        }
     }
 
     private void roundTrip(

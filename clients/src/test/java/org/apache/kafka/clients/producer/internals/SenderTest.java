@@ -483,6 +483,46 @@ public class SenderTest {
     }
 
     @Test
+    public void senderThreadShouldNotGetStuckWhenThrottledAndAddingPartitionsToTxn() {
+        // We want MockClient#poll() to advance time so that eventually the backoff expires.
+        try {
+            client.advanceTimeDuringPoll(true);
+
+            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+            apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
+            TransactionManager txnManager = new TransactionManager(logContext, "testUnresolvedSeq", 60000, 100, apiVersions);
+
+            setupWithTransactionState(txnManager);
+            doInitTransactions(txnManager, producerIdAndEpoch);
+
+            int throttleTimeMs = 1000;
+            long startTime = time.milliseconds();
+            Node nodeToThrottle = metadata.fetch().nodeById(0);
+            client.throttle(nodeToThrottle, throttleTimeMs);
+
+            // Verify node is throttled a little bit. In real-life Apache Kafka, we observe that this can happen
+            // as done above by throttling or with a disconnect / backoff.
+            long currentPollDelay = client.pollDelayMs(nodeToThrottle, startTime);
+            assertEquals(currentPollDelay, throttleTimeMs);
+
+            txnManager.beginTransaction();
+            txnManager.maybeAddPartition(tp0);
+
+            assertFalse(txnManager.hasInFlightRequest());
+            sender.runOnce();
+            assertTrue(txnManager.hasInFlightRequest());
+
+            long totalTimeToRunOnce = time.milliseconds() - startTime;
+
+            // It should have blocked roughly only the backoffTimeMs and some change.
+            assertTrue(totalTimeToRunOnce < REQUEST_TIMEOUT);
+
+        } finally {
+            client.advanceTimeDuringPoll(false);
+        }
+    }
+
+    @Test
     public void testNodeLatencyStats() throws Exception {
         try (Metrics m = new Metrics()) {
             // Create a new record accumulator with non-0 partitionAvailabilityTimeoutMs

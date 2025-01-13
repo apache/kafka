@@ -20,7 +20,6 @@ package org.apache.kafka.common.test.api;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
-import org.apache.kafka.clients.admin.DescribeAclsOptions;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -35,7 +34,6 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -464,12 +462,12 @@ public class ClusterTestExtensionsTest {
         }
     )
     public void testSaslPlaintextWithController(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
-        // test with admin
+        // default ClusterInstance#admin helper with admin credentials
         try (Admin admin = clusterInstance.admin(Map.of(), true)) {
             admin.describeAcls(AclBindingFilter.ANY).values().get();
         }
 
-        // test with non-admin
+        // client with non-admin credentials
         Map<String, Object> nonAdminConfig = Map.of(
             SaslConfigs.SASL_JAAS_CONFIG,
             String.format(
@@ -480,9 +478,25 @@ public class ClusterTestExtensionsTest {
         try (Admin admin = clusterInstance.admin(nonAdminConfig, true)) {
             ExecutionException exception = assertThrows(
                 ExecutionException.class,
-                () -> admin.describeAcls(AclBindingFilter.ANY, new DescribeAclsOptions().timeoutMs(5000)).values().get()
+                () -> admin.describeAcls(AclBindingFilter.ANY).values().get()
             );
-            assertInstanceOf(TimeoutException.class, exception.getCause());
+            assertInstanceOf(ClusterAuthorizationException.class, exception.getCause());
+        }
+
+        // client with unknown credentials
+        Map<String, Object> unknownUserConfig = Map.of(
+            SaslConfigs.SASL_JAAS_CONFIG,
+            String.format(
+                "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                "unknown", "unknown"
+            )
+        );
+        try (Admin admin = clusterInstance.admin(unknownUserConfig)) {
+            ExecutionException exception = assertThrows(
+                ExecutionException.class,
+                () -> admin.describeAcls(AclBindingFilter.ANY).values().get()
+            );
+            assertInstanceOf(SaslAuthenticationException.class, exception.getCause());
         }
     }
 }
