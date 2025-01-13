@@ -126,15 +126,9 @@ Configuration:
         additivity: false
         AppenderRef:
           ref: RequestAppender
-      # KRaft mode controller logger
+      # Controller logger
       - name: org.apache.kafka.controller
         level: INFO
-        additivity: false
-        AppenderRef:
-          ref: ControllerAppender
-      # ZK mode controller logger
-      - name: kafka.controller
-        level: TRACE
         additivity: false
         AppenderRef:
           ref: ControllerAppender
