@@ -52,8 +52,10 @@ class DynamicClientQuotaPublisher(
     val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
     try {
       quotaManagers.clientQuotaCallback().ifPresent(clientQuotaCallback => {
-        val cluster = KRaftMetadataCache.toCluster(clusterId, newImage)
-        clientQuotaCallback.updateClusterMetadata(cluster)
+        if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
+          val cluster = KRaftMetadataCache.toCluster(clusterId, newImage)
+          clientQuotaCallback.updateClusterMetadata(cluster)
+        }
       })
       Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
         clientQuotaMetadataManager.update(clientQuotasDelta)
