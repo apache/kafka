@@ -766,7 +766,7 @@ public List&lt;SourceRecord&gt; poll() throws InterruptedException {
 
     <p>When <a href="#connect_errorreporting">error reporting</a> is enabled for a connector, the connector can use an <code>ErrantRecordReporter</code> to report problems with individual records sent to a sink connector. The following example shows how a connector's <code>SinkTask</code> subclass might obtain and use the <code>ErrantRecordReporter</code>, safely handling a null reporter when the DLQ is not enabled or when the connector is installed in an older Connect runtime that doesn't have this reporter feature:</p>
 
-    <<pre class="line-numbers"><code class="language-java">private ErrantRecordReporter reporter;
+    <pre class="line-numbers"><code class="language-java">private ErrantRecordReporter reporter;
 
 @Override
 public void start(Map&lt;String, String&gt; props) {
