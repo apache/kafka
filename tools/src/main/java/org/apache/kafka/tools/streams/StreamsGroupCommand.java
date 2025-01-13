@@ -211,7 +211,7 @@ public class StreamsGroupCommand {
                 } else {
                     String fmt = "%" + -groupLen + "s %-15s% %-15s%" + -maxMemberIdLen + "s %s %15s %" + -maxHostLen + "s %" + -maxClientIdLen + "s\n";
                     for (StreamsGroupMemberDescription member : members) {
-                        System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT");
+                        System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID");
                         System.out.printf(fmt, description.groupId(), description.targetAssignmentEpoch(), description.topologyEpoch(), member.memberId(),
                             member.isClassic() ? "classic" : "streams", member.memberEpoch(), member.processId(), member.clientId());
                         printTasks(member.assignment(), false);
