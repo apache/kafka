@@ -16,7 +16,8 @@
 {
   "apiKey": 4,
   "type": "request",
-  "listeners": [],
+  // TODO: The generator should not generate the empty collection, It will reslove it in KAFKA-14552
+  "listeners": ["zkBroker"],
   "name": "LeaderAndIsrRequest",
   // Version 1 adds IsNew.
   //
