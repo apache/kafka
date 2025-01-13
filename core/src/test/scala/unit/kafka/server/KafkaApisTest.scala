@@ -35,7 +35,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, UnsupportedVersionException}
-import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
@@ -61,7 +61,6 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
-import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
