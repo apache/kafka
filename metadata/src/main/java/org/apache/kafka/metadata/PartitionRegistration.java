@@ -432,8 +432,7 @@ public class PartitionRegistration {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof PartitionRegistration)) return false;
-        PartitionRegistration other = (PartitionRegistration) o;
+        if (!(o instanceof PartitionRegistration other)) return false;
         return Arrays.equals(replicas, other.replicas) &&
             Arrays.equals(directories, other.directories) &&
             Arrays.equals(isr, other.isr) &&

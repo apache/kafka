@@ -1169,14 +1169,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * signal the completion when all results are known.
          */
         public void complete(TopicIdPartition partition, Acknowledgements acknowledgements, boolean isCommitAsync) {
-            if (acknowledgements != null) {
+            if (!isCommitAsync && acknowledgements != null) {
                 result.put(partition, acknowledgements);
             }
             // For commitAsync, we do not wait for other results to complete, we prepare a background event
             // for every ShareAcknowledgeResponse.
             // For commitAsync, we send out a background event for every TopicIdPartition, so we use a singletonMap each time.
             if (isCommitAsync) {
-                maybeSendShareAcknowledgeCommitCallbackEvent(Collections.singletonMap(partition, acknowledgements));
+                if (acknowledgements != null) {
+                    maybeSendShareAcknowledgeCommitCallbackEvent(Collections.singletonMap(partition, acknowledgements));
+                }
             } else if (remainingResults != null && remainingResults.decrementAndGet() == 0) {
                 maybeSendShareAcknowledgeCommitCallbackEvent(result);
                 future.ifPresent(future -> future.complete(result));

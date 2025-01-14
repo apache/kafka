@@ -342,8 +342,7 @@ public class BrokerRegistration {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof BrokerRegistration)) return false;
-        BrokerRegistration other = (BrokerRegistration) o;
+        if (!(o instanceof BrokerRegistration other)) return false;
         return other.id == id &&
             other.epoch == epoch &&
             other.incarnationId.equals(incarnationId) &&

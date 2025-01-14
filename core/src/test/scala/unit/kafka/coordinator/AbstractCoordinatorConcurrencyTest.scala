@@ -47,7 +47,7 @@ import scala.jdk.CollectionConverters._
 
 abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extends Logging {
   val nThreads = 5
-  val serverProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+  val serverProps = TestUtils.createBrokerConfig(0)
   val random = new Random
   var replicaManager: TestReplicaManager = _
   var zkClient: KafkaZkClient = _

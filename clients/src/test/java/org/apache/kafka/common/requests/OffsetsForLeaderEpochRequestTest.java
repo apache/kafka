@@ -42,18 +42,13 @@ public class OffsetsForLeaderEpochRequestTest {
     }
 
     @Test
-    public void testDefaultReplicaId() {
-        for (short version : ApiKeys.OFFSET_FOR_LEADER_EPOCH.allVersions()) {
-            int replicaId = 1;
-            OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forFollower(
-                    version, new OffsetForLeaderTopicCollection(), replicaId);
-            OffsetsForLeaderEpochRequest request = builder.build();
-            OffsetsForLeaderEpochRequest parsed = OffsetsForLeaderEpochRequest.parse(request.serialize(), version);
-            if (version < 3)
-                assertEquals(OffsetsForLeaderEpochRequest.DEBUGGING_REPLICA_ID, parsed.replicaId());
-            else
-                assertEquals(replicaId, parsed.replicaId());
-        }
+    public void testForFollower() {
+        short version = 4;
+        int replicaId = 1;
+        OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forFollower(
+                new OffsetForLeaderTopicCollection(), replicaId);
+        OffsetsForLeaderEpochRequest request = builder.build();
+        OffsetsForLeaderEpochRequest parsed = OffsetsForLeaderEpochRequest.parse(request.serialize(), version);
+        assertEquals(replicaId, parsed.replicaId());
     }
-
 }

@@ -602,12 +602,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                         nodes_for_kdc += other_service.nodes
                     self.minikdc = MiniKdc(self.context, nodes_for_kdc, extra_principals = add_principals)
                     self.minikdc.start()
-        else:
-            self.minikdc = None
-            if self.quorum_info.using_kraft:
-                self.controller_quorum.minikdc = None
-                if self.isolated_kafka:
-                    self.isolated_kafka.minikdc = None
 
     def alive(self, node):
         return len(self.pids(node)) > 0

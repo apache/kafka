@@ -108,6 +108,10 @@ public class RequestHeader implements AbstractRequestResponse {
         return size;
     }
 
+    public boolean isApiVersionSupported() {
+        return apiKey().isVersionSupported(apiVersion());
+    }
+
     public boolean isApiVersionDeprecated() {
         return apiKey().isVersionDeprecated(apiVersion());
     }

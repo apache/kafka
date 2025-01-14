@@ -29,7 +29,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
@@ -166,7 +165,6 @@ public class StressTestLog {
             LogAppendInfo logAppendInfo = log.appendAsLeader(records,
                     0,
                     AppendOrigin.CLIENT,
-                    MetadataVersion.LATEST_PRODUCTION,
                     RequestLocal.noCaching(),
                     VerificationGuard.SENTINEL);
 

@@ -96,8 +96,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof LeaderChangeBatch)) return false;
-            LeaderChangeBatch other = (LeaderChangeBatch) o;
+            if (!(o instanceof LeaderChangeBatch other)) return false;
             return other.newLeader.equals(newLeader);
         }
 
@@ -135,8 +134,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof LocalRecordBatch)) return false;
-            LocalRecordBatch other = (LocalRecordBatch) o;
+            if (!(o instanceof LocalRecordBatch other)) return false;
 
             return leaderEpoch == other.leaderEpoch &&
                 appendTimestamp == other.appendTimestamp &&
@@ -261,8 +259,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             long nextEndOffset = prevOffset + batch.size();
             log.debug("append(batch={}, nextEndOffset={})", batch, nextEndOffset);
             batches.put(nextEndOffset, batch);
-            if (batch instanceof LeaderChangeBatch) {
-                LeaderChangeBatch leaderChangeBatch = (LeaderChangeBatch) batch;
+            if (batch instanceof LeaderChangeBatch leaderChangeBatch) {
                 leader = leaderChangeBatch.newLeader;
             }
             for (LocalLogManager logManager : logManagers.values()) {
@@ -373,8 +370,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 .values()
                 .stream()
                 .flatMapToInt(batch -> {
-                    if (batch instanceof LocalRecordBatch) {
-                        LocalRecordBatch localBatch = (LocalRecordBatch) batch;
+                    if (batch instanceof LocalRecordBatch localBatch) {
                         return localBatch.records.stream().mapToInt(record -> messageSize(record, objectCache));
                     } else {
                         return IntStream.empty();
@@ -398,8 +394,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         public synchronized List<ApiMessageAndVersion> allRecords() {
             List<ApiMessageAndVersion> allRecords = new ArrayList<>();
             for (LocalBatch batch : batches.values()) {
-                if (batch instanceof LocalRecordBatch) {
-                    LocalRecordBatch recordBatch = (LocalRecordBatch) batch;
+                if (batch instanceof LocalRecordBatch recordBatch) {
                     allRecords.addAll(recordBatch.records);
                 }
             }
@@ -554,8 +549,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                                 nodeId, numEntriesFound, entryOffset, maxReadOffset);
                             break;
                         }
-                        if (entry.getValue() instanceof LeaderChangeBatch) {
-                            LeaderChangeBatch batch = (LeaderChangeBatch) entry.getValue();
+                        if (entry.getValue() instanceof LeaderChangeBatch batch) {
                             log.trace("Node {}: handling LeaderChange to {}.",
                                 nodeId, batch.newLeader);
                             // Only notify the listener if it equals the shared leader state
@@ -572,8 +566,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                                         nodeId, batch.newLeader, sharedLeader);
                                 listenerData.setOffset(entryOffset);
                             }
-                        } else if (entry.getValue() instanceof LocalRecordBatch) {
-                            LocalRecordBatch batch = (LocalRecordBatch) entry.getValue();
+                        } else if (entry.getValue() instanceof LocalRecordBatch batch) {
                             log.trace("Node {}: handling LocalRecordBatch with offset {}.",
                                 nodeId, entryOffset);
                             ObjectSerializationCache objectCache = new ObjectSerializationCache();
