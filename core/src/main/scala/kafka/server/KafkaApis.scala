@@ -243,6 +243,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.WRITE_SHARE_GROUP_STATE => handleWriteShareGroupStateRequest(request)
         case ApiKeys.DELETE_SHARE_GROUP_STATE => handleDeleteShareGroupStateRequest(request)
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY => handleReadShareGroupStateSummaryRequest(request)
+        case ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS => handleDescribeShareGroupOffsetsRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3517,6 +3518,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val readShareGroupStateSummaryRequest = request.body[ReadShareGroupStateSummaryRequest]
     // TODO: Implement the ReadShareGroupStateSummaryRequest handling
     requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleDescribeShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
+    val describeShareGroupOffsetsRequest = request.body[DescribeShareGroupOffsetsRequest]
+    // TODO: Implement the DescribeShareGroupOffsetsRequest handling
+    requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     CompletableFuture.completedFuture[Unit](())
   }
 
