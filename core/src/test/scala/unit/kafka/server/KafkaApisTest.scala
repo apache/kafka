@@ -176,7 +176,7 @@ class KafkaApisTest extends Logging {
 
 
     val listenerType = ListenerType.BROKER
-    val enabledApis = ApiKeys.apisForListener(listenerType).asScala ++ Set(ApiKeys.ENVELOPE)
+    val enabledApis = ApiKeys.apisForListener(listenerType).asScala
 
     val apiVersionManager = new SimpleApiVersionManager(
       listenerType,
@@ -2189,6 +2189,7 @@ class KafkaApisTest extends Logging {
   def testProduceResponseMetadataLookupErrorOnNotLeaderOrFollower(): Unit = {
     val topic = "topic"
 
+    metadataCache = mock(classOf[KRaftMetadataCache])
     for (version <- 10 to ApiKeys.PRODUCE.latestVersion) {
 
       reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
