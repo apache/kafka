@@ -110,6 +110,7 @@ public class ShareConsumerTest {
     private final TopicPartition warmupTp = new TopicPartition("warmup", 0);
     private static final String DEFAULT_STATE_PERSISTER = "org.apache.kafka.server.share.persister.DefaultStatePersister";
     private static final String NO_OP_PERSISTER = "org.apache.kafka.server.share.persister.NoOpShareStatePersister";
+    private List<TopicPartition> sgsTopicPartitions;
 
     private Admin adminClient;
 
@@ -145,6 +146,9 @@ public class ShareConsumerTest {
         createTopic("topic");
         createTopic("topic2");
         adminClient = createAdminClient();
+        sgsTopicPartitions = IntStream.range(0, 3)
+            .mapToObj(part -> new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, part))
+            .toList();
         warmup();
     }
 
@@ -1984,9 +1988,10 @@ public class ShareConsumerTest {
             consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
             consumerConfigs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
             consumerConfigs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-            consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
             try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfigs)) {
-                consumer.subscribe(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME));
+                consumer.assign(sgsTopicPartitions);
+                consumer.seekToBeginning(sgsTopicPartitions);
                 Set<ConsumerRecord<byte[], byte[]>> records = new HashSet<>();
                 TestUtils.waitForCondition(() -> {
                         ConsumerRecords<byte[], byte[]> msgs = consumer.poll(Duration.ofMillis(5000L));
