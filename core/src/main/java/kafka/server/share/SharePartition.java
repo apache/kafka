@@ -580,7 +580,7 @@ public class SharePartition {
      * fetched from the leader.
      *
      * @param memberId           The member id of the client that is fetching the record.
-     * @param batchSize          The batch size of the individual acquired records batch.
+     * @param batchSize          The number of records per acquired records batch.
      * @param maxFetchRecords    The maximum number of records that should be acquired, this is a soft
      *                           limit and the method might acquire more records than the maxFetchRecords,
      *                           if the records are already part of the same fetch batch.
@@ -1238,10 +1238,6 @@ public class SharePartition {
                 // as lastOffset call of RecordBatch is expensive (loads headers).
                 for (RecordBatch batch : batches) {
                     long batchBaseOffset = batch.baseOffset();
-                    if (batchBaseOffset < firstAcquiredOffset) {
-                        continue;
-                    }
-
                     // Check if the batch is already past the last acquired offset then break.
                     if (batchBaseOffset > lastAcquiredOffset) {
                         // Break the loop and the last batch will be processed outside the loop.

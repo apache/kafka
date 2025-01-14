@@ -1144,7 +1144,7 @@ public class SharePartitionTest {
     @Test
     public void testAcquireWithBatchSizeAndMultipleBatches() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
-        // Create 3 batches of records.
+        // Create 4 batches of records.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
         memoryRecordsBuilder(buffer, 5, 2).close();
         memoryRecordsBuilder(buffer, 5, 10).close();
@@ -1228,6 +1228,86 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(0L).offsetState());
         assertNull(sharePartition.cachedState().get(5L).offsetState());
+    }
+
+    @Test
+    public void testAcquireSingleBatchWithBatchSizeAndEndOffsetAheadBatchFirstOffset() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        sharePartition.updateCacheAndOffsets(8L);
+
+        MemoryRecords records = memoryRecords(10, 5);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                5 /* Batch size */,
+                100,
+                new FetchPartitionData(Errors.NONE, 20, 0, records,
+                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            7 /* Acquisition of records starts post endOffset */);
+
+        // Fetch expected single batch, but change the first offset as per endOffset.
+        assertArrayEquals(expectedAcquiredRecord(8, 14, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(15, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertTrue(sharePartition.cachedState().containsKey(8L));
+    }
+
+    @Test
+    public void testAcquireWithBatchSizeAndEndOffsetAheadBatchFirstOffset() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        sharePartition.updateCacheAndOffsets(4L);
+
+        // Create 2 batches of records.
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        memoryRecordsBuilder(buffer, 8, 2).close();
+        memoryRecordsBuilder(buffer, 7, 10).close();
+        buffer.flip();
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                5 /* Batch size */,
+                100,
+                new FetchPartitionData(Errors.NONE, 20, 0, records,
+                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            13 /* Acquisition of records starts post endOffset */);
+
+        // Fetch expected records from 2 batches, but change the first batch's first offset as per endOffset.
+        List<AcquiredRecords> expectedAcquiredRecords = expectedAcquiredRecords(records, 1);
+        expectedAcquiredRecords.remove(0);
+        expectedAcquiredRecords.addAll(0, expectedAcquiredRecord(4, 9, 1));
+
+        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertEquals(17, sharePartition.nextFetchOffset());
+        assertEquals(2, sharePartition.cachedState().size());
+        assertTrue(sharePartition.cachedState().containsKey(4L));
+        assertTrue(sharePartition.cachedState().containsKey(10L));
+    }
+
+    @Test
+    public void testAcquireSkipBatchWithBatchSizeAndEndOffsetAheadBatchOffset() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        sharePartition.updateCacheAndOffsets(12L);
+
+        // Create 2 batches of records.
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        memoryRecordsBuilder(buffer, 8, 2).close();
+        memoryRecordsBuilder(buffer, 7, 10).close();
+        buffer.flip();
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                5 /* Batch size */,
+                100,
+                new FetchPartitionData(Errors.NONE, 20, 0, records,
+                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5 /* Acquisition of records starts post endOffset */);
+
+        // Fetch expected single batch, but change the first offset as per endOffset.
+        assertArrayEquals(expectedAcquiredRecord(12, 16, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(17, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertTrue(sharePartition.cachedState().containsKey(12L));
     }
 
     @Test
