@@ -94,6 +94,7 @@ import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -173,6 +174,7 @@ public class ShareConsumerTest {
             assertEquals(subscription, shareConsumer.subscription());
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 1);
         }
     }
 
@@ -188,6 +190,7 @@ public class ShareConsumerTest {
             shareConsumer.unsubscribe();
             assertEquals(Collections.emptySet(), shareConsumer.subscription());
             assertEquals(0, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 1);
         }
     }
 
@@ -205,6 +208,7 @@ public class ShareConsumerTest {
             assertEquals(subscription, shareConsumer.subscription());
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 1);
         }
     }
 
@@ -222,6 +226,7 @@ public class ShareConsumerTest {
             // "Consumer is not subscribed to any topics."
             assertThrows(IllegalStateException.class, () -> shareConsumer.poll(Duration.ofMillis(500)));
             assertEquals(0, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 1);   // due to leader epoch in read
         }
     }
 
@@ -239,6 +244,7 @@ public class ShareConsumerTest {
             // "Consumer is not subscribed to any topics."
             assertThrows(IllegalStateException.class, () -> shareConsumer.poll(Duration.ofMillis(500)));
             assertEquals(0, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 1);   // due to leader epoch in read
         }
     }
 
@@ -255,7 +261,7 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
-            maybeVerifyShareGroupStateTopicRecordCount(persister, 1);
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -315,6 +321,7 @@ public class ShareConsumerTest {
             // Verifying if the callback was invoked without exceptions for the partitions for both topics.
             assertNull(partitionExceptionMap.get(tp));
             assertNull(partitionExceptionMap.get(tp2));
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 4);
         }
     }
 
@@ -459,6 +466,7 @@ public class ShareConsumerTest {
                 if (header != null)
                     assertEquals("headerValue", new String(header.value()));
             }
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -483,6 +491,7 @@ public class ShareConsumerTest {
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testHeadersSerializerDeserializer(String persister) {
         testHeadersSerializeDeserialize(new BaseConsumerTest.SerializerImpl(), new BaseConsumerTest.DeserializerImpl());
+        maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
     }
 
     @ParameterizedTest(name = "{displayName}.persister={0}")
@@ -515,6 +524,7 @@ public class ShareConsumerTest {
 
                 i++;
             }
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 4);
         }
     }
 
@@ -560,6 +570,7 @@ public class ShareConsumerTest {
 
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -581,6 +592,7 @@ public class ShareConsumerTest {
             producer.send(record);
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 3);
         }
     }
 
@@ -604,6 +616,7 @@ public class ShareConsumerTest {
             assertEquals(1, result.size());
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 3);
         }
     }
 
@@ -660,6 +673,7 @@ public class ShareConsumerTest {
             }, 30000, 100L, () -> "Didn't receive call to callback");
 
             assertNull(partitionExceptionMap1.get(tp));
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 4);
         }
     }
 
@@ -723,6 +737,7 @@ public class ShareConsumerTest {
 
             assertTrue(partitionExceptionMap.containsKey(tp));
             assertNull(partitionExceptionMap.get(tp));
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 3);
         }
     }
 
@@ -746,6 +761,7 @@ public class ShareConsumerTest {
             records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 3);
         }
     }
 
@@ -766,6 +782,7 @@ public class ShareConsumerTest {
             records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -784,6 +801,7 @@ public class ShareConsumerTest {
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
             records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -806,6 +824,7 @@ public class ShareConsumerTest {
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
             assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(consumedRecord));
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -827,6 +846,7 @@ public class ShareConsumerTest {
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
             assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(consumedRecord));
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -850,6 +870,7 @@ public class ShareConsumerTest {
             assertEquals(0, result.size());
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -889,6 +910,7 @@ public class ShareConsumerTest {
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Acknowledgement commit callback did not receive the response yet");
 
             assertNull(partitionExceptionMap1.get(tp));
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -911,6 +933,7 @@ public class ShareConsumerTest {
 
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -962,6 +985,7 @@ public class ShareConsumerTest {
                 int records2 = shareConsumer2Records.addAndGet(shareConsumer2.poll(Duration.ofMillis(2000)).count());
                 return records1 == 3 && records2 == 5;
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for both consumers for the last batch");
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 7);
         }
     }
 
@@ -999,6 +1023,7 @@ public class ShareConsumerTest {
             }
 
             assertEquals(totalMessages, consumer1MessageCount + consumer2MessageCount);
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 4);
         }
     }
 
@@ -1099,6 +1124,7 @@ public class ShareConsumerTest {
         assertEquals(totalMessagesSent, totalResult2);
         assertEquals(totalMessagesSent, totalResult3);
         assertEquals(totalMessagesSent, actualMessageSent);
+        maybeVerifyShareGroupStateTopicRecordCount(persister, 21);
     }
 
     @ParameterizedTest(name = "{displayName}.persister={0}")
@@ -1145,6 +1171,7 @@ public class ShareConsumerTest {
             }
             shareConsumer2.close();
             assertEquals(totalMessages, consumer1MessageCount + consumer2MessageCount);
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 3);
         }
     }
 
@@ -1191,6 +1218,7 @@ public class ShareConsumerTest {
 
         int totalSuccessResult = consumeMessagesFutures.stream().mapToInt(CompletableFuture::join).sum();
         assertEquals(producerCount * messagesPerProducer, totalSuccessResult);
+        maybeVerifyShareGroupStateTopicRecordCount(persister, 5);
     }
 
     @ParameterizedTest(name = "{displayName}.persister={0}")
@@ -1250,6 +1278,7 @@ public class ShareConsumerTest {
 
             consumerRecords = shareConsumer.poll(Duration.ofMillis(1000));
             assertEquals(0, consumerRecords.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 4);
         }
     }
 
@@ -1277,6 +1306,7 @@ public class ShareConsumerTest {
             // The acknowledgement commit callback will be called and the exception is thrown.
             // This is verified inside the onComplete() method implementation.
             shareConsumer.poll(Duration.ofMillis(500));
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -1332,6 +1362,7 @@ public class ShareConsumerTest {
                 }
                 return exceptionThrown.get();
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive expected exception");
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -1378,6 +1409,7 @@ public class ShareConsumerTest {
                 }
                 return exceptionThrown.get();
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive expected exception");
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -1453,6 +1485,7 @@ public class ShareConsumerTest {
 
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -1482,6 +1515,7 @@ public class ShareConsumerTest {
             producer.send(record);
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 4);
         }
     }
 
@@ -1524,6 +1558,7 @@ public class ShareConsumerTest {
             producer.send(recordTopic2).get();
             TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "incorrect number of records");
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 7);
         }
     }
 
@@ -1566,6 +1601,7 @@ public class ShareConsumerTest {
 
             messageCount = consumeMessages(new AtomicInteger(0), 0, groupId, 1, 5, true);
             assertEquals(0, messageCount);
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 3);
         }
     }
 
@@ -1592,6 +1628,7 @@ public class ShareConsumerTest {
             records = shareConsumer.poll(Duration.ofMillis(5000));
             // Now the next record should be consumed successfully
             assertEquals(1, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -1617,6 +1654,7 @@ public class ShareConsumerTest {
             records = shareConsumer.poll(Duration.ofMillis(5000));
             // The next records should also be consumed successfully
             assertEquals(1, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 3);
         }
     }
 
@@ -1641,6 +1679,7 @@ public class ShareConsumerTest {
             int consumedMessageCount = consumeMessages(new AtomicInteger(0), 5, "group1", 1, 10, true);
             // The records returned belong to offsets 5-9.
             assertEquals(5, consumedMessageCount);
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -1681,6 +1720,7 @@ public class ShareConsumerTest {
             records2 = shareConsumerLatest.poll(Duration.ofMillis(5000));
             // The next record should also be consumed successfully by group2
             assertEquals(1, records2.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 5);
         }
     }
 
@@ -1732,6 +1772,7 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
             List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 3);
             assertEquals(3, records.size());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 4);
         }
     }
 
@@ -1747,14 +1788,14 @@ public class ShareConsumerTest {
             GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:1h"), AlterConfigOp.OpType.SET)));
         ExecutionException e1 = assertThrows(ExecutionException.class, () -> 
             adminClient.incrementalAlterConfigs(alterEntries).all().get());
-        assertTrue(e1.getCause() instanceof InvalidConfigurationException);
+        assertInstanceOf(InvalidConfigurationException.class, e1.getCause());
 
         // Test negative duration
         alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
             GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:-PT1H"), AlterConfigOp.OpType.SET)));
         ExecutionException e2 = assertThrows(ExecutionException.class, () -> 
             adminClient.incrementalAlterConfigs(alterEntries).all().get());
-        assertTrue(e2.getCause() instanceof InvalidConfigurationException);
+        assertInstanceOf(InvalidConfigurationException.class, e2.getCause());
     }
 
     private int produceMessages(int messageCount) {
@@ -1945,18 +1986,18 @@ public class ShareConsumerTest {
             consumerConfigs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfigs)) {
-                consumer.subscribe(Collections.singleton(Topic.SHARE_GROUP_STATE_TOPIC_NAME));
+                consumer.subscribe(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME));
                 Set<ConsumerRecord<byte[], byte[]>> records = new HashSet<>();
                 TestUtils.waitForCondition(() -> {
                         ConsumerRecords<byte[], byte[]> msgs = consumer.poll(Duration.ofMillis(5000L));
                         if (msgs.count() > 0) {
                             msgs.records(Topic.SHARE_GROUP_STATE_TOPIC_NAME).forEach(records::add);
                         }
-                        return records.size()  == messageCount + 2; // +2 because of extra warmup records
+                        return records.size() == (messageCount + 2); // +2 because of extra warmup records
                     },
-                    DEFAULT_MAX_WAIT_MS,
-                    1000L,
-                    () -> "no records in " + Topic.SHARE_GROUP_STATE_TOPIC_NAME
+                    30000L,
+                    200L,
+                    () -> String.format("records found %d but expected %d", Math.max(0, records.size() - 2), messageCount)
                 );
             }
         } catch (InterruptedException e) {
