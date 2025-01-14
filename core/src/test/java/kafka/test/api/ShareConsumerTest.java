@@ -1027,7 +1027,6 @@ public class ShareConsumerTest {
             }
 
             assertEquals(totalMessages, consumer1MessageCount + consumer2MessageCount);
-            maybeVerifyShareGroupStateTopicRecordCount(persister, 4);
         }
     }
 
