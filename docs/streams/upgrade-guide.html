@@ -181,8 +181,8 @@
     </p>
 
     <p>
-        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1076%3A++Metrics+for+client+applications+KIP-714+extension">KIP-1076</a>
-        adds new methods <code>registerMetricForSubscription(KafkaMetric)</code> and <code>unregisterMetricFromSubscription(KafkaMetric)</code> to the Admin, Consumer, and Producer interfaces to allow applications embedding Kafka clients to register application-specific metrics for pushing them to the broker.
+        In this release, Kafka Streams metrics can be collected broker side via the KIP-714 broker-plugin.
+        For more detailed information, refer to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1076%3A++Metrics+for+client+applications+KIP-714+extension">KIP-1076</a> document please.
     </p>
 
     <p>
@@ -221,6 +221,13 @@
         Previously, foreign key joins in KTables only allowed extraction from the value, which led to data duplication and potential inconsistencies.
         This enhancement introduces a new method in the Java and Scala APIs that accepts a BiFunction for foreign key extraction, enabling more intuitive and efficient joins.
         The existing methods will be deprecated but not removed, ensuring backward compatibility. This change aims to reduce storage overhead and improve API usability.
+    </p>
+
+    <p>
+        With introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1106%3A+Add+duration+based+offset+reset+option+for+consumer+clients">KIP-1106</a>,
+        the existing <code>Topology.AutoOffsetReset</code> is deprecated and replaced with a new class <code>org.apache.kafka.streams.AutoOffsetReset</code> to capture the reset strategies.
+        New methods will be added to the <code>org.apache.kafka.streams.Topology</code> and <code>org.apache.kafka.streams.kstream.Consumed</code> classes to support the new reset strategy.
+        These changes aim to provide more flexibility and efficiency in managing offsets, especially in scenarios involving long-term storage and infinite retention.
     </p>
 
     <p>
