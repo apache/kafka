@@ -35,7 +35,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, UnsupportedVersionException}
-import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
@@ -61,7 +61,6 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
-import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
@@ -728,48 +727,6 @@ class KafkaApisTest extends Logging {
       resourceResponse.resourceName -> Errors.forCode(resourceResponse.errorCode)
     }.toMap
     assertEquals(expectedResults, responseMap)
-  }
-
-  @Test
-  def testAlterClientQuotasWithAuthorizer(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.CLUSTER,
-      Resource.CLUSTER_NAME, AuthorizationResult.DENIED)
-
-    val quotaEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"))
-    val quotas = Seq(new ClientQuotaAlteration(quotaEntity, Seq.empty.asJavaCollection))
-
-    val requestHeader = new RequestHeader(ApiKeys.ALTER_CLIENT_QUOTAS, ApiKeys.ALTER_CLIENT_QUOTAS.latestVersion, clientId, 0)
-
-    val alterClientQuotasRequest = new AlterClientQuotasRequest.Builder(quotas.asJavaCollection, false)
-      .build(requestHeader.apiVersion)
-    val request = buildRequest(alterClientQuotasRequest,
-      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
-
-    when(controller.isActive).thenReturn(true)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      anyLong)).thenReturn(0)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleAlterClientQuotasRequest(request)
-
-    val capturedResponse = verifyNoThrottling[AlterClientQuotasResponse](request)
-    verifyAlterClientQuotaResult(capturedResponse, Map(quotaEntity -> Errors.CLUSTER_AUTHORIZATION_FAILED))
-
-    verify(authorizer).authorize(any(), any())
-    verify(clientRequestQuotaManager).maybeRecordAndGetThrottleTimeMs(any(), anyLong)
-  }
-
-  private def verifyAlterClientQuotaResult(response: AlterClientQuotasResponse,
-                                           expected: Map[ClientQuotaEntity, Errors]): Unit = {
-    val futures = expected.keys.map(quotaEntity => quotaEntity -> new KafkaFutureImpl[Void]()).toMap
-    response.complete(futures.asJava)
-    futures.foreach {
-      case (entity, future) =>
-        future.whenComplete((_, thrown) =>
-          assertEquals(thrown, expected(entity).exception())
-        ).isDone
-    }
   }
 
   @ParameterizedTest
@@ -9932,23 +9889,10 @@ class KafkaApisTest extends Logging {
     request
   }
 
-  private def verifyShouldNeverHandleErrorMessage(handler: RequestChannel.Request => Unit): Unit = {
-    val request = createMockRequest()
-    val e = assertThrows(classOf[UnsupportedVersionException], () => handler(request))
-    assertEquals(KafkaApis.shouldNeverReceive(request).getMessage, e.getMessage)
-  }
-
   private def verifyShouldAlwaysForwardErrorMessage(handler: RequestChannel.Request => Unit): Unit = {
     val request = createMockRequest()
     val e = assertThrows(classOf[UnsupportedVersionException], () => handler(request))
     assertEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
-  }
-
-  @Test
-  def testRaftShouldNeverHandleAlterPartitionRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldNeverHandleErrorMessage(kafkaApis.handleAlterPartitionRequest)
   }
 
   @Test
@@ -10039,27 +9983,6 @@ class KafkaApisTest extends Logging {
         setResourceName(brokerId.toString).
         setResourceType(BROKER_LOGGER.id()))),
       response.data())
-  }
-  
-  @Test
-  def testRaftShouldAlwaysForwardAlterClientQuotasRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleAlterClientQuotasRequest)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardUpdateFeatures(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleUpdateFeatures)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardElectLeaders(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleElectLeaders)
   }
 
   @Test
