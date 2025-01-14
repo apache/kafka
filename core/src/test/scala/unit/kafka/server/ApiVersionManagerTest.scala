@@ -16,13 +16,12 @@
  */
 package kafka.server
 
-import kafka.server.metadata.ZkMetadataCache
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.server.BrokerFeatures
-import org.apache.kafka.server.common.MetadataVersion
-import org.junit.jupiter.api.{Disabled, Test}
+import org.apache.kafka.server.common.KRaftVersion
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
@@ -32,7 +31,7 @@ import scala.jdk.CollectionConverters._
 
 class ApiVersionManagerTest {
   private val brokerFeatures = BrokerFeatures.createDefault(true)
-  private val metadataCache = new ZkMetadataCache(1, MetadataVersion.latestTesting(), brokerFeatures)
+  private val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
   @ParameterizedTest
   @EnumSource(classOf[ListenerType])
@@ -119,44 +118,5 @@ class ApiVersionManagerTest {
       val envelopeVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id)
       assertNull(envelopeVersion)
     }
-  }
-
-  @Disabled("Enable after enable KIP-590 forwarding in KAFKA-12886")
-  @Test
-  def testEnvelopeEnabledWhenForwardingManagerPresent(): Unit = {
-    val forwardingManager = Mockito.mock(classOf[ForwardingManager])
-    Mockito.when(forwardingManager.controllerApiVersions).thenReturn(None)
-
-    val versionManager = new DefaultApiVersionManager(
-      listenerType = ListenerType.BROKER,
-      forwardingManager = Some(forwardingManager),
-      brokerFeatures = brokerFeatures,
-      metadataCache = metadataCache,
-      enableUnstableLastVersion = true
-    )
-    assertTrue(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
-    assertTrue(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
-
-    val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0, false)
-    val envelopeVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id)
-    assertNotNull(envelopeVersion)
-    assertEquals(ApiKeys.ENVELOPE.oldestVersion, envelopeVersion.minVersion)
-    assertEquals(ApiKeys.ENVELOPE.latestVersion, envelopeVersion.maxVersion)
-  }
-
-  @Test
-  def testEnvelopeDisabledWhenForwardingManagerEmpty(): Unit = {
-    val versionManager = new DefaultApiVersionManager(
-      listenerType = ListenerType.BROKER,
-      forwardingManager = None,
-      brokerFeatures = brokerFeatures,
-      metadataCache = metadataCache,
-      enableUnstableLastVersion = true
-    )
-    assertTrue(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
-    assertTrue(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
-
-    val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0, false)
-    assertNotNull(apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id))
   }
 }
