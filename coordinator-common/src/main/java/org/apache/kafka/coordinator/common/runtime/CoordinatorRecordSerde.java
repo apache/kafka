@@ -72,14 +72,14 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
         readMessage(keyMessage, keyBuffer, recordType, "key");
 
         if (valueBuffer == null) {
-            return new CoordinatorRecord(recordType, keyMessage, null);
+            return CoordinatorRecord.tombstone(recordType, keyMessage);
         }
 
         final ApiMessage valueMessage = apiMessageValueFor(recordType);
         final short valueVersion = readVersion(valueBuffer, "value");
         readMessage(valueMessage, valueBuffer, valueVersion, "value");
 
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             recordType,
             keyMessage,
             new ApiMessageAndVersion(valueMessage, valueVersion)

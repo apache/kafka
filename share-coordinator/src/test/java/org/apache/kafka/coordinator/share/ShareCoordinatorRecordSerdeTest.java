@@ -68,13 +68,12 @@ public class ShareCoordinatorRecordSerdeTest {
 
     @Test
     public void testSerializeNullValue() {
-        CoordinatorRecord record = new CoordinatorRecord(
+        CoordinatorRecord record = CoordinatorRecord.tombstone(
             CoordinatorRecordType.SHARE_SNAPSHOT.id(),
             new ShareSnapshotKey()
                 .setGroupId("group")
                 .setTopicId(Uuid.randomUuid())
-                .setPartition(1),
-            null
+                .setPartition(1)
         );
 
         assertNull(serde.serializeValue(record));
@@ -218,7 +217,7 @@ public class ShareCoordinatorRecordSerdeTest {
     }
 
     private static CoordinatorRecord getShareSnapshotRecord(String groupId, Uuid topicId, int partitionId) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.SHARE_SNAPSHOT.id(),
             new ShareSnapshotKey()
                 .setGroupId(groupId)

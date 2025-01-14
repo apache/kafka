@@ -87,7 +87,7 @@ public class GroupCoordinatorRecordHelpers {
     ) {
         List<String> topicNames = new ArrayList<>(member.subscribedTopicNames());
         Collections.sort(topicNames);
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.CONSUMER_GROUP_MEMBER_METADATA.id(),
             new ConsumerGroupMemberMetadataKey()
                 .setGroupId(groupId)
@@ -119,12 +119,11 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         String memberId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.CONSUMER_GROUP_MEMBER_METADATA.id(),
             new ConsumerGroupMemberMetadataKey()
                 .setGroupId(groupId)
-                .setMemberId(memberId),
-            null // Tombstone.
+                .setMemberId(memberId)
         );
     }
 
@@ -148,7 +147,7 @@ public class GroupCoordinatorRecordHelpers {
             )
         );
 
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.CONSUMER_GROUP_PARTITION_METADATA.id(),
             new ConsumerGroupPartitionMetadataKey()
                 .setGroupId(groupId),
@@ -168,11 +167,10 @@ public class GroupCoordinatorRecordHelpers {
     public static CoordinatorRecord newConsumerGroupSubscriptionMetadataTombstoneRecord(
         String groupId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.CONSUMER_GROUP_PARTITION_METADATA.id(),
             new ConsumerGroupPartitionMetadataKey()
-                .setGroupId(groupId),
-            null // Tombstone.
+                .setGroupId(groupId)
         );
     }
 
@@ -187,7 +185,7 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         int newGroupEpoch
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.CONSUMER_GROUP_METADATA.id(),
             new ConsumerGroupMetadataKey()
                 .setGroupId(groupId),
@@ -208,11 +206,10 @@ public class GroupCoordinatorRecordHelpers {
     public static CoordinatorRecord newConsumerGroupEpochTombstoneRecord(
         String groupId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.CONSUMER_GROUP_METADATA.id(),
             new ConsumerGroupMetadataKey()
-                .setGroupId(groupId),
-            null // Tombstone.
+                .setGroupId(groupId)
         );
     }
 
@@ -240,7 +237,7 @@ public class GroupCoordinatorRecordHelpers {
             );
         }
 
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.CONSUMER_GROUP_TARGET_ASSIGNMENT_MEMBER.id(),
             new ConsumerGroupTargetAssignmentMemberKey()
                 .setGroupId(groupId)
@@ -264,12 +261,11 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         String memberId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.CONSUMER_GROUP_TARGET_ASSIGNMENT_MEMBER.id(),
             new ConsumerGroupTargetAssignmentMemberKey()
                 .setGroupId(groupId)
-                .setMemberId(memberId),
-            null // Tombstone.
+                .setMemberId(memberId)
         );
     }
 
@@ -284,7 +280,7 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         int assignmentEpoch
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.CONSUMER_GROUP_TARGET_ASSIGNMENT_METADATA.id(),
             new ConsumerGroupTargetAssignmentMetadataKey()
                 .setGroupId(groupId),
@@ -305,11 +301,10 @@ public class GroupCoordinatorRecordHelpers {
     public static CoordinatorRecord newConsumerGroupTargetAssignmentEpochTombstoneRecord(
         String groupId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.CONSUMER_GROUP_TARGET_ASSIGNMENT_METADATA.id(),
             new ConsumerGroupTargetAssignmentMetadataKey()
-                .setGroupId(groupId),
-            null // Tombstone.
+                .setGroupId(groupId)
         );
     }
 
@@ -324,7 +319,7 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         ConsumerGroupMember member
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.CONSUMER_GROUP_CURRENT_MEMBER_ASSIGNMENT.id(),
             new ConsumerGroupCurrentMemberAssignmentKey()
                 .setGroupId(groupId)
@@ -352,12 +347,11 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         String memberId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.CONSUMER_GROUP_CURRENT_MEMBER_ASSIGNMENT.id(),
             new ConsumerGroupCurrentMemberAssignmentKey()
                 .setGroupId(groupId)
-                .setMemberId(memberId),
-            null // Tombstone
+                .setMemberId(memberId)
         );
     }
 
@@ -377,7 +371,7 @@ public class GroupCoordinatorRecordHelpers {
         List<String> topics = new ArrayList<>(resolvedRegularExpression.topics);
         Collections.sort(topics);
 
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.CONSUMER_GROUP_REGULAR_EXPRESSION.id(),
             new ConsumerGroupRegularExpressionKey()
                 .setGroupId(groupId)
@@ -403,12 +397,11 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         String regex
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.CONSUMER_GROUP_REGULAR_EXPRESSION.id(),
             new ConsumerGroupRegularExpressionKey()
                 .setGroupId(groupId)
-                .setRegularExpression(regex),
-            null // Tombstone
+                .setRegularExpression(regex)
         );
     }
 
@@ -449,7 +442,7 @@ public class GroupCoordinatorRecordHelpers {
             );
         });
 
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.GROUP_METADATA.id(),
             new GroupMetadataKey()
                 .setGroup(group.groupId()),
@@ -475,11 +468,10 @@ public class GroupCoordinatorRecordHelpers {
     public static CoordinatorRecord newGroupMetadataTombstoneRecord(
         String groupId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.GROUP_METADATA.id(),
             new GroupMetadataKey()
-                .setGroup(groupId),
-            null // Tombstone
+                .setGroup(groupId)
         );
     }
 
@@ -492,7 +484,7 @@ public class GroupCoordinatorRecordHelpers {
     public static CoordinatorRecord newEmptyGroupMetadataRecord(
         ClassicGroup group
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.GROUP_METADATA.id(),
             new GroupMetadataKey()
                 .setGroup(group.groupId()),
@@ -526,7 +518,7 @@ public class GroupCoordinatorRecordHelpers {
     ) {
         short version = offsetCommitValueVersion(offsetAndMetadata.expireTimestampMs.isPresent());
 
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.OFFSET_COMMIT.id(),
             new OffsetCommitKey()
                 .setGroup(groupId)
@@ -568,13 +560,12 @@ public class GroupCoordinatorRecordHelpers {
         String topic,
         int partitionId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.OFFSET_COMMIT.id(),
             new OffsetCommitKey()
                 .setGroup(groupId)
                 .setTopic(topic)
-                .setPartition(partitionId),
-            null
+                .setPartition(partitionId)
         );
     }
 
@@ -591,7 +582,7 @@ public class GroupCoordinatorRecordHelpers {
     ) {
         List<String> topicNames = new ArrayList<>(member.subscribedTopicNames());
         Collections.sort(topicNames);
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.SHARE_GROUP_MEMBER_METADATA.id(),
             new ShareGroupMemberMetadataKey()
                 .setGroupId(groupId)
@@ -618,12 +609,11 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         String memberId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.SHARE_GROUP_MEMBER_METADATA.id(),
             new ShareGroupMemberMetadataKey()
                 .setGroupId(groupId)
-                .setMemberId(memberId),
-            null // Tombstone.
+                .setMemberId(memberId)
         );
     }
 
@@ -647,7 +637,7 @@ public class GroupCoordinatorRecordHelpers {
             )
         );
 
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.SHARE_GROUP_PARTITION_METADATA.id(),
             new ShareGroupPartitionMetadataKey()
                 .setGroupId(groupId),
@@ -667,11 +657,10 @@ public class GroupCoordinatorRecordHelpers {
     public static CoordinatorRecord newShareGroupSubscriptionMetadataTombstoneRecord(
         String groupId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.SHARE_GROUP_PARTITION_METADATA.id(),
             new ShareGroupPartitionMetadataKey()
-                .setGroupId(groupId),
-            null // Tombstone.
+                .setGroupId(groupId)
         );
     }
 
@@ -686,7 +675,7 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         int newGroupEpoch
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.SHARE_GROUP_METADATA.id(),
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
@@ -707,11 +696,10 @@ public class GroupCoordinatorRecordHelpers {
     public static CoordinatorRecord newShareGroupEpochTombstoneRecord(
         String groupId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.SHARE_GROUP_METADATA.id(),
             new ShareGroupMetadataKey()
-                .setGroupId(groupId),
-            null // Tombstone.
+                .setGroupId(groupId)
         );
     }
 
@@ -739,7 +727,7 @@ public class GroupCoordinatorRecordHelpers {
             );
         }
 
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.SHARE_GROUP_TARGET_ASSIGNMENT_MEMBER.id(),
             new ShareGroupTargetAssignmentMemberKey()
                 .setGroupId(groupId)
@@ -763,12 +751,11 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         String memberId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.SHARE_GROUP_TARGET_ASSIGNMENT_MEMBER.id(),
             new ShareGroupTargetAssignmentMemberKey()
                 .setGroupId(groupId)
-                .setMemberId(memberId),
-            null // Tombstone.
+                .setMemberId(memberId)
         );
     }
 
@@ -783,7 +770,7 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         int assignmentEpoch
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.SHARE_GROUP_TARGET_ASSIGNMENT_METADATA.id(),
             new ShareGroupTargetAssignmentMetadataKey()
                 .setGroupId(groupId),
@@ -804,11 +791,10 @@ public class GroupCoordinatorRecordHelpers {
     public static CoordinatorRecord newShareGroupTargetAssignmentEpochTombstoneRecord(
         String groupId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.SHARE_GROUP_TARGET_ASSIGNMENT_METADATA.id(),
             new ShareGroupTargetAssignmentMetadataKey()
-                .setGroupId(groupId),
-            null // Tombstone.
+                .setGroupId(groupId)
         );
     }
 
@@ -823,7 +809,7 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         ShareGroupMember member
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.SHARE_GROUP_CURRENT_MEMBER_ASSIGNMENT.id(),
             new ShareGroupCurrentMemberAssignmentKey()
                 .setGroupId(groupId)
@@ -850,12 +836,11 @@ public class GroupCoordinatorRecordHelpers {
         String groupId,
         String memberId
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.tombstone(
             CoordinatorRecordType.SHARE_GROUP_CURRENT_MEMBER_ASSIGNMENT.id(),
             new ShareGroupCurrentMemberAssignmentKey()
                 .setGroupId(groupId)
-                .setMemberId(memberId),
-            null // Tombstone
+                .setMemberId(memberId)
         );
     }
 

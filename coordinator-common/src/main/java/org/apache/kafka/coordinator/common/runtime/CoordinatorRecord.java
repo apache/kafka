@@ -29,6 +29,22 @@ import java.util.Objects;
  * This class is immutable.
  */
 public class CoordinatorRecord {
+
+    public static CoordinatorRecord record(
+        short type,
+        ApiMessage key,
+        ApiMessageAndVersion value
+    ) {
+        return new CoordinatorRecord(type, key, value);
+    }
+
+    public static CoordinatorRecord tombstone(
+        short type,
+        ApiMessage key
+    ) {
+        return new CoordinatorRecord(type, key, null);
+    }
+
     /**
      * The type of the record.
      */
@@ -51,7 +67,7 @@ public class CoordinatorRecord {
      * @param key   A non-null key.
      * @param value A key or null.
      */
-    public CoordinatorRecord(
+    private CoordinatorRecord(
         short type,
         ApiMessage key,
         ApiMessageAndVersion value

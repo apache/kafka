@@ -650,7 +650,7 @@ class DumpLogSegmentsTest {
     val parser = new OffsetsMessageParser()
 
     def serializedRecord(recordType: Short, key: ApiMessage, value: ApiMessageAndVersion): Record = {
-      val record = new CoordinatorRecord(recordType, key, value)
+      val record = CoordinatorRecord.record(recordType, key, value)
       TestUtils.singletonRecords(
         key = serde.serializeKey(record),
         value = serde.serializeValue(record)
@@ -826,7 +826,7 @@ class DumpLogSegmentsTest {
     val parser = new TransactionLogMessageParser()
 
     def serializedRecord(recordType: Short, key: ApiMessage, value: ApiMessageAndVersion): Record = {
-      val record = new CoordinatorRecord(recordType, key, value)
+      val record = CoordinatorRecord.record(recordType, key, value)
       TestUtils.singletonRecords(
         key = serde.serializeKey(record),
         value = serde.serializeValue(record)
@@ -1072,7 +1072,7 @@ class DumpLogSegmentsTest {
     val parser = new ShareGroupStateMessageParser()
 
     def serializedRecord(recordType: Short, key: ApiMessage, value: ApiMessageAndVersion): Record = {
-      val record = new CoordinatorRecord(recordType, key, value)
+      val record = CoordinatorRecord.record(recordType, key, value)
       TestUtils.singletonRecords(
         key = serde.serializeKey(record),
         value = serde.serializeValue(record)

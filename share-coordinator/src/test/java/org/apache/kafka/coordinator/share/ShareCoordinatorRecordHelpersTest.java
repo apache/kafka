@@ -51,7 +51,7 @@ public class ShareCoordinatorRecordHelpersTest {
                 .build()
         );
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             (short) 0,
             new ShareSnapshotKey()
                 .setGroupId(groupId)
@@ -93,7 +93,7 @@ public class ShareCoordinatorRecordHelpersTest {
                 .build()
         );
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             (short) 1,
             new ShareUpdateKey()
                 .setGroupId(groupId)

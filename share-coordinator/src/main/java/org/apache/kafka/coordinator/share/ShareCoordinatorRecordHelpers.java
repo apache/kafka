@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 
 public class ShareCoordinatorRecordHelpers {
     public static CoordinatorRecord newShareSnapshotRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.SHARE_SNAPSHOT.id(),
             new ShareSnapshotKey()
                 .setGroupId(groupId)
@@ -47,12 +47,13 @@ public class ShareCoordinatorRecordHelpers {
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
                     .collect(Collectors.toList())),
-                (short) 0)
+                (short) 0
+            )
         );
     }
 
     public static CoordinatorRecord newShareSnapshotUpdateRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             CoordinatorRecordType.SHARE_UPDATE.id(),
             new ShareUpdateKey()
                 .setGroupId(groupId)
@@ -69,7 +70,8 @@ public class ShareCoordinatorRecordHelpers {
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
                     .collect(Collectors.toList())),
-                (short) 0)
+                (short) 0
+            )
         );
     }
 }

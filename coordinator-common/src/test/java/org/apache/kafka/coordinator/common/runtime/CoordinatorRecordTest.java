@@ -31,7 +31,7 @@ public class CoordinatorRecordTest {
     public void testAttributes() {
         ApiMessage key = mock(ApiMessage.class);
         ApiMessageAndVersion value = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
-        CoordinatorRecord record = new CoordinatorRecord((short) 0, key, value);
+        CoordinatorRecord record = CoordinatorRecord.record((short) 0, key, value);
         assertEquals((short) 0, record.type());
         assertEquals(key, record.key());
         assertEquals(value, record.value());
@@ -39,13 +39,13 @@ public class CoordinatorRecordTest {
 
     @Test
     public void testKeyCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new CoordinatorRecord((short) 0, null, null));
+        assertThrows(NullPointerException.class, () -> CoordinatorRecord.record((short) 0, null, null));
     }
 
     @Test
     public void testValueCanBeNull() {
         ApiMessage key = mock(ApiMessage.class);
-        CoordinatorRecord record = new CoordinatorRecord((short) 0, key, null);
+        CoordinatorRecord record = CoordinatorRecord.record((short) 0, key, null);
         assertEquals(key, record.key());
         assertNull(record.value());
     }
@@ -54,8 +54,8 @@ public class CoordinatorRecordTest {
     public void testEquals() {
         ApiMessage key = mock(ApiMessage.class);
         ApiMessageAndVersion value = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
-        CoordinatorRecord record1 = new CoordinatorRecord((short) 0, key, value);
-        CoordinatorRecord record2 = new CoordinatorRecord((short) 0, key, value);
+        CoordinatorRecord record1 = CoordinatorRecord.record((short) 0, key, value);
+        CoordinatorRecord record2 = CoordinatorRecord.record((short) 0, key, value);
         assertEquals(record1, record2);
     }
 }

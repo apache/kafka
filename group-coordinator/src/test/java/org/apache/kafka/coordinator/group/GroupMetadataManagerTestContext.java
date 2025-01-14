@@ -228,7 +228,7 @@ public class GroupMetadataManagerTestContext {
         String groupId,
         GroupMetadataValue value
     ) {
-        return new CoordinatorRecord(
+        return CoordinatorRecord.record(
             (short) 2,
             new GroupMetadataKey()
                 .setGroup(groupId),

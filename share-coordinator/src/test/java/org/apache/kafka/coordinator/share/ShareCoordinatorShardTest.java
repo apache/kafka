@@ -151,7 +151,7 @@ class ShareCoordinatorShardTest {
 
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 
-        CoordinatorRecord record1 = new CoordinatorRecord(
+        CoordinatorRecord record1 = CoordinatorRecord.record(
             (short) 0,
             new ShareSnapshotKey()
                 .setGroupId(GROUP_ID)
@@ -172,7 +172,7 @@ class ShareCoordinatorShardTest {
             )
         );
 
-        CoordinatorRecord record2 = new CoordinatorRecord(
+        CoordinatorRecord record2 = CoordinatorRecord.record(
             (short) 0,
             new ShareSnapshotKey()
                 .setGroupId(GROUP_ID)

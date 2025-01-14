@@ -40,7 +40,7 @@ public class GroupCoordinatorRecordSerdeTest {
     @Test
     public void testSerializeKey() {
         GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
-        CoordinatorRecord record = new CoordinatorRecord(
+        CoordinatorRecord record = CoordinatorRecord.record(
             (short) 3,
             new ConsumerGroupMetadataKey().setGroupId("group"),
             new ApiMessageAndVersion(
@@ -58,7 +58,7 @@ public class GroupCoordinatorRecordSerdeTest {
     @Test
     public void testSerializeValue() {
         GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
-        CoordinatorRecord record = new CoordinatorRecord(
+        CoordinatorRecord record = CoordinatorRecord.record(
             (short) 3,
             new ConsumerGroupMetadataKey().setGroupId("group"),
             new ApiMessageAndVersion(
@@ -76,10 +76,9 @@ public class GroupCoordinatorRecordSerdeTest {
     @Test
     public void testSerializeNullValue() {
         GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
-        CoordinatorRecord record = new CoordinatorRecord(
+        CoordinatorRecord record = CoordinatorRecord.tombstone(
             (short) 1,
-            new ConsumerGroupMetadataKey().setGroupId("group"),
-            null
+            new ConsumerGroupMetadataKey().setGroupId("group")
         );
 
         assertNull(serializer.serializeValue(record));
