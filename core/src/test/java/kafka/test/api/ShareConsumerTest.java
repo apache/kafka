@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -44,6 +45,7 @@ import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -77,6 +79,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -95,6 +98,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(1200)
 @Tag("integration")
@@ -251,6 +255,7 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 1);
         }
     }
 
@@ -273,6 +278,7 @@ public class ShareConsumerTest {
             producer.send(record);
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 3);
         }
     }
 
@@ -339,6 +345,7 @@ public class ShareConsumerTest {
 
             // We expect null exception as the acknowledgment error code is null.
             assertNull(partitionExceptionMap.get(tp));
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -369,6 +376,7 @@ public class ShareConsumerTest {
             // We expect null exception as the acknowledgment error code is null.
             assertTrue(partitionExceptionMap.containsKey(tp));
             assertNull(partitionExceptionMap.get(tp));
+            maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
 
@@ -1919,6 +1927,40 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(subscription);
             TestUtils.waitForCondition(
                 () -> shareConsumer.poll(Duration.ofMillis(5000)).count() == 1, 30000, 200L, () -> "warmup record not received");
+        }
+    }
+
+    private void maybeVerifyShareGroupStateTopicRecordCount(String persister, int messageCount) {
+        if (!persister.equals(DEFAULT_STATE_PERSISTER)) {
+            return;
+        }
+        try {
+            TestUtils.waitForCondition(() ->
+                    !cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL")).isEmpty(),
+                DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
+            Map<String, Object> consumerConfigs = new HashMap<>();
+            consumerConfigs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+            consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
+            consumerConfigs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+            consumerConfigs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+            consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+            try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfigs)) {
+                consumer.subscribe(Collections.singleton(Topic.SHARE_GROUP_STATE_TOPIC_NAME));
+                Set<ConsumerRecord<byte[], byte[]>> records = new HashSet<>();
+                TestUtils.waitForCondition(() -> {
+                        ConsumerRecords<byte[], byte[]> msgs = consumer.poll(Duration.ofMillis(5000L));
+                        if (msgs.count() > 0) {
+                            msgs.records(Topic.SHARE_GROUP_STATE_TOPIC_NAME).forEach(records::add);
+                        }
+                        return records.size()  == messageCount + 2; // +2 because of extra warmup records
+                    },
+                    DEFAULT_MAX_WAIT_MS,
+                    1000L,
+                    () -> "no records in " + Topic.SHARE_GROUP_STATE_TOPIC_NAME
+                );
+            }
+        } catch (InterruptedException e) {
+            fail(e);
         }
     }
 
