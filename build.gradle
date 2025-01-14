@@ -1162,7 +1162,7 @@ project(':core') {
       if (versions.baseScala == '2.13') {
         scoverageScalaVersion = '2.13.9' // there's no newer 2.13 artifact, org.scoverage:scalac-scoverage-plugin_2.13.9:2.0.11 is the latest as of now
       }
-      reportDir = file("${rootProject.buildDir}/scoverage")
+      reportDir = file("${layout.buildDirectory.get().asFile.path}/scoverage")
       highlighting = false
       minimumRate = 0.0
     }
