@@ -24,6 +24,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * This class holds the data that is needed to participate in the Streams rebalance protocol.
+ */
 public class StreamsRebalanceData {
 
     public static class Assignment {
@@ -187,13 +190,7 @@ public class StreamsRebalanceData {
 
     private final Map<String, Subtopology> subtopologies;
 
-    private final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(
-        new Assignment(
-            new HashSet<>(),
-            new HashSet<>(),
-            new HashSet<>()
-        )
-    );
+    private final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(Assignment.EMPTY);
 
     public StreamsRebalanceData(Map<String, Subtopology> subtopologies) {
         this.subtopologies = subtopologies;

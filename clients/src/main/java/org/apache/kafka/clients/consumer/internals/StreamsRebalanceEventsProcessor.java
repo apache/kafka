@@ -34,6 +34,14 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 
+/**
+ * Processes events from the Streams rebalance protocol.
+ * <p>
+ * The Streams rebalance processor receives events from the background thread of the async consumer, more precisely
+ * from the Streams membership manager and handles them.
+ * For example, events are requests for invoking the task assignment and task revocation callbacks.
+ * Results of the event handling are passed back to the background thread.
+ */
 public class StreamsRebalanceEventsProcessor {
 
     private final BlockingQueue<BackgroundEvent> onCallbackRequests = new LinkedBlockingQueue<>();
@@ -41,30 +49,60 @@ public class StreamsRebalanceEventsProcessor {
     private final StreamsGroupRebalanceCallbacks rebalanceCallbacks;
     private final StreamsRebalanceData streamsRebalanceData;
 
+    /**
+     * Constructs the Streams rebalance processor.
+     *
+     * @param streamsRebalanceData
+     * @param rebalanceCallbacks
+     */
     public StreamsRebalanceEventsProcessor(StreamsRebalanceData streamsRebalanceData,
                                            StreamsGroupRebalanceCallbacks rebalanceCallbacks) {
         this.streamsRebalanceData = streamsRebalanceData;
         this.rebalanceCallbacks = rebalanceCallbacks;
     }
 
+    /**
+     * Requests the invocation of the task assignment callback.
+     *
+     * @param assignment The tasks to be assigned to the member of the Streams group.
+     * @return A future that will be completed when the callback has been invoked.
+     */
     public CompletableFuture<Void> requestOnTasksAssignedCallbackInvocation(final StreamsRebalanceData.Assignment assignment) {
         final StreamsOnTasksAssignedCallbackNeededEvent onTasksAssignedCallbackNeededEvent = new StreamsOnTasksAssignedCallbackNeededEvent(assignment);
         onCallbackRequests.add(onTasksAssignedCallbackNeededEvent);
         return onTasksAssignedCallbackNeededEvent.future();
     }
 
+    /**
+     * Requests the invocation of the task revocation callback.
+     *
+     * @param activeTasksToRevoke The tasks to revoke from the member of the Streams group
+     * @return A future that will be completed when the callback has been invoked.
+     */
     public CompletableFuture<Void> requestOnTasksRevokedCallbackInvocation(final Set<StreamsRebalanceData.TaskId> activeTasksToRevoke) {
         final StreamsOnTasksRevokedCallbackNeededEvent onTasksRevokedCallbackNeededEvent = new StreamsOnTasksRevokedCallbackNeededEvent(activeTasksToRevoke);
         onCallbackRequests.add(onTasksRevokedCallbackNeededEvent);
         return onTasksRevokedCallbackNeededEvent.future();
     }
 
+    /**
+     * Requests the invocation of the all tasks lost callback.
+     *
+     * @return A future that will be completed when the callback has been invoked.
+     */
     public CompletableFuture<Void> requestOnAllTasksLostCallbackInvocation() {
         final StreamsOnAllTasksLostCallbackNeededEvent onAllTasksLostCallbackNeededEvent = new StreamsOnAllTasksLostCallbackNeededEvent();
         onCallbackRequests.add(onAllTasksLostCallbackNeededEvent);
         return onAllTasksLostCallbackNeededEvent.future();
     }
 
+    /**
+     * Sets the application event handler.
+     *
+     * The application handler sends the results of the callbacks to the background thread.
+     *
+     * @param applicationEventHandler The application handler.
+     */
     public void setApplicationEventHandler(final ApplicationEventHandler applicationEventHandler) {
         this.applicationEventHandler = applicationEventHandler;
     }
@@ -153,6 +191,9 @@ public class StreamsRebalanceEventsProcessor {
         return new StreamsOnAllTasksLostCallbackCompletedEvent(future, error);
     }
 
+    /**
+     * Processes all events received from the background thread so far.
+     */
     public void process() {
         LinkedList<BackgroundEvent> events = new LinkedList<>();
         onCallbackRequests.drainTo(events);
