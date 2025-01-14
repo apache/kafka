@@ -546,6 +546,11 @@ public class RaftUtil {
         Errors error,
         String errorMessage
     ) {
+        if (errorMessage == null) {
+            errorMessage = !Errors.NONE.equals(error) ? error.message() : null;
+        } else if (Errors.NONE.equals(error)) {
+            errorMessage = null;
+        }
         return new AddRaftVoterResponseData()
             .setErrorCode(error.code())
             .setErrorMessage(errorMessage);
@@ -565,6 +570,11 @@ public class RaftUtil {
         Errors error,
         String errorMessage
     ) {
+        if (errorMessage == null) {
+            errorMessage = !Errors.NONE.equals(error) ? error.message() : null;
+        } else if (Errors.NONE.equals(error)) {
+            errorMessage = null;
+        }
         return new RemoveRaftVoterResponseData()
             .setErrorCode(error.code())
             .setErrorMessage(errorMessage);
