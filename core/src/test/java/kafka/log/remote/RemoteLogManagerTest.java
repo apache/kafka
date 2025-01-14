@@ -3715,7 +3715,6 @@ public class RemoteLogManagerTest {
                 return 0L;
             }
         };
-        doReturn(true).when(remoteLogMetadataManager).isReady(any(TopicIdPartition.class));
 
         CountDownLatch latch = new CountDownLatch(3); // there are 3 RLMTasks, so setting the count to 3
         when(remoteLogMetadataManager.isReady(any(TopicIdPartition.class)))
