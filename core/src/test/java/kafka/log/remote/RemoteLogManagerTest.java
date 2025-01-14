@@ -2150,9 +2150,9 @@ public class RemoteLogManagerTest {
         partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, true, true));
 
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition)))
-                .thenReturn(listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024, RemoteLogSegmentState.DELETE_SEGMENT_FINISHED).iterator());
+            .thenAnswer(invocation -> listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024, RemoteLogSegmentState.DELETE_SEGMENT_FINISHED).iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(followerTopicIdPartition)))
-                .thenReturn(listRemoteLogSegmentMetadata(followerTopicIdPartition, 3, 100, 1024, RemoteLogSegmentState.DELETE_SEGMENT_FINISHED).iterator());
+            .thenAnswer(invocation -> listRemoteLogSegmentMetadata(followerTopicIdPartition, 3, 100, 1024, RemoteLogSegmentState.DELETE_SEGMENT_FINISHED).iterator());
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
         dummyFuture.complete(null);
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any()))

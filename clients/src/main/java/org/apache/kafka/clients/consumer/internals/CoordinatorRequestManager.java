@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -53,24 +51,27 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
 public class CoordinatorRequestManager implements RequestManager {
     private static final long COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS = 60 * 1000;
     private final Logger log;
-    private final BackgroundEventHandler backgroundEventHandler;
     private final String groupId;
 
     private final RequestState coordinatorRequestState;
     private long timeMarkedUnknownMs = -1L; // starting logging a warning only after unable to connect for a while
     private long totalDisconnectedMin = 0;
     private Node coordinator;
+    // Hold the latest fatal error received. It is exposed so that managers requiring a coordinator can access it and take 
+    // appropriate actions. 
+    // For example:
+    // - AbstractHeartbeatRequestManager propagates the error event to the application thread.
+    // - CommitRequestManager fail pending requests.
+    private Optional<Throwable> fatalError = Optional.empty();
 
     public CoordinatorRequestManager(
         final LogContext logContext,
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
-        final BackgroundEventHandler errorHandler,
         final String groupId
     ) {
         Objects.requireNonNull(groupId);
         this.log = logContext.logger(this.getClass());
-        this.backgroundEventHandler = errorHandler;
         this.groupId = groupId;
         this.coordinatorRequestState = new RequestState(
                 logContext,
@@ -114,6 +115,7 @@ public class CoordinatorRequestManager implements RequestManager {
         );
 
         return unsentRequest.whenComplete((clientResponse, throwable) -> {
+            clearFatalError();
             if (clientResponse != null) {
                 FindCoordinatorResponse response = (FindCoordinatorResponse) clientResponse.responseBody();
                 onResponse(clientResponse.receivedTimeMs(), response);
@@ -200,12 +202,12 @@ public class CoordinatorRequestManager implements RequestManager {
         if (exception == Errors.GROUP_AUTHORIZATION_FAILED.exception()) {
             log.debug("FindCoordinator request failed due to authorization error {}", exception.getMessage());
             KafkaException groupAuthorizationException = GroupAuthorizationException.forGroupId(this.groupId);
-            backgroundEventHandler.add(new ErrorEvent(groupAuthorizationException));
+            fatalError = Optional.of(groupAuthorizationException);
             return;
         }
 
         log.warn("FindCoordinator request failed due to fatal exception", exception);
-        backgroundEventHandler.add(new ErrorEvent(exception));
+        fatalError = Optional.of(exception);
     }
 
     /**
@@ -243,5 +245,13 @@ public class CoordinatorRequestManager implements RequestManager {
      */
     public Optional<Node> coordinator() {
         return Optional.ofNullable(this.coordinator);
+    }
+    
+    private void clearFatalError() {
+        this.fatalError = Optional.empty();
+    }
+    
+    public Optional<Throwable> fatalError() {
+        return fatalError;
     }
 }

@@ -161,7 +161,6 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
-import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.requests.AddRaftVoterRequest;
 import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
@@ -777,7 +776,7 @@ public class KafkaAdminClientTest {
         if (error == Errors.NONE) {
             return new ApiVersionsResponse.Builder().
                 setApiVersions(ApiVersionsResponse.filterApis(
-                    RecordVersion.current(), ApiMessageType.ListenerType.ZK_BROKER, false, false)).
+                    ApiMessageType.ListenerType.ZK_BROKER, false, false)).
                 setSupportedFeatures(
                     convertSupportedFeaturesMap(defaultFeatureMetadata().supportedFeatures())).
                 setFinalizedFeatures(

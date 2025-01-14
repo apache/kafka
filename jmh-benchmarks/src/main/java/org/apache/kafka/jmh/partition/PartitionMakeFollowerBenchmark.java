@@ -124,8 +124,7 @@ public class PartitionMakeFollowerBenchmark {
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Optional.of(0L));
         AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
-        partition = new Partition(tp, 100,
-            MetadataVersion.latestTesting(), 0, () -> -1, Time.SYSTEM,
+        partition = new Partition(tp, 100, 0, () -> -1, Time.SYSTEM,
             alterPartitionListener, delayedOperations,
             Mockito.mock(MetadataCache.class), logManager, alterPartitionManager, topicId);
         partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId, Option.empty());

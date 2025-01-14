@@ -177,7 +177,6 @@ public class SaslClientAuthenticator implements Authenticator {
                                    String servicePrincipal,
                                    String host,
                                    String mechanism,
-                                   boolean handshakeRequestEnable,
                                    TransportLayer transportLayer,
                                    Time time,
                                    LogContext logContext) {
@@ -196,7 +195,7 @@ public class SaslClientAuthenticator implements Authenticator {
         this.reauthInfo = new ReauthInfo();
 
         try {
-            setSaslState(handshakeRequestEnable ? SaslState.SEND_APIVERSIONS_REQUEST : SaslState.INITIAL);
+            setSaslState(SaslState.SEND_APIVERSIONS_REQUEST);
 
             // determine client principal from subject for Kerberos to use as authorization id for the SaslClient.
             // For other mechanisms, the authenticated principal (username for PLAIN and SCRAM) is used as

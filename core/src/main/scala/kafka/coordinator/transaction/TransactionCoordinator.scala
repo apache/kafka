@@ -814,10 +814,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
             if (txnMetadata.producerId != producerId && !retryOnOverflow)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-            else if (!isValidEpoch)
-              Left(Errors.PRODUCER_FENCED)
             else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
+            else if (!isValidEpoch)
+              Left(Errors.PRODUCER_FENCED)
             else txnMetadata.state match {
               case Ongoing =>
                 val nextState = if (txnMarkerResult == TransactionResult.COMMIT)
