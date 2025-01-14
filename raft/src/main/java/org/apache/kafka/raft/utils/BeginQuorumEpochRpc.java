@@ -31,72 +31,72 @@ import java.util.Optional;
 
 public class BeginQuorumEpochRpc {
     public static BeginQuorumEpochRequestData singletonBeginQuorumEpochRequest(
-            TopicPartition topicPartition,
-            String clusterId,
-            int leaderEpoch,
-            int leaderId,
-            Endpoints leaderEndpoints,
-            ReplicaKey voterKey
+        TopicPartition topicPartition,
+        String clusterId,
+        int leaderEpoch,
+        int leaderId,
+        Endpoints leaderEndpoints,
+        ReplicaKey voterKey
     ) {
         return new BeginQuorumEpochRequestData()
-                .setClusterId(clusterId)
-                .setVoterId(voterKey.id())
-                .setTopics(
-                        Collections.singletonList(
-                                new BeginQuorumEpochRequestData.TopicData()
-                                        .setTopicName(topicPartition.topic())
-                                        .setPartitions(
-                                                Collections.singletonList(
-                                                        new BeginQuorumEpochRequestData.PartitionData()
-                                                                .setPartitionIndex(topicPartition.partition())
-                                                                .setLeaderEpoch(leaderEpoch)
-                                                                .setLeaderId(leaderId)
-                                                                .setVoterDirectoryId(voterKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
-                                                )
-                                        )
+            .setClusterId(clusterId)
+            .setVoterId(voterKey.id())
+            .setTopics(
+                Collections.singletonList(
+                    new BeginQuorumEpochRequestData.TopicData()
+                        .setTopicName(topicPartition.topic())
+                        .setPartitions(
+                            Collections.singletonList(
+                                new BeginQuorumEpochRequestData.PartitionData()
+                                    .setPartitionIndex(topicPartition.partition())
+                                    .setLeaderEpoch(leaderEpoch)
+                                    .setLeaderId(leaderId)
+                                    .setVoterDirectoryId(voterKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
+                            )
                         )
                 )
-                .setLeaderEndpoints(leaderEndpoints.toBeginQuorumEpochRequest());
+            )
+            .setLeaderEndpoints(leaderEndpoints.toBeginQuorumEpochRequest());
     }
 
     public static BeginQuorumEpochResponseData singletonBeginQuorumEpochResponse(
-            ListenerName listenerName,
-            short apiVersion,
-            Errors topLevelError,
-            TopicPartition topicPartition,
-            Errors partitionLevelError,
-            int leaderEpoch,
-            int leaderId,
-            Endpoints endpoints
+        ListenerName listenerName,
+        short apiVersion,
+        Errors topLevelError,
+        TopicPartition topicPartition,
+        Errors partitionLevelError,
+        int leaderEpoch,
+        int leaderId,
+        Endpoints endpoints
     ) {
         BeginQuorumEpochResponseData response = new BeginQuorumEpochResponseData()
-                .setErrorCode(topLevelError.code())
-                .setTopics(
-                        Collections.singletonList(
-                                new BeginQuorumEpochResponseData.TopicData()
-                                        .setTopicName(topicPartition.topic())
-                                        .setPartitions(
-                                                Collections.singletonList(
-                                                        new BeginQuorumEpochResponseData.PartitionData()
-                                                                .setErrorCode(partitionLevelError.code())
-                                                                .setLeaderId(leaderId)
-                                                                .setLeaderEpoch(leaderEpoch)
-                                                )
-                                        )
+            .setErrorCode(topLevelError.code())
+            .setTopics(
+                Collections.singletonList(
+                    new BeginQuorumEpochResponseData.TopicData()
+                        .setTopicName(topicPartition.topic())
+                        .setPartitions(
+                            Collections.singletonList(
+                                new BeginQuorumEpochResponseData.PartitionData()
+                                    .setErrorCode(partitionLevelError.code())
+                                    .setLeaderId(leaderId)
+                                    .setLeaderEpoch(leaderEpoch)
+                            )
                         )
-                );
+                )
+            );
 
         if (apiVersion >= 1) {
             Optional<InetSocketAddress> address = endpoints.address(listenerName);
             if (address.isPresent() && leaderId >= 0) {
                 // Populate the node endpoints
                 BeginQuorumEpochResponseData.NodeEndpointCollection nodeEndpoints =
-                        new BeginQuorumEpochResponseData.NodeEndpointCollection(1);
+                    new BeginQuorumEpochResponseData.NodeEndpointCollection(1);
                 nodeEndpoints.add(
-                        new BeginQuorumEpochResponseData.NodeEndpoint()
-                                .setNodeId(leaderId)
-                                .setHost(address.get().getHostString())
-                                .setPort(address.get().getPort())
+                    new BeginQuorumEpochResponseData.NodeEndpoint()
+                        .setNodeId(leaderId)
+                        .setHost(address.get().getHostString())
+                        .setPort(address.get().getPort())
                 );
                 response.setNodeEndpoints(nodeEndpoints);
             }
@@ -107,21 +107,21 @@ public class BeginQuorumEpochRpc {
 
     public static boolean hasValidTopicPartition(BeginQuorumEpochRequestData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                data.topics().get(0).partitions().size() == 1 &&
-                data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
     public static boolean hasValidTopicPartition(BeginQuorumEpochResponseData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
     public static Optional<ReplicaKey> beginQuorumEpochRequestVoterKey(
-            BeginQuorumEpochRequestData request,
-            BeginQuorumEpochRequestData.PartitionData partition
+        BeginQuorumEpochRequestData request,
+        BeginQuorumEpochRequestData.PartitionData partition
     ) {
         if (request.voterId() < 0) {
             return Optional.empty();

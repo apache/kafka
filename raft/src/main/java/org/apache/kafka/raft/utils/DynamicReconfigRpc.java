@@ -34,90 +34,90 @@ import java.util.Optional;
 
 public class DynamicReconfigRpc {
     public static AddRaftVoterRequestData addVoterRequest(
-            String clusterId,
-            int timeoutMs,
-            ReplicaKey voter,
-            Endpoints listeners
+        String clusterId,
+        int timeoutMs,
+        ReplicaKey voter,
+        Endpoints listeners
     ) {
         return new AddRaftVoterRequestData()
-                .setClusterId(clusterId)
-                .setTimeoutMs(timeoutMs)
-                .setVoterId(voter.id())
-                .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
-                .setListeners(listeners.toAddVoterRequest());
+            .setClusterId(clusterId)
+            .setTimeoutMs(timeoutMs)
+            .setVoterId(voter.id())
+            .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
+            .setListeners(listeners.toAddVoterRequest());
     }
 
     public static AddRaftVoterResponseData addVoterResponse(
-            Errors error,
-            String errorMessage
+        Errors error,
+        String errorMessage
     ) {
         errorMessage = errorMessage == null ? error.message() : errorMessage;
 
         return new AddRaftVoterResponseData()
-                .setErrorCode(error.code())
-                .setErrorMessage(errorMessage);
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage);
     }
 
     public static RemoveRaftVoterRequestData removeVoterRequest(
-            String clusterId,
-            ReplicaKey voter
+        String clusterId,
+        ReplicaKey voter
     ) {
         return new RemoveRaftVoterRequestData()
-                .setClusterId(clusterId)
-                .setVoterId(voter.id())
-                .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
+            .setClusterId(clusterId)
+            .setVoterId(voter.id())
+            .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
     }
 
     public static RemoveRaftVoterResponseData removeVoterResponse(
-            Errors error,
-            String errorMessage
+        Errors error,
+        String errorMessage
     ) {
         errorMessage = errorMessage == null ? error.message() : errorMessage;
 
         return new RemoveRaftVoterResponseData()
-                .setErrorCode(error.code())
-                .setErrorMessage(errorMessage);
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage);
     }
 
     public static UpdateRaftVoterRequestData updateVoterRequest(
-            String clusterId,
-            ReplicaKey voter,
-            int epoch,
-            SupportedVersionRange supportedVersions,
-            Endpoints endpoints
+        String clusterId,
+        ReplicaKey voter,
+        int epoch,
+        SupportedVersionRange supportedVersions,
+        Endpoints endpoints
     ) {
         UpdateRaftVoterRequestData request = new UpdateRaftVoterRequestData()
-                .setClusterId(clusterId)
-                .setCurrentLeaderEpoch(epoch)
-                .setVoterId(voter.id())
-                .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
-                .setListeners(endpoints.toUpdateVoterRequest());
+            .setClusterId(clusterId)
+            .setCurrentLeaderEpoch(epoch)
+            .setVoterId(voter.id())
+            .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
+            .setListeners(endpoints.toUpdateVoterRequest());
 
         request.kRaftVersionFeature()
-                .setMinSupportedVersion(supportedVersions.min())
-                .setMaxSupportedVersion(supportedVersions.max());
+            .setMinSupportedVersion(supportedVersions.min())
+            .setMaxSupportedVersion(supportedVersions.max());
 
         return request;
     }
 
     public static UpdateRaftVoterResponseData updateVoterResponse(
-            Errors error,
-            ListenerName listenerName,
-            LeaderAndEpoch leaderAndEpoch,
-            Endpoints endpoints
+        Errors error,
+        ListenerName listenerName,
+        LeaderAndEpoch leaderAndEpoch,
+        Endpoints endpoints
     ) {
         UpdateRaftVoterResponseData response = new UpdateRaftVoterResponseData()
-                .setErrorCode(error.code());
+            .setErrorCode(error.code());
 
         response.currentLeader()
-                .setLeaderId(leaderAndEpoch.leaderId().orElse(-1))
-                .setLeaderEpoch(leaderAndEpoch.epoch());
+            .setLeaderId(leaderAndEpoch.leaderId().orElse(-1))
+            .setLeaderEpoch(leaderAndEpoch.epoch());
 
         Optional<InetSocketAddress> address = endpoints.address(listenerName);
         if (address.isPresent()) {
             response.currentLeader()
-                    .setHost(address.get().getHostString())
-                    .setPort(address.get().getPort());
+                .setHost(address.get().getHostString())
+                .setPort(address.get().getPort());
         }
 
         return response;

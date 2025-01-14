@@ -355,7 +355,7 @@ public class RaftUtilTest {
     @ParameterizedTest
     @MethodSource("singletonFetchRequestTestCases")
     public void testFetchRequestV17Compatibility(final FetchRequestTestCase testCase) {
-        FetchRequestData fetchRequestData = RaftUtil.singletonFetchRequest(
+        FetchRequestData fetchRequestData = FetchRpc.singletonFetchRequest(
             topicPartition,
             Uuid.ONE_UUID,
             partition -> partition
@@ -489,7 +489,7 @@ public class RaftUtilTest {
         int maxBytes = 1000;
         int position = 10;
 
-        FetchSnapshotRequestData fetchSnapshotRequestData = RaftUtil.singletonFetchSnapshotRequest(
+        FetchSnapshotRequestData fetchSnapshotRequestData = FetchSnapshotRpc.singletonFetchSnapshotRequest(
             clusterId,
             ReplicaKey.of(1, directoryId),
             topicPartition,

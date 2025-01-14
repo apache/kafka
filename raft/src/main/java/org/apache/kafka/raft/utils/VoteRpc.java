@@ -30,69 +30,69 @@ import java.util.Optional;
 
 public class VoteRpc {
     public static VoteRequestData singletonVoteRequest(
-            TopicPartition topicPartition,
-            String clusterId,
-            int replicaEpoch,
-            ReplicaKey replicaKey,
-            ReplicaKey voterKey,
-            int lastEpoch,
-            long lastEpochEndOffset,
-            boolean preVote
+        TopicPartition topicPartition,
+        String clusterId,
+        int replicaEpoch,
+        ReplicaKey replicaKey,
+        ReplicaKey voterKey,
+        int lastEpoch,
+        long lastEpochEndOffset,
+        boolean preVote
     ) {
         return new VoteRequestData()
-                .setClusterId(clusterId)
-                .setVoterId(voterKey.id())
-                .setTopics(
-                        Collections.singletonList(
-                                new VoteRequestData.TopicData()
-                                        .setTopicName(topicPartition.topic())
-                                        .setPartitions(
-                                                Collections.singletonList(
-                                                        new VoteRequestData.PartitionData()
-                                                                .setPartitionIndex(topicPartition.partition())
-                                                                .setReplicaEpoch(replicaEpoch)
-                                                                .setReplicaId(replicaKey.id())
-                                                                .setReplicaDirectoryId(
-                                                                        replicaKey
-                                                                                .directoryId()
-                                                                                .orElse(ReplicaKey.NO_DIRECTORY_ID)
-                                                                )
-                                                                .setVoterDirectoryId(
-                                                                        voterKey
-                                                                                .directoryId()
-                                                                                .orElse(ReplicaKey.NO_DIRECTORY_ID)
-                                                                )
-                                                                .setLastOffsetEpoch(lastEpoch)
-                                                                .setLastOffset(lastEpochEndOffset)
-                                                                .setPreVote(preVote)
-                                                )
-                                        )
+            .setClusterId(clusterId)
+            .setVoterId(voterKey.id())
+            .setTopics(
+                Collections.singletonList(
+                    new VoteRequestData.TopicData()
+                        .setTopicName(topicPartition.topic())
+                        .setPartitions(
+                            Collections.singletonList(
+                                new VoteRequestData.PartitionData()
+                                    .setPartitionIndex(topicPartition.partition())
+                                    .setReplicaEpoch(replicaEpoch)
+                                    .setReplicaId(replicaKey.id())
+                                    .setReplicaDirectoryId(
+                                        replicaKey
+                                            .directoryId()
+                                            .orElse(ReplicaKey.NO_DIRECTORY_ID)
+                                    )
+                                    .setVoterDirectoryId(
+                                        voterKey
+                                            .directoryId()
+                                            .orElse(ReplicaKey.NO_DIRECTORY_ID)
+                                    )
+                                    .setLastOffsetEpoch(lastEpoch)
+                                    .setLastOffset(lastEpochEndOffset)
+                                    .setPreVote(preVote)
+                            )
                         )
-                );
+                )
+            );
     }
 
     public static VoteResponseData singletonVoteResponse(
-            ListenerName listenerName,
-            short apiVersion,
-            Errors topLevelError,
-            TopicPartition topicPartition,
-            Errors partitionLevelError,
-            int leaderEpoch,
-            int leaderId,
-            boolean voteGranted,
-            Endpoints endpoints
+        ListenerName listenerName,
+        short apiVersion,
+        Errors topLevelError,
+        TopicPartition topicPartition,
+        Errors partitionLevelError,
+        int leaderEpoch,
+        int leaderId,
+        boolean voteGranted,
+        Endpoints endpoints
     ) {
         VoteResponseData response = new VoteResponseData()
-                .setErrorCode(topLevelError.code())
-                .setTopics(Collections.singletonList(
-                        new VoteResponseData.TopicData()
-                                .setTopicName(topicPartition.topic())
-                                .setPartitions(Collections.singletonList(
-                                        new VoteResponseData.PartitionData()
-                                                .setErrorCode(partitionLevelError.code())
-                                                .setLeaderId(leaderId)
-                                                .setLeaderEpoch(leaderEpoch)
-                                                .setVoteGranted(voteGranted)))));
+            .setErrorCode(topLevelError.code())
+            .setTopics(Collections.singletonList(
+                new VoteResponseData.TopicData()
+                    .setTopicName(topicPartition.topic())
+                    .setPartitions(Collections.singletonList(
+                        new VoteResponseData.PartitionData()
+                            .setErrorCode(partitionLevelError.code())
+                            .setLeaderId(leaderId)
+                            .setLeaderEpoch(leaderEpoch)
+                            .setVoteGranted(voteGranted)))));
 
         if (apiVersion >= 1) {
             Optional<InetSocketAddress> address = endpoints.address(listenerName);
@@ -100,10 +100,10 @@ public class VoteRpc {
                 // Populate the node endpoints
                 VoteResponseData.NodeEndpointCollection nodeEndpoints = new VoteResponseData.NodeEndpointCollection(1);
                 nodeEndpoints.add(
-                        new VoteResponseData.NodeEndpoint()
-                                .setNodeId(leaderId)
-                                .setHost(address.get().getHostString())
-                                .setPort(address.get().getPort())
+                    new VoteResponseData.NodeEndpoint()
+                        .setNodeId(leaderId)
+                        .setHost(address.get().getHostString())
+                        .setPort(address.get().getPort())
                 );
                 response.setNodeEndpoints(nodeEndpoints);
             }
@@ -113,8 +113,8 @@ public class VoteRpc {
     }
 
     public static Optional<ReplicaKey> voteRequestVoterKey(
-            VoteRequestData request,
-            VoteRequestData.PartitionData partition
+        VoteRequestData request,
+        VoteRequestData.PartitionData partition
     ) {
         if (request.voterId() < 0) {
             return Optional.empty();
@@ -125,15 +125,15 @@ public class VoteRpc {
 
     public static boolean hasValidTopicPartition(VoteResponseData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                data.topics().get(0).partitions().size() == 1 &&
-                data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
     public static boolean hasValidTopicPartition(VoteRequestData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                data.topics().get(0).partitions().size() == 1 &&
-                data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 }

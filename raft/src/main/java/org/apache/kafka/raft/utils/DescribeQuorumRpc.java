@@ -31,55 +31,55 @@ import java.util.stream.Collectors;
 
 public class DescribeQuorumRpc {
     public static DescribeQuorumRequestData singletonDescribeQuorumRequest(
-            TopicPartition topicPartition
+        TopicPartition topicPartition
     ) {
         return new DescribeQuorumRequestData()
-                .setTopics(
-                        Collections.singletonList(
-                                new DescribeQuorumRequestData.TopicData()
-                                        .setTopicName(topicPartition.topic())
-                                        .setPartitions(
-                                                Collections.singletonList(
-                                                        new DescribeQuorumRequestData.PartitionData()
-                                                                .setPartitionIndex(topicPartition.partition())
-                                                )
-                                        )
+            .setTopics(
+                Collections.singletonList(
+                    new DescribeQuorumRequestData.TopicData()
+                        .setTopicName(topicPartition.topic())
+                        .setPartitions(
+                            Collections.singletonList(
+                                new DescribeQuorumRequestData.PartitionData()
+                                    .setPartitionIndex(topicPartition.partition())
+                            )
                         )
-                );
+                )
+            );
     }
 
     public static DescribeQuorumResponseData singletonDescribeQuorumResponse(
-            short apiVersion,
-            TopicPartition topicPartition,
-            int leaderId,
-            int leaderEpoch,
-            long highWatermark,
-            Collection<LeaderState.ReplicaState> voters,
-            Collection<LeaderState.ReplicaState> observers,
-            long currentTimeMs
+        short apiVersion,
+        TopicPartition topicPartition,
+        int leaderId,
+        int leaderEpoch,
+        long highWatermark,
+        Collection<LeaderState.ReplicaState> voters,
+        Collection<LeaderState.ReplicaState> observers,
+        long currentTimeMs
     ) {
         DescribeQuorumResponseData response = new DescribeQuorumResponseData()
-                .setTopics(
-                        Collections.singletonList(
-                                new DescribeQuorumResponseData.TopicData()
-                                        .setTopicName(topicPartition.topic())
-                                        .setPartitions(
-                                                Collections.singletonList(
-                                                        new DescribeQuorumResponseData.PartitionData()
-                                                                .setPartitionIndex(topicPartition.partition())
-                                                                .setErrorCode(Errors.NONE.code())
-                                                                .setLeaderId(leaderId)
-                                                                .setLeaderEpoch(leaderEpoch)
-                                                                .setHighWatermark(highWatermark)
-                                                                .setCurrentVoters(toReplicaStates(apiVersion, leaderId, voters, currentTimeMs))
-                                                                .setObservers(toReplicaStates(apiVersion, leaderId, observers, currentTimeMs))))));
+            .setTopics(
+                Collections.singletonList(
+                    new DescribeQuorumResponseData.TopicData()
+                        .setTopicName(topicPartition.topic())
+                        .setPartitions(
+                            Collections.singletonList(
+                                new DescribeQuorumResponseData.PartitionData()
+                                    .setPartitionIndex(topicPartition.partition())
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setLeaderId(leaderId)
+                                    .setLeaderEpoch(leaderEpoch)
+                                    .setHighWatermark(highWatermark)
+                                    .setCurrentVoters(toReplicaStates(apiVersion, leaderId, voters, currentTimeMs))
+                                    .setObservers(toReplicaStates(apiVersion, leaderId, observers, currentTimeMs))))));
         if (apiVersion >= 2) {
             DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection(voters.size());
             for (LeaderState.ReplicaState voter : voters) {
                 nodes.add(
-                        new DescribeQuorumResponseData.Node()
-                                .setNodeId(voter.replicaKey().id())
-                                .setListeners(voter.listeners().toDescribeQuorumResponseListeners())
+                    new DescribeQuorumResponseData.Node()
+                        .setNodeId(voter.replicaKey().id())
+                        .setListeners(voter.listeners().toDescribeQuorumResponseListeners())
                 );
             }
             response.setNodes(nodes);
@@ -88,22 +88,22 @@ public class DescribeQuorumRpc {
     }
 
     private static List<DescribeQuorumResponseData.ReplicaState> toReplicaStates(
-            short apiVersion,
-            int leaderId,
-            Collection<LeaderState.ReplicaState> states,
-            long currentTimeMs
+        short apiVersion,
+        int leaderId,
+        Collection<LeaderState.ReplicaState> states,
+        long currentTimeMs
     ) {
         return states
-                .stream()
-                .map(replicaState -> toReplicaState(apiVersion, leaderId, replicaState, currentTimeMs))
-                .collect(Collectors.toList());
+            .stream()
+            .map(replicaState -> toReplicaState(apiVersion, leaderId, replicaState, currentTimeMs))
+            .collect(Collectors.toList());
     }
 
     private static DescribeQuorumResponseData.ReplicaState toReplicaState(
-            short apiVersion,
-            int leaderId,
-            LeaderState.ReplicaState replicaState,
-            long currentTimeMs
+        short apiVersion,
+        int leaderId,
+        LeaderState.ReplicaState replicaState,
+        long currentTimeMs
     ) {
         final long lastCaughtUpTimestamp;
         final long lastFetchTimestamp;
@@ -115,10 +115,10 @@ public class DescribeQuorumRpc {
             lastFetchTimestamp = replicaState.lastFetchTimestamp();
         }
         DescribeQuorumResponseData.ReplicaState replicaStateData = new DescribeQuorumResponseData.ReplicaState()
-                .setReplicaId(replicaState.replicaKey().id())
-                .setLogEndOffset(replicaState.endOffset().map(LogOffsetMetadata::offset).orElse(-1L))
-                .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
-                .setLastFetchTimestamp(lastFetchTimestamp);
+            .setReplicaId(replicaState.replicaKey().id())
+            .setLogEndOffset(replicaState.endOffset().map(LogOffsetMetadata::offset).orElse(-1L))
+            .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
+            .setLastFetchTimestamp(lastFetchTimestamp);
 
         if (apiVersion >= 2) {
             replicaStateData.setReplicaDirectoryId(replicaState.replicaKey().directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
@@ -128,8 +128,8 @@ public class DescribeQuorumRpc {
 
     public static boolean hasValidTopicPartition(DescribeQuorumRequestData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 }

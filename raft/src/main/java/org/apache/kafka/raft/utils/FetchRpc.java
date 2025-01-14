@@ -31,47 +31,47 @@ import java.util.function.Consumer;
 
 public class FetchRpc {
     public static FetchRequestData singletonFetchRequest(
-            TopicPartition topicPartition,
-            Uuid topicId,
-            Consumer<FetchRequestData.FetchPartition> partitionConsumer
+        TopicPartition topicPartition,
+        Uuid topicId,
+        Consumer<FetchRequestData.FetchPartition> partitionConsumer
     ) {
         FetchRequestData.FetchPartition fetchPartition =
-                new FetchRequestData.FetchPartition()
-                        .setPartition(topicPartition.partition());
+            new FetchRequestData.FetchPartition()
+                .setPartition(topicPartition.partition());
         partitionConsumer.accept(fetchPartition);
 
         FetchRequestData.FetchTopic fetchTopic =
-                new FetchRequestData.FetchTopic()
-                        .setTopic(topicPartition.topic())
-                        .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(fetchPartition));
+            new FetchRequestData.FetchTopic()
+                .setTopic(topicPartition.topic())
+                .setTopicId(topicId)
+                .setPartitions(Collections.singletonList(fetchPartition));
 
         return new FetchRequestData()
-                .setTopics(Collections.singletonList(fetchTopic));
+            .setTopics(Collections.singletonList(fetchTopic));
     }
 
     public static FetchResponseData singletonFetchResponse(
-            ListenerName listenerName,
-            short apiVersion,
-            TopicPartition topicPartition,
-            Uuid topicId,
-            Errors topLevelError,
-            int leaderId,
-            Endpoints endpoints,
-            Consumer<FetchResponseData.PartitionData> partitionConsumer
+        ListenerName listenerName,
+        short apiVersion,
+        TopicPartition topicPartition,
+        Uuid topicId,
+        Errors topLevelError,
+        int leaderId,
+        Endpoints endpoints,
+        Consumer<FetchResponseData.PartitionData> partitionConsumer
     ) {
         FetchResponseData.PartitionData fetchablePartition =
-                new FetchResponseData.PartitionData();
+            new FetchResponseData.PartitionData();
 
         fetchablePartition.setPartitionIndex(topicPartition.partition());
 
         partitionConsumer.accept(fetchablePartition);
 
         FetchResponseData.FetchableTopicResponse fetchableTopic =
-                new FetchResponseData.FetchableTopicResponse()
-                        .setTopic(topicPartition.topic())
-                        .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(fetchablePartition));
+            new FetchResponseData.FetchableTopicResponse()
+                .setTopic(topicPartition.topic())
+                .setTopicId(topicId)
+                .setPartitions(Collections.singletonList(fetchablePartition));
 
         FetchResponseData response = new FetchResponseData();
 
@@ -81,31 +81,31 @@ public class FetchRpc {
                 // Populate the node endpoints
                 FetchResponseData.NodeEndpointCollection nodeEndpoints = new FetchResponseData.NodeEndpointCollection(1);
                 nodeEndpoints.add(
-                        new FetchResponseData.NodeEndpoint()
-                                .setNodeId(leaderId)
-                                .setHost(address.get().getHostString())
-                                .setPort(address.get().getPort())
+                    new FetchResponseData.NodeEndpoint()
+                        .setNodeId(leaderId)
+                        .setHost(address.get().getHostString())
+                        .setPort(address.get().getPort())
                 );
                 response.setNodeEndpoints(nodeEndpoints);
             }
         }
 
         return response
-                .setErrorCode(topLevelError.code())
-                .setResponses(Collections.singletonList(fetchableTopic));
+            .setErrorCode(topLevelError.code())
+            .setResponses(Collections.singletonList(fetchableTopic));
     }
 
     public static boolean hasValidTopicPartition(FetchRequestData data, TopicPartition topicPartition, Uuid topicId) {
         return data.topics().size() == 1 &&
-                data.topics().get(0).topicId().equals(topicId) &&
-                data.topics().get(0).partitions().size() == 1 &&
-                data.topics().get(0).partitions().get(0).partition() == topicPartition.partition();
+            data.topics().get(0).topicId().equals(topicId) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partition() == topicPartition.partition();
     }
 
     public static boolean hasValidTopicPartition(FetchResponseData data, TopicPartition topicPartition, Uuid topicId) {
         return data.responses().size() == 1 &&
-                data.responses().get(0).topicId().equals(topicId) &&
-                data.responses().get(0).partitions().size() == 1 &&
-                data.responses().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.responses().get(0).topicId().equals(topicId) &&
+            data.responses().get(0).partitions().size() == 1 &&
+            data.responses().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 }
