@@ -974,6 +974,7 @@ project(':server') {
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
     implementation project(':raft')
+    implementation project(':share-coordinator')
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.slf4jApi
@@ -1767,7 +1768,6 @@ project(':share-coordinator') {
     implementation project(':clients')
     implementation project(':coordinator-common')
     implementation project(':metadata')
-    implementation project(':server')
     implementation project(':server-common')
     implementation project(':share')
     implementation libs.metrics
