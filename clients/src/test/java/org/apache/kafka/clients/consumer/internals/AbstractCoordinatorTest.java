@@ -116,6 +116,7 @@ public class AbstractCoordinatorTest {
     public void closeCoordinator() {
         Utils.closeQuietly(coordinator, "close coordinator");
         Utils.closeQuietly(consumerClient, "close consumer client");
+        Utils.closeQuietly(mockClient, "close mock client");
     }
 
     private void setupCoordinator() {
@@ -1506,7 +1507,6 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
-    @Tag("flaky") // KAFKA-15474 and KAFKA-18310
     @Test
     public void testWakeupAfterSyncGroupReceivedExternalCompletion() throws Exception {
         setupCoordinator();
