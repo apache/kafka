@@ -85,7 +85,7 @@ class ApiVersionManagerTest {
     )))
 
     val versionManager = new DefaultApiVersionManager(
-      listenerType = ListenerType.ZK_BROKER,
+      listenerType = ListenerType.BROKER,
       forwardingManager = Some(forwardingManager),
       brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
@@ -128,7 +128,7 @@ class ApiVersionManagerTest {
     Mockito.when(forwardingManager.controllerApiVersions).thenReturn(None)
 
     val versionManager = new DefaultApiVersionManager(
-      listenerType = ListenerType.ZK_BROKER,
+      listenerType = ListenerType.BROKER,
       forwardingManager = Some(forwardingManager),
       brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
@@ -147,7 +147,7 @@ class ApiVersionManagerTest {
   @Test
   def testEnvelopeDisabledWhenForwardingManagerEmpty(): Unit = {
     val versionManager = new DefaultApiVersionManager(
-      listenerType = ListenerType.ZK_BROKER,
+      listenerType = ListenerType.BROKER,
       forwardingManager = None,
       brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,

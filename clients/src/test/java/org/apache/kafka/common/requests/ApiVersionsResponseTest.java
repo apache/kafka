@@ -99,7 +99,7 @@ public class ApiVersionsResponseTest {
         );
 
         ApiVersionCollection commonResponse = ApiVersionsResponse.intersectForwardableApis(
-            ApiMessageType.ListenerType.ZK_BROKER,
+            ApiMessageType.ListenerType.BROKER,
             activeControllerApiVersions,
             true,
             false
@@ -112,7 +112,7 @@ public class ApiVersionsResponseTest {
     }
 
     @ParameterizedTest
-    @EnumSource(names = {"ZK_BROKER", "BROKER"})
+    @EnumSource(names = {"BROKER"})
     public void shouldReturnAllKeysWhenThrottleMsIsDefaultThrottle(ListenerType listenerType) {
         ApiVersionsResponse response = new ApiVersionsResponse.Builder().
             setThrottleTimeMs(AbstractResponse.DEFAULT_THROTTLE_TIME).
@@ -166,7 +166,7 @@ public class ApiVersionsResponseTest {
         ApiVersionsResponse response = new ApiVersionsResponse.Builder().
             setThrottleTimeMs(AbstractResponse.DEFAULT_THROTTLE_TIME).
             setApiVersions(ApiVersionsResponse.filterApis(
-                ListenerType.ZK_BROKER,
+                ListenerType.BROKER,
                 true,
                 true)).
             setSupportedFeatures(Features.emptySupportedFeatures()).
