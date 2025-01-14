@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.cluster.{Broker, Partition}
-import kafka.controller.{ControllerContext, KafkaController}
+import kafka.controller.KafkaController
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.UnifiedLog
 import kafka.network.RequestChannel
@@ -772,77 +772,6 @@ class KafkaApisTest extends Logging {
     }
   }
 
-  @Test
-  def testCreateTopicsWithAuthorizer(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    val authorizedTopic = "authorized-topic"
-    val unauthorizedTopic = "unauthorized-topic"
-
-    authorizeResource(authorizer, AclOperation.CREATE, ResourceType.CLUSTER,
-      Resource.CLUSTER_NAME, AuthorizationResult.DENIED, logIfDenied = false)
-
-    createCombinedTopicAuthorization(authorizer, AclOperation.CREATE,
-      authorizedTopic, unauthorizedTopic)
-
-    createCombinedTopicAuthorization(authorizer, AclOperation.DESCRIBE_CONFIGS,
-      authorizedTopic, unauthorizedTopic, logIfDenied = false)
-
-    val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS, ApiKeys.CREATE_TOPICS.latestVersion, clientId, 0)
-
-    when(controller.isActive).thenReturn(true)
-
-    val topics = new CreateTopicsRequestData.CreatableTopicCollection(3)
-    val topicToCreate = new CreateTopicsRequestData.CreatableTopic()
-      .setName(authorizedTopic)
-    topics.add(topicToCreate)
-
-    val topicToFilter = new CreateTopicsRequestData.CreatableTopic()
-      .setName(unauthorizedTopic)
-    topics.add(topicToFilter)
-
-    val topicToProhibited = new CreateTopicsRequestData.CreatableTopic()
-      .setName(Topic.CLUSTER_METADATA_TOPIC_NAME)
-    topics.add(topicToProhibited)
-
-    val timeout = 10
-    val createTopicsRequest = new CreateTopicsRequest.Builder(
-      new CreateTopicsRequestData()
-        .setTimeoutMs(timeout)
-        .setValidateOnly(false)
-        .setTopics(topics))
-      .build(requestHeader.apiVersion)
-    val request = buildRequest(createTopicsRequest,
-      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
-
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    when(clientControllerQuotaManager.newQuotaFor(
-      ArgumentMatchers.eq(request), ArgumentMatchers.eq(6))).thenReturn(UnboundedControllerMutationQuota)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleCreateTopicsRequest(request)
-
-    val capturedCallback: ArgumentCaptor[Map[String, ApiError] => Unit] = ArgumentCaptor.forClass(classOf[Map[String, ApiError] => Unit])
-
-    verify(adminManager).createTopics(
-      ArgumentMatchers.eq(timeout),
-      ArgumentMatchers.eq(false),
-      ArgumentMatchers.eq(Map(authorizedTopic -> topicToCreate)),
-      any(),
-      ArgumentMatchers.eq(UnboundedControllerMutationQuota),
-      capturedCallback.capture())
-    capturedCallback.getValue.apply(Map(authorizedTopic -> ApiError.NONE))
-
-    val capturedResponse = verifyNoThrottling[CreateTopicsResponse](request)
-    verifyCreateTopicsResult(capturedResponse,
-      Map(authorizedTopic -> Errors.NONE,
-        unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED,
-        Topic.CLUSTER_METADATA_TOPIC_NAME -> Errors.INVALID_REQUEST),
-      Map(authorizedTopic -> Errors.NONE,
-        unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED,
-        Topic.CLUSTER_METADATA_TOPIC_NAME -> Errors.NONE))
-  }
-
   @ParameterizedTest
   @CsvSource(value = Array("0,1500", "1500,0", "3000,1000"))
   def testKRaftControllerThrottleTimeEnforced(
@@ -904,49 +833,6 @@ class KafkaApisTest extends Logging {
       authorizedTopic, AuthorizationResult.ALLOWED, logIfAllowed, logIfDenied)
     authorizeResource(authorizer, operation, ResourceType.TOPIC,
       unauthorizedTopic, AuthorizationResult.DENIED, logIfAllowed, logIfDenied)
-  }
-
-  private def createCombinedTopicAuthorization(authorizer: Authorizer,
-                                               operation: AclOperation,
-                                               authorizedTopic: String,
-                                               unauthorizedTopic: String,
-                                               logIfAllowed: Boolean = true,
-                                               logIfDenied: Boolean = true): Unit = {
-    val expectedAuthorizedActions = Seq(
-      new Action(operation,
-        new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL),
-        1, logIfAllowed, logIfDenied),
-      new Action(operation,
-        new ResourcePattern(ResourceType.TOPIC, unauthorizedTopic, PatternType.LITERAL),
-        1, logIfAllowed, logIfDenied))
-
-    when(authorizer.authorize(
-      any[RequestContext], argThat((t: java.util.List[Action]) => t != null && t.containsAll(expectedAuthorizedActions.asJava))
-    )).thenAnswer { invocation =>
-      val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]]
-      actions.asScala.map { action =>
-        if (action.resourcePattern().name().equals(authorizedTopic))
-          AuthorizationResult.ALLOWED
-        else
-          AuthorizationResult.DENIED
-      }.asJava
-    }
-  }
-
-  private def verifyCreateTopicsResult(response: CreateTopicsResponse,
-                                       expectedErrorCodes: Map[String, Errors],
-                                       expectedTopicConfigErrorCodes: Map[String, Errors]): Unit = {
-    val actualErrorCodes = response.data.topics().asScala.map { topicResponse =>
-      topicResponse.name() -> Errors.forCode(topicResponse.errorCode)
-    }.toMap
-
-    assertEquals(expectedErrorCodes, actualErrorCodes)
-
-    val actualTopicConfigErrorCodes = response.data.topics().asScala.map { topicResponse =>
-      topicResponse.name() -> Errors.forCode(topicResponse.topicConfigErrorCode())
-    }.toMap
-
-    assertEquals(expectedTopicConfigErrorCodes, actualTopicConfigErrorCodes)
   }
 
   @Test
@@ -10038,156 +9924,6 @@ class KafkaApisTest extends Logging {
     assertEquals("Ongoing", transactionState.transactionState)
   }
 
-  @Test
-  def testDeleteTopicsByIdAuthorization(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    val controllerContext: ControllerContext = mock(classOf[ControllerContext])
-
-    when(clientControllerQuotaManager.newQuotaFor(
-      any[RequestChannel.Request],
-      anyShort
-    )).thenReturn(UnboundedControllerMutationQuota)
-    when(controller.isActive).thenReturn(true)
-    when(controller.controllerContext).thenReturn(controllerContext)
-
-    val topicResults = Map(
-      AclOperation.DESCRIBE -> Map(
-        "foo" -> AuthorizationResult.DENIED,
-        "bar" -> AuthorizationResult.ALLOWED
-      ),
-      AclOperation.DELETE -> Map(
-        "foo" -> AuthorizationResult.DENIED,
-        "bar" -> AuthorizationResult.DENIED
-      )
-    )
-    when(authorizer.authorize(any[RequestContext], isNotNull[util.List[Action]])).thenAnswer(invocation => {
-      val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]]
-      actions.asScala.map { action =>
-        val topic = action.resourcePattern.name
-        val ops = action.operation()
-        topicResults(ops)(topic)
-      }.asJava
-    })
-
-    // Try to delete three topics:
-    // 1. One without describe permission
-    // 2. One without delete permission
-    // 3. One which is authorized, but doesn't exist
-    val topicIdsMap = Map(
-      Uuid.randomUuid() -> Some("foo"),
-      Uuid.randomUuid() -> Some("bar"),
-      Uuid.randomUuid() -> None
-    )
-
-    topicIdsMap.foreach { case (topicId, topicNameOpt) =>
-      when(controllerContext.topicName(topicId)).thenReturn(topicNameOpt)
-    }
-
-    val topicDatas = topicIdsMap.keys.map { topicId =>
-      new DeleteTopicsRequestData.DeleteTopicState().setTopicId(topicId)
-    }.toList
-    val deleteRequest = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-      .setTopics(topicDatas.asJava))
-      .build(ApiKeys.DELETE_TOPICS.latestVersion)
-
-    val request = buildRequest(deleteRequest)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleDeleteTopicsRequest(request)
-    verify(authorizer, times(2)).authorize(any(), any())
-
-    val deleteResponse = verifyNoThrottling[DeleteTopicsResponse](request)
-
-    topicIdsMap.foreach { case (topicId, nameOpt) =>
-      val response = deleteResponse.data.responses.asScala.find(_.topicId == topicId).get
-      nameOpt match {
-        case Some("foo") =>
-          assertNull(response.name)
-          assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(response.errorCode))
-        case Some("bar") =>
-          assertEquals("bar", response.name)
-          assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(response.errorCode))
-        case None =>
-          assertNull(response.name)
-          assertEquals(Errors.UNKNOWN_TOPIC_ID, Errors.forCode(response.errorCode))
-        case _ =>
-          fail("Unexpected topic id/name mapping")
-      }
-    }
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testDeleteTopicsByNameAuthorization(usePrimitiveTopicNameArray: Boolean): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    when(clientControllerQuotaManager.newQuotaFor(
-      any[RequestChannel.Request],
-      anyShort
-    )).thenReturn(UnboundedControllerMutationQuota)
-    when(controller.isActive).thenReturn(true)
-
-    // Try to delete three topics:
-    // 1. One without describe permission
-    // 2. One without delete permission
-    // 3. One which is authorized, but doesn't exist
-
-    val topicResults = Map(
-      AclOperation.DESCRIBE -> Map(
-        "foo" -> AuthorizationResult.DENIED,
-        "bar" -> AuthorizationResult.ALLOWED,
-        "baz" -> AuthorizationResult.ALLOWED
-      ),
-      AclOperation.DELETE -> Map(
-        "foo" -> AuthorizationResult.DENIED,
-        "bar" -> AuthorizationResult.DENIED,
-        "baz" -> AuthorizationResult.ALLOWED
-      )
-    )
-    when(authorizer.authorize(any[RequestContext], isNotNull[util.List[Action]])).thenAnswer(invocation => {
-      val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]]
-      actions.asScala.map { action =>
-        val topic = action.resourcePattern.name
-        val ops = action.operation()
-        topicResults(ops)(topic)
-      }.asJava
-    })
-
-    val deleteRequest = if (usePrimitiveTopicNameArray) {
-      new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-        .setTopicNames(List("foo", "bar", "baz").asJava))
-        .build(5.toShort)
-    } else {
-      val topicDatas = List(
-        new DeleteTopicsRequestData.DeleteTopicState().setName("foo"),
-        new DeleteTopicsRequestData.DeleteTopicState().setName("bar"),
-        new DeleteTopicsRequestData.DeleteTopicState().setName("baz")
-      )
-      new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-        .setTopics(topicDatas.asJava))
-        .build(ApiKeys.DELETE_TOPICS.latestVersion)
-    }
-
-    val request = buildRequest(deleteRequest)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleDeleteTopicsRequest(request)
-    verify(authorizer, times(2)).authorize(any(), any())
-
-    val deleteResponse = verifyNoThrottling[DeleteTopicsResponse](request)
-
-    def lookupErrorCode(topic: String): Option[Errors] = {
-      Option(deleteResponse.data.responses().find(topic))
-        .map(result => Errors.forCode(result.errorCode))
-    }
-
-    assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), lookupErrorCode("foo"))
-    assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), lookupErrorCode("bar"))
-    assertEquals(Some(Errors.UNKNOWN_TOPIC_OR_PARTITION), lookupErrorCode("baz"))
-  }
-
   private def createMockRequest(): RequestChannel.Request = {
     val request: RequestChannel.Request = mock(classOf[RequestChannel.Request])
     val requestHeader: RequestHeader = mock(classOf[RequestHeader])
@@ -10213,27 +9949,6 @@ class KafkaApisTest extends Logging {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(raftSupport = true)
     verifyShouldNeverHandleErrorMessage(kafkaApis.handleAlterPartitionRequest)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardCreateTopicsRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleCreateTopicsRequest)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardCreatePartitionsRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleCreatePartitionsRequest)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardDeleteTopicsRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleDeleteTopicsRequest)
   }
 
   @Test

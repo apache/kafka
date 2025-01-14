@@ -932,7 +932,7 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
 
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
-            assertEquals(1, records.count());
+            assertEquals(2, records.count());
             maybeVerifyShareGroupStateTopicRecordCount(persister, 2);
         }
     }
