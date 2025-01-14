@@ -63,7 +63,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -4624,6 +4623,48 @@ public class TaskManagerTest {
         assertNull(task01.timeout);
 
         verify(consumer, times(2)).commitSync(any(Map.class));
+    }
+
+    @Test
+    public void shouldNotFailForTimeoutExceptionOnCommitWithEosAlpha() {
+        final Tasks tasks = mock(Tasks.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA, tasks, false);
+
+        final StreamsProducer producer = mock(StreamsProducer.class);
+        when(activeTaskCreator.streamsProducerForTask(any(TaskId.class))).thenReturn(producer);
+
+        final Map<TopicPartition, OffsetAndMetadata> offsetsT00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
+
+        doThrow(new TimeoutException("KABOOM!"))
+            .doNothing()
+            .doNothing()
+            .doNothing()
+            .when(producer).commitTransaction(offsetsT00, null);
+        doNothing()
+            .doNothing()
+            .when(producer).commitTransaction(offsetsT01, null);
+
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+        task00.setCommittableOffsetsAndMetadata(offsetsT00);
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
+        task01.setCommittableOffsetsAndMetadata(offsetsT01);
+        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true, stateManager);
+        when(tasks.allTasks()).thenReturn(mkSet(task00, task01, task02));
+
+        task00.setCommitNeeded();
+        task01.setCommitNeeded();
+
+        final TaskCorruptedException exception = assertThrows(
+            TaskCorruptedException.class,
+            () -> taskManager.commit(mkSet(task00, task01, task02))
+        );
+        assertThat(
+            exception.corruptedTasks(),
+            equalTo(Collections.singleton(taskId00))
+        );
+
+        verify(consumer, times(2)).groupMetadata();
     }
 
     @Test
