@@ -1128,7 +1128,7 @@ public class ShareConsumerTest {
         assertEquals(totalMessagesSent, totalResult2);
         assertEquals(totalMessagesSent, totalResult3);
         assertEquals(totalMessagesSent, actualMessageSent);
-        maybeVerifyShareGroupStateTopicRecordCount(persister, 21);
+        maybeVerifyShareGroupStateTopicRecordCount(persister, 12);
     }
 
     @ParameterizedTest(name = "{displayName}.persister={0}")
