@@ -459,7 +459,7 @@ public class SharePartition {
 
                 long initialOffset = startOffset;
                 for (InFlightBatch currentStateBatch : cachedState.values()) {
-                    if (startOffset != currentStateBatch.firstOffset()) {
+                    if (initialOffset != currentStateBatch.firstOffset()) {
                         InFlightBatch newBatch = new InFlightBatch(EMPTY_MEMBER_ID, initialOffset, currentStateBatch.firstOffset() - 1,
                             RecordState.AVAILABLE, (short) 0, null);
                         cachedState.put(initialOffset, newBatch);
