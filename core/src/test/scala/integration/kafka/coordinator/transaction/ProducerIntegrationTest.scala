@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerReco
 import org.apache.kafka.clients.producer.{Producer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.RecordTooLargeException
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterInstance, ClusterTest, ClusterTestDefaults, ClusterTestExtensions, ClusterTests, Type}
 import org.apache.kafka.common.message.InitProducerIdRequestData
 import org.apache.kafka.common.network.ListenerName
@@ -89,47 +89,50 @@ class ProducerIntegrationTest {
   }
 
   @ClusterTests(Array(
-    new ClusterTest(
-      features = Array(
-        new ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 0))),
-    new ClusterTest(
-      features = Array(
-        new ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 1))),
-    new ClusterTest(
-      features = Array(
-        new ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2))),
+    new ClusterTest(features = Array(
+      new ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 0))),
+    new ClusterTest(features = Array(
+      new ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 1))),
+    new ClusterTest(features = Array(
+      new ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2))),
   ))
-  def testTransactionWithInvalidSend(cluster: ClusterInstance): Unit = {
-    val topic = new NewTopic("foobar", 1, 1.toShort).configs(Collections.singletonMap(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "1"))
-    val admin = cluster.admin()
-    var txnVersion: Short = 0
-    try {
-      txnVersion = Option(admin.describeFeatures().featureMetadata().get().finalizedFeatures().get(Feature.TRANSACTION_VERSION))
-        .map(finalizedFeatures => finalizedFeatures.maxVersionLevel())
-        .getOrElse(0)
-      admin.createTopics(List(topic).asJava)
-    } finally if (admin != null) admin.close()
-
+  def testTransactionWithInvalidSendAndEndTxnRequestSent(cluster: ClusterInstance): Unit = {
+    val topic = new NewTopic("foobar", 1, 1.toShort).configs(Collections.singletonMap(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "100"))
+    val txnId = "test-txn"
     val properties = new util.HashMap[String, Object]
-    properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "foobar")
+    properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, txnId)
     properties.put(ProducerConfig.CLIENT_ID_CONFIG, "test")
     properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
 
+    val admin = cluster.admin()
     val producer: Producer[Array[Byte], Array[Byte]] = cluster.producer(properties)
     try {
+      val txnVersion: Short = Option(admin.describeFeatures().featureMetadata().get().finalizedFeatures().get(Feature.TRANSACTION_VERSION.featureName()))
+        .map(finalizedFeatures => finalizedFeatures.maxVersionLevel())
+        .getOrElse(0)
+      admin.createTopics(List(topic).asJava)
+
       producer.initTransactions()
       producer.beginTransaction()
       assertInstanceOf(classOf[RecordTooLargeException],
         assertThrows(classOf[ExecutionException],
-          () => producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic.name(), "key".getBytes, "value".getBytes)).get()).getCause)
+          () => producer.send(new ProducerRecord[Array[Byte], Array[Byte]](
+            topic.name(), Array.fill(100)(0: Byte), Array.fill(100)(0: Byte))).get()).getCause)
 
-      val commitError = assertThrows(classOf[KafkaException], () => producer.commitTransaction()) // fail due to last send failed
-      assertInstanceOf(classOf[RecordTooLargeException], commitError.getCause)
+      producer.abortTransaction()
+      // After abortTransaction, TV_0/TV_1 will increment the epoch, initiate a new transaction,
+      // and send an InitProducerId request to the broker. As a result, the expected state will be EMPTY in TV_0/TV_1.
+      val expectedState = if (txnVersion == 2) TransactionState.COMPLETE_ABORT else TransactionState.EMPTY
 
-      if (txnVersion == 2) {
-        producer.abortTransaction() // success under transaction version 2
-      }
-    } finally if (producer != null) producer.close()
+      TestUtils.waitForCondition(() => {
+        admin.listTransactions.all.get.stream
+          .filter(txn => txn.transactionalId == txnId)
+          .anyMatch(txn => txn.state == expectedState)
+      }, s"transaction is not in $expectedState state")
+    } finally {
+      if (admin != null) admin.close()
+      if (producer != null) producer.close()
+    }
   }
 
   @ClusterTests(Array(
