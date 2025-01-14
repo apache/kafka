@@ -134,6 +134,7 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
     val partitionsAssigned = new AtomicBoolean(false)
     consumer.subscribe(asList(topic), new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+        // Make sure the partition used in the test is actually assigned before continuing.
         if (partitions.contains(tp)) {
           execute(consumer, partitions)
           partitionsAssigned.set(true)
@@ -154,12 +155,14 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
     val partitionsRevoked = new AtomicBoolean(false)
     consumer.subscribe(asList(topic), new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+        // Make sure the partition used in the test is actually assigned before continuing.
         if (partitions.contains(tp)) {
           partitionsAssigned.set(true)
         }
       }
 
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+        // Make sure the partition used in the test is actually revoked before continuing.
         if (partitions.contains(tp)) {
           execute(consumer, partitions)
           partitionsRevoked.set(true)
