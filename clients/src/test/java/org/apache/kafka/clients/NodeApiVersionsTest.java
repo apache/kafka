@@ -180,7 +180,6 @@ public class NodeApiVersionsTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 2)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel((short) 2)
