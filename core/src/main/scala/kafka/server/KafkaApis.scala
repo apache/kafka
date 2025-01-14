@@ -216,7 +216,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_CLIENT_QUOTAS => forwardToController(request)
         case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => forwardToController(request)
-        case ApiKeys.ALTER_PARTITION => forwardToController(request)
         case ApiKeys.UPDATE_FEATURES => forwardToController(request)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
