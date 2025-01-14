@@ -378,7 +378,7 @@ public final class StandaloneHerder extends AbstractHerder {
         }
 
         Optional<RestartPlan> maybePlan = buildRestartPlan(request);
-        if (!maybePlan.isPresent()) {
+        if (maybePlan.isEmpty()) {
             cb.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
             return;
         }
@@ -624,9 +624,8 @@ public final class StandaloneHerder extends AbstractHerder {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof StandaloneHerderRequest))
+            if (!(o instanceof StandaloneHerderRequest other))
                 return false;
-            StandaloneHerderRequest other = (StandaloneHerderRequest) o;
             return seq == other.seq;
         }
 

@@ -2630,11 +2630,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private void handleInboundMessage(RaftMessage message, long currentTimeMs) {
         logger.trace("Received inbound message {}", message);
 
-        if (message instanceof RaftRequest.Inbound) {
-            RaftRequest.Inbound request = (RaftRequest.Inbound) message;
+        if (message instanceof RaftRequest.Inbound request) {
             handleRequest(request, currentTimeMs);
-        } else if (message instanceof RaftResponse.Inbound) {
-            RaftResponse.Inbound response = (RaftResponse.Inbound) message;
+        } else if (message instanceof RaftResponse.Inbound response) {
             if (requestManager.isResponseExpected(response.source(), response.correlationId())) {
                 handleResponse(response, currentTimeMs);
             } else {
@@ -3496,8 +3494,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (kafkaRaftMetrics != null) {
             kafkaRaftMetrics.close();
         }
-        if (memoryPool instanceof BatchMemoryPool) {
-            BatchMemoryPool batchMemoryPool = (BatchMemoryPool) memoryPool;
+        if (memoryPool instanceof BatchMemoryPool batchMemoryPool) {
             batchMemoryPool.releaseRetained();
         }
     }

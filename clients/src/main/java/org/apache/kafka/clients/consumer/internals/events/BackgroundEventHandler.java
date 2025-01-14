@@ -53,8 +53,8 @@ public class BackgroundEventHandler {
     public void add(BackgroundEvent event) {
         Objects.requireNonNull(event, "BackgroundEvent provided to add must be non-null");
         event.setEnqueuedMs(time.milliseconds());
+        asyncConsumerMetrics.recordBackgroundEventQueueSize(backgroundEventQueue.size() + 1);
         backgroundEventQueue.add(event);
-        asyncConsumerMetrics.recordBackgroundEventQueueSize(backgroundEventQueue.size());
     }
 
     /**

@@ -17,7 +17,6 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.header.Header;
@@ -425,22 +424,6 @@ public class FileRecordsTest {
         Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0, 0, time).records();
         assertTrue(batches(messageV0).isEmpty(), "No message should be there");
         assertEquals(size - 1, messageV0.sizeInBytes(), "There should be " + (size - 1) + " bytes");
-
-        // Lazy down-conversion will not return any messages for a partial input batch
-        TopicPartition tp = new TopicPartition("topic-1", 0);
-        LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, slice, RecordBatch.MAGIC_VALUE_V0, 0, Time.SYSTEM);
-        Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(16 * 1024L);
-        assertFalse(it.hasNext(), "No messages should be returned");
-    }
-
-    @Test
-    public void testFormatConversionWithNoMessages() {
-        TopicPartition tp = new TopicPartition("topic-1", 0);
-        LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, MemoryRecords.EMPTY, RecordBatch.MAGIC_VALUE_V0,
-            0, Time.SYSTEM);
-        assertEquals(0, lazyRecords.sizeInBytes());
-        Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(16 * 1024L);
-        assertFalse(it.hasNext(), "No messages should be returned");
     }
 
     @Test
@@ -637,23 +620,6 @@ public class FileRecordsTest {
         convertedRecords.add(fileRecords.downConvert(toMagic, firstOffset, time).records());
         verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compression, toMagic);
         convertedRecords.clear();
-
-        // Test the lazy down-conversion path
-        List<Long> maximumReadSize = asList(16L * 1024L,
-                (long) fileRecords.sizeInBytes(),
-                (long) fileRecords.sizeInBytes() - 1,
-                (long) fileRecords.sizeInBytes() / 4,
-                maxBatchSize + 1,
-                1L);
-        for (long readSize : maximumReadSize) {
-            TopicPartition tp = new TopicPartition("topic-1", 0);
-            LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, fileRecords, toMagic, firstOffset, Time.SYSTEM);
-            Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(readSize);
-            while (it.hasNext())
-                convertedRecords.add(it.next().records());
-            verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compression, toMagic);
-            convertedRecords.clear();
-        }
     }
 
     private void verifyConvertedRecords(List<SimpleRecord> initialRecords,

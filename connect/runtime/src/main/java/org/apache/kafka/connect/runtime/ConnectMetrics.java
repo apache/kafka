@@ -222,8 +222,7 @@ public class ConnectMetrics {
         public boolean equals(Object obj) {
             if (obj == this)
                 return true;
-            if (obj instanceof MetricGroupId) {
-                MetricGroupId that = (MetricGroupId) obj;
+            if (obj instanceof MetricGroupId that) {
                 return this.groupName.equals(that.groupName) && this.tags.equals(that.tags);
             }
             return false;

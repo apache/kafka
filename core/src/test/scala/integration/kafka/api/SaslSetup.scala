@@ -20,7 +20,6 @@ package kafka.api
 import kafka.security.JaasTestUtils
 import kafka.security.JaasTestUtils.JaasSection
 import kafka.security.minikdc.MiniKdc
-import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ScramCredentialInfo, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
@@ -30,9 +29,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
-import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ConfigType
-import org.apache.zookeeper.client.ZKClientConfig
 
 import java.io.File
 import java.util
@@ -203,10 +200,7 @@ trait SaslSetup {
   }
 
   def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {
-    val zkClientConfig = new ZKClientConfig()
-    Using.resource(KafkaZkClient(
-      zkConnect, JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig), 30000, 30000,
-      Int.MaxValue, Time.SYSTEM, name = "SaslSetup", zkClientConfig = zkClientConfig, enableEntityConfigControllerCheck = false)) { zkClient =>
+    Using.resource(new KafkaZkClient()) { zkClient =>
       val adminZkClient = new AdminZkClient(zkClient)
 
       val entityType = ConfigType.USER

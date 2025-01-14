@@ -19,6 +19,16 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading to 4.1.0 from any version 0.8.x through 4.0.x</a></h4>
+    <h5><a id="upgrade_410_notable" href="#upgrade_410_notable">Notable changes in 4.1.0</a></h5>
+        <ul>
+            <li><b>Producer</b>
+                <ul>
+                    <li>The <code>flush</code> method now detects potential deadlocks and prohibits its use inside a callback. This change prevents unintended blocking behavior, which was a known risk in earlier versions.
+                    </li>
+                </ul>
+            </li>
+        </ul>
 <h4><a id="upgrade_4_0_0" href="#upgrade_4_0_0">Upgrading to 4.0.0 from any version 0.8.x through 3.9.x</a></h4>
     <h5><a id="upgrade_400_notable" href="#upgrade_400_notable">Notable changes in 4.0.0</a></h5>
     <ul>
@@ -68,10 +78,6 @@
                         <li>The <code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code> and <code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code> class was removed.
                         </li>
                         <li>The <code>log.message.format.version</code> and <code>message.format.version</code> configs were removed.
-                        </li>
-                        <li>The password encoder related configs (<code>password.encoder.secret</code>, <code>password.encoder.old.secret</code>,
-                            <code>password.encoder.keyfactory.algorithm</code>, <code>password.encoder.cipher.algorithm</code>,
-                            <code>password.encoder.key.length</code>, and <code>password.encoder.iterations</code>) were removed.
                         </li>
                         <li>The function <code>onNewBatch</code> in <code>org.apache.kafka.clients.producer.Partitioner</code> class was removed.
                         </li>
@@ -656,9 +662,9 @@
         <li>The Apache Zookeeper dependency has been upgraded to 3.8.1 due to 3.6 reaching end-of-life. To bring both your
             Kafka and Zookeeper clusters to the latest versions:
             <ul>
-                <li><b>>=2.4</b> Kafka clusters can be updated directly.
+                <li><b>&gt;=2.4</b> Kafka clusters can be updated directly.
                     Zookeeper clusters which are running binaries bundled with Kafka versions 2.4 or above can be updated directly.</li>
-                <li><b><2.4</b> Kafka clusters first need to be updated to a version greater than 2.4 and smaller than 3.6.
+                <li><b>&lt;2.4</b> Kafka clusters first need to be updated to a version greater than 2.4 and smaller than 3.6.
                 Zookeeper clusters which are running binaries bundled with Kafka versions below 2.4 need to be updated to any
                 binaries bundled with Kafka versions greater than 2.4 and smaller than 3.6. You can then follow the first bullet-point.</li>
             </ul>
@@ -687,6 +693,10 @@
             has been added to data partitions to prevent hanging transactions. This feature is enabled by default and can be disabled by setting <code>transaction.partition.verification.enable</code> to false.
             The configuration can also be updated dynamically and is applied to the broker. Workloads running on version 3.6.0 with compression can experience
             InvalidRecordExceptions and UnknownServerExceptions. Upgrading to 3.6.1 or newer or disabling the feature fixes the issue.
+        </li>
+	<li>The <code>ByteBufferDeserializer</code> (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=225152035">KIP-863</a>)
+	    was changed to avoid unnecessary deep-copies of data. This changes the behavior of the deserializer as user code cannot make any assumptions
+	    about buffer position, limit, capacity any longer.
         </li>
     </ul>
 

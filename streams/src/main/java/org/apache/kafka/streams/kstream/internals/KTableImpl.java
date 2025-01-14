@@ -1120,7 +1120,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     private final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition = maybeMulticastPartitions -> {
-        if (!maybeMulticastPartitions.isPresent()) {
+        if (maybeMulticastPartitions.isEmpty()) {
             return Optional.empty();
         }
         if (maybeMulticastPartitions.get().size() != 1) {

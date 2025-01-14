@@ -20,7 +20,6 @@ package org.apache.kafka.message;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -58,7 +57,7 @@ public final class MessageSpec {
         this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
         this.type = Objects.requireNonNull(type);
         this.commonStructs = commonStructs == null ? Collections.emptyList() :
-                Collections.unmodifiableList(new ArrayList<>(commonStructs));
+                List.copyOf(commonStructs);
         if (flexibleVersions == null) {
             throw new RuntimeException("You must specify a value for flexibleVersions. " +
                     "Please use 0+ for all new messages.");
