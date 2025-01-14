@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.test.api;
 
+import kafka.server.ControllerServer;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -341,6 +343,20 @@ public class ClusterTestExtensionsTest {
     public void testControllerListenerName(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         assertEquals("FOO", cluster.controllerListenerName().get().value());
         try (Admin admin = cluster.admin(Map.of(), true)) {
+            assertEquals(1, admin.describeMetadataQuorum().quorumInfo().get().nodes().size());
+        }
+    }
+
+    @ClusterTest(types = {Type.KRAFT})
+    public void testControllerRestart(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+        try (Admin admin = cluster.admin()) {
+
+            ControllerServer controller = cluster.controllers().values().iterator().next();
+            controller.shutdown();
+            controller.awaitShutdown();
+
+            controller.startup();
+
             assertEquals(1, admin.describeMetadataQuorum().quorumInfo().get().nodes().size());
         }
     }
