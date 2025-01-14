@@ -20,16 +20,27 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URL_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class ConfigurationUtilsTest extends OAuthBearerTest {
 
     private static final String URL_CONFIG_NAME = "url";
+    private static final String FILE_CONFIG_NAME = "file";
+
+    @AfterEach
+    public void tearDown() throws Exception {
+        System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URL_CONFIG);
+    }
 
     @Test
     public void testUrl() {
@@ -127,6 +138,33 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
     @Test
     public void testFileWhitespace() {
         assertThrowsWithMessage(ConfigException.class, () -> testFile("    "), "must not contain only whitespace");
+    }
+
+    @Test
+    public void testAllowedSaslOauthbearerUrlSystemProperty() {
+        String url = "http://www.example.com";
+        String fileUrl = "file:///etc/passwd";
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(URL_CONFIG_NAME, url);
+        configs.put(FILE_CONFIG_NAME, fileUrl);
+        ConfigurationUtils cu = new ConfigurationUtils(configs);
+
+        // By default, no URL is allowed
+        assertThrowsWithMessage(IllegalArgumentException.class, () -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME),
+                url + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.url' to allow " + url);
+        assertThrowsWithMessage(IllegalArgumentException.class, () -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME),
+                fileUrl + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.url' to allow " + fileUrl);
+
+        // add one url into allowed list
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URL_CONFIG, url);
+        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME));
+        assertThrowsWithMessage(IllegalArgumentException.class, () -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME),
+                fileUrl + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.url' to allow " + fileUrl);
+
+        // add all urls into allowed list
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URL_CONFIG, url + "," + fileUrl);
+        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME));
+        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME));
     }
 
     protected void testFile(String value) {
