@@ -22,17 +22,15 @@ import java.util.concurrent.TimeUnit
 import kafka.common._
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback}
-import kafka.coordinator.transaction.ZkProducerIdManager
 import kafka.server._
 import kafka.server.metadata.ZkFinalizedFeatureCache
 import kafka.utils._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zk.{FeatureZNodeStatus, _}
-import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
+import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler, ZooKeeperClientException}
 import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.common.ElectionType
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
@@ -46,13 +44,11 @@ import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.zookeeper.KeeperException
-import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Try}
 
 sealed trait ElectionTrigger
 case object AutoTriggered extends ElectionTrigger
@@ -114,10 +110,9 @@ class KafkaController(val config: KafkaConfig,
 
   this.logIdent = s"[Controller id=${config.brokerId}] "
 
-  @volatile private var brokerInfo = initialBrokerInfo
+  private val brokerInfo = initialBrokerInfo
   @volatile private var _brokerEpoch = initialBrokerEpoch
 
-  private val isAlterPartitionEnabled = config.interBrokerProtocolVersion.isAlterPartitionSupported
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)
   val controllerContext = new ControllerContext
   var controllerChannelManager = new ControllerChannelManager(
@@ -245,15 +240,6 @@ class KafkaController(val config: KafkaConfig,
     eventManager.put(controlledShutdownEvent)
   }
 
-  private[kafka] def updateBrokerInfo(newBrokerInfo: BrokerInfo): Unit = {
-    this.brokerInfo = newBrokerInfo
-    zkClient.updateBrokerInfo(newBrokerInfo)
-  }
-
-  private[kafka] def enableDefaultUncleanLeaderElection(): Unit = {
-    eventManager.put(UncleanLeaderElectionEnable)
-  }
-
   private[kafka] def enableTopicUncleanLeaderElection(topic: String): Unit = {
     if (isActive) {
       eventManager.put(TopicUncleanLeaderElectionEnable(topic))
@@ -278,7 +264,7 @@ class KafkaController(val config: KafkaConfig,
    * This ensures another controller election will be triggered and there will always be an actively serving controller
    */
   private def onControllerFailover(): Unit = {
-    maybeSetupFeatureVersioning()
+    enableFeatureVersioning()
 
     info("Registering handlers")
 
@@ -450,47 +436,6 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  /**
-   * Disables the feature versioning system (KIP-584).
-   *
-   * Sets up the FeatureZNode with disabled status. This status means the feature versioning system
-   * (KIP-584) is disabled, and, the finalized features stored in the FeatureZNode are not relevant.
-   * This status should be written by the controller to the FeatureZNode only when the broker
-   * IBP config is less than IBP_2_7_IV0.
-   *
-   * NOTE:
-   * 1. When this method returns, existing finalized features (if any) will be cleared from the
-   *    FeatureZNode.
-   * 2. This method, unlike enableFeatureVersioning() need not wait for the FinalizedFeatureCache
-   *    to be updated, because, such updates to the cache (via FinalizedFeatureChangeListener)
-   *    are disabled when IBP config is < than IBP_2_7_IV0.
-   */
-  private def disableFeatureVersioning(): Unit = {
-    val newNode = FeatureZNode(config.interBrokerProtocolVersion, FeatureZNodeStatus.Disabled, Map.empty[String, Short])
-    val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
-    if (version == ZkVersion.UnknownVersion) {
-      createFeatureZNode(newNode)
-    } else {
-      val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-      if (existingFeatureZNode.status == FeatureZNodeStatus.Disabled &&
-          existingFeatureZNode.features.nonEmpty) {
-        warn(s"FeatureZNode at path: ${FeatureZNode.path} with disabled status" +
-             s" contains non-empty features: ${existingFeatureZNode.features}")
-      }
-      if (!newNode.equals(existingFeatureZNode)) {
-        updateFeatureZNode(newNode)
-      }
-    }
-  }
-
-  private def maybeSetupFeatureVersioning(): Unit = {
-    if (config.isFeatureVersioningSupported) {
-      enableFeatureVersioning()
-    } else {
-      disableFeatureVersioning()
-    }
-  }
-
   private def scheduleAutoLeaderRebalanceTask(delay: Long, unit: TimeUnit): Unit = {
     kafkaScheduler.scheduleOnce("auto-leader-rebalance-task",
       () => eventManager.put(AutoPreferredReplicaLeaderElection),
@@ -516,8 +461,6 @@ class KafkaController(val config: KafkaConfig,
     // stop token expiry check scheduler
     tokenCleanScheduler.shutdown()
 
-    // de-register partition ISR listener for on-going partition reassignment task
-    unregisterPartitionReassignmentIsrChangeHandlers()
     // shutdown partition state machine
     partitionStateMachine.shutdown()
     zkClient.unregisterZNodeChildChangeHandler(topicChangeHandler.path)
@@ -841,11 +784,6 @@ class KafkaController(val config: KafkaConfig,
         stopRemovedReplicasOfReassignedPartition(topicPartition, unneededReplicas)
     }
 
-    if (!isAlterPartitionEnabled) {
-      val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
-      zkClient.registerZNodeChangeHandler(reassignIsrChangeHandler)
-    }
-
     controllerContext.partitionsBeingReassigned.add(topicPartition)
   }
 
@@ -1078,21 +1016,7 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def updateReplicaAssignmentForPartition(topicPartition: TopicPartition, assignment: ReplicaAssignment): Unit = {
-    val topicAssignment = mutable.Map() ++=
-      controllerContext.partitionFullReplicaAssignmentForTopic(topicPartition.topic) +=
-      (topicPartition -> assignment)
-
-    val setDataResponse = zkClient.setTopicAssignmentRaw(topicPartition.topic,
-      controllerContext.topicIds.get(topicPartition.topic),
-      topicAssignment, controllerContext.epochZkVersion)
-    setDataResponse.resultCode match {
-      case Code.OK =>
-        info(s"Successfully updated assignment of partition $topicPartition to $assignment")
-      case Code.NONODE =>
-        throw new IllegalStateException(s"Failed to update assignment for $topicPartition since the topic " +
-          "has no current assignment")
-      case _ => throw new KafkaException(setDataResponse.resultException.get)
-    }
+    throw new UnsupportedOperationException()
   }
 
   private def startNewReplicasForReassignedPartition(topicPartition: TopicPartition, newReplicas: Seq[Int]): Unit = {
@@ -1148,22 +1072,9 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def unregisterPartitionReassignmentIsrChangeHandlers(): Unit = {
-    if (!isAlterPartitionEnabled) {
-      controllerContext.partitionsBeingReassigned.foreach { tp =>
-        val path = TopicPartitionStateZNode.path(tp)
-        zkClient.unregisterZNodeChangeHandler(path)
-      }
-    }
-  }
-
   private def removePartitionFromReassigningPartitions(topicPartition: TopicPartition,
                                                        assignment: ReplicaAssignment): Unit = {
     if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
-      if (!isAlterPartitionEnabled) {
-        val path = TopicPartitionStateZNode.path(topicPartition)
-        zkClient.unregisterZNodeChangeHandler(path)
-      }
       maybeRemoveFromZkReassignment((tp, replicas) => tp == topicPartition && replicas == assignment.replicas)
       controllerContext.partitionsBeingReassigned.remove(topicPartition)
     } else {
@@ -1196,7 +1107,7 @@ class KafkaController(val config: KafkaConfig,
       try {
         zkClient.setOrCreatePartitionReassignment(updatedPartitionsBeingReassigned, controllerContext.epochZkVersion)
       } catch {
-        case e: KeeperException => throw new AdminOperationException(e)
+        case e: ZooKeeperClientException => throw new AdminOperationException(e)
       }
     }
   }
@@ -1593,7 +1504,6 @@ class KafkaController(val config: KafkaConfig,
     //  of the cache are compatible with the supported features of each broker.
     brokersAndEpochs.partition {
       case (broker, _) =>
-        !config.isFeatureVersioningSupported ||
         !featureCache.getFeatureOption.exists(
           latestFinalizedFeatures =>
             BrokerFeatures.hasIncompatibleFeatures(broker.features,
@@ -1704,12 +1614,9 @@ class KafkaController(val config: KafkaConfig,
 
   private def processTopicIds(topicIdAssignments: Set[TopicIdReplicaAssignment]): Unit = {
     // Create topic IDs for topics missing them if we are using topic IDs
-    // Otherwise, maintain what we have in the topicZNode
-    val updatedTopicIdAssignments = if (config.usesTopicId) {
+    val updatedTopicIdAssignments = {
       val (withTopicIds, withoutTopicIds) = topicIdAssignments.partition(_.topicId.isDefined)
       withTopicIds ++ zkClient.setTopicIds(withoutTopicIds, controllerContext.epochZkVersion)
-    } else {
-      topicIdAssignments
     }
 
     // Add topic IDs to controller context
@@ -2554,17 +2461,6 @@ class KafkaController(val config: KafkaConfig,
       callback.apply(Left(Errors.STALE_BROKER_EPOCH))
       return
     }
-
-    val maybeNewProducerIdsBlock = try {
-      Try(ZkProducerIdManager.getNewProducerIdBlock(brokerId, zkClient, this))
-    } catch {
-      case ke: KafkaException => Failure(ke)
-    }
-
-    maybeNewProducerIdsBlock match {
-      case Failure(exception) => callback.apply(Left(Errors.forException(exception)))
-      case Success(newProducerIdBlock) => callback.apply(Right(newProducerIdBlock))
-    }
   }
 
   private def processControllerChange(): Unit = {
@@ -2692,10 +2588,6 @@ class LogDirEventNotificationHandler(eventManager: ControllerEventManager) exten
   override val path: String = LogDirEventNotificationZNode.path
 
   override def handleChildChange(): Unit = eventManager.put(LogDirEventNotification)
-}
-
-object LogDirEventNotificationHandler {
-  val Version: Long = 1L
 }
 
 class PartitionModificationsHandler(eventManager: ControllerEventManager, topic: String) extends ZNodeChangeHandler {

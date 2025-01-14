@@ -1456,7 +1456,7 @@ public class KafkaProducerTest {
 
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
-            TestUtils.assertFutureError(producer.send(largeRecord), RecordTooLargeException.class);
+            TestUtils.assertFutureThrows(producer.send(largeRecord), RecordTooLargeException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1493,7 +1493,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureError(producer.send(record), TimeoutException.class);
+            TestUtils.assertFutureThrows(producer.send(record), TimeoutException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1530,7 +1530,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureError(producer.send(record), TimeoutException.class);
+            TestUtils.assertFutureThrows(producer.send(record), TimeoutException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1569,7 +1569,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureError(producer.send(record), InvalidTopicException.class);
+            TestUtils.assertFutureThrows(producer.send(record), InvalidTopicException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -2008,7 +2008,7 @@ public class KafkaProducerTest {
 
         assertEquals(Collections.singleton(invalidTopicName),
                 metadata.fetch().invalidTopics(), "Cluster has incorrect invalid topic list.");
-        TestUtils.assertFutureError(future, InvalidTopicException.class);
+        TestUtils.assertFutureThrows(future, InvalidTopicException.class);
 
         producer.close(Duration.ofMillis(0));
     }
@@ -2271,6 +2271,34 @@ public class KafkaProducerTest {
             producer.send(record, callBack);
             assertEquals(1, MockProducerInterceptor.ON_ACKNOWLEDGEMENT_COUNT.intValue());
         }
+    }
+
+    @Test
+    public void shouldNotInvokeFlushInCallback() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        // only test in idempotence disabled producer for simplicity
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+        AtomicReference<KafkaException> kafkaException = new AtomicReference<>();
+
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+            new StringSerializer(), metadata, client, null, time)) {
+            producer.send(
+                new ProducerRecord<>("topic", "value"),
+                (recordMetadata, exception) -> kafkaException.set(assertThrows(KafkaException.class, producer::flush))
+            );
+        }
+
+        assertNotNull(kafkaException.get());
+        assertEquals("KafkaProducer.flush() invocation inside a callback is not permitted because it may lead to deadlock.",
+            kafkaException.get().getMessage());
     }
 
     @Test

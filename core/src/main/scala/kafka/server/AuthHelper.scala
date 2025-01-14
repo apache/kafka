@@ -55,7 +55,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
 
   def authorizeClusterOperation(request: RequestChannel.Request, operation: AclOperation): Unit = {
     if (!authorize(request.context, operation, CLUSTER, CLUSTER_NAME))
-      throw new ClusterAuthorizationException(s"Request $request is not authorized.")
+      throw new ClusterAuthorizationException(s"Request $request needs $operation permission.")
   }
 
   def authorizedOperations(request: RequestChannel.Request, resource: Resource): Int = {

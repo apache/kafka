@@ -14,16 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.security;
+package org.apache.kafka.raft;
 
-import java.security.AlgorithmParameters;
-import java.security.spec.AlgorithmParameterSpec;
-import java.security.spec.InvalidParameterSpecException;
-import java.util.Map;
+public record SegmentPosition(long baseOffset, int relativePosition) implements OffsetMetadata {
 
-public interface CipherParamsEncoder {
-
-    Map<String, String> toMap(AlgorithmParameters cipher) throws InvalidParameterSpecException;
-
-    AlgorithmParameterSpec toParameterSpec(Map<String, String> paramMap);
+    @Override
+    public String toString() {
+        return "(segmentBaseOffset=" + baseOffset + ",relativePositionInSegment=" + relativePosition + ")";
+    }
 }

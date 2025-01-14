@@ -25,12 +25,12 @@ import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 public class TransactionCoordinatorRecordSerde extends CoordinatorRecordSerde {
 
     @Override
-    protected ApiMessage apiMessageKeyFor(short recordVersion) {
-        switch (recordVersion) {
+    protected ApiMessage apiMessageKeyFor(short recordType) {
+        switch (recordType) {
             case 0:
                 return new TransactionLogKey();
             default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+                throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
         }
     }
 

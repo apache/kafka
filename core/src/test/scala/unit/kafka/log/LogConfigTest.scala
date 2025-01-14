@@ -62,7 +62,7 @@ class LogConfigTest {
     val millisInHour = 60L * 60L * 1000L
     val millisInDay = 24L * millisInHour
     val bytesInGB: Long = 1024 * 1024 * 1024
-    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0)
     kafkaProps.put(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, "2")
     kafkaProps.put(ServerLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG, "2")
     kafkaProps.put(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, "960") // 40 days
@@ -181,7 +181,7 @@ class LogConfigTest {
 
   @Test
   def testOverriddenConfigsAsLoggableString(): Unit = {
-    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0)
     kafkaProps.put("unknown.broker.password.config", "aaaaa")
     kafkaProps.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "50")
     kafkaProps.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, "somekeypassword")
@@ -466,7 +466,7 @@ class LogConfigTest {
   def testValidateWithMetadataVersionJbodSupport(): Unit = {
     def validate(metadataVersion: MetadataVersion, jbodConfig: Boolean): Unit =
       KafkaConfig.fromProps(
-          TestUtils.createBrokerConfig(nodeId = 0, zkConnect = null, logDirCount = if (jbodConfig) 2 else 1)
+          TestUtils.createBrokerConfig(nodeId = 0, logDirCount = if (jbodConfig) 2 else 1)
         ).validateWithMetadataVersion(metadataVersion)
 
     validate(MetadataVersion.IBP_3_6_IV2, jbodConfig = false)
