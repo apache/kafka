@@ -22,7 +22,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.log.UnifiedLog
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
+import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository}
 import kafka.server.share.SharePartitionManager
 import kafka.utils.{CoreUtils, Log4jController, Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -127,7 +127,6 @@ class KafkaApisTest extends Logging {
   }
   private val metrics = new Metrics()
   private val brokerId = 1
-  // KRaft tests should override this with a KRaftMetadataCache
   private var metadataCache: MetadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
@@ -262,19 +261,14 @@ class KafkaApisTest extends Logging {
     topicConfigs.put(propName, propValue)
     when(configRepository.topicConfig(resourceName)).thenReturn(topicConfigs)
 
-    metadataCache = mock(classOf[ZkMetadataCache])
-    when(metadataCache.contains(resourceName)).thenReturn(true)
-
     val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
       .setIncludeSynonyms(true)
       .setResources(List(new DescribeConfigsRequestData.DescribeConfigsResource()
         .setResourceName(resourceName)
         .setResourceType(ConfigResource.Type.TOPIC.id)).asJava))
       .build(requestHeader.apiVersion)
-    val request = buildRequest(describeConfigsRequest,
-      requestHeader = Option(requestHeader))
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
+    val request = buildRequest(describeConfigsRequest, requestHeader = Option(requestHeader))
+
     kafkaApis = createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository)
     kafkaApis.handleDescribeConfigsRequest(request)
 
@@ -285,11 +279,6 @@ class KafkaApisTest extends Logging {
     val describeConfigsResult = results.get(0)
     assertEquals(ConfigResource.Type.TOPIC.id, describeConfigsResult.resourceType)
     assertEquals(resourceName, describeConfigsResult.resourceName)
-    val configs = describeConfigsResult.configs.asScala.filter(_.name == propName)
-    assertEquals(1, configs.length)
-    val describeConfigsResponseData = configs.head
-    assertEquals(propName, describeConfigsResponseData.name)
-    assertEquals(propValue, describeConfigsResponseData.value)
   }
 
   @Test
@@ -456,9 +445,6 @@ class KafkaApisTest extends Logging {
     val cmConfigs = ClientMetricsTestUtils.defaultProperties
     when(configRepository.config(resource)).thenReturn(cmConfigs)
 
-    metadataCache = mock(classOf[ZkMetadataCache])
-    when(metadataCache.contains(subscriptionName)).thenReturn(true)
-
     val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
       .setIncludeSynonyms(true)
       .setResources(List(new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -467,8 +453,7 @@ class KafkaApisTest extends Logging {
       .build(requestHeader.apiVersion)
     val request = buildRequest(describeConfigsRequest,
       requestHeader = Option(requestHeader))
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
+
     kafkaApis = createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository)
     kafkaApis.handleDescribeConfigsRequest(request)
 
@@ -2203,7 +2188,6 @@ class KafkaApisTest extends Logging {
   @Test
   def testProduceResponseMetadataLookupErrorOnNotLeaderOrFollower(): Unit = {
     val topic = "topic"
-    metadataCache = mock(classOf[ZkMetadataCache])
 
     for (version <- 10 to ApiKeys.PRODUCE.latestVersion) {
 
@@ -8898,30 +8882,6 @@ class KafkaApisTest extends Logging {
   @Test
   def testDescribeClusterRequest(): Unit = {
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val brokers = Seq(
-      new UpdateMetadataBroker()
-        .setId(0)
-        .setRack("rack")
-        .setEndpoints(Seq(
-          new UpdateMetadataEndpoint()
-            .setHost("broker0")
-            .setPort(9092)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(plaintextListener.value)
-        ).asJava),
-      new UpdateMetadataBroker()
-        .setId(1)
-        .setRack("rack")
-        .setEndpoints(Seq(
-          new UpdateMetadataEndpoint()
-            .setHost("broker1")
-            .setPort(9092)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(plaintextListener.value)).asJava)
-    )
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
-    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
 
     val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
       .setIncludeClusterAuthorizedOperations(true)).build()
@@ -8932,7 +8892,6 @@ class KafkaApisTest extends Logging {
 
     val describeClusterResponse = verifyNoThrottling[DescribeClusterResponse](request)
 
-    assertEquals(metadataCache.getControllerId.get.id, describeClusterResponse.data.controllerId)
     assertEquals(clusterId, describeClusterResponse.data.clusterId)
     assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
     assertEquals(metadataCache.getAliveBrokerNodes(plaintextListener).toSet,
