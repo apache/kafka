@@ -346,7 +346,10 @@ public class LogSegmentTest {
 
             seg.append(41,
                 MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 40, Compression.NONE, TimestampType.CREATE_TIME,
-                    new SimpleRecord("hello there".getBytes())));
+                    List.of(
+                        new SimpleRecord("hello".getBytes()),
+                        new SimpleRecord("there".getBytes())
+                    ).toArray(new SimpleRecord[0])));
 
             // If the segment is empty after truncation, the create time should be reset
             time.sleep(500);
@@ -814,10 +817,12 @@ public class LogSegmentTest {
         segment.append(2L, record);
 
         assertEquals(2, segment.offsetIndex().entries());
-        assertTrue(segment.offsetIndex().lookup(2L).position > segment.offsetIndex().lookup(1L).position);
+        assertEquals(1, segment.offsetIndex().entry(0).offset);
+        assertEquals(2, segment.offsetIndex().entry(1).offset);
 
         assertEquals(2, segment.timeIndex().entries());
-        assertTrue(segment.timeIndex().lookup(2L).offset > segment.timeIndex().lookup(1L).offset);
+        assertEquals(new TimestampOffset(1, 1), segment.timeIndex().entry(0));
+        assertEquals(new TimestampOffset(2, 2), segment.timeIndex().entry(1));
     }
 
     @Test
@@ -845,8 +850,8 @@ public class LogSegmentTest {
         segment.append(2L, record);
 
         assertEquals(2, segment.offsetIndex().entries());
-        assertEquals(1, segment.offsetIndex().lookup(1L).offset);
-        assertEquals(2, segment.offsetIndex().lookup(2L).offset);
+        assertEquals(1, segment.offsetIndex().entry(0).offset);
+        assertEquals(2, segment.offsetIndex().entry(1).offset);
 
         assertEquals(2, segment.timeIndex().entries());
         assertEquals(new TimestampOffset(1, 0), segment.timeIndex().entry(0));

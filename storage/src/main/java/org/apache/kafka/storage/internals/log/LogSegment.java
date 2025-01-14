@@ -258,7 +258,6 @@ public class LogSegment implements Closeable {
                 if (bytesSinceLastIndexEntry > indexIntervalBytes) {
                     offsetIndex().append(batchLastOffset, physicalPosition);
                     timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar());
-
                     bytesSinceLastIndexEntry = 0;
                 }
                 var sizeInBytes = batch.sizeInBytes();
