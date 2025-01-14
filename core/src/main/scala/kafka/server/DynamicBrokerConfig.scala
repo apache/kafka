@@ -881,7 +881,6 @@ object DynamicListenerConfig {
    */
   val ReconfigurableConfigs = Set(
     // Listener configs
-    SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG,
     SocketServerConfigs.LISTENERS_CONFIG,
     SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
 
@@ -967,37 +966,13 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     DynamicListenerConfig.ReconfigurableConfigs
   }
 
-  private def listenerRegistrationsAltered(
-    oldAdvertisedListeners: Map[ListenerName, EndPoint],
-    newAdvertisedListeners: Map[ListenerName, EndPoint]
-  ): Boolean = {
-    if (oldAdvertisedListeners.size != newAdvertisedListeners.size) return true
-    oldAdvertisedListeners.foreachEntry {
-      case (oldListenerName, oldEndpoint) =>
-        newAdvertisedListeners.get(oldListenerName) match {
-          case None => return true
-          case Some(newEndpoint) => if (!newEndpoint.equals(oldEndpoint)) {
-            return true
-          }
-        }
-    }
-    false
-  }
-
-  private def verifyListenerRegistrationAlterationSupported(): Unit = {
-    if (!server.config.requiresZookeeper) {
-      throw new ConfigException("Advertised listeners cannot be altered when using a " +
-        "Raft-based metadata quorum.")
-    }
-  }
-
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     val oldConfig = server.config
     val newListeners = listenersToMap(newConfig.listeners)
-    val newAdvertisedListeners = listenersToMap(newConfig.effectiveAdvertisedBrokerListeners)
+    val oldAdvertisedListeners = listenersToMap(oldConfig.effectiveAdvertisedBrokerListeners)
     val oldListeners = listenersToMap(oldConfig.listeners)
-    if (!newAdvertisedListeners.keySet.subsetOf(newListeners.keySet))
-      throw new ConfigException(s"Advertised listeners '$newAdvertisedListeners' must be a subset of listeners '$newListeners'")
+    if (!oldAdvertisedListeners.keySet.subsetOf(newListeners.keySet))
+      throw new ConfigException(s"Advertised listeners '$oldAdvertisedListeners' must be a subset of listeners '$newListeners'")
     if (!newListeners.keySet.subsetOf(newConfig.effectiveListenerSecurityProtocolMap.keySet))
       throw new ConfigException(s"Listeners '$newListeners' must be subset of listener map '${newConfig.effectiveListenerSecurityProtocolMap}'")
     newListeners.keySet.intersect(oldListeners.keySet).foreach { listenerName =>
@@ -1013,15 +988,8 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
       if (oldConfig.effectiveListenerSecurityProtocolMap(listenerName) != newConfig.effectiveListenerSecurityProtocolMap(listenerName))
         throw new ConfigException(s"Security protocol cannot be updated for existing listener $listenerName")
     }
-    if (!newAdvertisedListeners.contains(newConfig.interBrokerListenerName))
+    if (!oldAdvertisedListeners.contains(newConfig.interBrokerListenerName))
       throw new ConfigException(s"Advertised listener must be specified for inter-broker listener ${newConfig.interBrokerListenerName}")
-
-    // Currently, we do not support adding or removing listeners when in KRaft mode.
-    // However, we support changing other listener configurations (max connections, etc.)
-    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedBrokerListeners),
-        listenersToMap(newConfig.effectiveAdvertisedBrokerListeners))) {
-      verifyListenerRegistrationAlterationSupported()
-    }
   }
 
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
@@ -1035,13 +1003,6 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
       LoginManager.closeAll() // Clear SASL login cache to force re-login
       if (listenersRemoved.nonEmpty) server.socketServer.removeListeners(listenersRemoved)
       if (listenersAdded.nonEmpty) server.socketServer.addListeners(listenersAdded)
-    }
-    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedBrokerListeners),
-        listenersToMap(newConfig.effectiveAdvertisedBrokerListeners))) {
-      verifyListenerRegistrationAlterationSupported()
-      server match {
-        case _ => throw new RuntimeException("Unable to handle reconfigure")
-      }
     }
   }
 
