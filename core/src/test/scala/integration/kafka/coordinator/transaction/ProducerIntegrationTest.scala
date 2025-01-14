@@ -19,10 +19,12 @@ package kafka.coordinator.transaction
 
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils
-import org.apache.kafka.clients.admin.{Admin, TransactionState}
+import org.apache.kafka.clients.admin.{Admin, NewTopic, TransactionState}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{Producer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.errors.RecordTooLargeException
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterInstance, ClusterTest, ClusterTestDefaults, ClusterTestExtensions, ClusterTests, Type}
 import org.apache.kafka.common.message.InitProducerIdRequestData
 import org.apache.kafka.common.network.ListenerName
@@ -33,12 +35,13 @@ import org.apache.kafka.common.test.TestUtils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{Feature, MetadataVersion}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertInstanceOf, assertThrows, assertTrue}
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.time.Duration
 import java.util
 import java.util.Collections
+import java.util.concurrent.ExecutionException
 import java.util.stream.{Collectors, IntStream, StreamSupport}
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters._
@@ -82,6 +85,50 @@ class ProducerIntegrationTest {
 
       producer.beginTransaction()
       producer.commitTransaction()
+    } finally if (producer != null) producer.close()
+  }
+
+  @ClusterTests(Array(
+    new ClusterTest(
+      features = Array(
+        new ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 0))),
+    new ClusterTest(
+      features = Array(
+        new ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 1))),
+    new ClusterTest(
+      features = Array(
+        new ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2))),
+  ))
+  def testTransactionWithInvalidSend(cluster: ClusterInstance): Unit = {
+    val topic = new NewTopic("foobar", 1, 1.toShort).configs(Collections.singletonMap(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "1"))
+    val admin = cluster.admin()
+    var txnVersion: Short = 0
+    try {
+      txnVersion = Option(admin.describeFeatures().featureMetadata().get().finalizedFeatures().get(Feature.TRANSACTION_VERSION))
+        .map(finalizedFeatures => finalizedFeatures.maxVersionLevel())
+        .getOrElse(0)
+      admin.createTopics(List(topic).asJava)
+    } finally if (admin != null) admin.close()
+
+    val properties = new util.HashMap[String, Object]
+    properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "foobar")
+    properties.put(ProducerConfig.CLIENT_ID_CONFIG, "test")
+    properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+
+    val producer: Producer[Array[Byte], Array[Byte]] = cluster.producer(properties)
+    try {
+      producer.initTransactions()
+      producer.beginTransaction()
+      assertInstanceOf(classOf[RecordTooLargeException],
+        assertThrows(classOf[ExecutionException],
+          () => producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic.name(), "key".getBytes, "value".getBytes)).get()).getCause)
+
+      val commitError = assertThrows(classOf[KafkaException], () => producer.commitTransaction()) // fail due to last send failed
+      assertInstanceOf(classOf[RecordTooLargeException], commitError.getCause)
+
+      if (txnVersion == 2) {
+        producer.abortTransaction() // success under transaction version 2
+      }
     } finally if (producer != null) producer.close()
   }
 
