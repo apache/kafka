@@ -1231,7 +1231,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireSingleBatchWithBatchSizeAndEndOffsetAheadBatchFirstOffset() {
+    public void testAcquireSingleBatchWithBatchSizeAndEndOffsetLargerThanBatchFirstOffset() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         sharePartition.updateCacheAndOffsets(8L);
 
@@ -1252,7 +1252,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireWithBatchSizeAndEndOffsetAheadBatchFirstOffset() {
+    public void testAcquireWithBatchSizeAndEndOffsetLargerThanBatchFirstOffset() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         sharePartition.updateCacheAndOffsets(4L);
 
@@ -1284,7 +1284,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireBatchSkipWithBatchSizeAndEndOffsetAheadFirstBatch() {
+    public void testAcquireBatchSkipWithBatchSizeAndEndOffsetLargerThanFirstBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         sharePartition.updateCacheAndOffsets(12L);
 
