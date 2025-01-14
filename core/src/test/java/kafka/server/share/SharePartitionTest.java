@@ -1149,7 +1149,7 @@ public class SharePartitionTest {
         memoryRecordsBuilder(buffer, 5, 2).close();
         memoryRecordsBuilder(buffer, 5, 10).close();
         memoryRecordsBuilder(buffer, 7, 15).close();
-        memoryRecordsBuilder(buffer, 5, 22).close();
+        memoryRecordsBuilder(buffer, 6, 22).close();
         buffer.flip();
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
 
@@ -1159,15 +1159,15 @@ public class SharePartitionTest {
             100,
             new FetchPartitionData(Errors.NONE, 20, 0, records,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            25 /* Gap of 3 records will also be added to first batch */);
+            26 /* Gap of 3 records will also be added to first batch */);
 
-        // Fetch expected records from 3 batches, but change the first expected record to include gap offsets.
+        // Fetch expected records from 4 batches, but change the first expected record to include gap offsets.
         List<AcquiredRecords> expectedAcquiredRecords = expectedAcquiredRecords(records, 1);
         expectedAcquiredRecords.remove(0);
         expectedAcquiredRecords.addAll(0, expectedAcquiredRecord(2, 9, 1));
 
         assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
-        assertEquals(27, sharePartition.nextFetchOffset());
+        assertEquals(28, sharePartition.nextFetchOffset());
         assertEquals(4, sharePartition.cachedState().size());
         assertTrue(sharePartition.cachedState().containsKey(2L));
         assertTrue(sharePartition.cachedState().containsKey(10L));
@@ -1194,8 +1194,9 @@ public class SharePartitionTest {
     @Test
     public void testAcquireWithBatchSizeAndMaxFetchRecords() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
-        // Create 2 batches of records.
+        // Create 3 batches of records.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
+        memoryRecordsBuilder(buffer, 5, 0).close();
         memoryRecordsBuilder(buffer, 15, 5).close();
         memoryRecordsBuilder(buffer, 15, 20).close();
         buffer.flip();
@@ -1206,16 +1207,26 @@ public class SharePartitionTest {
                 10,
                 new FetchPartitionData(Errors.NONE, 20, 0, records,
                     Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            15);
+            20);
 
-        assertArrayEquals(expectedAcquiredRecord(5, 19, 1).toArray(), acquiredRecordsList.toArray());
+        List<AcquiredRecords> expectedAcquiredRecords = expectedAcquiredRecords(records, 1);
+        // The last batch should be ignored as it exceeds the max fetch records.
+        expectedAcquiredRecords.remove(2);
+
+        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
         assertEquals(20, sharePartition.nextFetchOffset());
-        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(2, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(4, sharePartition.cachedState().get(0L).lastOffset());
         assertEquals(5, sharePartition.cachedState().get(5L).firstOffset());
         assertEquals(19, sharePartition.cachedState().get(5L).lastOffset());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
         assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(0L).offsetState());
         assertNull(sharePartition.cachedState().get(5L).offsetState());
     }
 
