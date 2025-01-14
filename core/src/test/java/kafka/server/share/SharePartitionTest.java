@@ -1284,7 +1284,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireSkipBatchWithBatchSizeAndEndOffsetAheadBatchOffset() {
+    public void testAcquireBatchSkipWithBatchSizeAndEndOffsetAheadFirstBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         sharePartition.updateCacheAndOffsets(12L);
 
@@ -1303,7 +1303,8 @@ public class SharePartitionTest {
                     Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
             5 /* Acquisition of records starts post endOffset */);
 
-        // Fetch expected single batch, but change the first offset as per endOffset.
+        // First batch should be skipped and fetch should result a single batch (second batch), but
+        // change the first offset of acquired batch as per endOffset.
         assertArrayEquals(expectedAcquiredRecord(12, 16, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(17, sharePartition.nextFetchOffset());
         assertEquals(1, sharePartition.cachedState().size());
