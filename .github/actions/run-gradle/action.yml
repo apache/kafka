@@ -56,7 +56,7 @@ runs:
         set +e
         ./.github/scripts/thread-dump.sh &
         timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
-        --info -Dorg.gradle.caching.debug=true \
+        -Dorg.gradle.caching.debug=true \
         -PtestLoggingEvents=started,passed,skipped,failed \
         -PmaxParallelForks=4 \
         -PmaxTestRetries=1 -PmaxTestRetryFailures=3 \
