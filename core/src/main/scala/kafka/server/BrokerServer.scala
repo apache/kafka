@@ -464,13 +464,13 @@ class BrokerServer(
         authorizer = authorizer,
         quotas = quotaManagers,
         fetchManager = fetchManager,
-        sharePartitionManager = Some(sharePartitionManager),
+        sharePartitionManager = sharePartitionManager,
         brokerTopicStats = brokerTopicStats,
         clusterId = clusterId,
         time = time,
         tokenManager = tokenManager,
         apiVersionManager = apiVersionManager,
-        clientMetricsManager = Some(clientMetricsManager))
+        clientMetricsManager = clientMetricsManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,

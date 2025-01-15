@@ -214,8 +214,6 @@ class KafkaApisTest extends Logging {
       true,
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
 
-    val clientMetricsManagerOpt = if (raftSupport) Some(clientMetricsManager) else None
-
     when(groupCoordinator.isNewGroupCoordinator).thenReturn(config.isNewGroupCoordinatorEnabled)
     setupFeatures(featureVersions)
 
@@ -235,13 +233,13 @@ class KafkaApisTest extends Logging {
       authorizer = authorizer,
       quotas = quotas,
       fetchManager = fetchManager,
-      sharePartitionManager = Some(sharePartitionManager),
+      sharePartitionManager = sharePartitionManager,
       brokerTopicStats = brokerTopicStats,
       clusterId = clusterId,
       time = time,
       tokenManager = null,
       apiVersionManager = apiVersionManager,
-      clientMetricsManager = clientMetricsManagerOpt)
+      clientMetricsManager = clientMetricsManager)
   }
 
   private def setupFeatures(featureVersions: Seq[FeatureVersion]): Unit = {
