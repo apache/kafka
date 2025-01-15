@@ -107,9 +107,6 @@ class ProducerIntegrationTest {
     val admin = cluster.admin()
     val producer: Producer[Array[Byte], Array[Byte]] = cluster.producer(properties)
     try {
-      val txnVersion: Short = Option(admin.describeFeatures().featureMetadata().get().finalizedFeatures().get(Feature.TRANSACTION_VERSION.featureName()))
-        .map(finalizedFeatures => finalizedFeatures.maxVersionLevel())
-        .getOrElse(0)
       admin.createTopics(List(topic).asJava)
 
       producer.initTransactions()
