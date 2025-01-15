@@ -54,7 +54,7 @@ import java.util.stream.Stream;
  * <ul>
  *   <li>Keeping member state</li>
  *   <li>Keeping assignment for the member</li>
- *   <li>Computing assignment for the group if the member is required to do so</li>
+ *   <li>Reconciles assignment, for example if tasks need to be revoked before other tasks can be assigned</li>
  *   <li>Calling the assignment and revocation callbacks on the Streams client</li>
  * </ul>
  */
