@@ -183,9 +183,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   /**
    * Initialize topic ID information for the log by maintaining the partition metadata file and setting the in-memory _topicId.
    * Set _topicId based on a few scenarios:
-   *   - Recover topic ID if present and topic IDs are supported. Ensure we do not try to assign a provided topicId that is inconsistent
+   *   - Recover topic ID if present. Ensure we do not try to assign a provided topicId that is inconsistent
    *     with the ID on file.
-   *   - If we were provided a topic ID when creating the log, partition metadata files are supported, and one does not yet exist
+   *   - If we were provided a topic ID when creating the log and one does not yet exist
    *     set _topicId and write to the partition metadata file.
    */
   private def initializeTopicId(): Unit =  {
