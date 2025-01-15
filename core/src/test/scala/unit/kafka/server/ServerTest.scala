@@ -29,7 +29,7 @@ import scala.jdk.CollectionConverters._
 class ServerTest {
 
   @Test
-  def testCreateSelfManagedKafkaMetricsContext(): Unit = {
+  def testCreateKafkaMetricsContext(): Unit = {
     val nodeId = 0
     val clusterId = Uuid.randomUuid().toString
 

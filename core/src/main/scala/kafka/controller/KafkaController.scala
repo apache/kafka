@@ -416,7 +416,7 @@ class KafkaController(val config: KafkaConfig,
           FeatureZNodeStatus.Enabled,
           brokerFeatures.defaultFinalizedFeatures.asScala.map { case (k, v) => (k, v.shortValue()) }
         ))
-      featureCache.waitUntilFeatureEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
+      featureCache.waitUntilFeatureEpochOrThrow(newVersion, 18000)
     } else {
       val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
       val newFeatures = existingFeatureZNode.status match {
@@ -431,7 +431,7 @@ class KafkaController(val config: KafkaConfig,
       val newFeatureZNode = FeatureZNode(config.interBrokerProtocolVersion, FeatureZNodeStatus.Enabled, newFeatures)
       if (!newFeatureZNode.equals(existingFeatureZNode)) {
         val newVersion = updateFeatureZNode(newFeatureZNode)
-        featureCache.waitUntilFeatureEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
+        featureCache.waitUntilFeatureEpochOrThrow(newVersion, 18000)
       }
     }
   }

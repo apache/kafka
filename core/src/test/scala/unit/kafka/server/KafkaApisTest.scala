@@ -166,7 +166,6 @@ class KafkaApisTest extends Logging {
     properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
 
     overrideProperties.foreach( p => properties.put(p._1, p._2))
-    TestUtils.setIbpVersion(properties, interBrokerProtocolVersion)
     val config = new KafkaConfig(properties)
 
     val listenerType = ListenerType.BROKER
