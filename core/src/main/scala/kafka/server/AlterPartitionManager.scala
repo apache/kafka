@@ -40,9 +40,8 @@ import scala.collection.mutable.ListBuffer
 import scala.jdk.OptionConverters.RichOptional
 
 /**
- * Handles updating the ISR by sending AlterPartition requests to the controller (as of 2.7) or by updating ZK directly
- * (prior to 2.7). Updating the ISR is an asynchronous operation, so partitions will learn about the result of their
- * request through a callback.
+ * Handles updating the ISR by sending AlterPartition requests to the controller. Updating the ISR is an asynchronous 
+ * operation, so partitions will learn about the result of their request through a callback.
  *
  * Note that ISR state changes can still be initiated by the controller and sent to the partitions via LeaderAndIsr
  * requests.
@@ -54,22 +53,20 @@ trait AlterPartitionManager {
 
   def submit(
     topicIdPartition: TopicIdPartition,
-    leaderAndIsr: LeaderAndIsr,
-    controllerEpoch: Int
+    leaderAndIsr: LeaderAndIsr
   ): CompletableFuture[LeaderAndIsr]
 }
 
 case class AlterPartitionItem(
   topicIdPartition: TopicIdPartition,
   leaderAndIsr: LeaderAndIsr,
-  future: CompletableFuture[LeaderAndIsr],
-  controllerEpoch: Int // controllerEpoch needed for `ZkAlterPartitionManager`
+  future: CompletableFuture[LeaderAndIsr]
 )
 
 object AlterPartitionManager {
 
   /**
-   * Factory to AlterPartition based implementation, used when IBP >= 2.7-IV2
+   * Factory to AlterPartition based implementation
    */
   def apply(
     config: KafkaConfig,
@@ -112,18 +109,11 @@ class DefaultAlterPartitionManager(
 
   // Used to allow only one pending ISR update per partition (visible for testing).
   // Note that we key items by TopicPartition despite using TopicIdPartition while
-  // submitting changes. We do this to ensure that topics with the same name but
-  // with a different topic id or no topic id collide here. There are two cases to
-  // consider:
-  // 1) When the cluster is upgraded from IBP < 2.8 to IBP >= 2.8, the ZK controller
-  //    assigns topic ids to the partitions. So partitions will start sending updates
-  //    with a topic id while they might still have updates without topic ids in this
-  //    Map. This would break the contract of only allowing one pending ISR update per
-  //    partition.
-  // 2) When a topic is deleted and re-created, we cannot have two entries in this Map
-  //    especially if we cannot use an AlterPartition request version which supports
-  //    topic ids in the end because the two updates with the same name would be merged
-  //    together.
+  // submitting changes. This is done to ensure that topics with the same name but
+  // with a different topic id or no topic id collide here. When a topic is deleted 
+  // and re-created, we cannot have two entries in this Map especially if we cannot 
+  // use an AlterPartition request version which supports topic ids in the end because 
+  // the two updates with the same name would be merged together.
   private[server] val unsentIsrUpdates: util.Map[TopicPartition, AlterPartitionItem] = new ConcurrentHashMap[TopicPartition, AlterPartitionItem]()
 
   // Used to allow only one in-flight request at a time
@@ -139,11 +129,10 @@ class DefaultAlterPartitionManager(
 
   override def submit(
     topicIdPartition: TopicIdPartition,
-    leaderAndIsr: LeaderAndIsr,
-    controllerEpoch: Int
+    leaderAndIsr: LeaderAndIsr
   ): CompletableFuture[LeaderAndIsr] = {
     val future = new CompletableFuture[LeaderAndIsr]()
-    val alterPartitionItem = AlterPartitionItem(topicIdPartition, leaderAndIsr, future, controllerEpoch)
+    val alterPartitionItem = AlterPartitionItem(topicIdPartition, leaderAndIsr, future)
     val enqueued = unsentIsrUpdates.putIfAbsent(alterPartitionItem.topicIdPartition.topicPartition, alterPartitionItem) == null
     if (enqueued) {
       maybePropagateIsrChanges()
