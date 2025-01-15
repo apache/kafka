@@ -2632,7 +2632,6 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
         }
       case None =>
-        info("Received get telemetry client request for zookeeper based cluster")
         requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     }
   }
@@ -2649,7 +2648,6 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
         }
       case None =>
-        info("Received push telemetry client request for zookeeper based cluster")
         requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     }
   }
@@ -2669,7 +2667,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case None =>
           // This should never happen as  based cluster calls should get rejected earlier itself,
           // but we should handle it gracefully.
-          info("Received list client metrics resources request for zookeeper based cluster")
           requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       }
     }
@@ -2767,7 +2764,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       case Some(manager) => manager
       case None =>
         // The API is not supported when the SharePartitionManager is not defined on the broker
-        info("Received share fetch request for zookeeper based cluster")
         requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
         return
     }
@@ -3087,7 +3083,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       case Some(manager) => manager
       case None =>
         // The API is not supported when the SharePartitionManager is not defined on the broker
-        info("Received share acknowledge request for zookeeper based cluster")
         requestHelper.sendMaybeThrottle(request,
           shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
         return
