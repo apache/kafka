@@ -1248,16 +1248,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             clearAll();
             return res;
         }
-    }
 
-    private void maybeFailOnCoordinatorFatalError() {
-        coordinatorRequestManager.fatalError().ifPresent(error -> {
-                log.warn("Failing all unsent commit requests and offset fetches because of coordinator fatal error. ", error);
-                unsentOffsetCommits.forEach(request -> request.future.completeExceptionally(error));
-                unsentOffsetFetches.forEach(request -> request.future.completeExceptionally(error));
-                clearAll();
-            }
-        );
+        private void maybeFailOnCoordinatorFatalError() {
+            coordinatorRequestManager.fatalError().ifPresent(error -> {
+                    log.warn("Failing all unsent commit requests and offset fetches because of coordinator fatal error. ", error);
+                    unsentOffsetCommits.forEach(request -> request.future.completeExceptionally(error));
+                    unsentOffsetFetches.forEach(request -> request.future.completeExceptionally(error));
+                    clearAll();
+                }
+            );
+        }
     }
 
     /**
