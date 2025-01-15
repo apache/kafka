@@ -1269,8 +1269,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
             bufferStoreName = Optional.of(name + "-Buffer");
-            final RocksDBTimeOrderedKeyValueBuffer.Builder<Object, Object> storeBuilder =
-                    new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName.get(), joined.gracePeriod(), name);
+            final RocksDBTimeOrderedKeyValueBuffer.Builder<K, V> storeBuilder =
+                    new RocksDBTimeOrderedKeyValueBuffer.Builder<>(
+                        bufferStoreName.get(),
+                        joinedInternal.keySerde() != null ? joinedInternal.keySerde() : keySerde,
+                        joinedInternal.valueSerde() != null ? joinedInternal.valueSerde() : valueSerde,
+                        joined.gracePeriod(),
+                        name
+                    );
             builder.addStateStore(new StoreBuilderWrapper(storeBuilder));
         }
 

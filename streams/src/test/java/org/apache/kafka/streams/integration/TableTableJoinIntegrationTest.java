@@ -56,7 +56,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Before
     public void prepareTopology() throws InterruptedException {
-        super.prepareEnvironment();
+        super.prepareEnvironment(true);
 
         appID = "table-table-join-integration-test";
 

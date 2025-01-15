@@ -56,7 +56,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
 
     @Before
     public void prepareTopology() throws InterruptedException {
-        super.prepareEnvironment();
+        super.prepareEnvironment(true);
 
         appID = "stream-stream-join-integration-test";
 
