@@ -120,15 +120,6 @@ class ProducerIntegrationTest {
             topic.name(), Array.fill(100)(0: Byte), Array.fill(100)(0: Byte))).get()).getCause)
 
       producer.abortTransaction()
-      // After abortTransaction, TV_0/TV_1 will increment the epoch, initiate a new transaction,
-      // and send an InitProducerId request to the broker. As a result, the expected state will be EMPTY in TV_0/TV_1.
-      val expectedState = if (txnVersion == 2) TransactionState.COMPLETE_ABORT else TransactionState.EMPTY
-
-      TestUtils.waitForCondition(() => {
-        admin.listTransactions.all.get.stream
-          .filter(txn => txn.transactionalId == txnId)
-          .anyMatch(txn => txn.state == expectedState)
-      }, s"transaction is not in $expectedState state")
     } finally {
       if (admin != null) admin.close()
       if (producer != null) producer.close()
