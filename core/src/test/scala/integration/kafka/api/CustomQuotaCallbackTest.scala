@@ -148,13 +148,12 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     // Create large number of partitions on another broker, should result in throttling on first partition
     val largeTopic = "group1_largeTopic"
     createTopic(largeTopic, numPartitions = 99, leader = 0)
-    user.removeThrottleMetrics()
     user.waitForQuotaUpdate(8000, 2500, defaultRequestQuota)
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)
 
-    user.removeQuotaOverrides()
     // Remove quota override and test default quota applied with scaling based on partitions
     user = addUser("group1_user2", brokerId)
+    user.removeQuotaOverrides()
     user.waitForQuotaUpdate(defaultProduceQuota / 100, defaultConsumeQuota / 100, defaultRequestQuota)
     user.removeThrottleMetrics() // since group was throttled before
     user.produceConsume(expectProduceThrottle = false, expectConsumeThrottle = false)
@@ -371,7 +370,6 @@ object GroupedUserQuotaCallback {
   val DefaultProduceQuotaProp = "default.produce.quota"
   val DefaultFetchQuotaProp = "default.fetch.quota"
   val UnlimitedQuotaMetricTags = new util.HashMap[String, String]
-  val updateClusterMetadataCalls = new AtomicInteger
   val quotaLimitCalls = Map(
     ClientQuotaType.PRODUCE -> new AtomicInteger,
     ClientQuotaType.FETCH -> new AtomicInteger,
@@ -458,7 +456,6 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
   }
 
   override def updateClusterMetadata(cluster: Cluster): Boolean = {
-    updateClusterMetadataCalls.incrementAndGet
     val topicsByGroup = cluster.topics.asScala.groupBy(group)
 
     topicsByGroup.map { case (group, groupTopics) =>

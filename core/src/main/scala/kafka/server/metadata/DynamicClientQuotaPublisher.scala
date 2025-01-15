@@ -54,7 +54,6 @@ class DynamicClientQuotaPublisher(
       quotaManagers.clientQuotaCallback().ifPresent(clientQuotaCallback => {
         if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
           val cluster = KRaftMetadataCache.toCluster(clusterId, newImage)
-          clientQuotaCallback.updateClusterMetadata(cluster)
           if (clientQuotaCallback.updateClusterMetadata(cluster)) {
             quotaManagers.fetch.updateQuotaMetricConfigs()
             quotaManagers.produce.updateQuotaMetricConfigs()
