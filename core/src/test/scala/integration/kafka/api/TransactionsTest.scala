@@ -749,6 +749,17 @@ class TransactionsTest extends IntegrationTestHarness {
 
       org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
       // Ensure the producer transitions to abortable_error state.
+      TestUtils.waitUntilTrue(() => {
+        var failed = false
+        try {
+          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
+        } catch {
+          case e: Exception =>
+            if (e.isInstanceOf[KafkaException])
+              failed = true
+        }
+        failed
+      }, "The send request never failed as expected.")
       assertThrows(classOf[KafkaException], () => producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false)))
       producer.abortTransaction()
 
