@@ -2860,6 +2860,7 @@ project(':streams:integration-tests') {
 
   dependencies {
     implementation libs.slf4jApi
+    implementation libs.scalaLibrary
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':group-coordinator')

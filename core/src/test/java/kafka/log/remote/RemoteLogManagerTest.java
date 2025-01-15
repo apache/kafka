@@ -3682,8 +3682,41 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    public void testRLMOpsWhenMetadataIsNotReady() throws InterruptedException {
-        CountDownLatch latch = new CountDownLatch(2);
+    public void testRLMOpsWhenMetadataIsNotReady() throws InterruptedException, IOException {
+        // Recreate a remoteLogManager with default REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP (default value is 30000).
+        // The value in setup function is 100 which is too small. If the case can't run two verifyNoMoreInteractions in
+        // 100ms, the test will fail.
+        remoteLogManager.close();
+        clearInvocations(remoteLogMetadataManager, remoteStorageManager);
+        Properties props = brokerConfig;
+        props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
+        props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "30000");
+        appendRLMConfig(props);
+        config = KafkaConfig.fromProps(props);
+
+        remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+            tp -> Optional.of(mockLog),
+            (topicPartition, offset) -> currentLogStartOffset.set(offset),
+            brokerTopicStats, metrics) {
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
+            }
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
+            }
+            public RLMQuotaManager createRLMCopyQuotaManager() {
+                return rlmCopyQuotaManager;
+            }
+            public Duration quotaTimeout() {
+                return Duration.ofMillis(100);
+            }
+            @Override
+            long findLogStartOffset(TopicIdPartition topicIdPartition, UnifiedLog log) {
+                return 0L;
+            }
+        };
+
+        CountDownLatch latch = new CountDownLatch(3); // there are 3 RLMTasks, so setting the count to 3
         when(remoteLogMetadataManager.isReady(any(TopicIdPartition.class)))
                 .thenAnswer(ans -> {
                     latch.countDown();
