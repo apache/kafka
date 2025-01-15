@@ -279,6 +279,14 @@ class KafkaApisTest extends Logging {
     val describeConfigsResult = results.get(0)
     assertEquals(ConfigResource.Type.TOPIC.id, describeConfigsResult.resourceType)
     assertEquals(resourceName, describeConfigsResult.resourceName)
+<<<<<<< HEAD
+=======
+    val configs = describeConfigsResult.configs.asScala.filter(_.name == propName)
+    assertEquals(1, configs.length)
+    val describeConfigsResponseData = configs.head
+    assertEquals(propName, describeConfigsResponseData.name)
+    assertEquals(propValue, describeConfigsResponseData.value)
+>>>>>>> trunk
   }
 
   @Test
@@ -305,7 +313,11 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+<<<<<<< HEAD
     createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
+=======
+    createKafkaApis(authorizer = Some(authorizer), raftSupport = true).handleIncrementalAlterConfigsRequest(request)
+>>>>>>> trunk
     verify(forwardingManager, times(1)).forwardRequest(
       any(),
       any(),
@@ -383,7 +395,11 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(apiRequest)
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+<<<<<<< HEAD
     kafkaApis = createKafkaApis()
+=======
+    kafkaApis = createKafkaApis(raftSupport = true)
+>>>>>>> trunk
     kafkaApis.handleAlterConfigsRequest(request)
     verify(forwardingManager, times(1)).forwardRequest(
       any(),
@@ -405,7 +421,11 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+<<<<<<< HEAD
     kafkaApis = createKafkaApis()
+=======
+    kafkaApis = createKafkaApis(raftSupport = true)
+>>>>>>> trunk
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
     verify(forwardingManager, times(1)).forwardRequest(
       any(),
@@ -559,7 +579,11 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+<<<<<<< HEAD
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+=======
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer), raftSupport = true)
+>>>>>>> trunk
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
 
     verify(authorizer, times(1)).authorize(any(), any())
@@ -9523,34 +9547,6 @@ class KafkaApisTest extends Logging {
     assertEquals("foo", transactionState.transactionalId)
     assertEquals(12345L, transactionState.producerId)
     assertEquals("Ongoing", transactionState.transactionState)
-  }
-
-  private def createMockRequest(): RequestChannel.Request = {
-    val request: RequestChannel.Request = mock(classOf[RequestChannel.Request])
-    val requestHeader: RequestHeader = mock(classOf[RequestHeader])
-    when(request.header).thenReturn(requestHeader)
-    when(requestHeader.apiKey()).thenReturn(ApiKeys.values().head)
-    request
-  }
-
-  private def verifyShouldAlwaysForwardErrorMessage(handler: RequestChannel.Request => Unit): Unit = {
-    val request = createMockRequest()
-    val e = assertThrows(classOf[UnsupportedVersionException], () => handler(request))
-    assertEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardCreateAcls(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis()
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleCreateAcls)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardDeleteAcls(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis()
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleDeleteAcls)
   }
 
   @Test

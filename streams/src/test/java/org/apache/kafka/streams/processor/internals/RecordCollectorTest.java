@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -1804,6 +1805,31 @@ public class RecordCollectorTest {
 
             assertThat(error.getCause(), instanceOf(ClassCastException.class));
         }
+    }
+
+    @Test
+    public void shouldSwallowTransactionAbortedExceptionAndNotCallProductionExceptionHandler() {
+        final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(
+            cluster,
+            false,
+            new org.apache.kafka.clients.producer.RoundRobinPartitioner(),
+            new ByteArraySerializer(),
+            new ByteArraySerializer()
+        );
+        streamsProducer = new StreamsProducer(
+            mockProducer,
+            EXACTLY_ONCE_V2,
+            Time.SYSTEM,
+            logContext
+        );
+
+        final RecordCollector collector = newRecordCollector(new ProductionExceptionHandlerMock());
+        collector.initialize();
+
+        collector.send(topic, "key", "val", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
+        mockProducer.errorNext(new TransactionAbortedException()); // error out the send() call
+
+        collector.flush(); // need to call flush() to check for internal exceptions
     }
 
     @Test

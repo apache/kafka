@@ -2055,16 +2055,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     aclApis.handleDescribeAcls(request)
   }
 
-  def handleCreateAcls(request: RequestChannel.Request): Unit = {
-    metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-    aclApis.handleCreateAcls(request)
-  }
-
-  def handleDeleteAcls(request: RequestChannel.Request): Unit = {
-    metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-    aclApis.handleDeleteAcls(request)
-  }
-
   def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {
     val offsetForLeaderEpoch = request.body[OffsetsForLeaderEpochRequest]
     val topics = offsetForLeaderEpoch.data.topics.asScala.toSeq

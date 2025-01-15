@@ -72,8 +72,8 @@ public final class GraphGraceSearchUtil {
 
     @SuppressWarnings("rawtypes")
     private static Long extractGracePeriod(final GraphNode node) {
-        if (node instanceof StatefulProcessorNode) {
-            final ProcessorSupplier processorSupplier = ((StatefulProcessorNode) node).processorParameters().processorSupplier();
+        if (node instanceof ProcessorGraphNode) {
+            final ProcessorSupplier processorSupplier = ((ProcessorGraphNode) node).processorParameters().processorSupplier();
             if (processorSupplier instanceof KStreamWindowAggregate) {
                 final KStreamWindowAggregate kStreamWindowAggregate = (KStreamWindowAggregate) processorSupplier;
                 final Windows windows = kStreamWindowAggregate.windows();
