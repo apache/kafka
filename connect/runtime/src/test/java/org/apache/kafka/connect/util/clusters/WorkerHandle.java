@@ -114,10 +114,9 @@ public class WorkerHandle {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof WorkerHandle)) {
+        if (!(o instanceof WorkerHandle that)) {
             return false;
         }
-        WorkerHandle that = (WorkerHandle) o;
         return Objects.equals(workerName, that.workerName) &&
                 Objects.equals(worker, that.worker);
     }

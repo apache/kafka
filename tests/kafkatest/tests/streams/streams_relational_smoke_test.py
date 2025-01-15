@@ -18,8 +18,10 @@ from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import quorum
+from kafkatest.services.kafka.util import get_log4j_config_param, get_log4j_config_for_tools
 from kafkatest.services.streams import StreamsTestBaseService
 from kafkatest.tests.kafka_test import KafkaTest
+from kafkatest.version import LATEST_4_0
 
 
 class StreamsRelationalSmokeTestService(StreamsTestBaseService):
@@ -33,14 +35,15 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
         self.mode = mode
         self.nodeId = nodeId
         self.processing_guarantee = processing_guarantee
-        self.log4j_template = 'log4j_template.properties'
+        self.log4j_template = "log4j2_template.yaml" if (self.node.version >= LATEST_4_0) else "log4j_template.properties"
 
     def start_cmd(self, node):
-        return "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+        return "( export KAFKA_LOG4J_OPTS=\"%(log4j_param)s%(log4j)s\"; " \
                "INCLUDE_TEST_JARS=true %(kafka_run_class)s org.apache.kafka.streams.tests.RelationalSmokeTest " \
                " %(mode)s %(kafka)s %(nodeId)s %(processing_guarantee)s %(state_dir)s" \
                " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % {
-                   "log4j": self.LOG4J_CONFIG_FILE,
+                   "log4j_param": get_log4j_config_param(node),
+                   "log4j": get_log4j_config_for_tools(node),
                    "kafka_run_class": self.path.script("kafka-run-class.sh", node),
                    "mode": self.mode,
                    "kafka": self.kafka.bootstrap_servers(),
@@ -54,8 +57,9 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
 
     def start_node(self, node):
         node.account.mkdirs(self.PERSISTENT_ROOT)
-        node.account.create_file(self.LOG4J_CONFIG_FILE,
-                                 self.render("log4j_template.properties", log_file=self.LOG_FILE))
+        node.account.create_file(get_log4j_config_for_tools(node),
+                                 self.render("log4j2_template.yaml" if node.version >= LATEST_4_0 else "log4j_template.properties",
+                                             log_file=self.LOG_FILE))
 
         self.logger.info("Starting process on " + str(node.account))
         node.account.ssh(self.start_cmd(node))

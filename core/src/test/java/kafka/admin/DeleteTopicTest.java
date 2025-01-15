@@ -39,7 +39,6 @@ import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.metadata.BrokerState;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
@@ -374,7 +373,6 @@ public class DeleteTopicTest {
                     ),
                     0,
                     AppendOrigin.CLIENT,
-                    MetadataVersion.LATEST_PRODUCTION,
                     RequestLocal.noCaching(),
                     VerificationGuard.SENTINEL
                 );

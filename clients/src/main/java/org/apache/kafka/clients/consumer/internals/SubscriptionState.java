@@ -898,8 +898,8 @@ public class SubscriptionState {
     }
 
     /**
-     * Enable fetching and updating positions for the given partitions that were added to the
-     * assignment, but waiting for the onPartitionsAssigned callback to complete. This is
+     * Enable fetching and updating positions for the given partitions that were assigned to the
+     * consumer, but waiting for the onPartitionsAssigned callback to complete. This is
      * expected to be used by the async consumer.
      */
     public synchronized void enablePartitionsAwaitingCallback(Collection<TopicPartition> partitions) {

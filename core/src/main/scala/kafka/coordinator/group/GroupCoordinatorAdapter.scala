@@ -414,7 +414,6 @@ private[group] class GroupCoordinatorAdapter(
           partition.committedOffset,
           partition.committedLeaderEpoch,
           partition.committedMetadata,
-          partition.commitTimestamp,
           expireTimeMs
         )
       }
@@ -473,7 +472,6 @@ private[group] class GroupCoordinatorAdapter(
           partition.committedOffset,
           partition.committedLeaderEpoch,
           partition.committedMetadata,
-          OffsetCommitRequest.DEFAULT_TIMESTAMP, // means that currentTimeMs is used.
           None
         )
       }
@@ -501,7 +499,6 @@ private[group] class GroupCoordinatorAdapter(
     offset: Long,
     leaderEpoch: Int,
     metadata: String,
-    commitTimestamp: Long,
     expireTimestamp: Option[Long]
   ): OffsetAndMetadata = {
     new OffsetAndMetadata(
@@ -514,10 +511,7 @@ private[group] class GroupCoordinatorAdapter(
         case null => OffsetAndMetadata.NO_METADATA
         case metadata => metadata
       },
-      commitTimestamp match {
-        case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimeMs
-        case customTimestamp => customTimestamp
-      },
+      currentTimeMs,
       expireTimestamp match {
         case Some(timestamp) => OptionalLong.of(timestamp)
         case None => OptionalLong.empty()
@@ -587,12 +581,16 @@ private[group] class GroupCoordinatorAdapter(
     producerId: Long,
     partitions: java.lang.Iterable[TopicPartition],
     transactionResult: TransactionResult
-  ): Unit = {
-    coordinator.scheduleHandleTxnCompletion(
-      producerId,
-      partitions.asScala,
-      transactionResult
-    )
+  ): CompletableFuture[Void] = {
+    try {
+      coordinator.scheduleHandleTxnCompletion(
+        producerId,
+        partitions.asScala,
+        transactionResult
+      )
+    } catch {
+      case e: Throwable => FutureUtils.failedFuture(e)
+    }
   }
 
   override def onPartitionsDeleted(

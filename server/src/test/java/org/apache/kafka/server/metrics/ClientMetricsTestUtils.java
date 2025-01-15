@@ -32,8 +32,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -43,10 +41,10 @@ public class ClientMetricsTestUtils {
     public static final String DEFAULT_METRICS =
         "org.apache.kafka.client.producer.partition.queue.,org.apache.kafka.client.producer.partition.latency";
     public static final int DEFAULT_PUSH_INTERVAL_MS = 30 * 1000; // 30 seconds
-    public static final List<String> DEFAULT_CLIENT_MATCH_PATTERNS = Collections.unmodifiableList(Arrays.asList(
+    public static final List<String> DEFAULT_CLIENT_MATCH_PATTERNS = List.of(
         ClientMetricsConfigs.CLIENT_SOFTWARE_NAME + "=apache-kafka-java",
         ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION + "=3.5.*"
-    ));
+    );
     public static final int CLIENT_PORT = 56078;
 
     public static Properties defaultProperties() {

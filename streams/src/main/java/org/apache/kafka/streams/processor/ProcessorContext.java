@@ -35,7 +35,13 @@ import java.util.Map;
 /**
  * Processor context interface.
  */
-@SuppressWarnings("deprecation") // Not deprecating the old context, since it is used by Transformers. See KAFKA-10603.
+/* This interface was technically deprecated via KIP-478 (AK 2.7), but we did not mark it as deprecated yet,
+ *  as it's used on many other places
+ *
+ * We need to clean this all up (https://issues.apache.org/jira/browse/KAFKA-17131) and mark the interface
+ * deprecated afterward.
+ */
+@SuppressWarnings("deprecation")
 public interface ProcessorContext {
 
     /**
@@ -105,8 +111,8 @@ public interface ProcessorContext {
 
     /**
      * Schedule a periodic operation for processors. A processor may call this method during
-     * {@link Processor#init(ProcessorContext) initialization} or
-     * {@link Processor#process(Object, Object) processing} to
+     * {@link org.apache.kafka.streams.kstream.ValueTransformer#init(ProcessorContext)  initialization} or
+     * {@link org.apache.kafka.streams.kstream.ValueTransformer#transform(Object)  processing} to
      * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>
@@ -239,8 +245,8 @@ public interface ProcessorContext {
      * <p> If it is triggered while processing a record streamed from the source processor,
      * timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
      * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
-     * Note, that an upstream {@link Processor} might have set a new timestamp by calling
-     * {@link ProcessorContext#forward(Object, Object, To) forward(..., To.all().withTimestamp(...))}.
+     * Note, that an upstream {@link org.apache.kafka.streams.processor.api.Processor} might have set a new timestamp by calling
+     * {@link org.apache.kafka.streams.processor.api.ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record)}.
      * In particular, some Kafka Streams DSL operators set result record timestamps explicitly,
      * to guarantee deterministic results.
      *

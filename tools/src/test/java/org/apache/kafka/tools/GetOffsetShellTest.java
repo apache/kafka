@@ -187,9 +187,7 @@ public class GetOffsetShellTest {
         public boolean equals(Object o) {
             if (o == this) return true;
 
-            if (!(o instanceof Row)) return false;
-
-            Row r = (Row) o;
+            if (!(o instanceof Row r)) return false;
 
             return name.equals(r.name) && partition == r.partition && Objects.equals(offset, r.offset);
         }

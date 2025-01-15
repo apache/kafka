@@ -29,6 +29,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -97,21 +98,27 @@ public class ApiMessageTypeTest {
         assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 5));
     }
 
-    /**
-     * Kafka currently supports direct upgrades from 0.8 to the latest version. As such, it has to support all apis
-     * starting from version 0 and we must have schemas from the oldest version to the latest.
-     */
     @Test
     public void testAllVersionsHaveSchemas() {
         for (ApiMessageType type : ApiMessageType.values()) {
-            assertEquals(0, type.lowestSupportedVersion());
+            assertTrue(type.lowestSupportedVersion() >= 0);
 
             assertEquals(type.requestSchemas().length, type.responseSchemas().length,
                     "request and response schemas must be the same length for " + type.name());
-            for (Schema schema : type.requestSchemas())
-                assertNotNull(schema);
-            for (Schema schema : type.responseSchemas())
-                assertNotNull(schema);
+            for (int i = 0; i < type.requestSchemas().length; ++i) {
+                Schema schema = type.requestSchemas()[i];
+                if (i >= type.lowestSupportedVersion())
+                    assertNotNull(schema);
+                else
+                    assertNull(schema);
+            }
+            for (int i = 0; i < type.responseSchemas().length; ++i) {
+                Schema schema = type.responseSchemas()[i];
+                if (i >= type.lowestSupportedVersion())
+                    assertNotNull(schema);
+                else
+                    assertNull(schema);
+            }
 
             assertEquals(type.highestSupportedVersion(true) + 1, type.requestSchemas().length);
         }

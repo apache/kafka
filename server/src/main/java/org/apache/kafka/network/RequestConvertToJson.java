@@ -90,6 +90,8 @@ import org.apache.kafka.common.message.DescribeProducersRequestDataJsonConverter
 import org.apache.kafka.common.message.DescribeProducersResponseDataJsonConverter;
 import org.apache.kafka.common.message.DescribeQuorumRequestDataJsonConverter;
 import org.apache.kafka.common.message.DescribeQuorumResponseDataJsonConverter;
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestDataJsonConverter;
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseDataJsonConverter;
 import org.apache.kafka.common.message.DescribeTopicPartitionsRequestDataJsonConverter;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseDataJsonConverter;
 import org.apache.kafka.common.message.DescribeTransactionsRequestDataJsonConverter;
@@ -175,6 +177,10 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatRequestDataJsonConvert
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseDataJsonConverter;
 import org.apache.kafka.common.message.StopReplicaRequestDataJsonConverter;
 import org.apache.kafka.common.message.StopReplicaResponseDataJsonConverter;
+import org.apache.kafka.common.message.StreamsGroupDescribeRequestDataJsonConverter;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseDataJsonConverter;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestDataJsonConverter;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseDataJsonConverter;
 import org.apache.kafka.common.message.SyncGroupRequestDataJsonConverter;
 import org.apache.kafka.common.message.SyncGroupResponseDataJsonConverter;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestDataJsonConverter;
@@ -270,6 +276,8 @@ import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
+import org.apache.kafka.common.requests.DescribeShareGroupOffsetsRequest;
+import org.apache.kafka.common.requests.DescribeShareGroupOffsetsResponse;
 import org.apache.kafka.common.requests.DescribeTopicPartitionsRequest;
 import org.apache.kafka.common.requests.DescribeTopicPartitionsResponse;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
@@ -356,6 +364,10 @@ import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.StopReplicaRequest;
 import org.apache.kafka.common.requests.StopReplicaResponse;
+import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
+import org.apache.kafka.common.requests.StreamsGroupDescribeResponse;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
@@ -393,6 +405,8 @@ public class RequestConvertToJson {
                 return AddOffsetsToTxnRequestDataJsonConverter.write(((AddOffsetsToTxnRequest) request).data(), request.version());
             case ADD_PARTITIONS_TO_TXN:
                 return AddPartitionsToTxnRequestDataJsonConverter.write(((AddPartitionsToTxnRequest) request).data(), request.version());
+            case ADD_RAFT_VOTER:
+                return AddRaftVoterRequestDataJsonConverter.write(((AddRaftVoterRequest) request).data(), request.version());
             case ALLOCATE_PRODUCER_IDS:
                 return AllocateProducerIdsRequestDataJsonConverter.write(((AllocateProducerIdsRequest) request).data(), request.version());
             case ALTER_CLIENT_QUOTAS:
@@ -461,6 +475,8 @@ public class RequestConvertToJson {
                 return DescribeProducersRequestDataJsonConverter.write(((DescribeProducersRequest) request).data(), request.version());
             case DESCRIBE_QUORUM:
                 return DescribeQuorumRequestDataJsonConverter.write(((DescribeQuorumRequest) request).data(), request.version());
+            case DESCRIBE_SHARE_GROUP_OFFSETS:
+                return DescribeShareGroupOffsetsRequestDataJsonConverter.write(((DescribeShareGroupOffsetsRequest) request).data(), request.version());
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsRequestDataJsonConverter.write(((DescribeTopicPartitionsRequest) request).data(), request.version());
             case DESCRIBE_TRANSACTIONS:
@@ -527,6 +543,8 @@ public class RequestConvertToJson {
                 return ReadShareGroupStateRequestDataJsonConverter.write(((ReadShareGroupStateRequest) request).data(), request.version());
             case READ_SHARE_GROUP_STATE_SUMMARY:
                 return ReadShareGroupStateSummaryRequestDataJsonConverter.write(((ReadShareGroupStateSummaryRequest) request).data(), request.version());
+            case REMOVE_RAFT_VOTER:
+                return RemoveRaftVoterRequestDataJsonConverter.write(((RemoveRaftVoterRequest) request).data(), request.version());
             case RENEW_DELEGATION_TOKEN:
                 return RenewDelegationTokenRequestDataJsonConverter.write(((RenewDelegationTokenRequest) request).data(), request.version());
             case SASL_AUTHENTICATE:
@@ -541,6 +559,10 @@ public class RequestConvertToJson {
                 return ShareGroupDescribeRequestDataJsonConverter.write(((ShareGroupDescribeRequest) request).data(), request.version());
             case SHARE_GROUP_HEARTBEAT:
                 return ShareGroupHeartbeatRequestDataJsonConverter.write(((ShareGroupHeartbeatRequest) request).data(), request.version());
+            case STREAMS_GROUP_DESCRIBE:
+                return StreamsGroupDescribeRequestDataJsonConverter.write(((StreamsGroupDescribeRequest) request).data(), request.version());
+            case STREAMS_GROUP_HEARTBEAT:
+                return StreamsGroupHeartbeatRequestDataJsonConverter.write(((StreamsGroupHeartbeatRequest) request).data(), request.version());
             case STOP_REPLICA:
                 return StopReplicaRequestDataJsonConverter.write(((StopReplicaRequest) request).data(), request.version());
             case SYNC_GROUP:
@@ -553,18 +575,14 @@ public class RequestConvertToJson {
                 return UpdateFeaturesRequestDataJsonConverter.write(((UpdateFeaturesRequest) request).data(), request.version());
             case UPDATE_METADATA:
                 return UpdateMetadataRequestDataJsonConverter.write(((UpdateMetadataRequest) request).data(), request.version());
+            case UPDATE_RAFT_VOTER:
+                return UpdateRaftVoterRequestDataJsonConverter.write(((UpdateRaftVoterRequest) request).data(), request.version());
             case VOTE:
                 return VoteRequestDataJsonConverter.write(((VoteRequest) request).data(), request.version());
             case WRITE_SHARE_GROUP_STATE:
                 return WriteShareGroupStateRequestDataJsonConverter.write(((WriteShareGroupStateRequest) request).data(), request.version());
             case WRITE_TXN_MARKERS:
                 return WriteTxnMarkersRequestDataJsonConverter.write(((WriteTxnMarkersRequest) request).data(), request.version());
-            case ADD_RAFT_VOTER:
-                return AddRaftVoterRequestDataJsonConverter.write(((AddRaftVoterRequest) request).data(), request.version());
-            case REMOVE_RAFT_VOTER:
-                return RemoveRaftVoterRequestDataJsonConverter.write(((RemoveRaftVoterRequest) request).data(), request.version());
-            case UPDATE_RAFT_VOTER:
-                return UpdateRaftVoterRequestDataJsonConverter.write(((UpdateRaftVoterRequest) request).data(), request.version());
             default:
                 throw new IllegalStateException("ApiKey " + request.apiKey() + " is not currently handled in `request`, the " +
                     "code should be updated to do so.");
@@ -577,6 +595,8 @@ public class RequestConvertToJson {
                 return AddOffsetsToTxnResponseDataJsonConverter.write(((AddOffsetsToTxnResponse) response).data(), version);
             case ADD_PARTITIONS_TO_TXN:
                 return AddPartitionsToTxnResponseDataJsonConverter.write(((AddPartitionsToTxnResponse) response).data(), version);
+            case ADD_RAFT_VOTER:
+                return AddRaftVoterResponseDataJsonConverter.write(((AddRaftVoterResponse) response).data(), version);
             case ALLOCATE_PRODUCER_IDS:
                 return AllocateProducerIdsResponseDataJsonConverter.write(((AllocateProducerIdsResponse) response).data(), version);
             case ALTER_CLIENT_QUOTAS:
@@ -645,6 +665,8 @@ public class RequestConvertToJson {
                 return DescribeProducersResponseDataJsonConverter.write(((DescribeProducersResponse) response).data(), version);
             case DESCRIBE_QUORUM:
                 return DescribeQuorumResponseDataJsonConverter.write(((DescribeQuorumResponse) response).data(), version);
+            case DESCRIBE_SHARE_GROUP_OFFSETS:
+                return DescribeShareGroupOffsetsResponseDataJsonConverter.write(((DescribeShareGroupOffsetsResponse) response).data(), version);
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsResponseDataJsonConverter.write(((DescribeTopicPartitionsResponse) response).data(), version);
             case DESCRIBE_TRANSACTIONS:
@@ -711,6 +733,8 @@ public class RequestConvertToJson {
                 return ReadShareGroupStateResponseDataJsonConverter.write(((ReadShareGroupStateResponse) response).data(), version);
             case READ_SHARE_GROUP_STATE_SUMMARY:
                 return ReadShareGroupStateSummaryResponseDataJsonConverter.write(((ReadShareGroupStateSummaryResponse) response).data(), version);
+            case REMOVE_RAFT_VOTER:
+                return RemoveRaftVoterResponseDataJsonConverter.write(((RemoveRaftVoterResponse) response).data(), version);
             case RENEW_DELEGATION_TOKEN:
                 return RenewDelegationTokenResponseDataJsonConverter.write(((RenewDelegationTokenResponse) response).data(), version);
             case SASL_AUTHENTICATE:
@@ -725,6 +749,10 @@ public class RequestConvertToJson {
                 return ShareGroupDescribeResponseDataJsonConverter.write(((ShareGroupDescribeResponse) response).data(), version);
             case SHARE_GROUP_HEARTBEAT:
                 return ShareGroupHeartbeatResponseDataJsonConverter.write(((ShareGroupHeartbeatResponse) response).data(), version);
+            case STREAMS_GROUP_DESCRIBE:
+                return StreamsGroupDescribeResponseDataJsonConverter.write(((StreamsGroupDescribeResponse) response).data(), version);
+            case STREAMS_GROUP_HEARTBEAT:
+                return StreamsGroupHeartbeatResponseDataJsonConverter.write(((StreamsGroupHeartbeatResponse) response).data(), version);
             case STOP_REPLICA:
                 return StopReplicaResponseDataJsonConverter.write(((StopReplicaResponse) response).data(), version);
             case SYNC_GROUP:
@@ -737,18 +765,14 @@ public class RequestConvertToJson {
                 return UpdateFeaturesResponseDataJsonConverter.write(((UpdateFeaturesResponse) response).data(), version);
             case UPDATE_METADATA:
                 return UpdateMetadataResponseDataJsonConverter.write(((UpdateMetadataResponse) response).data(), version);
+            case UPDATE_RAFT_VOTER:
+                return UpdateRaftVoterResponseDataJsonConverter.write(((UpdateRaftVoterResponse) response).data(), version);
             case VOTE:
                 return VoteResponseDataJsonConverter.write(((VoteResponse) response).data(), version);
             case WRITE_SHARE_GROUP_STATE:
                 return WriteShareGroupStateResponseDataJsonConverter.write(((WriteShareGroupStateResponse) response).data(), version);
             case WRITE_TXN_MARKERS:
                 return WriteTxnMarkersResponseDataJsonConverter.write(((WriteTxnMarkersResponse) response).data(), version);
-            case ADD_RAFT_VOTER:
-                return AddRaftVoterResponseDataJsonConverter.write(((AddRaftVoterResponse) response).data(), version);
-            case REMOVE_RAFT_VOTER:
-                return RemoveRaftVoterResponseDataJsonConverter.write(((RemoveRaftVoterResponse) response).data(), version);
-            case UPDATE_RAFT_VOTER:
-                return UpdateRaftVoterResponseDataJsonConverter.write(((UpdateRaftVoterResponse) response).data(), version);
             default:
                 throw new IllegalStateException("ApiKey " + response.apiKey() + " is not currently handled in `response`, the " +
                     "code should be updated to do so.");
@@ -760,7 +784,7 @@ public class RequestConvertToJson {
             header.data(), header.headerVersion(), false
         );
         node.set("requestApiKeyName", new TextNode(header.apiKey().toString()));
-        if (header.apiKey().isVersionDeprecated(header.apiVersion())) {
+        if (header.isApiVersionDeprecated()) {
             node.set("requestApiVersionDeprecated", BooleanNode.TRUE);
         }
         return node;

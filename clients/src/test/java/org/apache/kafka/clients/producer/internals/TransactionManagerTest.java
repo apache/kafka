@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortableException;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -747,7 +748,7 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         Future<RecordMetadata> responseFuture1 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
-                "1".getBytes(), "1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false, time.milliseconds(),
+                "1".getBytes(), "1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, time.milliseconds(),
                 TestUtils.singletonCluster()).future;
         sender.runOnce();
         assertEquals(1, transactionManager.sequenceNumber(tp0));
@@ -778,7 +779,7 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         Future<RecordMetadata> responseFuture2 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
-                "2".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false, time.milliseconds(),
+                "2".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, time.milliseconds(),
                 TestUtils.singletonCluster()).future;
         sender.runOnce();
         sender.runOnce();
@@ -947,18 +948,20 @@ public class TransactionManagerTest {
 
         TransactionalRequestResult retryResult = transactionManager.beginCommit();
         assertTrue(transactionManager.hasOngoingTransaction());
-        assertFalse(transactionManager.isTransactionV2Enabled());
+        assertTrue(transactionManager.isTransactionV2Enabled());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
+        prepareInitPidResponse(Errors.NONE, false, producerId, (short) (epoch + 1));
         runUntil(() -> !transactionManager.hasOngoingTransaction());
         runUntil(retryResult::isCompleted);
         retryResult.await();
         runUntil(retryResult::isAcked);
         assertFalse(transactionManager.hasOngoingTransaction());
 
-        // After restart the transaction, the V2 is enabled.
+        // After restart the transaction, the V2 is still enabled and epoch is bumped.
         transactionManager.beginTransaction();
         assertTrue(transactionManager.isTransactionV2Enabled());
+        assertEquals(epoch + 1, transactionManager.producerIdAndEpoch().epoch);
     }
 
     @Test
@@ -1527,8 +1530,8 @@ public class TransactionManagerTest {
         assertAbortableError(TopicAuthorizationException.class);
         sender.runOnce();
 
-        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
-        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
+        TestUtils.assertFutureThrows(firstPartitionAppend, TransactionAbortedException.class);
+        TestUtils.assertFutureThrows(secondPartitionAppend, TransactionAbortedException.class);
     }
 
     @Test
@@ -1575,8 +1578,8 @@ public class TransactionManagerTest {
         // the pending transaction commit.
         sender.runOnce();
         assertTrue(commitResult.isCompleted());
-        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
-        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
+        TestUtils.assertFutureThrows(firstPartitionAppend, TopicAuthorizationException.class);
+        TestUtils.assertFutureThrows(secondPartitionAppend, TopicAuthorizationException.class);
         assertInstanceOf(TopicAuthorizationException.class, commitResult.error());
     }
 
@@ -2373,7 +2376,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        TestUtils.assertFutureThrows(responseFuture, KafkaException.class);
+        TestUtils.assertFutureThrows(responseFuture, TransactionAbortedException.class);
     }
 
     @Test
@@ -2399,7 +2402,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        TestUtils.assertFutureThrows(responseFuture, KafkaException.class);
+        TestUtils.assertFutureThrows(responseFuture, TransactionAbortedException.class);
     }
 
     @Test
@@ -3976,7 +3979,7 @@ public class TransactionManagerTest {
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
         final long nowMs = time.milliseconds();
         return accumulator.append(tp.topic(), tp.partition(), nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,
-                null, MAX_BLOCK_TIMEOUT, false, nowMs, TestUtils.singletonCluster()).future;
+                null, MAX_BLOCK_TIMEOUT, nowMs, TestUtils.singletonCluster()).future;
     }
 
     private void verifyCommitOrAbortTransactionRetriable(TransactionResult firstTransactionResult,
@@ -4319,6 +4322,7 @@ public class TransactionManagerTest {
 
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
+        transactionManager.maybeUpdateTransactionV2Enabled(true);
 
         result.await();
         assertTrue(result.isSuccessful());

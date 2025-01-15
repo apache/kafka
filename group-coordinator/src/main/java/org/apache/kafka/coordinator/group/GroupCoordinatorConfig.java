@@ -82,7 +82,7 @@ public class GroupCoordinatorConfig {
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
         "wait for writes to accumulate before flushing them to disk. Transactional writes are not accumulated.";
-    public static final int GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT = 10;
+    public static final int GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT = 5;
 
     public static final String GROUP_COORDINATOR_NUM_THREADS_CONFIG = "group.coordinator.threads";
     public static final String GROUP_COORDINATOR_NUM_THREADS_DOC = "The number of threads used by the group coordinator.";
@@ -114,7 +114,10 @@ public class GroupCoordinatorConfig {
     public static final int CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT = 15000;
 
     public static final String CONSUMER_GROUP_MAX_SIZE_CONFIG = "group.consumer.max.size";
-    public static final String CONSUMER_GROUP_MAX_SIZE_DOC = "The maximum number of consumers that a single consumer group can accommodate. This value will only impact the new consumer coordinator. To configure the classic consumer coordinator check " + GROUP_MAX_SIZE_CONFIG + " instead.";
+    public static final String CONSUMER_GROUP_MAX_SIZE_DOC = "The maximum number of consumers " +
+            "that a single consumer group can accommodate. This value will only impact groups under " +
+            "the CONSUMER group protocol. To configure the max group size when using the CLASSIC " +
+            "group protocol use " + GROUP_MAX_SIZE_CONFIG + " " + "instead.";
     public static final int CONSUMER_GROUP_MAX_SIZE_DEFAULT = Integer.MAX_VALUE;
 
     public static final String CONSUMER_GROUP_ASSIGNORS_CONFIG = "group.consumer.assignors";

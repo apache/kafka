@@ -18,15 +18,14 @@ package kafka.api
 
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 class ProducerRebootstrapTest extends RebootstrapTest {
-  @Disabled("KAFKA-17986")
   @ParameterizedTest(name = "{displayName}.quorum=kraft.useRebootstrapTriggerMs={0}")
   @ValueSource(booleans = Array(false, true))
   def testRebootstrap(useRebootstrapTriggerMs: Boolean): Unit = {
+    // It's ok to shut the leader down, cause the reelection is small enough to the producer timeout.
     server1.shutdown()
     server1.awaitShutdown()
 

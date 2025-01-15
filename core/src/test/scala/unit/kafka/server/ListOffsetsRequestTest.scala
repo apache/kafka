@@ -165,14 +165,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   private[this] def fetchOffsetAndEpochWithError(serverId: Int, timestamp: Long, version: Short): (Long, Int, Short) = {
     val partitionData = sendRequest(serverId, timestamp, version)
-
-    if (version == 0) {
-      if (partitionData.oldStyleOffsets().isEmpty)
-        (-1, partitionData.leaderEpoch, partitionData.errorCode())
-      else
-        (partitionData.oldStyleOffsets().asScala.head, partitionData.leaderEpoch, partitionData.errorCode())
-    } else
-      (partitionData.offset, partitionData.leaderEpoch, partitionData.errorCode())
+    (partitionData.offset, partitionData.leaderEpoch, partitionData.errorCode())
   }
 
   @ParameterizedTest

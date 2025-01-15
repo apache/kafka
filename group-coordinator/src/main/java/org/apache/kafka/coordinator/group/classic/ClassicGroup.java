@@ -41,7 +41,6 @@ import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.server.common.MetadataVersion;
 
 import org.slf4j.Logger;
 
@@ -1437,11 +1436,9 @@ public class ClassicGroup implements Group {
     /**
      * Populate the record list with the records needed to create the given classic group.
      *
-     * @param metadataVersion   The MetadataVersion.
      * @param records           The list to which the new records are added.
      */
     public void createClassicGroupRecords(
-        MetadataVersion metadataVersion,
         List<CoordinatorRecord> records
     ) {
         Map<String, byte[]> assignments = new HashMap<>();
@@ -1449,7 +1446,7 @@ public class ClassicGroup implements Group {
             assignments.put(classicGroupMember.memberId(), classicGroupMember.assignment())
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
+        records.add(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments));
     }
 
     /**

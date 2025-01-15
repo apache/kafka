@@ -326,16 +326,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Suppress a spurious warning about a missing default case. -->
-        <Or>
-            <Class name="org.apache.kafka.common.utils.Crc32"/>
-            <Class name="org.apache.kafka.common.utils.PureJavaCrc32C"/>
-        </Or>
-        <Method name="update"/>
-        <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
-    </Match>
-
-    <Match>
         <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
         <Class name="org.apache.kafka.common.utils.Utils"/>
         <Method name="murmur2"/>

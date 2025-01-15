@@ -29,8 +29,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch, RequestLocal}
-import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
+import org.apache.kafka.server.common.{OffsetAndEpoch, RequestLocal}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.record.BrokerCompressionType
@@ -39,7 +38,7 @@ import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.LocalLog.SplitSegmentResult
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, LastRecord, LeaderHwChange, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, OffsetsOutOfOrderException, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, SegmentDeletionReason, VerificationGuard, UnifiedLog => JUnifiedLog}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, LastRecord, LeaderHwChange, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, OffsetResultHolder, OffsetsOutOfOrderException, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, SegmentDeletionReason, VerificationGuard, UnifiedLog => JUnifiedLog}
 import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStats}
 
 import java.io.{File, IOException}
@@ -49,7 +48,6 @@ import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, ScheduledFuture}
 import java.util.stream.Collectors
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
-import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -101,7 +99,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                  private val localLog: LocalLog,
                  val brokerTopicStats: BrokerTopicStats,
                  val producerIdExpirationCheckIntervalMs: Int,
-                 @volatile var leaderEpochCache: Option[LeaderEpochFileCache],
+                 @volatile var leaderEpochCache: LeaderEpochFileCache,
                  val producerStateManager: ProducerStateManager,
                  @volatile private var _topicId: Option[Uuid],
                  val keepPartitionMetadataFile: Boolean,
@@ -254,10 +252,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def updateConfig(newConfig: LogConfig): LogConfig = {
     val oldConfig = localLog.config
     localLog.updateConfig(newConfig)
-    val oldRecordVersion = oldConfig.recordVersion
-    val newRecordVersion = newConfig.recordVersion
-    if (newRecordVersion != oldRecordVersion)
-      initializeLeaderEpochCache()
     oldConfig
   }
 
@@ -480,8 +474,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     updateHighWatermark(localLog.logEndOffsetMetadata)
   }
 
-  private def recordVersion: RecordVersion = config.recordVersion
-
   private def initializePartitionMetadata(): Unit = lock synchronized {
     val partitionMetadata = PartitionMetadataFile.newFile(dir)
     partitionMetadataFile = Some(new PartitionMetadataFile(partitionMetadata, logDirFailureChannel))
@@ -516,9 +508,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  private def initializeLeaderEpochCache(): Unit = lock synchronized {
-    leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      dir, topicPartition, logDirFailureChannel, recordVersion, logIdent, leaderEpochCache, scheduler)
+  private def reinitializeLeaderEpochCache(): Unit = lock synchronized {
+    leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+      dir, topicPartition, logDirFailureChannel, Option.apply(leaderEpochCache), scheduler)
   }
 
   private def updateHighWatermarkWithLogEndOffset(): Unit = {
@@ -552,7 +544,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def rebuildProducerState(lastOffset: Long,
                                    producerStateManager: ProducerStateManager): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
-    JUnifiedLog.rebuildProducerState(producerStateManager, localLog.segments, logStartOffset, lastOffset, recordVersion, time, false, logIdent)
+    JUnifiedLog.rebuildProducerState(producerStateManager, localLog.segments, logStartOffset, lastOffset, time, false, logIdent)
   }
 
   @threadsafe
@@ -680,10 +672,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           if (shouldReinitialize) {
             // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
             // the checkpoint file in renamed log directory
-            initializeLeaderEpochCache()
+            reinitializeLeaderEpochCache()
             initializePartitionMetadata()
           } else {
-            leaderEpochCache = None
+            leaderEpochCache.clear()
             partitionMetadataFile = None
           }
         }
@@ -706,7 +698,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *
    * @param records The records to append
    * @param origin Declares the origin of the append which affects required validations
-   * @param interBrokerProtocolVersion Inter-broker message protocol version
    * @param requestLocal request local instance
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
@@ -714,11 +705,22 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def appendAsLeader(records: MemoryRecords,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
-                     interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestProduction,
                      requestLocal: RequestLocal = RequestLocal.noCaching,
                      verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
-    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)
+    append(records, origin, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)
+  }
+
+  /**
+   * Even though we always write to disk with record version v2 since Apache Kafka 4.0, older record versions may have
+   * been persisted to disk before that. In order to test such scenarios, we need the ability to append with older
+   * record versions. This method exists for that purpose and hence it should only be used from test code.
+   *
+   * Also see #appendAsLeader.
+   */
+  private[log] def appendAsLeaderWithRecordVersion(records: MemoryRecords, leaderEpoch: Int, recordVersion: RecordVersion): LogAppendInfo = {
+    append(records, AppendOrigin.CLIENT, true, leaderEpoch, Some(RequestLocal.noCaching),
+      VerificationGuard.SENTINEL, ignoreRecordSize = false, recordVersion.value)
   }
 
   /**
@@ -731,7 +733,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
     append(records,
       origin = AppendOrigin.REPLICATION,
-      interBrokerProtocolVersion = MetadataVersion.latestProduction,
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
       requestLocal = None,
@@ -748,7 +749,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *
    * @param records The log records to append
    * @param origin Declares the origin of the append which affects required validations
-   * @param interBrokerProtocolVersion Inter-broker message protocol version
    * @param validateAndAssignOffsets Should the log assign offsets to this message set or blindly apply what it is given
    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
    * @param requestLocal The request local instance if validateAndAssignOffsets is true
@@ -760,12 +760,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   private def append(records: MemoryRecords,
                      origin: AppendOrigin,
-                     interBrokerProtocolVersion: MetadataVersion,
                      validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
                      requestLocal: Option[RequestLocal],
                      verificationGuard: VerificationGuard,
-                     ignoreRecordSize: Boolean): LogAppendInfo = {
+                     ignoreRecordSize: Boolean,
+                     toMagic: Byte = RecordBatch.CURRENT_MAGIC_VALUE): LogAppendInfo = {
     // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
     // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
     maybeFlushMetadataFile()
@@ -795,13 +795,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                 appendInfo.sourceCompression,
                 targetCompression,
                 config.compact,
-                config.recordVersion.value,
+                toMagic,
                 config.messageTimestampType,
                 config.messageTimestampBeforeMaxMs,
                 config.messageTimestampAfterMaxMs,
                 leaderEpoch,
-                origin,
-                interBrokerProtocolVersion
+                origin
               )
               validator.validateMessagesAndAssignOffsets(offset,
                 validatorMetricsRecorder,
@@ -858,14 +857,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // update the epoch cache with the epoch stamped onto the message by the leader
           validRecords.batches.forEach { batch =>
             if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-              maybeAssignEpochStartOffset(batch.partitionLeaderEpoch, batch.baseOffset)
+              assignEpochStartOffset(batch.partitionLeaderEpoch, batch.baseOffset)
             } else {
               // In partial upgrade scenarios, we may get a temporary regression to the message format. In
               // order to ensure the safety of leader election, we clear the epoch cache so that we revert
               // to truncation by high watermark after the next leader election.
-              leaderEpochCache.filter(_.nonEmpty).foreach { cache =>
+              if (leaderEpochCache.nonEmpty) {
                 warn(s"Clearing leader epoch cache after unexpected append with message format v${batch.magic}")
-                cache.clearAndFlush()
+                leaderEpochCache.clearAndFlush()
               }
             }
           }
@@ -936,23 +935,18 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  def maybeAssignEpochStartOffset(leaderEpoch: Int, startOffset: Long): Unit = {
-    leaderEpochCache.foreach { cache =>
-      cache.assign(leaderEpoch, startOffset)
-    }
-  }
+  def assignEpochStartOffset(leaderEpoch: Int, startOffset: Long): Unit =
+    leaderEpochCache.assign(leaderEpoch, startOffset)
 
-  def latestEpoch: Option[Int] = leaderEpochCache.flatMap(_.latestEpoch.toScala)
+  def latestEpoch: Option[Int] = leaderEpochCache.latestEpoch.toScala
 
   def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
-    leaderEpochCache.flatMap { cache =>
-      val entry = cache.endOffsetFor(leaderEpoch, logEndOffset)
-      val (foundEpoch, foundOffset) = (entry.getKey, entry.getValue)
-      if (foundOffset == UNDEFINED_EPOCH_OFFSET)
-        None
-      else
-        Some(new OffsetAndEpoch(foundOffset, foundEpoch))
-    }
+    val entry = leaderEpochCache.endOffsetFor(leaderEpoch, logEndOffset)
+    val (foundEpoch, foundOffset) = (entry.getKey, entry.getValue)
+    if (foundOffset == UNDEFINED_EPOCH_OFFSET)
+      None
+    else
+      Some(new OffsetAndEpoch(foundOffset, foundEpoch))
   }
 
   private def maybeIncrementFirstUnstableOffset(): Unit = lock synchronized {
@@ -1012,7 +1006,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           updatedLogStartOffset = true
           updateLogStartOffset(newLogStartOffset)
           info(s"Incremented log start offset to $newLogStartOffset due to $reason")
-          leaderEpochCache.foreach(_.truncateFromStartAsyncFlush(logStartOffset))
+          leaderEpochCache.truncateFromStartAsyncFlush(logStartOffset)
           producerStateManager.onLogStartOffsetIncremented(newLogStartOffset)
           maybeIncrementFirstUnstableOffset()
         }
@@ -1269,17 +1263,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *           <li>All special timestamp offset results are returned immediately irrespective of the remote storage.
    *         </ul>
    */
-  @nowarn("cat=deprecation")
   def fetchOffsetByTimestamp(targetTimestamp: Long, remoteLogManager: Option[RemoteLogManager] = None): OffsetResultHolder = {
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
-
-      if (config.messageFormatVersion.isLessThan(IBP_0_10_0_IV0) &&
-        targetTimestamp != ListOffsetsRequest.EARLIEST_TIMESTAMP &&
-        targetTimestamp != ListOffsetsRequest.LATEST_TIMESTAMP)
-        throw new UnsupportedForMessageFormatException(s"Cannot search offsets based on timestamp because message format version " +
-          s"for partition $topicPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
-          s"required version $IBP_0_10_0_IV0")
 
       // For the earliest and latest, we do not need to return the timestamp.
       if (targetTimestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP ||
@@ -1287,53 +1273,36 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // The first cached epoch usually corresponds to the log start offset, but we have to verify this since
         // it may not be true following a message format version bump as the epoch will not be available for
         // log entries written in the older format.
-        val earliestEpochEntry = leaderEpochCache.toJava.flatMap(_.earliestEntry())
+        val earliestEpochEntry = leaderEpochCache.earliestEntry()
         val epochOpt = if (earliestEpochEntry.isPresent && earliestEpochEntry.get().startOffset <= logStartOffset) {
           Optional.of[Integer](earliestEpochEntry.get().epoch)
         } else Optional.empty[Integer]()
 
-        OffsetResultHolder(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt)))
+        new OffsetResultHolder(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
         val curLocalLogStartOffset = localLogStartOffset()
 
-        val epochResult: Optional[Integer] =
-          if (leaderEpochCache.isDefined) {
-            val epochOpt = leaderEpochCache.get.epochForOffset(curLocalLogStartOffset)
-            if (epochOpt.isPresent) Optional.of(epochOpt.getAsInt) else Optional.empty()
-          } else {
-            Optional.empty()
-          }
-
-        OffsetResultHolder(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochResult)))
-      } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
-        val epoch = leaderEpochCache match {
-          case Some(cache) =>
-            val latestEpoch = cache.latestEpoch()
-            if (latestEpoch.isPresent) Optional.of[Integer](latestEpoch.getAsInt) else Optional.empty[Integer]()
-          case None => Optional.empty[Integer]()
+        val epochResult: Optional[Integer] = {
+          val epochOpt = leaderEpochCache.epochForOffset(curLocalLogStartOffset)
+          if (epochOpt.isPresent) Optional.of(epochOpt.getAsInt) else Optional.empty()
         }
-        OffsetResultHolder(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epoch)))
+
+        new OffsetResultHolder(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochResult))
+      } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
+        val latestEpoch = leaderEpochCache.latestEpoch()
+        val epoch = if (latestEpoch.isPresent) Optional.of[Integer](latestEpoch.getAsInt) else Optional.empty[Integer]()
+        new OffsetResultHolder(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epoch))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
         if (remoteLogEnabled()) {
           val curHighestRemoteOffset = highestOffsetInRemoteStorage()
-
+          val epochOpt = leaderEpochCache.epochForOffset(curHighestRemoteOffset)
           val epochResult: Optional[Integer] =
-            if (leaderEpochCache.isDefined) {
-              val epochOpt = leaderEpochCache.get.epochForOffset(curHighestRemoteOffset)
-              if (epochOpt.isPresent) {
-                Optional.of(epochOpt.getAsInt)
-              } else if (curHighestRemoteOffset == -1) {
-                Optional.of(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-              } else {
-                Optional.empty()
-              }
-            } else {
-              Optional.empty()
-            }
-
-          OffsetResultHolder(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curHighestRemoteOffset, epochResult)))
+            if (epochOpt.isPresent) Optional.of(epochOpt.getAsInt)
+            else if (curHighestRemoteOffset == -1) Optional.of(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+            else Optional.empty()
+          new OffsetResultHolder(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curHighestRemoteOffset, epochResult))
         } else {
-          OffsetResultHolder(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1))))
+          new OffsetResultHolder(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1)))
         }
       } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
@@ -1347,22 +1316,20 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           .find(_.maxTimestamp() == maxTimestampSoFar.timestamp)
           .flatMap(batch => batch.offsetOfMaxTimestamp().toScala.map(new TimestampAndOffset(batch.maxTimestamp(), _,
             Optional.of[Integer](batch.partitionLeaderEpoch()).filter(_ >= 0))))
-        OffsetResultHolder(timestampAndOffsetOpt)
+        new OffsetResultHolder(timestampAndOffsetOpt.toJava)
       } else {
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
         if (remoteLogEnabled() && !isEmpty) {
           if (remoteLogManager.isEmpty) {
             throw new KafkaException("RemoteLogManager is empty even though the remote log storage is enabled.")
           }
-          if (recordVersion.value < RecordVersion.V2.value) {
-            throw new KafkaException("Tiered storage is supported only with versions supporting leader epochs, that means RecordVersion must be >= 2.")
-          }
 
           val asyncOffsetReadFutureHolder = remoteLogManager.get.asyncOffsetRead(topicPartition, targetTimestamp,
-            logStartOffset, leaderEpochCache.get, () => searchOffsetInLocalLog(targetTimestamp, localLogStartOffset()))
-          OffsetResultHolder(None, Some(asyncOffsetReadFutureHolder))
+            logStartOffset, leaderEpochCache, () => searchOffsetInLocalLog(targetTimestamp, localLogStartOffset()))
+          
+          new OffsetResultHolder(Optional.empty(), Optional.of(asyncOffsetReadFutureHolder))
         } else {
-          OffsetResultHolder(searchOffsetInLocalLog(targetTimestamp, logStartOffset))
+          new OffsetResultHolder(searchOffsetInLocalLog(targetTimestamp, logStartOffset).toJava)
         }
       }
     }
@@ -1786,7 +1753,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       lock synchronized {
         localLog.checkIfMemoryMappedBufferClosed()
         producerExpireCheck.cancel(true)
-        leaderEpochCache.foreach(_.clear())
+        leaderEpochCache.clear()
         val deletedSegments = localLog.deleteAllSegments()
         deleteProducerSnapshots(deletedSegments, asyncDelete = false)
         localLog.deleteEmptyDir()
@@ -1839,7 +1806,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // and inserted the first start offset entry, but then failed to append any entries
         // before another leader was elected.
         lock synchronized {
-          leaderEpochCache.foreach(_.truncateFromEndAsyncFlush(logEndOffset))
+          leaderEpochCache.truncateFromEndAsyncFlush(logEndOffset)
         }
 
         false
@@ -1852,7 +1819,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           } else {
             val deletedSegments = localLog.truncateTo(targetOffset)
             deleteProducerSnapshots(deletedSegments, asyncDelete = true)
-            leaderEpochCache.foreach(_.truncateFromEndAsyncFlush(targetOffset))
+            leaderEpochCache.truncateFromEndAsyncFlush(targetOffset)
             logStartOffset = math.min(targetOffset, logStartOffset)
             rebuildProducerState(targetOffset, producerStateManager)
             if (highWatermark >= localLog.logEndOffset)
@@ -1876,7 +1843,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       debug(s"Truncate and start at offset $newOffset, logStartOffset: ${logStartOffsetOpt.getOrElse(newOffset)}")
       lock synchronized {
         localLog.truncateFullyAndStartAt(newOffset)
-        leaderEpochCache.foreach(_.clearAndFlush())
+        leaderEpochCache.clearAndFlush()
         producerStateManager.truncateFullyAndStartAt(newOffset)
         logStartOffset = logStartOffsetOpt.getOrElse(newOffset)
         if (remoteLogEnabled()) _localLogStartOffset = newOffset
@@ -2033,12 +2000,10 @@ object UnifiedLog extends Logging {
     // The created leaderEpochCache will be truncated by LogLoader if necessary
     // so it is guaranteed that the epoch entries will be correct even when on-disk
     // checkpoint was stale (due to async nature of LeaderEpochFileCache#truncateFromStart/End).
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
       dir,
       topicPartition,
       logDirFailureChannel,
-      config.recordVersion,
-      s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ",
       None,
       scheduler)
     val producerStateManager = new ProducerStateManager(topicPartition, dir,
@@ -2055,7 +2020,7 @@ object UnifiedLog extends Logging {
       segments,
       logStartOffset,
       recoveryPoint,
-      leaderEpochCache.toJava,
+      leaderEpochCache,
       producerStateManager,
       numRemainingSegments,
       isRemoteLogEnabled,
@@ -2091,40 +2056,24 @@ object UnifiedLog extends Logging {
   def parseTopicPartitionName(dir: File): TopicPartition = LocalLog.parseTopicPartitionName(dir)
 
   /**
-   * If the recordVersion is >= RecordVersion.V2, create a new LeaderEpochFileCache instance.
-   * Loading the epoch entries from the backing checkpoint file or the provided currentCache if not empty.
-   * Otherwise, the message format is considered incompatible and the existing LeaderEpoch file
-   * is deleted.
+   * Create a new LeaderEpochFileCache instance and load the epoch entries from the backing checkpoint file or
+   * the provided currentCache (if not empty).
    *
    * @param dir                  The directory in which the log will reside
    * @param topicPartition       The topic partition
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
-   * @param recordVersion        The record version
-   * @param logPrefix            The logging prefix
    * @param currentCache         The current LeaderEpochFileCache instance (if any)
    * @param scheduler            The scheduler for executing asynchronous tasks
    * @return The new LeaderEpochFileCache instance (if created), none otherwise
    */
-  def maybeCreateLeaderEpochCache(dir: File,
-                                  topicPartition: TopicPartition,
-                                  logDirFailureChannel: LogDirFailureChannel,
-                                  recordVersion: RecordVersion,
-                                  logPrefix: String,
-                                  currentCache: Option[LeaderEpochFileCache],
-                                  scheduler: Scheduler): Option[LeaderEpochFileCache] = {
+  def createLeaderEpochCache(dir: File,
+                             topicPartition: TopicPartition,
+                             logDirFailureChannel: LogDirFailureChannel,
+                             currentCache: Option[LeaderEpochFileCache],
+                             scheduler: Scheduler): LeaderEpochFileCache = {
     val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
-
-    if (recordVersion.precedes(RecordVersion.V2)) {
-      if (leaderEpochFile.exists()) {
-        warn(s"${logPrefix}Deleting non-empty leader epoch cache due to incompatible message format $recordVersion")
-      }
-      Files.deleteIfExists(leaderEpochFile.toPath)
-      None
-    } else {
-      val checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
-      currentCache.map(_.withCheckpoint(checkpointFile))
-        .orElse(Some(new LeaderEpochFileCache(topicPartition, checkpointFile, scheduler)))
-    }
+    val checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
+    currentCache.map(_.withCheckpoint(checkpointFile)).getOrElse(new LeaderEpochFileCache(topicPartition, checkpointFile, scheduler))
   }
 
   private[log] def replaceSegments(existingSegments: LogSegments,

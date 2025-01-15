@@ -419,8 +419,7 @@ public class TestPurgatoryPerformance {
 
         @Override
         public int compareTo(Delayed o) {
-            if (o instanceof Scheduled) {
-                Scheduled other = (Scheduled) o;
+            if (o instanceof Scheduled other) {
                 if (operation.completesAt < other.operation.completesAt)
                     return -1;
                 else if (operation.completesAt > other.operation.completesAt)

@@ -31,11 +31,21 @@ class PartitionAssignmentState {
     final Optional<String> host;
     final Optional<String> clientId;
     final Optional<Long> logEndOffset;
+    final Optional<Integer> leaderEpoch;
 
-    PartitionAssignmentState(String group, Optional<Node> coordinator, Optional<String> topic,
-                                    Optional<Integer> partition, Optional<Long> offset, Optional<Long> lag,
-                                    Optional<String> consumerId, Optional<String> host, Optional<String> clientId,
-                                    Optional<Long> logEndOffset) {
+    PartitionAssignmentState(
+        String group,
+        Optional<Node> coordinator,
+        Optional<String> topic,
+        Optional<Integer> partition,
+        Optional<Long> offset,
+        Optional<Long> lag,
+        Optional<String> consumerId,
+        Optional<String> host,
+        Optional<String> clientId,
+        Optional<Long> logEndOffset,
+        Optional<Integer> leaderEpoch
+    ) {
         this.group = group;
         this.coordinator = coordinator;
         this.topic = topic;
@@ -46,5 +56,6 @@ class PartitionAssignmentState {
         this.host = host;
         this.clientId = clientId;
         this.logEndOffset = logEndOffset;
+        this.leaderEpoch = leaderEpoch;
     }
 }

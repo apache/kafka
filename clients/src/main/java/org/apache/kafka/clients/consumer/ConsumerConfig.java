@@ -171,9 +171,9 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String AUTO_OFFSET_RESET_CONFIG = "auto.offset.reset";
     public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server " +
             "(e.g. because that data has been deleted): " +
-            "<ul><li>earliest: automatically reset the offset to the earliest offset" +
+            "<ul><li>earliest: automatically reset the offset to the earliest offset</li>" +
             "<li>latest: automatically reset the offset to the latest offset</li>" +
-            "<li>by_duration:<duration>: automatically reset the offset to a configured <duration> from the current timestamp. <duration> must be specified in ISO8601 format (PnDTnHnMn.nS). " +
+            "<li>by_duration:&lt;duration&gt;: automatically reset the offset to a configured &lt;duration&gt; from the current timestamp. &lt;duration&gt; must be specified in ISO8601 format (PnDTnHnMn.nS). " +
             "Negative duration is not allowed.</li>" +
             "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
             "<li>anything else: throw exception to the consumer.</li></ul>" +

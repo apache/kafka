@@ -18,9 +18,9 @@
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "JoinGroupRequest",
-  // Version 1 adds RebalanceTimeoutMs.
+  // Versions 0-1 were removed in Apache Kafka 4.0, Version 2 is the new baseline.
   //
-  // Version 2 and 3 are the same as version 1.
+  // Version 1 adds RebalanceTimeoutMs. Version 2 and 3 are the same as version 1.
   //
   // Starting from version 4, the client needs to issue a second request to join group
   //
@@ -34,8 +34,7 @@
   // Version 8 adds the Reason field (KIP-800).
   //
   // Version 9 is the same as version 8.
-  "validVersions": "0-9",
-  "deprecatedVersions": "0-1",
+  "validVersions": "2-9",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",

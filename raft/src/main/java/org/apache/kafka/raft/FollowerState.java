@@ -37,6 +37,10 @@ public class FollowerState implements EpochState {
     private final Set<Integer> voters;
     // Used for tracking the expiration of both the Fetch and FetchSnapshot requests
     private final Timer fetchTimer;
+    /* Used to track if the replica has fetched successfully from the leader at least once since the transition to
+     * follower in this epoch. If the replica has not yet fetched successfully, it may be able to grant PreVotes.
+     */
+    private boolean hasFetchedFromLeader;
     private Optional<LogOffsetMetadata> highWatermark;
     /* Used to track the currently fetching snapshot. When fetching snapshot regular
      * Fetch request are paused
@@ -66,6 +70,7 @@ public class FollowerState implements EpochState {
         this.updateVoterPeriodTimer = time.timer(updateVoterPeriodMs());
         this.highWatermark = highWatermark;
         this.log = logContext.logger(FollowerState.class);
+        this.hasFetchedFromLeader = false;
     }
 
     @Override
@@ -118,9 +123,10 @@ public class FollowerState implements EpochState {
         return fetchTimer.isExpired();
     }
 
-    public void resetFetchTimeout(long currentTimeMs) {
+    public void resetFetchTimeoutForSuccessfulFetch(long currentTimeMs) {
         fetchTimer.update(currentTimeMs);
         fetchTimer.reset(fetchTimeoutMs);
+        hasFetchedFromLeader = true;
     }
 
     public void overrideFetchTimeout(long currentTimeMs, long timeoutMs) {
@@ -202,12 +208,19 @@ public class FollowerState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
+    public boolean canGrantVote(ReplicaKey replicaKey, boolean isLogUpToDate, boolean isPreVote) {
+        if (isPreVote && !hasFetchedFromLeader && isLogUpToDate) {
+            return true;
+        }
         log.debug(
-            "Rejecting vote request from candidate ({}) since we already have a leader {} in epoch {}",
-            candidateKey,
+            "Rejecting Vote request (preVote={}) from replica ({}) since we are in FollowerState with leader {} in " +
+                "epoch {}, hasFetchedFromLeader={}, replica's log is up-to-date={}",
+            isPreVote,
+            replicaKey,
             leaderId,
-            epoch
+            epoch,
+            hasFetchedFromLeader,
+            isLogUpToDate
         );
         return false;
     }
