@@ -627,31 +627,25 @@ public class RaftUtilTest {
     @Test
     public void testAddVoterResponse() {
         for (Errors error : Errors.values()) {
-            AddRaftVoterResponseData addRaftVoterResponseData = RaftUtil.addVoterResponse(error, error.message());
+            AddRaftVoterResponseData addRaftVoterResponseData = RaftUtil.addVoterResponse(error, null);
             assertEquals(error.code(), addRaftVoterResponseData.errorCode());
             if (Errors.NONE.equals(error))
                 assertNull(addRaftVoterResponseData.errorMessage());
             else
                 assertEquals(error.message(), addRaftVoterResponseData.errorMessage());
         }
-        AddRaftVoterResponseData addRaftVoterResponseData = RaftUtil.addVoterResponse(Errors.NONE, "NONE");
-        assertEquals(0, addRaftVoterResponseData.errorCode());
-        assertNull(addRaftVoterResponseData.errorMessage());
     }
 
     @Test
     public void testRemoveVoterResponse() {
         for (Errors error : Errors.values()) {
-            RemoveRaftVoterResponseData removeRaftVoterResponseData = RaftUtil.removeVoterResponse(error, error.message());
+            RemoveRaftVoterResponseData removeRaftVoterResponseData = RaftUtil.removeVoterResponse(error, null);
             assertEquals(error.code(), removeRaftVoterResponseData.errorCode());
             if (Errors.NONE.equals(error))
                 assertNull(removeRaftVoterResponseData.errorMessage());
             else
                 assertEquals(error.message(), removeRaftVoterResponseData.errorMessage());
         }
-        RemoveRaftVoterResponseData removeRaftVoterResponseData = RaftUtil.removeVoterResponse(Errors.NONE, "NONE");
-        assertEquals(0, removeRaftVoterResponseData.errorCode());
-        assertNull(removeRaftVoterResponseData.errorMessage());
     }
 
     private Records createRecords() {

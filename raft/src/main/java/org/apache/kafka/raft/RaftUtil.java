@@ -546,8 +546,9 @@ public class RaftUtil {
         Errors error,
         String errorMessage
     ) {
-        if (errorMessage == null) {
-            errorMessage = !Errors.NONE.equals(error) ? error.message() : null;
+        // return the provided errorMessage if it exists, Errors.NONE should have a null message
+        if (errorMessage == null && error != Errors.NONE) {
+            errorMessage = error.message();
         } else if (Errors.NONE.equals(error)) {
             errorMessage = null;
         }
@@ -570,8 +571,9 @@ public class RaftUtil {
         Errors error,
         String errorMessage
     ) {
-        if (errorMessage == null) {
-            errorMessage = !Errors.NONE.equals(error) ? error.message() : null;
+        // return the provided errorMessage if it exists, Errors.NONE should have a null message
+        if (errorMessage == null && error != Errors.NONE) {
+            errorMessage = error.message();
         } else if (Errors.NONE.equals(error)) {
             errorMessage = null;
         }
