@@ -35,7 +35,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, UnsupportedVersionException}
-import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
@@ -61,7 +61,6 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
-import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
@@ -322,44 +321,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testAlterConfigsWithAuthorizer(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    val authorizedTopic = "authorized-topic"
-    val unauthorizedTopic = "unauthorized-topic"
-    val (authorizedResource, unauthorizedResource) =
-      createConfigsWithAuthorization(authorizer, authorizedTopic, unauthorizedTopic)
-
-    val configs = Map(
-      authorizedResource -> new AlterConfigsRequest.Config(
-        Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava),
-      unauthorizedResource -> new AlterConfigsRequest.Config(
-        Seq(new AlterConfigsRequest.ConfigEntry("foo-1", "bar-1")).asJava)
-    )
-
-    val topicHeader = new RequestHeader(ApiKeys.ALTER_CONFIGS, ApiKeys.ALTER_CONFIGS.latestVersion,
-      clientId, 0)
-
-    val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false)
-      .build(topicHeader.apiVersion)
-    val request = buildRequest(alterConfigsRequest)
-
-    when(controller.isActive).thenReturn(false)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    when(adminManager.alterConfigs(any(), ArgumentMatchers.eq(false)))
-      .thenReturn(Map(authorizedResource -> ApiError.NONE))
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleAlterConfigsRequest(request)
-
-    val response = verifyNoThrottling[AlterConfigsResponse](request)
-    verifyAlterConfigResult(response, Map(authorizedTopic -> Errors.NONE,
-        unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED))
-    verify(authorizer, times(2)).authorize(any(), any())
-    verify(adminManager).alterConfigs(any(), anyBoolean())
-  }
-
-  @Test
   def testElectLeadersForwarding(): Unit = {
     val requestBuilder = new ElectLeadersRequest.Builder(ElectionType.PREFERRED, null, 30000)
     testKraftForwarding(ApiKeys.ELECT_LEADERS, requestBuilder)
@@ -380,20 +341,15 @@ class KafkaApisTest extends Logging {
 
     val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(
       Seq(resource), "consumer.session.timeout.ms", "45000").build(requestHeader.apiVersion)
-    val request = buildRequest(incrementalAlterConfigsRequest,
-      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
+    val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
-    when(controller.isActive).thenReturn(true)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    when(adminManager.incrementalAlterConfigs(any(), ArgumentMatchers.eq(false)))
-      .thenReturn(Map(resource -> ApiError.NONE))
-
-    createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
-    val response = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
-    verifyIncrementalAlterConfigResult(response, Map(consumerGroupId -> Errors.NONE))
-    verify(authorizer, times(1)).authorize(any(), any())
-    verify(adminManager).incrementalAlterConfigs(any(), anyBoolean())
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+    createKafkaApis(authorizer = Some(authorizer), raftSupport = true).handleIncrementalAlterConfigsRequest(request)
+    verify(forwardingManager, times(1)).forwardRequest(
+      any(),
+      any(),
+      any()
+    )
   }
 
   @Test
@@ -454,10 +410,6 @@ class KafkaApisTest extends Logging {
     val subscriptionName = "client_metric_subscription_1"
     val authorizedResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
 
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.CLUSTER,
-      Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
-
     val props = ClientMetricsTestUtils.defaultProperties
     val configEntries = new util.ArrayList[AlterConfigsRequest.ConfigEntry]()
     props.forEach((x, y) =>
@@ -466,51 +418,39 @@ class KafkaApisTest extends Logging {
     val configs = Map(authorizedResource -> new AlterConfigsRequest.Config(configEntries))
 
     val requestHeader = new RequestHeader(ApiKeys.ALTER_CONFIGS, ApiKeys.ALTER_CONFIGS.latestVersion, clientId, 0)
-    val request = buildRequest(
-      new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion))
+    val apiRequest = new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion)
+    val request = buildRequest(apiRequest)
 
-    when(controller.isActive).thenReturn(false)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    when(adminManager.alterConfigs(any(), ArgumentMatchers.eq(false)))
-      .thenReturn(Map(authorizedResource -> ApiError.NONE))
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+    kafkaApis = createKafkaApis(raftSupport = true)
     kafkaApis.handleAlterConfigsRequest(request)
-    val response = verifyNoThrottling[AlterConfigsResponse](request)
-    verifyAlterConfigResult(response, Map(subscriptionName -> Errors.NONE))
-    verify(authorizer, times(1)).authorize(any(), any())
-    verify(adminManager).alterConfigs(any(), anyBoolean())
+    verify(forwardingManager, times(1)).forwardRequest(
+      any(),
+      any(),
+      any()
+    )
   }
 
   @Test
   def testIncrementalClientMetricAlterConfigs(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
     val subscriptionName = "client_metric_subscription_1"
     val resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
-
-    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.CLUSTER,
-      Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
 
     val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS,
       ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
 
     val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(
       Seq(resource), "metrics", "foo.bar").build(requestHeader.apiVersion)
-    val request = buildRequest(incrementalAlterConfigsRequest,
-      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
+    val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
-    when(controller.isActive).thenReturn(true)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    when(adminManager.incrementalAlterConfigs(any(), ArgumentMatchers.eq(false)))
-      .thenReturn(Map(resource -> ApiError.NONE))
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+    kafkaApis = createKafkaApis(raftSupport = true)
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
-    val response = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
-    verifyIncrementalAlterConfigResult(response, Map(subscriptionName -> Errors.NONE ))
-    verify(authorizer, times(1)).authorize(any(), any())
-    verify(adminManager).incrementalAlterConfigs(any(), anyBoolean())
+    verify(forwardingManager, times(1)).forwardRequest(
+      any(),
+      any(),
+      any()
+    )
   }
 
   private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource],
@@ -658,118 +598,39 @@ class KafkaApisTest extends Logging {
       .thenReturn(Seq(result).asJava)
   }
 
-  private def verifyAlterConfigResult(response: AlterConfigsResponse,
-                                      expectedResults: Map[String, Errors]): Unit = {
-    val responseMap = response.data.responses().asScala.map { resourceResponse =>
-      resourceResponse.resourceName -> Errors.forCode(resourceResponse.errorCode)
-    }.toMap
-
-    assertEquals(expectedResults, responseMap)
-  }
-
-  private def createConfigsWithAuthorization(authorizer: Authorizer,
-                                             authorizedTopic: String,
-                                             unauthorizedTopic: String): (ConfigResource, ConfigResource) = {
-    val authorizedResource = new ConfigResource(ConfigResource.Type.TOPIC, authorizedTopic)
-
-    val unauthorizedResource = new ConfigResource(ConfigResource.Type.TOPIC, unauthorizedTopic)
-
-    createTopicAuthorization(authorizer, AclOperation.ALTER_CONFIGS, authorizedTopic, unauthorizedTopic)
-    (authorizedResource, unauthorizedResource)
-  }
-
   @Test
   def testIncrementalAlterConfigsWithAuthorizer(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
 
-    val authorizedTopic = "authorized-topic"
-    val unauthorizedTopic = "unauthorized-topic"
-    val (authorizedResource, unauthorizedResource) =
-      createConfigsWithAuthorization(authorizer, authorizedTopic, unauthorizedTopic)
+    val localResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "localResource")
+    val forwardedResource = new ConfigResource(ConfigResource.Type.GROUP, "forwardedResource")
 
     val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
 
-    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(Seq(authorizedResource, unauthorizedResource))
+    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(Seq(localResource, forwardedResource))
       .build(requestHeader.apiVersion)
-    val request = buildRequest(incrementalAlterConfigsRequest,
-      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
+    val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
-    when(controller.isActive).thenReturn(true)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    when(adminManager.incrementalAlterConfigs(any(), ArgumentMatchers.eq(false)))
-      .thenReturn(Map(authorizedResource -> ApiError.NONE))
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer), raftSupport = true)
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
 
-    val capturedResponse = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
-    verifyIncrementalAlterConfigResult(capturedResponse, Map(
-      authorizedTopic -> Errors.NONE,
-      unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED
-    ))
-
-    verify(authorizer, times(2)).authorize(any(), any())
-    verify(adminManager).incrementalAlterConfigs(any(), anyBoolean())
+    verify(authorizer, times(1)).authorize(any(), any())
+    verify(forwardingManager, times(1)).forwardRequest(
+      any(),
+      any(),
+      any()
+    )
   }
 
   private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
     val resourceMap = configResources.map(configResource => {
       configResource -> Set(
         new AlterConfigOp(new ConfigEntry("foo", "bar"),
-        OpType.forId(configResource.`type`.id))).asJavaCollection
+        OpType.SET)).asJavaCollection
     }).toMap.asJava
 
     new IncrementalAlterConfigsRequest.Builder(resourceMap, false)
-  }
-
-  private def verifyIncrementalAlterConfigResult(response: IncrementalAlterConfigsResponse,
-                                                 expectedResults: Map[String, Errors]): Unit = {
-    val responseMap = response.data.responses.asScala.map { resourceResponse =>
-      resourceResponse.resourceName -> Errors.forCode(resourceResponse.errorCode)
-    }.toMap
-    assertEquals(expectedResults, responseMap)
-  }
-
-  @Test
-  def testAlterClientQuotasWithAuthorizer(): Unit = {
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-
-    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.CLUSTER,
-      Resource.CLUSTER_NAME, AuthorizationResult.DENIED)
-
-    val quotaEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"))
-    val quotas = Seq(new ClientQuotaAlteration(quotaEntity, Seq.empty.asJavaCollection))
-
-    val requestHeader = new RequestHeader(ApiKeys.ALTER_CLIENT_QUOTAS, ApiKeys.ALTER_CLIENT_QUOTAS.latestVersion, clientId, 0)
-
-    val alterClientQuotasRequest = new AlterClientQuotasRequest.Builder(quotas.asJavaCollection, false)
-      .build(requestHeader.apiVersion)
-    val request = buildRequest(alterClientQuotasRequest,
-      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
-
-    when(controller.isActive).thenReturn(true)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      anyLong)).thenReturn(0)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    kafkaApis.handleAlterClientQuotasRequest(request)
-
-    val capturedResponse = verifyNoThrottling[AlterClientQuotasResponse](request)
-    verifyAlterClientQuotaResult(capturedResponse, Map(quotaEntity -> Errors.CLUSTER_AUTHORIZATION_FAILED))
-
-    verify(authorizer).authorize(any(), any())
-    verify(clientRequestQuotaManager).maybeRecordAndGetThrottleTimeMs(any(), anyLong)
-  }
-
-  private def verifyAlterClientQuotaResult(response: AlterClientQuotasResponse,
-                                           expected: Map[ClientQuotaEntity, Errors]): Unit = {
-    val futures = expected.keys.map(quotaEntity => quotaEntity -> new KafkaFutureImpl[Void]()).toMap
-    response.complete(futures.asJava)
-    futures.foreach {
-      case (entity, future) =>
-        future.whenComplete((_, thrown) =>
-          assertEquals(thrown, expected(entity).exception())
-        ).isDone
-    }
   }
 
   @ParameterizedTest
@@ -821,18 +682,6 @@ class KafkaApisTest extends Logging {
     )
 
     assertEquals(expectedThrottleTimeMs, responseData.throttleTimeMs)
-  }
-
-  private def createTopicAuthorization(authorizer: Authorizer,
-                                       operation: AclOperation,
-                                       authorizedTopic: String,
-                                       unauthorizedTopic: String,
-                                       logIfAllowed: Boolean = true,
-                                       logIfDenied: Boolean = true): Unit = {
-    authorizeResource(authorizer, operation, ResourceType.TOPIC,
-      authorizedTopic, AuthorizationResult.ALLOWED, logIfAllowed, logIfDenied)
-    authorizeResource(authorizer, operation, ResourceType.TOPIC,
-      unauthorizedTopic, AuthorizationResult.DENIED, logIfAllowed, logIfDenied)
   }
 
   @Test
@@ -9924,47 +9773,6 @@ class KafkaApisTest extends Logging {
     assertEquals("Ongoing", transactionState.transactionState)
   }
 
-  private def createMockRequest(): RequestChannel.Request = {
-    val request: RequestChannel.Request = mock(classOf[RequestChannel.Request])
-    val requestHeader: RequestHeader = mock(classOf[RequestHeader])
-    when(request.header).thenReturn(requestHeader)
-    when(requestHeader.apiKey()).thenReturn(ApiKeys.values().head)
-    request
-  }
-
-  private def verifyShouldNeverHandleErrorMessage(handler: RequestChannel.Request => Unit): Unit = {
-    val request = createMockRequest()
-    val e = assertThrows(classOf[UnsupportedVersionException], () => handler(request))
-    assertEquals(KafkaApis.shouldNeverReceive(request).getMessage, e.getMessage)
-  }
-
-  private def verifyShouldAlwaysForwardErrorMessage(handler: RequestChannel.Request => Unit): Unit = {
-    val request = createMockRequest()
-    val e = assertThrows(classOf[UnsupportedVersionException], () => handler(request))
-    assertEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
-  }
-
-  @Test
-  def testRaftShouldNeverHandleAlterPartitionRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldNeverHandleErrorMessage(kafkaApis.handleAlterPartitionRequest)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardCreateAcls(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleCreateAcls)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardDeleteAcls(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleDeleteAcls)
-  }
-
   @Test
   def testEmptyLegacyAlterConfigsRequestWithKRaft(): Unit = {
     val request = buildRequest(new AlterConfigsRequest(new AlterConfigsRequestData(), 1.toShort))
@@ -10039,27 +9847,6 @@ class KafkaApisTest extends Logging {
         setResourceName(brokerId.toString).
         setResourceType(BROKER_LOGGER.id()))),
       response.data())
-  }
-  
-  @Test
-  def testRaftShouldAlwaysForwardAlterClientQuotasRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleAlterClientQuotasRequest)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardUpdateFeatures(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleUpdateFeatures)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardElectLeaders(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(raftSupport = true)
-    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleElectLeaders)
   }
 
   @Test
