@@ -2368,7 +2368,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         describeClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
-      val result = metadataCache.asInstanceOf[KRaftMetadataCache]describeClientQuotas(describeClientQuotasRequest.data())
+      val result = metadataCache.asInstanceOf[KRaftMetadataCache].describeClientQuotas(describeClientQuotasRequest.data())
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
         result.setThrottleTimeMs(requestThrottleMs)
         new DescribeClientQuotasResponse(result)
