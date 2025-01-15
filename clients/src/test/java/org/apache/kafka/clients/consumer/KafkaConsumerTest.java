@@ -2239,7 +2239,7 @@ public class KafkaConsumerTest {
             // by the background thread, so it can realize there is authentication fail  and then
             // throw the AuthenticationException
             assertPollEventuallyThrows(consumer, AuthenticationException.class,
-                    "this consumer was not able to discover metadata errors during continuous polling.");
+                    "he consumer was not able to discover metadata errors during continuous polling.");
         } else {
             assertThrows(AuthenticationException.class, () -> consumer.poll(Duration.ZERO));
         }

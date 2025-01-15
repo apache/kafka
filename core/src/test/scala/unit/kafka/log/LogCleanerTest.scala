@@ -216,8 +216,7 @@ class LogCleanerTest extends Logging {
                       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
                       leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
-                      _topicId = None,
-                      keepPartitionMetadataFile = true) {
+                      _topicId = None) {
       override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment]): Unit = {
         deleteStartLatch.countDown()
         if (!deleteCompleteLatch.await(5000, TimeUnit.MILLISECONDS)) {
@@ -2093,8 +2092,7 @@ class LogCleanerTest extends Logging {
       producerStateManagerConfig = producerStateManagerConfig,
       producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true
+      topicId = None
     )
   }
 
