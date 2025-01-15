@@ -313,11 +313,8 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
-<<<<<<< HEAD
+
     createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
-=======
-    createKafkaApis(authorizer = Some(authorizer), raftSupport = true).handleIncrementalAlterConfigsRequest(request)
->>>>>>> trunk
     verify(forwardingManager, times(1)).forwardRequest(
       any(),
       any(),
@@ -395,11 +392,8 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(apiRequest)
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
-<<<<<<< HEAD
+
     kafkaApis = createKafkaApis()
-=======
-    kafkaApis = createKafkaApis(raftSupport = true)
->>>>>>> trunk
     kafkaApis.handleAlterConfigsRequest(request)
     verify(forwardingManager, times(1)).forwardRequest(
       any(),
@@ -421,11 +415,8 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
-<<<<<<< HEAD
+
     kafkaApis = createKafkaApis()
-=======
-    kafkaApis = createKafkaApis(raftSupport = true)
->>>>>>> trunk
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
     verify(forwardingManager, times(1)).forwardRequest(
       any(),
@@ -579,11 +570,8 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
-<<<<<<< HEAD
+
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-=======
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer), raftSupport = true)
->>>>>>> trunk
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
 
     verify(authorizer, times(1)).authorize(any(), any())
