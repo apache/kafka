@@ -1254,6 +1254,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     log.warn("Failing all unsent commit requests and offset fetches because of coordinator fatal error. ", error);
                     unsentOffsetCommits.forEach(request -> request.future.completeExceptionally(error));
                     unsentOffsetFetches.forEach(request -> request.future.completeExceptionally(error));
+                    coordinatorRequestManager.clearFatalError();
                     clearAll();
                 }
             );
