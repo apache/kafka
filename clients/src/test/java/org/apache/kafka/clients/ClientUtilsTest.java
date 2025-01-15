@@ -62,11 +62,13 @@ public class ClientUtilsTest {
 
         String hostname = "example.com";
         Integer port = 10000;
+        String canonicalHostname1 = "canonical_hostname1";
+        String canonicalHostname2 = "canonical_hostname2";
         try (final MockedStatic<InetAddress> inetAddress = mockStatic(InetAddress.class)) {
             InetAddress inetAddress1 = mock(InetAddress.class);
-            when(inetAddress1.getCanonicalHostName()).thenReturn("canonical_hostname1");
+            when(inetAddress1.getCanonicalHostName()).thenReturn(canonicalHostname1);
             InetAddress inetAddress2 = mock(InetAddress.class);
-            when(inetAddress2.getCanonicalHostName()).thenReturn("canonical_hostname2");
+            when(inetAddress2.getCanonicalHostName()).thenReturn(canonicalHostname2);
             inetAddress.when(() -> InetAddress.getAllByName(hostname))
                 .thenReturn(new InetAddress[]{inetAddress1, inetAddress2});
             try (MockedConstruction<InetSocketAddress> inetSocketAddress =
@@ -80,11 +82,15 @@ public class ClientUtilsTest {
             ) {
                 List<InetSocketAddress> validatedAddresses = checkWithLookup(Collections.singletonList(hostname + ":" + port));
                 assertEquals(2, inetSocketAddress.constructed().size());
+                assertEquals(2, validatedAddresses.size());
                 assertTrue(validatedAddresses.containsAll(List.of(
                     inetSocketAddress.constructed().get(0),
                     inetSocketAddress.constructed().get(1)))
                 );
                 validatedAddresses.forEach(address -> assertEquals(port, address.getPort()));
+                validatedAddresses.stream().map(InetSocketAddress::getHostName).forEach(
+                    hostName -> assertTrue(List.of(canonicalHostname1, canonicalHostname2).contains(hostName))
+                );
             }
         }
     }
