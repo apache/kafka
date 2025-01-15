@@ -731,7 +731,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
     val listenerNames = listeners.map(_.listenerName).toSet
     if (processRoles.isEmpty || processRoles.contains(ProcessRole.BrokerRole)) {
-      // validations for all broker setups (i.e. ZooKeeper and KRaft broker-only and KRaft co-located)
+      // validations for all broker setups (i.e. KRaft broker-only and KRaft co-located)
       validateAdvertisedBrokerListenersNonEmptyForBroker()
       require(advertisedBrokerListenerNames.contains(interBrokerListenerName),
         s"${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} must be a listener name defined in ${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG}. " +
