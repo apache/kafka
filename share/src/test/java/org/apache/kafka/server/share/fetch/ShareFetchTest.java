@@ -105,7 +105,7 @@ public class ShareFetchTest {
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         BiConsumer<Collection<TopicIdPartition>, Boolean> metricsHandler = mock(BiConsumer.class);
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), 100, metricsHandler);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, metricsHandler);
 
         // Add both erroneous partition and complete request.
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
@@ -127,7 +127,7 @@ public class ShareFetchTest {
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         BiConsumer<Collection<TopicIdPartition>, Boolean> metricsHandler = mock(BiConsumer.class);
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), 100, metricsHandler);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, metricsHandler);
 
         // Add an erroneous partition and complete request.
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
@@ -149,7 +149,7 @@ public class ShareFetchTest {
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         BiConsumer<Collection<TopicIdPartition>, Boolean> metricsHandler = mock(BiConsumer.class);
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), 100, metricsHandler);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, metricsHandler);
 
         shareFetch.maybeCompleteWithException(List.of(topicIdPartition0, topicIdPartition1), new RuntimeException());
         assertEquals(2, future.join().size());
@@ -168,7 +168,7 @@ public class ShareFetchTest {
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         BiConsumer<Collection<TopicIdPartition>, Boolean> metricsHandler = mock(BiConsumer.class);
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), 100, metricsHandler);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, metricsHandler);
 
         shareFetch.maybeCompleteWithException(List.of(topicIdPartition0), new RuntimeException());
         assertEquals(1, future.join().size());
@@ -186,7 +186,7 @@ public class ShareFetchTest {
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         BiConsumer<Collection<TopicIdPartition>, Boolean> metricsHandler = mock(BiConsumer.class);
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), 100, metricsHandler);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, metricsHandler);
 
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
         shareFetch.maybeCompleteWithException(List.of(topicIdPartition1), new RuntimeException());
