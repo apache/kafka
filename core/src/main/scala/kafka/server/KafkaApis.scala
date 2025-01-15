@@ -2368,39 +2368,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         describeClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
-      metadataSupport match {
-        case ZkSupport(adminManager, controller, zkClient, forwardingManager, metadataCache, _) =>
-          val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
-
-          val entriesData = result.iterator.map { case (quotaEntity, quotaValues) =>
-            val entityData = quotaEntity.entries.asScala.iterator.map { case (entityType, entityName) =>
-              new DescribeClientQuotasResponseData.EntityData()
-                .setEntityType(entityType)
-                .setEntityName(entityName)
-            }.toBuffer
-
-            val valueData = quotaValues.iterator.map { case (key, value) =>
-              new DescribeClientQuotasResponseData.ValueData()
-                .setKey(key)
-                .setValue(value)
-            }.toBuffer
-
-            new DescribeClientQuotasResponseData.EntryData()
-              .setEntity(entityData.asJava)
-              .setValues(valueData.asJava)
-          }.toBuffer
-
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
-              .setThrottleTimeMs(requestThrottleMs)
-              .setEntries(entriesData.asJava)))
-        case RaftSupport(_, metadataCache) =>
-          val result = metadataCache.describeClientQuotas(describeClientQuotasRequest.data())
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-            result.setThrottleTimeMs(requestThrottleMs)
-            new DescribeClientQuotasResponse(result)
-          })
-      }
+      val result = metadataCache.asInstanceOf[KRaftMetadataCache]describeClientQuotas(describeClientQuotasRequest.data())
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        result.setThrottleTimeMs(requestThrottleMs)
+        new DescribeClientQuotasResponse(result)
+      })
     }
   }
 

@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.cluster.{Broker, Partition}
-import kafka.controller.KafkaController
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.UnifiedLog
 import kafka.network.RequestChannel
@@ -119,9 +118,7 @@ class KafkaApisTest extends Logging {
   private val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
   private val groupCoordinator: GroupCoordinator = mock(classOf[GroupCoordinator])
   private val shareCoordinator: ShareCoordinator = mock(classOf[ShareCoordinator])
-  private val adminManager: ZkAdminManager = mock(classOf[ZkAdminManager])
   private val txnCoordinator: TransactionCoordinator = mock(classOf[TransactionCoordinator])
-  private val controller: KafkaController = mock(classOf[KafkaController])
   private val forwardingManager: ForwardingManager = mock(classOf[ForwardingManager])
   private val autoTopicCreationManager: AutoTopicCreationManager = mock(classOf[AutoTopicCreationManager])
 
