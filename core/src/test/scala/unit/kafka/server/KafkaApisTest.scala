@@ -8352,10 +8352,6 @@ class KafkaApisTest extends Logging {
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
   def testHandleOffsetFetchWithMultipleGroups(version: Short): Unit = {
-    // Version 0 gets offsets from Zookeeper. We are not interested
-    // in testing this here.
-    if (version == 0) return
-
     def makeRequest(version: Short): RequestChannel.Request = {
       val groups = Map(
         "group-1" -> List(
@@ -8477,10 +8473,6 @@ class KafkaApisTest extends Logging {
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
   def testHandleOffsetFetchWithSingleGroup(version: Short): Unit = {
-    // Version 0 gets offsets from Zookeeper. We are not interested
-    // in testing this here.
-    if (version == 0) return
-
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(new OffsetFetchRequest.Builder(
         "group-1",
