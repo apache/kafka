@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.kstream.internals.graph;
 
-public class TableSuppressNode<K, V> extends StatefulProcessorNode<K, V> {
+/**
+ * Marker interface to identify suppression nodes since they have some special requirements
+ */
+public class TableSuppressNode<K, V> extends ProcessorGraphNode<K, V> {
     public TableSuppressNode(final String nodeName,
-                             final ProcessorParameters<K, V, ?, ?> processorParameters,
-                             final String[] storeNames) {
-        super(nodeName, processorParameters, storeNames);
+                             final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        super(nodeName, processorParameters);
     }
 }
