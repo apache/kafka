@@ -1782,6 +1782,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    // @Flaky("KAFKA-18550")
     @Test
     public void testAdminClientApisAuthenticationFailure() {
         Cluster cluster = mockBootstrapCluster();
