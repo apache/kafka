@@ -21,8 +21,8 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 import java.util.Collections;
@@ -97,11 +97,10 @@ class GroupedStreamAggregateBuilder<K, V> {
             parentNode = repartitionNode;
         }
 
-        final StatefulProcessorNode<K, V> statefulProcessorNode =
-            new StatefulProcessorNode<>(
+        final ProcessorGraphNode<K, V> statefulProcessorNode =
+            new ProcessorGraphNode<>(
                 aggFunctionName,
-                new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
-                new String[] {storeFactory.storeName()}
+                new ProcessorParameters<>(aggregateSupplier, aggFunctionName)
             );
         statefulProcessorNode.setOutputVersioned(isOutputVersioned);
 
