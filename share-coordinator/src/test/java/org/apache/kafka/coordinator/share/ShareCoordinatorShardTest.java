@@ -39,7 +39,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.config.ShareCoordinatorConfig;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
