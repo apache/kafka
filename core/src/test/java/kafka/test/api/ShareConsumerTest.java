@@ -1897,9 +1897,7 @@ public class ShareConsumerTest {
 
     private void warmup() throws InterruptedException {
         createTopic(warmupTp.topic());
-        TestUtils.waitForCondition(() ->
-                !cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL")).isEmpty(),
-            DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
+        waitForMetadataCache();
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(warmupTp.topic(), warmupTp.partition(), null, "key".getBytes(), "value".getBytes());
         Set<String> subscription = Collections.singleton(warmupTp.topic());
         alterShareAutoOffsetReset("warmupgroup1", "earliest");
@@ -1915,11 +1913,14 @@ public class ShareConsumerTest {
         }
     }
 
+    private void waitForMetadataCache() throws InterruptedException {
+        TestUtils.waitForCondition(() ->
+                !cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL")).isEmpty(),
+            DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
+    }
+
     private void verifyShareGroupStateTopicRecordsProduced() {
         try {
-            TestUtils.waitForCondition(() ->
-                    !cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL")).isEmpty(),
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
             Map<String, Object> consumerConfigs = new HashMap<>();
             consumerConfigs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
             consumerConfigs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
