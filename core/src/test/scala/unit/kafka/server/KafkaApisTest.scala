@@ -261,6 +261,9 @@ class KafkaApisTest extends Logging {
     topicConfigs.put(propName, propValue)
     when(configRepository.topicConfig(resourceName)).thenReturn(topicConfigs)
 
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.contains(resourceName)).thenReturn(true)
+
     val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
       .setIncludeSynonyms(true)
       .setResources(List(new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -279,14 +282,11 @@ class KafkaApisTest extends Logging {
     val describeConfigsResult = results.get(0)
     assertEquals(ConfigResource.Type.TOPIC.id, describeConfigsResult.resourceType)
     assertEquals(resourceName, describeConfigsResult.resourceName)
-<<<<<<< HEAD
-=======
     val configs = describeConfigsResult.configs.asScala.filter(_.name == propName)
     assertEquals(1, configs.length)
     val describeConfigsResponseData = configs.head
     assertEquals(propName, describeConfigsResponseData.name)
     assertEquals(propValue, describeConfigsResponseData.value)
->>>>>>> trunk
   }
 
   @Test
@@ -313,7 +313,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
-
     createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
     verify(forwardingManager, times(1)).forwardRequest(
       any(),
@@ -392,7 +391,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(apiRequest)
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
-
     kafkaApis = createKafkaApis()
     kafkaApis.handleAlterConfigsRequest(request)
     verify(forwardingManager, times(1)).forwardRequest(
@@ -415,7 +413,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
-
     kafkaApis = createKafkaApis()
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
     verify(forwardingManager, times(1)).forwardRequest(
@@ -455,6 +452,9 @@ class KafkaApisTest extends Logging {
     val configRepository: ConfigRepository = mock(classOf[ConfigRepository])
     val cmConfigs = ClientMetricsTestUtils.defaultProperties
     when(configRepository.config(resource)).thenReturn(cmConfigs)
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.contains(subscriptionName)).thenReturn(true)
 
     val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
       .setIncludeSynonyms(true)
@@ -570,7 +570,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
-
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
 
@@ -2200,8 +2199,8 @@ class KafkaApisTest extends Logging {
   @Test
   def testProduceResponseMetadataLookupErrorOnNotLeaderOrFollower(): Unit = {
     val topic = "topic"
-
     metadataCache = mock(classOf[KRaftMetadataCache])
+
     for (version <- 10 to ApiKeys.PRODUCE.latestVersion) {
 
       reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
@@ -8895,6 +8894,30 @@ class KafkaApisTest extends Logging {
   @Test
   def testDescribeClusterRequest(): Unit = {
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val brokers = Seq(
+      new UpdateMetadataBroker()
+        .setId(0)
+        .setRack("rack")
+        .setEndpoints(Seq(
+          new UpdateMetadataEndpoint()
+            .setHost("broker0")
+            .setPort(9092)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(plaintextListener.value)
+        ).asJava),
+      new UpdateMetadataBroker()
+        .setId(1)
+        .setRack("rack")
+        .setEndpoints(Seq(
+          new UpdateMetadataEndpoint()
+            .setHost("broker1")
+            .setPort(9092)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(plaintextListener.value)).asJava)
+    )
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
+      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
+    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
 
     val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
       .setIncludeClusterAuthorizedOperations(true)).build()
@@ -9969,7 +9992,6 @@ class KafkaApisTest extends Logging {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -9994,7 +10016,6 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer),
-      
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -10016,7 +10037,6 @@ class KafkaApisTest extends Logging {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -10319,7 +10339,6 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
-      
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -10348,7 +10367,6 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
-      
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching())
 
@@ -10378,7 +10396,6 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
-      
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching())
 
