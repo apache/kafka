@@ -773,7 +773,12 @@ class KafkaConfigTest {
   def testFromPropsInvalid(): Unit = {
     def baseProperties: Properties = {
       val validRequiredProperties = new Properties()
-      validRequiredProperties.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:2181")
+      validRequiredProperties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+      validRequiredProperties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "0")
+      validRequiredProperties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+      validRequiredProperties.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
+      validRequiredProperties.setProperty("listeners", "CONTROLLER://:9093")
+      validRequiredProperties.setProperty("advertised.listeners", "CONTROLLER://127.0.0.1:9093")
       validRequiredProperties
     }
     // to ensure a basis is valid - bootstraps all needed validation
@@ -1070,7 +1075,12 @@ class KafkaConfigTest {
   def testDynamicLogConfigs(): Unit = {
     def baseProperties: Properties = {
       val validRequiredProperties = new Properties()
-      validRequiredProperties.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:2181")
+      validRequiredProperties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+      validRequiredProperties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "0")
+      validRequiredProperties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+      validRequiredProperties.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
+      validRequiredProperties.setProperty("listeners", "CONTROLLER://:9093")
+      validRequiredProperties.setProperty("advertised.listeners", "CONTROLLER://127.0.0.1:9093")
       validRequiredProperties
     }
 
@@ -1180,8 +1190,6 @@ class KafkaConfigTest {
     defaults.setProperty(MetricConfigs.METRIC_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.toString)
 
     val config = KafkaConfig.fromProps(defaults)
-    assertEquals("127.0.0.1:2181", config.zkConnect)
-    assertEquals(1234, config.zkConnectionTimeoutMs)
     assertEquals(false, config.brokerIdGenerationEnable)
     assertEquals(1, config.maxReservedBrokerId)
     assertEquals(1, config.brokerId)
@@ -1568,7 +1576,12 @@ class KafkaConfigTest {
   @Test
   def testSaslJwksEndpointRetryDefaults(): Unit = {
     val props = new Properties()
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "0")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
+    props.setProperty("listeners", "CONTROLLER://:9093")
+    props.setProperty("advertised.listeners", "CONTROLLER://127.0.0.1:9093")
     val config = KafkaConfig.fromProps(props)
     assertNotNull(config.getLong(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS))
     assertNotNull(config.getLong(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS))
