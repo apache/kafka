@@ -57,6 +57,10 @@ public class ShareFetch {
      */
     private final Map<TopicIdPartition, Integer> partitionMaxBytes;
     /**
+     * The batch size of the fetch request.
+     */
+    private final int batchSize;
+    /**
      * The maximum number of records that can be fetched for the request.
      */
     private final int maxFetchRecords;
@@ -76,6 +80,7 @@ public class ShareFetch {
         String memberId,
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
         Map<TopicIdPartition, Integer> partitionMaxBytes,
+        int batchSize,
         int maxFetchRecords,
         BiConsumer<Collection<TopicIdPartition>, Boolean> failedShareFetchMetricsHandler
     ) {
@@ -84,6 +89,7 @@ public class ShareFetch {
         this.memberId = memberId;
         this.future = future;
         this.partitionMaxBytes = partitionMaxBytes;
+        this.batchSize = batchSize;
         this.maxFetchRecords = maxFetchRecords;
         this.failedShareFetchMetricsHandler = failedShareFetchMetricsHandler;
     }
@@ -102,6 +108,10 @@ public class ShareFetch {
 
     public FetchParams fetchParams() {
         return fetchParams;
+    }
+
+    public int batchSize() {
+        return batchSize;
     }
 
     public int maxFetchRecords() {
