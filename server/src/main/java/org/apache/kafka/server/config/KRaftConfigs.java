@@ -36,8 +36,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 public class KRaftConfigs {
     /** KRaft mode configs */
     public static final String PROCESS_ROLES_CONFIG = "process.roles";
-    public static final String PROCESS_ROLES_DOC = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
-            "This configuration is only applicable for clusters in KRaft (Kafka Raft) mode (instead of ZooKeeper). Leave this config undefined or empty for ZooKeeper clusters.";
+    public static final String PROCESS_ROLES_DOC = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. ";
 
     public static final String INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG = "initial.broker.registration.timeout.ms";
     public static final int INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_DEFAULT = 60000;
@@ -78,9 +77,8 @@ public class KRaftConfigs {
             "maximum bytes limit is reached.";
 
     public static final String CONTROLLER_LISTENER_NAMES_CONFIG = "controller.listener.names";
-    public static final String CONTROLLER_LISTENER_NAMES_DOC = "A comma-separated list of the names of the listeners used by the controller. This is required " +
-            "if running in KRaft mode. When communicating with the controller quorum, the broker will always use the first listener in this list.\n " +
-            "Note: The ZooKeeper-based controller should not set this configuration.";
+    public static final String CONTROLLER_LISTENER_NAMES_DOC = "A comma-separated list of the names of the listeners used by the controller. " +
+        "This configuration is required. When communicating with the controller quorum, the broker will always use the first listener in this list.\n";
 
     public static final String SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG = "sasl.mechanism.controller.protocol";
     public static final String SASL_MECHANISM_CONTROLLER_PROTOCOL_DOC = "SASL mechanism used for communication with controllers. Default is GSSAPI.";
