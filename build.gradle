@@ -974,6 +974,7 @@ project(':server') {
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
     implementation project(':raft')
+    implementation project(':share-coordinator')
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.slf4jApi
@@ -1162,7 +1163,7 @@ project(':core') {
       if (versions.baseScala == '2.13') {
         scoverageScalaVersion = '2.13.9' // there's no newer 2.13 artifact, org.scoverage:scalac-scoverage-plugin_2.13.9:2.0.11 is the latest as of now
       }
-      reportDir = file("${rootProject.buildDir}/scoverage")
+      reportDir = file("${layout.buildDirectory.get().asFile.path}/scoverage")
       highlighting = false
       minimumRate = 0.0
     }
@@ -1767,7 +1768,6 @@ project(':share-coordinator') {
     implementation project(':clients')
     implementation project(':coordinator-common')
     implementation project(':metadata')
-    implementation project(':server')
     implementation project(':server-common')
     implementation project(':share')
     implementation libs.metrics
@@ -2860,6 +2860,7 @@ project(':streams:integration-tests') {
 
   dependencies {
     implementation libs.slf4jApi
+    implementation libs.scalaLibrary
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':group-coordinator')

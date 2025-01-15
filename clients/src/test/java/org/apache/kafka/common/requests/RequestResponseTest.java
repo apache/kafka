@@ -136,6 +136,8 @@ import org.apache.kafka.common.message.DescribeProducersRequestData;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
 import org.apache.kafka.common.message.DescribeTransactionsRequestData;
@@ -1074,6 +1076,7 @@ public class RequestResponseTest {
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryRequest(version);
             case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatRequest(version);
             case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeRequest(version);
+            case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1170,6 +1173,7 @@ public class RequestResponseTest {
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryResponse();
             case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse();
             case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse();
+            case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -3951,6 +3955,28 @@ public class RequestResponseTest {
                                 .setStartOffset(0)
                                 .setStateEpoch(0)))));
         return new ReadShareGroupStateSummaryResponse(data);
+    }
+
+    private DescribeShareGroupOffsetsRequest createDescribeShareGroupOffsetsRequest(short version) {
+        DescribeShareGroupOffsetsRequestData data = new DescribeShareGroupOffsetsRequestData()
+                .setGroupId("group")
+                .setTopics(Collections.singletonList(new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic()
+                        .setTopicName("topic-1")
+                        .setPartitions(Collections.singletonList(0))));
+        return new DescribeShareGroupOffsetsRequest.Builder(data).build(version);
+    }
+
+    private DescribeShareGroupOffsetsResponse createDescribeShareGroupOffsetsResponse() {
+        DescribeShareGroupOffsetsResponseData data = new DescribeShareGroupOffsetsResponseData()
+                .setResponses(Collections.singletonList(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+                        .setTopicName("group")
+                        .setTopicId(Uuid.randomUuid())
+                        .setPartitions(Collections.singletonList(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(0)
+                                .setErrorCode(Errors.NONE.code())
+                                .setStartOffset(0)
+                                .setLeaderEpoch(0)))));
+        return new DescribeShareGroupOffsetsResponse(data);
     }
 
     private AbstractRequest createStreamsGroupDescribeRequest(final short version) {
