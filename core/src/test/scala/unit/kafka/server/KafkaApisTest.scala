@@ -9663,8 +9663,7 @@ class KafkaApisTest extends Logging {
       consumerGroupHeartbeatRequest
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      featureVersions = Seq(GroupVersion.GV_1),
-
+      featureVersions = Seq(GroupVersion.GV_1)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -9690,8 +9689,7 @@ class KafkaApisTest extends Logging {
       consumerGroupHeartbeatRequest
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      featureVersions = Seq(GroupVersion.GV_1),
-
+      featureVersions = Seq(GroupVersion.GV_1)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -9713,8 +9711,7 @@ class KafkaApisTest extends Logging {
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
-      featureVersions = Seq(GroupVersion.GV_1),
-
+      featureVersions = Seq(GroupVersion.GV_1)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -9739,8 +9736,7 @@ class KafkaApisTest extends Logging {
       any[util.List[String]]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      featureVersions = Seq(GroupVersion.GV_1),
-
+      featureVersions = Seq(GroupVersion.GV_1)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -9810,8 +9806,7 @@ class KafkaApisTest extends Logging {
     future.complete(List().asJava)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
-      featureVersions = Seq(GroupVersion.GV_1),
-
+      featureVersions = Seq(GroupVersion.GV_1)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -9833,8 +9828,7 @@ class KafkaApisTest extends Logging {
       any[util.List[String]]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      featureVersions = Seq(GroupVersion.GV_1),
-
+      featureVersions = Seq(GroupVersion.GV_1)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
