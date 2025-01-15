@@ -108,7 +108,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         return build(aggFunctionName, storeName, aggregateSupplier, gracePeriodAggProcessorNode, queryableStoreName, keySerde, valueSerde);
     }
 
-    <KR, VR> KTable<KR, VR> build(final String aggFunctionName,
+    private <KR, VR> KTable<KR, VR> build(final String aggFunctionName,
                                           final String storeName,
                                           final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
                                           final ProcessorGraphNode<K, V> aggProcessorNode,
