@@ -1414,7 +1414,7 @@ public class ClassicGroup implements Group {
                 // of the leaving one.
                 ConsumerGroupMember replacedMember = consumerGroup.staticMember(joiningMember.instanceId());
                 if (replacedMember == null) {
-                    throw Errors.UNKNOWN_MEMBER_ID.exception("Instance id " + joiningMember.instanceId() + " is unknown.");
+                    throw new IllegalArgumentException("joiningMember must be a static member when not null.");
                 }
                 memberId = replacedMember.memberId();
             }

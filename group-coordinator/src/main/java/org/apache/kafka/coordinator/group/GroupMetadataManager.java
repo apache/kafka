@@ -1001,7 +1001,9 @@ public class GroupMetadataManager {
             // We've already generated the records to replace replacedMember with joiningMember,
             // so we need to tombstone joiningMember instead.
             ConsumerGroupMember replacedMember = consumerGroup.staticMember(joiningMember.instanceId());
-            throwIfStaticMemberIsUnknown(replacedMember, joiningMember.instanceId());
+            if (replacedMember == null) {
+                throw new IllegalArgumentException("joiningMember must be a static member when not null.");
+            }
             consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, replacedMember.memberId(), joiningMember.memberId());
         }
 
