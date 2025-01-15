@@ -446,11 +446,9 @@ class BrokerServer(
         metrics
       )
 
-      // Create the request processor objects.
-      val raftSupport = RaftSupport(forwardingManager, metadataCache)
       dataPlaneRequestProcessor = new KafkaApis(
         requestChannel = socketServer.dataPlaneRequestChannel,
-        metadataSupport = raftSupport,
+        forwardingManager = forwardingManager,
         replicaManager = replicaManager,
         groupCoordinator = groupCoordinator,
         txnCoordinator = transactionCoordinator,

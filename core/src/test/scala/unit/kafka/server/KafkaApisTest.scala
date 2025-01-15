@@ -169,12 +169,6 @@ class KafkaApisTest extends Logging {
     TestUtils.setIbpVersion(properties, interBrokerProtocolVersion)
     val config = new KafkaConfig(properties)
 
-    val metadataSupport = metadataCache match {
-        case cache: KRaftMetadataCache => RaftSupport(forwardingManager, cache)
-        case _ => throw new IllegalStateException("Test must set an instance of KRaftMetadataCache")
-      }
-
-
     val listenerType = ListenerType.BROKER
     val enabledApis = ApiKeys.apisForListener(listenerType).asScala
 
@@ -192,7 +186,7 @@ class KafkaApisTest extends Logging {
 
     new KafkaApis(
       requestChannel = requestChannel,
-      metadataSupport = metadataSupport,
+      forwardingManager = forwardingManager,
       replicaManager = replicaManager,
       groupCoordinator = groupCoordinator,
       txnCoordinator = txnCoordinator,

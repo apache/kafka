@@ -83,7 +83,7 @@ import scala.jdk.CollectionConverters._
  * Logic to handle the various Kafka requests
  */
 class KafkaApis(val requestChannel: RequestChannel,
-                val metadataSupport: MetadataSupport,
+                val forwardingManager: ForwardingManager,
                 val replicaManager: ReplicaManager,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
@@ -132,7 +132,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    metadataSupport.forward(request, responseCallback)
+    forwardingManager.forwardRequest(request, responseCallback)
   }
 
   private def handleInvalidVersionsDuringForwarding(request: RequestChannel.Request): Unit = {
@@ -2108,7 +2108,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (remaining.resources().isEmpty) {
       sendResponse(Some(new AlterConfigsResponseData()))
     } else {
-      metadataSupport.forwardingManager.get.forwardRequest(request,
+      forwardingManager.forwardRequest(request,
         new AlterConfigsRequest(remaining, request.header.apiVersion()),
         response => sendResponse(response.map(_.data())))
     }
@@ -2135,7 +2135,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (remaining.resources().isEmpty) {
       sendResponse(Some(new IncrementalAlterConfigsResponseData()))
     } else {
-      metadataSupport.forwardingManager.get.forwardRequest(request,
+      forwardingManager.forwardRequest(request,
         new IncrementalAlterConfigsRequest(remaining, request.header.apiVersion()),
         response => sendResponse(response.map(_.data())))
     }
@@ -2383,14 +2383,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         describeUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
-      metadataSupport match {
-        case RaftSupport(_, metadataCache) =>
-          val result = metadataCache.describeScramCredentials(describeUserScramCredentialsRequest.data())
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
-        case _ =>
-         throw KafkaApis.shouldNeverReceive(request)
-      }
+      val result = metadataCache.asInstanceOf[KRaftMetadataCache].describeScramCredentials(describeUserScramCredentialsRequest.data())
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
     }
   }
 
@@ -2672,7 +2667,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               name => new ClientMetricsResource().setName(name)).toList.asJava)
           requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
         case None =>
-          // This should never happen as ZK based cluster calls should get rejected earlier itself,
+          // This should never happen as  based cluster calls should get rejected earlier itself,
           // but we should handle it gracefully.
           info("Received list client metrics resources request for zookeeper based cluster")
           requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
