@@ -78,7 +78,6 @@ public class StressTestLog {
             new LogDirFailureChannel(10),
             true,
             Option.empty(),
-            true,
             new ConcurrentHashMap<>(),
             false,
             LogOffsetsListener.NO_OP_OFFSETS_LISTENER

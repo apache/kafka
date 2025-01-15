@@ -56,7 +56,6 @@ public class LogManagerBuilder {
     private BrokerTopicStats brokerTopicStats = null;
     private LogDirFailureChannel logDirFailureChannel = null;
     private Time time = Time.SYSTEM;
-    private boolean keepPartitionMetadataFile = true;
     private boolean remoteStorageSystemEnable = false;
     private long initialTaskDelayMs = ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT;
 
@@ -145,11 +144,6 @@ public class LogManagerBuilder {
         return this;
     }
 
-    public LogManagerBuilder setKeepPartitionMetadataFile(boolean keepPartitionMetadataFile) {
-        this.keepPartitionMetadataFile = keepPartitionMetadataFile;
-        return this;
-    }
-
     public LogManagerBuilder setRemoteStorageSystemEnable(boolean remoteStorageSystemEnable) {
         this.remoteStorageSystemEnable = remoteStorageSystemEnable;
         return this;
@@ -186,7 +180,6 @@ public class LogManagerBuilder {
                               brokerTopicStats,
                               logDirFailureChannel,
                               time,
-                              keepPartitionMetadataFile,
                               remoteStorageSystemEnable,
                               initialTaskDelayMs);
     }

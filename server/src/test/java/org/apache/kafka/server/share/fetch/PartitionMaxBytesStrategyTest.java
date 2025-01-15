@@ -23,7 +23,6 @@ import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy.StrategyTyp
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -56,7 +55,7 @@ public class PartitionMaxBytesStrategyTest {
             100, partitions, 0));
         // empty partitions set.
         assertThrows(IllegalArgumentException.class, () -> PartitionMaxBytesStrategy.checkValidArguments(
-            100, Collections.EMPTY_SET, 20));
+            100, Set.of(), 20));
         // partitions is null.
         assertThrows(IllegalArgumentException.class, () -> PartitionMaxBytesStrategy.checkValidArguments(
             100, null, 20));
