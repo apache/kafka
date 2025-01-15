@@ -47,7 +47,7 @@ public class ConsumerGroupDescription {
     private final Optional<Integer> targetAssignmentEpoch;
 
     /**
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
     @Deprecated
     public ConsumerGroupDescription(String groupId,
@@ -60,7 +60,7 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
     @Deprecated
     public ConsumerGroupDescription(String groupId,
@@ -74,7 +74,7 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
     @Deprecated
     public ConsumerGroupDescription(String groupId,

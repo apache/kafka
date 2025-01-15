@@ -39,12 +39,11 @@ object FixedPortTestUtils {
   }
 
   def createBrokerConfigs(numConfigs: Int,
-    zkConnect: String,
     enableControlledShutdown: Boolean = true,
     enableDeleteTopic: Boolean = false): Seq[Properties] = {
     val ports = FixedPortTestUtils.choosePorts(numConfigs)
     (0 until numConfigs).map { node =>
-      TestUtils.createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, ports(node))
+      TestUtils.createBrokerConfig(node, enableControlledShutdown, enableDeleteTopic, ports(node))
     }
   }
 

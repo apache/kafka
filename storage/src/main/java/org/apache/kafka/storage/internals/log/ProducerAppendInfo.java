@@ -181,7 +181,7 @@ public class ProducerAppendInfo {
             // Received a non-transactional message while a transaction is active
             throw new InvalidTxnStateException("Expected transactional write from producer " + producerId + " at " +
                     "offset " + firstOffsetMetadata + " in partition " + topicPartition);
-        } else if (!currentTxnFirstOffset.isPresent() && isTransactional) {
+        } else if (currentTxnFirstOffset.isEmpty() && isTransactional) {
             // Began a new transaction
             updatedEntry.setCurrentTxnFirstOffset(firstOffset);
             transactions.add(new TxnMetadata(producerId, firstOffsetMetadata));

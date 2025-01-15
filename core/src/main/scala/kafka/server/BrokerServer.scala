@@ -347,7 +347,6 @@ class BrokerServer(
         alterPartitionManager = alterPartitionManager,
         brokerTopicStats = brokerTopicStats,
         isShuttingDown = isShuttingDown,
-        zkClient = None,
         threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
         delayedRemoteFetchPurgatoryParam = None,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
@@ -385,8 +384,8 @@ class BrokerServer(
         producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM)
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
-        config, Some(clientToControllerChannelManager), None, None,
-        groupCoordinator, transactionCoordinator, shareCoordinator)
+        config, clientToControllerChannelManager, groupCoordinator,
+        transactionCoordinator, shareCoordinator)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
@@ -424,7 +423,7 @@ class BrokerServer(
       val fetchSessionCacheShards = (0 until NumFetchSessionCacheShards)
         .map(shardNum => new FetchSessionCacheShard(
           config.maxIncrementalFetchSessionCacheSlots / NumFetchSessionCacheShards,
-          KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
+          KafkaBroker.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
           sessionIdRange,
           shardNum
         ))
@@ -432,7 +431,7 @@ class BrokerServer(
 
       val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
         config.shareGroupConfig.shareGroupMaxGroups * config.groupCoordinatorConfig.shareGroupMaxSize,
-        KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
+        KafkaBroker.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
 
       sharePartitionManager = new SharePartitionManager(
         replicaManager,

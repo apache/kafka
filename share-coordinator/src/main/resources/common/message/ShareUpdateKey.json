@@ -16,16 +16,17 @@
 // KIP-932 is in development. This schema is subject to non-backwards-compatible changes.
 
 {
-  "type": "data",
+  "apiKey": 1,
+  "type": "coordinator-key",
   "name": "ShareUpdateKey",
-  "validVersions": "1",
+  "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "1",
+    { "name": "GroupId", "type": "string", "versions": "0",
       "about": "The group id." },
-    { "name": "TopicId", "type": "uuid", "versions": "1",
+    { "name": "TopicId", "type": "uuid", "versions": "0",
       "about": "The topic id." },
-    { "name": "Partition", "type": "int32", "versions": "1",
+    { "name": "Partition", "type": "int32", "versions": "0",
       "about": "The partition index." }
   ]
 }

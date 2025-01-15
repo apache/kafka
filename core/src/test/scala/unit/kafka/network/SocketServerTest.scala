@@ -66,7 +66,7 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.ControlThrowable
 
 class SocketServerTest {
-  val props = TestUtils.createBrokerConfig(0, null, port = 0)
+  val props = TestUtils.createBrokerConfig(0, port = 0)
   props.put("listeners", "PLAINTEXT://localhost:0")
   props.put("num.network.threads", "1")
   props.put("socket.send.buffer.bytes", "300000")
@@ -104,7 +104,6 @@ class SocketServerTest {
     logLevelToRestore = kafkaLogger.getLevel
     Configurator.setLevel(kafkaLogger.getName, Level.TRACE)
 
-    assertTrue(server.controlPlaneRequestChannelOpt.isEmpty)
   }
 
   @AfterEach
@@ -767,7 +766,7 @@ class SocketServerTest {
 
   @Test
   def testZeroMaxConnectionsPerIp(): Unit = {
-    val newProps = TestUtils.createBrokerConfig(0, null, port = 0)
+    val newProps = TestUtils.createBrokerConfig(0, port = 0)
     newProps.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, "0")
     newProps.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, "%s:%s".format("127.0.0.1", "5"))
     val server = new SocketServer(KafkaConfig.fromProps(newProps), new Metrics(),
@@ -806,7 +805,7 @@ class SocketServerTest {
   @Test
   def testMaxConnectionsPerIpOverrides(): Unit = {
     val overrideNum = server.config.maxConnectionsPerIp + 1
-    val overrideProps = TestUtils.createBrokerConfig(0, null, port = 0)
+    val overrideProps = TestUtils.createBrokerConfig(0, port = 0)
     overrideProps.put(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, s"localhost:$overrideNum")
     val serverMetrics = new Metrics()
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics,
@@ -865,7 +864,7 @@ class SocketServerTest {
   @Test
   def testConnectionRatePerIp(): Unit = {
     val defaultTimeoutMs = 2000
-    val overrideProps = TestUtils.createBrokerConfig(0, null, port = 0)
+    val overrideProps = TestUtils.createBrokerConfig(0, port = 0)
     overrideProps.remove(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG)
     overrideProps.put(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, String.valueOf(2))
     val connectionRate = 5
@@ -916,7 +915,7 @@ class SocketServerTest {
 
   @Test
   def testThrottledSocketsClosedOnShutdown(): Unit = {
-    val overrideProps = TestUtils.createBrokerConfig(0, null, port = 0)
+    val overrideProps = TestUtils.createBrokerConfig(0, port = 0)
     overrideProps.remove("max.connections.per.ip")
     overrideProps.put(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, String.valueOf(2))
     val connectionRate = 5
@@ -1004,7 +1003,7 @@ class SocketServerTest {
     props.setProperty("connections.max.reauth.ms", reauthMs.toString)
     props.setProperty("listener.security.protocol.map", "SASL_PLAINTEXT:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT")
 
-    val overrideProps = TestUtils.createBrokerConfig(0, null, saslProperties = Some(props), enableSaslPlaintext = true)
+    val overrideProps = TestUtils.createBrokerConfig(0, saslProperties = Some(props), enableSaslPlaintext = true)
     val time = new MockTime()
     val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(overrideProps), time = time)
     try {
@@ -1084,7 +1083,7 @@ class SocketServerTest {
   }
 
   private def checkClientDisconnectionUpdatesRequestMetrics(responseBufferSize: Int): Unit = {
-    val props = TestUtils.createBrokerConfig(0, null, port = 0)
+    val props = TestUtils.createBrokerConfig(0, port = 0)
     val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(props))
 
     try {
@@ -1117,7 +1116,7 @@ class SocketServerTest {
   def testServerShutdownWithoutEnable(): Unit = {
     // The harness server has already been enabled, so it's invalid for this test.
     shutdownServerAndMetrics(server)
-    val props = TestUtils.createBrokerConfig(0, null, port = 0)
+    val props = TestUtils.createBrokerConfig(0, port = 0)
     val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(props))
     overrideServer.shutdown()
     assertFalse(overrideServer.testableAcceptor.isOpen)
@@ -1542,8 +1541,6 @@ class SocketServerTest {
     val testableServer = new TestableSocketServer(time = time)
     testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
 
-    assertTrue(testableServer.controlPlaneRequestChannelOpt.isEmpty)
-
     val proxyServer = new ProxyServer(testableServer)
     try {
       val testableSelector = testableServer.testableSelector
@@ -1926,7 +1923,7 @@ class SocketServerTest {
 
   private def sslServerProps: Properties = {
     val trustStoreFile = TestUtils.tempFile("truststore", ".jks")
-    val sslProps = TestUtils.createBrokerConfig(0, null, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
+    val sslProps = TestUtils.createBrokerConfig(0, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
     sslProps.put(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:0")
     sslProps.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "SSL://localhost:0")

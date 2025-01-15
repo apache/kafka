@@ -90,6 +90,7 @@ import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
+import static org.apache.kafka.connect.runtime.WorkerTestUtils.getTransformationChain;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -192,13 +193,18 @@ public class WorkerSinkTaskTest {
         createTask(initialState, keyConverter, valueConverter, headerConverter);
     }
 
+    private void createTask(TargetState initialState, TransformationChain transformationChain, RetryWithToleranceOperator toleranceOperator) {
+        createTask(initialState, keyConverter, valueConverter, headerConverter, toleranceOperator, Collections::emptyList, transformationChain);
+    }
+
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
-        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noopOperator(), Collections::emptyList);
+        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noneOperator(), Collections::emptyList, transformationChain);
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
                             RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
-                            Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier) {
+                            Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier,
+                            TransformationChain transformationChain) {
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
@@ -852,6 +858,103 @@ public class WorkerSinkTaskTest {
         assertEquals(0, workerTask.commitFailures());
         verify(consumer).wakeup();
         verify(sinkTask).close(any(Collection.class));
+    }
+
+    @Test
+    public void testRaisesFailedRetriableExceptionFromConvert() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(invocation -> {
+                    // stop the task during its second iteration
+                    workerTask.stop();
+                    return new ConsumerRecords<>(Map.of(), Map.of());
+                });
+        throwExceptionOnConversion(null, new RecordHeaders());
+
+        workerTask.iteration();
+
+        assertThrows(ConnectException.class, workerTask::execute);
+    }
+
+    @Test
+    public void testSkipsFailedRetriableExceptionFromConvert() {
+        createTask(initialState, keyConverter, valueConverter, headerConverter,
+                RetryWithToleranceOperatorTest.allOperator(), Collections::emptyList, transformationChain);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(invocation -> {
+                    // stop the task during its second iteration
+                    workerTask.stop();
+                    return new ConsumerRecords<>(Map.of(), Map.of());
+                });
+        throwExceptionOnConversion(null, new RecordHeaders());
+
+        workerTask.iteration();
+        workerTask.execute();
+
+        verify(sinkTask, times(3)).put(Collections.emptyList());
+    }
+
+    @Test
+    public void testRaisesFailedRetriableExceptionFromTransform() {
+        RetryWithToleranceOperator<RetriableException> retryWithToleranceOperator = RetryWithToleranceOperatorTest.noneOperator();
+        TransformationChain<RetriableException, SinkRecord> transformationChainRetriableException = getTransformationChain(
+                retryWithToleranceOperator, List.of(new RetriableException("Test")));
+        createTask(initialState, transformationChainRetriableException, retryWithToleranceOperator);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(invocation -> {
+                    // stop the task during its second iteration
+                    workerTask.stop();
+                    return new ConsumerRecords<>(Map.of(), Map.of());
+                });
+        expectConversion(null, new RecordHeaders());
+
+        workerTask.iteration();
+
+        assertThrows(ConnectException.class, workerTask::execute);
+    }
+
+    @Test
+    public void testSkipsFailedRetriableExceptionFromTransform() {
+        RetryWithToleranceOperator<RetriableException> retryWithToleranceOperator = RetryWithToleranceOperatorTest.allOperator();
+        TransformationChain<RetriableException, SinkRecord> transformationChainRetriableException = getTransformationChain(
+                retryWithToleranceOperator, List.of(new RetriableException("Test")));
+        createTask(initialState, transformationChainRetriableException, retryWithToleranceOperator);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(invocation -> {
+                    // stop the task during its second iteration
+                    workerTask.stop();
+                    return new ConsumerRecords<>(Map.of(), Map.of());
+                });
+        expectConversion(null, new RecordHeaders());
+
+        workerTask.iteration();
+        workerTask.execute();
+
+        verify(sinkTask, times(3)).put(Collections.emptyList());
     }
 
     @Test
@@ -1758,7 +1861,7 @@ public class WorkerSinkTaskTest {
                 taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, mockConsumer, pluginLoader, time,
-                RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore, Collections::emptyList);
+                RetryWithToleranceOperatorTest.noneOperator(), null, statusBackingStore, Collections::emptyList);
         mockConsumer.updateBeginningOffsets(
                 new HashMap<>() {{
                     put(TOPIC_PARTITION, 0L);
@@ -1850,6 +1953,19 @@ public class WorkerSinkTaskTest {
         }
 
         expectTransformation(topicPrefix);
+    }
+
+    private void expectConversion(final String topicPrefix, final Headers headers) {
+        when(keyConverter.toConnectData(TOPIC, headers, RAW_KEY)).thenReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
+        when(valueConverter.toConnectData(TOPIC, headers, RAW_VALUE)).thenReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
+
+        for (Header header : headers) {
+            when(headerConverter.toConnectHeader(TOPIC, header.key(), header.value())).thenReturn(new SchemaAndValue(VALUE_SCHEMA, new String(header.value())));
+        }
+    }
+
+    private void throwExceptionOnConversion(final String topicPrefix, final Headers headers) {
+        when(keyConverter.toConnectData(TOPIC, headers, RAW_KEY)).thenThrow(new RetriableException("Failed to convert"));
     }
 
     @SuppressWarnings("unchecked")
