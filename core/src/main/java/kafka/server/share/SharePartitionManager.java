@@ -69,14 +69,17 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * The SharePartitionManager is responsible for managing the SharePartitions and ShareSessions.
@@ -265,7 +268,7 @@ public class SharePartitionManager implements AutoCloseable {
                 partitionMaxBytes.keySet(), groupId, fetchParams);
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        processShareFetch(new ShareFetch(fetchParams, groupId, memberId, future, partitionMaxBytes, batchSize, maxFetchRecords, failedShareFetchMetricsHandler()));
+        processShareFetch(new ShareFetch(fetchParams, groupId, memberId, future, partitionMaxBytes, batchSize, maxFetchRecords, brokerTopicStats));
 
         return future;
     }
@@ -287,11 +290,11 @@ public class SharePartitionManager implements AutoCloseable {
     ) {
         log.trace("Acknowledge request for topicIdPartitions: {} with groupId: {}",
             acknowledgeTopics.keySet(), groupId);
-        brokerTopicStats.allTopicsStats().totalShareAcknowledgementRequestRate().mark();
         Map<TopicIdPartition, CompletableFuture<Throwable>> futures = new HashMap<>();
+        // Track the topics for which we have received an acknowledgement for metrics.
+        Set<String> topics = new HashSet<>();
         acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
-            // Update share acknowledgement metrics.
-            brokerTopicStats.topicStats(topicIdPartition.topic()).totalShareAcknowledgementRequestRate().mark();
+            topics.add(topicIdPartition.topic());
             SharePartitionKey sharePartitionKey = sharePartitionKey(groupId, topicIdPartition);
             SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey);
             if (sharePartition != null) {
@@ -315,6 +318,12 @@ public class SharePartitionManager implements AutoCloseable {
             } else {
                 futures.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
             }
+        });
+
+        // Update the metrics for the topics for which we have received an acknowledgement.
+        topics.forEach(topic -> {
+            brokerTopicStats.allTopicsStats().totalShareAcknowledgementRequestRate().mark();
+            brokerTopicStats.topicStats(topic).totalShareAcknowledgementRequestRate().mark();
         });
 
         return mapAcknowledgementFutures(futures, Optional.of(failedShareAcknowledgeMetricsHandler()));
@@ -383,14 +392,14 @@ public class SharePartitionManager implements AutoCloseable {
 
     private CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> mapAcknowledgementFutures(
         Map<TopicIdPartition, CompletableFuture<Throwable>> futuresMap,
-        Optional<BiConsumer<Collection<String>, Boolean>> metricsHandler
+        Optional<Consumer<Collection<String>>> metricsHandler
     ) {
         CompletableFuture<Void> allFutures = CompletableFuture.allOf(
             futuresMap.values().toArray(new CompletableFuture[0]));
         return allFutures.thenApply(v -> {
             Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
-            // Keep the list as same topic might appear multiple times. Multiple partitions can fail for same topic.
-            List<String> failedTopics = new ArrayList<>();
+            // Keep the set as same topic might appear multiple times. Multiple partitions can fail for same topic.
+            Set<String> failedTopics = new HashSet<>();
             futuresMap.forEach((topicIdPartition, future) -> {
                 ShareAcknowledgeResponseData.PartitionData partitionData = new ShareAcknowledgeResponseData.PartitionData()
                     .setPartitionIndex(topicIdPartition.partition());
@@ -402,7 +411,7 @@ public class SharePartitionManager implements AutoCloseable {
                 }
                 result.put(topicIdPartition, partitionData);
             });
-            metricsHandler.ifPresent(handler -> handler.accept(failedTopics, failedTopics.size() == futuresMap.size()));
+            metricsHandler.ifPresent(handler -> handler.accept(failedTopics));
             return result;
         });
     }
@@ -568,7 +577,6 @@ public class SharePartitionManager implements AutoCloseable {
 
     // Visible for testing.
     void processShareFetch(ShareFetch shareFetch) {
-        brokerTopicStats.allTopicsStats().totalShareFetchRequestRate().mark();
         if (shareFetch.partitionMaxBytes().isEmpty()) {
             // If there are no partitions to fetch then complete the future with an empty map.
             shareFetch.maybeComplete(Collections.emptyMap());
@@ -577,8 +585,10 @@ public class SharePartitionManager implements AutoCloseable {
 
         List<DelayedShareFetchKey> delayedShareFetchWatchKeys = new ArrayList<>();
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        // Track the topics for which we have received a share fetch request for metrics.
+        Set<String> topics = new HashSet<>();
         for (TopicIdPartition topicIdPartition : shareFetch.partitionMaxBytes().keySet()) {
-            brokerTopicStats.topicStats(topicIdPartition.topic()).totalShareFetchRequestRate().mark();
+            topics.add(topicIdPartition.topic());
             SharePartitionKey sharePartitionKey = sharePartitionKey(
                 shareFetch.groupId(),
                 topicIdPartition
@@ -621,6 +631,12 @@ public class SharePartitionManager implements AutoCloseable {
             });
             sharePartitions.put(topicIdPartition, sharePartition);
         }
+
+        // Update the metrics for the topics for which we have received a share fetch request.
+        topics.forEach(topic -> {
+            brokerTopicStats.allTopicsStats().totalShareFetchRequestRate().mark();
+            brokerTopicStats.topicStats(topic).totalShareFetchRequestRate().mark();
+        });
 
         // If all the partitions in the request errored out, then complete the fetch request with an exception.
         if (shareFetch.errorInAllPartitions()) {
@@ -720,34 +736,17 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     /**
-     * The handler to update the failed share fetch request metrics.
-     *
-     * @return A BiConsumer that updates the failed share fetch request metrics.
-     */
-    private BiConsumer<Collection<TopicIdPartition>, Boolean> failedShareFetchMetricsHandler() {
-        return (topicIdPartitions, allTopicPartitionsFailed) -> {
-            // Update failed share fetch request metric.
-            topicIdPartitions.forEach(topicIdPartition ->
-                brokerTopicStats.topicStats(topicIdPartition.topic()).failedShareFetchRequestRate().mark());
-            if (allTopicPartitionsFailed) {
-                brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().mark();
-            }
-        };
-    }
-
-    /**
      * The handler to update the failed share acknowledge request metrics.
      *
-     * @return A BiConsumer that updates the failed share acknowledge request metrics.
+     * @return A Consumer that updates the failed share acknowledge request metrics.
      */
-    private BiConsumer<Collection<String>, Boolean> failedShareAcknowledgeMetricsHandler() {
-        return (failedTopics, allTopicPartitionsFailed) -> {
+    private Consumer<Collection<String>> failedShareAcknowledgeMetricsHandler() {
+        return failedTopics -> {
             // Update failed share acknowledge request metric.
-            failedTopics.forEach(topic -> brokerTopicStats.topicStats(topic).failedShareAcknowledgementRequestRate().mark());
-            if (allTopicPartitionsFailed) {
-                // Share acknowledgement failed for all topic partitions.
+            failedTopics.forEach(topic -> {
                 brokerTopicStats.allTopicsStats().failedShareAcknowledgementRequestRate().mark();
-            }
+                brokerTopicStats.topicStats(topic).failedShareAcknowledgementRequestRate().mark();
+            });
         };
     }
 

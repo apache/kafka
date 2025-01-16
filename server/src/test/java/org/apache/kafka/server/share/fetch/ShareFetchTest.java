@@ -21,36 +21,45 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.server.storage.log.FetchParams;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 
 public class ShareFetchTest {
-    // No-op metrics handler.
-    public static final BiConsumer<Collection<TopicIdPartition>, Boolean> METRICS_HANDLER = (tp, b) -> { };
 
     private static final String GROUP_ID = "groupId";
     private static final String MEMBER_ID = "memberId";
     private static final int BATCH_SIZE = 500;
 
+    private BrokerTopicStats brokerTopicStats;
+
+    @BeforeEach
+    public void setUp() {
+        brokerTopicStats = new BrokerTopicStats();
+    }
+
+    @AfterEach
+    public void tearDown() throws Exception {
+        brokerTopicStats.close();
+    }
+
     @Test
     public void testErrorInAllPartitions() {
         TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, new CompletableFuture<>(),
-            Map.of(topicIdPartition, 10), BATCH_SIZE, 100, METRICS_HANDLER);
+            Map.of(topicIdPartition, 10), BATCH_SIZE, 100, brokerTopicStats);
         assertFalse(shareFetch.errorInAllPartitions());
 
         shareFetch.addErroneous(topicIdPartition, new RuntimeException());
@@ -62,7 +71,8 @@ public class ShareFetchTest {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, new CompletableFuture<>(),
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, METRICS_HANDLER);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100,
+            brokerTopicStats);
         assertFalse(shareFetch.errorInAllPartitions());
 
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
@@ -77,7 +87,8 @@ public class ShareFetchTest {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, new CompletableFuture<>(),
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, METRICS_HANDLER);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100,
+            brokerTopicStats);
         Set<TopicIdPartition> result = shareFetch.filterErroneousTopicPartitions(Set.of(topicIdPartition0, topicIdPartition1));
         // No erroneous partitions, hence all partitions should be returned.
         assertEquals(2, result.size());
@@ -97,15 +108,13 @@ public class ShareFetchTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testMaybeCompleteWithErroneousTopicPartitions() {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        BiConsumer<Collection<TopicIdPartition>, Boolean> metricsHandler = mock(BiConsumer.class);
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, metricsHandler);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, brokerTopicStats);
 
         // Add both erroneous partition and complete request.
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
@@ -114,86 +123,84 @@ public class ShareFetchTest {
         assertEquals(2, future.join().size());
         assertTrue(future.join().containsKey(topicIdPartition0));
         assertTrue(future.join().containsKey(topicIdPartition1));
-        // Validate that the metrics handler was called with the erroneous partitions and true for the complete failure.
-        Mockito.verify(metricsHandler, times(1)).accept(Set.of(topicIdPartition0, topicIdPartition1), true);
+        // Validate failed share fetch request metrics, though 2 partitions failed but only 1 topic failed.
+        assertEquals(1, brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().count());
+        assertEquals(1, brokerTopicStats.topicStats("foo").failedShareFetchRequestRate().count());
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testMaybeCompleteWithPartialErroneousTopicPartitions() {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        BiConsumer<Collection<TopicIdPartition>, Boolean> metricsHandler = mock(BiConsumer.class);
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, metricsHandler);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, brokerTopicStats);
 
         // Add an erroneous partition and complete request.
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
         shareFetch.maybeComplete(Map.of());
         assertTrue(future.isDone());
-        // Validate that the metrics handler was called with the erroneous partition and false for the complete failure
-        // another topic partition is not errored out.
-        Mockito.verify(metricsHandler, times(1)).accept(Set.of(topicIdPartition0), false);
         assertEquals(1, future.join().size());
         assertTrue(future.join().containsKey(topicIdPartition0));
+        // Validate failed share fetch request metrics, 1 topic partition failed and 1 succeeded.
+        assertEquals(1, brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().count());
+        assertEquals(1, brokerTopicStats.topicStats("foo").failedShareFetchRequestRate().count());
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testMaybeCompleteWithException() {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        BiConsumer<Collection<TopicIdPartition>, Boolean> metricsHandler = mock(BiConsumer.class);
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, metricsHandler);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, brokerTopicStats);
 
         shareFetch.maybeCompleteWithException(List.of(topicIdPartition0, topicIdPartition1), new RuntimeException());
         assertEquals(2, future.join().size());
         assertTrue(future.join().containsKey(topicIdPartition0));
         assertTrue(future.join().containsKey(topicIdPartition1));
-        // Validate that the metrics handler was called with the erroneous partitions and true for the complete failure.
-        Mockito.verify(metricsHandler, times(1)).accept(Set.of(topicIdPartition0, topicIdPartition1), true);
+        // Validate failed share fetch request metrics, though 2 partitions failed but only 1 topic failed.
+        assertEquals(1, brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().count());
+        assertEquals(1, brokerTopicStats.topicStats("foo").failedShareFetchRequestRate().count());
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testMaybeCompleteWithExceptionPartialFailure() {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition topicIdPartition2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0));
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        BiConsumer<Collection<TopicIdPartition>, Boolean> metricsHandler = mock(BiConsumer.class);
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, metricsHandler);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10, topicIdPartition2, 10), BATCH_SIZE, 100, brokerTopicStats);
 
-        shareFetch.maybeCompleteWithException(List.of(topicIdPartition0), new RuntimeException());
-        assertEquals(1, future.join().size());
+        shareFetch.maybeCompleteWithException(List.of(topicIdPartition0, topicIdPartition2), new RuntimeException());
+        assertEquals(2, future.join().size());
         assertTrue(future.join().containsKey(topicIdPartition0));
-        // Validate that the metrics handler was called with the erroneous partitions and false for the complete failure.
-        Mockito.verify(metricsHandler, times(1)).accept(Set.of(topicIdPartition0), false);
+        // Validate failed share fetch request metrics, 1 topic partition failed and 1 succeeded.
+        assertEquals(2, brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().count());
+        assertEquals(1, brokerTopicStats.topicStats("foo").failedShareFetchRequestRate().count());
+        assertEquals(1, brokerTopicStats.topicStats("foo1").failedShareFetchRequestRate().count());
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testMaybeCompleteWithExceptionWithExistingErroneousTopicPartition() {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        BiConsumer<Collection<TopicIdPartition>, Boolean> metricsHandler = mock(BiConsumer.class);
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, metricsHandler);
+            Map.of(topicIdPartition0, 10, topicIdPartition1, 10), BATCH_SIZE, 100, brokerTopicStats);
 
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
         shareFetch.maybeCompleteWithException(List.of(topicIdPartition1), new RuntimeException());
         assertEquals(2, future.join().size());
         assertTrue(future.join().containsKey(topicIdPartition0));
         assertTrue(future.join().containsKey(topicIdPartition1));
-        // Validate that the metrics handler was called with the erroneous partitions and true for the complete failure.
-        Mockito.verify(metricsHandler, times(1)).accept(Set.of(topicIdPartition0, topicIdPartition1), true);
+        // Validate failed share fetch request metrics, though 2 partitions failed but only 1 topic failed.
+        assertEquals(1, brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().count());
+        assertEquals(1, brokerTopicStats.topicStats("foo").failedShareFetchRequestRate().count());
     }
 }

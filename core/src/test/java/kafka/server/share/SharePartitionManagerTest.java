@@ -116,7 +116,6 @@ import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
 
 import static kafka.server.share.DelayedShareFetchTest.mockTopicIdPartitionToReturnDataEqualToMinBytes;
-import static org.apache.kafka.server.share.fetch.ShareFetchTest.METRICS_HANDLER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -1112,12 +1111,12 @@ public class SharePartitionManagerTest {
             test.accept((Double) metrics.metrics().get(metric).metricValue());
         });
 
-        // Should have 3 total fetches, 12 fetches for topic foo (4 partitions and 3 fetches) and 9
-        // fetches for topic bar (3 partitions and 3 fetches).
+        // Should have 6 total fetches, 3 fetches for topic foo (though 4 partitions but 3 fetches) and 3
+        // fetches for topic bar (though 3 partitions but 3 fetches).
         validateBrokerTopicStatsMetrics(
             brokerTopicStats,
-            new TopicMetrics(3, 0, 0, 0),
-            Map.of("foo", new TopicMetrics(12, 0, 0, 0), "bar", new TopicMetrics(9, 0, 0, 0))
+            new TopicMetrics(6, 0, 0, 0),
+            Map.of("foo", new TopicMetrics(3, 0, 0, 0), "bar", new TopicMetrics(3, 0, 0, 0))
         );
     }
 
@@ -1612,10 +1611,10 @@ public class SharePartitionManagerTest {
             test.accept((Double) metrics.metrics().get(metric).metricValue());
         });
 
-        // Should have 1 successful acknowledgement and 1 successful acknowledgement per topic.
+        // Should have 3 successful acknowledgement and 1 successful acknowledgement per topic.
         validateBrokerTopicStatsMetrics(
             brokerTopicStats,
-            new TopicMetrics(0, 0, 1, 0),
+            new TopicMetrics(0, 0, 3, 0),
             Map.of(tp1.topic(), new TopicMetrics(0, 0, 1, 0), tp2.topic(), new TopicMetrics(0, 0, 1, 0), tp3.topic(), new TopicMetrics(0, 0, 1, 0))
         );
     }
@@ -1649,8 +1648,7 @@ public class SharePartitionManagerTest {
         assertEquals(0, result.get(tp).partitionIndex());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp).errorCode());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.message(), result.get(tp).errorMessage());
-        // Should have 1 acknowledge recorded and 1 failed. Also, the combined metrics should be 1 acknowledge
-        // failed as all partitions failed.
+        // Should have 1 acknowledge recorded and 1 failed.
         validateBrokerTopicStatsMetrics(
             brokerTopicStats,
             new TopicMetrics(0, 0, 1, 1),
@@ -1689,8 +1687,7 @@ public class SharePartitionManagerTest {
         assertEquals(0, result.get(tp).partitionIndex());
         assertEquals(Errors.INVALID_REQUEST.code(), result.get(tp).errorCode());
         assertEquals("Member is not the owner of batch record", result.get(tp).errorMessage());
-        // Should have 1 acknowledge recorded and 1 failed. Also, the combined metrics should be 1 acknowledge
-        // failed as all partitions failed.
+        // Should have 1 acknowledge recorded and 1 failed.
         validateBrokerTopicStatsMetrics(
             brokerTopicStats,
             new TopicMetrics(0, 0, 1, 1),
@@ -1721,8 +1718,7 @@ public class SharePartitionManagerTest {
         assertEquals(3, result.get(tp).partitionIndex());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp).errorCode());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.message(), result.get(tp).errorMessage());
-        // Should have 1 acknowledge recorded and 1 failed. Also, the combined metrics should be 1 acknowledge
-        // failed as all partitions failed.
+        // Should have 1 acknowledge recorded and 1 failed.
         validateBrokerTopicStatsMetrics(
             brokerTopicStats,
             new TopicMetrics(0, 0, 1, 1),
@@ -1766,7 +1762,7 @@ public class SharePartitionManagerTest {
             partitionMaxBytes,
             BATCH_SIZE,
             100,
-            METRICS_HANDLER);
+            brokerTopicStats);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
@@ -1780,6 +1776,8 @@ public class SharePartitionManagerTest {
         when(sp1.canAcquireRecords()).thenReturn(false);
         when(sp2.maybeAcquireFetchLock()).thenReturn(true);
         when(sp2.canAcquireRecords()).thenReturn(false);
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), any())).thenReturn(ShareAcquiredRecords.empty());
+        when(sp2.acquire(anyString(), anyInt(), anyInt(), any())).thenReturn(ShareAcquiredRecords.empty());
 
         List<DelayedOperationKey> delayedShareFetchWatchKeys = new ArrayList<>();
         partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
@@ -1826,7 +1824,7 @@ public class SharePartitionManagerTest {
         Mockito.verify(sp2, times(0)).nextFetchOffset();
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
-        // Should have 1 acknowledge recorded for topic as well as other topic is not acknowledged.
+        // Should have 1 acknowledge recorded as other topic is acknowledgement request is not sent.
         validateBrokerTopicStatsMetrics(
             brokerTopicStats,
             new TopicMetrics(0, 0, 1, 0),
@@ -1878,7 +1876,7 @@ public class SharePartitionManagerTest {
             partitionMaxBytes,
             BATCH_SIZE,
             100,
-            METRICS_HANDLER);
+            brokerTopicStats);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
@@ -1935,7 +1933,7 @@ public class SharePartitionManagerTest {
         Mockito.verify(sp2, times(0)).nextFetchOffset();
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
-        // Should have 1 acknowledge recorded for topic as well as other topic is not acknowledged.
+        // Should have 1 acknowledge recorded as other 2 topics acknowledgement request is not sent.
         validateBrokerTopicStatsMetrics(
             brokerTopicStats,
             new TopicMetrics(0, 0, 1, 0),
@@ -1985,7 +1983,7 @@ public class SharePartitionManagerTest {
             partitionMaxBytes,
             BATCH_SIZE,
             100,
-            METRICS_HANDLER);
+            brokerTopicStats);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
@@ -2094,7 +2092,7 @@ public class SharePartitionManagerTest {
             partitionMaxBytes,
             BATCH_SIZE,
             100,
-            METRICS_HANDLER);
+            brokerTopicStats);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
@@ -2567,12 +2565,12 @@ public class SharePartitionManagerTest {
         Mockito.verify(replicaManager, times(0)).completeDelayedShareFetchRequest(any());
         Mockito.verify(replicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
-        // Should have 1 fetch recorded and 0 failure for completed fetch. 3 topic fetch should be recorded
-        // with 2 failures.
+        // Should have 1 fetch recorded and 1 failure as single topic has multiple partition fetch
+        // and failure.
         validateBrokerTopicStatsMetrics(
             brokerTopicStats,
-            new TopicMetrics(1, 0, 0, 0),
-            Map.of(tp0.topic(), new TopicMetrics(3, 2, 0, 0))
+            new TopicMetrics(1, 1, 0, 0),
+            Map.of(tp0.topic(), new TopicMetrics(1, 1, 0, 0))
         );
     }
 
@@ -2687,11 +2685,12 @@ public class SharePartitionManagerTest {
             BATCH_SIZE, partitionMaxBytes);
         validateShareFetchFutureException(future, List.of(tp0, tp1), Errors.FENCED_STATE_EPOCH, "Fenced exception again");
         assertTrue(partitionCacheMap.isEmpty());
-        // Should have 2 fetch recorded and 1 failures as sp1 was not acquired in first fetch and shall have empty response.
-        // Similarly, tp0 should record 2 failures and tp1 should record 1 failure.
+        // Should have 4 fetch recorded (2 fetch and 2 topics) and 3 failures as sp1 was not acquired
+        // in first fetch and shall have empty response. Similarly, tp0 should record 2 failures and
+        // tp1 should record 1 failure.
         validateBrokerTopicStatsMetrics(
             brokerTopicStats,
-            new TopicMetrics(2, 1, 0, 0),
+            new TopicMetrics(4, 3, 0, 0),
             Map.of(tp0.topic(), new TopicMetrics(2, 2, 0, 0), tp1.topic(), new TopicMetrics(2, 1, 0, 0))
         );
     }
@@ -2725,7 +2724,7 @@ public class SharePartitionManagerTest {
         // metrics should mark fetch as failed.
         validateBrokerTopicStatsMetrics(
             brokerTopicStats,
-            new TopicMetrics(1, 1, 0, 0),
+            new TopicMetrics(2, 2, 0, 0),
             Map.of(tp0.topic(), new TopicMetrics(1, 1, 0, 0), tp1.topic(), new TopicMetrics(1, 1, 0, 0))
         );
     }
