@@ -33,6 +33,7 @@ on:
 jobs:
   configure:
     runs-on: ubuntu-latest
+    name: Configure
     outputs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
     steps:
@@ -95,7 +96,7 @@ jobs:
   validate:
     needs: [configure]
     runs-on: ubuntu-latest
-    name: Compile and Check (merge)
+    name: Compile and Check (Merge Ref)
     steps:
       - name: Env
         run: printenv
