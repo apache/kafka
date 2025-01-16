@@ -138,6 +138,7 @@ public class DefaultTaskManagerTest {
 
         awaitingRunnable.shutdown();
         awaitingThread.join(60_000L);
+        assertFalse(awaitingThread.isAlive());
     }
 
     @Test
@@ -153,6 +154,7 @@ public class DefaultTaskManagerTest {
 
         awaitingRunnable.shutdown();
         awaitingThread.join(60_000L);
+        assertFalse(awaitingThread.isAlive());
     }
 
     @Test
@@ -168,6 +170,7 @@ public class DefaultTaskManagerTest {
 
         awaitingRunnable.shutdown();
         awaitingThread.join(60_000L);
+        assertFalse(awaitingThread.isAlive());
     }
 
     @Test
@@ -188,6 +191,7 @@ public class DefaultTaskManagerTest {
 
         awaitingRunnable.shutdown();
         awaitingThread.join(60_000L);
+        assertFalse(awaitingThread.isAlive());
     }
 
     @Test
@@ -203,6 +207,7 @@ public class DefaultTaskManagerTest {
 
         awaitingRunnable.shutdown();
         awaitingThread.join(60_000L);
+        assertFalse(awaitingThread.isAlive());
     }
 
     @Test
@@ -220,6 +225,7 @@ public class DefaultTaskManagerTest {
 
         awaitingRunnable.shutdown();
         awaitingThread.join(60_000L);
+        assertFalse(awaitingThread.isAlive());
     }
 
     @Test
