@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -45,7 +46,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -65,9 +65,6 @@ import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_
 
 public class ConfigurationControlManager {
     public static final ConfigResource DEFAULT_NODE = new ConfigResource(Type.BROKER, "");
-    // When handle the min ISR updates, we could end up with a large size of partition change records. If the records
-    // size is large enough, we should add the records non-atomically.
-    private final int maximumAtomicApplyRecordsSize = 1000;
 
     private final Logger log;
     private final SnapshotRegistry snapshotRegistry;
@@ -79,7 +76,6 @@ public class ConfigurationControlManager {
     private final TimelineHashSet<Integer> brokersWithConfigs;
     private final Map<String, Object> staticConfig;
     private final ConfigResource currentController;
-    private final ReplicationControlAccessor replicationControlAccessor;
     private final FeatureControlManager featureControl;
 
     static class Builder {
@@ -90,19 +86,11 @@ public class ConfigurationControlManager {
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator validator = ConfigurationValidator.NO_OP;
         private Map<String, Object> staticConfig = Collections.emptyMap();
-        private ReplicationControlAccessor replicationControlAccessor;
         private int nodeId = 0;
         private FeatureControlManager featureControl = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
-            return this;
-        }
-
-        Builder setReplicationControlAccessor(
-            ReplicationControlAccessor replicationControlAccessor
-        ) {
-            this.replicationControlAccessor = replicationControlAccessor;
             return this;
         }
 
@@ -152,9 +140,6 @@ public class ConfigurationControlManager {
             if (configSchema == null) {
                 throw new RuntimeException("You must set the configSchema.");
             }
-            if (replicationControlAccessor == null) {
-                throw new RuntimeException("You must specify ReplicationControlAccessor");
-            }
             if (featureControl == null) {
                 featureControl = new FeatureControlManager.Builder().build();
             }
@@ -167,8 +152,7 @@ public class ConfigurationControlManager {
                 validator,
                 staticConfig,
                 nodeId,
-                featureControl,
-                replicationControlAccessor);
+                featureControl);
         }
     }
 
@@ -180,8 +164,8 @@ public class ConfigurationControlManager {
             ConfigurationValidator validator,
             Map<String, Object> staticConfig,
             int nodeId,
-            FeatureControlManager featureControl,
-            ReplicationControlAccessor replicationControlAccessor) {
+            FeatureControlManager featureControl
+    ) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.configSchema = configSchema;
@@ -192,7 +176,6 @@ public class ConfigurationControlManager {
         this.brokersWithConfigs = new TimelineHashSet<>(snapshotRegistry, 0);
         this.staticConfig = Collections.unmodifiableMap(new HashMap<>(staticConfig));
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
-        this.replicationControlAccessor = replicationControlAccessor;
         this.featureControl = featureControl;
     }
 
@@ -228,19 +211,27 @@ public class ConfigurationControlManager {
                 outputRecords);
             outputResults.put(resourceEntry.getKey(), apiError);
         }
-
-        List<ApiMessageAndVersion> partitionChangeRecords = maybeTriggerPartitionUpdateOnMinIsrChange(outputRecords);
-        if (!partitionChangeRecords.isEmpty()) {
-            // The partition change records should be applied before config records. Also, the partition records can be
-            // huge, we should add the config records to the partition change records.
-            partitionChangeRecords.addAll(outputRecords);
-            outputRecords = partitionChangeRecords;
-        }
-
-        if (outputRecords.size() >= maximumAtomicApplyRecordsSize) {
-            return ControllerResult.of(outputRecords, outputResults);
-        }
+        outputRecords.addAll(createClearElrRecordsAsNeeded(outputRecords));
         return ControllerResult.atomicOf(outputRecords, outputResults);
+    }
+
+    List<ApiMessageAndVersion> createClearElrRecordsAsNeeded(List<ApiMessageAndVersion> input) {
+        List<ApiMessageAndVersion> output = new ArrayList<>();
+        for (ApiMessageAndVersion messageAndVersion : input) {
+            if (messageAndVersion.message().apiKey() == CONFIG_RECORD.id()) {
+                ConfigRecord record = (ConfigRecord) messageAndVersion.message();
+                if (record.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG)) {
+                    if (Type.forId(record.resourceType()) == Type.TOPIC) {
+                        output.add(new ApiMessageAndVersion(
+                            new ClearElrRecord().
+                                setTopicName(record.resourceName()), (short) 0));
+                    } else {
+                        output.add(new ApiMessageAndVersion(new ClearElrRecord(), (short) 0));
+                    }
+                }
+            }
+        }
+        return output;
     }
 
     ControllerResult<ApiError> incrementalAlterConfig(
@@ -255,17 +246,7 @@ public class ConfigurationControlManager {
             newlyCreatedResource,
             outputRecords);
 
-        List<ApiMessageAndVersion> partitionChangeRecords = maybeTriggerPartitionUpdateOnMinIsrChange(outputRecords);
-        if (!partitionChangeRecords.isEmpty()) {
-            // The partition change records should be applied before config records. Also, the partition records can be
-            // huge, we should add the config records to the partition change records.
-            partitionChangeRecords.addAll(outputRecords);
-            outputRecords = partitionChangeRecords;
-        }
-
-        if (outputRecords.size() >= maximumAtomicApplyRecordsSize) {
-            return ControllerResult.of(outputRecords, apiError);
-        }
+        outputRecords.addAll(createClearElrRecordsAsNeeded(outputRecords));
         return ControllerResult.atomicOf(outputRecords, apiError);
     }
 
@@ -393,78 +374,13 @@ public class ConfigurationControlManager {
         return ApiError.NONE;
     }
 
-    List<ApiMessageAndVersion> maybeTriggerPartitionUpdateOnMinIsrChange(List<ApiMessageAndVersion> records) {
-        boolean hasMinIsrUpdate = false;
-        Map<String, Integer> topicToMinIsrValueMap = new HashMap<>();
-        HashSet<String> topicConfigRemovedSet = new HashSet<>();
-        int currentClusterLevelMinIsr = -1;
-        if (clusterConfig().containsKey(MIN_IN_SYNC_REPLICAS_CONFIG)) {
-            currentClusterLevelMinIsr = Integer.parseInt(clusterConfig().get(MIN_IN_SYNC_REPLICAS_CONFIG));
-        }
-        int clusterLevelMinIsr = currentClusterLevelMinIsr;
-        for (ApiMessageAndVersion record : records) {
-            ConfigRecord configRecord = (ConfigRecord) record.message();
-            if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG)) {
-                hasMinIsrUpdate = true;
-                if (Type.forId(configRecord.resourceType()) == Type.TOPIC) {
-                    if (configRecord.value() != null)
-                        topicToMinIsrValueMap.put(configRecord.resourceName(), Integer.parseInt(configRecord.value()));
-                    else
-                        topicConfigRemovedSet.add(configRecord.resourceName());
-                } else {
-                    // we already reject the min ISR updates on broker level, so it is a cluster level update.
-                    clusterLevelMinIsr = Integer.parseInt(configRecord.value());
-                }
-            }
-        }
-
-        // Fast exit if there is no min ISR config update.
-        if (!hasMinIsrUpdate) return Collections.emptyList();
-
-        List<ApiMessageAndVersion> newRecords = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
-        final Integer newClusterLevelMinIsr = clusterLevelMinIsr;
-        if (currentClusterLevelMinIsr <= newClusterLevelMinIsr) {
-            // Take the simple path when there is no cluster level min ISR decrease.
-            if (!topicToMinIsrValueMap.isEmpty()) {
-                newRecords.addAll(replicationControlAccessor.get().getPartitionElrUpdatesForConfigChanges(
-                    new ArrayList<>(topicToMinIsrValueMap.keySet()),
-                    topicName -> topicToMinIsrValueMap.get(topicName))
-                );
-            }
-            if (!topicConfigRemovedSet.isEmpty()) {
-                newRecords.addAll(replicationControlAccessor.get().getPartitionElrUpdatesForConfigChanges(
-                    new ArrayList<>(topicConfigRemovedSet),
-                    topicName -> newClusterLevelMinIsr)
-                );
-            }
-            return newRecords;
-        }
-
-        // Now we have a cluster level config decrease and may be combined with topic level update.
-        newRecords.addAll(replicationControlAccessor.get().getPartitionElrUpdatesForConfigChanges(
-            Collections.emptyList(),
-            topicName -> {
-                if (topicToMinIsrValueMap.containsKey(topicName)) {
-                    return topicToMinIsrValueMap.get(topicName);
-                } else if (topicConfigRemovedSet.contains(topicName) ||
-                        !currentTopicConfig(topicName).containsKey(MIN_IN_SYNC_REPLICAS_CONFIG)) {
-                    // Use the new default min ISR if the topic config is removed or the topic does not have min ISR.
-                    return newClusterLevelMinIsr;
-                }
-                // Otherwise, the current update does not affect the topic, use its current topic config.
-                return Integer.parseInt(currentTopicConfig(topicName).get(MIN_IN_SYNC_REPLICAS_CONFIG));
-            })
-        );
-        return newRecords;
-    }
-
     private static final ApiError DISALLOWED_BROKER_MIN_ISR_TRANSITION_ERROR =
         new ApiError(INVALID_CONFIG, "Broker-level " + MIN_IN_SYNC_REPLICAS_CONFIG +
             " cannot be altered while ELR is enabled.");
 
     private static final ApiError DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR =
-            new ApiError(INVALID_CONFIG, "Cluster-level " + MIN_IN_SYNC_REPLICAS_CONFIG +
-                    " cannot be removed while ELR is enabled.");
+        new ApiError(INVALID_CONFIG, "Cluster-level " + MIN_IN_SYNC_REPLICAS_CONFIG +
+            " cannot be removed while ELR is enabled.");
 
     boolean isDisallowedBrokerMinIsrTransition(ConfigRecord configRecord) {
         if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
@@ -513,17 +429,7 @@ public class ConfigurationControlManager {
                 outputRecords,
                 outputResults);
         }
-
-        List<ApiMessageAndVersion> partitionChangeRecords = maybeTriggerPartitionUpdateOnMinIsrChange(outputRecords);
-        if (!partitionChangeRecords.isEmpty()) {
-            // The partition change records should be applied before config records. Also, the partition records can be
-            // huge, we should add the config records to the partition change records.
-            partitionChangeRecords.addAll(outputRecords);
-            outputRecords = partitionChangeRecords;
-        }
-        if (outputRecords.size() >= maximumAtomicApplyRecordsSize) {
-            return ControllerResult.of(outputRecords, outputResults);
-        }
+        outputRecords.addAll(createClearElrRecordsAsNeeded(outputRecords));
         return ControllerResult.atomicOf(outputRecords, outputResults);
     }
 

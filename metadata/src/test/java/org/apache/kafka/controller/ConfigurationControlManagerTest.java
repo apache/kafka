@@ -39,11 +39,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.ArgumentMatchers;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -51,10 +48,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
@@ -67,8 +62,6 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 
 @Timeout(value = 40)
@@ -135,7 +128,6 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testReplay() throws Exception {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setReplicationControlAccessor(() -> mock(ReplicationControlManager.class)).
             setKafkaConfigSchema(SCHEMA).
             build();
         assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
@@ -162,7 +154,6 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfigs() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setReplicationControlAccessor(() -> mock(ReplicationControlManager.class)).
             setKafkaConfigSchema(SCHEMA).
             build();
 
@@ -194,7 +185,6 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfig() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setReplicationControlAccessor(() -> mock(ReplicationControlManager.class)).
             setKafkaConfigSchema(SCHEMA).
             build();
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps = toMap(entry("abc", entry(APPEND, "123")));
@@ -219,7 +209,6 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterMultipleConfigValues() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setReplicationControlAccessor(() -> mock(ReplicationControlManager.class)).
             setKafkaConfigSchema(SCHEMA).
             build();
 
@@ -266,7 +255,6 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfigsWithoutExistence() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setReplicationControlAccessor(() -> mock(ReplicationControlManager.class)).
             setKafkaConfigSchema(SCHEMA).
             setExistenceChecker(TestExistenceChecker.INSTANCE).
             build();
@@ -328,7 +316,6 @@ public class ConfigurationControlManagerTest {
                 entry("quux", "456"),
                 entry("broker.config.to.remove", null)))));
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setReplicationControlAccessor(() -> mock(ReplicationControlManager.class)).
             setKafkaConfigSchema(SCHEMA).
             setAlterConfigPolicy(Optional.of(policy)).
             build();
@@ -387,7 +374,6 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testLegacyAlterConfigs() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setReplicationControlAccessor(() -> mock(ReplicationControlManager.class)).
             setKafkaConfigSchema(SCHEMA).
             setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
             build();
@@ -419,221 +405,6 @@ public class ConfigurationControlManagerTest {
                 true));
     }
 
-    @Test
-    @SuppressWarnings("unchecked")
-    public void testPartitionUpdatesOnMinIsrUpdate_IncrementalAlterConfigs() {
-        ReplicationControlManager replicationControlManager = mock(ReplicationControlManager.class);
-        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setKafkaConfigSchema(SCHEMA).
-            setReplicationControlAccessor(() -> replicationControlManager).
-            build();
-
-        when(replicationControlManager.getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.eq(Collections.singletonList(MYTOPIC.name())), ArgumentMatchers.any()))
-            .thenAnswer(invocation -> {
-                // When the topic config is set in step 2.
-                assertEquals(2, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
-                return Collections.emptyList();
-            }).thenAnswer(invocation -> {
-                // When the topic config is removed in step 3.
-                assertEquals(4, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
-                return Collections.emptyList();
-            });
-
-        when(replicationControlManager.getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.eq(Collections.emptyList()), ArgumentMatchers.any()))
-            .thenAnswer(invocation -> {
-                // When the default config is set in step 5.
-                assertEquals(3, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
-                return Collections.emptyList();
-            })
-            .thenAnswer(invocation -> {
-                // When the default config and topic config are set in step 6.
-                assertEquals(5, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
-                return Collections.emptyList();
-            });
-
-        // Step 1. Set the cluster level config
-        ControllerResult<Map<ConfigResource, ApiError>> result = manager.incrementalAlterConfigs(toMap(entry(new ConfigResource(BROKER, ""), toMap(
-                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "4"))))),
-            true);
-        List<ApiMessageAndVersion> records = result.records();
-        assertEquals(1, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-
-        // Step 2. Set a topic level config. This should not trigger any update.
-        result = manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
-                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "2"))))),
-            true);
-        records = result.records();
-        assertEquals(1, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-
-        // Step 3. remove the topic level config.
-        result = manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
-                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(DELETE, ""))))),
-            false);
-        records = result.records();
-        assertEquals(1, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-
-        // Step 4. Increase the cluster level config. This should not trigger any update.
-        result = manager.incrementalAlterConfigs(toMap(entry(new ConfigResource(BROKER, ""), toMap(
-                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "5"))))),
-            true);
-        records = result.records();
-        assertEquals(1, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-
-        // Step 5. Decrease the cluster level config.
-        result = manager.incrementalAlterConfigs(toMap(entry(new ConfigResource(BROKER, ""), toMap(
-                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "3"))))),
-            true);
-        records = result.records();
-        assertEquals(1, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-
-        // Step 6. Decrease the cluster level config and add topic level config in the same update
-        result = manager.incrementalAlterConfigs(toMap(
-                entry(new ConfigResource(BROKER, ""), toMap(
-                        entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "2")))),
-                entry(MYTOPIC, toMap(
-                        entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "5"))))),
-                true);
-        records = result.records();
-        assertEquals(2, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void testPartitionUpdatesOnMinIsrUpdate_LegacyAlterConfigs() {
-        ReplicationControlManager replicationControlManager = mock(ReplicationControlManager.class);
-        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setKafkaConfigSchema(SCHEMA).
-            setReplicationControlAccessor(() -> replicationControlManager).
-            setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
-            build();
-
-        when(replicationControlManager.getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.eq(Collections.singletonList(MYTOPIC.name())), ArgumentMatchers.any()))
-            .thenAnswer(invocation -> {
-                // When the topic config is set in step 2.
-                assertEquals(2, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
-                return Collections.emptyList();
-            }).thenAnswer(invocation -> {
-                // When the topic config is removed in step 3.
-                assertEquals(4, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
-                return Collections.emptyList();
-            });
-
-        when(replicationControlManager.getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.eq(Collections.emptyList()), ArgumentMatchers.any()))
-            .thenAnswer(invocation -> {
-                // When the default config is set in step 5.
-                assertEquals(3, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
-                return Collections.emptyList();
-            })
-            .thenAnswer(invocation -> {
-                // When the default config is set in step 5.
-                assertEquals(5, ((Function<String, Integer>) invocation.getArgument(1)).apply(MYTOPIC.name()));
-                return Collections.emptyList();
-            });
-
-        // Step 1. Set the cluster level config. This should not trigger any update.
-        ControllerResult<Map<ConfigResource, ApiError>> result =
-            manager.legacyAlterConfigs(toMap(entry(new ConfigResource(BROKER, ""), toMap(
-                    entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "4")))),
-                true);
-        List<ApiMessageAndVersion> records = result.records();
-        assertEquals(1, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-
-        // Step 2. Set a topic level config.
-        result = manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(
-                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")))),
-            true);
-        records = result.records();
-        assertEquals(1, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-
-        // Step 3. remove the topic level config.
-        result = manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap())),
-            false);
-        records = result.records();
-        assertEquals(1, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-
-        // Step 4. Increase the cluster level config. This should not trigger any update.
-        result = manager.legacyAlterConfigs(toMap(entry(new ConfigResource(BROKER, ""), toMap(
-                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "5")))),
-            true);
-        records = result.records();
-        assertEquals(1, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-
-        // Step 5. Decrease the cluster level config.
-        result = manager.legacyAlterConfigs(toMap(entry(new ConfigResource(BROKER, ""), toMap(
-                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3")))),
-            true);
-        records = result.records();
-        assertEquals(1, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-
-        // Step 6. Decrease the cluster level config and add topic level config in the same update
-        result = manager.legacyAlterConfigs(toMap(
-            entry(new ConfigResource(BROKER, ""), toMap(
-                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"))),
-            entry(MYTOPIC, toMap(
-                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "5")))),
-            true);
-        records = result.records();
-        assertEquals(2, records.size());
-        manager.replay((ConfigRecord) result.records().get(0).message());
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testMaybeGenerateElrSafetyRecords(boolean setStaticConfig) {
-        ConfigurationControlManager.Builder builder = new ConfigurationControlManager.Builder().
-            setReplicationControlAccessor(() -> mock(ReplicationControlManager.class)).
-            setKafkaConfigSchema(SCHEMA);
-        if (setStaticConfig) {
-            builder.setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"));
-        }
-        ConfigurationControlManager manager = builder.build();
-        Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps =
-            toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "3")));
-        ConfigResource brokerConfigResource = new ConfigResource(ConfigResource.Type.BROKER, "1");
-        ControllerResult<ApiError> result = manager.incrementalAlterConfig(brokerConfigResource, keyToOps, true);
-        assertEquals(Collections.emptySet(), manager.brokersWithConfigs());
-
-        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
-            new ConfigRecord().setResourceType(BROKER.id()).setResourceName("1").
-                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue("3"), (short) 0)),
-            ApiError.NONE), result);
-
-        RecordTestUtils.replayAll(manager, result.records());
-        assertEquals(Set.of(1), manager.brokersWithConfigs());
-
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        String effectiveMinInsync = setStaticConfig ? "2" : "1";
-        assertEquals("Generating cluster-level min.insync.replicas of " +
-            effectiveMinInsync + ". Removing broker-level min.insync.replicas " +
-            "for brokers: 1.", manager.maybeGenerateElrSafetyRecords(records));
-
-        assertEquals(Arrays.asList(new ApiMessageAndVersion(
-            new ConfigRecord().
-                setResourceType(BROKER.id()).
-                setResourceName("").
-                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
-                setValue(effectiveMinInsync), (short) 0),
-            new ApiMessageAndVersion(new ConfigRecord().
-                setResourceType(BROKER.id()).
-                setResourceName("1").
-                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
-                setValue(null), (short) 0)),
-            records);
-        RecordTestUtils.replayAll(manager, records);
-        assertEquals(Collections.emptySet(), manager.brokersWithConfigs());
-    }
-
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testRejectMinIsrChangeWhenElrEnabled(boolean removal) {
@@ -645,7 +416,6 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
             setFeatureControl(featureManager).
-            setReplicationControlAccessor(() -> mock(ReplicationControlManager.class)).
             setKafkaConfigSchema(SCHEMA).
             build();
         ControllerResult<ApiError> result = manager.updateFeatures(
