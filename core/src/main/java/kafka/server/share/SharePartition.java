@@ -457,18 +457,12 @@ public class SharePartition {
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
                 }
 
-                long initialOffset = startOffset;
-                for (InFlightBatch currentStateBatch : cachedState.values()) {
-                    if (initialOffset != currentStateBatch.firstOffset()) {
-                        InFlightBatch newBatch = new InFlightBatch(EMPTY_MEMBER_ID, initialOffset, currentStateBatch.firstOffset() - 1,
-                            RecordState.AVAILABLE, (short) 0, null);
-                        cachedState.put(initialOffset, newBatch);
-                    }
-                    initialOffset = currentStateBatch.lastOffset() + 1;
-                }
-
                 // Update the endOffset of the partition.
                 if (!cachedState.isEmpty()) {
+                    // There might be gaps in the result given by persister. These gaps could be batches that were fetched earlier but not acknowledged.
+                    // These need to be added to the cachedState to ensure that these are fetched again.
+                    addNewBatchesForGapsInReadStateResult();
+
                     // If the cachedState is not empty, findNextFetchOffset flag is set to true so that any AVAILABLE records
                     // in the cached state are not missed
                     findNextFetchOffset.set(true);
@@ -2117,6 +2111,18 @@ public class SharePartition {
         } else {
             // offsetResetStrategy type is BY_DURATION
             return offsetForTimestamp(topicIdPartition, replicaManager, offsetResetStrategy.timestamp(), leaderEpoch);
+        }
+    }
+
+    private void addNewBatchesForGapsInReadStateResult() {
+        long initialOffset = startOffset;
+        for (InFlightBatch currentStateBatch : cachedState.values()) {
+            if (initialOffset != currentStateBatch.firstOffset()) {
+                InFlightBatch newBatch = new InFlightBatch(EMPTY_MEMBER_ID, initialOffset, currentStateBatch.firstOffset() - 1,
+                    RecordState.AVAILABLE, (short) 0, null);
+                cachedState.put(initialOffset, newBatch);
+            }
+            initialOffset = currentStateBatch.lastOffset() + 1;
         }
     }
 
