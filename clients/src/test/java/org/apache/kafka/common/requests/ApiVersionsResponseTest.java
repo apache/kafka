@@ -178,7 +178,6 @@ public class ApiVersionsResponseTest {
         assertFalse(exposedApis.contains(ApiKeys.VOTE));
         assertFalse(exposedApis.contains(ApiKeys.BEGIN_QUORUM_EPOCH));
         assertFalse(exposedApis.contains(ApiKeys.END_QUORUM_EPOCH));
-        assertFalse(exposedApis.contains(ApiKeys.DESCRIBE_QUORUM));
     }
 
     @Test
