@@ -23,10 +23,10 @@ import kafka.server.ApiVersionManager;
 import kafka.server.AutoTopicCreationManager;
 import kafka.server.DelegationTokenManager;
 import kafka.server.FetchManager;
+import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
-import kafka.server.MetadataSupport;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
 import kafka.server.metadata.ConfigRepository;
@@ -47,7 +47,7 @@ import scala.jdk.javaapi.OptionConverters;
 
 public class KafkaApisBuilder {
     private RequestChannel requestChannel = null;
-    private MetadataSupport metadataSupport = null;
+    private ForwardingManager forwardingManager = null;
     private ReplicaManager replicaManager = null;
     private GroupCoordinator groupCoordinator = null;
     private TransactionCoordinator txnCoordinator = null;
@@ -74,8 +74,8 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setMetadataSupport(MetadataSupport metadataSupport) {
-        this.metadataSupport = metadataSupport;
+    public KafkaApisBuilder setForwardingManager(ForwardingManager forwardingManager) {
+        this.forwardingManager = forwardingManager;
         return this;
     }
 
@@ -182,7 +182,7 @@ public class KafkaApisBuilder {
     @SuppressWarnings({"CyclomaticComplexity"})
     public KafkaApis build() {
         if (requestChannel == null) throw new RuntimeException("you must set requestChannel");
-        if (metadataSupport == null) throw new RuntimeException("you must set metadataSupport");
+        if (forwardingManager == null) throw new RuntimeException("you must set forwardingManager");
         if (replicaManager == null) throw new RuntimeException("You must set replicaManager");
         if (groupCoordinator == null) throw new RuntimeException("You must set groupCoordinator");
         if (txnCoordinator == null) throw new RuntimeException("You must set txnCoordinator");
@@ -200,7 +200,7 @@ public class KafkaApisBuilder {
         if (apiVersionManager == null) throw new RuntimeException("You must set apiVersionManager");
 
         return new KafkaApis(requestChannel,
-                             metadataSupport,
+                             forwardingManager,
                              replicaManager,
                              groupCoordinator,
                              txnCoordinator,

@@ -1349,7 +1349,8 @@ val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new Con
     private var _retries = Int.MaxValue
     private var _acks = -1
     private var _requestTimeoutMs = 30000
-    private var _deliveryTimeoutMs = 30000
+    private val defaultLingerMs = 5;
+    private var _deliveryTimeoutMs = 30000 + defaultLingerMs
 
     def maxRetries(retries: Int): ProducerBuilder = { _retries = retries; this }
     def acks(acks: Int): ProducerBuilder = { _acks = acks; this }
