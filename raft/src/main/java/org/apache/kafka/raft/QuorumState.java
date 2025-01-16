@@ -672,7 +672,7 @@ public class QuorumState {
         if (!isProspective()) {
             throw new IllegalStateException(
                 String.format(
-                    "Cannot transition to Candidate since the local broker.id=%d is state %s",
+                    "Cannot transition to Candidate since the local broker.id=%s is state %s",
                     localId,
                     state
                 )
