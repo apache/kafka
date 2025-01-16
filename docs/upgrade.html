@@ -219,6 +219,9 @@
                         </li>
                         <li>The deprecated <code>sendOffsetsToTransaction(Map&lt;TopicPartition, OffsetAndMetadata&gt;, String)</code> method has been removed from the Producer API.
                         </li>
+                        <li>The default <code>linger.ms</code> changed from 0 to 5 in Apache Kafka 4.0 as the efficiency gains from larger batches typically result in 
+                            similar or lower producer latency despite the increased linger.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Admin client</b>
