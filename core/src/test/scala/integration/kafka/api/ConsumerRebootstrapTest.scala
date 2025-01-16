@@ -136,11 +136,12 @@ object ConsumerRebootstrapTest {
   final val RebootstrapTestName = s"${TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames}.useRebootstrapTriggerMs={2}"
   def rebootstrapTestParams: stream.Stream[Arguments] = {
     assertEquals(2, getTestQuorumAndGroupProtocolParametersAll.count())
-    val args = getTestQuorumAndGroupProtocolParametersAll
-      .findFirst().get.get
-    stream.Stream.of(
-      Arguments.of((args :+ true):_*),
-      Arguments.of((args :+ false):_*)
-    )
+    getTestQuorumAndGroupProtocolParametersAll
+      .flatMap { baseArgs =>
+        stream.Stream.of(
+          Arguments.of((baseArgs.get :+ true):_*),
+          Arguments.of((baseArgs.get :+ false):_*)
+        )
+      }
   }
 }
