@@ -32,7 +32,6 @@ import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
 import kafka.server.share.DelayedShareFetch;
-import kafka.zk.KafkaZkClient;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
@@ -64,7 +63,6 @@ public class ReplicaManagerBuilder {
     private BrokerTopicStats brokerTopicStats = null;
     private AtomicBoolean isShuttingDown = new AtomicBoolean(false);
     private Optional<RemoteLogManager> remoteLogManager = Optional.empty();
-    private Optional<KafkaZkClient> zkClient = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedProduce>> delayedProducePurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedFetch>> delayedFetchPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedDeleteRecords>> delayedDeleteRecordsPurgatory = Optional.empty();
@@ -137,11 +135,6 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
-    public ReplicaManagerBuilder setZkClient(KafkaZkClient zkClient) {
-        this.zkClient = Optional.of(zkClient);
-        return this;
-    }
-
     public ReplicaManagerBuilder setDelayedProducePurgatory(DelayedOperationPurgatory<DelayedProduce> delayedProducePurgatory) {
         this.delayedProducePurgatory = Optional.of(delayedProducePurgatory);
         return this;
@@ -210,7 +203,6 @@ public class ReplicaManagerBuilder {
                              alterPartitionManager,
                              brokerTopicStats,
                              isShuttingDown,
-                             OptionConverters.toScala(zkClient),
                              OptionConverters.toScala(delayedProducePurgatory),
                              OptionConverters.toScala(delayedFetchPurgatory),
                              OptionConverters.toScala(delayedDeleteRecordsPurgatory),

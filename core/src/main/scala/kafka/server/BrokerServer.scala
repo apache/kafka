@@ -193,7 +193,7 @@ class BrokerServer(
       info("Starting broker")
 
       val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
-      config.dynamicConfig.initialize(zkClientOpt = None, Some(clientMetricsReceiverPlugin))
+      config.dynamicConfig.initialize(Some(clientMetricsReceiverPlugin))
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -216,8 +216,7 @@ class BrokerServer(
         kafkaScheduler,
         time,
         brokerTopicStats,
-        logDirFailureChannel,
-        keepPartitionMetadataFile = true)
+        logDirFailureChannel)
 
       remoteLogManagerOpt = createRemoteLogManager()
 
@@ -347,7 +346,6 @@ class BrokerServer(
         alterPartitionManager = alterPartitionManager,
         brokerTopicStats = brokerTopicStats,
         isShuttingDown = isShuttingDown,
-        zkClient = None,
         threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
         delayedRemoteFetchPurgatoryParam = None,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
@@ -447,11 +445,9 @@ class BrokerServer(
         metrics
       )
 
-      // Create the request processor objects.
-      val raftSupport = RaftSupport(forwardingManager, metadataCache)
       dataPlaneRequestProcessor = new KafkaApis(
         requestChannel = socketServer.dataPlaneRequestChannel,
-        metadataSupport = raftSupport,
+        forwardingManager = forwardingManager,
         replicaManager = replicaManager,
         groupCoordinator = groupCoordinator,
         txnCoordinator = transactionCoordinator,
@@ -465,13 +461,13 @@ class BrokerServer(
         authorizer = authorizer,
         quotas = quotaManagers,
         fetchManager = fetchManager,
-        sharePartitionManager = Some(sharePartitionManager),
+        sharePartitionManager = sharePartitionManager,
         brokerTopicStats = brokerTopicStats,
         clusterId = clusterId,
         time = time,
         tokenManager = tokenManager,
         apiVersionManager = apiVersionManager,
-        clientMetricsManager = Some(clientMetricsManager))
+        clientMetricsManager = clientMetricsManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,

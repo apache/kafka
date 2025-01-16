@@ -471,7 +471,6 @@ class ReplicaManagerConcurrencyTest extends Logging {
     override def submit(
       topicPartition: TopicIdPartition,
       leaderAndIsr: LeaderAndIsr,
-      controllerEpoch: Int
     ): CompletableFuture[LeaderAndIsr] = {
       channel.alterIsr(topicPartition, leaderAndIsr)
     }
