@@ -216,8 +216,7 @@ class LogCleanerTest extends Logging {
                       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
                       leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
-                      _topicId = None,
-                      keepPartitionMetadataFile = true) {
+                      _topicId = None) {
       override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment]): Unit = {
         deleteStartLatch.countDown()
         if (!deleteCompleteLatch.await(5000, TimeUnit.MILLISECONDS)) {
@@ -1918,7 +1917,10 @@ class LogCleanerTest extends Logging {
 
   @Test
   def testCleanTombstone(): Unit = {
-    val logConfig = new LogConfig(new Properties())
+    val properties = new Properties()
+    // This test uses future timestamps beyond the default of 1 hour.
+    properties.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.MaxValue.toString)
+    val logConfig = new LogConfig(properties)
 
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(10)
@@ -2093,8 +2095,7 @@ class LogCleanerTest extends Logging {
       producerStateManagerConfig = producerStateManagerConfig,
       producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true
+      topicId = None
     )
   }
 

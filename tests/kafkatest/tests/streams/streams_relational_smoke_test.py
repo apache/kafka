@@ -22,6 +22,7 @@ from kafkatest.services.kafka.util import get_log4j_config_param, get_log4j_conf
 from kafkatest.services.streams import StreamsTestBaseService
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.version import LATEST_4_0
+from kafkatest.version import get_version
 
 
 class StreamsRelationalSmokeTestService(StreamsTestBaseService):
@@ -35,7 +36,7 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
         self.mode = mode
         self.nodeId = nodeId
         self.processing_guarantee = processing_guarantee
-        self.log4j_template = "log4j2_template.yaml" if (self.node.version >= LATEST_4_0) else "log4j_template.properties"
+        self.log4j_template = "log4j2_template.yaml" if (get_version(self.node) >= LATEST_4_0) else "log4j_template.properties"
 
     def start_cmd(self, node):
         return "( export KAFKA_LOG4J_OPTS=\"%(log4j_param)s%(log4j)s\"; " \
@@ -58,7 +59,7 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
     def start_node(self, node):
         node.account.mkdirs(self.PERSISTENT_ROOT)
         node.account.create_file(get_log4j_config_for_tools(node),
-                                 self.render("log4j2_template.yaml" if node.version >= LATEST_4_0 else "log4j_template.properties",
+                                 self.render("log4j2_template.yaml" if get_version(node) >= LATEST_4_0 else "log4j_template.properties",
                                              log_file=self.LOG_FILE))
 
         self.logger.info("Starting process on " + str(node.account))

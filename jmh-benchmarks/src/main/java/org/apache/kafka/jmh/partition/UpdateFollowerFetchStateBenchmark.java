@@ -106,7 +106,6 @@ public class UpdateFollowerFetchStateBenchmark {
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
             setTime(Time.SYSTEM).
-            setKeepPartitionMetadataFile(true).
             build();
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Optional.of(0L));

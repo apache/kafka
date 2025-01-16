@@ -44,7 +44,7 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testUnsupportedVersionsToString() {
-        NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection(), Collections.emptyList(), false);
+        NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection(), Collections.emptyList());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.clientApis()) {
@@ -73,7 +73,7 @@ public class NodeApiVersionsTest {
                         .setMaxVersion((short) 10001));
             } else versionList.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
-        NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList(), false);
+        NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.values()) {
@@ -130,7 +130,7 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testUsableVersionCalculationNoKnownVersions() {
-        NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection(), Collections.emptyList(), false);
+        NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection(), Collections.emptyList());
         assertThrows(UnsupportedVersionException.class,
             () -> versions.latestUsableVersion(ApiKeys.FETCH));
     }
@@ -152,7 +152,7 @@ public class NodeApiVersionsTest {
                 .setApiKey((short) 100)
                 .setMinVersion((short) 0)
                 .setMaxVersion((short) 1));
-        NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList(), false);
+        NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList());
         for (ApiKeys apiKey: ApiKeys.apisForListener(scope)) {
             assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
         }
@@ -162,7 +162,7 @@ public class NodeApiVersionsTest {
     @EnumSource(ApiMessageType.ListenerType.class)
     public void testConstructionFromApiVersionsResponse(ApiMessageType.ListenerType scope) {
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(scope);
-        NodeApiVersions versions = new NodeApiVersions(apiVersionsResponse.data().apiKeys(), Collections.emptyList(), false);
+        NodeApiVersions versions = new NodeApiVersions(apiVersionsResponse.data().apiKeys(), Collections.emptyList());
 
         for (ApiVersion apiVersionKey : apiVersionsResponse.data().apiKeys()) {
             ApiVersion apiVersion = versions.apiVersion(ApiKeys.forId(apiVersionKey.apiKey()));
@@ -180,7 +180,6 @@ public class NodeApiVersionsTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 2)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel((short) 2)
