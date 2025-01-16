@@ -32,6 +32,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.stream.Stream;
 
@@ -55,10 +56,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey observer = replicaKey(localId + 3, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(local, otherNodeKey, electedLeader)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withElectedLeader(epoch, electedLeader.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -109,7 +110,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey votedCandidateKey = replicaKey(localId + 2, true);
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey, votedCandidateKey));
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localKey, voters, kraftVersion)
+        RaftClientTestContext context = contextBuilder(localKey, voters, kraftVersion.isReconfigSupported())
             .withVotedCandidate(epoch, votedCandidateKey)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -150,10 +151,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey observer = replicaKey(localId + 2, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             localKey,
             VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withVotedCandidate(epoch, ReplicaKey.of(localId, localKey.directoryId().get()))
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -194,10 +195,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey replica2 = replicaKey(localId + 2, true);
         ReplicaKey observer = replicaKey(localId + 3, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             localKey,
             VoterSetTest.voterSet(Stream.of(replica1, replica2)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -240,10 +241,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey observer = replicaKey(localId + 3, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             localKey,
             VoterSetTest.voterSet(Stream.of(replica1, replica2)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withVotedCandidate(epoch, replica2)
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -285,10 +286,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey observer = replicaKey(localId + 4, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             localKey,
             VoterSetTest.voterSet(Stream.of(replica1, replica2)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withElectedLeader(epoch, leader.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -331,10 +332,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey follower = replicaKey(localId + 2, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             localKey,
             VoterSetTest.voterSet(Stream.of(leader, follower)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withElectedLeader(epoch, leader.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -371,10 +372,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(local, otherNodeKey)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -394,10 +395,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             localKey,
             VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withUnknownLeader(2)
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -421,10 +422,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             localKey,
             VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -460,10 +461,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             localKey,
             VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -509,10 +510,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             localKey,
             VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withUnknownLeader(4)
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -538,10 +539,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             localKey,
             VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -571,10 +572,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             localKey,
             VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withElectedLeader(epoch, otherNodeKey.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -628,10 +629,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey replica2 = replicaKey(localId + 2, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(replica1, replica2)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withElectedLeader(epoch, replica1.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -675,10 +676,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey local = replicaKey(localId, true);
         ReplicaKey replica1 = replicaKey(localId + 1, true);
         ReplicaKey replica2 = replicaKey(localId + 2, true);
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(local, replica1, replica2)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -711,10 +712,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey voter3 = replicaKey(localId + 2, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(local, voter2, voter3)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -764,10 +765,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey voter3Key = replicaKey(localId + 2, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(local, voter2Key, voter3Key)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -849,10 +850,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey leader = replicaKey(localId + 1, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(local, leader)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
@@ -884,10 +885,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey otherNode = replicaKey(localId + 1, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(local, otherNode)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
@@ -936,10 +937,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey replica2 = replicaKey(localId + 2, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(local, replica1, replica2)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withElectedLeader(epoch, replica1.id())
             .withRaftProtocol(raftProtocol)
@@ -1012,10 +1013,10 @@ public class KafkaRaftClientPreVoteTest {
         int electedLeaderId = localId + 3;
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(local, voter1)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withElectedLeader(epoch, electedLeaderId)
             .withRaftProtocol(KIP_996_PROTOCOL)
@@ -1053,10 +1054,10 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey follower = replicaKey(local.id() + 2, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(local, leader, follower)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
@@ -1094,10 +1095,10 @@ public class KafkaRaftClientPreVoteTest {
         int epoch = 1;
         ReplicaKey local = replicaKey(localId, true);
         ReplicaKey otherNode = replicaKey(localId + 1, true);
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = contextBuilder(
             local,
             VoterSetTest.voterSet(Stream.of(local, otherNode)),
-            kraftVersion
+            kraftVersion.isReconfigSupported()
         )
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
@@ -1136,6 +1137,22 @@ public class KafkaRaftClientPreVoteTest {
         context.assertVotedCandidate(epoch + 1, local);
     }
 
+    private static RaftClientTestContext.Builder contextBuilder(
+        ReplicaKey localKey,
+        VoterSet voters,
+        boolean withBootstrapSnapshot
+    ) {
+        RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(
+            localKey.id(),
+            localKey.directoryId().get()
+        );
+        if (withBootstrapSnapshot) {
+            builder.withBootstrapSnapshot(Optional.of(voters));
+        } else {
+            builder.withStaticVoters(voters.voterIds());
+        }
+        return builder;
+    }
 
     static Stream<Arguments> kraftVersionRaftProtocolCombinations() {
         return Stream.of(KRaftVersion.values())

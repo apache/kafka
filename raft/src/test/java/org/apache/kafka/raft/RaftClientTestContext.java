@@ -198,21 +198,6 @@ public final class RaftClientTestContext {
             this.localDirectoryId = localDirectoryId;
         }
 
-        public Builder(
-            ReplicaKey localKey,
-            VoterSet voters,
-            KRaftVersion kraftVersion
-        ) {
-            this.localId = OptionalInt.of(localKey.id());
-            this.localDirectoryId = localKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID);
-            this.kraftVersion = kraftVersion;
-            if (kraftVersion == KRaftVersion.KRAFT_VERSION_0) {
-                withStaticVoters(voters.voterIds());
-            } else {
-                withBootstrapSnapshot(Optional.of(voters));
-            }
-        }
-
         Builder withElectedLeader(int epoch, int leaderId) {
             quorumStateStore.writeElectionState(
                 ElectionState.withElectedLeader(epoch, leaderId, Optional.empty(), startingVoters.voterIds()),
