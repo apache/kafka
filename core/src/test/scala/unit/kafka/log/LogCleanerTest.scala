@@ -2044,6 +2044,34 @@ class LogCleanerTest extends Logging {
     }
   }
 
+  @Test
+  def testMaxOverCleanerThreads(): Unit = {
+    val logCleaner =  new LogCleaner(new CleanerConfig(true),
+      logDirs = Array(TestUtils.tempDir(), TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, UnifiedLog](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time)
+
+    val cleaners = mutable.ArrayBuffer[logCleaner.CleanerThread]()
+
+    val cleaner1 = new logCleaner.CleanerThread(1)
+    cleaner1.lastStats = new CleanerStats(time)
+    cleaner1.lastStats.bufferUtilization = 0.75d
+    cleaners += cleaner1
+
+    val cleaner2 = new logCleaner.CleanerThread(2)
+    cleaner2.lastStats = new CleanerStats(time)
+    cleaner2.lastStats.bufferUtilization = 0.85d
+    cleaners += cleaner2
+
+    val cleaner3 = new logCleaner.CleanerThread(3)
+    cleaner3.lastStats = new CleanerStats(time)
+    cleaner3.lastStats.bufferUtilization = 0.65d
+    cleaners += cleaner3
+
+    assertEquals(0, logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization))
+  }
+
   private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for (((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.appendAsFollower(messageWithOffset(key, value, offset)).lastOffset
