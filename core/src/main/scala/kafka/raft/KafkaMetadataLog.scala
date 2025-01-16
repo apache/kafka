@@ -620,8 +620,7 @@ object KafkaMetadataLog extends Logging {
       producerIdExpirationCheckIntervalMs = Int.MaxValue,
       logDirFailureChannel = new LogDirFailureChannel(5),
       lastShutdownClean = false,
-      topicId = Some(topicId),
-      keepPartitionMetadataFile = true
+      topicId = Some(topicId)
     )
 
     val metadataLog = new KafkaMetadataLog(

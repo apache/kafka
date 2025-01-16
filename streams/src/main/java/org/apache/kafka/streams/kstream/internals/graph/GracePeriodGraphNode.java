@@ -14,14 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security;
 
-public final class JaasUtils {
-    public static final String JAVA_LOGIN_CONFIG_PARAM = "java.security.auth.login.config";
-    public static final String DISALLOWED_LOGIN_MODULES_CONFIG = "org.apache.kafka.disallowed.login.modules";
-    public static final String DISALLOWED_LOGIN_MODULES_DEFAULT = "com.sun.security.auth.module.JndiLoginModule";
-    public static final String SERVICE_NAME = "serviceName";
+package org.apache.kafka.streams.kstream.internals.graph;
 
-    private JaasUtils() {}
+/**
+ * Represents a stateful {@link ProcessorGraphNode} where a semantic grace period is defined for the processor
+ * and its state.
+ */
+public class GracePeriodGraphNode<K, V> extends ProcessorGraphNode<K, V> {
 
+    private final long gracePeriod;
+
+    public GracePeriodGraphNode(final String nodeName,
+                                final ProcessorParameters<K, V, ?, ?> processorParameters,
+                                final long gracePeriod) {
+        super(nodeName, processorParameters);
+        this.gracePeriod = gracePeriod;
+    }
+
+    public long gracePeriod() {
+        return gracePeriod;
+    }
 }
