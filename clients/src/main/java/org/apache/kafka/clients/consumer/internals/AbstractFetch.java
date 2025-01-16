@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
@@ -315,6 +316,48 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     /**
+     * Return the set of <em>fetchable</em> partitions, which are the set of partitions to which we are subscribed,
+     * but <em>excluding</em> any partitions for which we still have buffered data. The idea is that since the user
+     * has yet to process the data for the partition that has already been fetched, we should not go send for more data
+     * until the previously-fetched data has been processed.
+     *
+     * @return {@link Set} of {@link TopicPartition topic partitions} for which we should fetch data
+     */
+    private Set<TopicPartition> fetchablePartitions(Set<TopicPartition> buffered) {
+        // This is the test that returns true if the partition is *not* buffered
+        Predicate<TopicPartition> isNotBuffered = tp -> !buffered.contains(tp);
+
+        // Return all partitions that are in an otherwise fetchable state *and* for which we don't already have some
+        // messages sitting in our buffer.
+        return new HashSet<>(subscriptions.fetchablePartitions(isNotBuffered));
+    }
+
+    /**
+     * Return the set of IDs for nodes that have one or more partitions with buffered data.
+     *
+     * <p/>
+     *
+     * It's possible that at the time of the fetcher creating new fetch requests, a partition with buffered data from a
+     * <em>previous</em> request is no longer assigned. So before attempting to retrieve node information, check that
+     * the partition is still assigned as calling {@link SubscriptionState#position(TopicPartition)} on an
+     * <em>unassigned</em> partition will throw an {@link IllegalStateException}.
+     */
+    private Set<Integer> bufferedNodes(Set<TopicPartition> buffered, long currentTimeMs) {
+        Set<Integer> nodes = new HashSet<>();
+
+        for (TopicPartition partition : buffered) {
+            if (!subscriptions.isAssigned(partition))
+                continue;
+
+            SubscriptionState.FetchPosition position = positionForPartition(partition);
+            Optional<Node> nodeOpt = nodeForPartition(partition, position, currentTimeMs);
+            nodeOpt.ifPresent(node -> nodes.add(node.id()));
+        }
+
+        return nodes;
+    }
+
+    /**
      * Determine from which replica to read: the <i>preferred</i> or the <i>leader</i>. The preferred replica is used
      * iff:
      *
@@ -392,7 +435,7 @@ public abstract class AbstractFetch implements Closeable {
         Set<TopicPartition> buffered = Collections.unmodifiableSet(fetchBuffer.bufferedPartitions());
 
         // This is the set of partitions that do not have buffered data
-        Set<TopicPartition> unbuffered = Set.copyOf(subscriptions.fetchablePartitions(tp -> !buffered.contains(tp)));
+        Set<TopicPartition> unbuffered = fetchablePartitions(buffered);
 
         if (unbuffered.isEmpty()) {
             // If there are no partitions that don't already have data locally buffered, there's no need to issue
@@ -400,21 +443,7 @@ public abstract class AbstractFetch implements Closeable {
             return Collections.emptyMap();
         }
 
-        Set<Integer> nodesWithBufferedPartitions = new HashSet<>();
-
-        for (TopicPartition partition : buffered) {
-            if (!subscriptions.isAssigned(partition)) {
-                // It's possible that a partition with buffered data from a *previous* request is no longer
-                // assigned to the consumer at the time of the *current* request. In that case, skip the partition
-                // to avoid the IllegalStateException that SubscriptionState.position() throws if it is passed a
-                // TopicPartition that is unassigned.
-                continue;
-            }
-
-            SubscriptionState.FetchPosition position = positionForPartition(partition);
-            Optional<Node> nodeOpt = nodeForPartition(partition, position, currentTimeMs);
-            nodeOpt.ifPresent(node -> nodesWithBufferedPartitions.add(node.id()));
-        }
+        Set<Integer> bufferedNodes = bufferedNodes(buffered, currentTimeMs);
 
         for (TopicPartition partition : unbuffered) {
             SubscriptionState.FetchPosition position = positionForPartition(partition);
@@ -434,7 +463,7 @@ public abstract class AbstractFetch implements Closeable {
             } else if (nodesWithPendingFetchRequests.contains(node.id())) {
                 // If there's already an inflight request for this node, don't issue another request.
                 log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, node);
-            } else if (nodesWithBufferedPartitions.contains(node.id())) {
+            } else if (bufferedNodes.contains(node.id())) {
                 // While a node has buffered data, don't fetch other partition data from it. Because the buffered
                 // partitions are not included in the fetch request, those partitions will be inadvertently dropped
                 // from the broker fetch session cache. In some cases, that could lead to the entire fetch session
