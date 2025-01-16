@@ -1004,7 +1004,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
   }
 
   private def verifyListenerRegistrationAlterationSupported(): Unit = {
-    if (!server.config.requiresZookeeper) {
+    if (true) {
       throw new ConfigException("Advertised listeners cannot be altered when using a " +
         "Raft-based metadata quorum.")
     }
