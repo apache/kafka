@@ -120,6 +120,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -3635,6 +3636,58 @@ public class FetchRequestManagerTest {
         // (and its buffer removed) and the second partition had its leader node cleared. As a result, there are now
         // effectively no topic partitions for node 0.
         assertEquals(1, sendFetches());
+    }
+
+    @Test
+    public void testFetchRequestWithBufferedPartitionMissingPosition() {
+        buildFetcher();
+
+        // The test requires that there are multiple nodes as the fetch request logic is based in part off of the
+        // partition-to-node relationship.
+        int numNodes = 2;
+        Set<TopicPartition> partitions = Set.of(tp0, tp1, tp2, tp3);
+        assignFromUser(partitions, numNodes);
+
+        // Get all the nodes serving as the leader for these partitions, and then split them into the separate
+        // nodes and set of partitions to make things easier to keep track of later.
+        List<Node> nodes = nodesForPartitionLeaders(partitions);
+        Node node0 = nodes.get(0);
+        Node node1 = nodes.get(1);
+        List<TopicPartition> node0Partitions = partitionsForNode(node0, partitions);
+        List<TopicPartition> node1Partitions = partitionsForNode(node1, partitions);
+
+        // Seek each partition so that it becomes eligible to fetch.
+        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+
+        // sendFetches() call #1 should issue requests to node 0 or node 1 since neither has buffered data.
+        assertEquals(2, sendFetches());
+        prepareFetchResponses(node0, node0Partitions, 0);
+        prepareFetchResponses(node1, node1Partitions, 0);
+        networkClientDelegate.poll(time.timer(0));
+
+        // Grab both partitions for node 0. The first partition will be collected so that it doesn't have anything
+        // in the fetch buffer. The second node will be left in the buffer, but will clear out its position's leader
+        // node.
+        TopicPartition node0Partition1 = node0Partitions.remove(0);
+        TopicPartition node0Partition2 = node0Partitions.remove(0);
+
+        assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
+        collectSelectedPartition(node0Partition1, partitions);
+        assertEquals(3, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        // Overwrite the position with an empty leader to trigger the test case.
+        subscriptions.position(node0Partition2, null);
+
+        // Both the collected partition and the position without a partition leader should have a retrievable position.
+        // Confirm that position() doesn't throw an exception and that the leader for the second partition is missing.
+        assertNotEquals(Optional.empty(), subscriptions.position(node0Partition1).currentLeader.leader);
+        assertNull(subscriptions.position(node0Partition2));
+
+        // sendFetches() call #2 will now fail to send any requests as we have an invalid position in the assignment.
+        // The Consumer.poll() API will throw an IllegalStateException to the user.
+        Future<Void> future = fetcher.createFetchRequests();
+        assertEquals(0, sendFetches());
+        assertFutureThrows(future, IllegalStateException.class);
     }
 
     /**
