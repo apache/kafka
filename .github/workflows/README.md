@@ -129,11 +129,32 @@ some limitations.
 If your PR is running for longer than you would expect due to cache misses, there are a
 few things to check. 
 
-First, find the trunk Build Scan from your PR's branch point and compare it with the Build
-Scan of your PR. This is done in the Develocity UI using the two overlapping circles like 
-`(A()B)`. This will show you differences in the task inputs for the two builds.
+First, find the cache that was loaded into your PR build. This is found in the Setup Gradle
+output. Look for a line starting with "Restored Gradle User Home from cache key". 
+For example,
 
-Next, you can run your PR with extra cache debugging. Add this to the gradle invocation in
+```
+Restored Gradle User Home from cache key: gradle-home-v1|Linux-X64|test[188616818c9a3165053ef8704c27b28e]-5c20aa187aa8f51af4270d7d1b0db4963b0cd10b
+```
+
+The last part of the cache key is the SHA of the commit on trunk where the cache
+was created. If that commit is not on your branch, it means your build loaded a 
+cache that includes changes your PR does not yet have. This is a common way to
+have cache misses. To resolve this, update your PR with the latest cached trunk commit:
+
+```commandline
+git fetch origin
+git update-cache
+git merge trunk-cached
+```
+
+If your build seems to be using the correct cache, the next thing to check is for
+changes to task inputs. You can find this by locating the trunk Build Scan from 
+the cache commit on trunk and comparing it with the build scan of your PR build.
+This is done in the Develocity UI using the two overlapping circles like `(A()B)`. 
+This will show you differences in the task inputs for the two builds.
+
+Finally, you can run your PR with extra cache debugging. Add this to the gradle invocation in
 [run-gradle/action.yml](../actions/run-gradle/action.yml). 
 
 ```
