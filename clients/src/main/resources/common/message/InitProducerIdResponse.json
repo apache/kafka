@@ -41,7 +41,7 @@
       "about": "The current epoch associated with the producer id." },
     { "name": "OngoingTxnProducerId", "type": "int64", "versions": "6+", "entityType": "producerId",
       "default": -1, "about": "The producer id for ongoing transaction when KeepPreparedTxn is used, -1 if there is no transaction ongoing." },
-    { "name": "OngoingTxnProducerEpoch", "type": "int16", "versions": "6+",
+    { "name": "OngoingTxnProducerEpoch", "type": "int16", "default": -1, "versions": "6+",
       "about": "The epoch associated with the  producer id for ongoing transaction when KeepPreparedTxn is used, -1 if there is no transaction ongoing." }
   ]
 }
