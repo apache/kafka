@@ -552,13 +552,12 @@ public class KafkaRaftClientPreVoteTest {
 
         // resigned should grant pre-vote requests with the same epoch if log is up-to-date
         int epoch = context.currentEpoch();
-        long upToDateLEO = kraftVersion == KRaftVersion.KRAFT_VERSION_0 ? 1L : 3L;
-        context.deliverRequest(context.preVoteRequest(epoch, otherNodeKey, epoch, upToDateLEO));
+        context.deliverRequest(context.preVoteRequest(epoch, otherNodeKey, epoch, context.log.endOffset().offset()));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), true);
 
         // resigned will transition to unattached if pre-vote request has a higher epoch
-        context.deliverRequest(context.preVoteRequest(epoch + 1, otherNodeKey, epoch + 1, upToDateLEO));
+        context.deliverRequest(context.preVoteRequest(epoch + 1, otherNodeKey, epoch + 1, context.log.endOffset().offset()));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.of(-1), true);
         assertTrue(context.client.quorum().isUnattached());
@@ -915,7 +914,8 @@ public class KafkaRaftClientPreVoteTest {
         context.deliverResponse(
             voteRequest.correlationId(),
             voteRequest.destination(),
-            context.voteResponse(false, OptionalInt.empty(), epoch));
+            context.voteResponse(false, OptionalInt.empty(), epoch)
+        );
         context.client.poll();
         assertTrue(context.client.quorum().isUnattached());
 
@@ -973,13 +973,15 @@ public class KafkaRaftClientPreVoteTest {
         context.deliverResponse(
             voteRequests.get(0).correlationId(),
             voteRequests.get(0).destination(),
-            context.voteResponse(false, OptionalInt.empty(), epoch));
+            context.voteResponse(false, OptionalInt.empty(), epoch)
+        );
         context.client.poll();
 
         context.deliverResponse(
             voteRequests.get(1).correlationId(),
             voteRequests.get(1).destination(),
-            context.voteResponse(false, OptionalInt.empty(), epoch));
+            context.voteResponse(false, OptionalInt.empty(), epoch)
+        );
         context.client.poll();
         assertTrue(context.client.quorum().isFollower());
 

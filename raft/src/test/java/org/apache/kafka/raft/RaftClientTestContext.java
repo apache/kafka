@@ -1931,10 +1931,8 @@ public final class RaftClientTestContext {
             return 2;
         } else if (raftProtocol.isReconfigSupported()) {
             return 1;
-        } else if (raftProtocol.isKRaftSupported()) {
-            return 0;
         } else {
-            throw new IllegalStateException("KRaft must be supported in order to use vote RPCs");
+            return 0;
         }
     }
 
