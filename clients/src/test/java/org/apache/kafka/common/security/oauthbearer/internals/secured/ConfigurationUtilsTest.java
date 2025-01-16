@@ -29,7 +29,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URL_CONFIG;
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class ConfigurationUtilsTest extends OAuthBearerTest {
@@ -39,7 +39,7 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
 
     @AfterEach
     public void tearDown() throws Exception {
-        System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URL_CONFIG);
+        System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
     }
 
     @Test
@@ -151,18 +151,18 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
 
         // By default, no URL is allowed
         assertThrowsWithMessage(IllegalArgumentException.class, () -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME),
-                url + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.url' to allow " + url);
+                url + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.urls' to allow " + url);
         assertThrowsWithMessage(IllegalArgumentException.class, () -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME),
-                fileUrl + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.url' to allow " + fileUrl);
+                fileUrl + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.urls' to allow " + fileUrl);
 
         // add one url into allowed list
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URL_CONFIG, url);
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url);
         assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME));
         assertThrowsWithMessage(IllegalArgumentException.class, () -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME),
-                fileUrl + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.url' to allow " + fileUrl);
+                fileUrl + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.urls' to allow " + fileUrl);
 
         // add all urls into allowed list
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URL_CONFIG, url + "," + fileUrl);
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url + "," + fileUrl);
         assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME));
         assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME));
     }
