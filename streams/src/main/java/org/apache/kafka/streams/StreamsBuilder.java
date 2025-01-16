@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
@@ -510,8 +511,8 @@ public class StreamsBuilder {
      * Adds a state store to the underlying {@link Topology}.
      * <p>
      * It is required to connect state stores to {@link org.apache.kafka.streams.processor.api.Processor Processors},
-     * {@link org.apache.kafka.streams.kstream.Transformer Transformers},
-     * or {@link org.apache.kafka.streams.kstream.ValueTransformer ValueTransformers} before they can be used.
+     * or {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...) ValueTransformers}
+     * before they can be used.
      *
      * @param builder the builder used to obtain this state store {@link StateStore} instance
      * @return itself
@@ -540,8 +541,7 @@ public class StreamsBuilder {
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      * <p>
      * It is not required to connect a global store to the {@link Processor Processors},
-     * {@link org.apache.kafka.streams.kstream.Transformer Transformers},
-     * or {@link org.apache.kafka.streams.kstream.ValueTransformer ValueTransformer};
+     * or {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...) ValueTransformer};
      * those have read-only access to all global stores by default.
      *
      * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}

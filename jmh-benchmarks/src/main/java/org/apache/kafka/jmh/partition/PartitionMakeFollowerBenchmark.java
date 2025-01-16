@@ -115,7 +115,7 @@ public class PartitionMakeFollowerBenchmark {
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
-            setTime(Time.SYSTEM).setKeepPartitionMetadataFile(true).
+            setTime(Time.SYSTEM).
             build();
 
         TopicPartition tp = new TopicPartition("topic", 0);
