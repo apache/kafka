@@ -52,7 +52,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   }
 
   override def generateConfigs: collection.Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(numNodes, null, enableControlledShutdown = false, enableFetchFromFollower = true)
+    TestUtils.createBrokerConfigs(numNodes, enableControlledShutdown = false, enableFetchFromFollower = true)
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 

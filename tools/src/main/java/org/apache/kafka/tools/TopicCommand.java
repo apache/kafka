@@ -709,7 +709,7 @@ public abstract class TopicCommand {
         private final ArgumentAcceptingOptionSpec<String> configOpt;
 
         /**
-         * @deprecated since 4.0 and should not be used any longer.
+         * @deprecated Since 4.0 and should not be used any longer.
          */
         @Deprecated
         private final ArgumentAcceptingOptionSpec<String> deleteConfigOpt;

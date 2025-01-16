@@ -80,7 +80,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
 
     (0 until numServers).foreach { brokerId =>
 
-      val props = TestUtils.createBrokerConfig(brokerId, null, trustStoreFile = Some(trustStoreFile))
+      val props = TestUtils.createBrokerConfig(brokerId, trustStoreFile = Some(trustStoreFile))
       // Ensure that we can support multiple listeners per security protocol and multiple security protocols
       props.put(SocketServerConfigs.LISTENERS_CONFIG, s"$SecureInternal://localhost:0, $Internal://localhost:0, " +
         s"$SecureExternal://localhost:0, $External://localhost:0")

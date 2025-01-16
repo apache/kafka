@@ -60,7 +60,6 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       brokerConfig.interBrokerListenerName,
       brokerConfig.saslMechanismInterBrokerProtocol,
       time,
-      brokerConfig.saslInterBrokerHandshakeRequestEnable,
       logContext
     )
     val reconfigurableChannelBuilder = channelBuilder match {

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.metadata.FakeKafkaConfigSchema;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
@@ -122,10 +121,9 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 controllerBuilderInitializer.accept(builder);
                 QuorumController controller = builder.build();
                 if (eligibleLeaderReplicasEnabled) {
-                    controller.featureControl().replay(new FeatureLevelRecord()
-                        .setName(EligibleLeaderReplicasVersion.FEATURE_NAME)
-                        .setFeatureLevel(EligibleLeaderReplicasVersion.ELRV_1.featureLevel())
-                    );
+                    bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(
+                        EligibleLeaderReplicasVersion.FEATURE_NAME,
+                        EligibleLeaderReplicasVersion.ELRV_1.featureLevel());
                 }
                 this.controllers.add(controller);
             }

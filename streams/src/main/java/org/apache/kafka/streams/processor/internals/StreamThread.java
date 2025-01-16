@@ -311,6 +311,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private long lastLogSummaryMs = -1L;
     private long totalRecordsProcessedSinceLastSummary = 0L;
     private long totalPunctuatorsSinceLastSummary = 0L;
+    private long totalPolledSinceLastSummary = 0L;
     private long totalCommittedSinceLastSummary = 0L;
 
     private long now;
@@ -960,6 +961,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final long pollLatency;
         taskManager.resumePollingForPartitionsWithAvailableSpace();
         pollLatency = pollPhase();
+        totalPolledSinceLastSummary += 1;
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
@@ -1075,12 +1077,14 @@ public class StreamThread extends Thread implements ProcessingThread {
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
 
-        if (logSummaryIntervalMs > 0 && now - lastLogSummaryMs > logSummaryIntervalMs) {
-            log.info("Processed {} total records, ran {} punctuators, and committed {} total tasks since the last update",
-                 totalRecordsProcessedSinceLastSummary, totalPunctuatorsSinceLastSummary, totalCommittedSinceLastSummary);
+        final long timeSinceLastLog = now - lastLogSummaryMs;
+        if (logSummaryIntervalMs > 0 && timeSinceLastLog > logSummaryIntervalMs) {
+            log.info("Processed {} total records, ran {} punctuators, polled {} times and committed {} total tasks since the last update {}ms ago",
+                 totalRecordsProcessedSinceLastSummary, totalPunctuatorsSinceLastSummary, totalPolledSinceLastSummary, totalCommittedSinceLastSummary, timeSinceLastLog);
 
             totalRecordsProcessedSinceLastSummary = 0L;
             totalPunctuatorsSinceLastSummary = 0L;
+            totalPolledSinceLastSummary = 0L;
             totalCommittedSinceLastSummary = 0L;
             lastLogSummaryMs = now;
         }

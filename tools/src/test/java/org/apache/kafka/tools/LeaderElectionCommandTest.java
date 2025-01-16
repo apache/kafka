@@ -65,8 +65,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
     @ClusterConfigProperty(key = "auto.leader.rebalance.enable", value = "false"),
     @ClusterConfigProperty(key = "controlled.shutdown.enable", value = "true"),
-    @ClusterConfigProperty(key = "controlled.shutdown.max.retries", value = "1"),
-    @ClusterConfigProperty(key = "controlled.shutdown.retry.backoff.ms", value = "1000"),
     @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "2")
 })
 public class LeaderElectionCommandTest {

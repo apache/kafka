@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -709,6 +710,7 @@ class TransactionsTest extends IntegrationTestHarness {
     assertThrows(classOf[IllegalStateException], () => producer.initTransactions())
   }
 
+  @Flaky("KAFKA-18035")
   @ParameterizedTest
   @CsvSource(Array(
     "kraft,classic,false",
@@ -920,6 +922,22 @@ class TransactionsTest extends IntegrationTestHarness {
     } else {
       assertTrue((initialProducerEpoch + 1).toShort <= producerStateEntry.producerEpoch)
     }
+  }
+
+  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isTV2Enabled={2}")
+  @CsvSource(Array(
+    "kraft, consumer, true",
+  ))
+  def testEmptyAbortAfterCommit(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+    val producer = transactionalProducers.head
+
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 1, "4", "4", willBeCommitted = false))
+    producer.commitTransaction()
+
+    producer.beginTransaction()
+    producer.abortTransaction()
   }
 
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,

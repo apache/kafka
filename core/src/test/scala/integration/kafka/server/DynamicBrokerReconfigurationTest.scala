@@ -118,7 +118,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     (0 until numServers).foreach { brokerId =>
 
-      val props = TestUtils.createBrokerConfig(brokerId, null)
+      val props = TestUtils.createBrokerConfig(brokerId)
       props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
       props ++= securityProps(sslProperties1, TRUSTSTORE_PROPS)
       // Ensure that we can support multiple listeners per security protocol and multiple security protocols
