@@ -6362,6 +6362,7 @@ public class GroupMetadataManager {
      *
      * @param groupId The group id to be deleted.
      * @param records The list of records to delete the group.
+     *
      * @return true if the group is an empty consumer group.
      */
     private boolean maybeDeleteEmptyConsumerGroup(String groupId, List<CoordinatorRecord> records) {
