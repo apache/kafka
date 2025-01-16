@@ -468,6 +468,7 @@ public abstract class AbstractFetch implements Closeable {
 
         if (position == null)
             throw new IllegalStateException("Missing position for fetchable partition " + partition);
+
         return position;
     }
 

@@ -3452,11 +3452,7 @@ public class FetchRequestManagerTest {
         // Seek each partition so that it becomes eligible to fetch.
         partitions.forEach(tp -> subscriptions.seek(tp, 0));
 
-        List<Node> nodes = partitions.stream()
-            .map(tp -> metadata.fetch().leaderFor(tp))
-            .filter(Objects::nonNull)
-            .distinct()
-            .collect(Collectors.toList());
+        List<Node> nodes = nodesForPartitionLeaders(partitions);
         assertEquals(numNodes, nodes.size(), "The number of nodes in the cluster is incorrect");
 
         Node node0 = nodes.get(0);
@@ -3563,13 +3559,86 @@ public class FetchRequestManagerTest {
         );
     }
 
+    @Test
+    public void testFetchRequestWithBufferedPartitionNotAssigned() {
+        buildFetcher();
+
+        int numNodes = 2;
+        Set<TopicPartition> partitions = Set.of(tp0, tp1, tp2, tp3);
+        assignFromUser(partitions, numNodes);
+
+        // Seek each partition so that it becomes eligible to fetch.
+        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+
+        List<Node> nodes = nodesForPartitionLeaders(partitions);
+        assertEquals(numNodes, nodes.size(), "The number of nodes in the cluster is incorrect");
+
+        Node node0 = nodes.get(0);
+        Node node1 = nodes.get(1);
+        List<TopicPartition> node0Partitions = partitionsForNode(node0, partitions);
+        List<TopicPartition> node1Partitions = partitionsForNode(node1, partitions);
+
+        // sendFetches() call #1.
+        assertEquals(
+            2,
+            sendFetches(),
+            "The first fetch should issue requests to node 0 or node 1 since neither has buffered data"
+        );
+        prepareFetchResponses(node0, node0Partitions, buildRecords(0, 10, 1));
+        prepareFetchResponses(node1, node1Partitions, buildRecords(0, 10, 1));
+        networkClientDelegate.poll(time.timer(0));
+
+        // Grab both partitions for node 0. The first partition will be collected so that it doesn't have anything
+        // in the fetch buffer. The second node will be left in the buffer, but will be unassigned in a bit.
+        TopicPartition node0Partition1 = node0Partitions.remove(0);
+        TopicPartition node0Partition2 = node0Partitions.remove(0);
+
+        assertCollected(node0Partition1, partitions);
+        assertEquals(3, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        // Change the set of assigned partitions to exclude the remaining buffered partition for node 0, which means
+        // that partition is unassigned.
+        Set<TopicPartition> topicsWithoutUnassignedPartition = new HashSet<>(partitions);
+        topicsWithoutUnassignedPartition.remove(node0Partition2);
+        subscriptions.assignFromUser(topicsWithoutUnassignedPartition);
+
+        assertDoesNotThrow(
+            () -> subscriptions.position(node0Partition1),
+            "The collected partition should have a retrievable position"
+        );
+        assertThrows(
+            IllegalStateException.class,
+            () -> subscriptions.position(node0Partition2),
+            "The unassigned position should throw an error on attempts to retrieve its position"
+        );
+
+        // sendFetches() call #2.
+        // Because the first partition in node 0 was collected (and its buffer removed) and the second partition
+        // for node 0 was unassigned, there are now no *assigned* topic partitions for node 0 that are buffered.
+        // Therefore, a fetch request to node 0 is appropriate.
+        assertEquals(
+            1,
+            sendFetches(),
+            "The second fetch should issue a request to node 0 since it doesn't have any buffered data that is currently assigned"
+        );
+    }
+
+    private List<Node> nodesForPartitionLeaders(Set<TopicPartition> partitions) {
+        List<Node> nodes = partitions.stream()
+            .map(tp -> metadata.fetch().leaderFor(tp))
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+        return nodes;
+    }
+
     private List<TopicPartition> partitionsForNode(Node node, Set<TopicPartition> partitions) {
-        int nodesPerPartition = 2;
+        int partitionsPerNode = 2;
         List<TopicPartition> partitionsForNode = partitions.stream()
             .filter(tp -> node.equals(metadata.fetch().leaderFor(tp)))
             .collect(Collectors.toList());
         assertEquals(
-            nodesPerPartition,
+            partitionsPerNode,
             partitionsForNode.size(),
             "The number of partitions in the set is incorrect"
         );
