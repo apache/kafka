@@ -928,17 +928,6 @@ public class ShareConsumeRequestManagerTest {
         // Subscription changes.
         subscriptions.assignFromSubscribed(Collections.singletonList(tp1));
 
-        client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
-                        tp -> validLeaderEpoch, topicIds, false));
-        nodeId0 = metadata.fetch().nodeById(0);
-        nodeId1 = metadata.fetch().nodeById(1);
-        tp0Leader = metadata.fetch().leaderFor(tp0);
-        tp1Leader = metadata.fetch().leaderFor(tp1);
-
-        assertEquals(nodeId0, tp0Leader);
-        assertEquals(nodeId1, tp1Leader);
-
         NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
         assertEquals(2, pollResult.unsentRequests.size());
 
@@ -995,16 +984,6 @@ public class ShareConsumeRequestManagerTest {
         // Change the subscription.
         subscriptions.assignFromSubscribed(Collections.singletonList(tp1));
 
-        client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
-                        tp -> validLeaderEpoch, topicIds, false));
-        nodeId0 = metadata.fetch().nodeById(0);
-        nodeId1 = metadata.fetch().nodeById(1);
-        tp0Leader = metadata.fetch().leaderFor(tp0);
-        tp1Leader = metadata.fetch().leaderFor(tp1);
-
-        assertEquals(nodeId0, tp0Leader);
-        assertEquals(nodeId1, tp1Leader);
 
         // Now we will be sending the request to node1 only as leader for tip1 is node1.
         // We do not build the request for tip0 as there are no acknowledgements to send.
