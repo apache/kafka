@@ -18,7 +18,6 @@ package kafka.zk
 
 import java.util.{Collections, Optional, Properties}
 import kafka.admin.RackAwareMode
-import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.ReplicaAssignment
 import kafka.server.{DynamicConfig, KafkaConfig}
 import kafka.utils._
@@ -29,7 +28,6 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals}
 import org.apache.kafka.storage.internals.log.LogConfig
-import org.apache.zookeeper.KeeperException.NodeExistsException
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
@@ -180,7 +178,6 @@ class AdminZkClient(zkClient: KafkaZkClient,
       }
       debug("Updated path %s with %s for replica assignment".format(TopicZNode.path(topic), assignment))
     } catch {
-      case _: NodeExistsException => throw new TopicExistsException(s"Topic '$topic' already exists.")
       case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }
@@ -194,8 +191,6 @@ class AdminZkClient(zkClient: KafkaZkClient,
       try {
         zkClient.createDeleteTopicPath(topic)
       } catch {
-        case _: NodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
-          "topic %s is already marked for deletion".format(topic))
         case e: Throwable => throw new AdminOperationException(e.getMessage)
        }
     } else {

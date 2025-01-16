@@ -17,11 +17,10 @@ from ducktape.tests.test import Test
 from ducktape.mark import matrix, parametrize
 from ducktape.mark.resource import cluster
 
-from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.performance import ProducerPerformanceService
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.version import DEV_BRANCH, LATEST_1_1
+from kafkatest.version import DEV_BRANCH
 
 class QuotaConfig(object):
     CLIENT_ID = 'client-id'
@@ -77,10 +76,9 @@ class QuotaConfig(object):
                 self.configure_quota(kafka, QuotaConfig.LARGE_QUOTA, QuotaConfig.LARGE_QUOTA, ['clients', None])
 
     def configure_quota(self, kafka, producer_byte_rate, consumer_byte_rate, entity_args):
-        force_use_zk_connection = not kafka.all_nodes_configs_command_uses_bootstrap_server()
         node = kafka.nodes[0]
         cmd = "%s --alter --add-config producer_byte_rate=%d,consumer_byte_rate=%d" % \
-              (kafka.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_connection), producer_byte_rate, consumer_byte_rate)
+              (kafka.kafka_configs_cmd_with_optional_security_settings(node, False), producer_byte_rate, consumer_byte_rate)
         cmd += " --entity-type " + entity_args[0] + self.entity_name_opt(entity_args[1])
         if len(entity_args) > 2:
             cmd += " --entity-type " + entity_args[2] + self.entity_name_opt(entity_args[3])
@@ -108,8 +106,7 @@ class QuotaTest(Test):
         self.num_records = 50000
         self.record_size = 3000
 
-        self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(test_context, num_nodes=1, zk=self.zk,
+        self.kafka = KafkaService(test_context, num_nodes=1, zk=None,
                                   security_protocol='SSL', authorizer_class_name='',
                                   interbroker_security_protocol='SSL',
                                   topics={self.topic: {'partitions': 6, 'replication-factor': 1, 'configs': {'min.insync.replicas': 1}}},
@@ -119,34 +116,21 @@ class QuotaTest(Test):
         self.num_producers = 1
         self.num_consumers = 2
 
-    def setUp(self):
-        self.zk.start()
-
     def min_cluster_size(self):
         """Override this since we're adding services outside of the constructor"""
         return super(QuotaTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
     @cluster(num_nodes=5)
-    @matrix(quota_type=[QuotaConfig.CLIENT_ID, QuotaConfig.USER, QuotaConfig.USER_CLIENT], override_quota=[True, False])
-    @parametrize(quota_type=QuotaConfig.CLIENT_ID, consumer_num=2)
-    @parametrize(quota_type=QuotaConfig.CLIENT_ID, old_broker_throttling_behavior=True)
-    @parametrize(quota_type=QuotaConfig.CLIENT_ID, old_client_throttling_behavior=True)
-    def test_quota(self, quota_type, override_quota=True, producer_num=1, consumer_num=1,
-                   old_broker_throttling_behavior=False, old_client_throttling_behavior=False):
-        # Old (pre-2.0) throttling behavior for broker throttles before sending a response to the client.
-        if old_broker_throttling_behavior:
-            self.kafka.set_version(LATEST_1_1)
+    @matrix(quota_type=[QuotaConfig.CLIENT_ID, QuotaConfig.USER, QuotaConfig.USER_CLIENT], override_quota=[True, False], metadata_quorum=[quorum.isolated_kraft])
+    @parametrize(quota_type=QuotaConfig.CLIENT_ID, consumer_num=2, metadata_quorum=quorum.isolated_kraft)
+    def test_quota(self, quota_type, override_quota=True, producer_num=1, consumer_num=1, metadata_quorum=quorum.isolated_kraft):
         self.kafka.start()
 
         self.quota_config = QuotaConfig(quota_type, override_quota, self.kafka)
         producer_client_id = self.quota_config.client_id
         consumer_client_id = self.quota_config.client_id
 
-        # Old (pre-2.0) throttling behavior for client does not throttle upon receiving a response with a non-zero throttle time.
-        if old_client_throttling_behavior:
-            client_version = LATEST_1_1
-        else:
-            client_version = DEV_BRANCH
+        client_version = DEV_BRANCH
 
         # Produce all messages
         producer = ProducerPerformanceService(

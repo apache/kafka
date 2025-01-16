@@ -18,18 +18,17 @@ from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.version import LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
-  LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_VERSION, KafkaVersion
+  LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, DEV_VERSION, KafkaVersion
 
 smoke_test_versions = [str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4),
                        str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7),
                        str(LATEST_2_8), str(LATEST_3_0), str(LATEST_3_1),
                        str(LATEST_3_2), str(LATEST_3_3), str(LATEST_3_4),
                        str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7),
-                       str(LATEST_3_8)]
+                       str(LATEST_3_8), str(LATEST_3_9)]
 
 class StreamsUpgradeTest(Test):
     """
@@ -56,9 +55,9 @@ class StreamsUpgradeTest(Test):
             node.version = KafkaVersion(to_version)
             self.kafka.start_node(node)
 
-    @cluster(num_nodes=6)
-    @matrix(from_version=smoke_test_versions, bounce_type=["full"])
-    def test_app_upgrade(self, from_version, bounce_type):
+    @cluster(num_nodes=9)
+    @matrix(from_version=smoke_test_versions, bounce_type=["full"], metadata_quorum=[quorum.combined_kraft])
+    def test_app_upgrade(self, from_version, bounce_type, metadata_quorum):
         """
         Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
         """
@@ -68,10 +67,7 @@ class StreamsUpgradeTest(Test):
         if from_version == to_version:
             return
 
-        self.zk = ZookeeperService(self.test_context, num_nodes=1)
-        self.zk.start()
-
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, topics={
+        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=None, topics={
             'echo' : { 'partitions': 5, 'replication-factor': 1 },
             'data' : { 'partitions': 5, 'replication-factor': 1 },
             'min' : { 'partitions': 5, 'replication-factor': 1 },
@@ -86,7 +82,7 @@ class StreamsUpgradeTest(Test):
             'avg' : { 'partitions': 5, 'replication-factor': 1 },
             'wcnt' : { 'partitions': 5, 'replication-factor': 1 },
             'tagg' : { 'partitions': 5, 'replication-factor': 1 }
-        })
+        }, controller_num_nodes_override=1)
         self.kafka.start()
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)

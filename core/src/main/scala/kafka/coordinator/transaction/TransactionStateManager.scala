@@ -479,7 +479,6 @@ class TransactionStateManager(brokerId: Int,
                       case Some(txnMetadata) =>
                         loadedTransactions.put(transactionalId, txnMetadata)
                     }
-                    currOffset = batch.nextOffset
 
                   case unknownKey: UnknownKey =>
                     warn(s"Unknown message key with version ${unknownKey.version}" +
@@ -487,6 +486,7 @@ class TransactionStateManager(brokerId: Int,
                       "It could be a left over from an aborted upgrade.")
                 }
               }
+              currOffset = batch.nextOffset
             }
           }
         } catch {
@@ -596,16 +596,27 @@ class TransactionStateManager(brokerId: Int,
    */
   def removeTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
-    val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
     inWriteLock(stateLock) {
-      loadingPartitions.remove(partitionAndLeaderEpoch)
+      removeLoadingPartitionWithEpoch(partitionId, coordinatorEpoch)
       transactionMetadataCache.remove(partitionId) match {
         case Some(txnMetadataCacheEntry) =>
           info(s"Unloaded transaction metadata $txnMetadataCacheEntry for $topicPartition on become-follower transition")
 
         case None =>
           info(s"No cached transaction metadata found for $topicPartition during become-follower transition")
+      }
+    }
+  }
+
+  /**
+   * Remove the loading partition if the epoch is less than the specified epoch. Note: This method must be called under the write state lock.
+   */
+  private def removeLoadingPartitionWithEpoch(partitionId: Int, coordinatorEpoch: Int): Unit = {
+    loadingPartitions.find(_.txnPartitionId == partitionId).foreach { partitionAndLeaderEpoch =>
+      if (partitionAndLeaderEpoch.coordinatorEpoch < coordinatorEpoch) {
+        loadingPartitions.remove(partitionAndLeaderEpoch)
+        info(s"Cancelling load of currently loading partition $partitionAndLeaderEpoch")
       }
     }
   }

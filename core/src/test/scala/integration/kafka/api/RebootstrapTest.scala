@@ -16,36 +16,53 @@
  */
 package kafka.api
 
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaBroker, KafkaConfig}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import java.util.Properties
 
 abstract class RebootstrapTest extends AbstractConsumerTest {
   override def brokerCount: Int = 2
 
-  def server0: KafkaServer = serverForId(0).get
-  def server1: KafkaServer = serverForId(1).get
+  def server0: KafkaBroker = serverForId(0).get
+  def server1: KafkaBroker = serverForId(1).get
+
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.doSetup(testInfo, createOffsetsTopic = true)
+
+    // Enable unclean leader election for the test topic
+    val topicProps = new Properties
+    topicProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+
+    // create the test topic with all the brokers as replicas
+    createTopic(topic, 2, brokerCount, adminClientConfig = this.adminClientConfig, topicConfig = topicProps)
+  }
 
   override def generateConfigs: Seq[KafkaConfig] = {
     val overridingProps = new Properties()
     overridingProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, brokerCount.toString)
-    overridingProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
 
     // In this test, fixed ports are necessary, because brokers must have the
     // same port after the restart.
-    FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnect, enableControlledShutdown = false)
+    FixedPortTestUtils.createBrokerConfigs(brokerCount, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  def clientOverrides: Properties = {
+  def clientOverrides(useRebootstrapTriggerMs: Boolean): Properties = {
     val overrides = new Properties()
-    overrides.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "5000")
-    overrides.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, "5000")
-    overrides.put(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG, "1000")
-    overrides.put(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG, "1000")
+    if (useRebootstrapTriggerMs) {
+      overrides.put(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG, "5000")
+    } else {
+      overrides.put(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG, "3600000")
+      overrides.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "5000")
+      overrides.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, "5000")
+      overrides.put(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG, "1000")
+      overrides.put(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG, "1000")
+    }
     overrides.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "rebootstrap")
     overrides
   }

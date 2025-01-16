@@ -111,7 +111,7 @@ public abstract class TaskSpec {
         return JsonUtil.toJsonString(this);
     }
 
-    protected Map<String, String> configOrEmptyMap(Map<String, String> config) {
+    protected static Map<String, String> configOrEmptyMap(Map<String, String> config) {
         return (config == null) ? Collections.emptyMap() : config;
     }
 }

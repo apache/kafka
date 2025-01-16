@@ -22,21 +22,18 @@ import java.util.{Collections, Properties}
 import kafka.controller.KafkaController
 import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
-import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs, ZooKeeperInternals}
-import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs, ZooKeeperInternals}
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ClientMetricsManager
+import org.apache.kafka.server.common.StopPartition
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator}
-import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.util.Try
@@ -60,19 +57,13 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
   private def updateLogConfig(topic: String,
                               topicConfig: Properties): Unit = {
     val logManager = replicaManager.logManager
-    // Validate the configurations.
-    val configNamesToExclude = excludedConfigs(topic, topicConfig)
-    val props = new Properties()
-    topicConfig.asScala.foreachEntry { (key, value) =>
-      if (!configNamesToExclude.contains(key)) props.put(key, value)
-    }
 
     val logs = logManager.logsByTopic(topic)
     val wasRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
     val wasCopyDisabled = logs.exists(_.config.remoteLogCopyDisable())
 
     // kafkaController is only defined in Zookeeper's mode
-    logManager.updateTopicConfig(topic, props, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
+    logManager.updateTopicConfig(topic, topicConfig, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
       wasRemoteLogEnabled, kafkaController.isDefined)
     maybeUpdateRemoteLogComponents(topic, logs, wasRemoteLogEnabled, wasCopyDisabled)
   }
@@ -99,7 +90,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     // When copy disabled, we should stop leaderCopyRLMTask, but keep expirationTask
     if (isRemoteLogEnabled && !wasCopyDisabled && isCopyDisabled) {
       replicaManager.remoteLogManager.foreach(rlm => {
-        rlm.stopLeaderCopyRLMTasks(leaderPartitions.toSet.asJava);
+        rlm.stopLeaderCopyRLMTasks(leaderPartitions.toSet.asJava)
       })
     }
 
@@ -108,14 +99,12 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
       val stopPartitions: java.util.HashSet[StopPartition] = new java.util.HashSet[StopPartition]()
       leaderPartitions.foreach(partition => {
         // delete remote logs and stop RemoteLogMetadataManager
-        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false,
-          deleteRemoteLog = true, stopRemoteLogMetadataManager = true))
+        stopPartitions.add(new StopPartition(partition.topicPartition, false, true, true))
       })
 
       followerPartitions.foreach(partition => {
         // we need to cancel follower tasks and stop RemoteLogMetadataManager
-        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false,
-          deleteRemoteLog = false, stopRemoteLogMetadataManager = true))
+        stopPartitions.add(new StopPartition(partition.topicPartition, false, false, true))
       })
 
       // update the log start offset to local log start offset for the leader replicas
@@ -132,15 +121,15 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager): Unit = {
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
         val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
-        quotaManager.markThrottled(topic, partitions)
+        quotaManager.markThrottled(topic, partitions.map(Integer.valueOf).asJava)
         debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")
       } else {
         quotaManager.removeThrottle(topic)
         debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
       }
     }
-    updateThrottledList(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
-    updateThrottledList(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
+    updateThrottledList(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
+    updateThrottledList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
 
     if (Try(topicConfig.getProperty(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).toBoolean).getOrElse(false)) {
       kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
@@ -152,31 +141,13 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     ThrottledReplicaListValidator.ensureValidString(prop, configValue)
     configValue match {
       case "" => Seq()
-      case "*" => AllReplicas
+      case "*" => ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq
       case _ => configValue.trim
         .split(",")
         .map(_.split(":"))
         .filter(_ (1).toInt == brokerId) //Filter this replica
         .map(_ (0).toInt).toSeq //convert to list of partition ids
     }
-  }
-
-  @nowarn("cat=deprecation")
-  private def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
-    // Verify message format version
-    Option(topicConfig.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)).flatMap { versionString =>
-      val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
-      if (messageFormatVersion.shouldIgnore) {
-        if (messageFormatVersion.shouldWarn)
-          warn(messageFormatVersion.topicWarningMessage(topic))
-        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-      } else if (kafkaConfig.interBrokerProtocolVersion.isLessThan(messageFormatVersion.messageFormatVersion)) {
-        warn(s"Topic configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG} is ignored for `$topic` because `$versionString` " +
-          s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
-        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-      } else
-        None
-    }.toSet
   }
 }
 
@@ -190,26 +161,26 @@ class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
   def updateQuotaConfig(sanitizedUser: Option[String], sanitizedClientId: Option[String], config: Properties): Unit = {
     val clientId = sanitizedClientId.map(Sanitizer.desanitize)
     val producerQuota =
-      if (config.containsKey(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
-        Some(new Quota(config.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG).toLong.toDouble, true))
+      if (config.containsKey(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
+        Some(new Quota(config.getProperty(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG).toLong.toDouble, true))
       else
         None
     quotaManagers.produce.updateQuota(sanitizedUser, clientId, sanitizedClientId, producerQuota)
     val consumerQuota =
-      if (config.containsKey(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG))
-        Some(new Quota(config.getProperty(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).toLong.toDouble, true))
+      if (config.containsKey(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG))
+        Some(new Quota(config.getProperty(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).toLong.toDouble, true))
       else
         None
     quotaManagers.fetch.updateQuota(sanitizedUser, clientId, sanitizedClientId, consumerQuota)
     val requestQuota =
-      if (config.containsKey(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG))
-        Some(new Quota(config.getProperty(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG).toDouble, true))
+      if (config.containsKey(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG))
+        Some(new Quota(config.getProperty(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG).toDouble, true))
       else
         None
     quotaManagers.request.updateQuota(sanitizedUser, clientId, sanitizedClientId, requestQuota)
     val controllerMutationQuota =
-      if (config.containsKey(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG))
-        Some(new Quota(config.getProperty(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG).toDouble, true))
+      if (config.containsKey(QuotaConfig.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG))
+        Some(new Quota(config.getProperty(QuotaConfig.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG).toDouble, true))
       else
         None
     quotaManagers.controllerMutation.updateQuota(sanitizedUser, clientId, sanitizedClientId, controllerMutationQuota)
@@ -250,7 +221,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
 class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends ConfigHandler with Logging {
 
   def processConfigChanges(ip: String, config: Properties): Unit = {
-    val ipConnectionRateQuota = Option(config.getProperty(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)).map(_.toInt)
+    val ipConnectionRateQuota = Option(config.getProperty(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG)).map(_.toInt)
     val updatedIp = {
       if (ip != ZooKeeperInternals.DEFAULT_STRING) {
         try {
@@ -285,12 +256,12 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       case Some(value) => value.toLong
       case None => updatedDynamicDefaultConfigs get prop match {
         case Some(defaultValue) => defaultValue.toLong
-        case None => QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT
+        case None => QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT
       }
     }
-    quotaManagers.leader.updateQuota(upperBound(getOrDefault(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
-    quotaManagers.follower.updateQuota(upperBound(getOrDefault(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
-    quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG).toDouble))
+    quotaManagers.leader.updateQuota(upperBound(getOrDefault(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
+    quotaManagers.follower.updateQuota(upperBound(getOrDefault(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
+    quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG).toDouble))
   }
 }
 

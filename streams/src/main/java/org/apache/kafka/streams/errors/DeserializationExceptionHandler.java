@@ -29,14 +29,20 @@ public interface DeserializationExceptionHandler extends Configurable {
 
     /**
      * Inspect a record and the exception received.
-     * <p>
-     * Note, that the passed in {@link ProcessorContext} only allows to access metadata like the task ID.
+     *
+     * <p> Note, that the passed in {@link ProcessorContext} only allows to access metadata like the task ID.
      * However, it cannot be used to emit records via {@link ProcessorContext#forward(Object, Object)};
      * calling {@code forward()} (and some other methods) would result in a runtime exception.
      *
-     * @param context processor context
-     * @param record record that failed deserialization
-     * @param exception the actual exception
+     * @param context
+     *     Processor context.
+     * @param record
+     *     Record that failed deserialization.
+     * @param exception
+     *     The actual exception.
+     *
+     * @return Whether to continue or stop processing.
+     *
      * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ConsumerRecord, Exception)} instead.
      */
     @Deprecated
@@ -49,9 +55,14 @@ public interface DeserializationExceptionHandler extends Configurable {
     /**
      * Inspect a record and the exception received.
      *
-     * @param context error handler context
-     * @param record record that failed deserialization
-     * @param exception the actual exception
+     * @param context
+     *     Error handler context.
+     * @param record
+     *     Record that failed deserialization.
+     * @param exception
+     *     The actual exception.
+     *
+     * @return Whether to continue or stop processing.
      */
     default DeserializationHandlerResponse handle(final ErrorHandlerContext context,
                                                   final ConsumerRecord<byte[], byte[]> record,
@@ -63,15 +74,19 @@ public interface DeserializationExceptionHandler extends Configurable {
      * Enumeration that describes the response from the exception handler.
      */
     enum DeserializationHandlerResponse {
-        /* continue with processing */
+        /** Continue processing. */
         CONTINUE(0, "CONTINUE"),
-        /* fail the processing and stop */
+        /** Fail processing. */
         FAIL(1, "FAIL");
 
-        /** an english description of the api--this is for debugging and can change */
+        /**
+         * An english description for the used option. This is for debugging only and may change.
+         */
         public final String name;
 
-        /** the permanent and immutable id of an API--this can't change ever */
+        /**
+         * The permanent and immutable id for the used option. This can't change ever.
+         */
         public final int id;
 
         DeserializationHandlerResponse(final int id, final String name) {

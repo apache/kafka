@@ -22,7 +22,7 @@ import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -41,10 +41,11 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
         return 2;
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"kraft"})
-    public void executeTieredStorageTest(String quorum) {
-        super.executeTieredStorageTest(quorum);
+    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    @Override
+    public void executeTieredStorageTest(String quorum, String groupProtocol) {
+        super.executeTieredStorageTest(quorum, groupProtocol);
     }
 
     @Override

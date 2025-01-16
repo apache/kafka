@@ -97,8 +97,7 @@ public class BootstrapMetadata {
     }
 
     public static Optional<MetadataVersion> recordToMetadataVersion(ApiMessage record) {
-        if (record instanceof FeatureLevelRecord) {
-            FeatureLevelRecord featureLevel = (FeatureLevelRecord) record;
+        if (record instanceof FeatureLevelRecord featureLevel) {
             if (featureLevel.name().equals(MetadataVersion.FEATURE_NAME)) {
                 return Optional.of(MetadataVersion.fromFeatureLevel(featureLevel.featureLevel()));
             }
@@ -134,19 +133,41 @@ public class BootstrapMetadata {
         return source;
     }
 
-    public BootstrapMetadata copyWithOnlyVersion() {
-        ApiMessageAndVersion versionRecord = null;
+    public short featureLevel(String featureName) {
+        short result = 0;
         for (ApiMessageAndVersion record : records) {
-            if (recordToMetadataVersion(record.message()).isPresent()) {
-                versionRecord = record;
+            if (record.message() instanceof FeatureLevelRecord message) {
+                if (message.name().equals(featureName)) {
+                    result = message.featureLevel();
+                }
             }
         }
-        if (versionRecord == null) {
-            throw new RuntimeException("No FeatureLevelRecord for " + MetadataVersion.FEATURE_NAME +
-                    " was found in " + source);
+        return result;
+    }
+
+    public BootstrapMetadata copyWithFeatureRecord(String featureName, short level) {
+        List<ApiMessageAndVersion> newRecords = new ArrayList<>();
+        int i = 0;
+        while (i < records.size()) {
+            if (records.get(i).message() instanceof FeatureLevelRecord record) {
+                if (record.name().equals(featureName)) {
+                    FeatureLevelRecord newRecord = record.duplicate();
+                    newRecord.setFeatureLevel(level);
+                    newRecords.add(new ApiMessageAndVersion(newRecord, (short) 0));
+                    break;
+                } else {
+                    newRecords.add(records.get(i));
+                }
+            }
+            i++;
         }
-        return new BootstrapMetadata(Collections.singletonList(versionRecord),
-                metadataVersion, source);
+        if (i == records.size()) {
+            FeatureLevelRecord newRecord = new FeatureLevelRecord().
+                setName(featureName).
+                setFeatureLevel(level);
+            newRecords.add(new ApiMessageAndVersion(newRecord, (short) 0));
+        }
+        return BootstrapMetadata.fromRecords(newRecords, source);
     }
 
     @Override

@@ -31,7 +31,7 @@ import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.{ConnectionThrottledException, SocketServerConfigs, TooManyConnectionsException}
-import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs}
+import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
@@ -66,13 +66,14 @@ class ConnectionQuotasTest {
   }
 
   def brokerPropsWithDefaultConnectionLimits: Properties = {
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    val props = TestUtils.createBrokerConfig(0, port = 0)
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0,REPLICATION://localhost:1,ADMIN://localhost:2")
     // ConnectionQuotas does not limit inter-broker listener even when broker-wide connection limit is reached
     props.put(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "REPLICATION")
-    props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,ADMIN:PLAINTEXT")
-    props.put(QuotaConfigs.NUM_QUOTA_SAMPLES_CONFIG, numQuotaSamples.toString)
-    props.put(QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_CONFIG, quotaWindowSizeSeconds.toString)
+    props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "REPLICATION://localhost:1")
+    props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,ADMIN:PLAINTEXT")
+    props.put(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, numQuotaSamples.toString)
+    props.put(QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_CONFIG, quotaWindowSizeSeconds.toString)
     props
   }
 
@@ -652,12 +653,12 @@ class ConnectionQuotasTest {
 
     // remove default connection rate quota
     connectionQuotas.updateIpConnectionRateQuota(None, None)
-    verifyIpConnectionQuota(adminListener.defaultIp, QuotaConfigs.IP_CONNECTION_RATE_DEFAULT)
+    verifyIpConnectionQuota(adminListener.defaultIp, QuotaConfig.IP_CONNECTION_RATE_DEFAULT)
     verifyIpConnectionQuota(externalListener.defaultIp, overrideIpRate)
 
     // remove override for external listener IP
     connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), None)
-    verifyIpConnectionQuota(externalListener.defaultIp, QuotaConfigs.IP_CONNECTION_RATE_DEFAULT)
+    verifyIpConnectionQuota(externalListener.defaultIp, QuotaConfig.IP_CONNECTION_RATE_DEFAULT)
   }
 
   @Test

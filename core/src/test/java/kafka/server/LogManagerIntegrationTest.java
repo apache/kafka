@@ -34,7 +34,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
-import org.apache.kafka.common.test.api.RaftClusterInvocationContext;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile;
 import org.apache.kafka.test.TestUtils;
@@ -52,7 +51,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -67,22 +65,20 @@ public class LogManagerIntegrationTest {
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
     public void testRestartBrokerNoErrorIfMissingPartitionMetadata() throws IOException, ExecutionException, InterruptedException {
-        RaftClusterInvocationContext.RaftClusterInstance raftInstance =
-                (RaftClusterInvocationContext.RaftClusterInstance) cluster;
 
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
             admin.createTopics(Collections.singletonList(new NewTopic("foo", 1, (short) 3))).all().get();
         }
         cluster.waitForTopic("foo", 1);
 
         Optional<PartitionMetadataFile> partitionMetadataFile = Optional.ofNullable(
-                raftInstance.getUnderlying().brokers().get(0).logManager()
+                cluster.brokers().get(0).logManager()
                         .getLog(new TopicPartition("foo", 0), false).get()
                         .partitionMetadataFile().getOrElse(null));
         assertTrue(partitionMetadataFile.isPresent());
 
-        raftInstance.getUnderlying().brokers().get(0).shutdown();
-        try (Admin admin = cluster.createAdminClient()) {
+        cluster.brokers().get(0).shutdown();
+        try (Admin admin = cluster.admin()) {
             TestUtils.waitForCondition(() -> {
                 List<TopicPartitionInfo> partitionInfos = admin.describeTopics(Collections.singletonList("foo"))
                         .topicNameValues().get("foo").get().partitions();
@@ -93,10 +89,10 @@ public class LogManagerIntegrationTest {
         // delete partition.metadata file here to simulate the scenario that partition.metadata not flush to disk yet
         partitionMetadataFile.get().delete();
         assertFalse(partitionMetadataFile.get().exists());
-        raftInstance.getUnderlying().brokers().get(0).startup();
+        cluster.brokers().get(0).startup();
         // make sure there is no error during load logs
-        assertDoesNotThrow(() -> raftInstance.getUnderlying().fatalFaultHandler().maybeRethrowFirstException());
-        try (Admin admin = cluster.createAdminClient()) {
+        assertTrue(cluster.firstFatalException().isEmpty());
+        try (Admin admin = cluster.admin()) {
             TestUtils.waitForCondition(() -> {
                 List<TopicPartitionInfo> partitionInfos = admin.describeTopics(Collections.singletonList("foo"))
                         .topicNameValues().get("foo").get().partitions();

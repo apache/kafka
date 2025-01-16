@@ -17,7 +17,7 @@
 
 package kafka.server.metadata
 
-import java.util.{OptionalInt, Properties}
+import java.util.OptionalInt
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
 import kafka.server.{KafkaConfig, ReplicaManager}
@@ -216,6 +216,14 @@ class BrokerMetadataPublisher(
           s"coordinator with local changes in $deltaName", t)
       }
 
+      try {
+        // Propagate the new image to the share coordinator.
+        shareCoordinator.foreach(coordinator => coordinator.onNewMetadataImage(newImage, delta))
+      } catch {
+        case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
+          s"coordinator with local changes in $deltaName", t)
+      }
+
       if (_firstPublish) {
         finishInitializingReplicaManager()
       }
@@ -233,10 +241,6 @@ class BrokerMetadataPublisher(
       case Some(leaderEpoch) => OptionalInt.of(leaderEpoch)
       case None => OptionalInt.empty
     }
-  }
-
-  def reloadUpdatedFilesWithoutConfigChange(props: Properties): Unit = {
-    config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
   }
 
   /**

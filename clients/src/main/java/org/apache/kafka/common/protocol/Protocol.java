@@ -31,10 +31,7 @@ import java.util.Set;
 public class Protocol {
 
     private static String indentString(int size) {
-        StringBuilder b = new StringBuilder(size);
-        for (int i = 0; i < size; i++)
-            b.append(" ");
-        return b.toString();
+        return " ".repeat(Math.max(0, size));
     }
 
     private static void schemaToBnfHtml(Schema schema, StringBuilder b, int indentSize) {
@@ -52,7 +49,7 @@ public class Protocol {
                     subTypes.put(field.def.name, type.arrayElementType().get());
                 }
             } else if (type instanceof TaggedFields) {
-                b.append("TAG_BUFFER ");
+                b.append("_tagged_fields ");
             } else {
                 b.append(field.def.name);
                 b.append(" ");
@@ -108,7 +105,44 @@ public class Protocol {
             b.append(field.def.name);
             b.append("</td>");
             b.append("<td>");
-            b.append(field.def.docString);
+            if (field.def.type instanceof TaggedFields) {
+                TaggedFields taggedFields = (TaggedFields) field.def.type;
+                // Only include the field in the table if there are actually tags defined
+                if (taggedFields.numFields() > 0) {
+                    b.append("<table class=\"data-table\"><tbody>\n");
+                    b.append("<tr>");
+                    b.append("<th>Tag</th>\n");
+                    b.append("<th>Tagged field</th>\n");
+                    b.append("<th>Description</th>\n");
+                    b.append("</tr>");
+                    taggedFields.fields().forEach((tag, taggedField) -> {
+                        b.append("<tr>\n");
+                        b.append("<td>");
+                        b.append(tag);
+                        b.append("</td>");
+                        b.append("<td>");
+                        b.append(taggedField.name);
+                        b.append("</td>");
+                        b.append("<td>");
+                        b.append(taggedField.docString);
+                        if (taggedField.type.isArray()) {
+                            Type innerType = taggedField.type.arrayElementType().get();
+                            if (innerType instanceof Schema) {
+                                schemaToFieldTableHtml((Schema) innerType, b);
+                            }
+                        } else if (taggedField.type instanceof Schema) {
+                            schemaToFieldTableHtml((Schema) taggedField.type, b);
+                        }
+                        b.append("</td>");
+                        b.append("</tr>\n");
+                    });
+                    b.append("</tbody></table>\n");
+                } else {
+                    b.append(field.def.docString);
+                }
+            } else {
+                b.append(field.def.docString);
+            }
             b.append("</td>");
             b.append("</tr>\n");
         }
@@ -157,6 +191,10 @@ public class Protocol {
                     b.append(") => ");
                     schemaToBnfHtml(requests[i], b, 2);
                     b.append("</pre>");
+
+                    if (!key.isVersionEnabled((short) i, false)) {
+                        b.append("<p>This version of the request is unstable.</p>");
+                    }
 
                     b.append("<p><b>Request header version:</b> ");
                     b.append(key.requestHeaderVersion((short) i));

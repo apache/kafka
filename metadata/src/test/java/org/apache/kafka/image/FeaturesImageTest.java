@@ -21,7 +21,6 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
-import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -54,7 +53,7 @@ public class FeaturesImageTest {
         Map<String, Short> map1 = new HashMap<>();
         map1.put("foo", (short) 2);
         map1.put("bar", (short) 1);
-        IMAGE1 = new FeaturesImage(map1, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
+        IMAGE1 = new FeaturesImage(map1, MetadataVersion.latestTesting());
 
         DELTA1_RECORDS = new ArrayList<>();
         // change feature level
@@ -76,7 +75,7 @@ public class FeaturesImageTest {
         Map<String, Short> map2 = new HashMap<>();
         map2.put("foo", (short) 3);
         map2.put("baz", (short) 8);
-        IMAGE2 = new FeaturesImage(map2, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
+        IMAGE2 = new FeaturesImage(map2, MetadataVersion.latestTesting());
 
         DELTA2_RECORDS = new ArrayList<>();
         // remove all features
@@ -95,7 +94,7 @@ public class FeaturesImageTest {
         RecordTestUtils.replayAll(DELTA2, DELTA2_RECORDS);
 
         Map<String, Short> map3 = Collections.singletonMap("bar", (short) 1);
-        IMAGE3 = new FeaturesImage(map3, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
+        IMAGE3 = new FeaturesImage(map3, MetadataVersion.latestTesting());
     }
 
     @Test
@@ -162,10 +161,9 @@ public class FeaturesImageTest {
     public void testEmpty() {
         assertTrue(FeaturesImage.EMPTY.isEmpty());
         assertFalse(new FeaturesImage(Collections.singletonMap("foo", (short) 1),
-            FeaturesImage.EMPTY.metadataVersion(), FeaturesImage.EMPTY.zkMigrationState()).isEmpty());
+            FeaturesImage.EMPTY.metadataVersion()).isEmpty());
         assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
-            MetadataVersion.IBP_3_3_IV0, FeaturesImage.EMPTY.zkMigrationState()).isEmpty());
-        assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
-            FeaturesImage.EMPTY.metadataVersion(), ZkMigrationState.MIGRATION).isEmpty());
+            MetadataVersion.IBP_3_3_IV0).isEmpty());
+        assertTrue(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(), FeaturesImage.EMPTY.metadataVersion()).isEmpty());
     }
 }

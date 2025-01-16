@@ -51,7 +51,7 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * Hence, it is instantiater's responsibility to ensure restoring the cache to the correct state after instantiating
  * this class from checkpoint (which might contain stale epoch entries right after instantiation).
  */
-public class LeaderEpochFileCache {
+public final class LeaderEpochFileCache {
     private final TopicPartition topicPartition;
     private final LeaderEpochCheckpointFile checkpoint;
     private final Scheduler scheduler;
@@ -66,7 +66,6 @@ public class LeaderEpochFileCache {
      * @param checkpoint     the checkpoint file
      * @param scheduler      the scheduler to use for async I/O operations
      */
-    @SuppressWarnings("this-escape")
     public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpointFile checkpoint, Scheduler scheduler) {
         this.checkpoint = checkpoint;
         this.topicPartition = topicPartition;

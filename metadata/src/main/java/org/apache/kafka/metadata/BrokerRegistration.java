@@ -142,14 +142,6 @@ public class BrokerRegistration {
         }
     }
 
-    public static Optional<Long> zkBrokerEpoch(long value) {
-        if (value == -1) {
-            return Optional.empty();
-        } else {
-            return Optional.of(value);
-        }
-    }
-
     private final int id;
     private final long epoch;
     private final Uuid incarnationId;
@@ -178,7 +170,7 @@ public class BrokerRegistration {
         this.incarnationId = incarnationId;
         Map<String, Endpoint> newListeners = new HashMap<>(listeners.size());
         for (Entry<String, Endpoint> entry : listeners.entrySet()) {
-            if (!entry.getValue().listenerName().isPresent()) {
+            if (entry.getValue().listenerName().isEmpty()) {
                 throw new IllegalArgumentException("Broker listeners must be named.");
             }
             newListeners.put(entry.getKey(), entry.getValue());
@@ -241,7 +233,7 @@ public class BrokerRegistration {
         if (endpoint == null) {
             return Optional.empty();
         }
-        return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null)));
+        return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null), fenced));
     }
 
     public Map<String, VersionRange> supportedFeatures() {
@@ -350,8 +342,7 @@ public class BrokerRegistration {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof BrokerRegistration)) return false;
-        BrokerRegistration other = (BrokerRegistration) o;
+        if (!(o instanceof BrokerRegistration other)) return false;
         return other.id == id &&
             other.epoch == epoch &&
             other.incarnationId.equals(incarnationId) &&

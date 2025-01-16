@@ -41,7 +41,7 @@ jobs:
       - uses: actions/stale@v9
         with:
           debug-only: ${{ inputs.dryRun || false }}
-          operations-per-run: ${{ inputs.operationsPerRun || 100 }}
+          operations-per-run: ${{ inputs.operationsPerRun || 500 }}
           ascending: true
           days-before-stale: 90
           days-before-close: 30  # Since adding 'stale' will update the PR, days-before-close is relative to that.

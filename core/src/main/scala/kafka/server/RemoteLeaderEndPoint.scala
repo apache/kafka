@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
-
 import java.util.{Collections, Optional}
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Logging
@@ -31,7 +29,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
-import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV2
+import org.apache.kafka.server.network.BrokerEndPoint
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
@@ -65,7 +63,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
-  override def isTruncationOnFetchSupported: Boolean = metadataVersionSupplier().isTruncationOnFetchSupported
+  override def isTruncationOnFetchSupported: Boolean = true
 
   override def initiateClose(): Unit = blockingSender.initiateClose()
 
@@ -124,11 +122,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
       .partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
 
     Errors.forCode(responsePartition.errorCode) match {
-      case Errors.NONE =>
-        if (metadataVersion.isAtLeast(IBP_0_10_1_IV2))
-          new OffsetAndEpoch(responsePartition.offset, responsePartition.leaderEpoch)
-        else
-          new OffsetAndEpoch(responsePartition.oldStyleOffsets.get(0), responsePartition.leaderEpoch)
+      case Errors.NONE => new OffsetAndEpoch(responsePartition.offset, responsePartition.leaderEpoch)
       case error => throw error.exception
     }
   }
@@ -149,8 +143,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
       topic.partitions.add(epochData)
     }
 
-    val epochRequest = OffsetsForLeaderEpochRequest.Builder.forFollower(
-      metadataVersionSupplier().offsetForLeaderEpochRequestVersion, topics, brokerConfig.brokerId)
+    val epochRequest = OffsetsForLeaderEpochRequest.Builder.forFollower(topics, brokerConfig.brokerId)
     debug(s"Sending offset for leader epoch request $epochRequest")
 
     try {

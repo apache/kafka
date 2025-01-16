@@ -263,7 +263,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       replicaManager.fetchMessages(
         params = fetchParams,
         fetchInfos = Seq(topicIdPartition -> partitionData),
-        quota = QuotaFactory.UnboundedQuota,
+        quota = QuotaFactory.UNBOUNDED_QUOTA,
         responseCallback = fetchCallback,
       )
 
@@ -471,7 +471,6 @@ class ReplicaManagerConcurrencyTest extends Logging {
     override def submit(
       topicPartition: TopicIdPartition,
       leaderAndIsr: LeaderAndIsr,
-      controllerEpoch: Int
     ): CompletableFuture[LeaderAndIsr] = {
       channel.alterIsr(topicPartition, leaderAndIsr)
     }

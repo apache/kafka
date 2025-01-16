@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
-import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
@@ -38,7 +37,6 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult;
@@ -132,12 +130,12 @@ public class LogValidatorTest {
 
     @ParameterizedTest
     @CsvSource({
-            "0,gzip,none", "1,gzip,none", "2,gzip,none",
-            "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
-            "0,snappy,gzip", "1,snappy,gzip", "2,snappy,gzip",
-            "0,lz4,gzip", "1,lz4,gzip", "2,lz4,gzip",
-            "2,none,none", "2,none,gzip",
-            "2,zstd,gzip",
+        "0,gzip,none", "1,gzip,none", "2,gzip,none",
+        "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
+        "0,snappy,gzip", "1,snappy,gzip", "2,snappy,gzip",
+        "0,lz4,gzip", "1,lz4,gzip", "2,lz4,gzip",
+        "2,none,none", "2,none,gzip",
+        "2,zstd,gzip",
     })
     public void checkOnlyOneBatch(Byte magic, String sourceCompression,
                                    String targetCompression) {
@@ -186,8 +184,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ));
@@ -221,8 +218,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         );
 
         LogValidator.ValidationResult validatedResults = validator.validateMessagesAndAssignOffsets(
@@ -271,8 +267,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         );
         LogValidator.ValidationResult validatedResults = logValidator.validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(0),
@@ -355,8 +350,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 partitionLeaderEpoch,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(0L),
                 metricsRecorder,
@@ -461,8 +455,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PRODUCER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.IBP_2_3_IV1
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier());
     }
@@ -547,8 +540,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 partitionLeaderEpoch,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         );
 
         LogValidator.ValidationResult validatedResults = validator.validateMessagesAndAssignOffsets(
@@ -636,8 +628,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(0),
                 metricsRecorder,
@@ -668,8 +659,7 @@ public class LogValidatorTest {
                         1000L,
                         1000L,
                         RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                        AppendOrigin.CLIENT,
-                        MetadataVersion.latestTesting()
+                        AppendOrigin.CLIENT
                 ).validateMessagesAndAssignOffsets(
                         PrimitiveRef.ofLong(0),
                         metricsRecorder,
@@ -700,8 +690,7 @@ public class LogValidatorTest {
                         1000L,
                         1000L,
                         RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                        AppendOrigin.CLIENT,
-                        MetadataVersion.latestTesting()
+                        AppendOrigin.CLIENT
                 ).validateMessagesAndAssignOffsets(
                         PrimitiveRef.ofLong(0),
                         metricsRecorder,
@@ -712,9 +701,9 @@ public class LogValidatorTest {
 
     @ParameterizedTest
     @CsvSource({
-            "0,gzip,gzip", "1,gzip,gzip",
-            "0,lz4,lz4", "1,lz4,lz4",
-            "0,snappy,snappy", "1,snappy,snappy",
+        "0,gzip,gzip", "1,gzip,gzip",
+        "0,lz4,lz4", "1,lz4,lz4",
+        "0,snappy,snappy", "1,snappy,snappy",
     })
     public void checkInvalidChecksum(byte magic, String compressionName, String typeName) {
         Compression compression = Compression.of(compressionName).build();
@@ -743,8 +732,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         );
 
 
@@ -797,8 +785,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         );
 
 
@@ -813,10 +800,10 @@ public class LogValidatorTest {
 
     @ParameterizedTest
     @CsvSource({
-            "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
-            "0,lz4,lz4", "1,lz4,lz4", "2,lz4,lz4",
-            "0,snappy,snappy", "1,snappy,snappy", "2,snappy,snappy",
-            "2,zstd,zstd"
+        "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
+        "0,lz4,lz4", "1,lz4,lz4", "2,lz4,lz4",
+        "0,snappy,snappy", "1,snappy,snappy", "2,snappy,snappy",
+        "2,zstd,zstd"
     })
     public void checkNoKeyCompactedTopic(byte magic, String compressionName, String typeName) {
         Compression codec = Compression.of(compressionName).build();
@@ -835,8 +822,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(0),
                 metricsRecorder,
@@ -869,8 +855,7 @@ public class LogValidatorTest {
                         1000L,
                         1000L,
                         RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                        AppendOrigin.CLIENT,
-                        MetadataVersion.latestTesting()
+                        AppendOrigin.CLIENT
                 ).validateMessagesAndAssignOffsets(
                         PrimitiveRef.ofLong(0),
                         metricsRecorder,
@@ -899,8 +884,7 @@ public class LogValidatorTest {
                         1000L,
                         1000L,
                         RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                        AppendOrigin.CLIENT,
-                        MetadataVersion.latestTesting()
+                        AppendOrigin.CLIENT
                 ).validateMessagesAndAssignOffsets(
                         PrimitiveRef.ofLong(offset),
                         metricsRecorder,
@@ -931,8 +915,7 @@ public class LogValidatorTest {
                         1000L,
                         1000L,
                         RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                        AppendOrigin.CLIENT,
-                        MetadataVersion.latestTesting()
+                        AppendOrigin.CLIENT
                 ).validateMessagesAndAssignOffsets(
                         PrimitiveRef.ofLong(offset),
                         metricsRecorder,
@@ -962,8 +945,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
@@ -993,8 +975,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
@@ -1025,8 +1006,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
@@ -1057,8 +1037,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
@@ -1087,8 +1066,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
@@ -1123,8 +1101,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
@@ -1160,8 +1137,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
@@ -1197,8 +1173,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
@@ -1231,8 +1206,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
@@ -1257,8 +1231,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.COORDINATOR,
-                MetadataVersion.latestTesting()
+                AppendOrigin.COORDINATOR
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
@@ -1287,8 +1260,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
@@ -1315,8 +1287,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ).validatedRecords, offset);
@@ -1339,8 +1310,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ).validatedRecords, offset);
@@ -1364,8 +1334,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ).validatedRecords, offset);
@@ -1389,8 +1358,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ).validatedRecords, offset);
@@ -1415,8 +1383,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ).validatedRecords, offset);
@@ -1442,8 +1409,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ));
@@ -1470,8 +1436,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ));
@@ -1495,8 +1460,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ).validatedRecords, offset);
@@ -1522,8 +1486,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ).validatedRecords, offset);
@@ -1551,38 +1514,12 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ));
 
         assertEquals(metricsRecorder.recordInvalidOffsetCount, 1);
-    }
-
-    @Test
-    public void testZStdCompressedWithUnavailableIBPVersion() {
-        // The timestamps should be overwritten
-        MemoryRecords records = createRecords(RecordBatch.MAGIC_VALUE_V2, 1234L, Compression.NONE);
-        assertThrows(UnsupportedCompressionTypeException.class, () ->
-                new LogValidator(
-                        records,
-                        topicPartition,
-                        time,
-                        CompressionType.NONE,
-                        Compression.zstd().build(),
-                        false,
-                        RecordBatch.MAGIC_VALUE_V2,
-                        TimestampType.LOG_APPEND_TIME,
-                        1000L,
-                        1000L,
-                        RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                        AppendOrigin.CLIENT,
-                        MetadataVersion.IBP_2_0_IV1
-                ).validateMessagesAndAssignOffsets(
-                        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-                )
-        );
     }
 
     @Test
@@ -1604,8 +1541,7 @@ public class LogValidatorTest {
                         1000L,
                         1000L,
                         RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                        AppendOrigin.CLIENT,
-                        MetadataVersion.latestTesting()
+                        AppendOrigin.CLIENT
                 ).validateMessagesAndAssignOffsets(
                         PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
                 )
@@ -1691,8 +1627,7 @@ public class LogValidatorTest {
                         timestampBeforeMaxConfig,
                         timestampAfterMaxConfig,
                         RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                        AppendOrigin.CLIENT,
-                        MetadataVersion.latestTesting()
+                        AppendOrigin.CLIENT
                 ).validateMessagesAndAssignOffsets(
                         PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
                 )
@@ -1724,8 +1659,7 @@ public class LogValidatorTest {
                         timestampBeforeMaxConfig,
                         timestampAfterMaxConfig,
                         RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                        AppendOrigin.CLIENT,
-                        MetadataVersion.latestTesting()
+                        AppendOrigin.CLIENT
                 ).validateMessagesAndAssignOffsets(
                         PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
                 )
@@ -1766,8 +1700,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         );
 
         LogValidator.ValidationResult result = validator.validateMessagesAndAssignOffsets(
@@ -1805,8 +1738,7 @@ public class LogValidatorTest {
                 5000L,
                 5000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         );
 
         LogValidator.ValidationResult result = validator.validateMessagesAndAssignOffsets(
@@ -1865,8 +1797,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 partitionLeaderEpoch,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 offsetCounter,
                 metricsRecorder,
@@ -1934,8 +1865,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(0L),
                 metricsRecorder,
@@ -1961,8 +1891,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(0),
                 metricsRecorder,
@@ -2006,8 +1935,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(0),
                 metricsRecorder,
@@ -2049,8 +1977,7 @@ public class LogValidatorTest {
                 1000L,
                 1000L,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
+                AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 offsetCounter,
                 metricsRecorder,
@@ -2119,8 +2046,7 @@ public class LogValidatorTest {
     }
 
     private void maybeCheckBaseTimestamp(long expected, RecordBatch batch) {
-        if (batch instanceof DefaultRecordBatch) {
-            DefaultRecordBatch b = (DefaultRecordBatch) batch;
+        if (batch instanceof DefaultRecordBatch b) {
             assertEquals(expected, b.baseTimestamp(), "Unexpected base timestamp of batch " + batch);
         }
     }

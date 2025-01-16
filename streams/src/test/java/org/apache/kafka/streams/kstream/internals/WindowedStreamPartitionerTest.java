@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -38,12 +39,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class WindowedStreamPartitionerTest {
 
-    private String topicName = "topic";
+    private final String topicName = "topic";
 
-    private IntegerSerializer intSerializer = new IntegerSerializer();
-    private StringSerializer stringSerializer = new StringSerializer();
+    private final IntegerSerializer intSerializer = new IntegerSerializer();
+    private final StringSerializer stringSerializer = new StringSerializer();
 
-    private List<PartitionInfo> infos = Arrays.asList(
+    private final List<PartitionInfo> infos = Arrays.asList(
             new PartitionInfo(topicName, 0, Node.noNode(), new Node[0], new Node[0]),
             new PartitionInfo(topicName, 1, Node.noNode(), new Node[0], new Node[0]),
             new PartitionInfo(topicName, 2, Node.noNode(), new Node[0], new Node[0]),
@@ -52,14 +53,12 @@ public class WindowedStreamPartitionerTest {
             new PartitionInfo(topicName, 5, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
+    private final Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
             Collections.emptySet(), Collections.emptySet());
 
     @Test
     public void testCopartitioning() {
         final Random rand = new Random();
-        @SuppressWarnings("deprecation")
-        final org.apache.kafka.clients.producer.internals.DefaultPartitioner defaultPartitioner = new org.apache.kafka.clients.producer.internals.DefaultPartitioner();
         final WindowedSerializer<Integer> timeWindowedSerializer = new TimeWindowedSerializer<>(intSerializer);
         final WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(timeWindowedSerializer);
 
@@ -68,9 +67,8 @@ public class WindowedStreamPartitionerTest {
             final byte[] keyBytes = intSerializer.serialize(topicName, key);
 
             final String value = key.toString();
-            final byte[] valueBytes = stringSerializer.serialize(topicName, value);
 
-            final Set<Integer> expected = Collections.singleton(defaultPartitioner.partition(topicName, key, keyBytes, value, valueBytes, cluster));
+            final Set<Integer> expected = Set.of(BuiltInPartitioner.partitionForKey(keyBytes, cluster.partitionsForTopic(topicName).size()));
 
             for (int w = 1; w < 10; w++) {
                 final TimeWindow window = new TimeWindow(10 * w, 20 * w);
@@ -82,7 +80,5 @@ public class WindowedStreamPartitionerTest {
                 assertEquals(expected, actual.get());
             }
         }
-
-        defaultPartitioner.close();
     }
 }

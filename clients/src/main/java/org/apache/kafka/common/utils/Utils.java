@@ -100,7 +100,7 @@ public final class Utils {
 
     private static final Pattern VALID_HOST_CHARACTERS = Pattern.compile("([0-9a-zA-Z\\-%._:]*)");
 
-    // Prints up to 2 decimal digits. Used for human readable printing
+    // Prints up to 2 decimal digits. Used for human-readable printing
     private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##",
         DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
@@ -346,7 +346,7 @@ public final class Utils {
      * Compares two character arrays for equality using a constant-time algorithm, which is needed
      * for comparing passwords. Two arrays are equal if they have the same length and all
      * characters at corresponding positions are equal.
-     *
+     * <p>
      * All characters in the first array are examined to determine equality.
      * The calculation time depends only on the length of this first character array; it does not
      * depend on the length of the second character array or the contents of either array.
@@ -572,9 +572,12 @@ public final class Utils {
     }
 
     /**
-     * Formats a byte number as a human-readable String ("3.2 MB")
-     * @param bytes some size in bytes
-     * @return
+     * Formats a byte value into a human-readable string with an appropriate unit
+     * (e.g., "3.2 KB", "1.5 MB", "2.1 GB"). The format includes two decimal places.
+     *
+     * @param bytes the size in bytes
+     * @return a string representing the size with the appropriate unit (e.g., "3.2 KB", "1.5 MB").
+     *         If the value is negative or too large, the input is returned as a string (e.g., "-500", "999999999999999").
      */
     public static String formatBytes(long bytes) {
         if (bytes < 0) {
@@ -615,7 +618,7 @@ public final class Utils {
 
     /**
      *  Converts an extensions string into a {@code Map<String, String>}.
-     *
+     * <p>
      *  Example:
      *      {@code parseMap("key=hey,keyTwo=hi,keyThree=hello", "=", ",") => { key: "hey", keyTwo: "hi", keyThree: "hello" }}
      *
@@ -888,9 +891,12 @@ public final class Utils {
     }
 
     /**
-     * Returns an empty collection if this list is null
-     * @param other
-     * @return
+     * Returns an empty list if the provided list is null, otherwise returns the list itself.
+     * <p>
+     * This method is useful for avoiding {@code NullPointerException} when working with potentially null lists.
+     *
+     * @param other the list to check for null
+     * @return an empty list if the provided list is null, otherwise the original list
      */
     public static <T> List<T> safe(List<T> other) {
         return other == null ? Collections.emptyList() : other;
@@ -906,7 +912,7 @@ public final class Utils {
     /**
      * Get the Context ClassLoader on this thread or, if not present, the ClassLoader that
      * loaded Kafka.
-     *
+     * <p>
      * This should be used whenever passing a ClassLoader to Class.forName
      */
     public static ClassLoader getContextOrKafkaClassLoader() {
@@ -957,7 +963,7 @@ public final class Utils {
 
     /**
      * Flushes dirty directories to guarantee crash consistency.
-     *
+     * <p>
      * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
      *
      * @throws IOException if flushing the directory fails.
@@ -1060,7 +1066,7 @@ public final class Utils {
 
     /**
      * An {@link AutoCloseable} interface without a throws clause in the signature
-     *
+     * <p>
      * This is used with lambda expressions in try-with-resources clauses
      * to avoid casting un-checked exceptions to checked exceptions unnecessarily.
      */
@@ -1149,7 +1155,7 @@ public final class Utils {
 
     /**
      * Invokes every function in `all` even if one or more functions throws an exception.
-     *
+     * <p>
      * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
      * added as suppressed exceptions.
      */
@@ -1176,7 +1182,7 @@ public final class Utils {
      * positive, the original value is returned. When the input number is negative, the returned
      * positive value is the original value bit AND against 0x7fffffff which is not its absolute
      * value.
-     *
+     * <p>
      * Note: changing this method in the future will possibly cause partition selection not to be
      * compatible with the existing messages already placed on a partition since it is used
      * in producer's partition selection logic {@link org.apache.kafka.clients.producer.KafkaProducer}

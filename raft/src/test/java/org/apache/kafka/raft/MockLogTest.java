@@ -450,13 +450,23 @@ public class MockLogTest {
 
         // Test snapshot id for the first epoch
         log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords, firstEpoch)).get().close();
-        log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, firstEpoch)).get().close();
-        log.createNewSnapshot(new OffsetAndEpoch(1, firstEpoch)).get().close();
 
         // Test snapshot id for the second epoch
         log.createNewSnapshot(new OffsetAndEpoch(2 * numberOfRecords, secondEpoch)).get().close();
-        log.createNewSnapshot(new OffsetAndEpoch(2 * numberOfRecords - 1, secondEpoch)).get().close();
-        log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords + 1, secondEpoch)).get().close();
+    }
+
+    @Test
+    public void testCreateSnapshotInMiddleOfBatch() {
+        int numberOfRecords = 10;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, epoch))
+        );
     }
 
     @Test

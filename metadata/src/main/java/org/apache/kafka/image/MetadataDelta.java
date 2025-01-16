@@ -38,7 +38,6 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
-import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -247,7 +246,9 @@ public final class MetadataDelta {
                  */
                 break;
             case ZK_MIGRATION_STATE_RECORD:
-                replay((ZkMigrationStateRecord) record);
+                // In 4.0, although migration is no longer supported and ZK has been removed from Kafka,
+                // users might migrate from ZK to KRaft in version 3.x and then perform a rolling upgrade to 4.0.
+                // Therefore, this case needs to be retained but will be a no-op.
                 break;
             case REGISTER_CONTROLLER_RECORD:
                 replay((RegisterControllerRecord) record);
@@ -343,10 +344,6 @@ public final class MetadataDelta {
 
     public void replay(RemoveUserScramCredentialRecord record) {
         getOrCreateScramDelta().replay(record);
-    }
-
-    public void replay(ZkMigrationStateRecord record) {
-        getOrCreateFeaturesDelta().replay(record);
     }
 
     public void replay(RegisterControllerRecord record) {

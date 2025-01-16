@@ -78,7 +78,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -147,6 +146,14 @@ public class SslTransportLayerTest {
             parameters.add(Arguments.of(new Args("TLSv1.2", true)));
             parameters.add(Arguments.of(new Args("TLSv1.3", false)));
             return parameters.stream();
+        }
+    }
+
+    private static class SslTransportLayerArgumentsForTLS2Provider extends SslTransportLayerArgumentsProvider {
+
+        @Override
+        public Stream<? extends Arguments> provideArguments(ExtensionContext context) throws Exception {
+            return super.provideArguments(context).filter(arg -> ((Args) arg.get()[0]).tlsProtocol.equals("TLSv1.2"));
         }
     }
 
@@ -465,10 +472,9 @@ public class SslTransportLayerTest {
      * Tests key-pair created using DSA.
      */
     @ParameterizedTest
-    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    @ArgumentsSource(SslTransportLayerArgumentsForTLS2Provider.class)
     public void testDsaKeyPair(Args args) throws Exception {
         // DSA algorithms are not supported for TLSv1.3.
-        assumeTrue(args.tlsProtocol.equals("TLSv1.2"));
         args.serverCertStores = certBuilder(true, "server", args.useInlinePem).keyAlgorithm("DSA").build();
         args.clientCertStores = certBuilder(false, "client", args.useInlinePem).keyAlgorithm("DSA").build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);

@@ -71,7 +71,7 @@ public abstract class AbstractRecords implements Records {
     }
 
     private Iterator<Record> recordsIterator() {
-        return new AbstractIterator<Record>() {
+        return new AbstractIterator<>() {
             private final Iterator<? extends RecordBatch> batches = batches().iterator();
             private Iterator<Record> records;
 

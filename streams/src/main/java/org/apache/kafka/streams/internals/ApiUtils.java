@@ -87,16 +87,4 @@ public final class ApiUtils {
                     " %s#get() must return a new object each time it is called.", supplierClass, supplierClass));
         }
     }
-
-    /**
-     * @throws IllegalArgumentException if the same instance is obtained each time
-     */
-    @SuppressWarnings("deprecation")
-    public static <VR, V> void checkSupplier(final org.apache.kafka.streams.kstream.ValueTransformerSupplier<V, VR> supplier) {
-        if (supplier.get() == supplier.get()) {
-            final String supplierClass = supplier.getClass().getName();
-            throw new IllegalArgumentException(String.format("%s generates single reference." +
-                    " %s#get() must return a new object each time it is called.", supplierClass, supplierClass));
-        }
-    }
 }

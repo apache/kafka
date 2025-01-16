@@ -33,6 +33,8 @@ import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{clearInvocations, mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
@@ -72,7 +74,7 @@ class TransactionMarkerChannelManagerTest {
   private val time = new MockTime
 
   private val channelManager = new TransactionMarkerChannelManager(
-    KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
+    KafkaConfig.fromProps(TestUtils.createBrokerConfig(1)),
     metadataCache,
     networkClient,
     txnStateManager,
@@ -96,7 +98,7 @@ class TransactionMarkerChannelManagerTest {
     val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
     try {
       val transactionMarkerChannelManager = new TransactionMarkerChannelManager(
-        KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
+        KafkaConfig.fromProps(TestUtils.createBrokerConfig(1)),
         metadataCache,
         networkClient,
         txnStateManager,
@@ -112,9 +114,13 @@ class TransactionMarkerChannelManagerTest {
     }
   }
 
-  @Test
-  def shouldOnlyWriteTxnCompletionOnce(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def shouldOnlyWriteTxnCompletionOnce(isTransactionV2Enabled: Boolean): Unit = {
     mockCache()
+
+    // Adjust txn metadata based on the transaction version.
+    adjustTransactionMetadataForVersion(isTransactionV2Enabled, txnMetadata2)
 
     val expectedTransition = txnMetadata2.prepareComplete(time.milliseconds())
 
@@ -292,10 +298,10 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(1, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition1))
     assertEquals(0, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition2))
 
-    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
         new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
-    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
     val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
@@ -362,10 +368,10 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(1, channelManager.queueForUnknownBroker.totalNumMarkers(txnTopicPartition1))
     assertEquals(1, channelManager.queueForUnknownBroker.totalNumMarkers(txnTopicPartition2))
 
-    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
         new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
-    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
     val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
@@ -418,9 +424,13 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(0, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition2))
   }
 
-  @Test
-  def shouldCompleteAppendToLogOnEndTxnWhenSendMarkersSucceed(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def shouldCompleteAppendToLogOnEndTxnWhenSendMarkersSucceed(isTransactionV2Enabled : Boolean): Unit = {
     mockCache()
+
+    // Adjust txn metadata based on the transaction version.
+    adjustTransactionMetadataForVersion(isTransactionV2Enabled, txnMetadata2)
 
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition1.topic),
@@ -524,9 +534,13 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(PrepareCommit, txnMetadata2.state)
   }
 
-  @Test
-  def shouldRetryAppendToLogOnEndTxnWhenCoordinatorNotAvailableError(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def shouldRetryAppendToLogOnEndTxnWhenCoordinatorNotAvailableError(isTransactionV2Enabled: Boolean): Unit = {
     mockCache()
+
+    // Adjust txn metadata based on the transaction version.
+    adjustTransactionMetadataForVersion(isTransactionV2Enabled, txnMetadata2)
 
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition1.topic),
@@ -599,5 +613,29 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(1, metrics.count { case (k, _) =>
       k.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=LogAppendRetryQueueSize"
     })
+  }
+
+  /**
+   * Adjusts the transaction metadata based on the transaction version.
+   * When transaction V2 is enabled, the producer epoch is incremented
+   * by 1 after every prepareCommit/prepareAbort.
+   *
+   * Use this method to adjust the transaction metadata before
+   * prepareComplete is called with TV2.
+   *
+   * @param isTransactionV2Enabled    Whether Transaction Version 2 (TV2) is enabled.
+   * @param txnMetadata               The transaction metadata to be adjusted.
+   */
+  private def adjustTransactionMetadataForVersion(
+    isTransactionV2Enabled: Boolean,
+    txnMetadata: TransactionMetadata
+  ): Unit = {
+    if (isTransactionV2Enabled) {
+      txnMetadata.clientTransactionVersion = TransactionVersion.TV_2
+      txnMetadata.producerEpoch = (producerEpoch + 1).toShort
+      txnMetadata.lastProducerEpoch = producerEpoch
+    } else {
+      txnMetadata.clientTransactionVersion = TransactionVersion.TV_1
+    }
   }
 }

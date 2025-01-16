@@ -79,6 +79,11 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
     private final RemoteLogSegmentState state;
 
     /**
+     * Indicates whether the transaction index is empty for this segment.
+     */
+    private final boolean txnIdxEmpty;
+
+    /**
      * Creates an instance with the given metadata of remote log segment.
      * <p>
      * {@code segmentLeaderEpochs} can not be empty. If all the records in this segment belong to the same leader epoch
@@ -105,6 +110,39 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                                     Optional<CustomMetadata> customMetadata,
                                     RemoteLogSegmentState state,
                                     Map<Integer, Long> segmentLeaderEpochs) {
+        this(remoteLogSegmentId, startOffset, endOffset, maxTimestampMs, brokerId, eventTimestampMs, segmentSizeInBytes,
+                customMetadata, state, segmentLeaderEpochs, false);
+    }
+
+    /**
+     * Creates an instance with the given metadata of remote log segment.
+     * <p>
+     * {@code segmentLeaderEpochs} can not be empty. If all the records in this segment belong to the same leader epoch
+     * then it should have an entry with epoch mapping to start-offset of this segment.
+     *
+     * @param remoteLogSegmentId  Universally unique remote log segment id.
+     * @param startOffset         Start offset of this segment (inclusive).
+     * @param endOffset           End offset of this segment (inclusive).
+     * @param maxTimestampMs      Maximum timestamp in milli seconds in this segment.
+     * @param brokerId            Broker id from which this event is generated.
+     * @param eventTimestampMs    Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
+     * @param segmentSizeInBytes  Size of this segment in bytes.
+     * @param customMetadata      Custom metadata.
+     * @param state               State of the respective segment of remoteLogSegmentId.
+     * @param segmentLeaderEpochs leader epochs occurred within this segment.
+     * @param txnIdxEmpty         True if the transaction index is empty, false otherwise.
+     */
+    public RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
+                                    long startOffset,
+                                    long endOffset,
+                                    long maxTimestampMs,
+                                    int brokerId,
+                                    long eventTimestampMs,
+                                    int segmentSizeInBytes,
+                                    Optional<CustomMetadata> customMetadata,
+                                    RemoteLogSegmentState state,
+                                    Map<Integer, Long> segmentLeaderEpochs,
+                                    boolean txnIdxEmpty) {
         super(brokerId, eventTimestampMs);
         this.remoteLogSegmentId = Objects.requireNonNull(remoteLogSegmentId, "remoteLogSegmentId can not be null");
         this.state = Objects.requireNonNull(state, "state can not be null");
@@ -128,6 +166,7 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
         }
 
         this.segmentLeaderEpochs = Collections.unmodifiableNavigableMap(new TreeMap<>(segmentLeaderEpochs));
+        this.txnIdxEmpty = txnIdxEmpty;
     }
 
     /**
@@ -164,6 +203,34 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                 segmentLeaderEpochs);
     }
 
+    /**
+     * Creates an instance with the given metadata of remote log segment and its state as {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}.
+     * <p>
+     * {@code segmentLeaderEpochs} can not be empty. If all the records in this segment belong to the same leader epoch
+     * then it should have an entry with epoch mapping to start-offset of this segment.
+     *
+     * @param remoteLogSegmentId  Universally unique remote log segment id.
+     * @param startOffset         Start offset of this segment (inclusive).
+     * @param endOffset           End offset of this segment (inclusive).
+     * @param maxTimestampMs      Maximum timestamp in this segment
+     * @param brokerId            Broker id from which this event is generated.
+     * @param eventTimestampMs    Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
+     * @param segmentSizeInBytes  Size of this segment in bytes.
+     * @param segmentLeaderEpochs leader epochs occurred within this segment
+     * @param txnIdxEmpty         True if the transaction index is empty, false otherwise.
+     */
+    public RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
+                                    long startOffset,
+                                    long endOffset,
+                                    long maxTimestampMs,
+                                    int brokerId,
+                                    long eventTimestampMs,
+                                    int segmentSizeInBytes,
+                                    Map<Integer, Long> segmentLeaderEpochs,
+                                    boolean txnIdxEmpty) {
+        this(remoteLogSegmentId, startOffset, endOffset, maxTimestampMs, brokerId, eventTimestampMs, segmentSizeInBytes,
+                Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_STARTED, segmentLeaderEpochs, txnIdxEmpty);
+    }
 
     /**
      * @return unique id of this segment.
@@ -228,6 +295,14 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
     }
 
     /**
+     * If true indicates that the transaction index is empty.
+     * @return True if the Transaction index is empty, false otherwise.
+     */
+    public boolean isTxnIdxEmpty() {
+        return txnIdxEmpty;
+    }
+
+    /**
      * Creates a new RemoteLogSegmentMetadata applying the given {@code rlsmUpdate} on this instance. This method will
      * not update this instance.
      *
@@ -241,7 +316,7 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
 
         return new RemoteLogSegmentMetadata(remoteLogSegmentId, startOffset,
                 endOffset, maxTimestampMs, rlsmUpdate.brokerId(), rlsmUpdate.eventTimestampMs(),
-                segmentSizeInBytes, rlsmUpdate.customMetadata(), rlsmUpdate.state(), segmentLeaderEpochs);
+                segmentSizeInBytes, rlsmUpdate.customMetadata(), rlsmUpdate.state(), segmentLeaderEpochs, txnIdxEmpty);
     }
 
     @Override
@@ -266,13 +341,14 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                 && Objects.equals(customMetadata, that.customMetadata)
                 && state == that.state
                 && eventTimestampMs() == that.eventTimestampMs()
-                && brokerId() == that.brokerId();
+                && brokerId() == that.brokerId()
+                && txnIdxEmpty == that.txnIdxEmpty;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(remoteLogSegmentId, startOffset, endOffset, brokerId(), maxTimestampMs,
-                eventTimestampMs(), segmentLeaderEpochs, segmentSizeInBytes, customMetadata, state);
+                eventTimestampMs(), segmentLeaderEpochs, segmentSizeInBytes, customMetadata, state, txnIdxEmpty);
     }
 
     @Override
@@ -288,6 +364,7 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                ", segmentSizeInBytes=" + segmentSizeInBytes +
                ", customMetadata=" + customMetadata +
                ", state=" + state +
+               ", txnIdxEmpty=" + txnIdxEmpty +
                '}';
     }
 

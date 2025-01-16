@@ -80,7 +80,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
 
     @ClusterTest
     public void testDoesTopicExist() throws ExecutionException, InterruptedException {
-        try (Admin admin = clusterInstance.createAdminClient()) {
+        try (Admin admin = clusterInstance.admin()) {
             String topic = "test-topic-exist";
             admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, (short) 1))).all().get();
             clusterInstance.waitForTopic(topic, 1);
@@ -91,7 +91,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
 
     @ClusterTest
     public void testTopicDoesNotExist() {
-        try (Admin admin = clusterInstance.createAdminClient()) {
+        try (Admin admin = clusterInstance.admin()) {
             String topic = "dummy-test-topic";
             boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
             assertFalse(doesTopicExist);
@@ -110,7 +110,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         // Create topics.
         String leaderTopic = "new-leader";
         String followerTopic = "new-follower";
-        try (Admin admin = clusterInstance.createAdminClient()) {
+        try (Admin admin = clusterInstance.admin()) {
             // Set broker id 0 as the first entry which is taken as the leader.
             admin.createTopics(Collections.singletonList(new NewTopic(leaderTopic, Collections.singletonMap(0, Arrays.asList(0, 1, 2))))).all().get();
             clusterInstance.waitForTopic(leaderTopic, 1);
@@ -152,6 +152,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         assertThrows(RemoteResourceNotFoundException.class, () -> topicBasedRlmm().listRemoteLogSegments(newLeaderTopicIdPartition));
         assertThrows(RemoteResourceNotFoundException.class, () -> topicBasedRlmm().listRemoteLogSegments(newFollowerTopicIdPartition));
 
+        assertFalse(topicBasedRlmm().isReady(newLeaderTopicIdPartition));
+        assertFalse(topicBasedRlmm().isReady(newFollowerTopicIdPartition));
+
         topicBasedRlmm().onPartitionLeadershipChanges(Collections.singleton(newLeaderTopicIdPartition),
                                                       Collections.singleton(newFollowerTopicIdPartition));
 
@@ -166,6 +169,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         verify(spyRemotePartitionMetadataEventHandler).handleRemoteLogSegmentMetadata(followerSegmentMetadata);
         assertTrue(topicBasedRlmm().listRemoteLogSegments(newLeaderTopicIdPartition).hasNext());
         assertTrue(topicBasedRlmm().listRemoteLogSegments(newFollowerTopicIdPartition).hasNext());
+
+        assertTrue(topicBasedRlmm().isReady(newLeaderTopicIdPartition));
+        assertTrue(topicBasedRlmm().isReady(newFollowerTopicIdPartition));
     }
 
     @ClusterTest

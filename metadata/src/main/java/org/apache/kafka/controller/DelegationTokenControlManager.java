@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 
 import javax.crypto.Mac;
@@ -59,6 +60,8 @@ import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
  * Manages DelegationTokens.
  */
 public class DelegationTokenControlManager {
+    private static final int MAX_RECORDS_PER_EXPIRATION = 1000;
+
     private final Time time = Time.SYSTEM;
 
     static class Builder {
@@ -95,6 +98,7 @@ public class DelegationTokenControlManager {
 
         DelegationTokenControlManager build() {
             if (logContext == null) logContext = new LogContext();
+            if (tokenCache == null) tokenCache = new DelegationTokenCache(Collections.emptySet());
             return new DelegationTokenControlManager(
               logContext,
               tokenCache,
@@ -330,9 +334,9 @@ public class DelegationTokenControlManager {
     }
 
     // Periodic call to remove expired DelegationTokens
-    public List<ApiMessageAndVersion> sweepExpiredDelegationTokens() {
+    public ControllerResult<Boolean> sweepExpiredDelegationTokens() {
         long now = time.milliseconds();
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = new ArrayList<>(0);
 
         for (TokenInformation oldTokenInformation: tokenCache.tokens()) {
             if ((oldTokenInformation.maxTimestamp() < now) ||
@@ -341,9 +345,12 @@ public class DelegationTokenControlManager {
                     oldTokenInformation.tokenId(), oldTokenInformation.ownerAsString());
                 records.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
                     setTokenId(oldTokenInformation.tokenId()), (short) 0));
+                if (records.size() >= MAX_RECORDS_PER_EXPIRATION) {
+                    return ControllerResult.of(records, true);
+                }
             }
         }
-        return records;
+        return ControllerResult.of(records, false);
     }
 
     public void replay(DelegationTokenRecord record) {

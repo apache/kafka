@@ -157,8 +157,7 @@ object ZkMetadataCache {
 class ZkMetadataCache(
   brokerId: Int,
   metadataVersion: MetadataVersion,
-  brokerFeatures: BrokerFeatures,
-  zkMigrationEnabled: Boolean = false)
+  brokerFeatures: BrokerFeatures)
   extends MetadataCache with ZkFinalizedFeatureCache with Logging {
 
   private val partitionMetadataLock = new ReentrantReadWriteLock()
@@ -354,6 +353,10 @@ class ZkMetadataCache(
     metadataSnapshot.aliveBrokers.values.flatMap(_.getNode(listenerName))
   }
 
+  override def getBrokerNodes(listenerName: ListenerName): Iterable[Node] = {
+    getAliveBrokerNodes(listenerName)
+  }
+
   def getTopicId(topicName: String): Uuid = {
     metadataSnapshot.topicIds.getOrElse(topicName, Uuid.ZERO_UUID)
   }
@@ -476,9 +479,6 @@ class ZkMetadataCache(
           stateChangeLogger.error(s"Received UpdateMetadataRequest with Type=FULL (2), but version of " +
             updateMetadataRequest.version() + ", which should not be possible. Not treating this as a full " +
             "metadata update")
-        } else if (!zkMigrationEnabled) {
-          stateChangeLogger.error(s"Received UpdateMetadataRequest with Type=FULL (2), but ZK migrations " +
-            s"are not enabled on this broker. Not treating this as a full metadata update")
         } else {
           // When handling a UMR from a KRaft controller, we may have to insert some partition
           // deletions at the beginning, to handle the different way topic deletion works in KRaft

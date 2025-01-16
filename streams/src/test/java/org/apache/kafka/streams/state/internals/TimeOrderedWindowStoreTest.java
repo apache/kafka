@@ -19,8 +19,10 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
@@ -34,7 +36,6 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -71,7 +72,7 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
-import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.apache.kafka.test.StreamsTestUtils.verifyAllWindowedKeyValues;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
@@ -100,7 +101,7 @@ public class TimeOrderedWindowStoreTest {
     private static final String TOPIC = "topic";
     private static final String CACHE_NAMESPACE = "0_0-store-name";
 
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
     private RocksDBTimeOrderedWindowSegmentedBytesStore bytesStore;
     private RocksDBTimeOrderedWindowStore underlyingStore;
     private TimeOrderedCachingWindowStore cachingStore;
@@ -120,7 +121,7 @@ public class TimeOrderedWindowStoreTest {
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, new RecordHeaders()));
-        cachingStore.init((StateStoreContext) context, cachingStore);
+        cachingStore.init(context, cachingStore);
     }
 
     @AfterEach
@@ -139,8 +140,8 @@ public class TimeOrderedWindowStoreTest {
         reset(inner);
         when(inner.name()).thenReturn("store");
 
-        outer.init((StateStoreContext) context, outer);
-        verify(inner).init((StateStoreContext) context, outer);
+        outer.init(context, outer);
+        verify(inner).init(context, outer);
     }
 
     @ParameterizedTest
@@ -223,8 +224,8 @@ public class TimeOrderedWindowStoreTest {
 
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000L);
 
@@ -232,8 +233,8 @@ public class TimeOrderedWindowStoreTest {
         final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, initialWallClockTime);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(TOPIC,
-            Serdes.String().serializer(),
-            Serdes.String().serializer(),
+            new StringSerializer(),
+            new StringSerializer(),
             initialWallClockTime,
             Duration.ZERO);
 
@@ -341,8 +342,9 @@ public class TimeOrderedWindowStoreTest {
         return Bytes.wrap(key.getBytes());
     }
 
+    @SuppressWarnings("resource")
     private String stringFrom(final byte[] from) {
-        return Serdes.String().deserializer().deserialize("", from);
+        return new StringDeserializer().deserialize("", from);
     }
 
     @ParameterizedTest
@@ -893,6 +895,7 @@ public class TimeOrderedWindowStoreTest {
         assertEquals(0, cache.size());
     }
 
+    @SuppressWarnings("resource")
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldThrowIfTryingToFetchFromClosedCachingStore(final boolean hasIndex) {
@@ -901,6 +904,7 @@ public class TimeOrderedWindowStoreTest {
         assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(10)));
     }
 
+    @SuppressWarnings("resource")
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldThrowIfTryingToFetchRangeFromClosedCachingStore(final boolean hasIndex) {
@@ -951,7 +955,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("a", "0001", 1),
                     windowedPair("aa", "0002", 0)
                 ),
-                toList(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         } else {
@@ -960,7 +964,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("aa", "0002", 0),
                     windowedPair("a", "0001", 1)
                 ),
-                toList(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         }
@@ -982,7 +986,7 @@ public class TimeOrderedWindowStoreTest {
             KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005"))
         );
         final List<KeyValue<Long, byte[]>> actual =
-            toList(cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+            toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
         verifyKeyValueList(expected, actual);
     }
 
@@ -1002,7 +1006,7 @@ public class TimeOrderedWindowStoreTest {
             KeyValue.pair(0L, bytesValue("0001"))
         );
         final List<KeyValue<Long, byte[]>> actual =
-            toList(cachingStore.backwardFetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
         verifyKeyValueList(expected, actual);
     }
 
@@ -1022,14 +1026,14 @@ public class TimeOrderedWindowStoreTest {
                 windowedPair("a", "0003", 1),
                 windowedPair("a", "0005", SEGMENT_INTERVAL)
             ),
-            toList(cachingStore.fetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
         );
 
         verifyKeyValueList(
             asList(
                 windowedPair("aa", "0002", 0),
                 windowedPair("aa", "0004", 1)),
-            toList(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
         );
 
         if (hasIndex) {
@@ -1041,7 +1045,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("aa", "0004", 1),
                     windowedPair("a", "0005", SEGMENT_INTERVAL)
                 ),
-                toList(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         } else {
@@ -1053,7 +1057,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("aa", "0004", 1),
                     windowedPair("a", "0005", SEGMENT_INTERVAL)
                 ),
-                toList(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         }
@@ -1075,14 +1079,14 @@ public class TimeOrderedWindowStoreTest {
                 windowedPair("a", "0003", 1),
                 windowedPair("a", "0001", 0)
             ),
-            toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
         );
 
         verifyKeyValueList(
             asList(
                 windowedPair("aa", "0004", 1),
                 windowedPair("aa", "0002", 0)),
-            toList(cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
         );
 
         if (!hasIndex) {
@@ -1095,7 +1099,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("aa", "0002", 0),
                     windowedPair("a", "0001", 0)
                 ),
-                toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         } else {
@@ -1108,7 +1112,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("a", "0003", 1),
                     windowedPair("a", "0001", 0)
                 ),
-                toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         }
@@ -1168,6 +1172,7 @@ public class TimeOrderedWindowStoreTest {
         cachingStore.put(bytesKey("a"), null, 0L);
     }
 
+    @SuppressWarnings("resource")
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldThrowNullPointerExceptionOnFetchNullKey(final boolean hasIndex) {
@@ -1175,12 +1180,13 @@ public class TimeOrderedWindowStoreTest {
         assertThrows(NullPointerException.class, () -> cachingStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
+    @SuppressWarnings("resource")
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey(final boolean hasIndex) {
         setUp(hasIndex);
-        final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
-        final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
+        final Bytes keyFrom = Bytes.wrap(new IntegerSerializer().serialize("", -1));
+        final Bytes keyTo = Bytes.wrap(new IntegerSerializer().serialize("", 1));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TimeOrderedCachingWindowStore.class);
              final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetch(keyFrom, keyTo, 0L, 10L)) {
@@ -1197,12 +1203,13 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
+    @SuppressWarnings("resource")
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldNotThrowInvalidBackwardRangeExceptionWithNegativeFromKey(final boolean hasIndex) {
         setUp(hasIndex);
-        final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
-        final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
+        final Bytes keyFrom = Bytes.wrap(new IntegerSerializer().serialize("", -1));
+        final Bytes keyTo = Bytes.wrap(new IntegerSerializer().serialize("", 1));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TimeOrderedCachingWindowStore.class);
              final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
@@ -1263,7 +1270,7 @@ public class TimeOrderedWindowStoreTest {
         cache = mock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
-        cachingStore.init((StateStoreContext) context, cachingStore);
+        cachingStore.init(context, cachingStore);
     }
 
     private static KeyValue<Windowed<Bytes>, byte[]> windowedPair(final String key, final String value, final long timestamp) {

@@ -41,7 +41,6 @@ import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.server.common.MetadataVersion;
 
 import org.slf4j.Logger;
 
@@ -287,7 +286,7 @@ public class ClassicGroup implements Group {
      * @return True if the group is a simple group.
      */
     public boolean isSimpleGroup() {
-        return !protocolType.isPresent() && isEmpty() && pendingJoinMembers.isEmpty();
+        return protocolType.isEmpty() && isEmpty() && pendingJoinMembers.isEmpty();
     }
 
     /**
@@ -448,7 +447,7 @@ public class ClassicGroup implements Group {
             throw new IllegalStateException("None of the member's protocols can be supported.");
         }
 
-        if (!leaderId.isPresent()) {
+        if (leaderId.isEmpty()) {
             leaderId = Optional.of(member.memberId());
         }
 
@@ -972,23 +971,6 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Verify the member id is up to date for static members. Return true if both conditions met:
-     *   1. given member is a known static member to group
-     *   2. group stored member id doesn't match with given member id
-     *
-     * @param groupInstanceId  the group instance id.
-     * @param memberId         the member id.
-     * @return whether the static member is fenced based on the condition above.
-     */
-    public boolean isStaticMemberFenced(
-        String groupInstanceId,
-        String memberId
-    ) {
-        String existingMemberId = staticMemberId(groupInstanceId);
-        return existingMemberId != null && !existingMemberId.equals(memberId);
-    }
-
-    /**
      * @return whether the group can rebalance.
      */
     public boolean canRebalance() {
@@ -1160,7 +1142,7 @@ public class ClassicGroup implements Group {
      * @return the subscribed topics or Empty based on the condition above.
      */
     public Optional<Set<String>> computeSubscribedTopics() {
-        if (!protocolType.isPresent()) {
+        if (protocolType.isEmpty()) {
             return Optional.empty();
         }
         String type = protocolType.get();
@@ -1378,7 +1360,7 @@ public class ClassicGroup implements Group {
             ClassicGroupState.STABLE,
             time,
             consumerGroup.groupEpoch(),
-            Optional.ofNullable(ConsumerProtocol.PROTOCOL_TYPE),
+            Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.empty(),
             Optional.empty(),
             Optional.of(time.milliseconds())
@@ -1450,11 +1432,9 @@ public class ClassicGroup implements Group {
     /**
      * Populate the record list with the records needed to create the given classic group.
      *
-     * @param metadataVersion   The MetadataVersion.
      * @param records           The list to which the new records are added.
      */
     public void createClassicGroupRecords(
-        MetadataVersion metadataVersion,
         List<CoordinatorRecord> records
     ) {
         Map<String, byte[]> assignments = new HashMap<>();
@@ -1462,7 +1442,7 @@ public class ClassicGroup implements Group {
             assignments.put(classicGroupMember.memberId(), classicGroupMember.assignment())
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
+        records.add(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments));
     }
 
     /**

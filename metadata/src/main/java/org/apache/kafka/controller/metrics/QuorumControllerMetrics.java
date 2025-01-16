@@ -36,7 +36,7 @@ import java.util.function.Consumer;
  * controller queue.
  *
  * IMPORTANT: Metrics which relate to the metadata itself (like number of topics, etc.) should go in
- * @link{org.apache.kafka.controller.metrics.ControllerMetadataMetrics}, not here.
+ * {@link org.apache.kafka.controller.metrics.ControllerMetadataMetrics}, not here.
  */
 public class QuorumControllerMetrics implements AutoCloseable {
     private static final MetricName ACTIVE_CONTROLLER_COUNT = getMetricName(

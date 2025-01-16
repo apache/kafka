@@ -125,7 +125,7 @@ public class DescribeUserScramCredentialsResult {
                 // for users 1, 2, and 3 but this is looking for user 4), so explicitly take care of that case
                 Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalUserResult =
                         data.results().stream().filter(result -> result.user().equals(userName)).findFirst();
-                if (!optionalUserResult.isPresent()) {
+                if (optionalUserResult.isEmpty()) {
                     retval.completeExceptionally(new ResourceNotFoundException("No such user: " + userName));
                 } else {
                     DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult userResult = optionalUserResult.get();

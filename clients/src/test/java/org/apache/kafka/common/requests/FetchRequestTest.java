@@ -275,19 +275,64 @@ public class FetchRequestTest {
     }
 
     private FetchRequest createFetchRequestByVersion(short version, Uuid topicId, TopicIdPartition tp) {
-        Map<TopicPartition, FetchRequest.PartitionData> partitionData = Collections.singletonMap(tp.topicPartition(),
-                new FetchRequest.PartitionData(topicId, 0, 0, 0, Optional.empty()));
+        return createFetchRequestByVersion(version, tp, new FetchRequest.PartitionData(topicId, 0, 0, 0, Optional.empty()));
+    }
+
+    private FetchRequest createFetchRequestByVersion(short version, TopicIdPartition tp,
+                                                     FetchRequest.PartitionData partitionData) {
+        Map<TopicPartition, FetchRequest.PartitionData> partitionDataMap = Collections.singletonMap(tp.topicPartition(), partitionData);
         if (version >= 13) {
             return FetchRequest.Builder
-                    .forReplica(version, 0, 1, 1, 1, partitionData)
-                    .replaced(Collections.singletonList(tp))
-                    .metadata(FetchMetadata.newIncremental(123)).build(version);
+                .forReplica(version, 0, 1, 1, 1, partitionDataMap)
+                .replaced(Collections.singletonList(tp))
+                .metadata(FetchMetadata.newIncremental(123)).build(version);
         } else {
             return FetchRequest.Builder
-                    .forReplica(version, 0, 1, 1, 1, partitionData)
-                    .removed(Collections.singletonList(tp))
-                    .metadata(FetchMetadata.newIncremental(123)).build(version);
+                .forReplica(version, 0, 1, 1, 1, partitionDataMap)
+                .removed(Collections.singletonList(tp))
+                .metadata(FetchMetadata.newIncremental(123)).build(version);
         }
     }
 
+    @ParameterizedTest
+    @MethodSource("fetchVersions")
+    public void testFetchDataNoCacheData(short version) {
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+        TopicIdPartition tp = new TopicIdPartition(topicId, partition, "topic1");
+        long fetchOffset = 118L;
+        long logStartOffset = 119L;
+        int maxBytes = 120;
+        Optional<Integer> currentLeaderEpoch = Optional.of(121);
+        FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(topicId, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch);
+        FetchRequest fetchRequest = createFetchRequestByVersion(version, tp, partitionData);
+        Map<Uuid, String> topicNames = Collections.singletonMap(topicId, tp.topic());
+        Map<TopicIdPartition, FetchRequest.PartitionData> topicIdPartitionMap = fetchRequest.fetchData(topicNames);
+
+        assertEquals(topicNames.size(), topicIdPartitionMap.size());
+        topicIdPartitionMap.forEach((topicIdPartition, partitionDataTmp) -> {
+            assertEquals(tp.topic(), topicIdPartition.topic());
+            assertEquals(topicId, topicIdPartition.topicId());
+            assertEquals(tp.partition(), topicIdPartition.partition());
+            assertEquals(tp.topicPartition(), topicIdPartition.topicPartition());
+            assertEquals(fetchOffset, partitionDataTmp.fetchOffset);
+            assertEquals(logStartOffset, partitionDataTmp.logStartOffset);
+            assertEquals(maxBytes, partitionDataTmp.maxBytes);
+            assertEquals(currentLeaderEpoch, partitionDataTmp.currentLeaderEpoch);
+        });
+
+        String expectedTopic = version >= 13 ? null : tp.topic();
+        topicIdPartitionMap = fetchRequest.fetchData(Collections.emptyMap());
+        assertEquals(1, topicIdPartitionMap.size());
+        topicIdPartitionMap.forEach((topicIdPartition, partitionDataTmp) -> {
+            assertEquals(expectedTopic, topicIdPartition.topic());
+            assertEquals(topicId, topicIdPartition.topicId());
+            assertEquals(tp.partition(), topicIdPartition.partition());
+            assertEquals(new TopicPartition(expectedTopic, partition), topicIdPartition.topicPartition());
+            assertEquals(fetchOffset, partitionDataTmp.fetchOffset);
+            assertEquals(logStartOffset, partitionDataTmp.logStartOffset);
+            assertEquals(maxBytes, partitionDataTmp.maxBytes);
+            assertEquals(currentLeaderEpoch, partitionDataTmp.currentLeaderEpoch);
+        });
+    }
 }

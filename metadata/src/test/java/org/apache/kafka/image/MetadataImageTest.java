@@ -125,7 +125,7 @@ public class MetadataImageTest {
 
     private static void testToImage(MetadataImage image, List<ApiMessageAndVersion> fromRecords) {
         // test from empty image stopping each of the various intermediate images along the way
-        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<MetadataDelta, MetadataImage>(
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
             () -> MetadataImage.EMPTY,
             MetadataDelta::new
         ) {

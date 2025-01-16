@@ -14,11 +14,8 @@ package kafka.api
 
 import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils.{isAclUnsecure, secureZkPaths}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.server.config.ZkConfigs
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api._
 
 import java.util.Locale
@@ -30,9 +27,6 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   private val kafkaServerJaasEntryName =
     s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME}"
-  this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "false")
-  // disable secure acls of zkClient in QuorumTestHarness
-  override protected def zkAclsEnabled = Some(false)
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
@@ -48,20 +42,5 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   override def tearDown(): Unit = {
     super.tearDown()
     closeSasl()
-  }
-
-  /**
-   * Checks that everyone can access ZkData.SecureZkRootPaths and ZkData.SensitiveZkRootPaths
-   * when zookeeper.set.acl=false, even if ZooKeeper is SASL-enabled.
-   */
-  @Test
-  def testZkAclsDisabled(): Unit = {
-    secureZkPaths(zkClient).foreach(path => {
-      if (zkClient.pathExists(path)) {
-        val acls = zkClient.getAcl(path)
-        assertEquals(1, acls.size, s"Invalid ACLs for $path $acls")
-        acls.foreach(isAclUnsecure)
-      }
-    })
   }
 }

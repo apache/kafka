@@ -33,7 +33,7 @@
         </div>
     </div>
 <p>
-  This tutorial assumes you are starting fresh and have no existing Kafka or ZooKeeper data. However, if you have already started Kafka, feel free to skip the first two steps.
+  This tutorial assumes you are starting fresh and have no existing Kafka data. However, if you have already started Kafka, feel free to skip the first two steps.
 </p>
 
   <p>
@@ -97,30 +97,6 @@ $ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
 <h4><a id="quickstart_streams_startserver" href="#quickstart_streams_startserver">Step 2: Start the Kafka server</a></h4>
 
 <p>
-  Apache Kafka can be started using ZooKeeper or KRaft. To get started with either configuration follow one of the sections below but not both.
-</p>
-
-<h5>
-  Kafka with ZooKeeper
-</h5>
-
-<p>
-  Run the following commands in order to start all services in the correct order:
-</p>
-
-<pre><code class="language-bash">$ bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
-
-<p>
-  Open another terminal session and run:
-</p>
-
-<pre><code class="language-bash">$ bin/kafka-server-start.sh config/server.properties</code></pre>
-
-<h5>
-  Kafka with KRaft
-</h5>
-
-<p>
   Generate a Cluster UUID
 </p>
 
@@ -130,13 +106,13 @@ $ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
   Format Log Directories
 </p>
 
-<pre><code class="language-bash">$ bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties</code></pre>
+<pre><code class="language-bash">$ bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties</code></pre>
 
 <p>
   Start the Kafka Server
 </p>
 
-<pre><code class="language-bash">$ bin/kafka-server-start.sh config/kraft/server.properties</code></pre>
+<pre><code class="language-bash">$ bin/kafka-server-start.sh config/kraft/reconfig-server.properties</code></pre>
 
 <h4><a id="quickstart_streams_prepare" href="#quickstart_streams_prepare">Step 3: Prepare input topic and start Kafka producer</a></h4>
 
@@ -325,7 +301,7 @@ Looking beyond the scope of this concrete example, what Kafka Streams is doing h
 
 <h4><a id="quickstart_streams_stop" href="#quickstart_streams_stop">Step 6: Teardown the application</a></h4>
 
-<p>You can now stop the console consumer, the console producer, the Wordcount application, the Kafka broker and the ZooKeeper server (if one was started) in order via <b>Ctrl-C</b>.</p>
+<p>You can now stop the console consumer, the console producer, the Wordcount application, the Kafka broker in order via <b>Ctrl-C</b>.</p>
 
  <div class="pagination">
         <a href="/{{version}}/documentation/streams" class="pagination__btn pagination__btn__prev">Previous</a>

@@ -18,7 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 
@@ -72,7 +73,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class GlobalStreamThreadTest {
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
-    private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.NONE);
+    private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name());
     private final MockTime time = new MockTime();
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private GlobalStreamThread globalStreamThread;
@@ -108,15 +109,17 @@ public class GlobalStreamThreadTest {
                 }
             };
 
+        final StoreFactory storeFactory =
+                new KeyValueStoreMaterializer<>(materialized).withLoggingDisabled();
+        final StoreBuilder<?> storeBuilder = new StoreFactory.FactoryWrappingStoreBuilder<>(storeFactory);
         builder.addGlobalStore(
-            new KeyValueStoreMaterializer<>(materialized).withLoggingDisabled(),
             "sourceName",
             null,
             null,
             null,
             GLOBAL_STORE_TOPIC_NAME,
             "processorName",
-            processorSupplier,
+            new StoreDelegatingProcessorSupplier<>(processorSupplier, Set.of(storeBuilder)),
             false
         );
 
@@ -134,7 +137,7 @@ public class GlobalStreamThreadTest {
             mockConsumer,
             new StateDirectory(config, time, true, false),
             0,
-            new StreamsMetricsImpl(new Metrics(), "test-client", time),
+            new StreamsMetricsImpl(new Metrics(), "test-client", "processId", time),
             time,
             "clientId",
             stateRestoreListener,
@@ -160,7 +163,7 @@ public class GlobalStreamThreadTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() throws Exception {
-        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
                 throw new RuntimeException("KABOOM!");
@@ -173,7 +176,7 @@ public class GlobalStreamThreadTest {
             mockConsumer,
             new StateDirectory(config, time, true, false),
             0,
-            new StreamsMetricsImpl(new Metrics(), "test-client", time),
+            new StreamsMetricsImpl(new Metrics(), "test-client", "processId", time),
             time,
             "clientId",
             stateRestoreListener,

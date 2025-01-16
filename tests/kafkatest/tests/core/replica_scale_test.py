@@ -22,7 +22,6 @@ from kafkatest.services.trogdor.consume_bench_workload import ConsumeBenchWorklo
 from kafkatest.services.trogdor.task_spec import TaskSpec
 from kafkatest.services.kafka import KafkaService, quorum, consumer_group
 from kafkatest.services.trogdor.trogdor import TrogdorService
-from kafkatest.services.zookeeper import ZookeeperService
 
 import time
 
@@ -31,12 +30,9 @@ class ReplicaScaleTest(Test):
     def __init__(self, test_context):
         super(ReplicaScaleTest, self).__init__(test_context=test_context)
         self.test_context = test_context
-        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
-        self.kafka = KafkaService(self.test_context, num_nodes=8, zk=self.zk, controller_num_nodes_override=1)
+        self.kafka = KafkaService(self.test_context, num_nodes=8, zk=None, controller_num_nodes_override=1)
 
     def setUp(self):
-        if self.zk:
-            self.zk.start()
         self.kafka.start()
 
     def teardown(self):
@@ -44,15 +40,13 @@ class ReplicaScaleTest(Test):
         for node in self.kafka.nodes:
             self.kafka.stop_node(node, clean_shutdown=False, timeout_sec=60)
         self.kafka.stop()
-        if self.zk:
-            self.zk.stop()
 
     @cluster(num_nodes=12)
     @matrix(
         topic_count=[50],
         partition_count=[34],
         replication_factor=[3],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -64,7 +58,7 @@ class ReplicaScaleTest(Test):
         group_protocol=consumer_group.all_group_protocols
     )
     def test_produce_consume(self, topic_count, partition_count, replication_factor, 
-                             metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+                             metadata_quorum, use_new_coordinator=False, group_protocol=None):
         topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "replicas_produce_consume_%d" % i
@@ -123,18 +117,11 @@ class ReplicaScaleTest(Test):
         topic_count=[50],
         partition_count=[34],
         replication_factor=[3],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        topic_count=[50],
-        partition_count=[34],
-        replication_factor=[3],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True, False]
     )
     def test_clean_bounce(self, topic_count, partition_count, replication_factor,
-                          metadata_quorum=quorum.zk, use_new_coordinator=False):
+                          metadata_quorum, use_new_coordinator=False):
         topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "topic-%04d" % i

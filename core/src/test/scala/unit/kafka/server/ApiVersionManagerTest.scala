@@ -73,7 +73,7 @@ class ApiVersionManagerTest {
 
   @Test
   def testControllerApiIntersection(): Unit = {
-    val controllerMinVersion: Short = 1
+    val controllerMinVersion: Short = 3
     val controllerMaxVersion: Short = 5
 
     val forwardingManager = Mockito.mock(classOf[ForwardingManager])

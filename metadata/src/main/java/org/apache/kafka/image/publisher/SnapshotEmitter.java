@@ -140,7 +140,7 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
             provenance.snapshotId(),
             provenance.lastContainedLogTimeMs()
         );
-        if (!snapshotWriter.isPresent()) {
+        if (snapshotWriter.isEmpty()) {
             log.error("Not generating {} because it already exists.", provenance.snapshotName());
             return;
         }

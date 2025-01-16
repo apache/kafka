@@ -27,10 +27,11 @@ import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
@@ -50,11 +51,12 @@ class StorageToolTest {
     properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9092")
-    properties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT")
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    properties.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
     properties
   }
 
-  val testingFeatures = Features.FEATURES.toList.asJava
+  val testingFeatures = Feature.FEATURES.toList.asJava
 
   @Test
   def testConfigToLogDirectories(): Unit = {
@@ -177,8 +179,9 @@ Found problem:
   defaultDynamicQuorumProperties.setProperty("process.roles", "controller")
   defaultDynamicQuorumProperties.setProperty("node.id", "0")
   defaultDynamicQuorumProperties.setProperty("controller.listener.names", "CONTROLLER")
-  defaultDynamicQuorumProperties.setProperty("controller.quorum.voters", "0@localhost:9093")
-  defaultDynamicQuorumProperties.setProperty("listeners", "CONTROLLER://127.0.0.1:9093")
+  defaultDynamicQuorumProperties.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
+  defaultDynamicQuorumProperties.setProperty("listeners", "CONTROLLER://:9093")
+  defaultDynamicQuorumProperties.setProperty("advertised.listeners", "CONTROLLER://127.0.0.1:9093")
   defaultDynamicQuorumProperties.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
   defaultDynamicQuorumProperties.setProperty(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG , "true")
 
@@ -292,19 +295,6 @@ Found problem:
   }
 
   @Test
-  def testFormatFailsInZkMode(): Unit = {
-    val availableDirs = Seq(TestUtils.tempDir())
-    val properties = new Properties()
-    properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("zookeeper.connect", "localhost:2181")
-    val stream = new ByteArrayOutputStream()
-    assertEquals("The kafka configuration file appears to be for a legacy cluster. " +
-      "Formatting is only supported for clusters in KRaft mode.",
-        assertThrows(classOf[TerseFailure],
-          () => runFormatCommand(stream, properties)).getMessage)
-  }
-
-  @Test
   def testFormatWithReleaseVersion(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
@@ -324,8 +314,33 @@ Found problem:
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq("--feature", "metadata.version=20")))
-    assertTrue(stream.toString().contains("4.0-IV0"),
+    assertTrue(stream.toString().contains("3.8-IV0"),
       "Failed to find content in output: " + stream.toString())
+  }
+
+  @Test
+  def testFormatWithInvalidFeature(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    assertEquals("Unsupported feature: non.existent.feature. Supported features are: " +
+      "eligible.leader.replicas.version, group.version, kraft.version, transaction.version",
+        assertThrows(classOf[FormatterException], () =>
+          runFormatCommand(new ByteArrayOutputStream(), properties,
+            Seq("--feature", "non.existent.feature=20"))).getMessage)
+  }
+
+  @Test
+  def testFormatWithInvalidKRaftVersionLevel(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    assertEquals("No feature:kraft.version with feature level 999",
+      assertThrows(classOf[IllegalArgumentException], () =>
+        runFormatCommand(new ByteArrayOutputStream(), properties,
+          Seq("--feature", "kraft.version=999", "--standalone"))).getMessage)
   }
 
   @Test
@@ -378,7 +393,7 @@ Found problem:
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
-    assertEquals("You cannot use --standalone on a broker node.",
+    assertEquals("You can only use --standalone on a controller.",
       assertThrows(classOf[TerseFailure],
         () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage)
   }
@@ -437,6 +452,84 @@ Found problem:
       "Failed to find content in output: " + stream.toString())
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("controller", "broker,controller"))
+  def testFormatWithoutStaticQuorumFailsWithoutInitialControllersOnController(processRoles: String): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    if (processRoles.contains("broker")) {
+      properties.setProperty("listeners", "PLAINTEXT://:9092,CONTROLLER://:9093")
+      properties.setProperty("advertised.listeners", "PLAINTEXT://127.0.0.1:9092,CONTROLLER://127.0.0.1:9093")
+    }
+    properties.setProperty("process.roles", processRoles)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    assertEquals("Because controller.quorum.voters is not set on this controller, you must " +
+      "specify one of the following: --standalone, --initial-controllers, or " +
+        "--no-initial-controllers.",
+          assertThrows(classOf[TerseFailure],
+            () => runFormatCommand(new ByteArrayOutputStream(), properties,
+              Seq("--release-version", "3.9-IV0"))).getMessage)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testFormatWithNoInitialControllersSucceedsOnController(setKraftVersionFeature: Boolean): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--no-initial-controllers")
+    if (setKraftVersionFeature) {
+      arguments += "--feature"
+      arguments += "kraft.version=1"
+    }
+    assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
+    assertTrue(stream.toString().
+      contains("Formatting metadata directory %s".format(availableDirs.head)),
+      "Failed to find content in output: " + stream.toString())
+  }
+
+  @Test
+  def testFormatWithNoInitialControllersFlagAndStandaloneFlagFails(): Unit = {
+    val arguments = ListBuffer[String](
+      "format", "--cluster-id", "XcZZOzUqS4yHOjhMQB6JLQ",
+      "--release-version", "3.9-IV0",
+      "--no-initial-controllers", "--standalone")
+    val exception = assertThrows(classOf[ArgumentParserException], () => StorageTool.parseArguments(arguments.toArray))
+    assertEquals("argument --standalone/-s: not allowed with argument --no-initial-controllers/-N", exception.getMessage)
+  }
+
+  @Test
+  def testFormatWithNoInitialControllersFlagAndInitialControllersFlagFails(): Unit = {
+    val arguments = ListBuffer[String](
+      "format", "--cluster-id", "XcZZOzUqS4yHOjhMQB6JLQ",
+      "--release-version", "3.9-IV0",
+      "--no-initial-controllers", "--initial-controllers",
+      "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ," +
+      "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
+      "2@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang")
+    val exception = assertThrows(classOf[ArgumentParserException], () => StorageTool.parseArguments(arguments.toArray))
+    assertEquals("argument --initial-controllers/-I: not allowed with argument --no-initial-controllers/-N", exception.getMessage)
+  }
+
+  @Test
+  def testFormatWithoutStaticQuorumSucceedsWithoutInitialControllersOnBroker(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty("listeners", "PLAINTEXT://:9092")
+    properties.setProperty("advertised.listeners", "PLAINTEXT://127.0.0.1:9092")
+    properties.setProperty("process.roles", "broker")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, properties, Seq("--release-version", "3.9-IV0")))
+    assertTrue(stream.toString().
+      contains("Formatting metadata directory %s".format(availableDirs.head)),
+      "Failed to find content in output: " + stream.toString())
+  }
+
   private def runVersionMappingCommand(
     stream: ByteArrayOutputStream,
     releaseVersion: String
@@ -467,8 +560,8 @@ Found problem:
       s"Output did not contain expected Metadata Version: $output"
     )
 
-    for (feature <- Features.PRODUCTION_FEATURES.asScala) {
-      val featureLevel = feature.defaultValue(metadataVersion)
+    for (feature <- Feature.PRODUCTION_FEATURES.asScala) {
+      val featureLevel = feature.defaultLevel(metadataVersion)
       assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
         s"Output did not contain expected feature mapping: $output"
       )
@@ -490,8 +583,8 @@ Found problem:
       s"Output did not contain expected Metadata Version: $output"
     )
 
-    for (feature <- Features.PRODUCTION_FEATURES.asScala) {
-      val featureLevel = feature.defaultValue(metadataVersion)
+    for (feature <- Feature.PRODUCTION_FEATURES.asScala) {
+      val featureLevel = feature.defaultLevel(metadataVersion)
       assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
         s"Output did not contain expected feature mapping: $output"
       )
@@ -620,7 +713,7 @@ Found problem:
   def testBootstrapScramRecords(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultDynamicQuorumProperties)
+    properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String](
@@ -647,7 +740,7 @@ Found problem:
   def testScramRecordsOldReleaseVersion(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultDynamicQuorumProperties)
+    properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String](
@@ -659,5 +752,26 @@ Found problem:
     assertEquals(
       "SCRAM is only supported in metadata.version 3.5-IV2 or later.",
       assertThrows(classOf[FormatterException], () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage)
+  }
+
+  @Test
+  def testParseNameAndLevel(): Unit = {
+    assertEquals(("foo.bar", 56.toShort), StorageTool.parseNameAndLevel("foo.bar=56"))
+  }
+
+  @Test
+  def testParseNameAndLevelWithNoEquals(): Unit = {
+    assertEquals("Can't parse feature=level string kraft.version5: equals sign not found.",
+      assertThrows(classOf[RuntimeException],
+        () => StorageTool.parseNameAndLevel("kraft.version5")).
+          getMessage)
+  }
+
+  @Test
+  def testParseNameAndLevelWithNoNumber(): Unit = {
+    assertEquals("Can't parse feature=level string kraft.version=foo: unable to parse foo as a short.",
+      assertThrows(classOf[RuntimeException],
+        () => StorageTool.parseNameAndLevel("kraft.version=foo")).
+        getMessage)
   }
 }

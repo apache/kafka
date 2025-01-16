@@ -21,10 +21,9 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.share.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
-import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
-import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -75,7 +74,7 @@ public class ShareCoordinatorRecordSerdeTest {
                     .setGroupId("group")
                     .setTopicId(Uuid.randomUuid())
                     .setPartition(1),
-                ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION
+                CoordinatorRecordType.SHARE_SNAPSHOT.id()
             ),
             null
         );
@@ -104,7 +103,7 @@ public class ShareCoordinatorRecordSerdeTest {
                 .setGroupId("groupId")
                 .setTopicId(Uuid.randomUuid())
                 .setPartition(1),
-            ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION
+            CoordinatorRecordType.SHARE_SNAPSHOT.id()
         );
         ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
 
@@ -145,7 +144,7 @@ public class ShareCoordinatorRecordSerdeTest {
                 .setGroupId("foo")
                 .setTopicId(Uuid.randomUuid())
                 .setPartition(1),
-            ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION
+            CoordinatorRecordType.SHARE_SNAPSHOT.id()
         );
         ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
 
@@ -181,7 +180,7 @@ public class ShareCoordinatorRecordSerdeTest {
                 .setGroupId("foo")
                 .setTopicId(Uuid.randomUuid())
                 .setPartition(1),
-            ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION
+            CoordinatorRecordType.SHARE_SNAPSHOT.id()
         );
         ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
 
@@ -198,8 +197,9 @@ public class ShareCoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserializeAllRecordTypes() {
-        roundTrip((short) 0, new ShareSnapshotKey(), new ShareSnapshotValue());
-        roundTrip((short) 1, new ShareUpdateKey(), new ShareUpdateValue());
+        for (CoordinatorRecordType record : CoordinatorRecordType.values()) {
+            roundTrip(record.id(), record.newRecordKey(), record.newRecordValue());
+        }
     }
 
     private void roundTrip(
@@ -228,7 +228,7 @@ public class ShareCoordinatorRecordSerdeTest {
                     .setGroupId(groupId)
                     .setTopicId(topicId)
                     .setPartition(partitionId),
-                ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION
+                CoordinatorRecordType.SHARE_SNAPSHOT.id()
             ),
             new ApiMessageAndVersion(
                 new ShareSnapshotValue()

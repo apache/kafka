@@ -30,6 +30,7 @@ import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
@@ -108,14 +109,14 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     val failedCreateResult = client.createTopics(newTopics.asJava)
     val results = failedCreateResult.values()
     assertTrue(results.containsKey("mytopic"))
-    assertFutureExceptionTypeEquals(results.get("mytopic"), classOf[TopicExistsException])
+    assertFutureThrows(results.get("mytopic"), classOf[TopicExistsException])
     assertTrue(results.containsKey("mytopic2"))
-    assertFutureExceptionTypeEquals(results.get("mytopic2"), classOf[TopicExistsException])
+    assertFutureThrows(results.get("mytopic2"), classOf[TopicExistsException])
     assertTrue(results.containsKey("mytopic3"))
-    assertFutureExceptionTypeEquals(results.get("mytopic3"), classOf[TopicExistsException])
-    assertFutureExceptionTypeEquals(failedCreateResult.numPartitions("mytopic3"), classOf[TopicExistsException])
-    assertFutureExceptionTypeEquals(failedCreateResult.replicationFactor("mytopic3"), classOf[TopicExistsException])
-    assertFutureExceptionTypeEquals(failedCreateResult.config("mytopic3"), classOf[TopicExistsException])
+    assertFutureThrows(results.get("mytopic3"), classOf[TopicExistsException])
+    assertFutureThrows(failedCreateResult.numPartitions("mytopic3"), classOf[TopicExistsException])
+    assertFutureThrows(failedCreateResult.replicationFactor("mytopic3"), classOf[TopicExistsException])
+    assertFutureThrows(failedCreateResult.config("mytopic3"), classOf[TopicExistsException])
 
     val topicToDescription = client.describeTopics(topics.asJava).allTopicNames.get()
     assertEquals(topics.toSet, topicToDescription.keySet.asScala)

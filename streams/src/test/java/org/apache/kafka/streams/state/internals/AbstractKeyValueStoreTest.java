@@ -38,11 +38,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
@@ -53,18 +53,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@SuppressWarnings("unchecked")
 public abstract class AbstractKeyValueStoreTest {
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context);
-    protected InternalMockProcessorContext context;
+    protected InternalMockProcessorContext<?, ?> context;
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;
 
     @BeforeEach
     public void before() {
         driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        context = (InternalMockProcessorContext) driver.context();
+        context = (InternalMockProcessorContext<?, ?>) driver.context();
         context.setTime(10);
         store = createKeyValueStore(context);
     }
@@ -75,16 +74,17 @@ public abstract class AbstractKeyValueStoreTest {
         driver.clear();
     }
 
-    private static Map<Integer, String> getContents(final KeyValueIterator<Integer, String> iter) {
-        final HashMap<Integer, String> result = new HashMap<>();
-        while (iter.hasNext()) {
-            final KeyValue<Integer, String> entry = iter.next();
-            result.put(entry.key, entry.value);
+    private static Map<Integer, String> getContentsAndCloseIterator(final KeyValueIterator<Integer, String> iter) {
+        try (iter) {
+            final HashMap<Integer, String> result = new HashMap<>();
+            while (iter.hasNext()) {
+                final KeyValue<Integer, String> entry = iter.next();
+                result.put(entry.key, entry.value);
+            }
+            return result;
         }
-        return result;
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldNotIncludeDeletedFromRangeResult() {
         store.close();
@@ -113,7 +113,7 @@ public abstract class AbstractKeyValueStoreTest {
 
         // should not include deleted records in iterator
         final Map<Integer, String> expectedContents = Collections.singletonMap(2, "two");
-        assertEquals(expectedContents, getContents(store.all()));
+        assertEquals(expectedContents, getContentsAndCloseIterator(store.all()));
     }
 
     @Test
@@ -142,7 +142,7 @@ public abstract class AbstractKeyValueStoreTest {
 
         // should not include deleted records in iterator
         final Map<Integer, String> expectedContents = Collections.singletonMap(2, "two");
-        assertEquals(expectedContents, getContents(store.all()));
+        assertEquals(expectedContents, getContentsAndCloseIterator(store.all()));
     }
 
     @Test
@@ -184,13 +184,13 @@ public abstract class AbstractKeyValueStoreTest {
         expectedContents.put(4, "four");
 
         // Check range iteration ...
-        assertEquals(expectedContents, getContents(store.range(2, 4)));
-        assertEquals(expectedContents, getContents(store.range(2, 6)));
+        assertEquals(expectedContents, getContentsAndCloseIterator(store.range(2, 4)));
+        assertEquals(expectedContents, getContentsAndCloseIterator(store.range(2, 6)));
 
         // Check all iteration ...
         expectedContents.put(0, "zero");
         expectedContents.put(1, "one");
-        assertEquals(expectedContents, getContents(store.all()));
+        assertEquals(expectedContents, getContentsAndCloseIterator(store.all()));
     }
 
     @Test
@@ -232,13 +232,13 @@ public abstract class AbstractKeyValueStoreTest {
         expectedContents.put(4, "four");
 
         // Check range iteration ...
-        assertEquals(expectedContents, getContents(store.reverseRange(2, 4)));
-        assertEquals(expectedContents, getContents(store.reverseRange(2, 6)));
+        assertEquals(expectedContents, getContentsAndCloseIterator(store.reverseRange(2, 4)));
+        assertEquals(expectedContents, getContentsAndCloseIterator(store.reverseRange(2, 6)));
 
         // Check all iteration ...
         expectedContents.put(0, "zero");
         expectedContents.put(1, "one");
-        assertEquals(expectedContents, getContents(store.reverseAll()));
+        assertEquals(expectedContents, getContentsAndCloseIterator(store.reverseAll()));
     }
 
     @Test
@@ -498,14 +498,10 @@ public abstract class AbstractKeyValueStoreTest {
 
         store.putAll(entries);
 
-        final List<KeyValue<Integer, String>> allReturned = new ArrayList<>();
+        final List<KeyValue<Integer, String>> allReturned = toListAndCloseIterator(store.all());
         final List<KeyValue<Integer, String>> expectedReturned =
             Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
-        final Iterator<KeyValue<Integer, String>> iterator = store.all();
 
-        while (iterator.hasNext()) {
-            allReturned.add(iterator.next());
-        }
         assertThat(allReturned, equalTo(expectedReturned));
     }
 
@@ -517,14 +513,10 @@ public abstract class AbstractKeyValueStoreTest {
 
         store.putAll(entries);
 
-        final List<KeyValue<Integer, String>> allReturned = new ArrayList<>();
+        final List<KeyValue<Integer, String>> allReturned = toListAndCloseIterator(store.reverseAll());
         final List<KeyValue<Integer, String>> expectedReturned =
             Arrays.asList(KeyValue.pair(2, "two"), KeyValue.pair(1, "one"));
-        final Iterator<KeyValue<Integer, String>> iterator = store.reverseAll();
 
-        while (iterator.hasNext()) {
-            allReturned.add(iterator.next());
-        }
         assertThat(allReturned, equalTo(expectedReturned));
     }
 
@@ -545,10 +537,10 @@ public abstract class AbstractKeyValueStoreTest {
 
         store.putAll(entries);
 
-        final Iterator<KeyValue<Integer, String>> iterator = store.range(2, 2);
-
-        assertEquals(iterator.next().value, store.get(2));
-        assertFalse(iterator.hasNext());
+        try (final KeyValueIterator<Integer, String> iterator = store.range(2, 2)) {
+            assertEquals(iterator.next().value, store.get(2));
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -560,10 +552,10 @@ public abstract class AbstractKeyValueStoreTest {
 
         store.putAll(entries);
 
-        final Iterator<KeyValue<Integer, String>> iterator = store.reverseRange(2, 2);
-
-        assertEquals(iterator.next().value, store.get(2));
-        assertFalse(iterator.hasNext());
+        try (final KeyValueIterator<Integer, String> iterator = store.reverseRange(2, 2)) {
+            assertEquals(iterator.next().value, store.get(2));
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test

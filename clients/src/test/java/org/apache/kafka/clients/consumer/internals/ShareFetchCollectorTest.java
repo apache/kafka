@@ -137,7 +137,7 @@ public class ShareFetchCollectorTest {
         subscribeAndAssign(topicAPartition0);
 
         // Create a ShareFetchCollector that fails on ShareCompletedFetch initialization.
-        fetchCollector = new ShareFetchCollector<String, String>(logContext,
+        fetchCollector = new ShareFetchCollector<>(logContext,
                 metadata,
                 subscriptions,
                 fetchConfig,

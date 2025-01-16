@@ -35,14 +35,12 @@ import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
-import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrRequest}
 import org.apache.kafka.image.TopicsImage
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
 
 import java.util.{Collections, OptionalLong, Properties}
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{FileLock, Scheduler}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
@@ -50,7 +48,6 @@ import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, 
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.util
-import scala.annotation.nowarn
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -81,7 +78,6 @@ class LogManager(logDirs: Seq[File],
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time,
-                 val keepPartitionMetadataFile: Boolean,
                  remoteStorageSystemEnable: Boolean,
                  val initialTaskDelayMs: Long) extends Logging {
 
@@ -349,7 +345,6 @@ class LogManager(logDirs: Seq[File],
       logDirFailureChannel = logDirFailureChannel,
       lastShutdownClean = hadCleanShutdown,
       topicId = None,
-      keepPartitionMetadataFile = keepPartitionMetadataFile,
       numRemainingSegments = numRemainingSegments,
       remoteStorageSystemEnable = remoteStorageSystemEnable)
 
@@ -583,27 +578,13 @@ class LogManager(logDirs: Seq[File],
   }
 
   // visible for testing
-  @nowarn("cat=deprecation")
   private[log] def fetchTopicConfigOverrides(defaultConfig: LogConfig, topicNames: Set[String]): Map[String, LogConfig] = {
     val topicConfigOverrides = mutable.Map[String, LogConfig]()
     val defaultProps = defaultConfig.originals()
     topicNames.foreach { topicName =>
-      var overrides = configRepository.topicConfig(topicName)
+      val overrides = configRepository.topicConfig(topicName)
       // save memory by only including configs for topics with overrides
       if (!overrides.isEmpty) {
-        Option(overrides.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)).foreach { versionString =>
-          val messageFormatVersion = new MessageFormatVersion(versionString, interBrokerProtocolVersion.version)
-          if (messageFormatVersion.shouldIgnore) {
-            val copy = new Properties()
-            copy.putAll(overrides)
-            copy.remove(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-            overrides = copy
-
-            if (messageFormatVersion.shouldWarn)
-              warn(messageFormatVersion.topicWarningMessage(topicName))
-          }
-        }
-
         val logConfig = LogConfig.fromProps(defaultProps, overrides)
         topicConfigOverrides(topicName) = logConfig
       }
@@ -1091,7 +1072,6 @@ class LogManager(logDirs: Seq[File],
           brokerTopicStats = brokerTopicStats,
           logDirFailureChannel = logDirFailureChannel,
           topicId = topicId,
-          keepPartitionMetadataFile = keepPartitionMetadataFile,
           remoteStorageSystemEnable = remoteStorageSystemEnable)
 
         if (isFuture)
@@ -1569,8 +1549,7 @@ object LogManager {
             kafkaScheduler: Scheduler,
             time: Time,
             brokerTopicStats: BrokerTopicStats,
-            logDirFailureChannel: LogDirFailureChannel,
-            keepPartitionMetadataFile: Boolean): LogManager = {
+            logDirFailureChannel: LogDirFailureChannel): LogManager = {
     val defaultProps = config.extractLogConfigMap
 
     LogConfig.validateBrokerLogConfigValues(defaultProps, config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
@@ -1595,7 +1574,6 @@ object LogManager {
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
       time = time,
-      keepPartitionMetadataFile = keepPartitionMetadataFile,
       interBrokerProtocolVersion = config.interBrokerProtocolVersion,
       remoteStorageSystemEnable = config.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
       initialTaskDelayMs = config.logInitialTaskDelayMs)

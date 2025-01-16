@@ -40,11 +40,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
-    if(isKRaftTest())
-      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
-    else {
-      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG,  classOf[AlterCredentialsTest.TestAuthorizer].getName)
-    }
+    properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
   }
 
@@ -59,7 +55,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
   private val user2 = "user2"
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testAlterNothingNotAuthorized(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
@@ -72,7 +68,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testAlterSomethingNotAuthorized(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()

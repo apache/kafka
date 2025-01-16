@@ -95,6 +95,14 @@
       "type": "int8",
       "versions": "0+",
       "about": "State of the remote log segment"
+    },
+    {
+      "name": "TxnIndexEmpty",
+      "type": "bool",
+      "versions": "0+",
+      "about": "Flag to indicate if the transaction index is empty.",
+      "taggedVersions": "0+",
+      "tag": 0
     }
   ]
 }

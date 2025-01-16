@@ -30,7 +30,7 @@ class FinalizedFeatureCacheTest {
 
   @Test
   def testEmpty(): Unit = {
-    assertTrue(new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, BrokerFeatures.createDefault(true)).getFeatureOption.isEmpty)
+    assertTrue(new ZkMetadataCache(1, MetadataVersion.IBP_3_0_IV1, BrokerFeatures.createDefault(true)).getFeatureOption.isEmpty)
   }
 
   def asJava(input: Map[String, Short]): java.util.Map[String, java.lang.Short] = {
@@ -45,7 +45,7 @@ class FinalizedFeatureCacheTest {
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 4)
 
-    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
+    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_3_0_IV1, brokerFeatures)
     cache.updateFeaturesOrThrow(finalizedFeatures, 10)
     assertTrue(cache.getFeatureOption.isDefined)
     assertEquals(asJava(finalizedFeatures), cache.getFeatureOption.get.finalizedFeatures())
@@ -67,7 +67,7 @@ class FinalizedFeatureCacheTest {
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 2)
 
-    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
+    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_3_0_IV1, brokerFeatures)
     assertThrows(classOf[FeatureCacheUpdateException], () => cache.updateFeaturesOrThrow(finalizedFeatures, 12))
 
     // Check that the failed updateOrThrow call did not make any mutations.
@@ -82,7 +82,7 @@ class FinalizedFeatureCacheTest {
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 3)
 
-    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
+    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_3_0_IV1, brokerFeatures)
     cache.updateFeaturesOrThrow(finalizedFeatures, 12)
     assertTrue(cache.getFeatureOption.isDefined)
     assertEquals(asJava(finalizedFeatures),  cache.getFeatureOption.get.finalizedFeatures())
@@ -97,7 +97,7 @@ class FinalizedFeatureCacheTest {
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 3)
 
-    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
+    val cache = new ZkMetadataCache(1, MetadataVersion.IBP_3_0_IV1, brokerFeatures)
     cache.updateFeaturesOrThrow(finalizedFeatures, 12)
     assertTrue(cache.getFeatureOption.isDefined)
     assertEquals(asJava(finalizedFeatures), cache.getFeatureOption.get.finalizedFeatures())

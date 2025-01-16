@@ -67,7 +67,7 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDynamicNumNetworkThreads(quorum: String): Unit = {
     // Increase the base network thread count
     val newBaseNetworkThreadsCount = SocketServerConfigs.NUM_NETWORK_THREADS_DEFAULT + 1

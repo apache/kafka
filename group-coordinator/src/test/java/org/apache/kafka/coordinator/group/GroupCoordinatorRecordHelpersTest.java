@@ -34,6 +34,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -46,14 +48,10 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -67,7 +65,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedAssignment;
@@ -451,21 +448,8 @@ public class GroupCoordinatorRecordHelpersTest {
         ));
     }
 
-    private static Stream<Arguments> metadataToExpectedGroupMetadataValue() {
-        return Stream.of(
-            Arguments.arguments(MetadataVersion.IBP_0_10_0_IV0, (short) 0),
-            Arguments.arguments(MetadataVersion.IBP_1_1_IV0, (short) 1),
-            Arguments.arguments(MetadataVersion.IBP_2_2_IV0, (short) 2),
-            Arguments.arguments(MetadataVersion.IBP_3_5_IV0, (short) 3)
-        );
-    }
-
-    @ParameterizedTest
-    @MethodSource("metadataToExpectedGroupMetadataValue")
-    public void testNewGroupMetadataRecord(
-        MetadataVersion metadataVersion,
-        short expectedGroupMetadataValueVersion
-    ) {
+    @Test
+    public void testNewGroupMetadataRecord() {
         Time time = new MockTime();
 
         List<GroupMetadataValue.MemberMetadata> expectedMembers = new ArrayList<>();
@@ -506,7 +490,7 @@ public class GroupCoordinatorRecordHelpersTest {
                     .setGeneration(1)
                     .setCurrentStateTimestamp(time.milliseconds())
                     .setMembers(expectedMembers),
-                expectedGroupMetadataValueVersion));
+                (short) 3));
 
         ClassicGroup group = new ClassicGroup(
             new LogContext(),
@@ -541,8 +525,7 @@ public class GroupCoordinatorRecordHelpersTest {
         group.initNextGeneration();
         CoordinatorRecord groupMetadataRecord = GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
             group,
-            assignment,
-            metadataVersion
+            assignment
         );
 
         assertEquals(expectedRecord, groupMetadataRecord);
@@ -607,8 +590,7 @@ public class GroupCoordinatorRecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
-                Collections.emptyMap(),
-                MetadataVersion.IBP_3_5_IV2
+                Collections.emptyMap()
             ));
     }
 
@@ -658,17 +640,12 @@ public class GroupCoordinatorRecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
-                Collections.emptyMap(),
-                MetadataVersion.IBP_3_5_IV2
+                Collections.emptyMap()
             ));
     }
       
-    @ParameterizedTest
-    @MethodSource("metadataToExpectedGroupMetadataValue")
-    public void testEmptyGroupMetadataRecord(
-        MetadataVersion metadataVersion,
-        short expectedGroupMetadataValueVersion
-    ) {
+    @Test
+    public void testEmptyGroupMetadataRecord() {
         Time time = new MockTime();
 
         List<GroupMetadataValue.MemberMetadata> expectedMembers = Collections.emptyList();
@@ -686,7 +663,7 @@ public class GroupCoordinatorRecordHelpersTest {
                     .setGeneration(0)
                     .setCurrentStateTimestamp(time.milliseconds())
                     .setMembers(expectedMembers),
-                expectedGroupMetadataValueVersion));
+                (short) 3));
 
         ClassicGroup group = new ClassicGroup(
             new LogContext(),
@@ -697,16 +674,20 @@ public class GroupCoordinatorRecordHelpersTest {
 
         group.initNextGeneration();
         CoordinatorRecord groupMetadataRecord = GroupCoordinatorRecordHelpers.newEmptyGroupMetadataRecord(
-            group,
-            metadataVersion
+            group
         );
 
         assertEquals(expectedRecord, groupMetadataRecord);
     }
 
-    @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class)
-    public void testNewOffsetCommitRecord(MetadataVersion metadataVersion) {
+    @Test
+    public void testOffsetCommitValueVersion() {
+        assertEquals((short) 1, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(true));
+        assertEquals((short) 3, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false));
+    }
+
+    @Test
+    public void testNewOffsetCommitRecord() {
         OffsetCommitKey key = new OffsetCommitKey()
             .setGroup("group-id")
             .setTopic("foo")
@@ -724,8 +705,7 @@ public class GroupCoordinatorRecordHelpersTest {
                 (short) 1),
             new ApiMessageAndVersion(
                 value,
-                metadataVersion.offsetCommitValueVersion(false)
-            )
+                GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false))
         );
 
         assertEquals(expectedRecord, GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
@@ -737,8 +717,7 @@ public class GroupCoordinatorRecordHelpersTest {
                 OptionalInt.of(10),
                 "metadata",
                 1234L,
-                OptionalLong.empty()),
-            metadataVersion
+                OptionalLong.empty())
         ));
 
         value.setLeaderEpoch(-1);
@@ -752,14 +731,12 @@ public class GroupCoordinatorRecordHelpersTest {
                 OptionalInt.empty(),
                 "metadata",
                 1234L,
-                OptionalLong.empty()),
-            metadataVersion
+                OptionalLong.empty())
         ));
     }
 
-    @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class)
-    public void testNewOffsetCommitRecordWithExpireTimestamp(MetadataVersion metadataVersion) {
+    @Test
+    public void testNewOffsetCommitRecordWithExpireTimestamp() {
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new OffsetCommitKey()
@@ -787,8 +764,7 @@ public class GroupCoordinatorRecordHelpersTest {
                 OptionalInt.of(10),
                 "metadata",
                 1234L,
-                OptionalLong.of(5678L)),
-            metadataVersion
+                OptionalLong.of(5678L))
         ));
     }
 
@@ -804,6 +780,57 @@ public class GroupCoordinatorRecordHelpersTest {
             null);
 
         CoordinatorRecord record = GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 1);
+        assertEquals(expectedRecord, record);
+    }
+
+    @Test
+    public void testNewConsumerGroupRegularExpressionRecord() {
+        CoordinatorRecord expectedRecord = new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegularExpressionKey()
+                    .setGroupId("group-id")
+                    .setRegularExpression("ab*"),
+                (short) 16
+            ),
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegularExpressionValue()
+                    .setTopics(Arrays.asList("abc", "abcd"))
+                    .setVersion(10L)
+                    .setTimestamp(12345L),
+                (short) 0
+            )
+        );
+
+        CoordinatorRecord record = GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
+            "group-id",
+            "ab*",
+            new ResolvedRegularExpression(
+                Set.of("abc", "abcd"),
+                10L,
+                12345L
+            )
+        );
+
+        assertEquals(expectedRecord, record);
+    }
+
+    @Test
+    public void testNewConsumerGroupRegularExpressionTombstone() {
+        CoordinatorRecord expectedRecord = new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegularExpressionKey()
+                    .setGroupId("group-id")
+                    .setRegularExpression("ab*"),
+                (short) 16
+            ),
+            null
+        );
+
+        CoordinatorRecord record = GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(
+            "group-id",
+            "ab*"
+        );
+
         assertEquals(expectedRecord, record);
     }
 

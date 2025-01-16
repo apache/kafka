@@ -17,8 +17,8 @@
 
 package kafka.coordinator.group
 
-import kafka.server.{DelayedOperationPurgatory, GroupJoinKey}
-
+import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, GroupJoinKey}
+import java.util
 import scala.math.{max, min}
 
 /**
@@ -85,7 +85,7 @@ private[group] class InitialDelayedJoin(
           configuredRebalanceDelay,
           delay,
           remaining
-        ), Seq(GroupJoinKey(group.groupId)))
+        ), util.List.of(new GroupJoinKey(group.groupId)))
       } else
         super.onComplete()
     }

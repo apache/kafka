@@ -24,6 +24,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 
 import java.io.Closeable;
 import java.time.Duration;
@@ -49,13 +50,6 @@ public interface Producer<K, V> extends Closeable {
     void beginTransaction() throws ProducerFencedException;
 
     /**
-     * See {@link KafkaProducer#sendOffsetsToTransaction(Map, String)}
-     */
-    @Deprecated
-    void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                  String consumerGroupId) throws ProducerFencedException;
-
-    /**
      * See {@link KafkaProducer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)}
      */
     void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -70,6 +64,16 @@ public interface Producer<K, V> extends Closeable {
      * See {@link KafkaProducer#abortTransaction()}
      */
     void abortTransaction() throws ProducerFencedException;
+
+    /**
+     * @see KafkaProducer#registerMetricForSubscription(KafkaMetric) 
+     */
+    void registerMetricForSubscription(KafkaMetric metric);
+
+    /**
+     * @see KafkaProducer#unregisterMetricFromSubscription(KafkaMetric) 
+     */
+    void unregisterMetricFromSubscription(KafkaMetric metric);
 
     /**
      * See {@link KafkaProducer#send(ProducerRecord)}

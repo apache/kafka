@@ -19,8 +19,6 @@ package kafka.coordinator.group
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
-
-import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
@@ -28,7 +26,7 @@ import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMe
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.coordinator.group.Group
+import org.apache.kafka.coordinator.group.{Group, OffsetAndMetadata}
 
 import scala.collection.{Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
@@ -761,13 +759,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         case (topicPartition, commitRecordMetadataAndOffset) =>
           !subscribedTopics.contains(topicPartition.topic()) &&
           !pendingOffsetCommits.contains(topicPartition) && {
-            commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp match {
-              case None =>
-                // current version with no per partition retention
-                currentTimestamp - baseTimestamp(commitRecordMetadataAndOffset) >= offsetRetentionMs
-              case Some(expireTimestamp) =>
-                // older versions with explicit expire_timestamp field => old expiration semantics is used
-                currentTimestamp >= expireTimestamp
+            if (commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestampMs.isEmpty) {
+              // current version with no per partition retention
+              currentTimestamp - baseTimestamp(commitRecordMetadataAndOffset) >= offsetRetentionMs
+            } else {
+              // older versions with explicit expire_timestamp field => old expiration semantics is used
+              currentTimestamp >= commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestampMs.getAsLong
             }
           }
       }.map {
@@ -785,7 +782,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         //   since the last commit timestamp, expire the offset
         getExpiredOffsets(
           commitRecordMetadataAndOffset => currentStateTimestamp
-            .getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp)
+            .getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestampMs)
         )
 
       case Some(ConsumerProtocol.PROTOCOL_TYPE) if subscribedTopics.isDefined && is(Stable) =>
@@ -794,14 +791,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         //   the last commit timestamp, expire the offset. offset with pending offset commit are not
         //   expired
         getExpiredOffsets(
-          _.offsetAndMetadata.commitTimestamp,
+          _.offsetAndMetadata.commitTimestampMs,
           subscribedTopics.get
         )
 
       case None =>
         // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
         // expire offsets with no pending offset commit that retention period has passed since their last commit
-        getExpiredOffsets(_.offsetAndMetadata.commitTimestamp)
+        getExpiredOffsets(_.offsetAndMetadata.commitTimestampMs)
 
       case _ =>
         Map()

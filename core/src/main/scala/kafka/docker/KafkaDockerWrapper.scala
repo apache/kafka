@@ -173,7 +173,7 @@ object KafkaDockerWrapper extends Logging {
     env.map {
         case (key, value) =>
           if (key.startsWith("KAFKA_") && !ExcludeServerPropsEnv.contains(key)) {
-            val final_key = key.replace("KAFKA_", "").toLowerCase()
+            val final_key = key.replaceFirst("KAFKA_", "").toLowerCase()
               .replace("_", ".")
               .replace("...", "-")
               .replace("..", "_")

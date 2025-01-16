@@ -37,6 +37,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_LISTENER_NAME;
 import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_SECURITY_PROTOCOL;
+import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_CONTROLLER_LISTENER_NAME;
+import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_CONTROLLER_SECURITY_PROTOCOL;
 
 public class ClusterConfigTest {
 
@@ -60,8 +62,10 @@ public class ClusterConfigTest {
                 .setTags(Arrays.asList("name", "Generated Test"))
                 .setBrokerSecurityProtocol(SecurityProtocol.PLAINTEXT)
                 .setBrokerListenerName(ListenerName.normalised("EXTERNAL"))
+                .setControllerSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)
+                .setControllerListenerName(ListenerName.normalised("CONTROLLER"))
                 .setTrustStoreFile(trustStoreFile)
-                .setMetadataVersion(MetadataVersion.IBP_0_8_0)
+                .setMetadataVersion(MetadataVersion.IBP_3_0_IV1)
                 .setServerProperties(Collections.singletonMap("broker", "broker_value"))
                 .setConsumerProperties(Collections.singletonMap("consumer", "consumer_value"))
                 .setProducerProperties(Collections.singletonMap("producer", "producer_value"))
@@ -116,5 +120,7 @@ public class ClusterConfigTest {
         Assertions.assertTrue(expectedDisplayTags.contains("MetadataVersion=" + MetadataVersion.latestTesting()));
         Assertions.assertTrue(expectedDisplayTags.contains("BrokerSecurityProtocol=" + DEFAULT_BROKER_SECURITY_PROTOCOL));
         Assertions.assertTrue(expectedDisplayTags.contains("BrokerListenerName=" + ListenerName.normalised(DEFAULT_BROKER_LISTENER_NAME)));
+        Assertions.assertTrue(expectedDisplayTags.contains("ControllerSecurityProtocol=" + DEFAULT_CONTROLLER_SECURITY_PROTOCOL));
+        Assertions.assertTrue(expectedDisplayTags.contains("ControllerListenerName=" + ListenerName.normalised(DEFAULT_CONTROLLER_LISTENER_NAME)));
     }
 }

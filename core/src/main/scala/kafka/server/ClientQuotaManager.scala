@@ -216,7 +216,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
   /**
    * Records that a user/clientId accumulated or would like to accumulate the provided amount at the
-   * the specified time, returns throttle time in milliseconds.
+   * specified time, returns throttle time in milliseconds.
    *
    * @param session The session from which the user is extracted
    * @param clientId The client id

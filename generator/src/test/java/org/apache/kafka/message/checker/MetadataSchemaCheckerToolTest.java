@@ -27,6 +27,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MetadataSchemaCheckerToolTest {
     @Test
+    public void testVerifyEvolutionGit() throws Exception {
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+            MetadataSchemaCheckerTool.run(
+                // In the CI environment because the CI fetch command only creates HEAD and refs/remotes/pull/... references.
+                // Since there may not be other branches like refs/heads/trunk in CI, HEAD serves as the baseline reference.
+                new String[]{"verify-evolution-git", "--file", "AbortTransactionRecord.json", "--ref", "HEAD"},
+                new PrintStream(stream)
+            );
+            assertEquals("Successfully verified evolution of file: AbortTransactionRecord.json",
+                stream.toString().trim());
+        }
+    }
+
+    @Test
     public void testSuccessfulParse() throws Exception {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
             String path = messageSpecStringToTempFile(
