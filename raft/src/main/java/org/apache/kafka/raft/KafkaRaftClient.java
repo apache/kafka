@@ -686,8 +686,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         } else if (state instanceof CandidateState candidate) {
             maybeTransitionToLeader(candidate, currentTimeMs);
         } else {
-            throw new IllegalStateException("Expected to be a NomineeState (Prospective or Candidate), " +
-                "but current state is " + state);
+            throw new IllegalStateException(
+                "Expected to be a NomineeState (Prospective or Candidate), but current state is " + state
+            );
         }
     }
 
@@ -924,7 +925,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (topLevelError == Errors.UNSUPPORTED_VERSION && quorum.isProspective()) {
             logger.info(
                 "Prospective received unsupported version error in vote response in epoch {}, " +
-                "transitioning to Candidate state immediately since entire quorum may not support PreVote.",
+                "transitioning to Candidate state immediately since at least one voter doesn't support PreVote.",
                 quorum.epoch()
             );
             transitionToCandidate(currentTimeMs);

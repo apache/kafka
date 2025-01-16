@@ -50,11 +50,9 @@ public class EpochElection {
     public boolean recordVote(int voterId, boolean isGranted) {
         VoterState voterState = getVoterStateOrThrow(voterId);
         boolean wasUnrecorded = voterState.state == VoterState.State.UNRECORDED;
-        if (isGranted) {
-            voterState.setState(VoterState.State.GRANTED);
-        } else {
-            voterState.setState(VoterState.State.REJECTED);
-        }
+        voterState.setState(
+            isGranted ? VoterState.State.GRANTED : VoterState.State.REJECTED
+        );
         return wasUnrecorded;
     }
 

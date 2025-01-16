@@ -80,7 +80,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity" })
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity", "JavaNCSS" })
 public class KafkaRaftClientTest {
     @Test
     public void testNodeDirectoryId() {

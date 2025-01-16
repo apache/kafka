@@ -187,9 +187,6 @@
     <suppress checks="NPathComplexity"
               files="(DynamicVoter|RecordsIterator).java"/>
 
-    <suppress checks="JavaNCSS"
-              files="(KafkaRaftClientTest).java"/>
-
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"
               files="(KafkaStreams|KStreamImpl|KTableImpl|InternalTopologyBuilder|StreamsPartitionAssignor|StreamThread|IQv2StoreIntegrationTest|KStreamImplTest|RocksDBStore|StreamTask|TaskManager).java"/>

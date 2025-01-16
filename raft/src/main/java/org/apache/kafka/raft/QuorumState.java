@@ -509,7 +509,7 @@ public class QuorumState {
                 localIdOrThrow(),
                 epoch,
                 state.election().optionalLeaderId(),
-                Optional.of(state.leaderEndpoints()),
+                state.leaderEndpoints(),
                 Optional.of(candidateKey),
                 partitionState.lastVoterSet(),
                 state.highWatermark(),
@@ -624,7 +624,7 @@ public class QuorumState {
                 localIdOrThrow(),
                 epoch(),
                 leaderId(),
-                Optional.of(state.leaderEndpoints()),
+                state.leaderEndpoints(),
                 votedKey(),
                 partitionState.lastVoterSet(),
                 state.highWatermark(),
@@ -661,7 +661,7 @@ public class QuorumState {
             throw new IllegalStateException(
                 String.format(
                     "Cannot transition to Candidate since the local id (%s) and directory id (%s) " +
-                        "is not one of the voters %s",
+                    "is not one of the voters %s",
                     localId,
                     localDirectoryId,
                     partitionState.lastVoterSet()
@@ -670,8 +670,13 @@ public class QuorumState {
         }
         // Only Prospective is allowed to transition to Candidate
         if (!isProspective()) {
-            throw new IllegalStateException("Cannot transition to Candidate since the local broker.id=" + localId +
-                " is state " + state);
+            throw new IllegalStateException(
+                String.format(
+                    "Cannot transition to Candidate since the local broker.id=%d is state %s",
+                    localId,
+                    state
+                )
+            );
         }
     }
 

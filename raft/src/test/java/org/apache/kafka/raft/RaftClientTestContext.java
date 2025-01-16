@@ -311,6 +311,14 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withStartingVoters(VoterSet voters, KRaftVersion kraftVersion) {
+            if (kraftVersion.isReconfigSupported()) {
+                return withBootstrapSnapshot(Optional.of(voters));
+            } else {
+                return withStaticVoters(voters.voterIds());
+            }
+        }
+
         Builder withStaticVoters(Set<Integer> staticVoters) {
             Map<Integer, InetSocketAddress> staticVoterAddressMap = staticVoters
                 .stream()
@@ -597,8 +605,11 @@ public final class RaftClientTestContext {
     void expectAndGrantPreVotes(int epoch) throws Exception {
         pollUntilRequest();
 
-        List<RaftRequest.Outbound> voteRequests = collectPreVoteRequests(epoch,
-            log.lastFetchedEpoch(), log.endOffset().offset());
+        List<RaftRequest.Outbound> voteRequests = collectPreVoteRequests(
+            epoch,
+            log.lastFetchedEpoch(),
+            log.endOffset().offset()
+        );
 
         for (RaftRequest.Outbound request : voteRequests) {
             if (!raftProtocol.isPreVoteSupported()) {

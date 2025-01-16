@@ -32,7 +32,7 @@ public class ProspectiveState implements NomineeState {
     private final int localId;
     private final int epoch;
     private final OptionalInt leaderId;
-    private final Optional<Endpoints> leaderEndpoints;
+    private final Endpoints leaderEndpoints;
     private final Optional<ReplicaKey> votedKey;
     private final VoterSet voters;
     private final EpochElection epochElection;
@@ -56,7 +56,7 @@ public class ProspectiveState implements NomineeState {
         int localId,
         int epoch,
         OptionalInt leaderId,
-        Optional<Endpoints> leaderEndpoints,
+        Endpoints leaderEndpoints,
         Optional<ReplicaKey> votedKey,
         VoterSet voters,
         Optional<LogOffsetMetadata> highWatermark,
@@ -149,7 +149,7 @@ public class ProspectiveState implements NomineeState {
 
     @Override
     public Endpoints leaderEndpoints() {
-        return leaderEndpoints.orElse(Endpoints.empty());
+        return leaderEndpoints;
     }
 
     @Override
