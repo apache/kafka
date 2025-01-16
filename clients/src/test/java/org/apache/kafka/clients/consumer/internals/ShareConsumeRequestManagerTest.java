@@ -931,7 +931,19 @@ public class ShareConsumeRequestManagerTest {
         NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
         assertEquals(2, pollResult.unsentRequests.size());
 
-        ShareFetchRequest.Builder builder1 = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        ShareFetchRequest.Builder builder1, builder2;
+        if (pollResult.unsentRequests.get(0).node().get() == nodeId0) {
+            builder1 = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+            builder2 = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(1).requestBuilder();
+            assertEquals(nodeId1, pollResult.unsentRequests.get(1).node().get());
+        } else {
+            builder1 = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(1).requestBuilder();
+            builder2 = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+            assertEquals(nodeId0, pollResult.unsentRequests.get(1).node().get());
+            assertEquals(nodeId1, pollResult.unsentRequests.get(0).node().get());
+        }
+
+        // Verify the builder data for node0.
         assertEquals(1, builder1.data().topics().size());
         assertEquals(tip0.topicId(), builder1.data().topics().get(0).topicId());
         assertEquals(1, builder1.data().topics().get(0).partitions().size());
@@ -945,7 +957,7 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(1, builder1.data().forgottenTopicsData().get(0).partitions().size());
         assertEquals(0, builder1.data().forgottenTopicsData().get(0).partitions().get(0));
 
-        ShareFetchRequest.Builder builder2 = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(1).requestBuilder();
+        // Verify the builder data for node1.
         assertEquals(1, builder2.data().topics().size());
         assertEquals(tip1.topicId(), builder2.data().topics().get(0).topicId());
         assertEquals(1, builder2.data().topics().get(0).partitions().size());
@@ -989,6 +1001,7 @@ public class ShareConsumeRequestManagerTest {
         // We do not build the request for tip0 as there are no acknowledgements to send.
         NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
         assertEquals(1, pollResult.unsentRequests.size());
+        assertEquals(nodeId1, pollResult.unsentRequests.get(0).node().get());
 
         ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
 
