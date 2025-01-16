@@ -144,9 +144,11 @@ have cache misses. To resolve this, update your PR with the latest cached trunk 
 
 ```commandline
 git fetch origin
-git update-cache
+./committer-tools/update-cache.sh
 git merge trunk-cached
 ```
+
+then push your branch.
 
 If your build seems to be using the correct cache, the next thing to check is for
 changes to task inputs. You can find this by locating the trunk Build Scan from 
