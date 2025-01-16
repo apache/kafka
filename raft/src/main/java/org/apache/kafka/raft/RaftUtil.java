@@ -549,8 +549,6 @@ public class RaftUtil {
         // return the provided errorMessage if it exists, Errors.NONE should have a null message
         if (errorMessage == null && error != Errors.NONE) {
             errorMessage = error.message();
-        } else if (Errors.NONE.equals(error)) {
-            errorMessage = null;
         }
         return new AddRaftVoterResponseData()
             .setErrorCode(error.code())
@@ -574,8 +572,6 @@ public class RaftUtil {
         // return the provided errorMessage if it exists, Errors.NONE should have a null message
         if (errorMessage == null && error != Errors.NONE) {
             errorMessage = error.message();
-        } else if (Errors.NONE.equals(error)) {
-            errorMessage = null;
         }
         return new RemoveRaftVoterResponseData()
             .setErrorCode(error.code())
