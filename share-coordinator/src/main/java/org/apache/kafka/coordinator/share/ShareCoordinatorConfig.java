@@ -69,7 +69,7 @@ public class ShareCoordinatorConfig {
     public static final String STATE_TOPIC_COMPRESSION_CODEC_DOC = "Compression codec for the share-group state topic.";
 
     public static final String APPEND_LINGER_MS_CONFIG = "share.coordinator.append.linger.ms";
-    public static final int APPEND_LINGER_MS_DEFAULT = 10;
+    public static final int APPEND_LINGER_MS_DEFAULT = 5;
     public static final String APPEND_LINGER_MS_DOC = "The duration in milliseconds that the share coordinator will wait for writes to accumulate before flushing them to disk.";
 
     public static final String STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG = "share.coordinator.state.topic.prune.interval.ms";

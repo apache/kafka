@@ -29,7 +29,6 @@ import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
-import kafka.server.RaftSupport;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
 import kafka.server.SimpleApiVersionManager;
@@ -191,7 +190,7 @@ public class KRaftMetadataRequestBenchmark {
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().
                 setRequestChannel(requestChannel).
-                setMetadataSupport(new RaftSupport(forwardingManager, metadataCache)).
+                setForwardingManager(forwardingManager).
                 setReplicaManager(replicaManager).
                 setGroupCoordinator(groupCoordinator).
                 setTxnCoordinator(transactionCoordinator).

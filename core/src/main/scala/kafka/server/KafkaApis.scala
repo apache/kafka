@@ -83,7 +83,7 @@ import scala.jdk.CollectionConverters._
  * Logic to handle the various Kafka requests
  */
 class KafkaApis(val requestChannel: RequestChannel,
-                val metadataSupport: MetadataSupport,
+                val forwardingManager: ForwardingManager,
                 val replicaManager: ReplicaManager,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
@@ -132,7 +132,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    metadataSupport.forward(request, responseCallback)
+    forwardingManager.forwardRequest(request, responseCallback)
   }
 
   private def handleInvalidVersionsDuringForwarding(request: RequestChannel.Request): Unit = {
@@ -2108,7 +2108,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (remaining.resources().isEmpty) {
       sendResponse(Some(new AlterConfigsResponseData()))
     } else {
-      metadataSupport.forwardingManager.get.forwardRequest(request,
+      forwardingManager.forwardRequest(request,
         new AlterConfigsRequest(remaining, request.header.apiVersion()),
         response => sendResponse(response.map(_.data())))
     }
@@ -2135,7 +2135,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (remaining.resources().isEmpty) {
       sendResponse(Some(new IncrementalAlterConfigsResponseData()))
     } else {
-      metadataSupport.forwardingManager.get.forwardRequest(request,
+      forwardingManager.forwardRequest(request,
         new IncrementalAlterConfigsRequest(remaining, request.header.apiVersion()),
         response => sendResponse(response.map(_.data())))
     }
@@ -2368,39 +2368,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         describeClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
-      metadataSupport match {
-        case ZkSupport(adminManager, controller, zkClient, forwardingManager, metadataCache, _) =>
-          val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
-
-          val entriesData = result.iterator.map { case (quotaEntity, quotaValues) =>
-            val entityData = quotaEntity.entries.asScala.iterator.map { case (entityType, entityName) =>
-              new DescribeClientQuotasResponseData.EntityData()
-                .setEntityType(entityType)
-                .setEntityName(entityName)
-            }.toBuffer
-
-            val valueData = quotaValues.iterator.map { case (key, value) =>
-              new DescribeClientQuotasResponseData.ValueData()
-                .setKey(key)
-                .setValue(value)
-            }.toBuffer
-
-            new DescribeClientQuotasResponseData.EntryData()
-              .setEntity(entityData.asJava)
-              .setValues(valueData.asJava)
-          }.toBuffer
-
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
-              .setThrottleTimeMs(requestThrottleMs)
-              .setEntries(entriesData.asJava)))
-        case RaftSupport(_, metadataCache) =>
-          val result = metadataCache.describeClientQuotas(describeClientQuotasRequest.data())
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-            result.setThrottleTimeMs(requestThrottleMs)
-            new DescribeClientQuotasResponse(result)
-          })
-      }
+      val result = metadataCache.asInstanceOf[KRaftMetadataCache].describeClientQuotas(describeClientQuotasRequest.data())
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        result.setThrottleTimeMs(requestThrottleMs)
+        new DescribeClientQuotasResponse(result)
+      })
     }
   }
 
@@ -2411,14 +2383,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         describeUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
-      metadataSupport match {
-        case RaftSupport(_, metadataCache) =>
-          val result = metadataCache.describeScramCredentials(describeUserScramCredentialsRequest.data())
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
-        case _ =>
-         throw KafkaApis.shouldNeverReceive(request)
-      }
+      val result = metadataCache.asInstanceOf[KRaftMetadataCache].describeScramCredentials(describeUserScramCredentialsRequest.data())
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
     }
   }
 
