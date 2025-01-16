@@ -975,7 +975,6 @@ class LogManagerTest {
         // not clean shutdown
         lastShutdownClean = false,
         topicId = None,
-        keepPartitionMetadataFile = false,
         // pass mock map for verification later
         numRemainingSegments = mockMap)
 
@@ -1383,7 +1382,6 @@ class LogManagerTest {
       time = Time.SYSTEM,
       brokerTopicStats = new BrokerTopicStats,
       logDirFailureChannel = new LogDirFailureChannel(1),
-      keepPartitionMetadataFile = true,
       interBrokerProtocolVersion = MetadataVersion.latestTesting,
       remoteStorageSystemEnable = false,
       initialTaskDelayMs = 0)

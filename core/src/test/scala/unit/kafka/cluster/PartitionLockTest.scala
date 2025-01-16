@@ -452,8 +452,7 @@ class PartitionLockTest extends Logging {
     log.producerIdExpirationCheckIntervalMs,
     leaderEpochCache,
     producerStateManager,
-    _topicId = None,
-    keepPartitionMetadataFile = true) {
+    _topicId = None) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
                                 requestLocal: RequestLocal, verificationGuard: VerificationGuard): LogAppendInfo = {

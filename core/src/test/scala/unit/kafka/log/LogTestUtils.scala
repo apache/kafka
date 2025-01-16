@@ -103,7 +103,6 @@ object LogTestUtils {
                 producerIdExpirationCheckIntervalMs: Int = TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
-                keepPartitionMetadataFile: Boolean = true,
                 numRemainingSegments: ConcurrentMap[String, Integer] = new ConcurrentHashMap[String, Integer],
                 remoteStorageSystemEnable: Boolean = false,
                 remoteLogManager: Option[RemoteLogManager] = None,
@@ -122,7 +121,6 @@ object LogTestUtils {
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
       topicId = topicId,
-      keepPartitionMetadataFile = keepPartitionMetadataFile,
       numRemainingSegments = numRemainingSegments,
       remoteStorageSystemEnable = remoteStorageSystemEnable,
       logOffsetsListener = logOffsetsListener

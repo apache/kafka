@@ -146,7 +146,6 @@ public class ReplicaFetcherThreadBenchmark {
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
             setTime(Time.SYSTEM).
-            setKeepPartitionMetadataFile(true).
             build();
 
         replicaManager = new ReplicaManagerBuilder().
