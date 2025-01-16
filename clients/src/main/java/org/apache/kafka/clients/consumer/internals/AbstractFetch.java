@@ -321,6 +321,7 @@ public abstract class AbstractFetch implements Closeable {
      * has yet to process the data for the partition that has already been fetched, we should not go send for more data
      * until the previously-fetched data has been processed.
      *
+     * @param buffered The set of partitions we have in our buffer
      * @return {@link Set} of {@link TopicPartition topic partitions} for which we should fetch data
      */
     private Set<TopicPartition> fetchablePartitions(Set<TopicPartition> buffered) {
