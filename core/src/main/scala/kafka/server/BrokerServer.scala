@@ -216,8 +216,7 @@ class BrokerServer(
         kafkaScheduler,
         time,
         brokerTopicStats,
-        logDirFailureChannel,
-        keepPartitionMetadataFile = true)
+        logDirFailureChannel)
 
       remoteLogManagerOpt = createRemoteLogManager()
 
@@ -347,7 +346,6 @@ class BrokerServer(
         alterPartitionManager = alterPartitionManager,
         brokerTopicStats = brokerTopicStats,
         isShuttingDown = isShuttingDown,
-        zkClient = None,
         threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
         delayedRemoteFetchPurgatoryParam = None,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
@@ -465,13 +463,13 @@ class BrokerServer(
         authorizer = authorizer,
         quotas = quotaManagers,
         fetchManager = fetchManager,
-        sharePartitionManager = Some(sharePartitionManager),
+        sharePartitionManager = sharePartitionManager,
         brokerTopicStats = brokerTopicStats,
         clusterId = clusterId,
         time = time,
         tokenManager = tokenManager,
         apiVersionManager = apiVersionManager,
-        clientMetricsManager = Some(clientMetricsManager))
+        clientMetricsManager = clientMetricsManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
