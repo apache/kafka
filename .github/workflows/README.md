@@ -121,3 +121,23 @@ some limitations.
 
 - Cannot run more than one step in a composite action (see `workflow_call` instead)
 - Inputs can only be strings, no support for typed parameters. See: https://github.com/actions/runner/issues/2238
+
+## Troubleshooting
+
+### Gradle Cache Misses
+
+If your PR is running for longer than you would expect due to cache misses, there are a
+few things to check. 
+
+First, find the trunk Build Scan from your PR's branch point and compare it with the Build
+Scan of your PR. This is done in the Develocity UI using the two overlapping circles like 
+`(A()B)`. This will show you differences in the task inputs for the two builds.
+
+Next, you can run your PR with extra cache debugging. Add this to the gradle invocation in
+[run-gradle/action.yml](../actions/run-gradle/action.yml). 
+
+```
+-Dorg.gradle.caching.debug=true
+```
+
+This will dump out a lot of output, so you may also reduce the test target to one module.
