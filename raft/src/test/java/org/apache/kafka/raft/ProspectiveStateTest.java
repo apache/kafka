@@ -206,7 +206,7 @@ public class ProspectiveStateTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    public void testIdempotentGrant(boolean withDirectoryId) {
+    public void testConsecutiveGrant(boolean withDirectoryId) {
         int otherNodeId = 1;
         ProspectiveState state = newProspectiveState(
             voterSetWithLocal(IntStream.of(otherNodeId), withDirectoryId)
@@ -217,7 +217,7 @@ public class ProspectiveStateTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testIdempotentReject(boolean withDirectoryId) {
+    public void testConsecutiveReject(boolean withDirectoryId) {
         int otherNodeId = 1;
         ProspectiveState state = newProspectiveState(
             voterSetWithLocal(IntStream.of(otherNodeId), withDirectoryId)
@@ -445,8 +445,14 @@ public class ProspectiveStateTest {
             OptionalInt.empty(),
             Optional.of(ReplicaKey.of(1, Uuid.randomUuid()))
         );
-
         assertEquals(Endpoints.empty(), state.leaderEndpoints());
+
+        state = newProspectiveState(
+            voterSetWithLocal(IntStream.of(1, 2, 3), true),
+            OptionalInt.of(3),
+            Optional.of(ReplicaKey.of(1, Uuid.randomUuid()))
+        );
+        assertEquals(leaderEndpoints, state.leaderEndpoints());
     }
 
     private ReplicaKey replicaKey(int id, boolean withDirectoryId) {

@@ -98,7 +98,7 @@ public class QuorumStateTest {
     }
 
     private Set<Integer> persistedVoters(Set<Integer> voters, KRaftVersion kraftVersion) {
-        if (kraftVersion.featureLevel() == 1) {
+        if (kraftVersion.isReconfigSupported()) {
             return Collections.emptySet();
         }
 
@@ -106,7 +106,7 @@ public class QuorumStateTest {
     }
 
     private ReplicaKey persistedVotedKey(ReplicaKey replicaKey, KRaftVersion kraftVersion) {
-        if (kraftVersion.featureLevel() == 1) {
+        if (kraftVersion.isReconfigSupported()) {
             return replicaKey;
         }
 

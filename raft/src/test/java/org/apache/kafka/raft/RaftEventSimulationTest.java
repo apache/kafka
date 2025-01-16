@@ -750,28 +750,24 @@ public class RaftEventSimulationTest {
             return latestLeader;
         }
 
-        int epoch(int nodeId) {
-            return running.values().stream()
-                .filter(node -> node.nodeId == nodeId)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Node " + nodeId + " is not running"))
-                .client.quorum().epoch();
-        }
-
         boolean hasConsistentLeader() {
             Iterator<RaftNode> iter = running.values().iterator();
             if (!iter.hasNext())
                 return false;
 
             RaftNode first = iter.next();
-            OptionalInt leaderId = first.store.readElectionState().get().optionalLeaderId();
-            if (leaderId.isEmpty())
+            OptionalInt firstLeaderId = first.store.readElectionState().get().optionalLeaderId();
+            int firstEpoch = first.store.readElectionState().get().epoch();
+            if (firstLeaderId.isEmpty())
                 return false;
 
             while (iter.hasNext()) {
                 RaftNode next = iter.next();
-                if (!leaderId.equals(next.store.readElectionState().get().optionalLeaderId()))
+                OptionalInt nextLeaderId = next.store.readElectionState().get().optionalLeaderId();
+                int nextEpoch = next.store.readElectionState().get().epoch();
+                if (!firstLeaderId.equals(nextLeaderId) || firstEpoch != nextEpoch) {
                     return false;
+                }
             }
 
             return true;
@@ -1186,7 +1182,7 @@ public class RaftEventSimulationTest {
 
         @Override
         public void verify() {
-            // Todo: currently this just checks the leader is never changed after the first successful election.
+            // KAFKA-18439: Currently this just checks the leader is never changed after the first successful election.
             // KAFKA-18439 will generalize the invariant so it holds for all tests even if routing filters are changed.
             // i.e. if the current leader is reachable by majority, we do not expect leadership to change
             for (Map.Entry<Integer, PersistentState> nodeEntry : cluster.nodes.entrySet()) {

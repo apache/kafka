@@ -359,7 +359,8 @@ public final class VoterSetTest {
     }
 
     public static VoterSet.VoterNode voterNode(ReplicaKey replicaKey) {
-        return voterNode(replicaKey,
+        return voterNode(
+            replicaKey,
             Endpoints.fromInetSocketAddresses(
                 Collections.singletonMap(
                     DEFAULT_LISTENER_NAME,

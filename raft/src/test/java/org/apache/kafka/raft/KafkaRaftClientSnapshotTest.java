@@ -1187,7 +1187,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
 
-        context.assertSentVoteRequest(epoch, 0, 0L, 1);
+        context.assertSentPreVoteRequest(epoch, 0, 0L, 1);
         assertTrue(context.client.quorum().isProspective());
     }
 
@@ -1782,7 +1782,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
 
-        context.assertSentVoteRequest(epoch, 0, 0L, 1);
+        context.assertSentPreVoteRequest(epoch, 0, 0L, 1);
         assertTrue(context.client.quorum().isProspective());
 
         // Send the response late

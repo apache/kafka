@@ -569,20 +569,6 @@ public final class RaftClientTestContext {
         return builder.build();
     }
 
-    static RaftClientTestContext initializeAsLeader(int localId, Set<Integer> voters, int epoch) throws Exception {
-        if (epoch <= 0) {
-            throw new IllegalArgumentException("Cannot become leader in epoch " + epoch);
-        }
-
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withUnknownLeader(epoch - 1)
-            .build();
-
-        context.assertUnknownLeaderAndNoVotedCandidate(epoch - 1);
-        context.unattachedToLeader();
-        return context;
-    }
-
     public void unattachedToCandidate() throws Exception {
         time.sleep(electionTimeoutMs * 2L);
         expectAndGrantPreVotes(currentEpoch());
@@ -703,11 +689,11 @@ public final class RaftClientTestContext {
         );
     }
 
-    public void assertElectedLeaderAndVotedCandidate(int epoch, int leaderId, ReplicaKey candidateKey) {
+    public void assertElectedLeaderAndVotedKey(int epoch, int leaderId, ReplicaKey candidateKey) {
         assertEquals(
-            new ElectionState(
+            ElectionState.withElectedLeader(
                 epoch,
-                OptionalInt.of(leaderId),
+                leaderId,
                 Optional.of(persistedVotedKey(candidateKey, kraftVersion)),
                 expectedVoters()
             ),
@@ -715,8 +701,8 @@ public final class RaftClientTestContext {
         );
     }
 
-    private ReplicaKey persistedVotedKey(ReplicaKey replicaKey, KRaftVersion kraftVersion) {
-        if (kraftVersion.featureLevel() == 1) {
+    private static ReplicaKey persistedVotedKey(ReplicaKey replicaKey, KRaftVersion kraftVersion) {
+        if (kraftVersion.isReconfigSupported()) {
             return replicaKey;
         }
 
@@ -816,6 +802,12 @@ public final class RaftClientTestContext {
         assertEquals(expectedResponse, response);
     }
 
+    RaftRequest.Outbound assertSentPreVoteRequest(int epoch, int lastEpoch, long lastEpochOffset, int numVoteReceivers) {
+        List<RaftRequest.Outbound> voteRequests = collectPreVoteRequests(epoch, lastEpoch, lastEpochOffset);
+        assertEquals(numVoteReceivers, voteRequests.size());
+        return voteRequests.iterator().next();
+    }
+
     RaftRequest.Outbound assertSentVoteRequest(int epoch, int lastEpoch, long lastEpochOffset, int numVoteReceivers) {
         List<RaftRequest.Outbound> voteRequests = collectVoteRequests(epoch, lastEpoch, lastEpochOffset);
         assertEquals(numVoteReceivers, voteRequests.size());
@@ -898,6 +890,7 @@ public final class RaftClientTestContext {
                 VoteRequestData request = (VoteRequestData) raftMessage.data();
                 VoteRequestData.PartitionData partitionRequest = unwrap(request);
 
+                assertFalse(partitionRequest.preVote());
                 assertEquals(epoch, partitionRequest.replicaEpoch());
                 assertEquals(localIdOrThrow(), partitionRequest.replicaId());
                 assertEquals(lastEpoch, partitionRequest.lastOffsetEpoch());
@@ -1951,11 +1944,12 @@ public final class RaftClientTestContext {
     short voteRpcVersion() {
         if (raftProtocol.isPreVoteSupported()) {
             return 2;
-        }
-        if (raftProtocol.isReconfigSupported()) {
+        } else if (raftProtocol.isReconfigSupported()) {
             return 1;
-        } else {
+        } else if (raftProtocol.isKRaftSupported()) {
             return 0;
+        } else {
+            throw new IllegalStateException("KRaft must be supported in order to use vote RPCs");
         }
     }
 
@@ -1987,7 +1981,7 @@ public final class RaftClientTestContext {
         if (raftProtocol.isReconfigSupported()) {
             return 0;
         } else {
-            throw new IllegalStateException("Reconfiguration must be enabled by calling withKip853Rpc(true)");
+            throw new IllegalStateException("Reconfiguration must be enabled by calling withRaftProtocol(KIP_853_PROTOCOL)");
         }
     }
 
@@ -1995,7 +1989,7 @@ public final class RaftClientTestContext {
         if (raftProtocol.isReconfigSupported()) {
             return 0;
         } else {
-            throw new IllegalStateException("Reconfiguration must be enabled by calling withKip853Rpc(true)");
+            throw new IllegalStateException("Reconfiguration must be enabled by calling withRaftProtocol(KIP_853_PROTOCOL)");
         }
     }
 
@@ -2003,7 +1997,7 @@ public final class RaftClientTestContext {
         if (raftProtocol.isReconfigSupported()) {
             return 0;
         } else {
-            throw new IllegalStateException("Reconfiguration must be enabled by calling withKip853Rpc(true)");
+            throw new IllegalStateException("Reconfiguration must be enabled by calling withRaftProtocol(KIP_853_PROTOCOL)");
         }
     }
 
@@ -2239,6 +2233,10 @@ public final class RaftClientTestContext {
         KIP_853_PROTOCOL,
         // preVote support
         KIP_996_PROTOCOL;
+
+        boolean isKRaftSupported() {
+            return isAtLeast(KIP_595_PROTOCOL);
+        }
 
         boolean isReconfigSupported() {
             return isAtLeast(KIP_853_PROTOCOL);
