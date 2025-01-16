@@ -112,6 +112,7 @@ public class StreamsMetricsImplTest {
     private static final String STORE_NAME2 = "store2";
     private static final Map<String, String> STORE_LEVEL_TAG_MAP = mkMap(
         mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
+        mkEntry(PROCESS_ID_TAG, PROCESS_ID),
         mkEntry(TASK_ID_TAG, TASK_ID1),
         mkEntry(SCOPE_NAME + STORE_ID_TAG, STORE_NAME1)
     );
@@ -880,6 +881,8 @@ public class StreamsMetricsImplTest {
             "",
             "thread-id",
             Thread.currentThread().getName(),
+            "process-id",
+            "test-process",
             "scope-id",
             "entity"
         );
@@ -992,7 +995,8 @@ public class StreamsMetricsImplTest {
                 streamsMetrics.version() == Version.LATEST ? THREAD_ID_TAG : CLIENT_ID_TAG,
                 Thread.currentThread().getName()
             ),
-            mkEntry(SCOPE_NAME + "-id", ENTITY_NAME)
+            mkEntry(SCOPE_NAME + "-id", ENTITY_NAME),
+            mkEntry(PROCESS_ID_TAG, PROCESS_ID)
         );
     }
 
@@ -1049,7 +1053,7 @@ public class StreamsMetricsImplTest {
 
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskName, storeType, storeName);
 
-        assertThat(tagMap.size(), equalTo(3));
+        assertThat(tagMap.size(), equalTo(4));
         assertThat(
             tagMap.get(StreamsMetricsImpl.THREAD_ID_TAG),
             equalTo(Thread.currentThread().getName()));
@@ -1081,7 +1085,7 @@ public class StreamsMetricsImplTest {
 
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(THREAD_ID1);
 
-        assertThat(tagMap.size(), equalTo(1));
+        assertThat(tagMap.size(), equalTo(2));
         assertThat(
             tagMap.get(THREAD_ID_TAG),
             equalTo(THREAD_ID1)
@@ -1281,7 +1285,10 @@ public class StreamsMetricsImplTest {
         final MetricName name = metrics.metricName(
             "foobar",
             THREAD_LEVEL_GROUP,
-            Collections.singletonMap("thread-id", "t1")
+            mkMap(
+                mkEntry("thread-id", "t1"),
+                mkEntry("process-id", "test-process")
+            )
         );
         assertThat(metrics.metric(name), notNullValue());
         assertThat(metrics.metric(name).metricValue(), equalTo(measuredValue));
@@ -1325,7 +1332,10 @@ public class StreamsMetricsImplTest {
         final MetricName name = metrics.metricName(
             "foobar",
             THREAD_LEVEL_GROUP,
-            Collections.singletonMap("thread-id", "t1")
+            mkMap(
+                mkEntry("thread-id", "t1"),
+                mkEntry("process-id", "test-process")
+            )
         );
         assertThat(metrics.metric(name), notNullValue());
         assertThat(metrics.metric(name).metricValue(), equalTo(measuredValue));

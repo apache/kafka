@@ -281,6 +281,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public Map<String, String> threadLevelTagMap(final String threadId) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(THREAD_ID_TAG, threadId);
+        tagMap.put(PROCESS_ID_TAG, processId);
         return tagMap;
     }
 
