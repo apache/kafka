@@ -674,8 +674,7 @@ public class GroupMetadataManager {
         if (group == null) {
             return new ConsumerGroup(snapshotRegistry, groupId, metrics);
         } else if (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records)) {
-            log.info("Got an empty classic group {} when getting consumer group. " +
-                "Removed the old classic group and use an empty consumer group instead.", groupId);
+            log.info("[GroupId {}] Converted the empty classic group to a consumer group.", groupId);
             return new ConsumerGroup(snapshotRegistry, groupId, metrics);
         } else {
             if (group.type() == CONSUMER) {
@@ -1035,7 +1034,7 @@ public class GroupMetadataManager {
             prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
         }
 
-        log.info("Converted consumer group {} to classic group.", consumerGroup.groupId());
+        log.info("[GroupId {}] Converted the consumer group to a classic group.", consumerGroup.groupId());
     }
 
     /**
@@ -1116,7 +1115,7 @@ public class GroupMetadataManager {
             scheduleConsumerGroupSessionTimeout(consumerGroup.groupId(), memberId, member.classicProtocolSessionTimeout().get())
         );
 
-        log.info("Converted classic group {} to consumer group.", classicGroup.groupId());
+        log.info("[GroupId {}] Converted the classic group to a consumer group.", classicGroup.groupId());
 
         return consumerGroup;
     }
@@ -4370,8 +4369,7 @@ public class GroupMetadataManager {
         // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
         ClassicGroup group;
         if (maybeDeleteEmptyConsumerGroup(groupId, records)) {
-            log.info("Got an empty consumer group {} when a classic consumer joins. " +
-                "Removed the old consumer group and use an empty consumer group instead.", groupId);
+            log.info("[GroupId {}] Converted the empty consumer group to a classic group.", groupId);
         }
         boolean isNewGroup = !groups.containsKey(groupId);
         try {
