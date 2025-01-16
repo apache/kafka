@@ -409,26 +409,6 @@ public class ProducerPerformance {
             this.steadyStateActive = isSteadyState;
         }
 
-        Stats(Stats first, Stats second) {
-            // create a Stats object that's the combination of two disjoint Stats objects
-            this.start = Math.min(first.start, second.start);
-            this.iteration = first.iteration + second.iteration;
-            this.sampling = first.sampling;
-            this.index = first.index() + second.index();
-            this.latencies = Arrays.copyOf(first.latencies, this.index);
-            System.arraycopy(second.latencies, 0, this.latencies, first.index(), second.index());
-            this.maxLatency = Math.max(first.maxLatency, second.maxLatency);
-            this.windowCount = first.windowCount + second.windowCount;
-            this.windowMaxLatency = 0;
-            this.windowTotalLatency = 0;
-            this.totalLatency = first.totalLatency + second.totalLatency;
-            this.reportingInterval = first.reportingInterval;
-            this.isSteadyState = false; // false except in the steady-state case
-            this.count = first.count + second.count;
-            this.bytes = first.bytes + second.bytes;
-            this.steadyStateActive = false;
-        }
-
         public void record(int latency, int bytes, long time) {
             this.count++;
             this.bytes += bytes;
@@ -564,8 +544,8 @@ public class ProducerPerformance {
 
     static final class ConfigPostProcessor {
         final String topicName;
-        final Long numRecords;
-        final Long warmupRecords;
+        final long numRecords;
+        final long warmupRecords;
         final Integer recordSize;
         final double throughput;
         final boolean payloadMonotonic;
@@ -590,10 +570,10 @@ public class ProducerPerformance {
             String payloadFilePath = namespace.getString("payloadFile");
             Long transactionDurationMsArg = namespace.getLong("transactionDurationMs");
             String transactionIdArg = namespace.getString("transactionalId");
-            if (numRecords != null && numRecords <= 0) {
+            if (numRecords <= 0) {
                 throw new ArgumentParserException("--num-records should be greater than zero", parser);
             }
-            if (warmupRecords != null && warmupRecords >= numRecords) {
+            if (warmupRecords >= numRecords) {
                 throw new ArgumentParserException("The value for --warmup-records must be strictly fewer than the number of records in the test, --num-records.", parser);
             }
             if (recordSize != null && recordSize <= 0) {
