@@ -81,7 +81,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        checkout-ref: [ ${{ github.event.pull_request.head.sha }}, ${{ github.sha }} ]
+        checkout-ref: [ '${{ github.event.pull_request.head.sha }}', '${{ github.sha }}' ]
     outputs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
     steps:
