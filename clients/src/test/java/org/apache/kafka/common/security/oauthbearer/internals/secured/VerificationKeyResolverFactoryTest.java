@@ -27,13 +27,13 @@ import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
-import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URL_CONFIG;
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 
 public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
 
     @AfterEach
     public void tearDown() throws Exception {
-        System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URL_CONFIG);
+        System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
     }
 
     @Test
@@ -41,7 +41,7 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         File tmpDir = createTempDir("access-token");
         File verificationKeyFile = createTempFile(tmpDir, "access-token-", ".json", "{}");
 
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URL_CONFIG, verificationKeyFile.toURI().toString());
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, verificationKeyFile.toURI().toString());
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
         Map<String, Object> jaasConfig = Collections.emptyMap();
 
@@ -53,7 +53,7 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
     public void testConfigureRefreshingFileVerificationKeyResolverWithInvalidDirectory() {
         // Should fail because the parent path doesn't exist.
         String file = new File("/tmp/this-directory-does-not-exist/foo.json").toURI().toString();
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URL_CONFIG, file);
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
         Map<String, Object> jaasConfig = Collections.emptyMap();
         assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, jaasConfig), "that doesn't exist");
@@ -64,7 +64,7 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         // Should fail because the parent path exists, the file itself doesn't.
         File tmpDir = createTempDir("this-directory-does-exist");
         File verificationKeyFile = new File(tmpDir, "this-file-does-not-exist.json");
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URL_CONFIG, verificationKeyFile.toURI().toString());
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, verificationKeyFile.toURI().toString());
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
         Map<String, Object> jaasConfig = Collections.emptyMap();
         assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, jaasConfig), "that doesn't exist");
@@ -77,6 +77,6 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         File verificationKeyFile = new File(tmpDir, "not_allowed.json");
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
         assertThrowsWithMessage(IllegalArgumentException.class, () -> VerificationKeyResolverFactory.create(configs, Collections.emptyMap()),
-                verificationKeyFile.toURI().toString() + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.url' to allow " + verificationKeyFile.toURI().toString());
+                verificationKeyFile.toURI().toString() + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.urls' to allow " + verificationKeyFile.toURI().toString());
     }
 }
