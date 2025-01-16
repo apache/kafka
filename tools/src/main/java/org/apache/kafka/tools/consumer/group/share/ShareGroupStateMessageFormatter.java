@@ -71,7 +71,7 @@ public class ShareGroupStateMessageFormatter extends ApiMessageFormatter {
         } else if (logKey instanceof ShareUpdateKey) {
             return ShareUpdateKeyJsonConverter.write((ShareUpdateKey) logKey, keyVersion);
         }
-        return new TextNode(UNKNOWN);
+        return null;
     }
 
     /**
