@@ -14,14 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+package org.apache.kafka.streams.kstream.internals.graph;
 
-public class EagerConsumerCoordinatorTest extends ConsumerCoordinatorTest {
-    public EagerConsumerCoordinatorTest() {
-        super(ConsumerPartitionAssignor.RebalanceProtocol.EAGER);
+/**
+ * Represents a stateful {@link ProcessorGraphNode} where a semantic grace period is defined for the processor
+ * and its state.
+ */
+public class GracePeriodGraphNode<K, V> extends ProcessorGraphNode<K, V> {
+
+    private final long gracePeriod;
+
+    public GracePeriodGraphNode(final String nodeName,
+                                final ProcessorParameters<K, V, ?, ?> processorParameters,
+                                final long gracePeriod) {
+        super(nodeName, processorParameters);
+        this.gracePeriod = gracePeriod;
     }
 
-    // @Flaky("KAFKA-15900") -> testOutdatedCoordinatorAssignment (in super class)
+    public long gracePeriod() {
+        return gracePeriod;
+    }
 }

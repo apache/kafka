@@ -127,7 +127,6 @@ class LogLoaderTest {
         brokerTopicStats = new BrokerTopicStats(),
         logDirFailureChannel = logDirFailureChannel,
         time = time,
-        keepPartitionMetadataFile = true,
         remoteStorageSystemEnable = config.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
         initialTaskDelayMs = config.logInitialTaskDelayMs) {
 
@@ -324,7 +323,7 @@ class LogLoaderTest {
         logDirFailureChannel)
       new UnifiedLog(offsets.logStartOffset, localLog, brokerTopicStats,
         producerIdExpirationCheckIntervalMs, leaderEpochCache, producerStateManager,
-        None, keepPartitionMetadataFile = true)
+        None)
     }
 
     // Retain snapshots for the last 2 segments
@@ -447,8 +446,7 @@ class LogLoaderTest {
       producerIdExpirationCheckIntervalMs = 30000,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
-      _topicId = None,
-      keepPartitionMetadataFile = true)
+      _topicId = None)
 
     verify(stateManager).updateMapEndOffset(0L)
     verify(stateManager).removeStraySnapshots(any())
@@ -557,8 +555,7 @@ class LogLoaderTest {
       producerIdExpirationCheckIntervalMs = 30000,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
-      _topicId = None,
-      keepPartitionMetadataFile = true)
+      _topicId = None)
 
     verify(stateManager).removeStraySnapshots(any[java.util.List[java.lang.Long]])
     verify(stateManager, times(2)).updateMapEndOffset(0L)

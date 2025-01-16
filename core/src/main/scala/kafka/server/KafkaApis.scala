@@ -83,7 +83,7 @@ import scala.jdk.CollectionConverters._
  * Logic to handle the various Kafka requests
  */
 class KafkaApis(val requestChannel: RequestChannel,
-                val metadataSupport: MetadataSupport,
+                val forwardingManager: ForwardingManager,
                 val replicaManager: ReplicaManager,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
@@ -97,13 +97,13 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val authorizer: Option[Authorizer],
                 val quotas: QuotaManagers,
                 val fetchManager: FetchManager,
-                val sharePartitionManager: Option[SharePartitionManager],
+                val sharePartitionManager: SharePartitionManager,
                 brokerTopicStats: BrokerTopicStats,
                 val clusterId: String,
                 time: Time,
                 val tokenManager: DelegationTokenManager,
                 val apiVersionManager: ApiVersionManager,
-                val clientMetricsManager: Option[ClientMetricsManager]
+                val clientMetricsManager: ClientMetricsManager
 ) extends ApiRequestHandler with Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordValidationStats]
@@ -132,7 +132,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    metadataSupport.forward(request, responseCallback)
+    forwardingManager.forwardRequest(request, responseCallback)
   }
 
   private def handleInvalidVersionsDuringForwarding(request: RequestChannel.Request): Unit = {
@@ -2108,7 +2108,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (remaining.resources().isEmpty) {
       sendResponse(Some(new AlterConfigsResponseData()))
     } else {
-      metadataSupport.forwardingManager.get.forwardRequest(request,
+      forwardingManager.forwardRequest(request,
         new AlterConfigsRequest(remaining, request.header.apiVersion()),
         response => sendResponse(response.map(_.data())))
     }
@@ -2135,7 +2135,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (remaining.resources().isEmpty) {
       sendResponse(Some(new IncrementalAlterConfigsResponseData()))
     } else {
-      metadataSupport.forwardingManager.get.forwardRequest(request,
+      forwardingManager.forwardRequest(request,
         new IncrementalAlterConfigsRequest(remaining, request.header.apiVersion()),
         response => sendResponse(response.map(_.data())))
     }
@@ -2368,39 +2368,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         describeClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
-      metadataSupport match {
-        case ZkSupport(adminManager, controller, zkClient, forwardingManager, metadataCache, _) =>
-          val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
-
-          val entriesData = result.iterator.map { case (quotaEntity, quotaValues) =>
-            val entityData = quotaEntity.entries.asScala.iterator.map { case (entityType, entityName) =>
-              new DescribeClientQuotasResponseData.EntityData()
-                .setEntityType(entityType)
-                .setEntityName(entityName)
-            }.toBuffer
-
-            val valueData = quotaValues.iterator.map { case (key, value) =>
-              new DescribeClientQuotasResponseData.ValueData()
-                .setKey(key)
-                .setValue(value)
-            }.toBuffer
-
-            new DescribeClientQuotasResponseData.EntryData()
-              .setEntity(entityData.asJava)
-              .setValues(valueData.asJava)
-          }.toBuffer
-
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
-              .setThrottleTimeMs(requestThrottleMs)
-              .setEntries(entriesData.asJava)))
-        case RaftSupport(_, metadataCache) =>
-          val result = metadataCache.describeClientQuotas(describeClientQuotasRequest.data())
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-            result.setThrottleTimeMs(requestThrottleMs)
-            new DescribeClientQuotasResponse(result)
-          })
-      }
+      val result = metadataCache.asInstanceOf[KRaftMetadataCache].describeClientQuotas(describeClientQuotasRequest.data())
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        result.setThrottleTimeMs(requestThrottleMs)
+        new DescribeClientQuotasResponse(result)
+      })
     }
   }
 
@@ -2411,14 +2383,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         describeUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
-      metadataSupport match {
-        case RaftSupport(_, metadataCache) =>
-          val result = metadataCache.describeScramCredentials(describeUserScramCredentialsRequest.data())
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
-        case _ =>
-         throw KafkaApis.shouldNeverReceive(request)
-      }
+      val result = metadataCache.asInstanceOf[KRaftMetadataCache].describeScramCredentials(describeUserScramCredentialsRequest.data())
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
     }
   }
 
@@ -2655,35 +2622,21 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleGetTelemetrySubscriptionsRequest(request: RequestChannel.Request): Unit = {
     val subscriptionRequest = request.body[GetTelemetrySubscriptionsRequest]
-
-    clientMetricsManager match {
-      case Some(metricsManager) =>
-        try {
-          requestHelper.sendMaybeThrottle(request, metricsManager.processGetTelemetrySubscriptionRequest(subscriptionRequest, request.context))
-        } catch {
-          case _: Exception =>
-            requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
-        }
-      case None =>
-        info("Received get telemetry client request for zookeeper based cluster")
-        requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    try {
+      requestHelper.sendMaybeThrottle(request, clientMetricsManager.processGetTelemetrySubscriptionRequest(subscriptionRequest, request.context))
+    } catch {
+      case _: Exception =>
+        requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
     }
   }
 
-  def handlePushTelemetryRequest(request: RequestChannel.Request): Unit = {
+  private def handlePushTelemetryRequest(request: RequestChannel.Request): Unit = {
     val pushTelemetryRequest = request.body[PushTelemetryRequest]
-
-    clientMetricsManager match {
-      case Some(metricsManager) =>
-        try {
-          requestHelper.sendMaybeThrottle(request, metricsManager.processPushTelemetryRequest(pushTelemetryRequest, request.context))
-        } catch {
-          case _: Exception =>
-            requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
-        }
-      case None =>
-        info("Received push telemetry client request for zookeeper based cluster")
-        requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    try {
+      requestHelper.sendMaybeThrottle(request, clientMetricsManager.processPushTelemetryRequest(pushTelemetryRequest, request.context))
+    } catch {
+      case _: Exception =>
+        requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
     }
   }
 
@@ -2693,18 +2646,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (!authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
       requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
-      clientMetricsManager match {
-        case Some(metricsManager) =>
-          val data = new ListClientMetricsResourcesResponseData().setClientMetricsResources(
-            metricsManager.listClientMetricsResources.asScala.map(
-              name => new ClientMetricsResource().setName(name)).toList.asJava)
-          requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
-        case None =>
-          // This should never happen as ZK based cluster calls should get rejected earlier itself,
-          // but we should handle it gracefully.
-          info("Received list client metrics resources request for zookeeper based cluster")
-          requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      }
+      val data = new ListClientMetricsResourcesResponseData().setClientMetricsResources(
+        clientMetricsManager.listClientMetricsResources.stream.map(
+          name => new ClientMetricsResource().setName(name)).toList)
+      requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
     }
   }
 
@@ -2796,14 +2741,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
       return
     }
-    val sharePartitionManagerInstance: SharePartitionManager = sharePartitionManager match {
-      case Some(manager) => manager
-      case None =>
-        // The API is not supported when the SharePartitionManager is not defined on the broker
-        info("Received share fetch request for zookeeper based cluster")
-        requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
-        return
-    }
 
     val groupId = shareFetchRequest.data.groupId
 
@@ -2833,7 +2770,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     try {
       // Creating the shareFetchContext for Share Session Handling. if context creation fails, the request is failed directly here.
-      shareFetchContext = sharePartitionManagerInstance.newContext(groupId, shareFetchData, forgottenTopics, newReqMetadata, isAcknowledgeDataPresent)
+      shareFetchContext = sharePartitionManager.newContext(groupId, shareFetchData, forgottenTopics, newReqMetadata, isAcknowledgeDataPresent)
     } catch {
       case e: Exception =>
         requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))
@@ -2872,7 +2809,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       acknowledgeResult = handleAcknowledgements(
         acknowledgementDataFromRequest,
         erroneous,
-        sharePartitionManagerInstance,
+        sharePartitionManager,
         authorizedTopics,
         groupId,
         memberId,
@@ -2885,7 +2822,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       handleFetchFromShareFetchRequest(
       request,
       erroneousAndValidPartitionData,
-      sharePartitionManagerInstance,
+      sharePartitionManager,
       authorizedTopics
     )
 
@@ -2952,7 +2889,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-            sharePartitionManagerInstance.releaseSession(groupId, memberId).
+            sharePartitionManager.releaseSession(groupId, memberId).
               whenComplete((releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
                   error(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
@@ -3039,6 +2976,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         groupId,
         shareFetchRequest.data.memberId,
         params,
+        shareFetchRequest.data.batchSize,
         interestedWithMaxBytes
       ).thenApply{ result =>
         val combinedResult = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
@@ -3116,15 +3054,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       return
     }
 
-    val sharePartitionManagerInstance: SharePartitionManager = sharePartitionManager match {
-      case Some(manager) => manager
-      case None =>
-        // The API is not supported when the SharePartitionManager is not defined on the broker
-        info("Received share acknowledge request for zookeeper based cluster")
-        requestHelper.sendMaybeThrottle(request,
-          shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
-        return
-    }
     val groupId = shareAcknowledgeRequest.data.groupId
 
     // Share Acknowledge needs permission to perform READ action on the named group resource (groupId)
@@ -3140,7 +3069,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     try {
       // Updating the cache for Share Session Handling
-      sharePartitionManagerInstance.acknowledgeSessionUpdate(groupId, newReqMetadata)
+      sharePartitionManager.acknowledgeSessionUpdate(groupId, newReqMetadata)
     } catch {
       case e: Exception =>
         requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))
@@ -3169,13 +3098,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
     val acknowledgementDataFromRequest = getAcknowledgeBatchesFromShareAcknowledgeRequest(shareAcknowledgeRequest, topicIdNames, erroneous)
-    handleAcknowledgements(acknowledgementDataFromRequest, erroneous, sharePartitionManagerInstance, authorizedTopics, groupId, memberId)
+    handleAcknowledgements(acknowledgementDataFromRequest, erroneous, sharePartitionManager, authorizedTopics, groupId, memberId)
       .handle[Unit] {(result, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
         } else {
           if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-            sharePartitionManagerInstance.releaseSession(groupId, memberId).
+            sharePartitionManager.releaseSession(groupId, memberId).
               whenComplete{ (releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
                   debug(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
