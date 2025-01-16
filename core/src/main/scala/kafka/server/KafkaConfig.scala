@@ -224,7 +224,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val controllerPerformanceAlwaysLogThresholdMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS)
 
   def requiresZookeeper: Boolean = processRoles.isEmpty
-  def usesSelfManagedQuorum: Boolean = processRoles.nonEmpty
 
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KRaftConfigs.PROCESS_ROLES_CONFIG).asScala.map {
@@ -602,7 +601,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       .map { case (listenerName, protocolName) =>
         ListenerName.normalised(listenerName) -> getSecurityProtocol(protocolName, SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)
       }
-    if (usesSelfManagedQuorum && !originals.containsKey(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)) {
+    if (!originals.containsKey(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)) {
       // Nothing was specified explicitly for listener.security.protocol.map, so we are using the default value,
       // and we are using KRaft.
       // Add PLAINTEXT mappings for controller listeners as long as there is no SSL or SASL_{PLAINTEXT,SSL} in use
