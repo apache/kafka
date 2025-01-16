@@ -63,8 +63,10 @@ settings.put(... , ...);</code></pre>
           </li>
           <li><a class="reference internal" href="#recommended-configuration-parameters-for-resiliency" id="id21">Recommended configuration parameters for resiliency</a>
             <ul>
-              <li><a class="reference internal" href="#acks" id="id22">acks</a></li>
-              <li><a class="reference internal" href="#id2" id="id23">replication.factor</a></li>
+              <li><a class="reference internal" href="#acks-short" id="id22">acks</a></li>
+              <li><a class="reference internal" href="#replication-factor-short" id="id23">replication.factor</a></li>
+              <li><a class="reference internal" href="#min-isr-short" id="id44">min.insync.replicas</a></li>
+              <li><a class="reference internal" href="#num-standby-replicas-short" id="id45">num.standby.replicas</a></li>
             </ul>
           </li>
           <li><a class="reference internal" href="#optional-configuration-parameters" id="id6">Optional configuration parameters</a>
@@ -155,7 +157,7 @@ settings.put(... , ...);</code></pre>
         <div class="section" id="bootstrap-servers">
           <h4><a class="toc-backref" href="#id5">bootstrap.servers</a><a class="headerlink" href="#bootstrap-servers" title="Permalink to this headline"></a></h4>
           <blockquote>
-            <div><p>(Required) The Kafka bootstrap servers. This is the same <a class="reference external" href="http://kafka.apache.org/documentation.html#producerconfigs">setting</a> that is used by the underlying producer and consumer clients to connect to the Kafka cluster.
+            <div><p>(Required) The Kafka bootstrap servers. This is the same <a class="reference external" href="/{{version}}/documentation.html#producerconfigs">setting</a> that is used by the underlying producer and consumer clients to connect to the Kafka cluster.
               Example: <code class="docutils literal"><span class="pre">&quot;kafka-broker1:9092,kafka-broker2:9092&quot;</span></code>.</p>
             </div></blockquote>
         </div>
@@ -172,59 +174,70 @@ settings.put(... , ...);</code></pre>
           </tr>
           </thead>
           <tbody valign="top">
-          <tr class="row-odd"><td>acks</td>
-            <td>Producer</td>
-            <td><code class="docutils literal"><span class="pre">acks=1</span></code></td>
-            <td><code class="docutils literal"><span class="pre">acks=all</span></code></td>
+          <tr class="row-odd">
+            <td>acks</td>
+            <td>Producer (for version &lt;=2.8)</td>
+            <td><code class="docutils literal"><span class="pre">acks="1")</span></code></td>
+            <td><code class="docutils literal"><span class="pre">acks="all"</span></code></td>
           </tr>
-          <tr class="row-even"><td>replication.factor (for broker version 2.3 or older)/td>
+          <tr class="row-even">
+            <td>replication.factor (for broker version 2.3 or older)/td>
             <td>Streams</td>
             <td><code class="docutils literal"><span class="pre">-1</span></code></td>
-            <td><code class="docutils literal"><span class="pre">3</span></code></td>
+            <td><code class="docutils literal"><span class="pre">3</span></code> (broker 2.4+: ensure broker config <code>default.replication.factor=3</code>)</td>
           </tr>
-          <tr class="row-odd"><td>min.insync.replicas</td>
+          <tr class="row-odd">
+            <td>min.insync.replicas</td>
             <td>Broker</td>
             <td><code class="docutils literal"><span class="pre">1</span></code></td>
             <td><code class="docutils literal"><span class="pre">2</span></code></td>
           </tr>
-          <tr class="row-even"><td>num.standby.replicas</td>
+          <tr class="row-even">
+            <td>num.standby.replicas</td>
             <td>Streams</td>
             <td><code class="docutils literal"><span class="pre">0</span></code></td>
             <td><code class="docutils literal"><span class="pre">1</span></code></td>
           </tr>
           </tbody>
         </table>
-        <p>Increasing the replication factor to 3 ensures that the internal Kafka Streams topic can tolerate up to 2 broker failures. Changing the acks setting to &#8220;all&#8221;
-          guarantees that a record will not be lost as long as one replica is alive. The tradeoff from moving to the default values to the recommended ones is
+        <p>Increasing the replication factor to 3 ensures that the internal Kafka Streams topic can tolerate up to 2 broker failures.
+          The tradeoff from moving to the default values to the recommended ones is
           that some performance and more storage space (3x with the replication factor of 3) are sacrificed for more resiliency.</p>
-        <div class="section" id="acks">
+        <div class="section" id="acks-short">
           <h4><a class="toc-backref" href="#id22">acks</a><a class="headerlink" href="#acks" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div><p>The number of acknowledgments that the leader must have received before considering a request complete. This controls
               the durability of records that are sent. The possible values are:</p>
               <ul class="simple">
-                <li><code class="docutils literal"><span class="pre">acks=0</span></code> The producer does not wait for acknowledgment from the server and the record is immediately added to the socket buffer and considered sent. No guarantee can be made that the server has received the record in this case, and the producer won&#8217;t generally know of any failures. The offset returned for each record will always be set to <code class="docutils literal"><span class="pre">-1</span></code>.</li>
-                <li><code class="docutils literal"><span class="pre">acks=1</span></code> The leader writes the record to its local log and responds without waiting for full acknowledgement from all followers. If the leader immediately fails after acknowledging the record, but before the followers have replicated it, then the record will be lost.</li>
-                <li><code class="docutils literal"><span class="pre">acks=all</span></code> The leader waits for the full set of in-sync replicas to acknowledge the record. This guarantees that the record will not be lost if there is at least one in-sync replica alive. This is the strongest available guarantee.</li>
+                <li><code class="docutils literal"><span class="pre">acks="0"</span></code> The producer does not wait for acknowledgment from the server and the record is immediately added to the socket buffer and considered sent. No guarantee can be made that the server has received the record in this case, and the producer won&#8217;t generally know of any failures. The offset returned for each record will always be set to <code class="docutils literal"><span class="pre">-1</span></code>.</li>
+                <li><code class="docutils literal"><span class="pre">acks="1"</span></code> The leader writes the record to its local log and responds without waiting for full acknowledgement from all followers. If the leader immediately fails after acknowledging the record, but before the followers have replicated it, then the record will be lost.</li>
+                <li><code class="docutils literal"><span class="pre">acks="all"</span></code> (default since 3.0 release) The leader waits for the full set of in-sync replicas to acknowledge the record. This guarantees that the record will not be lost if there is at least one in-sync replica alive. This is the strongest available guarantee.</li>
               </ul>
               <p>For more information, see the <a class="reference external" href="https://kafka.apache.org/documentation/#producerconfigs">Kafka Producer documentation</a>.</p>
             </div></blockquote>
         </div>
-        <div class="section" id="id2">
-          <h4><a class="toc-backref" href="#id23">replication.factor</a><a class="headerlink" href="#id2" title="Permalink to this headline"></a></h4>
+        <div class="section" id="replication-factor-short">
+          <h4><a class="toc-backref" href="#id23">replication.factor</a><a class="headerlink" href="#id23" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div>See the <a class="reference internal" href="#replication-factor-parm"><span class="std std-ref">description here</span></a>.</div></blockquote>
         </div>
-        <div class="section" id="i32">
-          <h4><a class="toc-backref" href="#id23">num.standby.replicas</a><a class="headerlink" href="#id2" title="Permalink to this headline"></a></h4>
+        <div class="section" id="min-isr-short">
+          <h4><a class="toc-backref" href="#id44">min.insync.replicas</a><a class="headerlink" href="#id44" title="Permalink to this headline"></a></h4>
+          <p>The minimum number of in-sync replicas available for replication if the producer is configured with <code>acks="all"</code>
+             (see <a href="/{{version}}/documentation/#topicconfigs_min.insync.replicas">topic configs</a>).
+          </p>
+        </div>
+        <div class="section" id="num-standby-replicas-short">
+          <h4><a class="toc-backref" href="#id45">num.standby.replicas</a><a class="headerlink" href="#id45" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div>See the <a class="reference internal" href="#streams-developer-guide-standby-replicas"><span class="std std-ref">description here</span></a>.</div></blockquote>
         </div>
         <pre class="line-numbers"><code class="language-java">Properties streamsSettings = new Properties();
 // for broker version 2.3 or older
 //streamsSettings.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
+// for version 2.8 or older
+//streamsSettings.put(StreamsConfig.producerPrefix(ProducerConfig.ACKS_CONFIG), "all");
 streamsSettings.put(StreamsConfig.topicPrefix(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG), 2);
-streamsSettings.put(StreamsConfig.producerPrefix(ProducerConfig.ACKS_CONFIG), "all");
 streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
 
       </div>
@@ -920,7 +933,7 @@ rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cl
                 for the reassigned warmups to restore sufficient state for them to be transitioned to active tasks. Must be at least 1.
               </p>
               <p>
-                Note that one warmup replica corresponds to one <a href="https://kafka.apache.org/34/documentation/streams/architecture#streams_architecture_tasks">Stream Task</a>. Furthermore, note that each warmup task can only be promoted to an active task during
+                Note that one warmup replica corresponds to one <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks">Stream Task</a>. Furthermore, note that each warmup task can only be promoted to an active task during
                 a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the
                 <code class="docutils literal"><span class="pre">probing.rebalance.interval.ms</span></code> config). This means that the
                 maximum rate at which active tasks can be migrated from one Kafka Streams instance to another instance can be determined by
@@ -1250,8 +1263,8 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
     <div class="section" id="default-values">
       <h4><a class="toc-backref" href="#id18">Default Values</a><a class="headerlink" href="#default-values" title="Permalink to this headline"></a></h4>
       <p>Kafka Streams uses different default values for some of the underlying client configs, which are summarized below. For detailed descriptions
-        of these configs, see <a class="reference external" href="https://kafka.apache.org/documentation.html#producerconfigs">Producer Configs</a>
-        and <a class="reference external" href="https://kafka.apache.org/documentation.html#consumerconfigs">Consumer Configs</a>.</p>
+        of these configs, see <a class="reference external" href="/{{version}}/documentation.html#producerconfigs">Producer Configs</a>
+        and <a class="reference external" href="/{{version}}/documentation.html#consumerconfigs">Consumer Configs</a>.</p>
       <table border="1" class="non-scrolling-table docutils">
         <thead valign="bottom">
         <tr class="row-odd"><th class="head">Parameter Name</th>
