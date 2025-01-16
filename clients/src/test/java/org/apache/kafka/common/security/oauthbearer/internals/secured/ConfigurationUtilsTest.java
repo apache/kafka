@@ -149,11 +149,9 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
         configs.put(FILE_CONFIG_NAME, fileUrl);
         ConfigurationUtils cu = new ConfigurationUtils(configs);
 
-        // By default, no URL is allowed
-        assertThrowsWithMessage(IllegalArgumentException.class, () -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME),
-                url + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.urls' to allow " + url);
-        assertThrowsWithMessage(IllegalArgumentException.class, () -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME),
-                fileUrl + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.urls' to allow " + fileUrl);
+        // By default, all URLs are allowed
+        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME));
+        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME));
 
         // add one url into allowed list
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url);

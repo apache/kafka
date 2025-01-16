@@ -75,6 +75,7 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         // Should fail because the while the parent path exists, the file itself doesn't.
         File tmpDir = createTempDir("not_allowed");
         File verificationKeyFile = new File(tmpDir, "not_allowed.json");
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "nothing");
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
         assertThrowsWithMessage(IllegalArgumentException.class, () -> VerificationKeyResolverFactory.create(configs, Collections.emptyMap()),
                 verificationKeyFile.toURI().toString() + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.urls' to allow " + verificationKeyFile.toURI().toString());
