@@ -178,6 +178,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         }
     }
 
+    @JsonPropertyOrder({ "timestamp", "name", "offsetResetStrategy" })
     protected static class OffsetResetStrategySet extends ShareConsumerEvent {
 
         private final String offsetResetStrategy;
@@ -205,6 +206,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         }
     }
 
+    @JsonPropertyOrder({ "timestamp", "name", "count", "partitions" })
     public static class RecordsConsumed extends ShareConsumerEvent {
         private final long count;
         private final List<RecordSetSummary> partitionSummaries;
@@ -230,6 +232,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         }
     }
 
+    @JsonPropertyOrder({ "timestamp", "name", "count", "partitions", "success", "error" })
     protected static class OffsetsAcknowledged extends ShareConsumerEvent {
 
         private final long count;

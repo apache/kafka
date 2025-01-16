@@ -22,7 +22,7 @@ from kafkatest.services.kafka import TopicPartition, quorum
 
 import signal
 
-class ShareTest(VerifiableShareConsumerTest):
+class ShareConsumerTest(VerifiableShareConsumerTest):
     TOPIC1 = {"name": "test_topic1", "partitions": 1,"replication_factor": 1}
     TOPIC2 = {"name": "test_topic2", "partitions": 3,"replication_factor": 3}
     TOPIC3 = {"name": "test_topic3", "partitions": 3,"replication_factor": 3}
@@ -32,14 +32,14 @@ class ShareTest(VerifiableShareConsumerTest):
     num_brokers = 3
 
     def __init__(self, test_context):
-        super(ShareTest, self).__init__(test_context, num_consumers=self.num_consumers, num_producers=self.num_producers,
+        super(ShareConsumerTest, self).__init__(test_context, num_consumers=self.num_consumers, num_producers=self.num_producers,
                                         num_zk=0, num_brokers=self.num_brokers, topics={
                 self.TOPIC1["name"] : { 'partitions': self.TOPIC1["partitions"], 'replication-factor': self.TOPIC1["replication_factor"] },
                 self.TOPIC2["name"] : { 'partitions': self.TOPIC2["partitions"], 'replication-factor': self.TOPIC2["replication_factor"] }
             })
 
     def setup_share_group(self, topic, **kwargs):
-        consumer = super(ShareTest, self).setup_share_group(topic, **kwargs)
+        consumer = super(ShareConsumerTest, self).setup_share_group(topic, **kwargs)
         self.mark_for_collect(consumer, 'verifiable_share_consumer_stdout')
         return consumer
 

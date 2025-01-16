@@ -15,6 +15,7 @@
 
 import json
 import os
+
 from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
@@ -22,13 +23,13 @@ from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.version import DEV_BRANCH
 
-class ConsumerState:
+class ShareConsumerState:
     Started = 1
     Dead = 2
 
 class ShareConsumerEventHandler(object):
 
-    def __init__(self, node, idx, state=ConsumerState.Dead):
+    def __init__(self, node, idx, state=ShareConsumerState.Dead):
         self.node = node
         self.idx = idx
         self.total_consumed = 0
@@ -40,12 +41,12 @@ class ShareConsumerEventHandler(object):
         self.state = state
 
     def handle_shutdown_complete(self, node=None, logger=None):
-        self.state = ConsumerState.Dead
+        self.state = ShareConsumerState.Dead
         if node is not None and logger is not None:
             logger.debug("Shut down %s" % node.account.hostname)
 
     def handle_startup_complete(self, node, logger):
-        self.state = ConsumerState.Started
+        self.state = ShareConsumerState.Started
         logger.debug("Started %s" % node.account.hostname)
 
     def handle_offsets_acknowledged(self, event, node, logger):
@@ -73,7 +74,7 @@ class ShareConsumerEventHandler(object):
 
     def handle_kill_process(self, clean_shutdown):
         # if the shutdown was clean, then we expect the explicit
-        # shutdown event from the consumer
+        # shutdown event from the share consumer
         if not clean_shutdown:
             self.handle_shutdown_complete()
 
@@ -132,10 +133,7 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
         self.total_records_acknowledged = 0
         self.total_records_acknowledged_failed = 0
         self.consumed_records_offsets = set()
-        # self.consumed_more_than_once = []
-
         self.acknowledged_records_offsets = set()
-        # self.acknowledged_more_than_once = []
         self.is_offset_reset_strategy_set = False
 
         for node in self.nodes:
@@ -227,11 +225,6 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
         if self.on_record_consumed:
             cmd += " --verbose"
 
-        # 3.7.0 includes support for KIP-848 which introduced a new implementation of the consumer group protocol.
-        # The two implementations use slightly different configuration, hence these arguments are conditional.
-        #
-        # See the Java class/method VerifiableShareConsumer.createFromArgs() for how the command line arguments are
-        # parsed and used as configuration in the runner.
         cmd += " --acknowledgement-mode %s" % self.acknowledgement_mode
 
         cmd += " --offset-reset-strategy %s" % self.offset_reset_strategy
@@ -329,9 +322,9 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
     def dead_nodes(self):
         with self.lock:
             return [handler.node for handler in self.event_handlers.values()
-                    if handler.state == ConsumerState.Dead]
+                    if handler.state == ShareConsumerState.Dead]
 
     def alive_nodes(self):
         with self.lock:
             return [handler.node for handler in self.event_handlers.values()
-                    if handler.state == ConsumerState.Started]
+                    if handler.state == ShareConsumerState.Started]
