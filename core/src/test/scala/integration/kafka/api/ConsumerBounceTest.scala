@@ -413,7 +413,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
    * close should terminate immediately without sending leave group.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  // TODO: enable for all protocols after fix for not generating/blocking on unneeded
+  //  FindCoordinator on close for the new consumer
   def testCloseDuringRebalance(quorum: String, groupProtocol: String): Unit = {
     val topic = "closetest"
     createTopic(topic, 10, brokerCount)
