@@ -17,9 +17,9 @@
 
 package kafka.server
 
-import kafka.server.metadata.KRaftMetadataCache
+import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import org.apache.kafka.admin.BrokerMetadata
-import org.apache.kafka.common.message.{MetadataResponseData, UpdateMetadataRequestData}
+import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData, DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData, MetadataResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
@@ -39,7 +39,7 @@ sealed trait CachedControllerId {
 case class ZkCachedControllerId(id: Int) extends CachedControllerId
 case class KRaftCachedControllerId(id: Int) extends CachedControllerId
 
-trait MetadataCache {
+trait MetadataCache extends ConfigRepository {
   /**
    * Return topic metadata for a given set of topics and listener. See KafkaApis#handleTopicMetadataRequest for details
    * on the use of the two boolean flags.
@@ -113,6 +113,10 @@ trait MetadataCache {
   def getRandomAliveBrokerId: Option[Int]
 
   def features(): FinalizedFeatures
+
+  def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData
+
+  def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData
 }
 
 object MetadataCache {
