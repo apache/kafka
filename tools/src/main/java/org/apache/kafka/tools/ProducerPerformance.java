@@ -76,6 +76,9 @@ public class ProducerPerformance {
             // not thread-safe, do not share with other threads
             SplittableRandom random = new SplittableRandom(0);
             ProducerRecord<byte[], byte[]> record;
+
+            System.out.println("DEBUG: config.warmupRecords=" + config.warmupRecords + ", (config.warmupRecords > 0)=" + (config.warmupRecords > 0));
+
             if (config.warmupRecords > 0) {
                 System.out.println("Warmup first " + config.warmupRecords + " records. Steady state results will print after the complete test summary.");
             }
@@ -104,6 +107,7 @@ public class ProducerPerformance {
                     } else {
                         if (i == config.warmupRecords) {
                             steadyStateStats = new Stats(config.numRecords - config.warmupRecords, DEFAULT_REPORTING_INTERVAL_MS, config.warmupRecords > 0);
+                            stats.steadyStateActive = true;
                         }
                         cb = new PerfCallback(sendStartMs, payload.length, stats, steadyStateStats);
                     }
@@ -381,6 +385,7 @@ public class ProducerPerformance {
         private long windowBytes;
         private long windowStart;
         private final boolean isSteadyState;
+        private boolean steadyStateActive;
 
         public Stats(long numRecords, int reportingInterval) {
             this(numRecords, reportingInterval, false);
@@ -401,6 +406,7 @@ public class ProducerPerformance {
             this.totalLatency = 0;
             this.reportingInterval = reportingInterval;
             this.isSteadyState = isSteadyState;
+            this.steadyStateActive = isSteadyState;
         }
 
         Stats(Stats first, Stats second) {
@@ -420,6 +426,7 @@ public class ProducerPerformance {
             this.isSteadyState = false; // false except in the steady-state case
             this.count = first.count + second.count;
             this.bytes = first.bytes + second.bytes;
+            this.steadyStateActive = false;
         }
 
         public void record(int latency, int bytes, long time) {
@@ -440,7 +447,9 @@ public class ProducerPerformance {
                 if (this.isSteadyState && count == windowCount) {
                     System.out.println("Beginning steady state.");
                 }
-                printWindow();
+                if (this.isSteadyState || !this.steadyStateActive) {
+                    printWindow();
+                }
                 newWindow();
             }
         }
