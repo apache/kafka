@@ -31,7 +31,24 @@ on:
         type: boolean
 
 jobs:
+  configure:
+    runs-on: ubuntu-latest
+    outputs:
+      is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Check for Draft PR
+        id: check-draft-pr
+        if: |
+          github.event_name == 'pull_request' && 
+          github.event.pull_request.draft
+        run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
+
   load-catalog:
+    needs: [configure]
     runs-on: ubuntu-latest
     name: Load Test Catalog
     steps:
@@ -76,30 +93,19 @@ jobs:
           compression-level: 9
 
   validate:
+    needs: [configure]
     runs-on: ubuntu-latest
-    name: Compile and Check Java
-    strategy:
-      fail-fast: false
-      matrix:
-        checkout-ref: [ '${{ github.event.pull_request.head.sha }}', '${{ github.sha }}' ]
-    outputs:
-      is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
+    name: Compile and Check (merge)
     steps:
       - name: Env
         run: printenv
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
-      - name: Check for Draft PR
-        id: check-draft-pr
-        if: |
-          github.event_name == 'pull_request' && 
-          github.event.pull_request.draft
-        run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: ${{ matrix.checkout-ref }}
+          ref: ${{ github.sha }}  # this is the default, just being explicit.
       - name: Setup Python
         uses: ./.github/actions/setup-python
       - name: Setup Gradle
@@ -150,8 +156,8 @@ jobs:
           fi
 
   test:
-    needs: [validate, load-catalog]
-    if: ${{ ! needs.validate.outputs.is-draft }}
+    needs: [configure, load-catalog]
+    if: ${{ ! needs.configure.outputs.is-draft }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
