@@ -267,7 +267,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
             assertEquals(streamsTaskMetricNames.size(), consumerPassedStreamTaskMetricNames.size());
             assertEquals(consumerPassedTaskMetricCount, streamsTaskMetricNames.size());
 
-
             try (final KafkaStreams streamsTwo = new KafkaStreams(topology, streamsSecondApplicationProperties)) {
                 streamsTwo.start();
                 waitForCondition(() -> KafkaStreams.State.RUNNING == streamsTwo.state() && KafkaStreams.State.RUNNING == streamsOne.state(),
@@ -277,8 +276,19 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 /*
                   Now with 2 instances, the tasks will get split amongst both Kafka Streams applications
                  */
-                final List<String> streamOneTaskIds = getTaskIdsAsStrings(streamsOne);
-                final List<String> streamTwoTasksIds = getTaskIdsAsStrings(streamsTwo);
+                final List<String> streamOneTaskIds = new ArrayList<>();
+                final List<String> streamTwoTasksIds = new ArrayList<>();
+                waitForCondition(() -> {
+                        streamOneTaskIds.clear();
+                        streamTwoTasksIds.clear();
+
+                        streamOneTaskIds.addAll(getTaskIdsAsStrings(streamsOne));
+                        streamTwoTasksIds.addAll(getTaskIdsAsStrings(streamsTwo));
+
+                        return streamOneTaskIds.size() == 2 && streamTwoTasksIds.size() == 2;
+                    },
+                    "Task assignment did not complete."
+                );
 
                 final List<MetricName> streamsOneTaskMetrics = streamsOne.metrics().values().stream().map(Metric::metricName)
                         .filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
