@@ -424,45 +424,27 @@ public abstract class AbstractFetch implements Closeable {
         for (TopicPartition partition : buffered) {
             // It's possible that at the time of the fetcher creating new fetch requests, a partition with buffered
             // data from a *previous* request is no longer assigned. So before attempting to retrieve the node
-            // information, check that the partition is still assigned as calling
-            // SubscriptionState.position() on an  unassigned partition will throw an IllegalStateException.
+            // information, check that the partition is still assigned as calling  SubscriptionState.position() on an
+            // unassigned partition will throw an IllegalStateException.
+            //
+            // Note: this check is not needed for the unbuffered partitions as the logic in
+            // SubscriptionState.fetchablePartitions() only includes partitions currently assigned.
             if (!subscriptions.isAssigned(partition))
                 continue;
 
-            SubscriptionState.FetchPosition position = subscriptions.position(partition);
-
-            if (position == null)
-                throw new IllegalStateException("Missing position for fetchable partition " + partition);
-
-            Optional<Node> leaderOpt = position.currentLeader.leader;
-
-            if (leaderOpt.isEmpty()) {
-                log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
-                metadata.requestUpdate(false);
-                continue;
-            }
-
-            // Use the preferred read replica if set, otherwise the partition's leader
-            Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
-            bufferedNodes.add(node.id());
+            SubscriptionState.FetchPosition position = positionForPartition(partition);
+            Optional<Node> nodeOpt = maybeNodeForPosition(partition, position, currentTimeMs);
+            nodeOpt.ifPresent(node -> bufferedNodes.add(node.id()));
         }
 
         for (TopicPartition partition : unbuffered) {
-            SubscriptionState.FetchPosition position = subscriptions.position(partition);
+            SubscriptionState.FetchPosition position = positionForPartition(partition);
+            Optional<Node> nodeOpt = maybeNodeForPosition(partition, position, currentTimeMs);
 
-            if (position == null)
-                throw new IllegalStateException("Missing position for fetchable partition " + partition);
-
-            Optional<Node> leaderOpt = position.currentLeader.leader;
-
-            if (leaderOpt.isEmpty()) {
-                log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
-                metadata.requestUpdate(false);
+            if (nodeOpt.isEmpty())
                 continue;
-            }
 
-            // Use the preferred read replica if set, otherwise the partition's leader
-            Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
+            Node node = nodeOpt.get();
 
             if (isUnavailable(node)) {
                 maybeThrowAuthFailure(node);
@@ -500,6 +482,44 @@ public abstract class AbstractFetch implements Closeable {
         }
 
         return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
+    }
+
+    /**
+     * Simple utility method that returns a {@link SubscriptionState.FetchPosition position} for the partition. If
+     * no position exists, an {@link IllegalStateException} is thrown.
+     */
+    private SubscriptionState.FetchPosition positionForPartition(TopicPartition partition) {
+        SubscriptionState.FetchPosition position = subscriptions.position(partition);
+
+        if (position == null)
+            throw new IllegalStateException("Missing position for fetchable partition " + partition);
+
+        return position;
+    }
+
+    /**
+     * Retrieves the node from which to fetch the partition data. If the given
+     * {@link SubscriptionState.FetchPosition position} does not have a current
+     * {@link Metadata.LeaderAndEpoch#leader leader} defined the method will return {@link Optional#empty()}.
+     *
+     * @return Three options: 1) {@link Optional#empty()} if the position's leader is empty, 2) the
+     * {@link #selectReadReplica(TopicPartition, Node, long) read replica, if defined}, or 3) the position's
+     * {@link Metadata.LeaderAndEpoch#leader leader}
+     */
+    private Optional<Node> maybeNodeForPosition(TopicPartition partition,
+                                                SubscriptionState.FetchPosition position,
+                                                long currentTimeMs) {
+        Optional<Node> leaderOpt = position.currentLeader.leader;
+
+        if (leaderOpt.isEmpty()) {
+            log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
+            metadata.requestUpdate(false);
+            return Optional.empty();
+        }
+
+        // Use the preferred read replica if set, otherwise the partition's leader
+        Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
+        return Optional.of(node);
     }
 
     // Visible for testing
