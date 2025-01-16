@@ -181,11 +181,20 @@ jobs:
         with:
           name: combined-test-catalog
 
+      - name: JUnit Quarantined Tests
+        id: junit-quarantined-test
+        uses: ./.github/actions/run-gradle
+        with:
+          test-task: quarantinedTest
+          timeout-minutes: 180
+          test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
+          build-scan-artifact-name: build-scan-quarantined-test-${{ matrix.java }}
+
       - name: JUnit Tests
         id: junit-test
         uses: ./.github/actions/run-gradle
         with:
-          test-task: ':metadata:test'
+          test-task: test
           timeout-minutes: 180  # 3 hours
           test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
           build-scan-artifact-name: build-scan-test-${{ matrix.java }}
