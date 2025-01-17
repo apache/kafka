@@ -465,7 +465,6 @@ class ReplicaFetcherThreadTest {
       0,
       OptionalInt.empty,
       RecordBatch.NO_TIMESTAMP,
-      -1L,
       RecordBatch.NO_TIMESTAMP,
       -1L,
       RecordValidationStats.EMPTY,
