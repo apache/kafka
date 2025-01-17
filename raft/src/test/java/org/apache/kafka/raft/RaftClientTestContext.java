@@ -101,7 +101,6 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.LeaderState.CHECK_QUORUM_TIMEOUT_FACTOR;
-import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_853_PROTOCOL;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -293,14 +292,6 @@ public final class RaftClientTestContext {
 
         Builder withBootstrapServers(Optional<List<InetSocketAddress>> bootstrapServers) {
             this.bootstrapServers = bootstrapServers;
-            return this;
-        }
-
-        // deprecated, use withRpc instead
-        Builder withKip853Rpc(boolean withKip853Rpc) {
-            if (withKip853Rpc) {
-                this.raftProtocol = KIP_853_PROTOCOL;
-            }
             return this;
         }
 

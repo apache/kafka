@@ -45,9 +45,9 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -69,8 +69,14 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.raft.RaftClientTestContext.Builder;
 import static org.apache.kafka.raft.RaftClientTestContext.Builder.DEFAULT_ELECTION_TIMEOUT_MS;
+import static org.apache.kafka.raft.RaftClientTestContext.MockListener;
+import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
+import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_595_PROTOCOL;
 import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_853_PROTOCOL;
+import static org.apache.kafka.raft.RaftClientTestContext.assertMatchingRecords;
+import static org.apache.kafka.raft.RaftClientTestContext.verifyLeaderChangeMessage;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -82,35 +88,38 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class KafkaRaftClientTest {
+    private static final String KIP_595_PROTOCOL_NAME = "KIP_595_PROTOCOL";
+    private static final String KIP_853_PROTOCOL_NAME = "KIP_853_PROTOCOL";
+
     @Test
     public void testNodeDirectoryId() {
         int localId = randomReplicaId();
         assertThrows(
             IllegalArgumentException.class,
-            new RaftClientTestContext.Builder(localId, Uuid.ZERO_UUID)::build
+            new Builder(localId, Uuid.ZERO_UUID)::build
         );
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInitializeSingleMemberQuorum(boolean withKip853Rpc) throws IOException {
+    @EnumSource(value = RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInitializeSingleMemberQuorum(RaftProtocol raftProtocol) throws IOException {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId))
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, Collections.singleton(localId))
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(1, localId);
         assertEquals(context.log.endOffset().offset(), context.client.logEndOffset());
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInitializeAsLeaderFromStateStoreSingleMemberQuorum(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInitializeAsLeaderFromStateStoreSingleMemberQuorum(RaftProtocol raftProtocol) throws Exception {
         // Start off as leader. We should still bump the epoch after initialization
         int localId = randomReplicaId();
         int initialEpoch = 2;
         Set<Integer> voters = Collections.singleton(localId);
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .withElectedLeader(initialEpoch, localId)
             .build();
 
@@ -123,18 +132,18 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testRejectVotesFromSameEpochAfterResigningLeadership(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testRejectVotesFromSameEpochAfterResigningLeadership(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey remoteKey = replicaKey(remoteId, withKip853Rpc);
+        ReplicaKey remoteKey = replicaKey(remoteId, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withElectedLeader(epoch, localId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         assertEquals(0L, context.log.endOffset().offset());
@@ -155,18 +164,18 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testRejectVotesFromSameEpochAfterResigningCandidacy(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testRejectVotesFromSameEpochAfterResigningCandidacy(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey remoteKey = replicaKey(remoteId, withKip853Rpc);
+        ReplicaKey remoteKey = replicaKey(remoteId, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withVotedCandidate(epoch, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         assertEquals(0L, context.log.endOffset().offset());
@@ -187,18 +196,18 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testGrantVotesFromHigherEpochAfterResigningLeadership(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testGrantVotesFromHigherEpochAfterResigningLeadership(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey remoteKey = replicaKey(remoteId, withKip853Rpc);
+        ReplicaKey remoteKey = replicaKey(remoteId, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withElectedLeader(epoch, localId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Resign from leader, will restart in resigned state
@@ -224,18 +233,18 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testGrantVotesFromHigherEpochAfterResigningCandidacy(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testGrantVotesFromHigherEpochAfterResigningCandidacy(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey remoteKey = replicaKey(remoteId, withKip853Rpc);
+        ReplicaKey remoteKey = replicaKey(remoteId, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withVotedCandidate(epoch, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Resign from candidate, will restart in candidate state
@@ -261,15 +270,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testGrantVotesWhenShuttingDown(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testGrantVotesWhenShuttingDown(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey remoteKey = replicaKey(remoteId, withKip853Rpc);
+        ReplicaKey remoteKey = replicaKey(remoteId, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, remoteKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -303,17 +312,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInitializeAsResignedAndUnableToContactQuorum(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInitializeAsResignedAndUnableToContactQuorum(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
         Set<Integer> voters = Set.of(localId, remoteId);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withElectedLeader(epoch, localId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Resign from leader, will restart in resigned state
@@ -341,16 +350,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInitializeAsResignedLeaderFromStateStore(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInitializeAsResignedLeaderFromStateStore(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
         Set<Integer> voters = Set.of(localId, remoteId);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .withElectedLeader(epoch, localId)
             .build();
 
@@ -380,24 +389,24 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testAppendFailedWithNotLeaderException(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testAppendFailedWithNotLeaderException(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
         Set<Integer> voters = Set.of(localId, remoteId);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         assertThrows(NotLeaderException.class, () -> context.client.prepareAppend(epoch, Arrays.asList("a", "b")));
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testAppendFailedWithBufferAllocationException(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testAppendFailedWithBufferAllocationException(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
@@ -409,9 +418,9 @@ public class KafkaRaftClientTest {
             .thenReturn(buffer) // Buffer for the leader message control record
             .thenReturn(null); // Buffer for the prepareAppend call
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withMemoryPool(memoryPool)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -423,14 +432,14 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testAppendFailedWithFencedEpoch(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testAppendFailedWithFencedEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -444,14 +453,14 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testAppendFailedWithRecordBatchTooLargeException(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testAppendFailedWithRecordBatchTooLargeException(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -470,8 +479,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testEndQuorumEpochRetriesWhileResigned(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testEndQuorumEpochRetriesWhileResigned(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int voter1 = localId + 1;
         int voter2 = localId + 2;
@@ -482,11 +491,11 @@ public class KafkaRaftClientTest {
         // Note that we intentionally set a request timeout which is smaller than
         // the election timeout so that we can still in the Resigned state and
         // verify retry behavior.
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectionTimeoutMs(10000)
             .withRequestTimeoutMs(5000)
             .withElectedLeader(epoch, localId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.pollUntilRequest();
@@ -516,15 +525,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testResignWillCompleteFetchPurgatory(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testResignWillCompleteFetchPurgatory(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey otherNodeKey = replicaKey(remoteId, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(remoteId, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -555,14 +564,14 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testResignInOlderEpochIgnored(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testResignInOlderEpochIgnored(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -579,17 +588,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testHandleBeginQuorumEpochAfterUserInitiatedResign(
-        boolean withKip853Rpc
+        RaftProtocol raftProtocol
     ) throws Exception {
         int localId = randomReplicaId();
         int remoteId1 = localId + 1;
         int remoteId2 = localId + 2;
         Set<Integer> voters = Set.of(localId, remoteId1, remoteId2);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -609,15 +618,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testBeginQuorumEpochHeartbeat(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testBeginQuorumEpochHeartbeat(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId1 = localId + 1;
         int remoteId2 = localId + 2;
         Set<Integer> voters = Set.of(localId, remoteId1, remoteId2);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -640,19 +649,19 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testLeaderShouldResignLeadershipIfNotGetFetchRequestFromMajorityVoters(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testLeaderShouldResignLeadershipIfNotGetFetchRequestFromMajorityVoters(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId1 = localId + 1;
         int remoteId2 = localId + 2;
         int observerId = localId + 3;
-        ReplicaKey remoteKey1 = replicaKey(remoteId1, withKip853Rpc);
-        ReplicaKey remoteKey2 = replicaKey(remoteId2, withKip853Rpc);
-        ReplicaKey observerKey3 = replicaKey(observerId, withKip853Rpc);
+        ReplicaKey remoteKey1 = replicaKey(remoteId1, isSupport853(raftProtocol));
+        ReplicaKey remoteKey2 = replicaKey(remoteId2, isSupport853(raftProtocol));
+        ReplicaKey observerKey3 = replicaKey(observerId, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, remoteKey1.id(), remoteKey2.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
         int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
 
@@ -700,13 +709,13 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testLeaderShouldNotResignLeadershipIfOnlyOneVoters(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testLeaderShouldNotResignLeadershipIfOnlyOneVoters(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         Set<Integer> voters = Set.of(localId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
         assertEquals(OptionalInt.of(localId), context.currentLeader());
 
@@ -719,14 +728,14 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testElectionTimeoutAfterUserInitiatedResign(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testElectionTimeoutAfterUserInitiatedResign(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -754,7 +763,7 @@ public class KafkaRaftClientTest {
         assertFalse(context.channel.hasSentRequests());
 
         // Any `Fetch` received in the resigned state should result in a NOT_LEADER error.
-        ReplicaKey observer = replicaKey(-1, withKip853Rpc);
+        ReplicaKey observer = replicaKey(-1, isSupport853(raftProtocol));
         context.deliverRequest(context.fetchRequest(1, observer, 0, 0, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(
@@ -777,14 +786,14 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testCannotResignWithLargerEpochThanCurrentEpoch(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testCannotResignWithLargerEpochThanCurrentEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.unattachedToLeader();
 
@@ -793,16 +802,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testCannotResignIfNotLeader(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testCannotResignIfNotLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int leaderEpoch = 2;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(leaderEpoch, otherNodeId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         assertEquals(OptionalInt.of(otherNodeId), context.currentLeader());
@@ -810,15 +819,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testCannotResignIfObserver(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testCannotResignIfObserver(RaftProtocol raftProtocol) throws Exception {
         int leaderId = randomReplicaId();
         int otherNodeId = randomReplicaId() + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(leaderId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.empty(), voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(OptionalInt.empty(), voters)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.pollUntilRequest();
 
@@ -838,15 +847,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInitializeAsCandidateFromStateStore(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInitializeAsCandidateFromStateStore(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         // Need 3 node to require a 2-node majority
         Set<Integer> voters = Set.of(localId, localId + 1, localId + 2);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withVotedCandidate(2, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertVotedCandidate(2, localId);
         assertEquals(0L, context.log.endOffset().offset());
@@ -858,13 +867,13 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInitializeAsUnattachedAndBecomeLeader(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInitializeAsUnattachedAndBecomeLeader(RaftProtocol raftProtocol) throws Exception {
         final int localId = randomReplicaId();
         final int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.assertUnknownLeaderAndNoVotedCandidate(0);
@@ -922,20 +931,20 @@ public class KafkaRaftClientTest {
 
         Record record = batch.iterator().next();
         assertEquals(electionTimestamp, record.timestamp());
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, otherNodeId),
+        verifyLeaderChangeMessage(localId, Arrays.asList(localId, otherNodeId),
             Arrays.asList(otherNodeId, localId), record.key(), record.value());
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInitializeAsCandidateAndBecomeLeaderQuorumOfThree(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInitializeAsCandidateAndBecomeLeaderQuorumOfThree(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         final int firstNodeId = localId + 1;
         final int secondNodeId = localId + 2;
         Set<Integer> voters = Set.of(localId, firstNodeId, secondNodeId);
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withVotedCandidate(2, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         assertTrue(context.client.quorum().isCandidate());
         context.pollUntilRequest();
@@ -971,16 +980,16 @@ public class KafkaRaftClientTest {
 
         Record record = batch.iterator().next();
         assertEquals(electionTimestamp, record.timestamp());
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, firstNodeId, secondNodeId),
+        verifyLeaderChangeMessage(localId, Arrays.asList(localId, firstNodeId, secondNodeId),
             Arrays.asList(voterId, localId), record.key(), record.value());
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInitializeAsOnlyVoterWithEmptyElectionState(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInitializeAsOnlyVoterWithEmptyElectionState(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, Set.of(localId))
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(1, localId);
         assertEquals(0L, context.log.endOffset().offset());
@@ -990,7 +999,7 @@ public class KafkaRaftClientTest {
     @Test
     public void testInitializeAsFollowerAndOnlyVoter() throws Exception {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
+        RaftClientTestContext context = new Builder(localId, Set.of(localId))
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withElectedLeader(2, localId + 1)
             .build();
@@ -1002,7 +1011,7 @@ public class KafkaRaftClientTest {
     @Test
     public void testInitializeAsCandidateAndOnlyVoter() throws Exception {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
+        RaftClientTestContext context = new Builder(localId, Set.of(localId))
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withVotedCandidate(2, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .build();
@@ -1013,7 +1022,7 @@ public class KafkaRaftClientTest {
     @Test
     public void testInitializeAsResignedAndOnlyVoter() throws Exception {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
+        RaftClientTestContext context = new Builder(localId, Set.of(localId))
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withElectedLeader(2, localId)
             .build();
@@ -1022,16 +1031,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleBeginQuorumRequest(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleBeginQuorumRequest(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int votedCandidateEpoch = 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withVotedCandidate(votedCandidateEpoch, otherNodeKey)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.deliverRequest(context.beginEpochRequest(votedCandidateEpoch, otherNodeKey.id()));
@@ -1054,10 +1063,10 @@ public class KafkaRaftClientTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, leader));
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new Builder(local.id(), local.directoryId().get())
             .withStaticVoters(voters)
             .withElectedLeader(leaderEpoch, leader.id())
-            .withKip853Rpc(true)
+            .withRaftProtocol(KIP_853_PROTOCOL)
             .build();
 
         context.client.poll();
@@ -1086,16 +1095,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleBeginQuorumResponse(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleBeginQuorumResponse(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int leaderEpoch = 2;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(leaderEpoch, localId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.deliverRequest(context.beginEpochRequest(leaderEpoch + 1, otherNodeId));
@@ -1105,18 +1114,18 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testEndQuorumIgnoredAsCandidateIfOlderEpoch(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testEndQuorumIgnoredAsCandidateIfOlderEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         int jitterMs = 85;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(jitterMs))
             .withUnknownLeader(epoch - 1)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToCandidate();
@@ -1150,14 +1159,14 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testEndQuorumIgnoredAsLeaderIfOlderEpoch(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testEndQuorumIgnoredAsLeaderIfOlderEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int voter2 = localId + 1;
-        ReplicaKey voter3 = replicaKey(localId + 2, withKip853Rpc);
+        ReplicaKey voter3 = replicaKey(localId + 2, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, voter2, voter3.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(6)
             .build();
 
@@ -1179,19 +1188,19 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testEndQuorumStartsNewElectionImmediatelyIfFollowerUnattached(
-        boolean withKip853Rpc
+        RaftProtocol raftProtocol
     ) throws Exception {
         int localId = randomReplicaId();
         int voter2 = localId + 1;
-        ReplicaKey voter3 = replicaKey(localId + 2, withKip853Rpc);
+        ReplicaKey voter3 = replicaKey(localId + 2, isSupport853(raftProtocol));
         int epoch = 2;
         Set<Integer> voters = Set.of(localId, voter2, voter3.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.deliverRequest(
@@ -1211,8 +1220,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testAccumulatorClearedAfterBecomingFollower(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testAccumulatorClearedAfterBecomingFollower(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int lingerMs = 50;
@@ -1223,10 +1232,10 @@ public class KafkaRaftClientTest {
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
             .withMemoryPool(memoryPool)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -1244,10 +1253,10 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testAccumulatorClearedAfterBecomingVoted(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testAccumulatorClearedAfterBecomingVoted(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int lingerMs = 50;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -1256,10 +1265,10 @@ public class KafkaRaftClientTest {
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
             .withMemoryPool(memoryPool)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -1278,10 +1287,10 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testAccumulatorClearedAfterBecomingUnattached(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testAccumulatorClearedAfterBecomingUnattached(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int lingerMs = 50;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -1290,10 +1299,10 @@ public class KafkaRaftClientTest {
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
             .withMemoryPool(memoryPool)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -1311,8 +1320,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testChannelWokenUpIfLingerTimeoutReachedWithoutAppend(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testChannelWokenUpIfLingerTimeoutReachedWithoutAppend(RaftProtocol raftProtocol) throws Exception {
         // This test verifies that the client will set its poll timeout accounting
         // for the lingerMs of a pending append
         int localId = randomReplicaId();
@@ -1320,9 +1329,9 @@ public class KafkaRaftClientTest {
         int lingerMs = 50;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -1347,8 +1356,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testChannelWokenUpIfLingerTimeoutReachedDuringAppend(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testChannelWokenUpIfLingerTimeoutReachedDuringAppend(RaftProtocol raftProtocol) throws Exception {
         // This test verifies that the client will get woken up immediately
         // if the linger timeout has expired during an append
         int localId = randomReplicaId();
@@ -1356,9 +1365,9 @@ public class KafkaRaftClientTest {
         int lingerMs = 50;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -1384,16 +1393,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleEndQuorumRequest(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleEndQuorumRequest(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int oldLeaderId = localId + 1;
         int leaderEpoch = 2;
         Set<Integer> voters = Set.of(localId, oldLeaderId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(leaderEpoch, oldLeaderId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.deliverRequest(
@@ -1413,17 +1422,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleEndQuorumRequestWithLowerPriorityToBecomeLeader(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleEndQuorumRequestWithLowerPriorityToBecomeLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey oldLeaderKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey oldLeaderKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int leaderEpoch = 2;
-        ReplicaKey preferredNextLeader = replicaKey(localId + 2, withKip853Rpc);
+        ReplicaKey preferredNextLeader = replicaKey(localId + 2, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, oldLeaderKey.id(), preferredNextLeader.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(leaderEpoch, oldLeaderKey.id())
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.deliverRequest(
@@ -1456,15 +1465,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testVoteRequestTimeout(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testVoteRequestTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertUnknownLeaderAndNoVotedCandidate(0);
 
@@ -1498,16 +1507,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleValidVoteRequestAsFollower(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleValidVoteRequestAsFollower(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.deliverRequest(context.voteRequest(epoch, otherNodeKey, epoch - 1, 1));
@@ -1519,17 +1528,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleVoteRequestAsFollowerWithElectedLeader(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleVoteRequestAsFollowerWithElectedLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int electedLeaderId = localId + 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), electedLeaderId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, electedLeaderId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.deliverRequest(context.voteRequest(epoch, otherNodeKey, epoch - 1, 1));
@@ -1541,17 +1550,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleVoteRequestAsFollowerWithVotedCandidate(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleVoteRequestAsFollowerWithVotedCandidate(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
-        ReplicaKey votedCandidateKey = replicaKey(localId + 2, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey votedCandidateKey = replicaKey(localId + 2, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), votedCandidateKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withVotedCandidate(epoch, votedCandidateKey)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.deliverRequest(context.voteRequest(epoch, otherNodeKey, epoch - 1, 1));
@@ -1562,17 +1571,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleVoteRequestAsProspective(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleVoteRequestAsProspective(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int electedLeaderId = localId + 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), electedLeaderId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, electedLeaderId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Sleep a little to ensure that we become a prospective
@@ -1590,17 +1599,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleVoteRequestAsProspectiveWithVotedCandidate(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleVoteRequestAsProspectiveWithVotedCandidate(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
-        ReplicaKey votedCandidateKey = replicaKey(localId + 2, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey votedCandidateKey = replicaKey(localId + 2, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), votedCandidateKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withVotedCandidate(epoch, votedCandidateKey)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Sleep a little to ensure that we become a prospective
@@ -1617,16 +1626,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleInvalidVoteRequestWithOlderEpoch(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleInvalidVoteRequestWithOlderEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.deliverRequest(context.voteRequest(epoch - 1, otherNodeKey, epoch - 2, 1));
@@ -1637,17 +1646,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleVoteRequestAsObserver(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleVoteRequestAsObserver(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int otherNodeId2 = localId + 2;
         Set<Integer> voters = Set.of(otherNodeKey.id(), otherNodeId2);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.deliverRequest(context.voteRequest(epoch + 1, otherNodeKey, epoch, 1));
@@ -1658,15 +1667,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testLeaderIgnoreVoteRequestOnSameEpoch(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testLeaderIgnoreVoteRequestOnSameEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(2)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -1681,15 +1690,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testListenerCommitCallbackAfterLeaderWrite(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testListenerCommitCallbackAfterLeaderWrite(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(4)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -1727,15 +1736,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testLeaderImmediatelySendsDivergingEpoch(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testLeaderImmediatelySendsDivergingEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(5)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .appendToLog(1, Arrays.asList("a", "b", "c"))
             .appendToLog(3, Arrays.asList("d", "e", "f"))
             .appendToLog(5, Arrays.asList("g", "h", "i"))
@@ -1759,16 +1768,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testCandidateIgnoreVoteRequestOnSameEpoch(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testCandidateIgnoreVoteRequestOnSameEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int leaderEpoch = 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withVotedCandidate(leaderEpoch, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.pollUntilRequest();
@@ -1780,17 +1789,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testCandidateBackoffElection(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testCandidateBackoffElection(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 1;
         int exponentialFactor = 85;  // set it large enough so that replica will bound on jitter
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(exponentialFactor))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.assertUnknownLeaderAndNoVotedCandidate(0);
@@ -1856,17 +1865,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testCandidateElectionTimeout(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testCandidateElectionTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 1;
         int jitter = 100;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(jitter))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.assertUnknownLeaderAndNoVotedCandidate(0);
@@ -1899,16 +1908,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInitializeAsFollowerEmptyLog(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInitializeAsFollowerEmptyLog(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.assertElectedLeader(epoch, otherNodeId);
@@ -1919,18 +1928,18 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInitializeAsFollowerNonEmptyLog(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInitializeAsFollowerNonEmptyLog(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         int lastEpoch = 3;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .appendToLog(lastEpoch, singletonList("foo"))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.assertElectedLeader(epoch, otherNodeId);
@@ -1940,18 +1949,18 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testVoterBecomeProspectiveAfterFetchTimeout(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testVoterBecomeProspectiveAfterFetchTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         int lastEpoch = 3;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .appendToLog(lastEpoch, singletonList("foo"))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
 
@@ -1966,18 +1975,18 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testFollowerAsObserverDoesNotBecomeProspectiveAfterFetchTimeout(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testFollowerAsObserverDoesNotBecomeProspectiveAfterFetchTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         int lastEpoch = 3;
         Set<Integer> voters = Set.of(otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .appendToLog(lastEpoch, singletonList("foo"))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
 
@@ -1989,23 +1998,23 @@ public class KafkaRaftClientTest {
         assertTrue(context.client.quorum().isFollower());
 
         // transitions to unattached
-        context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, withKip853Rpc), epoch, 1));
+        context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, isSupport853(raftProtocol)), epoch, 1));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
         assertTrue(context.client.quorum().isUnattached());
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testUnattachedAsObserverDoesNotBecomeProspectiveAfterElectionTimeout(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testUnattachedAsObserverDoesNotBecomeProspectiveAfterElectionTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.pollUntilRequest();
@@ -2019,7 +2028,7 @@ public class KafkaRaftClientTest {
         // confirm no vote request was sent
         assertEquals(0, context.channel.drainSendQueue().size());
 
-        context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, withKip853Rpc), epoch, 0));
+        context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, isSupport853(raftProtocol)), epoch, 0));
         context.pollUntilResponse();
         // observer can vote
         context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
@@ -2033,17 +2042,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testUnattachedAsVoterCanBecomeFollowerAfterFindingLeader(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testUnattachedAsVoterCanBecomeFollowerAfterFindingLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int leaderNodeId = localId + 2;
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId, leaderNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.pollUntilRequest();
@@ -2064,16 +2073,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInitializeObserverNoPreviousState(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInitializeObserverNoPreviousState(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
         int otherNodeId = localId + 2;
         int epoch = 5;
         Set<Integer> voters = Set.of(leaderId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.pollUntilRequest();
@@ -2092,8 +2101,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testObserverQuorumDiscoveryFailure(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testObserverQuorumDiscoveryFailure(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
         int epoch = 5;
@@ -2103,9 +2112,9 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.pollUntilRequest();
@@ -2138,8 +2147,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testObserverSendDiscoveryFetchAfterFetchTimeout(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testObserverSendDiscoveryFetchAfterFetchTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
         int otherNodeId = localId + 2;
@@ -2150,9 +2159,9 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.pollUntilRequest();
@@ -2179,8 +2188,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testObserverHandleRetryFetchToBootstrapServer(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testObserverHandleRetryFetchToBootstrapServer(RaftProtocol raftProtocol) throws Exception {
         // This test tries to check that KRaft is able to handle a retrying Fetch request to
         // a boostrap server after a Fetch request to the leader.
         int localId = randomReplicaId();
@@ -2193,9 +2202,9 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Expect a fetch request to one of the bootstrap servers
@@ -2253,8 +2262,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testObserverHandleRetryFetchToLeader(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testObserverHandleRetryFetchToLeader(RaftProtocol raftProtocol) throws Exception {
         // This test tries to check that KRaft is able to handle a retrying Fetch request to
         // the leader after a Fetch request to the bootstrap server.
         int localId = randomReplicaId();
@@ -2267,9 +2276,9 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Expect a fetch request to one of the bootstrap servers
@@ -2312,15 +2321,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInvalidFetchRequest(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInvalidFetchRequest(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(4)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -2365,7 +2374,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch - 1)
             .build();
         context.assertUnknownLeaderAndNoVotedCandidate(epoch - 1);
@@ -2388,15 +2397,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testFetchRequestClusterIdValidation(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testFetchRequestClusterIdValidation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(4)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -2424,14 +2433,14 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testVoteRequestClusterIdValidation(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testVoteRequestClusterIdValidation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -2464,8 +2473,8 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(true)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(KIP_853_PROTOCOL)
             .build();
 
         context.unattachedToLeader();
@@ -2510,9 +2519,9 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, voter2, voter3);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch - 1)
-            .withKip853Rpc(true)
+            .withRaftProtocol(KIP_853_PROTOCOL)
             .build();
         context.assertUnknownLeaderAndNoVotedCandidate(epoch - 1);
 
@@ -2556,15 +2565,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testBeginQuorumEpochRequestClusterIdValidation(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testBeginQuorumEpochRequestClusterIdValidation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(4)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -2592,15 +2601,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testEndQuorumEpochRequestClusterIdValidation(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testEndQuorumEpochRequestClusterIdValidation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(4)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -2628,21 +2637,21 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testLeaderAcceptVoteFromObserver(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testLeaderAcceptVoteFromObserver(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(4)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        ReplicaKey observerKey = replicaKey(localId + 2, withKip853Rpc);
+        ReplicaKey observerKey = replicaKey(localId + 2, isSupport853(raftProtocol));
         context.deliverRequest(context.voteRequest(epoch - 1, observerKey, 0, 0));
         context.client.poll();
         context.assertSentVoteResponse(Errors.FENCED_LEADER_EPOCH, epoch, OptionalInt.of(localId), false);
@@ -2653,16 +2662,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testInvalidVoteRequest(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testInvalidVoteRequest(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeKey.id())
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(epoch, otherNodeKey.id());
 
@@ -2698,15 +2707,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testPurgatoryFetchTimeout(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testPurgatoryFetchTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(4)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -2726,15 +2735,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testPurgatoryFetchSatisfiedByWrite(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testPurgatoryFetchSatisfiedByWrite(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(4)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -2752,20 +2761,20 @@ public class KafkaRaftClientTest {
         context.client.poll();
 
         MemoryRecords fetchedRecords = context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
-        RaftClientTestContext.assertMatchingRecords(appendRecords, fetchedRecords);
+        assertMatchingRecords(appendRecords, fetchedRecords);
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testPurgatoryFetchCompletedByFollowerTransition(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testPurgatoryFetchCompletedByFollowerTransition(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey voterKey2 = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey voterKey2 = replicaKey(localId + 1, isSupport853(raftProtocol));
         int voter3 = localId + 2;
         Set<Integer> voters = Set.of(localId, voterKey2.id(), voter3);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(4)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -2792,17 +2801,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testFetchResponseIgnoredAfterBecomingProspective(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testFetchResponseIgnoredAfterBecomingProspective(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         // The other node starts out as the leader
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
 
@@ -2829,9 +2838,9 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testFetchResponseIgnoredAfterBecomingFollowerOfDifferentLeader(
-        boolean withKip853Rpc
+        RaftProtocol raftProtocol
     ) throws Exception {
         int localId = randomReplicaId();
         int voter2 = localId + 1;
@@ -2840,9 +2849,9 @@ public class KafkaRaftClientTest {
         // Start out with `voter2` as the leader
         Set<Integer> voters = Set.of(localId, voter2, voter3);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, voter2)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(epoch, voter2);
 
@@ -2870,17 +2879,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testVoteResponseIgnoredAfterBecomingFollower(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testVoteResponseIgnoredAfterBecomingFollower(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int voter2 = localId + 1;
         int voter3 = localId + 2;
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, voter2, voter3);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertUnknownLeaderAndNoVotedCandidate(epoch);
         context.unattachedToCandidate();
@@ -2924,8 +2933,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testFollowerLeaderRediscoveryAfterBrokerNotAvailableError(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testFollowerLeaderRediscoveryAfterBrokerNotAvailableError(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
         int otherNodeId = localId + 2;
@@ -2936,9 +2945,9 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .withElectedLeader(epoch, leaderId)
             .build();
 
@@ -2963,8 +2972,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testFollowerLeaderRediscoveryAfterRequestTimeout(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testFollowerLeaderRediscoveryAfterRequestTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
         int otherNodeId = localId + 2;
@@ -2975,9 +2984,9 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .withElectedLeader(epoch, leaderId)
             .build();
 
@@ -2998,8 +3007,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testObserverLeaderRediscoveryAfterBrokerNotAvailableError(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testObserverLeaderRediscoveryAfterBrokerNotAvailableError(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
         int otherNodeId = localId + 2;
@@ -3010,9 +3019,9 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.discoverLeaderAsObserver(leaderId, epoch);
@@ -3047,8 +3056,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testObserverLeaderRediscoveryAfterRequestTimeout(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testObserverLeaderRediscoveryAfterRequestTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
         int otherNodeId = localId + 2;
@@ -3059,9 +3068,9 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.discoverLeaderAsObserver(leaderId, epoch);
@@ -3092,14 +3101,14 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testLeaderGracefulShutdown(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testLeaderGracefulShutdown(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -3139,15 +3148,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testEndQuorumEpochSentBasedOnFetchOffset(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testEndQuorumEpochSentBasedOnFetchOffset(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey closeFollower = replicaKey(localId + 2, withKip853Rpc);
-        ReplicaKey laggingFollower = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey closeFollower = replicaKey(localId + 2, isSupport853(raftProtocol));
+        ReplicaKey laggingFollower = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, closeFollower.id(), laggingFollower.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -3190,15 +3199,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testDescribeQuorumNonLeader(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testDescribeQuorumNonLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey voter2 = replicaKey(localId + 1, withKip853Rpc);
-        ReplicaKey voter3 = replicaKey(localId + 2, withKip853Rpc);
+        ReplicaKey voter2 = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey voter3 = replicaKey(localId + 2, isSupport853(raftProtocol));
         int epoch = 2;
         Set<Integer> voters = Set.of(localId, voter2.id(), voter3.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch)
             .build();
 
@@ -3221,16 +3230,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testDescribeQuorumWithOnlyStaticVoters(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testDescribeQuorumWithOnlyStaticVoters(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey local = replicaKey(localId, true);
         ReplicaKey follower1 = replicaKey(localId + 1, true);
         Set<Integer> voters = Set.of(localId, follower1.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, local.directoryId().get())
+        RaftClientTestContext context = new Builder(localId, local.directoryId().get())
             .withStaticVoters(voters)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -3256,24 +3265,25 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "true, true", "true, false", "false, false" })
-    public void testDescribeQuorumWithFollowers(boolean withKip853Rpc, boolean withBootstrapSnapshot) throws Exception {
+    @MethodSource("generateTestDescribeQuorumMatrix")
+    public void testDescribeQuorumWithFollowers(RaftProtocol raftProtocol, boolean withBootstrapSnapshot) throws Exception {
         int localId = randomReplicaId();
         int followerId1 = localId + 1;
         int followerId2 = localId + 2;
+        boolean support853 = isSupport853(raftProtocol);
         ReplicaKey local = replicaKey(localId, withBootstrapSnapshot);
         // local directory id must exist
         Uuid localDirectoryId = local.directoryId().orElse(Uuid.randomUuid());
         ReplicaKey bootstrapFollower1 = replicaKey(followerId1, withBootstrapSnapshot);
         // if withBootstrapSnapshot is false, directory ids are still needed by the static voter set
-        Uuid followerDirectoryId1 = bootstrapFollower1.directoryId().orElse(withKip853Rpc ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        Uuid followerDirectoryId1 = bootstrapFollower1.directoryId().orElse(support853 ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower1 = ReplicaKey.of(followerId1, followerDirectoryId1);
         ReplicaKey bootstrapFollower2 = replicaKey(followerId2, withBootstrapSnapshot);
-        Uuid followerDirectoryId2 = bootstrapFollower2.directoryId().orElse(withKip853Rpc ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        Uuid followerDirectoryId2 = bootstrapFollower2.directoryId().orElse(support853 ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower2 = ReplicaKey.of(followerId2, followerDirectoryId2);
 
-        RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
-            .withKip853Rpc(withKip853Rpc);
+        Builder builder = new Builder(localId, localDirectoryId)
+            .withRaftProtocol(raftProtocol);
 
         if (withBootstrapSnapshot) {
             VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower1, bootstrapFollower2));
@@ -3368,18 +3378,19 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "true, true", "true, false", "false, false" })
-    public void testDescribeQuorumWithObserver(boolean withKip853Rpc, boolean withBootstrapSnapshot) throws Exception {
+    @MethodSource("generateTestDescribeQuorumMatrix")
+    public void testDescribeQuorumWithObserver(RaftProtocol raftProtocol, boolean withBootstrapSnapshot) throws Exception {
         int localId = randomReplicaId();
         int followerId = localId + 1;
         ReplicaKey local = replicaKey(localId, withBootstrapSnapshot);
         Uuid localDirectoryId = local.directoryId().orElse(Uuid.randomUuid());
         ReplicaKey bootstrapFollower = replicaKey(followerId, withBootstrapSnapshot);
-        Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(withKip853Rpc ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        boolean support853 = isSupport853(raftProtocol);
+        Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(support853 ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower = ReplicaKey.of(followerId, followerDirectoryId);
 
-        RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
-            .withKip853Rpc(withKip853Rpc);
+        Builder builder = new Builder(localId, localDirectoryId)
+            .withRaftProtocol(raftProtocol);
 
         if (withBootstrapSnapshot) {
             VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower));
@@ -3403,7 +3414,7 @@ public class KafkaRaftClientTest {
         context.assertSentFetchPartitionResponse(expectedHW, epoch);
 
         // Create observer
-        ReplicaKey observer = replicaKey(localId + 2, withKip853Rpc);
+        ReplicaKey observer = replicaKey(localId + 2, support853);
         Uuid observerDirectoryId = observer.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID);
         context.time.sleep(100);
         long observerFetchTime = context.time.milliseconds();
@@ -3511,18 +3522,18 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "true, true", "true, false", "false, false" })
-    public void testDescribeQuorumNonMonotonicFollowerFetch(boolean withKip853Rpc, boolean withBootstrapSnapshot) throws Exception {
+    @MethodSource("generateTestDescribeQuorumMatrix")
+    public void testDescribeQuorumNonMonotonicFollowerFetch(RaftProtocol raftProtocol, boolean withBootstrapSnapshot) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey local = replicaKey(localId, withBootstrapSnapshot);
         Uuid localDirectoryId = local.directoryId().orElse(Uuid.randomUuid());
         int followerId = localId + 1;
         ReplicaKey bootstrapFollower = replicaKey(followerId, withBootstrapSnapshot);
-        Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(withKip853Rpc ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(isSupport853(raftProtocol) ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower = ReplicaKey.of(followerId, followerDirectoryId);
 
-        RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
-            .withKip853Rpc(withKip853Rpc);
+        Builder builder = new Builder(localId, localDirectoryId)
+            .withRaftProtocol(raftProtocol);
         if (withBootstrapSnapshot) {
             VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower));
             builder.withBootstrapSnapshot(Optional.of(bootstrapVoterSet));
@@ -3587,8 +3598,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testStaticVotersIgnoredWithBootstrapSnapshot(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testStaticVotersIgnoredWithBootstrapSnapshot(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey local = replicaKey(localId, true);
         ReplicaKey follower = replicaKey(localId + 1, true);
@@ -3597,9 +3608,9 @@ public class KafkaRaftClientTest {
         Set<Integer> staticVoters = Set.of(localId, follower.id());
         VoterSet voterSet = VoterSetTest.voterSet(Stream.of(local, follower, follower2));
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, local.directoryId().get())
+        RaftClientTestContext context = new Builder(localId, local.directoryId().get())
             .withStaticVoters(staticVoters)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .withBootstrapSnapshot(Optional.of(voterSet))
             .build();
 
@@ -3608,22 +3619,23 @@ public class KafkaRaftClientTest {
         // check describe quorum response has both followers
         context.deliverRequest(context.describeQuorumRequest());
         context.pollUntilResponse();
+        boolean support853 = isSupport853(raftProtocol);
         List<ReplicaState> expectedVoterStates = Arrays.asList(
             new ReplicaState()
                 .setReplicaId(localId)
-                .setReplicaDirectoryId(withKip853Rpc ? local.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaDirectoryId(support853 ? local.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(3L)
                 .setLastFetchTimestamp(context.time.milliseconds())
                 .setLastCaughtUpTimestamp(context.time.milliseconds()),
             new ReplicaState()
                 .setReplicaId(follower.id())
-                .setReplicaDirectoryId(withKip853Rpc ? follower.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaDirectoryId(support853 ? follower.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(-1L)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1),
             new ReplicaState()
                 .setReplicaId(follower2.id())
-                .setReplicaDirectoryId(withKip853Rpc ? follower2.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaDirectoryId(support853 ? follower2.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(-1L)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1));
@@ -3632,15 +3644,15 @@ public class KafkaRaftClientTest {
 
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testLeaderGracefulShutdownTimeout(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testLeaderGracefulShutdownTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(1)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -3670,16 +3682,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testFollowerGracefulShutdown(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testFollowerGracefulShutdown(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
 
@@ -3697,16 +3709,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testObserverGracefulShutdown(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testObserverGracefulShutdown(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int voter1 = localId + 1;
         int voter2 = localId + 2;
         Set<Integer> voters = Set.of(voter1, voter2);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(5)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.client.poll();
         context.assertUnknownLeaderAndNoVotedCandidate(5);
@@ -3724,11 +3736,11 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testGracefulShutdownSingleMemberQuorum(boolean withKip853Rpc) throws IOException {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testGracefulShutdownSingleMemberQuorum(RaftProtocol raftProtocol) throws IOException {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId))
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, Collections.singleton(localId))
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.assertElectedLeader(1, localId);
@@ -3742,16 +3754,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testFollowerReplication(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testFollowerReplication(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
 
@@ -3772,16 +3784,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "true, true", "true, false", "false, true", "false, false" })
-    public void testObserverReplication(boolean withKip853Rpc, boolean alwaysFlush) throws Exception {
+    @MethodSource("generateTestObserverReplication")
+    public void testObserverReplication(RaftProtocol raftProtocol, boolean alwaysFlush) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .withAlwaysFlush(alwaysFlush)
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
@@ -3804,16 +3816,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testEmptyRecordSetInFetchResponse(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testEmptyRecordSetInFetchResponse(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
 
@@ -3871,17 +3883,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testFetchShouldBeTreatedAsLeaderAcknowledgement(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testFetchShouldBeTreatedAsLeaderAcknowledgement(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withUnknownLeader(epoch - 1)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToCandidate();
@@ -3907,13 +3919,13 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testLeaderAppendSingleMemberQuorum(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testLeaderAppendSingleMemberQuorum(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         Set<Integer> voters = Collections.singleton(localId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
         long now = context.time.milliseconds();
 
@@ -3937,7 +3949,7 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalLong.of(4L), context.client.highWatermark());
 
         // Now try reading it
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         List<MutableRecordBatch> batches = new ArrayList<>(2);
         boolean appended = true;
 
@@ -3970,7 +3982,7 @@ public class KafkaRaftClientTest {
 
         Record record = readRecords.get(0);
         assertEquals(now, record.timestamp());
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Collections.singletonList(localId),
+        verifyLeaderChangeMessage(localId, Collections.singletonList(localId),
             Collections.singletonList(localId), record.key(), record.value());
 
         MutableRecordBatch batch = batches.get(1);
@@ -3984,19 +3996,19 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testFollowerLogReconciliation(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testFollowerLogReconciliation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         int lastEpoch = 3;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .appendToLog(lastEpoch, Arrays.asList("foo", "bar"))
             .appendToLog(lastEpoch, singletonList("baz"))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.assertElectedLeader(epoch, otherNodeId);
@@ -4021,12 +4033,12 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testMetrics(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testMetrics(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 1;
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId))
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, Collections.singleton(localId))
+            .withRaftProtocol(raftProtocol)
             .build();
         context.pollUntil(() -> context.log.endOffset().offset() == 1L);
 
@@ -4072,15 +4084,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testClusterAuthorizationFailedInFetch(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testClusterAuthorizationFailedInFetch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -4100,17 +4112,17 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testClusterAuthorizationFailedInBeginQuorumEpoch(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testClusterAuthorizationFailedInBeginQuorumEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withUnknownLeader(epoch - 1)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.time.sleep(context.electionTimeoutMs());
@@ -4130,16 +4142,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testClusterAuthorizationFailedInVote(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testClusterAuthorizationFailedInVote(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch - 1)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Become a candidate
@@ -4156,15 +4168,15 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testClusterAuthorizationFailedInEndQuorumEpoch(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testClusterAuthorizationFailedInEndQuorumEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(1)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -4182,16 +4194,14 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffsetOnEmptyLog(
-        boolean withKip853Rpc
-    ) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffsetOnEmptyLog(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new Builder(localId, voters)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -4229,12 +4239,10 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffset(
-        boolean withKip853Rpc
-    ) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffset(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -4243,12 +4251,12 @@ public class KafkaRaftClientTest {
         List<String> batch3 = Arrays.asList("7", "8", "9");
 
         List<List<String>> expectedBatches = Arrays.asList(batch1, batch2, batch3);
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .appendToLog(1, batch1)
             .appendToLog(1, batch2)
             .appendToLog(2, batch3)
             .withUnknownLeader(epoch - 1)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -4298,10 +4306,10 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testLateRegisteredListenerCatchesUp(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testLateRegisteredListenerCatchesUp(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -4309,12 +4317,12 @@ public class KafkaRaftClientTest {
         List<String> batch2 = Arrays.asList("4", "5", "6");
         List<String> batch3 = Arrays.asList("7", "8", "9");
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .appendToLog(1, batch1)
             .appendToLog(1, batch2)
             .appendToLog(2, batch3)
             .withUnknownLeader(epoch - 1)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -4331,7 +4339,7 @@ public class KafkaRaftClientTest {
         assertEquals(9L, context.listener.claimedEpochStartOffset(epoch));
 
         // Register a second listener and allow it to catch up to the high watermark
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
+        MockListener secondListener = new MockListener(OptionalInt.of(localId));
         context.client.register(secondListener);
         context.pollUntil(() -> OptionalInt.of(epoch).equals(secondListener.currentClaimedEpoch()));
         assertEquals(OptionalLong.of(9L), secondListener.lastCommitOffset());
@@ -4341,8 +4349,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testReregistrationChangesListenerContext(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testReregistrationChangesListenerContext(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
@@ -4352,12 +4360,12 @@ public class KafkaRaftClientTest {
         List<String> batch2 = Arrays.asList("4", "5", "6");
         List<String> batch3 = Arrays.asList("7", "8", "9");
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .appendToLog(1, batch1)
             .appendToLog(1, batch2)
             .appendToLog(2, batch3)
             .withUnknownLeader(epoch - 1)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.unattachedToLeader();
@@ -4369,7 +4377,7 @@ public class KafkaRaftClientTest {
         context.pollUntil(() -> OptionalLong.of(9).equals(context.listener.lastCommitOffset()));
 
         // Register a second listener
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
+        MockListener secondListener = new MockListener(OptionalInt.of(localId));
         context.client.register(secondListener);
         context.pollUntil(() -> OptionalLong.of(9).equals(secondListener.lastCommitOffset()));
         context.client.unregister(secondListener);
@@ -4385,16 +4393,16 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleCommitCallbackFiresAfterFollowerHighWatermarkAdvances(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleCommitCallbackFiresAfterFollowerHighWatermarkAdvances(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
 
@@ -4444,21 +4452,21 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleCommitCallbackFiresInVotedState(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleCommitCallbackFiresInVotedState(RaftProtocol raftProtocol) throws Exception {
         // This test verifies that the state machine can still catch up even while
         // an election is in progress as long as the high watermark is known.
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .appendToLog(2, Arrays.asList("a", "b", "c"))
             .appendToLog(4, Arrays.asList("d", "e", "f"))
             .appendToLog(4, Arrays.asList("g", "h", "i"))
             .withUnknownLeader(epoch - 1)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Start off as the leader and receive a fetch to initialize the high watermark
@@ -4475,7 +4483,7 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalLong.of(10L), context.client.highWatermark());
 
         // Register another listener and verify that it catches up while we remain 'voted'
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+        MockListener secondListener = new MockListener(
             OptionalInt.of(localId)
         );
         context.client.register(secondListener);
@@ -4491,21 +4499,21 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleCommitCallbackFiresInCandidateState(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleCommitCallbackFiresInCandidateState(RaftProtocol raftProtocol) throws Exception {
         // This test verifies that the state machine can still catch up even while
         // an election is in progress as long as the high watermark is known.
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .appendToLog(2, Arrays.asList("a", "b", "c"))
             .appendToLog(4, Arrays.asList("d", "e", "f"))
             .appendToLog(4, Arrays.asList("g", "h", "i"))
             .withUnknownLeader(epoch - 1)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Start off as the leader and receive a fetch to initialize the high watermark
@@ -4530,7 +4538,7 @@ public class KafkaRaftClientTest {
         context.assertVotedCandidate(candidateEpoch, localId);
 
         // Register another listener and verify that it catches up
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+        MockListener secondListener = new MockListener(
             OptionalInt.of(localId)
         );
         context.client.register(secondListener);
@@ -4546,9 +4554,9 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testHandleLeaderChangeFiresAfterUnattachedRegistration(
-        boolean withKip853Rpc
+        RaftProtocol raftProtocol
     ) throws Exception {
         // When registering a listener while the replica is unattached, it should get notified
         // with the current epoch
@@ -4558,13 +4566,13 @@ public class KafkaRaftClientTest {
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withUnknownLeader(epoch)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Register another listener and verify that it is notified of latest epoch
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+        MockListener secondListener = new MockListener(
             OptionalInt.of(localId)
         );
         context.client.register(secondListener);
@@ -4584,8 +4592,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleLeaderChangeFiresAfterFollowerRegistration(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleLeaderChangeFiresAfterFollowerRegistration(RaftProtocol raftProtocol) throws Exception {
         // When registering a listener while the replica is a follower, it should get notified with
         // the current leader and epoch
         int localId = randomReplicaId();
@@ -4593,13 +4601,13 @@ public class KafkaRaftClientTest {
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // Register another listener and verify that it is notified of latest leader and epoch
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+        MockListener secondListener = new MockListener(
             OptionalInt.of(localId)
         );
         context.client.register(secondListener);
@@ -4610,8 +4618,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testHandleLeaderChangeFiresAfterResignRegistration(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testHandleLeaderChangeFiresAfterResignRegistration(RaftProtocol raftProtocol) throws Exception {
         // When registering a listener while the replica is resigned, it should not get notified with
         // the current leader and epoch
         int localId = randomReplicaId();
@@ -4619,9 +4627,9 @@ public class KafkaRaftClientTest {
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new Builder(localId, voters)
             .withElectedLeader(epoch, localId)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         context.client.poll();
@@ -4629,7 +4637,7 @@ public class KafkaRaftClientTest {
         assertEquals(LeaderAndEpoch.UNKNOWN, context.listener.currentLeaderAndEpoch());
 
         // Register another listener and verify that it is not notified of latest leader and epoch
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+        MockListener secondListener = new MockListener(
             OptionalInt.of(localId)
         );
         context.client.register(secondListener);
@@ -4640,8 +4648,8 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testObserverFetchWithNoLocalId(boolean withKip853Rpc) throws Exception {
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    public void testObserverFetchWithNoLocalId(RaftProtocol raftProtocol) throws Exception {
         // When no `localId` is defined, the client will behave as an observer.
         // This is designed for tooling/debugging use cases.
         int leaderId = randomReplicaId();
@@ -4651,9 +4659,9 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.empty(), voters)
+        RaftClientTestContext context = new Builder(OptionalInt.empty(), voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(raftProtocol)
             .build();
 
         // First fetch discovers the current leader and epoch
@@ -4692,6 +4700,10 @@ public class KafkaRaftClientTest {
         assertEquals(3, context.log.lastFetchedEpoch());
     }
 
+    private boolean isSupport853(RaftProtocol raftProtocol) {
+        return raftProtocol == KIP_853_PROTOCOL;
+    }
+
     private static KafkaMetric getMetric(final Metrics metrics, final String name) {
         return metrics.metrics().get(metrics.metricName(name, "raft-metrics"));
     }
@@ -4703,5 +4715,22 @@ public class KafkaRaftClientTest {
 
     static int randomReplicaId() {
         return ThreadLocalRandom.current().nextInt(1025);
+    }
+
+    private static Stream<Arguments> generateTestDescribeQuorumMatrix() {
+        return Stream.of(
+            Arguments.of(KIP_853_PROTOCOL, true),
+            Arguments.of(KIP_853_PROTOCOL, false),
+            Arguments.of(KIP_595_PROTOCOL, false)
+        );
+    }
+
+    private static Stream<Arguments> generateTestObserverReplication() {
+        return Stream.of(
+            Arguments.of(KIP_853_PROTOCOL, true),
+            Arguments.of(KIP_853_PROTOCOL, false),
+            Arguments.of(KIP_853_PROTOCOL, true),
+            Arguments.of(KIP_595_PROTOCOL, false)
+        );
     }
 }
