@@ -262,34 +262,6 @@ class KafkaRaftServerTest {
   }
 
   @Test
-  def testKRaftUpdateWithIBP(): Unit = {
-    val clusterId = clusterIdBase64
-    val nodeId = 0
-    val metaProperties = new MetaProperties.Builder().
-      setVersion(MetaPropertiesVersion.V1).
-      setClusterId(clusterId).
-      setNodeId(nodeId).
-      setDirectoryId(Uuid.fromString("4jm0e-YRYeB6CCKBvwoS8w")).
-      build()
-
-    val configProperties = new Properties
-    configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
-    configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-    configProperties.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
-    configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
-    configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    configProperties.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.3-IV1")
-
-    val (metaPropertiesEnsemble, bootstrapMetadata) =
-      invokeLoadMetaProperties(metaProperties, configProperties, None)
-
-    assertEquals(metaProperties, metaPropertiesEnsemble.logDirProps().values().iterator().next())
-    assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty)
-    assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty)
-    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.IBP_3_3_IV1)
-  }
-
-  @Test
   def testKRaftUpdateWithoutIBP(): Unit = {
     val clusterId = clusterIdBase64
     val nodeId = 0

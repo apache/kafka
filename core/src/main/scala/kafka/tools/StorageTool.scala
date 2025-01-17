@@ -129,11 +129,9 @@ object StorageTool extends Logging {
       setIgnoreFormatted(namespace.getBoolean("ignore_formatted")).
       setControllerListenerName(config.controllerListenerNames.head).
       setMetadataLogDirectory(config.metadataLogDir)
-    Option(namespace.getString("release_version")) match {
-      case Some(releaseVersion) => formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion))
-      case None => Option(config.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).
-        foreach(v => formatter.setReleaseVersion(MetadataVersion.fromVersionString(v.toString)))
-    }
+    Option(namespace.getString("release_version")).foreach(
+      releaseVersion =>  formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion))
+    )
     Option(namespace.getList[String]("feature")).foreach(
       featureNamesAndLevels(_).foreachEntry {
         (k, v) => formatter.setFeatureLevel(k, v)

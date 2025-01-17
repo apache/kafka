@@ -612,29 +612,6 @@ class KafkaConfigTest {
     assertEquals(conf.effectiveAdvertisedBrokerListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
   }
 
-  @Test
-  def testVersionConfiguration(): Unit = {
-    val props = new Properties()
-    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
-    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-    val conf = KafkaConfig.fromProps(props)
-    assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, conf.interBrokerProtocolVersion)
-
-    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0.0-IV1")
-    val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(MetadataVersion.IBP_3_0_IV1, conf2.interBrokerProtocolVersion)
-
-    // check that patch version doesn't affect equality
-    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0.1-IV1")
-    val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(MetadataVersion.IBP_3_0_IV1, conf3.interBrokerProtocolVersion)
-
-    //check that latest is newer than 3.0.1-IV0
-    assertTrue(MetadataVersion.latestTesting.isAtLeast(conf3.interBrokerProtocolVersion))
-  }
-
   private def isValidKafkaConfig(props: Properties): Boolean = {
     try {
       KafkaConfig.fromProps(props)
@@ -1649,17 +1626,6 @@ class KafkaConfigTest {
     assertEquals("early.start.listeners contains listener INTERNAL, but this is not " +
       "contained in listeners or controller.listener.names",
         assertThrows(classOf[ConfigException], () => new KafkaConfig(props)).getMessage)
-  }
-
-  @Test
-  def testIgnoreUserInterBrokerProtocolVersionKRaft(): Unit = {
-    for (ibp <- Seq("3.0", "3.1", "3.2")) {
-      val props = new Properties()
-      props.putAll(kraftProps())
-      props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, ibp)
-      val config = new KafkaConfig(props)
-      assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_KRAFT_VERSION)
-    }
   }
 
   @Test
