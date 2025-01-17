@@ -48,7 +48,6 @@ public class UnifiedLog {
      * @param segments                The segments of the log whose producer state is being rebuilt
      * @param logStartOffset          The log start offset
      * @param lastOffset              The last offset upto which the producer state needs to be rebuilt
-     * @param recordVersion           The record version
      * @param time                    The time instance used for checking the clock
      * @param reloadFromCleanShutdown True if the producer state is being built after a clean shutdown, false otherwise.
      * @param logPrefix               The logging prefix
