@@ -1104,6 +1104,7 @@ project(':core') {
     testImplementation project(':server').sourceSets.test.output
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-api')
+    testImplementation project(':test-common:test-common-junit')
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1540,7 +1541,7 @@ project(':group-coordinator') {
 
 
 project(':test-common:test-common-api') {
-  // Interfaces, config classes, and other test APIs
+  // Interfaces, config classes, and other test APIs. Java 17 only
   base {
     archivesName = "kafka-test-common-api"
   }

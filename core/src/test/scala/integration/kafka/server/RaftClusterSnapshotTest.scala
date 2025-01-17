@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.utils.TestUtils
+import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.server.config.KRaftConfigs
