@@ -50,8 +50,12 @@ jobs:
         run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
       - name: Commit to build
         id: commit-to-build
-        if: github.event_name == 'pull_request'
-        run: echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ];
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
 
   load-catalog:
     needs: [configure]
