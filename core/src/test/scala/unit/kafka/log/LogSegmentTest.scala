@@ -34,6 +34,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import java.io.{File, RandomAccessFile}
+import java.nio.ByteBuffer
 import java.util.{Optional, OptionalLong}
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -86,11 +87,9 @@ class LogSegmentTest {
   ))
   def testAppendForLogSegmentOffsetOverflowException(baseOffset: Long, largestOffset: Long): Unit = {
     val seg = createSegment(baseOffset)
-    val currentTime = Time.SYSTEM.milliseconds()
-    val shallowOffsetOfMaxTimestamp = largestOffset
     val memoryRecords = records(0, "hello")
     assertThrows(classOf[LogSegmentOffsetOverflowException], () => {
-      seg.append(largestOffset, currentTime, shallowOffsetOfMaxTimestamp, memoryRecords)
+      seg.append(largestOffset, memoryRecords)
     })
   }
 
@@ -112,7 +111,7 @@ class LogSegmentTest {
   def testReadBeforeFirstOffset(): Unit = {
     val seg = createSegment(40)
     val ms = records(50, "hello", "there", "little", "bee")
-    seg.append(53, RecordBatch.NO_TIMESTAMP, -1L, ms)
+    seg.append(53, ms)
     val read = seg.read(41, 300).records
     checkEquals(ms.records.iterator, read.records.iterator)
   }
@@ -124,7 +123,7 @@ class LogSegmentTest {
   def testReadAfterLast(): Unit = {
     val seg = createSegment(40)
     val ms = records(50, "hello", "there")
-    seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
+    seg.append(51, ms)
     val read = seg.read(52, 200)
     assertNull(read, "Read beyond the last offset in the segment should give null")
   }
@@ -137,9 +136,9 @@ class LogSegmentTest {
   def testReadFromGap(): Unit = {
     val seg = createSegment(40)
     val ms = records(50, "hello", "there")
-    seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
+    seg.append(51, ms)
     val ms2 = records(60, "alpha", "beta")
-    seg.append(61, RecordBatch.NO_TIMESTAMP, -1L, ms2)
+    seg.append(61, ms2)
     val read = seg.read(55, 200)
     checkEquals(ms2.records.iterator, read.records.records.iterator)
   }
@@ -151,7 +150,7 @@ class LogSegmentTest {
     val maxSize = 1
     val seg = createSegment(40)
     val ms = records(50, "hello", "there")
-    seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
+    seg.append(51, ms)
     // read before first offset
     var read = seg.read(48, maxSize, maxPosition, minOneMessage)
     assertEquals(new LogOffsetMetadata(48, 40, 0), read.fetchOffsetMetadata)
@@ -182,9 +181,9 @@ class LogSegmentTest {
     var offset = 40
     for (_ <- 0 until 30) {
       val ms1 = records(offset, "hello")
-      seg.append(offset, RecordBatch.NO_TIMESTAMP, -1L, ms1)
+      seg.append(offset, ms1)
       val ms2 = records(offset + 1, "hello")
-      seg.append(offset + 1, RecordBatch.NO_TIMESTAMP, -1L, ms2)
+      seg.append(offset + 1, ms2)
       // check that we can read back both messages
       val read = seg.read(offset, 10000)
       assertEquals(List(ms1.records.iterator.next(), ms2.records.iterator.next()), read.records.records.asScala.toList)
@@ -243,7 +242,7 @@ class LogSegmentTest {
     val seg = createSegment(40, 2 * records(0, "hello").sizeInBytes - 1)
     var offset = 40
     for (_ <- 0 until numMessages) {
-      seg.append(offset, offset, offset, records(offset, "hello"))
+      seg.append(offset, records(offset, "hello"))
       offset += 1
     }
     assertEquals(offset, seg.readNextOffset)
@@ -265,7 +264,17 @@ class LogSegmentTest {
     // test the case where we fully truncate the log
     val time = new MockTime
     val seg = createSegment(40, time = time)
-    seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, records(40, "hello", "there"))
+    seg.append(
+      41,
+      MemoryRecords.withRecords(
+        RecordBatch.MAGIC_VALUE_V1,
+        40,
+        Compression.NONE,
+        TimestampType.CREATE_TIME,
+        new SimpleRecord("hello".getBytes()),
+        new SimpleRecord("there".getBytes())
+      )
+    )
 
     // If the segment is empty after truncation, the create time should be reset
     time.sleep(500)
@@ -277,7 +286,7 @@ class LogSegmentTest {
     assertFalse(seg.offsetIndex.isFull)
     assertNull(seg.read(0, 1024), "Segment should be empty.")
 
-    seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, records(40, "hello", "there"))
+    seg.append(41, records(40, "hello", "there"))
   }
 
   /**
@@ -289,7 +298,7 @@ class LogSegmentTest {
     val seg = createSegment(40, messageSize * 2 - 1)
     // Produce some messages
     for (i <- 40 until 50)
-      seg.append(i, i * 10, i, records(i, s"msg$i"))
+      seg.append(i, records(i, s"msg$i"))
 
     assertEquals(490, seg.largestTimestamp)
     // Search for an indexed timestamp
@@ -313,7 +322,7 @@ class LogSegmentTest {
   def testNextOffsetCalculation(): Unit = {
     val seg = createSegment(40)
     assertEquals(40, seg.readNextOffset)
-    seg.append(52, RecordBatch.NO_TIMESTAMP, -1L, records(50, "hello", "there", "you"))
+    seg.append(52, records(50, "hello", "there", "you"))
     assertEquals(53, seg.readNextOffset)
   }
 
@@ -354,7 +363,7 @@ class LogSegmentTest {
   def testRecoveryFixesCorruptIndex(): Unit = {
     val seg = createSegment(0)
     for (i <- 0 until 100)
-      seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
+      seg.append(i, records(i, i.toString))
     val indexFile = seg.offsetIndexFile
     writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
@@ -375,25 +384,22 @@ class LogSegmentTest {
     val pid2 = 10L
 
     // append transactional records from pid1
-    segment.append(101L, RecordBatch.NO_TIMESTAMP,
-      100L, MemoryRecords.withTransactionalRecords(100L, Compression.NONE,
+    segment.append(101L, MemoryRecords.withTransactionalRecords(100L, Compression.NONE,
         pid1, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // append transactional records from pid2
-    segment.append(103L, RecordBatch.NO_TIMESTAMP, 102L, MemoryRecords.withTransactionalRecords(102L, Compression.NONE,
+    segment.append(103L, MemoryRecords.withTransactionalRecords(102L, Compression.NONE,
         pid2, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // append non-transactional records
-    segment.append(105L, RecordBatch.NO_TIMESTAMP, 104L, MemoryRecords.withRecords(104L, Compression.NONE,
+    segment.append(105L, MemoryRecords.withRecords(104L, Compression.NONE,
         partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // abort the transaction from pid2 (note LSO should be 100L since the txn from pid1 has not completed)
-    segment.append(106L, RecordBatch.NO_TIMESTAMP, 106L,
-      endTxnRecords(ControlRecordType.ABORT, pid2, producerEpoch, offset = 106L))
+    segment.append(106L, endTxnRecords(ControlRecordType.ABORT, pid2, producerEpoch, offset = 106L))
 
     // commit the transaction from pid1
-    segment.append(107L, RecordBatch.NO_TIMESTAMP, 107L,
-      endTxnRecords(ControlRecordType.COMMIT, pid1, producerEpoch, offset = 107L))
+    segment.append(107L, endTxnRecords(ControlRecordType.COMMIT, pid1, producerEpoch, offset = 107L))
 
     var stateManager = newProducerStateManager()
     segment.recover(stateManager, Optional.empty())
@@ -434,16 +440,16 @@ class LogSegmentTest {
     val checkpoint: LeaderEpochCheckpointFile = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1))
 
     val cache = new LeaderEpochFileCache(topicPartition, checkpoint, new MockScheduler(new MockTime()))
-    seg.append(105L, RecordBatch.NO_TIMESTAMP, 104L, MemoryRecords.withRecords(104L, Compression.NONE, 0,
+    seg.append(105L, MemoryRecords.withRecords(104L, Compression.NONE, 0,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
-    seg.append(107L, RecordBatch.NO_TIMESTAMP, 106L, MemoryRecords.withRecords(106L, Compression.NONE, 1,
+    seg.append(107L, MemoryRecords.withRecords(106L, Compression.NONE, 1,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
-    seg.append(109L, RecordBatch.NO_TIMESTAMP, 108L, MemoryRecords.withRecords(108L, Compression.NONE, 1,
+    seg.append(109L, MemoryRecords.withRecords(108L, Compression.NONE, 1,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
-    seg.append(111L, RecordBatch.NO_TIMESTAMP, 110, MemoryRecords.withRecords(110L, Compression.NONE, 2,
+    seg.append(111L, MemoryRecords.withRecords(110L, Compression.NONE, 2,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     seg.recover(newProducerStateManager(), Optional.of(cache))
@@ -472,7 +478,7 @@ class LogSegmentTest {
   def testRecoveryFixesCorruptTimeIndex(): Unit = {
     val seg = createSegment(0)
     for (i <- 0 until 100)
-      seg.append(i, i * 10, i, records(i, i.toString))
+      seg.append(i, records(i, i.toString))
     val timeIndexFile = seg.timeIndexFile
     writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
@@ -492,7 +498,7 @@ class LogSegmentTest {
     for (_ <- 0 until 10) {
       val seg = createSegment(0)
       for (i <- 0 until messagesAppended)
-        seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
+        seg.append(i, records(i, i.toString))
       val offsetToBeginCorruption = TestUtils.random.nextInt(messagesAppended)
       // start corrupting somewhere in the middle of the chosen record all the way to the end
 
@@ -523,9 +529,9 @@ class LogSegmentTest {
   def testCreateWithInitFileSizeAppendMessage(): Unit = {
     val seg = createSegment(40, fileAlreadyExists = false, 512*1024*1024, preallocate = true)
     val ms = records(50, "hello", "there")
-    seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
+    seg.append(51, ms)
     val ms2 = records(60, "alpha", "beta")
-    seg.append(61, RecordBatch.NO_TIMESTAMP, -1L, ms2)
+    seg.append(61, ms2)
     val read = seg.read(55, 200)
     checkEquals(ms2.records.iterator, read.records.records.iterator)
   }
@@ -544,9 +550,9 @@ class LogSegmentTest {
       512 * 1024 * 1024, true)
 
     val ms = records(50, "hello", "there")
-    seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
+    seg.append(51, ms)
     val ms2 = records(60, "alpha", "beta")
-    seg.append(61, RecordBatch.NO_TIMESTAMP, -1L, ms2)
+    seg.append(61, ms2)
     val read = seg.read(55, 200)
     checkEquals(ms2.records.iterator, read.records.records.iterator)
     val oldSize = seg.log.sizeInBytes()
@@ -581,9 +587,9 @@ class LogSegmentTest {
 
     //Given two messages with a gap between them (e.g. mid offset compacted away)
     val ms1 = records(offset, "first message")
-    seg.append(offset, RecordBatch.NO_TIMESTAMP, -1L, ms1)
+    seg.append(offset, ms1)
     val ms2 = records(offset + 3, "message after gap")
-    seg.append(offset + 3, RecordBatch.NO_TIMESTAMP, -1L, ms2)
+    seg.append(offset + 3, ms2)
 
     // When we truncate to an offset without a corresponding log entry
     seg.truncateTo(offset + 1)
@@ -629,10 +635,78 @@ class LogSegmentTest {
     val segment = createSegment(1)
     assertEquals(Long.MaxValue, segment.getFirstBatchTimestamp)
 
-    segment.append(1, 1000L, 1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord("one".getBytes)))
+    segment.append(1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord(1000L, "one".getBytes)))
     assertEquals(1000L, segment.getFirstBatchTimestamp)
 
     segment.close()
+  }
+
+  @Test
+  def testIndexForMultipleBatchesInMemoryRecords(): Unit = {
+    val segment = createSegment(0, 1, Time.SYSTEM)
+
+    val buffer1 = ByteBuffer.allocate(1024)
+
+    // append first batch to buffer1
+    var builder = MemoryRecords.builder(buffer1, Compression.NONE, TimestampType.CREATE_TIME, 0)
+    builder.append(0L, "key1".getBytes, "value1".getBytes)
+    builder.close()
+
+    // append second batch to buffer1
+    builder = MemoryRecords.builder(buffer1, Compression.NONE, TimestampType.CREATE_TIME, 1)
+    builder.append(1L, "key1".getBytes, "value1".getBytes)
+    builder.close()
+
+    buffer1.flip
+    var record = MemoryRecords.readableRecords(buffer1)
+    segment.append(1L, record)
+
+    val buffer2 = ByteBuffer.allocate(1024)
+    // append first batch to buffer2
+    builder = MemoryRecords.builder(buffer2, Compression.NONE, TimestampType.CREATE_TIME, 2)
+    builder.append(2L, "key1".getBytes, "value1".getBytes)
+    builder.close()
+    buffer2.flip
+    record = MemoryRecords.readableRecords(buffer2)
+    segment.append(2L, record)
+    assertEquals(2, segment.offsetIndex.entries)
+    assertEquals(1, segment.offsetIndex.entry(0).offset)
+    assertEquals(2, segment.offsetIndex.entry(1).offset)
+    assertEquals(2, segment.timeIndex.entries)
+    assertEquals(new TimestampOffset(1, 1), segment.timeIndex.entry(0))
+    assertEquals(new TimestampOffset(2, 2), segment.timeIndex.entry(1))
+  }
+
+  @Test
+  def estNonMonotonicTimestampForMultipleBatchesInMemoryRecords(): Unit = {
+    val segment = createSegment(0, 1, Time.SYSTEM)
+    val buffer1 = ByteBuffer.allocate(1024)
+
+    // append first batch to buffer1
+    var builder = MemoryRecords.builder(buffer1, Compression.NONE, TimestampType.CREATE_TIME, 0)
+    builder.append(1L, "key1".getBytes, "value1".getBytes)
+    builder.close()
+
+    // append second batch to buffer1
+    builder = MemoryRecords.builder(buffer1, Compression.NONE, TimestampType.CREATE_TIME, 1)
+    builder.append(0L, "key1".getBytes, "value1".getBytes)
+    builder.close()
+
+    // append third batch to buffer1
+    builder = MemoryRecords.builder(buffer1, Compression.NONE, TimestampType.CREATE_TIME, 2)
+    builder.append(2L, "key1".getBytes, "value1".getBytes)
+    builder.close()
+
+    buffer1.flip()
+    val record = MemoryRecords.readableRecords(buffer1)
+    segment.append(2L, record)
+
+    assertEquals(2, segment.offsetIndex.entries)
+    assertEquals(1, segment.offsetIndex.entry(0).offset)
+    assertEquals(2, segment.offsetIndex.entry(1).offset)
+    assertEquals(2, segment.timeIndex.entries)
+    assertEquals(new TimestampOffset(1, 0), segment.timeIndex.entry(0))
+    assertEquals(new TimestampOffset(2, 2), segment.timeIndex.entry(1))
   }
 
   private def newProducerStateManager(): ProducerStateManager = {
