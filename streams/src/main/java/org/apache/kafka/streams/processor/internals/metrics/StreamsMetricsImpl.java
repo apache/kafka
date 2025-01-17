@@ -289,7 +289,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return threadLevelTagMap(threadId, Collections.emptyMap());
     }
 
-        public Map<String, String> threadLevelTagMap(final String threadId, final Map<String, String> additionalTags) {
+    public Map<String, String> threadLevelTagMap(final String threadId, final Map<String, String> additionalTags) {
         final Map<String, String> tagMap = new LinkedHashMap<>(additionalTags);
         tagMap.put(THREAD_ID_TAG, threadId);
         return tagMap;
