@@ -110,7 +110,6 @@ include 'clients',
     'tools:tools-api',
     'transaction-coordinator',
     'trogdor',
-    'test-common',
     'test-common:test-common-api',
     'test-common:test-common-junit',
     'test-common:test-common-runtime'

@@ -1538,38 +1538,6 @@ project(':group-coordinator') {
   srcJar.dependsOn 'processMessages'
 }
 
-project(':test-common') {
-  // Test framework stuff. Implementations that support test-common-api
-  base {
-    archivesName = "kafka-test-common"
-  }
-
-  dependencies {
-    implementation project(':core')
-    implementation project(':metadata')
-    implementation project(':server')
-    implementation project(':raft')
-    implementation project(':storage')
-    implementation project(':server-common')
-    implementation project(':test-common:test-common-api')
-    implementation libs.jacksonDatabindYaml
-    implementation libs.slf4jApi
-
-    testImplementation libs.junitJupiter
-    testImplementation libs.mockitoCore
-    testImplementation testLog4j2Libs
-
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  checkstyle {
-    configProperties = checkstyleConfigProperties("import-control-test-common.xml")
-  }
-
-  javadoc {
-    enabled = false
-  }
-}
 
 project(':test-common:test-common-api') {
   // Interfaces, config classes, and other test APIs
@@ -1599,7 +1567,7 @@ project(':test-common:test-common-api') {
 }
 
 project(':test-common:test-common-junit') {
-  // Runtime-only test code including JUnit extentions. Java 11 only
+  // Runtime-only JUnit extentions for entire project. Java 11 only
   base {
     archivesName = "kafka-test-common-junit"
   }
@@ -1622,7 +1590,7 @@ project(':test-common:test-common-junit') {
 }
 
 project(':test-common:test-common-runtime') {
-  // Runtime-only test code. Java 17+ only
+  // Runtime-only JUnit extensions for integration tests. Java 17 only
   base {
     archivesName = "kafka-test-common-runtime"
   }
