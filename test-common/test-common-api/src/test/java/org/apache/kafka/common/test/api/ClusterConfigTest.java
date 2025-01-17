@@ -19,7 +19,6 @@ package org.apache.kafka.common.test.api;
 
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Assertions;
@@ -28,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -35,10 +35,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_LISTENER_NAME;
-import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_SECURITY_PROTOCOL;
-import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_CONTROLLER_LISTENER_NAME;
-import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_CONTROLLER_SECURITY_PROTOCOL;
+import static org.apache.kafka.common.test.api.Defaults.DEFAULT_BROKER_LISTENER_NAME;
+import static org.apache.kafka.common.test.api.Defaults.DEFAULT_BROKER_SECURITY_PROTOCOL;
+import static org.apache.kafka.common.test.api.Defaults.DEFAULT_CONTROLLER_LISTENER_NAME;
+import static org.apache.kafka.common.test.api.Defaults.DEFAULT_CONTROLLER_SECURITY_PROTOCOL;
 
 public class ClusterConfigTest {
 
@@ -51,7 +51,8 @@ public class ClusterConfigTest {
 
     @Test
     public void testCopy() throws IOException {
-        File trustStoreFile = TestUtils.tempFile();
+        File trustStoreFile = Files.createTempFile("kafka", ".tmp").toFile();
+        trustStoreFile.deleteOnExit();
 
         ClusterConfig clusterConfig = ClusterConfig.builder()
                 .setTypes(Collections.singleton(Type.KRAFT))

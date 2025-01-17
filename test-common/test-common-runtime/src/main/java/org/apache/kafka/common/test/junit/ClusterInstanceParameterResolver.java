@@ -19,6 +19,7 @@ package org.apache.kafka.common.test.junit;
 
 
 import org.apache.kafka.common.test.ClusterInstance;
+
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
@@ -27,7 +28,6 @@ import org.junit.platform.commons.util.AnnotationUtils;
 
 import java.lang.reflect.Executable;
 
-import static org.junit.platform.commons.util.AnnotationUtils.isAnnotated;
 
 /**
  * This resolver provides an instance of {@link ClusterInstance} to a test invocation. The instance represents the
