@@ -72,7 +72,7 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
 
     @Test
     public void testConfigureRefreshingFileAccessTokenRetrieverWithInvalidFile() throws Exception {
-        // Should fail because the parent path exists, the file itself doesn't.
+        // Should fail because while the parent path exists, the file itself doesn't.
         File tmpDir = createTempDir("this-directory-does-exist");
         File accessTokenFile = new File(tmpDir, "this-file-does-not-exist.json");
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
@@ -83,12 +83,12 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
 
     @Test
     public void testSaslOauthbearerTokenEndpointUrlIsNotAllowed() throws Exception {
-        // Should fail because the while the parent path exists, the file itself doesn't.
+        // Should fail because while the parent path exists, the file itself doesn't.
         File tmpDir = createTempDir("not_allowed");
         File accessTokenFile = new File(tmpDir, "not_allowed.json");
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         assertThrowsWithMessage(IllegalArgumentException.class, () -> AccessTokenRetrieverFactory.create(configs, Collections.emptyMap()),
-                accessTokenFile.toURI().toString() + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.urls' to allow " + accessTokenFile.toURI().toString());
+                ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
     }
 
     @ParameterizedTest

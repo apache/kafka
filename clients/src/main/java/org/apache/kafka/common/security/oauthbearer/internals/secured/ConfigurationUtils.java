@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT;
 
 /**
  * <code>ConfigurationUtils</code> is a utility class to perform basic configuration-related
@@ -236,12 +237,12 @@ public class ConfigurationUtils {
     // make sure the url is in the "org.apache.kafka.sasl.oauthbearer.allowed.urls" system property
     public void throwIfURLIsNotAllowed(String urlConfig) {
         Set<String> allowedLoginModuleList = Arrays.stream(
-                        System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "").split(","))
+                        System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT).split(","))
                 .map(String::trim)
                 .collect(Collectors.toSet());
         String value = get(urlConfig);
         if (!allowedLoginModuleList.contains(value)) {
-            throw new IllegalArgumentException(value + " is not allowed. Update System property '"
+            throw new IllegalArgumentException(value + " is not allowed. Update system property '"
                     + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
         }
     }
