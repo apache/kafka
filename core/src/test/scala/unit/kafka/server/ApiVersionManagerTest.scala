@@ -16,12 +16,11 @@
  */
 package kafka.server
 
-import kafka.server.metadata.ZkMetadataCache
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.server.BrokerFeatures
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.KRaftVersion
 import org.junit.jupiter.api.{Disabled, Test}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -32,7 +31,7 @@ import scala.jdk.CollectionConverters._
 
 class ApiVersionManagerTest {
   private val brokerFeatures = BrokerFeatures.createDefault(true)
-  private val metadataCache = new ZkMetadataCache(1, MetadataVersion.latestTesting(), brokerFeatures)
+  private val metadataCache = MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.LATEST_PRODUCTION)
 
   @ParameterizedTest
   @EnumSource(classOf[ListenerType])
