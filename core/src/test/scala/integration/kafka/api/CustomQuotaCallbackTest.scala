@@ -87,7 +87,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
     super.configureSecurityBeforeServersStart(testInfo)
-    createScramCredentials("", JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
+    createScramCredentials(createAdminClient(), JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
