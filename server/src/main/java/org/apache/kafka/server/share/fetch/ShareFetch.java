@@ -214,6 +214,7 @@ public class ShareFetch {
             erroneous.forEach((topicIdPartition, throwable) -> {
                 erroneousTopics.add(topicIdPartition.topic());
                 response.put(topicIdPartition, new PartitionData()
+                    .setPartitionIndex(topicIdPartition.partition())
                     .setErrorCode(Errors.forException(throwable).code())
                     .setErrorMessage(throwable.getMessage()));
             });

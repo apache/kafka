@@ -392,7 +392,7 @@ public class SharePartitionManager implements AutoCloseable {
 
     private CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> mapAcknowledgementFutures(
         Map<TopicIdPartition, CompletableFuture<Throwable>> futuresMap,
-        Optional<Consumer<Collection<String>>> metricsHandler
+        Optional<Consumer<Set<String>>> failedMetricsHandler
     ) {
         CompletableFuture<Void> allFutures = CompletableFuture.allOf(
             futuresMap.values().toArray(new CompletableFuture[0]));
@@ -411,7 +411,7 @@ public class SharePartitionManager implements AutoCloseable {
                 }
                 result.put(topicIdPartition, partitionData);
             });
-            metricsHandler.ifPresent(handler -> handler.accept(failedTopics));
+            failedMetricsHandler.ifPresent(handler -> handler.accept(failedTopics));
             return result;
         });
     }
@@ -740,7 +740,7 @@ public class SharePartitionManager implements AutoCloseable {
      *
      * @return A Consumer that updates the failed share acknowledge request metrics.
      */
-    private Consumer<Collection<String>> failedShareAcknowledgeMetricsHandler() {
+    private Consumer<Set<String>> failedShareAcknowledgeMetricsHandler() {
         return failedTopics -> {
             // Update failed share acknowledge request metric.
             failedTopics.forEach(topic -> {
