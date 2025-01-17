@@ -9001,6 +9001,7 @@ class KafkaApisTest extends Logging {
       Seq(new RegisterBrokerRecord()
         .setBrokerId(brokerId)
         .setRack("rack")
+        .setFenced(false)
         .setEndPoints(endpoints)))
 
     val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
@@ -9025,22 +9026,24 @@ class KafkaApisTest extends Logging {
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
     val anotherListener = new ListenerName("LISTENER2")
 
-    val endpoints = new BrokerEndpointCollection()
-    endpoints.add(
+    val endpoints0 = new BrokerEndpointCollection()
+    endpoints0.add(
       new BrokerEndpoint()
         .setHost("broker0")
         .setPort(9092)
         .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
         .setName(plaintextListener.value)
     )
-    endpoints.add(
+    endpoints0.add(
       new BrokerEndpoint()
         .setHost("broker0")
         .setPort(9093)
         .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
         .setName(anotherListener.value)
     )
-    endpoints.add(
+
+    val endpoints1 = new BrokerEndpointCollection()
+    endpoints1.add(
       new BrokerEndpoint()
         .setHost("broker1")
         .setPort(9092)
@@ -9049,10 +9052,9 @@ class KafkaApisTest extends Logging {
     )
 
     MetadataCacheTest.updateCache(metadataCache,
-      Seq(new RegisterBrokerRecord()
-        .setBrokerId(brokerId)
-        .setRack("rack")
-        .setEndPoints(endpoints)))
+      Seq(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints0),
+      new RegisterBrokerRecord().setBrokerId(1).setRack("rack").setFenced(false).setEndPoints(endpoints1))
+    )
 
     (plaintextListener, anotherListener)
   }
@@ -9298,6 +9300,7 @@ class KafkaApisTest extends Logging {
     new RegisterBrokerRecord()
       .setBrokerId(brokerId)
       .setRack("rack")
+      .setFenced(false)
       .setEndPoints(endpoints)
       .setBrokerEpoch(brokerEpoch)
   }
