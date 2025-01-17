@@ -179,7 +179,7 @@ class KafkaApisTest extends Logging {
       enabledApis,
       BrokerFeatures.defaultSupportedFeatures(true),
       true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
+      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
 
     when(groupCoordinator.isNewGroupCoordinator).thenReturn(config.isNewGroupCoordinatorEnabled)
     setupFeatures(featureVersions)
@@ -220,9 +220,7 @@ class KafkaApisTest extends Logging {
             featureVersions.map { featureVersion =>
               featureVersion.featureName -> featureVersion.featureLevel.asInstanceOf[java.lang.Short]
             }.toMap.asJava,
-            0,
-            true
-          )
+            0)
         }
 
       case _ => throw new IllegalStateException("Test must set an instance of KRaftMetadataCache")
