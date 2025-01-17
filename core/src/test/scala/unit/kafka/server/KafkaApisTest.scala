@@ -3575,6 +3575,9 @@ class KafkaApisTest extends Logging {
         .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
         .setName(plaintextListener.value)
     )
+    MetadataCacheTest.updateCache(metadataCache,
+      Seq(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints))
+    )
 
     // 2. Set up authorizer
     val authorizer: Authorizer = mock(classOf[Authorizer])
@@ -3604,6 +3607,8 @@ class KafkaApisTest extends Logging {
     val topicIds = new util.HashMap[String, Uuid]()
     topicIds.put(authorizedTopic, authorizedTopicId)
     topicIds.put(unauthorizedTopic, unauthorizedTopicId)
+    addTopicToMetadataCache(authorizedTopic, 1, topicId = authorizedTopicId)
+    addTopicToMetadataCache(unauthorizedTopic, 1, topicId = unauthorizedTopicId)
 
     def createDummyPartitionRecord(topicId: Uuid) = {
       new PartitionRecord()
