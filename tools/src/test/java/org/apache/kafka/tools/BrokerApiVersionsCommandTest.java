@@ -60,8 +60,7 @@ public class BrokerApiVersionsCommandTest {
 
         NodeApiVersions nodeApiVersions = new NodeApiVersions(
                 ApiVersionsResponse.collectApis(ApiKeys.clientApis(), true),
-                Collections.emptyList(),
-                false);
+                Collections.emptyList());
         Iterator<ApiKeys> apiKeysIter = ApiKeys.clientApis().iterator();
         while (apiKeysIter.hasNext()) {
             ApiKeys apiKey = apiKeysIter.next();

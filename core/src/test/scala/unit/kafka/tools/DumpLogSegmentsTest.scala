@@ -88,6 +88,8 @@ class DumpLogSegmentsTest {
   private def createTestLog = {
     val props = new Properties
     props.setProperty(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "128")
+    // This test uses future timestamps beyond the default of 1 hour.
+    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.MaxValue.toString)
     log = UnifiedLog(
       dir = logDir,
       config = new LogConfig(props),

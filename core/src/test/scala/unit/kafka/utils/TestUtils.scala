@@ -1008,15 +1008,13 @@ object TestUtils extends Logging {
     override def submit(
       topicPartition: TopicIdPartition,
       leaderAndIsr: LeaderAndIsr,
-      controllerEpoch: Int
     ): CompletableFuture[LeaderAndIsr]= {
       val future = new CompletableFuture[LeaderAndIsr]()
       if (inFlight.compareAndSet(false, true)) {
         isrUpdates += AlterPartitionItem(
           topicPartition,
           leaderAndIsr,
-          future,
-          controllerEpoch
+          future
         )
       } else {
         future.completeExceptionally(new OperationNotAttemptedException(
