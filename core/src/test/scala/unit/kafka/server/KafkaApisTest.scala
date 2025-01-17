@@ -525,7 +525,6 @@ class KafkaApisTest extends Logging {
 
     val capturedResponse = verifyNoThrottling[AbstractResponse](request)
     assertEquals(expectedResponse.data, capturedResponse.data)
-
   }
 
   private def authorizeResource(authorizer: Authorizer,
