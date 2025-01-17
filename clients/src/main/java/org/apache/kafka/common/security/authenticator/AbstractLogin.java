@@ -76,6 +76,10 @@ public abstract class AbstractLogin implements Login {
         return configuration;
     }
 
+    protected AuthenticateCallbackHandler getLoginCallbackHandler() {
+        return this.loginCallbackHandler;
+    }
+
     /**
      * Callback handler for creating login context. Login callback handlers
      * should support the callbacks required for the login modules used by
