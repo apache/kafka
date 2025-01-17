@@ -27,6 +27,8 @@ import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.DetectThreadLeak;
 import org.apache.kafka.common.test.api.Type;
 
+import org.apache.kafka.server.common.Feature;
+import org.apache.kafka.server.util.timer.SystemTimer;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -110,9 +112,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private static final String DETECT_THREAD_LEAK_KEY = "detectThreadLeak";
     private static final Set<String> SKIPPED_THREAD_PREFIX = Set.of(METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX,
             FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX, ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX,
-            RMI_THREAD_PREFIX);
-
-    // TODO re-add SystemTimer.SYSTEM_TIMER_THREAD_PREFIX
+            RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX);
 
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
@@ -262,9 +262,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .collect(Collectors.groupingBy(ClusterConfigProperty::id, Collectors.mapping(Function.identity(),
                 Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b))));
 
-        // TODO get rid of Feature reference
-        //Map<Feature, Short> features = Arrays.stream(clusterTest.features())
-        //    .collect(Collectors.toMap(ClusterFeature::feature, ClusterFeature::version));
+        Map<Feature, Short> features = Arrays.stream(clusterTest.features())
+            .collect(Collectors.toMap(ClusterFeature::feature, ClusterFeature::version));
 
         ClusterConfig config = ClusterConfig.builder()
             .setTypes(new HashSet<>(Arrays.asList(types)))
@@ -280,7 +279,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .setPerServerProperties(perServerProperties)
             .setMetadataVersion(clusterTest.metadataVersion())
             .setTags(Arrays.asList(clusterTest.tags()))
-        //    .setFeatures(features)
+            .setFeatures(features)
             .build();
 
         return Arrays.stream(types)

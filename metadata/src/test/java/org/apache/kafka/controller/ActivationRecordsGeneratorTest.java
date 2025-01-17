@@ -43,7 +43,7 @@ public class ActivationRecordsGeneratorTest {
             logMsg -> assertEquals("Performing controller activation. The metadata log appears to be empty. " +
                 "Appending 1 bootstrap record(s) at metadata.version 3.0-IV1 from bootstrap source 'test'.", logMsg),
             -1L,
-            BootstrapMetadata.fromVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, "org/apache/kafka/common/test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, "test"),
             MetadataVersion.MINIMUM_KRAFT_VERSION,
             2
         );
@@ -58,7 +58,7 @@ public class ActivationRecordsGeneratorTest {
                 "Appending 1 bootstrap record(s) at metadata.version 3.4-IV0 from bootstrap " +
                 "source 'test'.", logMsg),
             -1L,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_4_IV0, "org/apache/kafka/common/test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_4_IV0, "test"),
             MetadataVersion.IBP_3_4_IV0,
             2
         );
@@ -73,7 +73,7 @@ public class ActivationRecordsGeneratorTest {
                 "Appending 1 bootstrap record(s) in metadata transaction at metadata.version 3.6-IV1 from bootstrap " +
                 "source 'test'.", logMsg),
             -1L,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "org/apache/kafka/common/test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
             MetadataVersion.IBP_3_6_IV1,
             2
         );
@@ -88,7 +88,7 @@ public class ActivationRecordsGeneratorTest {
                 "transaction at offset 0. Re-appending 1 bootstrap record(s) in new metadata transaction at " +
                 "metadata.version 3.6-IV1 from bootstrap source 'test'.", logMsg),
             0L,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "org/apache/kafka/common/test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
             MetadataVersion.IBP_3_6_IV1,
             2
         );
@@ -103,7 +103,7 @@ public class ActivationRecordsGeneratorTest {
                 "transaction at offset 0. Re-appending 2 bootstrap record(s) in new metadata transaction at " +
                 "metadata.version 4.0-IV1 from bootstrap source 'test'.", logMsg),
             0L,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "org/apache/kafka/common/test").copyWithFeatureRecord(
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test").copyWithFeatureRecord(
                 EligibleLeaderReplicasVersion.FEATURE_NAME,
                 EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
             MetadataVersion.IBP_4_0_IV1,

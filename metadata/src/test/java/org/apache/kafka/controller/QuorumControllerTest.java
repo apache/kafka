@@ -1511,7 +1511,7 @@ public class QuorumControllerTest {
             msg -> { },
             true,
             -1L,
-            BootstrapMetadata.fromVersion(metadataVersion, "org/apache/kafka/common/test"),
+            BootstrapMetadata.fromVersion(metadataVersion, "test"),
             metadataVersion,
             3);
         RecordTestUtils.replayAll(featureControlManager, result.records());
@@ -1547,7 +1547,7 @@ public class QuorumControllerTest {
             logMsg -> { },
             true,
             0L,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "org/apache/kafka/common/test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
             MetadataVersion.IBP_3_6_IV1,
             3);
         assertFalse(result.isAtomic());
@@ -1596,7 +1596,7 @@ public class QuorumControllerTest {
             logMsg -> { },
             false,
             offsetControlManager.transactionStartOffset(),
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "org/apache/kafka/common/test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
             MetadataVersion.IBP_3_6_IV1,
             3);
 
@@ -1620,7 +1620,7 @@ public class QuorumControllerTest {
                 msg -> { },
                 false,
                 offsetControlManager.transactionStartOffset(),
-                BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "org/apache/kafka/common/test"),
+                BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
                 MetadataVersion.IBP_3_6_IV0,
                 3));
     }
