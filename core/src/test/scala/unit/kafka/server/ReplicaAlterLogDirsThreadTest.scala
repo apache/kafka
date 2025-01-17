@@ -25,12 +25,10 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.metadata.{PartitionRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.server.common
 import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
@@ -43,7 +41,7 @@ import org.mockito.Mockito.{doNothing, mock, never, times, verify, verifyNoInter
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
 import java.util.{Optional, OptionalInt, OptionalLong}
-import scala.collection.{Map, Seq}
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class ReplicaAlterLogDirsThreadTest {
@@ -54,17 +52,7 @@ class ReplicaAlterLogDirsThreadTest {
   private val topicNames = collection.immutable.Map(topicId -> "topic1")
   private val tid1p0 = new TopicIdPartition(topicId, t1p0)
   private val failedPartitions = new FailedPartitions
-  private val metadataDelta = new MetadataDelta(MetadataImage.EMPTY)
-  metadataDelta.replay(new TopicRecord().setTopicId(topicId).setName("topic1"))
-  metadataDelta.replay(new PartitionRecord()
-    .setTopicId(topicId)
-    .setPartitionId(0)
-    .setLeader(0)
-    .setLeaderEpoch(0)
-  )
-
   private val metadataCache = MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.LATEST_PRODUCTION)
-  metadataCache.setImage(metadataDelta.apply(new MetadataProvenance(0, 0, 0L, true)))
 
   private def initialFetchState(fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
     InitialFetchState(topicId = Some(topicId), leader = new BrokerEndPoint(0, "localhost", 9092),

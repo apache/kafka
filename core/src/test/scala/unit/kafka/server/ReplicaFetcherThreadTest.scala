@@ -28,13 +28,11 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.metadata.{PartitionRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
@@ -51,7 +49,7 @@ import org.mockito.Mockito.{mock, times, verify, when}
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.{Collections, Optional, OptionalInt}
-import scala.collection.{Map, mutable}
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 class ReplicaFetcherThreadTest {
@@ -68,24 +66,7 @@ class ReplicaFetcherThreadTest {
   private val brokerEndPoint = new BrokerEndPoint(0, "localhost", 1000)
   private val failedPartitions = new FailedPartitions
 
-  private val metadataDelta = new MetadataDelta(MetadataImage.EMPTY)
-  metadataDelta.replay(new TopicRecord().setTopicId(topicId1).setName("topic1"))
-  metadataDelta.replay(new PartitionRecord()
-    .setTopicId(topicId1)
-    .setPartitionId(0)
-    .setLeader(0)
-    .setLeaderEpoch(0)
-  )
-  metadataDelta.replay(new TopicRecord().setTopicId(topicId2).setName("topic2"))
-  metadataDelta.replay(new PartitionRecord()
-    .setTopicId(topicId2)
-    .setPartitionId(0)
-    .setLeader(0)
-    .setLeaderEpoch(0)
-  )
-
   private val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION)
-  metadataCache.setImage(metadataDelta.apply(new MetadataProvenance(0, 0, 0L, true)))
 
   private def initialFetchState(topicId: Option[Uuid], fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
     InitialFetchState(topicId = topicId, leader = new BrokerEndPoint(0, "localhost", 9092),
