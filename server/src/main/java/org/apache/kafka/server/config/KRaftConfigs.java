@@ -52,7 +52,8 @@ public class KRaftConfigs {
 
     public static final String NODE_ID_CONFIG = "node.id";
     public static final int EMPTY_NODE_ID = -1;
-    public static final String NODE_ID_DOC = "The node ID associated with the roles this process is playing when <code>process.roles</code> is non-empty.";
+    public static final String NODE_ID_DOC = "The node ID associated with the roles this process is playing when <code>process.roles</code> is non-empty. " +
+            "This is required configuration when running in KRaft mode.";
 
     public static final String METADATA_LOG_DIR_CONFIG = "metadata.log.dir";
     public static final String METADATA_LOG_DIR_DOC = "This configuration determines where we put the metadata log. " +
@@ -76,7 +77,7 @@ public class KRaftConfigs {
 
     public static final String CONTROLLER_LISTENER_NAMES_CONFIG = "controller.listener.names";
     public static final String CONTROLLER_LISTENER_NAMES_DOC = "A comma-separated list of the names of the listeners used by the controller. This is required " +
-            "in KRaft mode. When communicating with the controller quorum, the broker will always use the first listener in this list.";
+            "when communicating with the controller quorum, the broker will always use the first listener in this list.";
 
     public static final String SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG = "sasl.mechanism.controller.protocol";
     public static final String SASL_MECHANISM_CONTROLLER_PROTOCOL_DOC = "SASL mechanism used for communication with controllers. Default is GSSAPI.";

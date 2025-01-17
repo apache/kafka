@@ -46,7 +46,7 @@ public class ServerConfigs {
 
     public static final String BROKER_ID_CONFIG = "broker.id";
     public static final int BROKER_ID_DEFAULT = -1;
-    public static final String BROKER_ID_DOC = "The broker id for this server. If unset, a unique broker id will be generated.";
+    public static final String BROKER_ID_DOC = "The broker id for this server.";
 
     public static final String MESSAGE_MAX_BYTES_CONFIG = "message.max.bytes";
     public static final String MESSAGE_MAX_BYTES_DOC = TopicConfig.MAX_MESSAGE_BYTES_DOC +
