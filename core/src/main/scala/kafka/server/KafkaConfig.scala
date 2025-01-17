@@ -560,7 +560,17 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     controllerListenerNames.flatMap { name =>
       controllerAdvertisedListeners
         .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
-        .orElse(controllerListenersValue.find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name))))
+        .orElse(
+          // If users don't define advertised.listeners, the advertised controller listeners inherit from listeners configuration
+          // which match listener names in controller.listener.names. Also, removing "0.0.0.0" host to avoid validation errors.
+          controllerListenersValue
+            .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
+            .map(endpoint => if (endpoint.host == "0.0.0.0") {
+              new EndPoint(null, endpoint.port, endpoint.listenerName, endpoint.securityProtocol)
+            } else {
+              endpoint
+            })
+        )
     }
   }
 
@@ -575,7 +585,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (advertisedListenersProp != null) {
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
     } else {
-      listeners
+      // Only use implicit broker listeners here. Implicit controller listeners are handled in effectiveAdvertisedControllerListeners.
+      listeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
     }
   }
 
