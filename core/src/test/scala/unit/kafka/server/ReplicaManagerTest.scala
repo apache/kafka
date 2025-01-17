@@ -67,6 +67,7 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPa
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, PartitionMetadataFile}
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -265,7 +266,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testMaybeAddLogDirFetchersWithoutEpochCache(): Unit = {
+  def testMaybeAddLogDirFetchers(): Unit = {
     val dir1 = TestUtils.tempDir()
     val dir2 = TestUtils.tempDir()
     val props = TestUtils.createBrokerConfig(0)
@@ -310,8 +311,6 @@ class ReplicaManagerTest {
 
       partition.createLogIfNotExists(isNew = true, isFutureReplica = true,
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
-      // remove cache to disable OffsetsForLeaderEpoch API
-      partition.futureLog.get.leaderEpochCache = None
 
       // this method should use hw of future log to create log dir fetcher. Otherwise, it causes offset mismatch error
       rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), _ => None)
@@ -2540,7 +2539,7 @@ class ReplicaManagerTest {
       verify(addPartitionsToTxnManager, times(0)).addOrVerifyTransaction(any(), any(), any(), any(), any(), any())
 
       // Dynamically enable verification.
-      config.dynamicConfig.initialize(None, None)
+      config.dynamicConfig.initialize(None)
       val props = new Properties()
       props.put(TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "true")
       config.dynamicConfig.updateBrokerConfig(config.brokerId, props)
@@ -2592,7 +2591,7 @@ class ReplicaManagerTest {
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // Disable verification
-      config.dynamicConfig.initialize(None, None)
+      config.dynamicConfig.initialize(None)
       val props = new Properties()
       props.put(TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "false")
       config.dynamicConfig.updateBrokerConfig(config.brokerId, props)
@@ -2901,8 +2900,8 @@ class ReplicaManagerTest {
     val maxTransactionTimeoutMs = 30000
     val maxProducerIdExpirationMs = 30000
     val segments = new LogSegments(tp)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      logDir, tp, mockLogDirFailureChannel, "", None, time.scheduler)
+    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+      logDir, tp, mockLogDirFailureChannel, None, time.scheduler)
     val producerStateManager = new ProducerStateManager(tp, logDir,
       maxTransactionTimeoutMs, new ProducerStateManagerConfig(maxProducerIdExpirationMs, true), time)
     val offsets = new LogLoader(
@@ -2916,7 +2915,7 @@ class ReplicaManagerTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.toJava,
+      leaderEpochCache,
       producerStateManager,
       new ConcurrentHashMap[String, Integer],
       false
@@ -2930,8 +2929,7 @@ class ReplicaManagerTest {
       producerIdExpirationCheckIntervalMs = 30000,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = producerStateManager,
-      _topicId = topicId,
-      keepPartitionMetadataFile = true) {
+      _topicId = topicId) {
 
       override def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
         assertEquals(leaderEpoch, leaderEpochFromLeader)
@@ -4517,7 +4515,7 @@ class ReplicaManagerTest {
     when(mockLog.logStartOffset).thenReturn(endOffset).thenReturn(startOffset)
     when(mockLog.logEndOffset).thenReturn(endOffset)
     when(mockLog.localLogStartOffset()).thenReturn(endOffset - 10)
-    when(mockLog.leaderEpochCache).thenReturn(None)
+    when(mockLog.leaderEpochCache).thenReturn(mock(classOf[LeaderEpochFileCache]))
     when(mockLog.latestEpoch).thenReturn(Some(0))
     val producerStateManager = mock(classOf[ProducerStateManager])
     when(mockLog.producerStateManager).thenReturn(producerStateManager)

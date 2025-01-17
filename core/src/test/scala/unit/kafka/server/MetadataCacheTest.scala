@@ -16,10 +16,8 @@
   */
 package kafka.server
 
-import kafka.cluster.Broker
-import kafka.server.metadata.{KRaftMetadataCache, MetadataSnapshot, ZkMetadataCache}
+import kafka.server.metadata.{KRaftMetadataCache}
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition
-import org.apache.kafka.common.message.UpdateMetadataRequestData
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState, UpdateMetadataTopicState}
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
 import org.apache.kafka.common.metadata._
@@ -28,10 +26,10 @@ import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AbstractControlRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.{DirectoryId, Node, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
-import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
+import org.apache.kafka.server.common.KRaftVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -44,20 +42,13 @@ import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
 object MetadataCacheTest {
-  def zkCacheProvider(): util.stream.Stream[MetadataCache] =
-    util.stream.Stream.of[MetadataCache](
-      MetadataCache.zkMetadataCache(1, MetadataVersion.latestTesting())
-    )
-
   def cacheProvider(): util.stream.Stream[MetadataCache] =
     util.stream.Stream.of[MetadataCache](
-      MetadataCache.zkMetadataCache(1, MetadataVersion.latestTesting()),
       MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.KRAFT_VERSION_0)
     )
 
   def updateCache(cache: MetadataCache, request: UpdateMetadataRequest, records: Seq[ApiMessage] = List()): Unit = {
     cache match {
-      case c: ZkMetadataCache => c.updateMetadata(0, request)
       case c: KRaftMetadataCache => {
         // UpdateMetadataRequest always contains a full list of brokers, but may contain
         // a partial list of partitions. Therefore, base our delta off a partial image that
@@ -585,65 +576,6 @@ class MetadataCacheTest {
     assertEquals(initialBrokerIds.toSet, aliveBrokersFromCache.map(_.id).toSet)
   }
 
-  // This test runs only for the ZK cache, because KRaft mode doesn't support offline
-  // replicas yet. TODO: implement KAFKA-13005.
-  @ParameterizedTest
-  @MethodSource(Array("zkCacheProvider"))
-  def testGetClusterMetadataWithOfflineReplicas(cache: MetadataCache): Unit = {
-    val topic = "topic"
-    val topicPartition = new TopicPartition(topic, 0)
-    val securityProtocol = SecurityProtocol.PLAINTEXT
-    val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
-
-    val brokers = Seq(
-      new UpdateMetadataBroker()
-        .setId(0)
-        .setRack("r")
-        .setEndpoints(Seq(new UpdateMetadataEndpoint()
-          .setHost("foo")
-          .setPort(9092)
-          .setSecurityProtocol(securityProtocol.id)
-          .setListener(listenerName.value)).asJava),
-      new UpdateMetadataBroker()
-        .setId(1)
-        .setEndpoints(Seq.empty.asJava)
-    )
-    val controllerEpoch = 1
-    val leader = 1
-    val leaderEpoch = 0
-    val replicas = asList[Integer](0, 1)
-    val isr = asList[Integer](0, 1)
-    val offline = asList[Integer](1)
-    val partitionStates = Seq(new UpdateMetadataPartitionState()
-      .setTopicName(topic)
-      .setPartitionIndex(topicPartition.partition)
-      .setControllerEpoch(controllerEpoch)
-      .setLeader(leader)
-      .setLeaderEpoch(leaderEpoch)
-      .setIsr(isr)
-      .setZkVersion(3)
-      .setReplicas(replicas)
-      .setOfflineReplicas(offline))
-    val version = ApiKeys.UPDATE_METADATA.latestVersion
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, partitionStates.asJava,
-      brokers.asJava, Collections.emptyMap()).build()
-    MetadataCacheTest.updateCache(cache, updateMetadataRequest)
-
-    val expectedNode0 = new Node(0, "foo", 9092, "r")
-    val expectedNode1 = new Node(1, "", -1)
-
-    val cluster = cache.getClusterMetadata("clusterId", listenerName)
-    assertEquals(expectedNode0, cluster.nodeById(0))
-    assertNull(cluster.nodeById(1))
-    assertEquals(expectedNode1, cluster.leaderFor(topicPartition))
-
-    val partitionInfo = cluster.partition(topicPartition)
-    assertEquals(expectedNode1, partitionInfo.leader)
-    assertEquals(Seq(expectedNode0, expectedNode1), partitionInfo.replicas.toSeq)
-    assertEquals(Seq(expectedNode0, expectedNode1), partitionInfo.inSyncReplicas.toSeq)
-    assertEquals(Seq(expectedNode1), partitionInfo.offlineReplicas.toSeq)
-  }
-
   @Test
   def testIsBrokerFenced(): Unit = {
     val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
@@ -952,19 +884,12 @@ class MetadataCacheTest {
     val partitionState = cache.getPartitionInfo(topic, partitionIndex).get
     assertEquals(topic, partitionState.topicName())
     assertEquals(partitionIndex, partitionState.partitionIndex())
-    if (cache.isInstanceOf[ZkMetadataCache]) {
-      assertEquals(controllerEpoch, partitionState.controllerEpoch())
-    } else {
-      assertEquals(-1, partitionState.controllerEpoch())
-    }
+    assertEquals(-1, partitionState.controllerEpoch())
     assertEquals(leader, partitionState.leader())
     assertEquals(leaderEpoch, partitionState.leaderEpoch())
     assertEquals(isr, partitionState.isr())
     assertEquals(zkVersion, partitionState.zkVersion())
     assertEquals(replicas, partitionState.replicas())
-    if (cache.isInstanceOf[ZkMetadataCache]) {
-      assertEquals(offlineReplicas, partitionState.offlineReplicas())
-    }
   }
 
   def setupInitialAndFullMetadata(): (
@@ -1185,285 +1110,4 @@ class MetadataCacheTest {
     setZkVersion(0).
     setReplicas(java.util.Arrays.asList(7, 8, 9)).
     setOfflineReplicas(java.util.Collections.emptyList())
-
-  @Test
-  def testCreateDeletionEntries(): Unit = {
-    assertEquals(new UpdateMetadataTopicState().
-      setTopicName(fooTopicName).
-      setTopicId(fooTopicId).
-      setPartitionStates(Seq(
-        new UpdateMetadataPartitionState().
-          setTopicName(fooTopicName).
-          setPartitionIndex(0).
-          setControllerEpoch(newRequestControllerEpoch).
-          setLeader(-2).
-          setIsr(java.util.Arrays.asList(4, 5, 6)).
-          setZkVersion(0).
-          setReplicas(java.util.Arrays.asList(4, 5, 6)).
-          setOfflineReplicas(java.util.Collections.emptyList()),
-        new UpdateMetadataPartitionState().
-          setTopicName(fooTopicName).
-          setPartitionIndex(1).
-          setControllerEpoch(newRequestControllerEpoch).
-          setLeader(-2).
-          setIsr(java.util.Arrays.asList(4, 5, 6)).
-          setZkVersion(0).
-          setReplicas(java.util.Arrays.asList(4, 5, 6)).
-          setOfflineReplicas(java.util.Collections.emptyList())
-      ).asJava),
-    ZkMetadataCache.createDeletionEntries(fooTopicName,
-      fooTopicId,
-      Seq(oldFooPart0, oldFooPart1),
-      newRequestControllerEpoch))
-  }
-
-  val prevSnapshot: MetadataSnapshot = {
-    val parts = new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]]
-    val fooParts = new mutable.LongMap[UpdateMetadataPartitionState]
-    fooParts.put(0L, oldFooPart0)
-    fooParts.put(1L, oldFooPart1)
-    parts.put(fooTopicName, fooParts)
-    val barParts = new mutable.LongMap[UpdateMetadataPartitionState]
-    barParts.put(0L, oldBarPart0)
-    barParts.put(1L, oldBarPart1)
-    barParts.put(2L, oldBarPart2)
-    parts.put(barTopicName, barParts)
-    MetadataSnapshot(parts,
-      Map[String, Uuid](
-        fooTopicName -> fooTopicId,
-        barTopicName -> barTopicId
-      ),
-      Some(KRaftCachedControllerId(1)),
-      mutable.LongMap[Broker](),
-      mutable.LongMap[collection.Map[ListenerName, Node]]()
-    )
-  }
-
-  def transformKRaftControllerFullMetadataRequest(
-    currentMetadata: MetadataSnapshot,
-    requestControllerEpoch: Int,
-    requestTopicStates: util.List[UpdateMetadataTopicState],
-  ): (util.List[UpdateMetadataTopicState], util.List[String]) = {
-
-    val logs = new util.ArrayList[String]
-    val results = ZkMetadataCache.transformKRaftControllerFullMetadataRequest(
-      currentMetadata, requestControllerEpoch, requestTopicStates, log => logs.add(log))
-    (results, logs)
-  }
-
-  @Test
-  def transformUMRWithNoChanges(): Unit = {
-    assertEquals((Seq(
-        new UpdateMetadataTopicState().
-          setTopicName(fooTopicName).
-          setTopicId(fooTopicId).
-          setPartitionStates(Seq(newFooPart0, newFooPart1).asJava),
-        new UpdateMetadataTopicState().
-          setTopicName(barTopicName).
-          setTopicId(barTopicId).
-          setPartitionStates(Seq(newBarPart0, newBarPart1, newBarPart2).asJava)
-      ).asJava,
-      List[String]().asJava),
-      transformKRaftControllerFullMetadataRequest(prevSnapshot,
-        newRequestControllerEpoch,
-        Seq(
-          new UpdateMetadataTopicState().
-            setTopicName(fooTopicName).
-            setTopicId(fooTopicId).
-            setPartitionStates(Seq(newFooPart0, newFooPart1).asJava),
-          new UpdateMetadataTopicState().
-            setTopicName(barTopicName).
-            setTopicId(barTopicId).
-            setPartitionStates(Seq(newBarPart0, newBarPart1, newBarPart2).asJava)
-        ).asJava
-      )
-    )
-  }
-
-  @Test
-  def transformUMRWithMissingBar(): Unit = {
-    assertEquals((Seq(
-      new UpdateMetadataTopicState().
-        setTopicName(barTopicName).
-        setTopicId(barTopicId).
-        setPartitionStates(Seq(deletedBarPart0, deletedBarPart1, deletedBarPart2).asJava),
-      new UpdateMetadataTopicState().
-        setTopicName(fooTopicName).
-        setTopicId(fooTopicId).
-        setPartitionStates(Seq(newFooPart0, newFooPart1).asJava),
-    ).asJava,
-      List[String](
-        "Removing topic bar with ID 97FBD1g4QyyNNZNY94bkRA from the metadata cache since the full UMR did not include it.",
-      ).asJava),
-      transformKRaftControllerFullMetadataRequest(prevSnapshot,
-        newRequestControllerEpoch,
-        Seq(
-          new UpdateMetadataTopicState().
-            setTopicName(fooTopicName).
-            setTopicId(fooTopicId).
-            setPartitionStates(Seq(newFooPart0, newFooPart1).asJava),
-        ).asJava
-      )
-    )
-  }
-
-  @Test
-  def transformUMRWithRecreatedBar(): Unit = {
-    assertEquals((Seq(
-      new UpdateMetadataTopicState().
-        setTopicName(barTopicName).
-        setTopicId(barTopicId).
-        setPartitionStates(Seq(deletedBarPart0, deletedBarPart1, deletedBarPart2).asJava),
-      new UpdateMetadataTopicState().
-        setTopicName(fooTopicName).
-        setTopicId(fooTopicId).
-        setPartitionStates(Seq(newFooPart0, newFooPart1).asJava),
-      new UpdateMetadataTopicState().
-        setTopicName(barTopicName).
-        setTopicId(recreatedBarTopicId).
-        setPartitionStates(Seq(newBarPart0, newBarPart1, newBarPart2).asJava),
-    ).asJava,
-      List[String](
-        "Removing topic bar with ID 97FBD1g4QyyNNZNY94bkRA from the metadata cache since the full UMR did not include it.",
-      ).asJava),
-      transformKRaftControllerFullMetadataRequest(prevSnapshot,
-        newRequestControllerEpoch,
-        Seq(
-          new UpdateMetadataTopicState().
-            setTopicName(fooTopicName).
-            setTopicId(fooTopicId).
-            setPartitionStates(Seq(newFooPart0, newFooPart1).asJava),
-          new UpdateMetadataTopicState().
-            setTopicName(barTopicName).
-            setTopicId(recreatedBarTopicId).
-            setPartitionStates(Seq(newBarPart0, newBarPart1, newBarPart2).asJava)
-        ).asJava
-      )
-    )
-  }
-
-  val buggySnapshot: MetadataSnapshot = new MetadataSnapshot(
-    new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
-    prevSnapshot.topicIds,
-    prevSnapshot.controllerId,
-    prevSnapshot.aliveBrokers,
-    prevSnapshot.aliveNodes)
-
-  @Test
-  def transformUMRWithBuggySnapshot(): Unit = {
-    assertEquals((Seq(
-      new UpdateMetadataTopicState().
-        setTopicName(fooTopicName).
-        setTopicId(fooTopicId).
-        setPartitionStates(Seq(newFooPart0, newFooPart1).asJava),
-      new UpdateMetadataTopicState().
-        setTopicName(barTopicName).
-        setTopicId(barTopicId).
-        setPartitionStates(Seq(newBarPart0, newBarPart1, newBarPart2).asJava),
-    ).asJava,
-      List[String](
-        "Error: topic foo appeared in currentMetadata.topicNames, but not in currentMetadata.partitionStates.",
-        "Error: topic bar appeared in currentMetadata.topicNames, but not in currentMetadata.partitionStates.",
-      ).asJava),
-      transformKRaftControllerFullMetadataRequest(buggySnapshot,
-        newRequestControllerEpoch,
-        Seq(
-          new UpdateMetadataTopicState().
-            setTopicName(fooTopicName).
-            setTopicId(fooTopicId).
-            setPartitionStates(Seq(newFooPart0, newFooPart1).asJava),
-          new UpdateMetadataTopicState().
-            setTopicName(barTopicName).
-            setTopicId(barTopicId).
-            setPartitionStates(Seq(newBarPart0, newBarPart1, newBarPart2).asJava)
-        ).asJava
-      )
-    )
-  }
-
-  @Test
-  def testUpdateZkMetadataCacheViaHybridUMR(): Unit = {
-    val cache = MetadataCache.zkMetadataCache(1, MetadataVersion.latestTesting())
-    cache.updateMetadata(123, createFullUMR(Seq(
-      new UpdateMetadataTopicState().
-        setTopicName(fooTopicName).
-        setTopicId(fooTopicId).
-        setPartitionStates(Seq(oldFooPart0, oldFooPart1).asJava),
-      new UpdateMetadataTopicState().
-        setTopicName(barTopicName).
-        setTopicId(barTopicId).
-        setPartitionStates(Seq(oldBarPart0, oldBarPart1).asJava),
-    )))
-    checkCacheContents(cache, Map(
-      fooTopicId -> Seq(oldFooPart0, oldFooPart1),
-      barTopicId -> Seq(oldBarPart0, oldBarPart1),
-    ))
-  }
-
-  @Test
-  def testUpdateZkMetadataCacheWithRecreatedTopic(): Unit = {
-    val cache = MetadataCache.zkMetadataCache(1, MetadataVersion.latestTesting())
-    cache.updateMetadata(123, createFullUMR(Seq(
-      new UpdateMetadataTopicState().
-        setTopicName(fooTopicName).
-        setTopicId(fooTopicId).
-        setPartitionStates(Seq(oldFooPart0, oldFooPart1).asJava),
-      new UpdateMetadataTopicState().
-        setTopicName(barTopicName).
-        setTopicId(barTopicId).
-        setPartitionStates(Seq(oldBarPart0, oldBarPart1).asJava),
-    )))
-    cache.updateMetadata(124, createFullUMR(Seq(
-      new UpdateMetadataTopicState().
-        setTopicName(fooTopicName).
-        setTopicId(fooTopicId).
-        setPartitionStates(Seq(newFooPart0, newFooPart1).asJava),
-      new UpdateMetadataTopicState().
-        setTopicName(barTopicName).
-        setTopicId(barTopicId).
-        setPartitionStates(Seq(oldBarPart0, oldBarPart1).asJava),
-    )))
-    checkCacheContents(cache, Map(
-      fooTopicId -> Seq(newFooPart0, newFooPart1),
-      barTopicId -> Seq(oldBarPart0, oldBarPart1),
-    ))
-  }
-
-  def createFullUMR(
-    topicStates: Seq[UpdateMetadataTopicState]
-  ): UpdateMetadataRequest = {
-    val data = new UpdateMetadataRequestData().
-      setControllerId(0).
-      setIsKRaftController(true).
-      setControllerEpoch(123).
-      setBrokerEpoch(456).
-      setTopicStates(topicStates.asJava)
-    new UpdateMetadataRequest(data, 8.toShort)
-  }
-
-  def checkCacheContents(
-    cache: ZkMetadataCache,
-    expected: Map[Uuid, Iterable[UpdateMetadataPartitionState]],
-  ): Unit = {
-    val expectedTopics = new util.HashMap[String, Uuid]
-    val expectedIds = new util.HashMap[Uuid, String]
-    val expectedParts = new util.HashMap[String, util.Set[TopicPartition]]
-    expected.foreach {
-      case (id, states) =>
-        states.foreach {
-          case state =>
-            expectedTopics.put(state.topicName(), id)
-            expectedIds.put(id, state.topicName())
-            expectedParts.computeIfAbsent(state.topicName(),
-              _ => new util.HashSet[TopicPartition]()).
-              add(new TopicPartition(state.topicName(), state.partitionIndex()))
-        }
-    }
-    assertEquals(expectedTopics, cache.topicNamesToIds())
-    assertEquals(expectedIds, cache.topicIdsToNames())
-    cache.getAllTopics().foreach(topic =>
-      assertEquals(expectedParts.getOrDefault(topic, Collections.emptySet()),
-        cache.getTopicPartitions(topic).asJava)
-    )
-  }
 }

@@ -78,7 +78,6 @@ class LogManager(logDirs: Seq[File],
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time,
-                 val keepPartitionMetadataFile: Boolean,
                  remoteStorageSystemEnable: Boolean,
                  val initialTaskDelayMs: Long) extends Logging {
 
@@ -346,7 +345,6 @@ class LogManager(logDirs: Seq[File],
       logDirFailureChannel = logDirFailureChannel,
       lastShutdownClean = hadCleanShutdown,
       topicId = None,
-      keepPartitionMetadataFile = keepPartitionMetadataFile,
       numRemainingSegments = numRemainingSegments,
       remoteStorageSystemEnable = remoteStorageSystemEnable)
 
@@ -950,8 +948,7 @@ class LogManager(logDirs: Seq[File],
   def updateTopicConfig(topic: String,
                         newTopicConfig: Properties,
                         isRemoteLogStorageSystemEnabled: Boolean,
-                        wasRemoteLogEnabled: Boolean,
-                        fromZK: Boolean): Unit = {
+                        wasRemoteLogEnabled: Boolean): Unit = {
     topicConfigUpdated(topic)
     val logs = logsByTopic(topic)
     // Combine the default properties with the overrides in zk to create the new LogConfig
@@ -961,10 +958,6 @@ class LogManager(logDirs: Seq[File],
     // Otherwise we risk someone creating a tiered-topic, disabling Tiered Storage cluster-wide and the check
     // failing since the logs for the topic are non-existent.
     LogConfig.validateRemoteStorageOnlyIfSystemEnabled(newLogConfig.values(), isRemoteLogStorageSystemEnabled, true)
-    // `remote.log.delete.on.disable` and `remote.log.copy.disable` are unsupported in ZK mode
-    if (fromZK) {
-      LogConfig.validateNoInvalidRemoteStorageConfigsInZK(newLogConfig.values())
-    }
     LogConfig.validateTurningOffRemoteStorageWithDelete(newLogConfig.values(), wasRemoteLogEnabled, isRemoteLogStorageEnabled)
     LogConfig.validateRetentionConfigsWhenRemoteCopyDisabled(newLogConfig.values(), isRemoteLogStorageEnabled)
     if (logs.nonEmpty) {
@@ -1074,7 +1067,6 @@ class LogManager(logDirs: Seq[File],
           brokerTopicStats = brokerTopicStats,
           logDirFailureChannel = logDirFailureChannel,
           topicId = topicId,
-          keepPartitionMetadataFile = keepPartitionMetadataFile,
           remoteStorageSystemEnable = remoteStorageSystemEnable)
 
         if (isFuture)
@@ -1552,8 +1544,7 @@ object LogManager {
             kafkaScheduler: Scheduler,
             time: Time,
             brokerTopicStats: BrokerTopicStats,
-            logDirFailureChannel: LogDirFailureChannel,
-            keepPartitionMetadataFile: Boolean): LogManager = {
+            logDirFailureChannel: LogDirFailureChannel): LogManager = {
     val defaultProps = config.extractLogConfigMap
 
     LogConfig.validateBrokerLogConfigValues(defaultProps, config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
@@ -1578,7 +1569,6 @@ object LogManager {
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
       time = time,
-      keepPartitionMetadataFile = keepPartitionMetadataFile,
       interBrokerProtocolVersion = config.interBrokerProtocolVersion,
       remoteStorageSystemEnable = config.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
       initialTaskDelayMs = config.logInitialTaskDelayMs)

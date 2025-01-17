@@ -284,7 +284,7 @@ processorUnderTest.init(context);</code></pre>
 props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
 props.put(&quot;some.other.config&quot;, &quot;some config value&quot;);
-final MockProcessorContext&lt;String, Long&gt; context = new MockProcessorContext&lt;&gt;(props);
+final MockProcessorContext&lt;String, Long&gt; context = new MockProcessorContext&lt;&gt;(props);</code></pre>
             </p>
             <b>Captured data</b>
             <p>

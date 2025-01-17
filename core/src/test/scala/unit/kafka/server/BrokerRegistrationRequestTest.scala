@@ -57,10 +57,8 @@ class BrokerRegistrationRequestTest {
 
         val saslMechanism: String = ""
 
-        def isZkController: Boolean = false
-
         override def getControllerInfo(): ControllerInformation =
-          ControllerInformation(node, listenerName, securityProtocol, saslMechanism, isZkController)
+          ControllerInformation(node, listenerName, securityProtocol, saslMechanism)
       },
       Time.SYSTEM,
       new Metrics(),

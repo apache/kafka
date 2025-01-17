@@ -24,18 +24,19 @@ import kafka.cluster.EndPoint
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, SaslConfigs, TopicConfig}
+import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.{CompressionType, TimestampType}
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
@@ -43,13 +44,11 @@ import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareCoordinatorConfig, ZkConfigs}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.server.util.Csv
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
-import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
@@ -60,18 +59,6 @@ object KafkaConfig {
   def main(args: Array[String]): Unit = {
     System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
       DynamicBrokerConfig.dynamicConfigUpdateModes))
-  }
-
-  private[kafka] def zooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String): Option[String] = {
-    Option(clientConfig.getProperty(ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName)))
-  }
-
-  // For ZooKeeper TLS client authentication to be enabled the client must (at a minimum) configure itself as using TLS
-  // with both a client connection socket and a key store location explicitly set.
-  private[kafka] def zkTlsClientAuthEnabled(zkClientConfig: ZKClientConfig): Boolean = {
-    zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG).contains("true") &&
-      zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG).isDefined &&
-      zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG).isDefined
   }
 
   val configDef = AbstractKafkaConfig.CONFIG_DEF
@@ -441,9 +428,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
 
-  /** ********* Feature configuration ***********/
-  def isFeatureVersioningSupported = interBrokerProtocolVersion.isFeatureVersioningSupported
-
   /** New group coordinator configs */
   val isNewGroupCoordinatorEnabled = getBoolean(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG)
   val groupCoordinatorRebalanceProtocols = {
@@ -452,14 +436,12 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (!protocols.contains(GroupType.CLASSIC)) {
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
-    if (protocols.contains(GroupType.CONSUMER)) {
-      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
-        warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
-      }
+    if (protocols.contains(GroupType.CONSUMER) && !isNewGroupCoordinatorEnabled) {
+      warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported with the new group coordinator.")
     }
     if (protocols.contains(GroupType.SHARE)) {
-      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
-        warn(s"The new '${GroupType.SHARE}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
+      if (!isNewGroupCoordinatorEnabled) {
+        warn(s"The new '${GroupType.SHARE}' rebalance protocol is only supported with the new group coordinator.")
       }
       warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-932 and MUST NOT be used in production.")
@@ -490,7 +472,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def interBrokerListenerName = getInterBrokerListenerNameAndSecurityProtocol._1
   def interBrokerSecurityProtocol = getInterBrokerListenerNameAndSecurityProtocol._2
   def saslMechanismInterBrokerProtocol = getString(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG)
-  val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion.isSaslInterBrokerHandshakeRequestEnabled
 
   /** ********* DelegationToken Configuration **************/
   val delegationTokenSecretKey = getPassword(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG)
@@ -649,31 +630,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
   }
 
-  // Topic IDs are used with all self-managed quorum clusters and ZK cluster with IBP greater than or equal to 2.8
-  def usesTopicId: Boolean =
-    usesSelfManagedQuorum || interBrokerProtocolVersion.isTopicIdsSupported
-
   validateValues()
 
   private def validateValues(): Unit = {
     if (nodeId != brokerId) {
       throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
-    }
-    if (requiresZookeeper) {
-      if (zkConnect == null) {
-        throw new ConfigException(s"Missing required configuration `${ZkConfigs.ZK_CONNECT_CONFIG}` which has no default value.")
-      }
-      if (brokerIdGenerationEnable) {
-        require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be greater than or equal to -1 and not greater than reserved.broker.max.id")
-      } else {
-        require(brokerId >= 0, "broker.id must be greater than or equal to 0")
-      }
-    } else {
-      // KRaft-based metadata quorum
-      if (nodeId < 0) {
-        throw new ConfigException(s"Missing configuration `${KRaftConfigs.NODE_ID_CONFIG}` which is required " +
-          s"when `process.roles` is defined (i.e. when running in KRaft mode).")
-      }
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
@@ -793,14 +754,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       s"${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")
 
-    if (groupCoordinatorConfig.offsetTopicCompressionType == CompressionType.ZSTD)
-      require(interBrokerProtocolVersion.highestSupportedRecordVersion().value >= IBP_2_1_IV0.highestSupportedRecordVersion().value,
-        "offsets.topic.compression.codec zstd can only be used when inter.broker.protocol.version " +
-        s"is set to version ${IBP_2_1_IV0.shortVersion} or higher")
-
     val interBrokerUsesSasl = interBrokerSecurityProtocol == SecurityProtocol.SASL_PLAINTEXT || interBrokerSecurityProtocol == SecurityProtocol.SASL_SSL
-    require(!interBrokerUsesSasl || saslInterBrokerHandshakeRequestEnable || saslMechanismInterBrokerProtocol == SaslConfigs.GSSAPI_MECHANISM,
-      s"Only GSSAPI mechanism is supported for inter-broker communication with SASL when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
     require(!interBrokerUsesSasl || saslEnabledMechanisms(interBrokerListenerName).contains(saslMechanismInterBrokerProtocol),
       s"${BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG} must be included in ${BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG} when SASL is used for inter-broker communication")
     require(queuedMaxBytes <= 0 || queuedMaxBytes >= socketRequestMaxBytes,

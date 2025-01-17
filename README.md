@@ -1,10 +1,17 @@
-Apache Kafka
-=================
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/kafka-logo-readme-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/kafka-logo-readme-dark.svg">
+  <img src="docs/images/kafka-logo-readme-light.svg" alt="Kafka Logo" width="50%"> 
+</picture>
+</p>
 
 [![CI](https://github.com/apache/kafka/actions/workflows/ci.yml/badge.svg?branch=trunk&event=push)](https://github.com/apache/kafka/actions/workflows/ci.yml?query=event%3Apush+branch%3Atrunk)
 [![Flaky Test Report](https://github.com/apache/kafka/actions/workflows/generate-reports.yml/badge.svg?branch=trunk&event=schedule)](https://github.com/apache/kafka/actions/workflows/generate-reports.yml?query=event%3Aschedule+branch%3Atrunk)
 
-See our [web site](https://kafka.apache.org) for details on the project.
+[**Apache Kafka**](https://kafka.apache.org) is an open-source distributed event streaming platform used by thousands of
+
+companies for high-performance data pipelines, streaming analytics, data integration, and mission-critical applications.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
@@ -56,9 +63,9 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
 
 ### Running a particular unit/integration test with log4j output ###
-By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j2.yml` file in the module's `src/test/resources` directory.
+By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j2.yaml` file in the module's `src/test/resources` directory.
 
-For example, if you want to see more logs for clients project tests, you can modify [the line](https://github.com/apache/kafka/blob/trunk/clients/src/test/resources/log4j2.yml#L35) in `clients/src/test/resources/log4j2.yml` 
+For example, if you want to see more logs for clients project tests, you can modify [the line](https://github.com/apache/kafka/blob/trunk/clients/src/test/resources/log4j2.yaml#L35) in `clients/src/test/resources/log4j2.yaml` 
 to `level: INFO` and then run:
     
     ./gradlew cleanTest clients:test --tests NetworkClientTest   

@@ -197,7 +197,7 @@ final class KafkaMetadataLog private (
   }
 
   override def initializeLeaderEpoch(epoch: Int): Unit = {
-    log.maybeAssignEpochStartOffset(epoch, log.logEndOffset)
+    log.assignEpochStartOffset(epoch, log.logEndOffset)
   }
 
   override def updateHighWatermark(offsetMetadata: LogOffsetMetadata): Unit = {
@@ -620,8 +620,7 @@ object KafkaMetadataLog extends Logging {
       producerIdExpirationCheckIntervalMs = Int.MaxValue,
       logDirFailureChannel = new LogDirFailureChannel(5),
       lastShutdownClean = false,
-      topicId = Some(topicId),
-      keepPartitionMetadataFile = true
+      topicId = Some(topicId)
     )
 
     val metadataLog = new KafkaMetadataLog(
