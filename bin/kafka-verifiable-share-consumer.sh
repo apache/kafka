@@ -1,3 +1,4 @@
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,31 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Flaky Test Report
-on:
-  workflow_dispatch:      # Let us run manually
-
-  schedule:
-    - cron: '0 6 * * *'   # Run daily at 6am UTC
-
-jobs:
-  flaky-test-report:
-    name: Flaky Test Report
-    if : github.event.repository.fork == 'false'
-    permissions:
-      contents: read
-    runs-on: ubuntu-latest
-    steps:
-      - name: Env
-        run: printenv
-        env:
-          GITHUB_CONTEXT: ${{ toJson(github) }}
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup Python
-        uses: ./.github/actions/setup-python
-      - name: Run Report
-        env:
-          DEVELOCITY_ACCESS_TOKEN: ${{ secrets.DV_API_ACCESS }}
-        run: |
-          python ./.github/scripts/develocity_reports.py >> $GITHUB_STEP_SUMMARY
+if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
+    export KAFKA_HEAP_OPTS="-Xmx512M"
+fi
+exec $(dirname $0)/kafka-run-class.sh org.apache.kafka.tools.VerifiableShareConsumer "$@"

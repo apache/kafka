@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.common._
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, Logging, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
@@ -29,7 +28,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -1217,7 +1216,7 @@ class LogCleanerTest extends Logging {
 
     def distinctValuesBySegment = log.logSegments.asScala.map(s => s.log.records.asScala.map(record => TestUtils.readString(record.value)).toSet.size).toSeq
 
-    val disctinctValuesBySegmentBeforeClean = distinctValuesBySegment
+    val distinctValuesBySegmentBeforeClean = distinctValuesBySegment
     assertTrue(distinctValuesBySegment.reverse.tail.forall(_ > N),
       "Test is not effective unless each segment contains duplicates. Increase segment size or decrease number of keys.")
 
@@ -1225,10 +1224,10 @@ class LogCleanerTest extends Logging {
 
     val distinctValuesBySegmentAfterClean = distinctValuesBySegment
 
-    assertTrue(disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
+    assertTrue(distinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
       .take(numCleanableSegments).forall { case (before, after) => after < before },
       "The cleanable segments should have fewer number of values after cleaning")
-    assertTrue(disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
+    assertTrue(distinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
       .slice(numCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 }, "The uncleanable segments should have the same number of values after cleaning")
   }
 
@@ -1240,9 +1239,9 @@ class LogCleanerTest extends Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // create 6 segments with only one message in each segment
-    def createRecorcs = TestUtils.singletonRecords(value = Array.fill[Byte](25)(0), key = 1.toString.getBytes)
+    def createRecords = TestUtils.singletonRecords(value = Array.fill[Byte](25)(0), key = 1.toString.getBytes)
     for (_ <- 0 until 6)
-      log.appendAsLeader(createRecorcs, leaderEpoch = 0)
+      log.appendAsLeader(createRecords, leaderEpoch = 0)
 
     val logToClean = LogToClean(new TopicPartition("test", 0), log, log.activeSegment.baseOffset, log.activeSegment.baseOffset)
 
