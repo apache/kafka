@@ -23,6 +23,7 @@ on:
 jobs:
   flaky-test-report:
     name: Flaky Test Report
+    if : github.event.repository.fork == 'false'
     permissions:
       contents: read
     runs-on: ubuntu-latest

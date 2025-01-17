@@ -341,8 +341,7 @@ class PartitionLockTest extends Logging {
     )).thenReturn(Optional.empty[JLong])
     when(alterIsrManager.submit(
       ArgumentMatchers.eq(topicIdPartition),
-      ArgumentMatchers.any[LeaderAndIsr],
-      ArgumentMatchers.anyInt()
+      ArgumentMatchers.any[LeaderAndIsr]
     )).thenReturn(new CompletableFuture[LeaderAndIsr]())
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
@@ -452,8 +451,7 @@ class PartitionLockTest extends Logging {
     log.producerIdExpirationCheckIntervalMs,
     leaderEpochCache,
     producerStateManager,
-    _topicId = None,
-    keepPartitionMetadataFile = true) {
+    _topicId = None) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
                                 requestLocal: RequestLocal, verificationGuard: VerificationGuard): LogAppendInfo = {

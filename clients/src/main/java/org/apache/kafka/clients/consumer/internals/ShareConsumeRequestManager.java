@@ -203,15 +203,17 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             if (acknowledgementsToSend != null) {
                                 metricsManager.recordAcknowledgementSent(acknowledgementsToSend.size());
                                 fetchAcknowledgementsInFlight.put(tip, acknowledgementsToSend);
+
+                                sessionHandler.addPartitionToFetch(tip, acknowledgementsToSend);
+                                handlerMap.put(node, sessionHandler);
+
+                                partitionsToForgetMap.putIfAbsent(node, new ArrayList<>());
+                                partitionsToForgetMap.get(node).add(tip);
+
+                                topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
+                                fetchedPartitions.add(tip);
+                                log.debug("Added fetch request for previously subscribed partition {} to node {}", tip, node.id());
                             }
-
-                            sessionHandler.addPartitionToFetch(tip, acknowledgementsToSend);
-                            partitionsToForgetMap.putIfAbsent(node, new ArrayList<>());
-                            partitionsToForgetMap.get(node).add(tip);
-
-                            topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
-                            fetchedPartitions.add(tip);
-                            log.debug("Added fetch request for previously subscribed partition {} to node {}", tip, node.id());
                         }
                     }
                 }
