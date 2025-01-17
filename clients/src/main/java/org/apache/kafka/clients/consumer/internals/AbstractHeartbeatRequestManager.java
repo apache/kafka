@@ -267,6 +267,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     private void maybePropagateCoordinatorFatalErrorEvent() {
         coordinatorRequestManager.fatalError()
                 .ifPresent(fatalError -> backgroundEventHandler.add(new ErrorEvent(fatalError)));
+        coordinatorRequestManager.clearFatalError();
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs, final boolean ignoreResponse) {
