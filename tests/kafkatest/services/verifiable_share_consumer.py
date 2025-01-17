@@ -20,6 +20,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
+from kafkatest.services.kafka.util import get_log4j_config_param, get_log4j_config_for_tools
 from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.version import DEV_BRANCH
 
@@ -92,7 +93,6 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_share_consumer.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "verifiable_share_consumer.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "verifiable_share_consumer.properties")
 
     logs = {
@@ -153,8 +153,8 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
         node.account.ssh("mkdir -p %s" % VerifiableShareConsumer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
-        log_config = self.render('tools_log4j.properties', log_file=VerifiableShareConsumer.LOG_FILE)
-        node.account.create_file(VerifiableShareConsumer.LOG4J_CONFIG, log_config)
+        log_config = self.render(get_log4j_config_for_tools(node), log_file=VerifiableShareConsumer.LOG_FILE)
+        node.account.create_file(get_log4j_config_for_tools(node), log_config)
 
         # Create and upload config file
         self.security_config = self.kafka.security_config.client_config(self.prop_file, node,
@@ -220,7 +220,7 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
         cmd = ""
         cmd += "export LOG_DIR=%s;" % VerifiableShareConsumer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
-        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableShareConsumer.LOG4J_CONFIG
+        cmd += " export KAFKA_LOG4J_OPTS=\"%s%s\"; " % (get_log4j_config_param(node), get_log4j_config_for_tools(node))
         cmd += self.impl.exec_cmd(node)
         if self.on_record_consumed:
             cmd += " --verbose"
