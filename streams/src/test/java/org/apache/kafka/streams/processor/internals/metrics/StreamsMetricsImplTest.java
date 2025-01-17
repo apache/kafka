@@ -112,7 +112,6 @@ public class StreamsMetricsImplTest {
     private static final String STORE_NAME2 = "store2";
     private static final Map<String, String> STORE_LEVEL_TAG_MAP = mkMap(
         mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
-        mkEntry(PROCESS_ID_TAG, PROCESS_ID),
         mkEntry(TASK_ID_TAG, TASK_ID1),
         mkEntry(SCOPE_NAME + STORE_ID_TAG, STORE_NAME1)
     );
@@ -1053,7 +1052,7 @@ public class StreamsMetricsImplTest {
 
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskName, storeType, storeName);
 
-        assertThat(tagMap.size(), equalTo(4));
+        assertThat(tagMap.size(), equalTo(3));
         assertThat(
             tagMap.get(StreamsMetricsImpl.THREAD_ID_TAG),
             equalTo(Thread.currentThread().getName()));
