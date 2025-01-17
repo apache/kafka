@@ -726,7 +726,7 @@ Found problem:
 
     // Not doing full SCRAM record validation since that's covered elsewhere.
     // Just checking that we generate the correct number of records
-    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString, Optional.empty).read
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
     val scramRecords = bootstrapMetadata.records().asScala
       .filter(apiMessageAndVersion => apiMessageAndVersion.message().isInstanceOf[UserScramCredentialRecord])
       .map(apiMessageAndVersion => apiMessageAndVersion.message().asInstanceOf[UserScramCredentialRecord])

@@ -109,7 +109,7 @@ class KafkaRaftServerTest {
   }
 
   private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion): Unit = {
-    val bootstrapDirectory = new BootstrapDirectory(logDir.toString, Optional.empty())
+    val bootstrapDirectory = new BootstrapDirectory(logDir.toString)
     bootstrapDirectory.writeBinaryFile(BootstrapMetadata.fromVersion(metadataVersion, "test"))
   }
 

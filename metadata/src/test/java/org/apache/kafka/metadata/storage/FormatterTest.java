@@ -142,7 +142,7 @@ public class FormatterTest {
             assertEquals(Optional.of(DEFAULT_CLUSTER_ID.toString()), ensemble.clusterId());
             assertEquals(new HashSet<>(testEnv.directories), ensemble.logDirProps().keySet());
             BootstrapMetadata bootstrapMetadata =
-                new BootstrapDirectory(testEnv.directory(0), Optional.empty()).read();
+                new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.latestProduction(), bootstrapMetadata.metadataVersion());
         }
     }
@@ -223,7 +223,7 @@ public class FormatterTest {
                 " with metadata.version " + MetadataVersion.IBP_3_5_IV0 + ".",
                     formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
-                new BootstrapDirectory(testEnv.directory(0), Optional.empty()).read();
+                new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.IBP_3_5_IV0, bootstrapMetadata.metadataVersion());
             assertEquals(1, bootstrapMetadata.records().size());
         }
@@ -250,7 +250,7 @@ public class FormatterTest {
                 " with metadata.version " + MetadataVersion.latestTesting() + ".",
                     formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
-                    new BootstrapDirectory(testEnv.directory(0), Optional.empty()).read();
+                    new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.latestTesting(), bootstrapMetadata.metadataVersion());
         }
     }
@@ -300,7 +300,7 @@ public class FormatterTest {
                 " with metadata.version " + MetadataVersion.IBP_3_8_IV0 + ".",
                     formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
-                new BootstrapDirectory(testEnv.directory(0), Optional.empty()).read();
+                new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.IBP_3_8_IV0, bootstrapMetadata.metadataVersion());
             List<ApiMessageAndVersion> scramRecords = bootstrapMetadata.records().stream().
                 filter(r -> r.message() instanceof UserScramCredentialRecord).
@@ -335,7 +335,7 @@ public class FormatterTest {
             formatter1.formatter.setFeatureLevel(TestFeatureVersion.FEATURE_NAME, version);
             formatter1.formatter.run();
             BootstrapMetadata bootstrapMetadata =
-                new BootstrapDirectory(testEnv.directory(0), Optional.empty()).read();
+                new BootstrapDirectory(testEnv.directory(0)).read();
             List<ApiMessageAndVersion> expected = new ArrayList<>();
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
