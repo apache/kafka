@@ -59,7 +59,6 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     public Sensor sensor;
     public long offset;
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     @BeforeEach
     public void setUp() {
         final Metrics metrics = new Metrics();
@@ -82,6 +81,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         return buffer.put(time, record, context.recordContext());
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldReturnIfRecordWasAdded() {
         when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
@@ -112,6 +112,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertThat(count.get(), equalTo(1));
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldAddAndEvictRecordTwice() {
         when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
@@ -144,6 +145,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertThat(count.get(), equalTo(1));
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldAddRecordsTwiceAndEvictRecordsOnce() {
         when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
@@ -158,6 +160,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertThat(count.get(), equalTo(2));
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldDropLateRecords() {
         when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
@@ -180,6 +183,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertNumSizeAndTimestamp(buffer, 2, 1, 84);
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldHandleCollidingKeys() {
         when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());

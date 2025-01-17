@@ -380,7 +380,7 @@ class KRaftMetadataCache(
   }
 
   override def getBrokerNodes(listenerName: ListenerName): Seq[Node] = {
-    _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).asScala).toSeq
+    _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).toScala).toSeq
   }
 
   // Does NOT include offline replica metadata
