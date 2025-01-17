@@ -53,6 +53,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1435,8 +1436,8 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member2);
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept("member-1"));
-        assertTrue(consumerGroup.allMembersUseClassicProtocolExcept("member-2"));
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept(member1));
+        assertTrue(consumerGroup.allMembersUseClassicProtocolExcept(member2));
 
         // The group has member 2 (using the consumer protocol) and member 3 (using the consumer protocol).
         consumerGroup.removeMember(member1.memberId());
@@ -1444,7 +1445,7 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member3);
         assertEquals(0, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept("member-2"));
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept(member2));
 
         // The group has member 2 (using the classic protocol).
         consumerGroup.removeMember(member2.memberId());
@@ -1454,6 +1455,66 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member2);
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "5, 5, 0, 0, false", // remove no consumer protocol members
+        "5, 5, 0, 4, false", // remove 4 out of 5 consumer protocol members
+        "5, 5, 1, 4, false", // remove 4 out of 5 consumer protocol members and 1 classic protocol member
+        "5, 5, 0, 5, true", // remove 5 out of 5 consumer protocol members
+        "5, 5, 1, 5, true", // remove 5 out of 5 consumer protocol members and 1 classic protocol member
+        "5, 5, 5, 5, true", // an empty consumer group is considered to have only classic protocol members
+        "5, 0, 0, 0, true", // a consumer group with only classic protocol members, which should not happen
+        "5, 0, 1, 0, true", // a consumer group with only classic protocol members, which should not happen
+    })
+    public void testAllMembersUseClassicProtocolExcept(
+        int numClassicProtocolMembers,
+        int numConsumerProtocolMembers,
+        int numRemovedClassicProtocolMembers,
+        int numRemovedConsumerProtocolMembers,
+        boolean expectedResult
+    ) {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = new ArrayList<>();
+        protocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        List<ConsumerGroupMember> classicProtocolMembers = new ArrayList<>();
+        List<ConsumerGroupMember> consumerProtocolMembers = new ArrayList<>();
+
+        // Add classic and consumer protocol members to the group
+        for (int i = 0; i < numClassicProtocolMembers; i++) {
+            ConsumerGroupMember member = new ConsumerGroupMember.Builder("classic-member-" + i)
+                .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSupportedProtocols(protocols))
+                .build();
+            classicProtocolMembers.add(member);
+            consumerGroup.updateMember(member);
+        }
+
+        for (int i = 0; i < numConsumerProtocolMembers; i++) {
+            ConsumerGroupMember member = new ConsumerGroupMember.Builder("consumer-member-" + i)
+                .build();
+            consumerProtocolMembers.add(member);
+            consumerGroup.updateMember(member);
+        }
+
+        assertEquals(numClassicProtocolMembers, consumerGroup.numClassicProtocolMembers());
+
+        // Test allMembersUseClassicProtocolExcept
+        Set<ConsumerGroupMember> removedMembers = new HashSet<>();
+
+        for (int i = 0; i < numRemovedClassicProtocolMembers; i++) {
+            removedMembers.add(classicProtocolMembers.get(i));
+        }
+
+        for (int i = 0; i < numRemovedConsumerProtocolMembers; i++) {
+            removedMembers.add(consumerProtocolMembers.get(i));
+        }
+
+        assertEquals(expectedResult, consumerGroup.allMembersUseClassicProtocolExcept(removedMembers));
     }
 
     @Test

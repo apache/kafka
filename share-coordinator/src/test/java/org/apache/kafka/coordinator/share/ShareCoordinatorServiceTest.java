@@ -85,7 +85,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -108,7 +108,7 @@ class ShareCoordinatorServiceTest {
         when(time.hiResClockMs()).thenReturn(0L).thenReturn(100L).thenReturn(150L);
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             coordinatorMetrics,
             time,
@@ -218,7 +218,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -320,7 +320,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -367,7 +367,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -414,7 +414,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -493,7 +493,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -556,7 +556,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -606,7 +606,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -649,7 +649,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -678,7 +678,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -734,7 +734,7 @@ class ShareCoordinatorServiceTest {
 
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             time,
@@ -821,7 +821,7 @@ class ShareCoordinatorServiceTest {
 
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             time,
@@ -874,7 +874,7 @@ class ShareCoordinatorServiceTest {
 
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             time,
@@ -919,7 +919,7 @@ class ShareCoordinatorServiceTest {
 
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             time,
@@ -964,7 +964,7 @@ class ShareCoordinatorServiceTest {
 
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             time,
@@ -1020,7 +1020,7 @@ class ShareCoordinatorServiceTest {
 
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             time,
@@ -1088,7 +1088,7 @@ class ShareCoordinatorServiceTest {
 
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             time,
