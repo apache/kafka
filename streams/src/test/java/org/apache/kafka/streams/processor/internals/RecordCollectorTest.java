@@ -2006,6 +2006,51 @@ public class RecordCollectorTest {
         }
     }
 
+    public void shouldCallOldImplementationExceptionHandler() {
+        final KafkaException exception = new KafkaException("KABOOM!");
+        final StreamsProducer streamProducer = getExceptionalStreamsProducerOnSend(exception);
+        final OldProductionExceptionHandlerImplementation productionExceptionHandler = new OldProductionExceptionHandlerImplementation();
+
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            streamProducer,
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+
+        collector.initialize();
+
+        collector.send(topic, "hello", "world", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
+        final Exception thrown = assertThrows(StreamsException.class, collector::flush);
+
+        assertEquals(exception, thrown.getCause());
+    }
+
+    @Test
+    public void shouldCallOldImplementationWithRecordContextExceptionHandler() {
+        final KafkaException exception = new KafkaException("KABOOM!");
+        final StreamsProducer streamProducer = getExceptionalStreamsProducerOnSend(exception);
+        final OldProductionExceptionHandlerWithRecordContextImplementation productionExceptionHandler = new OldProductionExceptionHandlerWithRecordContextImplementation();
+
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            streamProducer,
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+
+        collector.initialize();
+
+        collector.send(topic, "hello", "world", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
+        final Exception thrown = assertThrows(StreamsException.class, collector::flush);
+
+        assertEquals(exception, thrown.getCause());
+    }
+
     private RecordCollector newRecordCollector(final ProductionExceptionHandler productionExceptionHandler) {
         return new RecordCollectorImpl(
             logContext,
@@ -2169,6 +2214,35 @@ public class RecordCollectorTest {
             assertEquals(expectedContext.recordContext().timestamp(), context.timestamp());
             assertInstanceOf(RuntimeException.class, exception);
             assertEquals("KABOOM!", exception.getMessage());
+        }
+    }
+
+    public class OldProductionExceptionHandlerImplementation implements ProductionExceptionHandler {
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
+                                                         final Exception exception) {
+            return ProductionExceptionHandlerResponse.FAIL;
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+        }
+    }
+
+    public class OldProductionExceptionHandlerWithRecordContextImplementation implements ProductionExceptionHandler {
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
+                                                         final ProducerRecord<byte[], byte[]> record,
+                                                         final Exception exception) {
+            return ProductionExceptionHandlerResponse.FAIL;
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
         }
     }
 }

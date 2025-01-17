@@ -28,7 +28,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * {@code CommonExceptionHandler} Contains utilities method that could be used by all exception handlers
+ * {@code ExceptionHandlerUtils} Contains utilities method that could be used by all exception handlers
  */
 class ExceptionHandlerUtils {
     static final String HEADER_ERRORS_EXCEPTION_NAME = "__streams.errors.exception";
@@ -45,6 +45,7 @@ class ExceptionHandlerUtils {
 
     /**
      * If required, return Dead Letter Queue records for the provided exception
+     *
      * @param key Serialized key for the records
      * @param value Serialized value for the records
      * @param context ErrorHandlerContext of the exception
@@ -65,19 +66,20 @@ class ExceptionHandlerUtils {
 
 
     /**
-     * Build Dead Letter Queue records for the provided exception
-     * @param key Serialized key for the records
-     * @param value Serialized value for the records
-     * @param context ErrorHandlerContext of the exception
-     * @return A list of Dead Letter Queue records to produce
+     * Build dead letter queue record for the provided exception.
+     *
+     * @param key Serialized key for the record.
+     * @param value Serialized value for the record.
+     * @param context error handler context of the exception.
+     * @return A dead letter queue record to produce.
      */
     static ProducerRecord<byte[], byte[]> buildDeadLetterQueueRecord(final String deadLetterQueueTopicName,
-                                                                            final byte[] key,
-                                                                            final byte[] value,
-                                                                            final ErrorHandlerContext context,
-                                                                            final Exception e) {
+                                                                     final byte[] key,
+                                                                     final byte[] value,
+                                                                     final ErrorHandlerContext context,
+                                                                     final Exception e) {
         if (deadLetterQueueTopicName == null) {
-            throw new InvalidConfigurationException(String.format("%s can not be null while building DeadLetterQueue record", StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
+            throw new InvalidConfigurationException(String.format("%s cannot be null while building dead letter queue record", StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
         }
         final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(deadLetterQueueTopicName, null, context.timestamp(), key, value);
         final StringWriter stackStraceStringWriter = new StringWriter();

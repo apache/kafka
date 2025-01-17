@@ -32,30 +32,6 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
 
     private String deadLetterQueueTopic = null;
 
-    /**
-     * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ProducerRecord, Exception)} instead.
-     */
-    @SuppressWarnings("deprecation")
-    @Deprecated
-    @Override
-    public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
-                                                     final Exception exception) {
-        return exception instanceof RetriableException ?
-            ProductionExceptionHandler.ProductionExceptionHandlerResponse.RETRY :
-            ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL;
-    }
-
-    @SuppressWarnings("deprecation")
-    @Deprecated
-    @Override
-    public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
-                                                     final ProducerRecord<byte[], byte[]> record,
-                                                     final Exception exception) {
-        return exception instanceof RetriableException ?
-                ProductionExceptionHandler.ProductionExceptionHandlerResponse.RETRY :
-                ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL;
-    }
-
     @Override
     public Response handleError(final ErrorHandlerContext context,
                                 final ProducerRecord<byte[], byte[]> record,
@@ -63,17 +39,6 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
         return exception instanceof RetriableException ?
             Response.retry() :
             Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
-    }
-
-
-    @SuppressWarnings("deprecation")
-    @Deprecated
-    @Override
-    public ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
-                                                                           final ProducerRecord record,
-                                                                           final Exception exception,
-                                                                           final SerializationExceptionOrigin origin) {
-        return ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL;
     }
 
     @Override

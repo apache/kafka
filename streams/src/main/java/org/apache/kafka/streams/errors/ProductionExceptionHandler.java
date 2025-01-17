@@ -64,7 +64,7 @@ public interface ProductionExceptionHandler extends Configurable {
     default ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
                                                       final ProducerRecord<byte[], byte[]> record,
                                                       final Exception exception) {
-        throw new UnsupportedOperationException();
+        return handle(record, exception);
     }
 
     /**
@@ -272,7 +272,7 @@ public interface ProductionExceptionHandler extends Configurable {
     /**
      * Represents the result of handling a production exception.
      * <p>
-     * The {@code Response} class encapsulates a {@link ProductionExceptionHandlerResponse},
+     * The {@code Response} class encapsulates a {@link Result},
      * indicating whether processing should continue or fail, along with an optional list of
      * {@link ProducerRecord} instances to be sent to a dead letter queue.
      * </p>

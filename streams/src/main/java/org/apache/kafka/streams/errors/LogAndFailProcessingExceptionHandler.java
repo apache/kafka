@@ -34,28 +34,11 @@ public class LogAndFailProcessingExceptionHandler implements ProcessingException
     private static final Logger log = LoggerFactory.getLogger(LogAndFailProcessingExceptionHandler.class);
     private String deadLetterQueueTopic = null;
 
-    @Deprecated
-    @Override
-    public ProcessingHandlerResponse handle(final ErrorHandlerContext context,
-                                            final Record<?, ?> record, final Exception exception) {
-        log.error(
-            "Exception caught during message processing, processor node: {}, taskId: {}, source topic: {}, source partition: {}, source offset: {}",
-            context.processorNodeId(),
-            context.taskId(),
-            context.topic(),
-            context.partition(),
-            context.offset(),
-            exception
-        );
-
-        return ProcessingHandlerResponse.FAIL;
-    }
-
     @Override
     public Response handleError(final ErrorHandlerContext context,
                                 final Record<?, ?> record,
                                 final Exception exception) {
-        log.warn(
+        log.error(
             "Exception caught during message processing, processor node: {}, taskId: {}, source topic: {}, source partition: {}, source offset: {}",
             context.processorNodeId(),
             context.taskId(),

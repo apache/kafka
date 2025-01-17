@@ -164,7 +164,7 @@ public interface DeserializationExceptionHandler extends Configurable {
     /**
      * Represents the result of handling a deserialization exception.
      * <p>
-     * The {@code Response} class encapsulates a {@link ProcessingExceptionHandler.Result},
+     * The {@code Response} class encapsulates a {@link Result},
      * indicating whether processing should continue or fail, along with an optional list of
      * {@link ProducerRecord} instances to be sent to a dead letter queue.
      * </p>
@@ -220,7 +220,7 @@ public interface DeserializationExceptionHandler extends Configurable {
         /**
          * Creates a {@code Response} indicating that processing should continue.
          *
-         * @return a {@code Response} with a {@link DeserializationHandlerResponse#CONTINUE} status.
+         * @return a {@code Response} with a {@link DeserializationExceptionHandler.Result#RESUME} status.
          */
         public static Response resume() {
             return resume(Collections.emptyList());
