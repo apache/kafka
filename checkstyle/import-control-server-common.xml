@@ -98,6 +98,15 @@
             <allow pkg="org.apache.kafka.server.util" />
         </subpackage>
 
+        <subpackage name="share">
+          <allow pkg="org.apache.kafka.server.share" />
+          <subpackage name="persister">
+            <allow pkg="org.apache.kafka.clients" />
+            <allow pkg="org.apache.kafka.server.util" />
+            <allow pkg="org.apache.kafka.test" />
+          </subpackage>
+        </subpackage>
+
         <subpackage name="util">
             <!-- InterBrokerSendThread uses some clients classes that are not part of the public -->
             <!-- API but are still relatively common -->

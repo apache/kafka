@@ -1027,34 +1027,6 @@ project(':server') {
   }
 }
 
-project(':share') {
-  base {
-    archivesName = "kafka-share"
-  }
-
-  dependencies {
-    implementation project(':server-common')
-    implementation libs.slf4jApi
-
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':server-common').sourceSets.test.output
-
-    testImplementation libs.junitJupiter
-    testImplementation libs.mockitoCore
-    testImplementation testLog4j2Libs
-
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  checkstyle {
-    configProperties = checkstyleConfigProperties("import-control-share.xml")
-  }
-
-  javadoc {
-    enabled = false
-  }
-}
-
 project(':core') {
   apply plugin: 'scala'
 
@@ -1106,7 +1078,6 @@ project(':core') {
     implementation project(':storage')
     implementation project(':server')
     implementation project(':coordinator-common')
-    implementation project(':share')
     implementation project(':share-coordinator')
 
     implementation libs.argparse4j
@@ -1131,7 +1102,6 @@ project(':core') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':server').sourceSets.test.output
-    testImplementation project(':share').sourceSets.test.output
     testImplementation project(':test-common')
     testImplementation project(':test-common:test-common-api')
     testImplementation libs.bcpkix
@@ -1769,7 +1739,6 @@ project(':share-coordinator') {
     implementation project(':coordinator-common')
     implementation project(':metadata')
     implementation project(':server-common')
-    implementation project(':share')
     implementation libs.metrics
     implementation libs.slf4jApi
 
@@ -2467,7 +2436,6 @@ project(':tools') {
     implementation project(':group-coordinator')
     implementation project(':coordinator-common')
     implementation project(':share-coordinator')
-    implementation project(':share')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv

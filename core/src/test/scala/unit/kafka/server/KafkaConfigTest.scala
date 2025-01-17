@@ -153,19 +153,22 @@ class KafkaConfigTest {
 
   @Test
   def testAdvertiseDefaults(): Unit = {
-    val port = 9999
+    val brokerProt = 9999
+    val controllerPort = 10000
     val hostName = "fake-host"
     val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"PLAINTEXT://$hostName:$port")
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, s"$hostName:$controllerPort")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"PLAINTEXT://$hostName:$brokerProt")
     val serverConfig = KafkaConfig.fromProps(props)
 
     val endpoints = serverConfig.effectiveAdvertisedBrokerListeners
     assertEquals(1, endpoints.size)
     val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
     assertEquals(endpoint.host, hostName)
-    assertEquals(endpoint.port, port)
+    assertEquals(endpoint.port, brokerProt)
   }
 
   @Test
@@ -187,8 +190,10 @@ class KafkaConfigTest {
   @Test
   def testDuplicateListeners(): Unit = {
     val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9095")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
 
     // listeners with duplicate port
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9091,SSL://localhost:9091")
@@ -199,7 +204,7 @@ class KafkaConfigTest {
     assertBadConfigContainingMessage(props, "Each listener must have a different name")
 
     // advertised listeners can have duplicate ports
-    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "HOST:SASL_SSL,LB:SASL_SSL")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "HOST:SASL_SSL,LB:SASL_SSL,CONTROLLER:SASL_SSL")
     props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "HOST")
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "HOST://localhost:9091,LB://localhost:9092")
     props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "HOST://localhost:9091,LB://localhost:9091")
@@ -213,8 +218,11 @@ class KafkaConfigTest {
   @Test
   def testIPv4AndIPv6SamePortListeners(): Unit = {
     val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.put(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.put(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "CONTROLLER://localhost:9091")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_DEFAULT + ",CONTROLLER:PLAINTEXT")
 
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://[::1]:9092,SSL://[::1]:9092")
     var caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
@@ -465,23 +473,12 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testControllerListenerNameDoesNotMapToPlaintextByDefaultForNonKRaft(): Unit = {
-    val props = new Properties()
-    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://localhost:9092")
-    assertBadConfigContainingMessage(props,
-      "Error creating broker listeners from 'CONTROLLER://localhost:9092': No security protocol defined for listener CONTROLLER")
-    // Valid now
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092")
-    assertEquals(None, KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER")))
-  }
-
-  @Test
   def testBadListenerProtocol(): Unit = {
     val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "CONTROLLER://localhost:9092")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "BAD://localhost:9091")
 
     assertFalse(isValidKafkaConfig(props))
@@ -490,11 +487,13 @@ class KafkaConfigTest {
   @Test
   def testListenerNamesWithAdvertisedListenerUnset(): Unit = {
     val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "CONTROLLER://localhost:9092")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
 
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CLIENT://localhost:9091,REPLICATION://localhost:9092,INTERNAL://localhost:9093")
-    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CLIENT:SSL,REPLICATION:SSL,INTERNAL:PLAINTEXT")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CLIENT:SSL,REPLICATION:SSL,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
     props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "REPLICATION")
     val config = KafkaConfig.fromProps(props)
     val expectedListeners = Seq(
@@ -506,7 +505,8 @@ class KafkaConfigTest {
     val expectedSecurityProtocolMap = Map(
       new ListenerName("CLIENT") -> SecurityProtocol.SSL,
       new ListenerName("REPLICATION") -> SecurityProtocol.SSL,
-      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT
+      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT,
+      new ListenerName("CONTROLLER") -> SecurityProtocol.PLAINTEXT
     )
     assertEquals(expectedSecurityProtocolMap, config.effectiveListenerSecurityProtocolMap)
   }
@@ -514,12 +514,14 @@ class KafkaConfigTest {
   @Test
   def testListenerAndAdvertisedListenerNames(): Unit = {
     val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "CONTROLLER://localhost:9092")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
 
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:9091,INTERNAL://localhost:9093")
     props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "EXTERNAL://lb1.example.com:9000,INTERNAL://host1:9093")
-    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "EXTERNAL:SSL,INTERNAL:PLAINTEXT")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "EXTERNAL:SSL,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
     props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "INTERNAL")
     val config = KafkaConfig.fromProps(props)
 
@@ -537,7 +539,8 @@ class KafkaConfigTest {
 
     val expectedSecurityProtocolMap = Map(
       new ListenerName("EXTERNAL") -> SecurityProtocol.SSL,
-      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT
+      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT,
+      new ListenerName("CONTROLLER") -> SecurityProtocol.PLAINTEXT
     )
     assertEquals(expectedSecurityProtocolMap, config.effectiveListenerSecurityProtocolMap)
   }
@@ -579,9 +582,12 @@ class KafkaConfigTest {
   @Test
   def testCaseInsensitiveListenerProtocol(): Unit = {
     val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "CONTROLLER://localhost:9093")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "plaintext://localhost:9091,SsL://localhost:9092")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,SSL:SSL,CONTROLLER:PLAINTEXT")
     val config = KafkaConfig.fromProps(props)
     assertEquals(Some("SSL://localhost:9092"), config.listeners.find(_.listenerName.value == "SSL").map(_.connectionString))
     assertEquals(Some("PLAINTEXT://localhost:9091"), config.listeners.find(_.listenerName.value == "PLAINTEXT").map(_.connectionString))
@@ -594,8 +600,10 @@ class KafkaConfigTest {
   @Test
   def testListenerDefaults(): Unit = {
     val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9093")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
 
     // configuration with no listeners
     val conf = KafkaConfig.fromProps(props)
@@ -607,10 +615,12 @@ class KafkaConfigTest {
   @Test
   def testVersionConfiguration(): Unit = {
     val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(MetadataVersion.latestProduction, conf.interBrokerProtocolVersion)
+    assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, conf.interBrokerProtocolVersion)
 
     props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0.0-IV1")
     val conf2 = KafkaConfig.fromProps(props)
@@ -773,7 +783,10 @@ class KafkaConfigTest {
   def testFromPropsInvalid(): Unit = {
     def baseProperties: Properties = {
       val validRequiredProperties = new Properties()
-      validRequiredProperties.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:2181")
+      validRequiredProperties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+      validRequiredProperties.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
+      validRequiredProperties.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+      validRequiredProperties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
       validRequiredProperties
     }
     // to ensure a basis is valid - bootstraps all needed validation
@@ -1070,7 +1083,10 @@ class KafkaConfigTest {
   def testDynamicLogConfigs(): Unit = {
     def baseProperties: Properties = {
       val validRequiredProperties = new Properties()
-      validRequiredProperties.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:2181")
+      validRequiredProperties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+      validRequiredProperties.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
+      validRequiredProperties.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9093")
+      validRequiredProperties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
       validRequiredProperties
     }
 
@@ -1102,7 +1118,7 @@ class KafkaConfigTest {
         case TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG =>
           assertDynamic(kafkaConfigProp, "5", () => config.zstdCompressionLevel)
         case TopicConfig.SEGMENT_BYTES_CONFIG =>
-          assertDynamic(kafkaConfigProp, 10000, () => config.logSegmentBytes)
+          assertDynamic(kafkaConfigProp, 1048576, () => config.logSegmentBytes)
         case TopicConfig.SEGMENT_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10001L, () => config.logRollTimeMillis)
         case TopicConfig.DELETE_RETENTION_MS_CONFIG =>
@@ -1161,7 +1177,9 @@ class KafkaConfigTest {
   @Test
   def testSpecificProperties(): Unit = {
     val defaults = new Properties()
-    defaults.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:2181")
+    defaults.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    defaults.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "CONTROLLER://localhost:9092")
+    defaults.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     // For ZkConnectionTimeoutMs
     defaults.setProperty(ZkConfigs.ZK_SESSION_TIMEOUT_MS_CONFIG, "1234")
     defaults.setProperty(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG, "false")
@@ -1180,7 +1198,6 @@ class KafkaConfigTest {
     defaults.setProperty(MetricConfigs.METRIC_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.toString)
 
     val config = KafkaConfig.fromProps(defaults)
-    assertEquals("127.0.0.1:2181", config.zkConnect)
     assertEquals(1234, config.zkConnectionTimeoutMs)
     assertEquals(false, config.brokerIdGenerationEnable)
     assertEquals(1, config.maxReservedBrokerId)
@@ -1207,9 +1224,12 @@ class KafkaConfigTest {
   @Test
   def testNonroutableAdvertisedListeners(): Unit = {
     val props = new Properties()
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:2181")
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "CONTROLLER://localhost:9092")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://0.0.0.0:9092")
-    assertFalse(isValidKafkaConfig(props))
+    assertBadConfigContainingMessage(props, "advertised.listeners cannot use the nonroutable meta-address 0.0.0.0. Use a routable IP address.")
   }
 
   @Test
@@ -1513,6 +1533,7 @@ class KafkaConfigTest {
   @Test
   def testNodeIdMustNotBeDifferentThanBrokerId(): Unit = {
     val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     assertEquals("You must set `node.id` to the same value as `broker.id`.",
@@ -1524,8 +1545,7 @@ class KafkaConfigTest {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
-    assertEquals("Missing configuration `node.id` which is required when `process.roles` " +
-      "is defined (i.e. when running in KRaft mode).",
+    assertEquals("Missing required configuration \"node.id\" which has no default value.",
       assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage())
   }
 
@@ -1568,7 +1588,10 @@ class KafkaConfigTest {
   @Test
   def testSaslJwksEndpointRetryDefaults(): Unit = {
     val props = new Properties()
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "CONTROLLER://localhost:9092")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     val config = KafkaConfig.fromProps(props)
     assertNotNull(config.getLong(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS))
     assertNotNull(config.getLong(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS))

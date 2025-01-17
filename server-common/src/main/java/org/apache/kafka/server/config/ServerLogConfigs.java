@@ -118,7 +118,7 @@ public class ServerLogConfigs {
             "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
             "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime.";
     public static final String LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
-    public static final long LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT = Long.MAX_VALUE;
+    public static final long LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT = 3600000; // 1 hour
     public static final String LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC = "This configuration sets the allowable timestamp difference between the " +
             "message timestamp and the broker's timestamp. The message timestamp can be later than or equal to the broker's " +
             "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
@@ -126,7 +126,7 @@ public class ServerLogConfigs {
             "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime.";
 
     public static final String NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG = "num.recovery.threads.per.data.dir";
-    public static final int NUM_RECOVERY_THREADS_PER_DATA_DIR_DEFAULT = 1;
+    public static final int NUM_RECOVERY_THREADS_PER_DATA_DIR_DEFAULT = 2;
     public static final String NUM_RECOVERY_THREADS_PER_DATA_DIR_DOC = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown";
 
     public static final String AUTO_CREATE_TOPICS_ENABLE_CONFIG = "auto.create.topics.enable";
