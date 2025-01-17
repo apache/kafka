@@ -232,8 +232,15 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String description,
                                                 final String threadId,
                                                 final Gauge<T> valueProvider) {
+        addThreadLevelMutableMetric(name, description, threadId, Collections.emptyMap(), valueProvider);
+    }
+    public <T> void addThreadLevelMutableMetric(final String name,
+                                                final String description,
+                                                final String threadId,
+                                                final Map<String, String> additionalTags,
+                                                final Gauge<T> valueProvider) {
         final MetricName metricName = metrics.metricName(
-            name, THREAD_LEVEL_GROUP, description, threadLevelTagMap(threadId));
+            name, THREAD_LEVEL_GROUP, description, threadLevelTagMap(threadId, additionalTags));
         synchronized (threadLevelMetrics) {
             threadLevelMetrics.computeIfAbsent(
                 threadSensorPrefix(threadId),
@@ -279,9 +286,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     public Map<String, String> threadLevelTagMap(final String threadId) {
-        final Map<String, String> tagMap = new LinkedHashMap<>();
+        return threadLevelTagMap(threadId, Collections.emptyMap());
+    }
+
+        public Map<String, String> threadLevelTagMap(final String threadId, final Map<String, String> additionalTags) {
+        final Map<String, String> tagMap = new LinkedHashMap<>(additionalTags);
         tagMap.put(THREAD_ID_TAG, threadId);
-        tagMap.put(PROCESS_ID_TAG, processId);
         return tagMap;
     }
 

@@ -880,8 +880,6 @@ public class StreamsMetricsImplTest {
             "",
             "thread-id",
             Thread.currentThread().getName(),
-            "process-id",
-            "test-process",
             "scope-id",
             "entity"
         );
@@ -994,8 +992,7 @@ public class StreamsMetricsImplTest {
                 streamsMetrics.version() == Version.LATEST ? THREAD_ID_TAG : CLIENT_ID_TAG,
                 Thread.currentThread().getName()
             ),
-            mkEntry(SCOPE_NAME + "-id", ENTITY_NAME),
-            mkEntry(PROCESS_ID_TAG, PROCESS_ID)
+            mkEntry(SCOPE_NAME + "-id", ENTITY_NAME)
         );
     }
 
@@ -1084,7 +1081,7 @@ public class StreamsMetricsImplTest {
 
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(THREAD_ID1);
 
-        assertThat(tagMap.size(), equalTo(2));
+        assertThat(tagMap.size(), equalTo(1));
         assertThat(
             tagMap.get(THREAD_ID_TAG),
             equalTo(THREAD_ID1)
@@ -1285,8 +1282,33 @@ public class StreamsMetricsImplTest {
             "foobar",
             THREAD_LEVEL_GROUP,
             mkMap(
+                mkEntry("thread-id", "t1")
+            )
+        );
+        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricValue(), equalTo(measuredValue));
+    }
+
+    @Test
+    public void shouldAddThreadLevelMutableMetricWithAdditionalTags() {
+        final int measuredValue = 123;
+        final StreamsMetricsImpl streamsMetrics
+            = new StreamsMetricsImpl(metrics, THREAD_ID1, PROCESS_ID, time);
+
+        streamsMetrics.addThreadLevelMutableMetric(
+            "foobar",
+            "test metric",
+            "t1",
+            Collections.singletonMap("additional-tag", "additional-value"),
+            (c, t) -> measuredValue
+        );
+
+        final MetricName name = metrics.metricName(
+            "foobar",
+            THREAD_LEVEL_GROUP,
+            mkMap(
                 mkEntry("thread-id", "t1"),
-                mkEntry("process-id", "test-process")
+                mkEntry("additional-tag", "additional-value")
             )
         );
         assertThat(metrics.metric(name), notNullValue());
@@ -1332,8 +1354,7 @@ public class StreamsMetricsImplTest {
             "foobar",
             THREAD_LEVEL_GROUP,
             mkMap(
-                mkEntry("thread-id", "t1"),
-                mkEntry("process-id", "test-process")
+                mkEntry("thread-id", "t1")
             )
         );
         assertThat(metrics.metric(name), notNullValue());
