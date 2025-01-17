@@ -748,7 +748,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         if (throwOnNextAppend.getAndSet(false)) {
             throw new BufferAllocationException("Test asked to fail the next prepareAppend");
         }
-        long appendTimestamp = (shared.prevOffset + 1) * 10;
+        long appendTimestamp = logEndOffset() * 10;
         lastOffset += batch.size();
         LocalRecordBatch recordBatch = new LocalRecordBatch(epoch, appendTimestamp, batch);
         preparedBatches.add(recordBatch);
