@@ -1102,7 +1102,7 @@ project(':core') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':server').sourceSets.test.output
-    testImplementation project(':test-common')
+    testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-api')
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
@@ -1628,7 +1628,6 @@ project(':test-common:test-common-runtime') {
   }
 
   dependencies {
-    implementation project(':test-common')
     implementation project(':test-common:test-common-api')
     implementation project(':clients')
     implementation project(':core')
@@ -1640,12 +1639,12 @@ project(':test-common:test-common-runtime') {
     implementation project(':storage')
 
     implementation libs.junitPlatformLanucher
-    implementation libs.junitJupiterApi
     implementation libs.junitJupiter
+    implementation libs.jacksonDatabindYaml
     implementation libs.slf4jApi
 
-    runtimeOnly project(':test-common:test-common-runtime')
-
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
   }
 
@@ -1678,7 +1677,7 @@ project(':transaction-coordinator') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':test-common')
+    testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-api')
 
     testRuntimeOnly runtimeTestLibs
@@ -2490,6 +2489,7 @@ project(':tools') {
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':test-common:test-common-api')
+    testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':connect:api')
@@ -2500,7 +2500,6 @@ project(':tools') {
     testImplementation project(':streams')
     testImplementation project(':streams').sourceSets.test.output
     testImplementation project(':streams:integration-tests').sourceSets.test.output
-    testImplementation project(':test-common')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -2872,7 +2871,7 @@ project(':streams:integration-tests') {
     testImplementation project(':storage')
     testImplementation project(':streams').sourceSets.test.output
     testImplementation project(':streams:streams-scala')
-    testImplementation project(':test-common')
+    testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':tools')
     testImplementation project(':transaction-coordinator')
     testImplementation libs.bcpkix
@@ -3548,14 +3547,14 @@ project(':connect:runtime') {
     testImplementation project(':server')
     testImplementation project(':metadata')
     testImplementation project(':server-common')
-    testImplementation project(':test-common')
+    testImplementation project(':test-common:test-common-api')
+    testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server-common')
     testImplementation project(':server')
     testImplementation project(':group-coordinator')
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
     testImplementation project(':server-common').sourceSets.test.output
-    testImplementation project(':test-common:test-common-api')
 
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
@@ -3669,7 +3668,7 @@ project(':connect:file') {
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
-    testImplementation project(':test-common')
+    testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server-common').sourceSets.test.output
 
     testRuntimeOnly runtimeTestLibs
@@ -3773,7 +3772,7 @@ project(':connect:mirror') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
-    testImplementation project(':test-common')
+    testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server')
     testImplementation project(':server-common').sourceSets.test.output
 

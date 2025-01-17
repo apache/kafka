@@ -24,11 +24,11 @@ import org.junit.jupiter.api.Assertions._
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
+import test.ClusterInstance
 
 import java.time.Duration
 import java.util.Collections

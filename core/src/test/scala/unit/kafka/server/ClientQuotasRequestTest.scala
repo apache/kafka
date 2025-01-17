@@ -27,7 +27,6 @@ import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersi
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
-import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.server.config.{QuotaConfig, ZooKeeperInternals}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Disabled

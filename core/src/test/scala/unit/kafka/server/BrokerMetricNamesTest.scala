@@ -19,7 +19,6 @@ package kafka.server
 
 import org.apache.kafka.common.test.api.ClusterTest
 import kafka.utils.TestUtils
-import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals

@@ -344,7 +344,7 @@ public class RecordTestUtils {
     public static ApiMessageAndVersion testRecord(int index) {
         MockRandom random = new MockRandom(index);
         return new ApiMessageAndVersion(
-            new TopicRecord().setName("test" + index).
+            new TopicRecord().setName("org/apache/kafka/common/test" + index).
             setTopicId(new Uuid(random.nextLong(), random.nextLong())), (short) 0);
     }
 
