@@ -21,14 +21,13 @@ import java.lang.{Long => JLong}
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
-import kafka.common.LogCleaningAbortedException
 import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
-import org.apache.kafka.storage.internals.log.LogDirFailureChannel
+import org.apache.kafka.storage.internals.log.{LogCleaningAbortedException, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util.Comparator

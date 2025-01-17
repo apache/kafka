@@ -1335,12 +1335,11 @@ public class ClassicGroup implements Group {
 
     /**
      * Convert the given ConsumerGroup to a corresponding ClassicGroup.
-     * The member with leavingMemberId will not be converted to the new ClassicGroup as it's the last
-     * member using new consumer protocol that left and triggered the downgrade.
      *
      * @param consumerGroup                 The converted ConsumerGroup.
-     * @param leavingMemberId               The member that will not be converted in the ClassicGroup.
+     * @param leavingMembers                The members that will not be converted in the ClassicGroup.
      * @param joiningMember                 The member that needs to be converted and added to the ClassicGroup.
+     *                                      When not null, must have an instanceId that matches an existing member.
      * @param logContext                    The logContext to create the ClassicGroup.
      * @param time                          The time to create the ClassicGroup.
      * @param metadataImage                 The MetadataImage.
@@ -1348,7 +1347,7 @@ public class ClassicGroup implements Group {
      */
     public static ClassicGroup fromConsumerGroup(
         ConsumerGroup consumerGroup,
-        String leavingMemberId,
+        Set<ConsumerGroupMember> leavingMembers,
         ConsumerGroupMember joiningMember,
         LogContext logContext,
         Time time,
@@ -1367,7 +1366,8 @@ public class ClassicGroup implements Group {
         );
 
         consumerGroup.members().forEach((memberId, member) -> {
-            if (!memberId.equals(leavingMemberId)) {
+            if (!leavingMembers.contains(member) &&
+                (joiningMember == null || joiningMember.instanceId() == null || !joiningMember.instanceId().equals(member.instanceId()))) {
                 classicGroup.add(
                     new ClassicGroupMember(
                         memberId,
@@ -1411,7 +1411,11 @@ public class ClassicGroup implements Group {
                 // If the downgraded is triggered by the joining static member replacing
                 // the leaving static member, the joining member should take the assignment
                 // of the leaving one.
-                memberId = leavingMemberId;
+                ConsumerGroupMember replacedMember = consumerGroup.staticMember(joiningMember.instanceId());
+                if (replacedMember == null) {
+                    throw new IllegalArgumentException("joiningMember must be a static member when not null.");
+                }
+                memberId = replacedMember.memberId();
             }
             byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(
                 toConsumerProtocolAssignment(

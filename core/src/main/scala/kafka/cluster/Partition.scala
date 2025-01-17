@@ -19,11 +19,11 @@ package kafka.cluster
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
-import kafka.controller.{KafkaController, StateChangeLogger}
+import kafka.controller.StateChangeLogger
 import kafka.log._
 import kafka.log.remote.RemoteLogManager
 import kafka.server._
-import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.DelayedShareFetch
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
@@ -358,12 +358,6 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  /* Epoch of the controller that last changed the leader. This needs to be initialized correctly upon broker startup.
-   * One way of doing that is through the controller's start replica state change command. When a new broker starts up
-   * the controller sends it a start replica command containing the leader for each partition that the broker hosts.
-   * In addition to the leader, the controller can also send the epoch of the controller that elected the leader for
-   * each partition. */
-  private var controllerEpoch: Int = KafkaController.InitialControllerEpoch
   this.logIdent = s"[Partition $topicPartition broker=$localBrokerId] "
 
   private val tags = Map("topic" -> topic, "partition" -> partitionId.toString).asJava
@@ -749,10 +743,6 @@ class Partition(val topicPartition: TopicPartition,
         return false
       }
 
-      // Record the epoch of the controller that made the leadership decision. This is useful while updating the isr
-      // to maintain the decision maker controller's epoch in the zookeeper path.
-      controllerEpoch = partitionState.controllerEpoch
-
       val currentTimeMs = time.milliseconds
       val isNewLeader = !isLeader
       val isNewLeaderEpoch = partitionState.leaderEpoch > leaderEpoch
@@ -860,10 +850,6 @@ class Partition(val topicPartition: TopicPartition,
           s"and partition state $partitionState since the follower is already at a newer partition epoch $partitionEpoch.")
         return false
       }
-
-      // Record the epoch of the controller that made the leadership decision. This is useful while updating the isr
-      // to maintain the decision maker controller's epoch in the zookeeper path
-      controllerEpoch = partitionState.controllerEpoch
 
       val isNewLeaderEpoch = partitionState.leaderEpoch > leaderEpoch
       // The leader should be updated before updateAssignmentAndIsr where we clear the ISR. Or it is possible to meet
@@ -1099,11 +1085,6 @@ class Partition(val topicPartition: TopicPartition,
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
           isBrokerEpochIsrEligible(storedBrokerEpoch, cachedBrokerEpoch)
-
-      // In ZK mode, we just ensure the broker is alive. Although we do not check for shutting down brokers here,
-      // the controller will block them from being added to ISR.
-      case zkMetadataCache: ZkMetadataCache =>
-        zkMetadataCache.hasAliveBroker(followerReplicaId)
 
       case _ => true
     }
@@ -1875,8 +1856,7 @@ class Partition(val topicPartition: TopicPartition,
     debug(s"Submitting ISR state change $proposedIsrState")
     val future = alterIsrManager.submit(
       new TopicIdPartition(topicId.getOrElse(Uuid.ZERO_UUID), topicPartition),
-      proposedIsrState.sentLeaderAndIsr,
-      controllerEpoch
+      proposedIsrState.sentLeaderAndIsr
     )
     future.whenComplete { (leaderAndIsr, e) =>
       var hwIncremented = false
