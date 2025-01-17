@@ -20,6 +20,7 @@ package org.apache.kafka.common.test;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.test.api.Defaults;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
@@ -43,13 +44,6 @@ import java.util.stream.Stream;
 @SuppressWarnings("NPathComplexity")
 public class TestKitNodes {
 
-    public static final int CONTROLLER_ID_OFFSET = 3000;
-    public static final int BROKER_ID_OFFSET = 0;
-    public static final SecurityProtocol DEFAULT_BROKER_SECURITY_PROTOCOL = SecurityProtocol.PLAINTEXT;
-    public static final String DEFAULT_BROKER_LISTENER_NAME = "EXTERNAL";
-    public static final SecurityProtocol DEFAULT_CONTROLLER_SECURITY_PROTOCOL = SecurityProtocol.PLAINTEXT;
-    public static final String DEFAULT_CONTROLLER_LISTENER_NAME = "CONTROLLER";
-
     public static class Builder {
         private boolean combined;
         private String clusterId;
@@ -69,10 +63,10 @@ public class TestKitNodes {
         }
         // The broker and controller listener name and SecurityProtocol configurations must
         // be kept in sync with the default values in ClusterTest.
-        private ListenerName brokerListenerName = ListenerName.normalised(DEFAULT_BROKER_LISTENER_NAME);
-        private SecurityProtocol brokerSecurityProtocol = DEFAULT_BROKER_SECURITY_PROTOCOL;
-        private ListenerName controllerListenerName = ListenerName.normalised(DEFAULT_CONTROLLER_LISTENER_NAME);
-        private SecurityProtocol controllerSecurityProtocol = DEFAULT_CONTROLLER_SECURITY_PROTOCOL;
+        private ListenerName brokerListenerName = ListenerName.normalised(Defaults.DEFAULT_BROKER_LISTENER_NAME);
+        private SecurityProtocol brokerSecurityProtocol = Defaults.DEFAULT_BROKER_SECURITY_PROTOCOL;
+        private ListenerName controllerListenerName = ListenerName.normalised(Defaults.DEFAULT_CONTROLLER_LISTENER_NAME);
+        private SecurityProtocol controllerSecurityProtocol = Defaults.DEFAULT_CONTROLLER_SECURITY_PROTOCOL;
 
         public Builder setClusterId(String clusterId) {
             this.clusterId = clusterId;
@@ -169,11 +163,11 @@ public class TestKitNodes {
                 clusterId = Uuid.randomUuid().toString();
             }
 
-            int controllerId = combined ? BROKER_ID_OFFSET : BROKER_ID_OFFSET + CONTROLLER_ID_OFFSET;
+            int controllerId = combined ? Defaults.BROKER_ID_OFFSET : Defaults.BROKER_ID_OFFSET + Defaults.CONTROLLER_ID_OFFSET;
             List<Integer> controllerNodeIds = IntStream.range(controllerId, controllerId + numControllerNodes)
                 .boxed()
                 .collect(Collectors.toList());
-            List<Integer> brokerNodeIds = IntStream.range(BROKER_ID_OFFSET, BROKER_ID_OFFSET + numBrokerNodes)
+            List<Integer> brokerNodeIds = IntStream.range(Defaults.BROKER_ID_OFFSET, Defaults.BROKER_ID_OFFSET + numBrokerNodes)
                 .boxed()
                 .collect(Collectors.toList());
 

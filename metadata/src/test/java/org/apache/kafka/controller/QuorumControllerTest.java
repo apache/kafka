@@ -67,6 +67,7 @@ import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -1622,5 +1623,11 @@ public class QuorumControllerTest {
                 BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
                 MetadataVersion.IBP_3_6_IV0,
                 3));
+    }
+
+
+    @ClusterTest
+    public void testClusterTestSpi() {
+        assertTrue(true);
     }
 }

@@ -79,7 +79,7 @@ a JUnit extension called `ClusterTestExtensions` which knows how to process thes
 invocations. Test classes that wish to make use of these annotations need to explicitly register this extension:
 
 ```scala
-import org.apache.kafka.common.test.api.ClusterTestExtensions
+import org.apache.kafka.common.test.junit.ClusterTestExtensions
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ApiVersionsRequestTest {

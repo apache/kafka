@@ -26,7 +26,7 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.test.TestUtils;

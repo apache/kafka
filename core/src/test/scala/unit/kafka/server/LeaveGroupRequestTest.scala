@@ -18,11 +18,10 @@ package kafka.server
 
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.LeaveGroupResponseData
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.JoinGroupRequest
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.test.api;
+package org.apache.kafka.common.test;
 
 import kafka.log.UnifiedLog;
 import kafka.network.SocketServer;
@@ -43,8 +43,9 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.test.JaasUtils;
-import org.apache.kafka.common.test.TestUtils;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;

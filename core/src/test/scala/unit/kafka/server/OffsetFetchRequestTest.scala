@@ -16,13 +16,11 @@
  */
 package kafka.server
 
-
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetFetchResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.extension.ExtendWith

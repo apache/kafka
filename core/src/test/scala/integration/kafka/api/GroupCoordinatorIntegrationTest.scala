@@ -13,9 +13,7 @@
 package kafka.api
 
 import kafka.log.UnifiedLog
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, ConsumerGroupDescription}
 import org.apache.kafka.clients.consumer.{Consumer, GroupProtocol, OffsetAndMetadata}
@@ -26,6 +24,7 @@ import org.junit.jupiter.api.Assertions._
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Timeout

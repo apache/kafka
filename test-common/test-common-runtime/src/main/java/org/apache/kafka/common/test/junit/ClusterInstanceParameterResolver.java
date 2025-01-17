@@ -15,13 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.test.api;
+package org.apache.kafka.common.test.junit;
 
 
+import org.apache.kafka.common.test.ClusterInstance;
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolver;
+import org.junit.platform.commons.util.AnnotationUtils;
 
 import java.lang.reflect.Executable;
 
@@ -57,7 +59,7 @@ public class ClusterInstanceParameterResolver implements ParameterResolver {
         } else {
             // If we're injecting into a method, make sure it's a test method and not a lifecycle method
             Executable parameterizedMethod = parameterContext.getParameter().getDeclaringExecutable();
-            return isAnnotated(parameterizedMethod, TestTemplate.class);
+            return AnnotationUtils.isAnnotated(parameterizedMethod, TestTemplate.class);
         }
     }
 

@@ -16,9 +16,7 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api._
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.common.GroupState
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup
@@ -26,6 +24,7 @@ import org.apache.kafka.common.message.{ShareGroupDescribeRequestData, ShareGrou
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ShareGroupDescribeRequest, ShareGroupDescribeResponse}
 import org.apache.kafka.common.resource.ResourceType
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig

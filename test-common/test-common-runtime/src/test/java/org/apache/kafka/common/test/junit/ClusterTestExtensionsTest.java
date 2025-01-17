@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.test.api;
+package org.apache.kafka.common.test.junit;
 
 import kafka.server.ControllerServer;
 
@@ -40,14 +40,22 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.TestUtils;
+import org.apache.kafka.common.test.api.AutoStart;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -84,7 +92,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
     @ClusterConfigProperty(key = "default.key", value = "default.value"),
     @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "100"),
 })  // Set defaults for a few params in @ClusterTest(s)
-@ExtendWith(ClusterTestExtensions.class)
 public class ClusterTestExtensionsTest {
 
     private final ClusterInstance clusterInstance;
@@ -371,7 +378,7 @@ public class ClusterTestExtensionsTest {
         }
     )
     public void testSaslPlaintext(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
-        Assertions.assertEquals(SecurityProtocol.SASL_PLAINTEXT, clusterInstance.config().brokerSecurityProtocol());
+        assertEquals(SecurityProtocol.SASL_PLAINTEXT, clusterInstance.config().brokerSecurityProtocol());
 
         // default ClusterInstance#admin helper with admin credentials
         try (Admin admin = clusterInstance.admin()) {

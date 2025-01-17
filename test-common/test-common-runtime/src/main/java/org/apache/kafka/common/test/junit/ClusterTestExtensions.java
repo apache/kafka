@@ -14,12 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.test.api;
+package org.apache.kafka.common.test.junit;
 
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.server.common.Feature;
-import org.apache.kafka.server.util.timer.SystemTimer;
 
+import org.apache.kafka.common.test.api.AutoStart;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
+import org.apache.kafka.common.test.api.DetectThreadLeak;
+import org.apache.kafka.common.test.api.Type;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -103,7 +110,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private static final String DETECT_THREAD_LEAK_KEY = "detectThreadLeak";
     private static final Set<String> SKIPPED_THREAD_PREFIX = Set.of(METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX,
             FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX, ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX,
-            RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX);
+            RMI_THREAD_PREFIX);
+
+    // TODO re-add SystemTimer.SYSTEM_TIMER_THREAD_PREFIX
 
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
@@ -174,6 +183,21 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return count;
     }
 
+    private TestTemplateInvocationContext invocationContextForClusterType(
+        Type type,
+        String baseDisplayName,
+        ClusterConfig config
+    ) {
+        switch (type) {
+            case KRAFT:
+                return new RaftClusterInvocationContext(baseDisplayName, config, false);
+            case CO_KRAFT:
+                return new RaftClusterInvocationContext(baseDisplayName, config, true);
+            default:
+                throw new IllegalArgumentException("Unsupported @Type value " + type);
+        }
+    }
+
     List<TestTemplateInvocationContext> processClusterTemplate(ExtensionContext context, ClusterTemplate annot) {
         if (annot.value().trim().isEmpty()) {
             throw new IllegalStateException("ClusterTemplate value can't be empty string.");
@@ -184,7 +208,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         List<TestTemplateInvocationContext> contexts = IntStream.range(0, repeatCount)
             .mapToObj(__ -> generateClusterConfigurations(context, annot.value()).stream())
             .flatMap(Function.identity())
-            .flatMap(config -> config.clusterTypes().stream().map(type -> type.invocationContexts(baseDisplayName, config)))
+            .flatMap(config -> config.clusterTypes().stream().map(type -> invocationContextForClusterType(type, baseDisplayName, config)))
             .collect(Collectors.toList());
 
         if (contexts.isEmpty()) {
@@ -238,8 +262,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .collect(Collectors.groupingBy(ClusterConfigProperty::id, Collectors.mapping(Function.identity(),
                 Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b))));
 
-        Map<Feature, Short> features = Arrays.stream(clusterTest.features())
-            .collect(Collectors.toMap(ClusterFeature::feature, ClusterFeature::version));
+        // TODO get rid of Feature reference
+        //Map<Feature, Short> features = Arrays.stream(clusterTest.features())
+        //    .collect(Collectors.toMap(ClusterFeature::feature, ClusterFeature::version));
 
         ClusterConfig config = ClusterConfig.builder()
             .setTypes(new HashSet<>(Arrays.asList(types)))
@@ -255,11 +280,11 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .setPerServerProperties(perServerProperties)
             .setMetadataVersion(clusterTest.metadataVersion())
             .setTags(Arrays.asList(clusterTest.tags()))
-            .setFeatures(features)
+        //    .setFeatures(features)
             .build();
 
         return Arrays.stream(types)
-            .map(type -> type.invocationContexts(context.getRequiredTestMethod().getName(), config))
+            .map(type -> invocationContextForClusterType(type, context.getRequiredTestMethod().getName(), config))
             .collect(Collectors.toList());
     }
 

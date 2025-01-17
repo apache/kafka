@@ -16,25 +16,9 @@
  */
 package org.apache.kafka.common.test.api;
 
-import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-
-
 /**
  * The type of cluster config being requested. Used by {@link org.apache.kafka.common.test.api.ClusterConfig} and the test annotations.
  */
 public enum Type {
-    KRAFT {
-        @Override
-        public TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config) {
-            return new RaftClusterInvocationContext(baseDisplayName, config, false);
-        }
-    },
-    CO_KRAFT {
-        @Override
-        public TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config) {
-            return new RaftClusterInvocationContext(baseDisplayName, config, true);
-        }
-    };
-
-    public abstract TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config);
+    KRAFT, CO_KRAFT;
 }

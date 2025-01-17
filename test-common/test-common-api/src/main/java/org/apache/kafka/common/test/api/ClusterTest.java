@@ -30,8 +30,8 @@ import java.lang.annotation.Target;
 
 import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
-import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_LISTENER_NAME;
-import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_CONTROLLER_LISTENER_NAME;
+import static org.apache.kafka.common.test.api.Defaults.DEFAULT_BROKER_LISTENER_NAME;
+import static org.apache.kafka.common.test.api.Defaults.DEFAULT_CONTROLLER_LISTENER_NAME;
 
 @Documented
 @Target({METHOD})

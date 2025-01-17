@@ -49,7 +49,7 @@ ext {
   gradleVersion = versions.gradle
   minClientJavaVersion = 11
   minNonClientJavaVersion = 17
-  modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams-scala", ":test-common:test-common-runtime"]
+  modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams-scala", ":test-common:test-common-junit"]
 
   buildVersionFileName = "kafka-version.properties"
 
@@ -139,7 +139,7 @@ ext {
   runtimeTestLibs = [
     libs.slf4jLog4j2,
     libs.junitPlatformLanucher,
-    project(":test-common:test-common-runtime")
+    project(":test-common:test-common-junit")
   ]
 
   log4jRuntimeLibs = [
@@ -1364,6 +1364,9 @@ project(':metadata') {
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
 
+    testImplementation project(':test-common:test-common-api')
+    testRuntimeOnly project(':test-common:test-common-runtime')
+
     testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
@@ -1548,6 +1551,7 @@ project(':test-common') {
     implementation project(':raft')
     implementation project(':storage')
     implementation project(':server-common')
+    implementation project(':test-common:test-common-api')
     implementation libs.jacksonDatabindYaml
     implementation libs.slf4jApi
 
@@ -1574,15 +1578,8 @@ project(':test-common:test-common-api') {
   }
 
   dependencies {
-    implementation project(':clients')
-    implementation project(':core')
-    implementation project(':group-coordinator')
-    implementation project(':metadata')
-    implementation project(':raft')
-    implementation project(':server')
-    implementation project(':server-common')
-    implementation project(':storage')
-    implementation project(':test-common')
+    implementation project(':server-common') // Only project dependency allowed
+
     implementation libs.junitJupiterApi
 
     testImplementation libs.junitJupiter
@@ -1601,10 +1598,10 @@ project(':test-common:test-common-api') {
   }
 }
 
-project(':test-common:test-common-runtime') {
-  // Runtime-only test code including JUnit extentions
+project(':test-common:test-common-junit') {
+  // Runtime-only test code including JUnit extentions. Java 11 only
   base {
-    archivesName = "kafka-test-common-runtime"
+    archivesName = "kafka-test-common-junit"
   }
 
   dependencies {
@@ -1612,6 +1609,43 @@ project(':test-common:test-common-runtime') {
     implementation libs.junitJupiterApi
     implementation libs.junitJupiter
     implementation libs.slf4jApi
+    testImplementation testLog4j2Libs
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-test-common-api.xml")
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
+project(':test-common:test-common-runtime') {
+  // Runtime-only test code. Java 17+ only
+  base {
+    archivesName = "kafka-test-common-runtime"
+  }
+
+  dependencies {
+    implementation project(':test-common')
+    implementation project(':test-common:test-common-api')
+    implementation project(':clients')
+    implementation project(':core')
+    implementation project(':group-coordinator')
+    implementation project(':metadata')
+    implementation project(':raft')
+    implementation project(':server')
+    implementation project(':server-common')
+    implementation project(':storage')
+
+    implementation libs.junitPlatformLanucher
+    implementation libs.junitJupiterApi
+    implementation libs.junitJupiter
+    implementation libs.slf4jApi
+
+    runtimeOnly project(':test-common:test-common-runtime')
+
     testImplementation testLog4j2Libs
   }
 
