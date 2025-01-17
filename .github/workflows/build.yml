@@ -36,7 +36,7 @@ jobs:
     name: Configure
     outputs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
-      sha: $${ steps.commit-to-build.outputs.sha }}
+      sha: ${{ steps.commit-to-build.outputs.sha }}
     steps:
       - name: Env
         run: printenv
