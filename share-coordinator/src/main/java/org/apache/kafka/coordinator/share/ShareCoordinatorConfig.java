@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.config;
+package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -69,7 +69,7 @@ public class ShareCoordinatorConfig {
     public static final String STATE_TOPIC_COMPRESSION_CODEC_DOC = "Compression codec for the share-group state topic.";
 
     public static final String APPEND_LINGER_MS_CONFIG = "share.coordinator.append.linger.ms";
-    public static final int APPEND_LINGER_MS_DEFAULT = 10;
+    public static final int APPEND_LINGER_MS_DEFAULT = 5;
     public static final String APPEND_LINGER_MS_DOC = "The duration in milliseconds that the share coordinator will wait for writes to accumulate before flushing them to disk.";
 
     public static final String STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG = "share.coordinator.state.topic.prune.interval.ms";

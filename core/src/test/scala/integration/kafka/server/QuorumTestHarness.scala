@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import kafka.controller.ControllerEventManager
-
 import java.io.File
 import java.net.InetSocketAddress
 import java.util
@@ -393,7 +391,7 @@ object QuorumTestHarness {
     // when broker ports are reused (e.g. auto-create topics) as well as threads
     // which reset static JAAS configuration.
     val unexpectedThreadNames = Set(
-      ControllerEventManager.ControllerEventThreadName,
+      "controller-event-thread",
       KafkaProducer.NETWORK_THREAD_PREFIX,
       AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
       AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,

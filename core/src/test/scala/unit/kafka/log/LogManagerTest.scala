@@ -800,7 +800,7 @@ class LogManagerTest {
     val newProperties = new Properties()
     newProperties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
 
-    spyLogManager.updateTopicConfig(topic, newProperties, isRemoteLogStorageSystemEnabled = false, wasRemoteLogEnabled = false, fromZK = false)
+    spyLogManager.updateTopicConfig(topic, newProperties, isRemoteLogStorageSystemEnabled = false, wasRemoteLogEnabled = false)
 
     assertTrue(log0.config.delete)
     assertTrue(log1.config.delete)
@@ -975,7 +975,6 @@ class LogManagerTest {
         // not clean shutdown
         lastShutdownClean = false,
         topicId = None,
-        keepPartitionMetadataFile = false,
         // pass mock map for verification later
         numRemainingSegments = mockMap)
 
@@ -1383,7 +1382,6 @@ class LogManagerTest {
       time = Time.SYSTEM,
       brokerTopicStats = new BrokerTopicStats,
       logDirFailureChannel = new LogDirFailureChannel(1),
-      keepPartitionMetadataFile = true,
       interBrokerProtocolVersion = MetadataVersion.latestTesting,
       remoteStorageSystemEnable = false,
       initialTaskDelayMs = 0)
