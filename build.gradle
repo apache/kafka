@@ -1582,7 +1582,7 @@ project(':test-common:test-common-junit') {
   }
 
   checkstyle {
-    configProperties = checkstyleConfigProperties("import-control-test-common-api.xml")
+    configProperties = checkstyleConfigProperties("import-control-test-common-junit.xml")
   }
 
   javadoc {
@@ -1618,7 +1618,7 @@ project(':test-common:test-common-runtime') {
   }
 
   checkstyle {
-    configProperties = checkstyleConfigProperties("import-control-test-common-api.xml")
+    configProperties = checkstyleConfigProperties("import-control-test-common-runtime.xml")
   }
 
   javadoc {
@@ -2269,6 +2269,7 @@ project(':storage') {
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':test-common:test-common-api')
+    testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
@@ -3517,6 +3518,7 @@ project(':connect:runtime') {
     testImplementation project(':metadata')
     testImplementation project(':server-common')
     testImplementation project(':test-common:test-common-api')
+    testImplementation project(':test-common:test-common-junit')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server-common')
     testImplementation project(':server')

@@ -19,10 +19,8 @@
 -->
 
 <import-control pkg="org.apache.kafka">
-
+    <!-- Only JUnit and slf4j allowed here -->
     <allow pkg="java" />
-    <allow pkg="org" />
-    <allow pkg="kafka" />
-    <allow pkg="scala.jdk.javaapi" />
-    <allow pkg="javax.security" />
+    <allow pkg="org.junit" />
+    <allow pkg="org.slf4j" />
 </import-control>

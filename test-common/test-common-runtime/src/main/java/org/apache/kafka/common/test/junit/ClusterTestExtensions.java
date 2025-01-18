@@ -27,9 +27,9 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.DetectThreadLeak;
 import org.apache.kafka.common.test.api.Type;
-
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.util.timer.SystemTimer;
+
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;

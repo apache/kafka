@@ -19,25 +19,14 @@
 -->
 
 <import-control pkg="org.apache.kafka">
-    <!-- no one depends on the server -->
-    <disallow pkg="kafka" />
+    <!-- allow any import from kafka -->
+    <allow pkg="org.apache.kafka" />
+    <allow pkg="kafka" />
 
-    <!-- anyone can use public classes -->
-    <allow pkg="org.apache.kafka.common" exact-match="true" />
-    <allow pkg="org.apache.kafka.common.security" />
-    <allow pkg="org.apache.kafka.common.serialization" />
-    <allow pkg="org.apache.kafka.common.utils" />
-    <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
-    <allow pkg="org.apache.kafka.common.memory" />
-    <allow pkg="org.apache.kafka.common.network" />
-    <allow pkg="org.apache.kafka.common.test" />
-
-    <!-- things from server-common -->
-    <allow pkg="org.apache.kafka.server.common" />
-
+    <allow pkg="org.slf4j"/>
+    <allow pkg="org.mockito"/>
+    <allow pkg="org.junit"/>
     <allow pkg="java" />
+    <allow pkg="scala.jdk.javaapi" />
     <allow pkg="javax.security" />
-    <allow pkg="org.junit" />
-    <allow pkg="org.slf4j" />
-
 </import-control>
