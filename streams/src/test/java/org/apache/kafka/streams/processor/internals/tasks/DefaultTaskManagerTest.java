@@ -137,7 +137,7 @@ public class DefaultTaskManagerTest {
         assertFalse(awaitingRunnable.awaitDone.await(100, TimeUnit.MILLISECONDS));
 
         awaitingRunnable.shutdown();
-        awaitingThread.join(60_000L);
+        awaitingThread.join();
         assertFalse(awaitingThread.isAlive());
     }
 
@@ -153,7 +153,7 @@ public class DefaultTaskManagerTest {
         assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
 
         awaitingRunnable.shutdown();
-        awaitingThread.join(60_000L);
+        awaitingThread.join();
         assertFalse(awaitingThread.isAlive());
     }
 
@@ -169,7 +169,7 @@ public class DefaultTaskManagerTest {
         assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
 
         awaitingRunnable.shutdown();
-        awaitingThread.join(60_000L);
+        awaitingThread.join();
         assertFalse(awaitingThread.isAlive());
     }
 
@@ -190,7 +190,7 @@ public class DefaultTaskManagerTest {
         assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
 
         awaitingRunnable.shutdown();
-        awaitingThread.join(60_000L);
+        awaitingThread.join();
         assertFalse(awaitingThread.isAlive());
     }
 
@@ -206,7 +206,7 @@ public class DefaultTaskManagerTest {
         assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
 
         awaitingRunnable.shutdown();
-        awaitingThread.join(60_000L);
+        awaitingThread.join();
         assertFalse(awaitingThread.isAlive());
     }
 
@@ -224,7 +224,7 @@ public class DefaultTaskManagerTest {
         assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
 
         awaitingRunnable.shutdown();
-        awaitingThread.join(60_000L);
+        awaitingThread.join();
         assertFalse(awaitingThread.isAlive());
     }
 
