@@ -50,7 +50,7 @@ import scala.util.control.Breaks._
 class KRaftMetadataCache(
   val brokerId: Int,
   val kraftVersionSupplier: Supplier[KRaftVersion]
-) extends MetadataCache with Logging with ConfigRepository {
+) extends MetadataCache with Logging {
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
 
   // This is the cache state. Every MetadataImage instance is immutable, and updates
@@ -355,7 +355,7 @@ class KRaftMetadataCache(
   }
 
   override def getBrokerNodes(listenerName: ListenerName): Seq[Node] = {
-    _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).asScala).toSeq
+    _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).toScala).toSeq
   }
 
   // Does NOT include offline replica metadata
@@ -505,11 +505,11 @@ class KRaftMetadataCache(
   override def config(configResource: ConfigResource): Properties =
     _currentImage.configs().configProperties(configResource)
 
-  def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData = {
+  override def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData = {
     _currentImage.clientQuotas().describe(request)
   }
 
-  def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData = {
+  override def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData = {
     _currentImage.scram().describe(request)
   }
 
