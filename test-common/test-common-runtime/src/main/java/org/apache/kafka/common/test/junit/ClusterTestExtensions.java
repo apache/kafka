@@ -120,6 +120,13 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return true;
     }
 
+    private boolean isClusterTest(ExtensionContext context) {
+        Method method = context.getRequiredTestMethod();
+        return method.getDeclaredAnnotation(ClusterTemplate.class) != null ||
+            method.getDeclaredAnnotation(ClusterTest.class) != null ||
+            method.getDeclaredAnnotation(ClusterTests.class) != null;
+    }
+
     @Override
     public Stream<TestTemplateInvocationContext> provideTestTemplateInvocationContexts(ExtensionContext context) {
         ClusterTestDefaults defaults = getClusterTestDefaults(context.getRequiredTestClass());
@@ -143,30 +150,29 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             generatedContexts.addAll(processClusterTests(context, clusterTestsAnnot.value(), defaults));
         }
 
-        if (generatedContexts.isEmpty()) {
-            throw new IllegalStateException("Please annotate test methods with @ClusterTemplate, @ClusterTest, or " +
-                    "@ClusterTests when using the ClusterTestExtensions provider");
-        }
-
         return generatedContexts.stream();
     }
 
     @Override
     public void beforeEach(ExtensionContext context) {
-        DetectThreadLeak detectThreadLeak = DetectThreadLeak.of(thread ->
+        if (isClusterTest(context)) {
+            DetectThreadLeak detectThreadLeak = DetectThreadLeak.of(thread ->
                 SKIPPED_THREAD_PREFIX.stream().noneMatch(prefix -> thread.getName().startsWith(prefix)));
-        getStore(context).put(DETECT_THREAD_LEAK_KEY, detectThreadLeak);
+            getStore(context).put(DETECT_THREAD_LEAK_KEY, detectThreadLeak);
+        }
     }
 
     @Override
     public void afterEach(ExtensionContext context) {
-        DetectThreadLeak detectThreadLeak = getStore(context).remove(DETECT_THREAD_LEAK_KEY, DetectThreadLeak.class);
-        if (detectThreadLeak == null) {
-            return;
-        }
-        List<Thread> threads = detectThreadLeak.newThreads();
-        assertTrue(threads.isEmpty(), "Thread leak detected: " +
+        if (isClusterTest(context)) {
+            DetectThreadLeak detectThreadLeak = getStore(context).remove(DETECT_THREAD_LEAK_KEY, DetectThreadLeak.class);
+            if (detectThreadLeak == null) {
+                return;
+            }
+            List<Thread> threads = detectThreadLeak.newThreads();
+            assertTrue(threads.isEmpty(), "Thread leak detected: " +
                 threads.stream().map(Thread::getName).collect(Collectors.joining(", ")));
+        }
     }
 
     private Store getStore(ExtensionContext context) {
