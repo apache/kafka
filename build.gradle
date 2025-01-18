@@ -139,10 +139,11 @@ ext {
   runtimeTestLibs = [
     libs.slf4jLog4j2,
     libs.junitPlatformLanucher,
+    libs.jacksonDatabindYaml,
     project(":test-common:test-common-junit")
   ]
 
-  log4jRuntimeLibs = [
+  log4jReleaseLibs = [
     libs.slf4jLog4j2,
     libs.log4j1Bridge2Api,
     libs.jacksonDatabindYaml
@@ -1059,7 +1060,7 @@ project(':core') {
   }
 
   dependencies {
-    releaseOnly log4jRuntimeLibs
+    releaseOnly log4jReleaseLibs
     // `core` is often used in users' tests, define the following dependencies as `api` for backwards compatibility
     // even though the `core` module doesn't expose any public API
     api project(':clients')
@@ -1883,7 +1884,6 @@ project(':clients') {
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
     testRuntimeOnly runtimeTestLibs
-    testRuntimeOnly log4jRuntimeLibs
 
     generator project(':generator')
   }
@@ -2428,7 +2428,7 @@ project(':tools') {
   }
 
   dependencies {
-    releaseOnly log4jRuntimeLibs
+    releaseOnly log4jReleaseLibs
 
     implementation project(':clients')
     implementation project(':metadata')
@@ -2652,7 +2652,6 @@ project(':streams') {
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly runtimeTestLibs
-    testRuntimeOnly log4jRuntimeLibs
 
     generator project(':generator')
   }
