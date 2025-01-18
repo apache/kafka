@@ -1615,6 +1615,8 @@ project(':test-common:test-common-runtime') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
+
+    testRuntimeOnly runtimeTestLibs
   }
 
   checkstyle {
