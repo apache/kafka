@@ -60,7 +60,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -350,15 +349,13 @@ public class ClusterTestExtensionsTest {
         }
     }
 
-    @ClusterTest(types = {Type.KRAFT}, brokers = 1)
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 1)
     public void testBrokerRestart(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         final String topicName = "topic";
-        Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-
         try (Admin admin = cluster.admin();
-             Producer<String, String> producer = cluster.producer(Utils.propsToMap(producerProps))) {
+             Producer<String, String> producer = cluster.producer(Map.of(
+                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()))) {
             admin.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
 
             cluster.waitForTopic(topicName, 1);
