@@ -227,7 +227,7 @@ public class ClusterTestExtensionsTest {
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 3)
     public void testCreateTopic(ClusterInstance clusterInstance) throws Exception {
-        String topicName = "org/apache/kafka/common/test";
+        String topicName = "test";
         int numPartition = 3;
         short numReplicas = 3;
         clusterInstance.createTopic(topicName, numPartition, numReplicas);
@@ -243,7 +243,7 @@ public class ClusterTestExtensionsTest {
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
     public void testShutdownAndSyncMetadata(ClusterInstance clusterInstance) throws Exception {
-        String topicName = "org/apache/kafka/common/test";
+        String topicName = "test";
         int numPartition = 3;
         short numReplicas = 3;
         clusterInstance.createTopic(topicName, numPartition, numReplicas);
