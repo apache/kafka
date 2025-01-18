@@ -2091,9 +2091,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   /**
    * Test the consumer group APIs.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerGroupWithMemberMigration(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testConsumerGroupWithMemberMigration(quorum: String): Unit = {
     val config = createConfig
     client = Admin.create(config)
     var classicConsumer: Consumer[Array[Byte], Array[Byte]] = null
