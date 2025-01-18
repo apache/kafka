@@ -250,12 +250,6 @@ public class ApiVersionsResponseTest {
         assertEquals(expectedVersionsForForwardableAPI, commonResponse.find(forwardableAPIKey));
     }
 
-    private void verifyApiKeysForMagic(ApiVersionsResponse response, Byte maxMagic) {
-        for (ApiVersion version : response.data().apiKeys()) {
-            assertTrue(ApiKeys.forId(version.apiKey()).minRequiredInterBrokerMagic <= maxMagic);
-        }
-    }
-
     private void verifyApiKeysForTelemetry(ApiVersionsResponse response, int expectedCount) {
         int count = 0;
         for (ApiVersion version : response.data().apiKeys()) {

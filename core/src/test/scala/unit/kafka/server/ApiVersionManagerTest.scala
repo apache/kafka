@@ -21,7 +21,7 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.KRaftVersion
-import org.junit.jupiter.api.{Disabled, Test}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
