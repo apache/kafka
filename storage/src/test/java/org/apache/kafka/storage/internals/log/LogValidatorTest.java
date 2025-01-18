@@ -240,7 +240,6 @@ public class LogValidatorTest {
         }
 
         assertEquals(timestamp, validatedResults.maxTimestampMs);
-        assertEquals(2, validatedResults.shallowOffsetOfMaxTimestamp, "Offset of max timestamp should be the last offset 2.");
         assertTrue(validatedResults.messageSizeMaybeChanged, "Message size should have been changed");
 
         verifyRecordValidationStats(
@@ -287,7 +286,6 @@ public class LogValidatorTest {
         }
         assertEquals(RecordBatch.NO_TIMESTAMP, validatedResults.maxTimestampMs,
                 "Max timestamp should be " + RecordBatch.NO_TIMESTAMP);
-        assertEquals(-1, validatedResults.shallowOffsetOfMaxTimestamp);
         assertTrue(validatedResults.messageSizeMaybeChanged, "Message size should have been changed");
 
         verifyRecordValidationStats(validatedResults.recordValidationStats, 3, records, true);
@@ -383,7 +381,6 @@ public class LogValidatorTest {
         // Both V2 and V1 have single batch in the validated records when compression is enabled, and hence their shallow
         // OffsetOfMaxTimestamp is the last offset of the single batch
         assertEquals(1, iteratorSize(validatedRecords.batches().iterator()));
-        assertEquals(2, validatingResults.shallowOffsetOfMaxTimestamp);
         assertTrue(validatingResults.messageSizeMaybeChanged,
                 "Message size should have been changed");
 
@@ -571,8 +568,6 @@ public class LogValidatorTest {
 
         assertEquals(now + 1, validatedResults.maxTimestampMs, "Max timestamp should be " + (now + 1));
 
-        int expectedShallowOffsetOfMaxTimestamp = 2;
-        assertEquals(expectedShallowOffsetOfMaxTimestamp, validatedResults.shallowOffsetOfMaxTimestamp, "Shallow offset of max timestamp should be 2");
         assertFalse(validatedResults.messageSizeMaybeChanged, "Message size should not have been changed");
 
         verifyRecordValidationStats(validatedResults.recordValidationStats, 0, records, true);
@@ -1831,10 +1826,8 @@ public class LogValidatorTest {
 
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             assertEquals(1, iteratorSize(records.batches().iterator()));
-            assertEquals(2, validatingResults.shallowOffsetOfMaxTimestamp);
         } else {
             assertEquals(3, iteratorSize(records.batches().iterator()));
-            assertEquals(1, validatingResults.shallowOffsetOfMaxTimestamp);
         }
 
         assertFalse(validatingResults.messageSizeMaybeChanged,
@@ -1908,8 +1901,6 @@ public class LogValidatorTest {
                 "MessageSet should still valid");
         assertEquals(now, validatedResults.maxTimestampMs,
                 "Max timestamp should be " + now);
-        assertEquals(2, validatedResults.shallowOffsetOfMaxTimestamp,
-                "The shallow offset of max timestamp should be the last offset 2 if logAppendTime is used");
         assertFalse(validatedResults.messageSizeMaybeChanged,
                 "Message size should not have been changed");
 
@@ -1950,8 +1941,6 @@ public class LogValidatorTest {
         assertTrue(validatedRecords.batches().iterator().next().isValid(),
                 "MessageSet should still valid");
         assertEquals(now, validatedResults.maxTimestampMs, String.format("Max timestamp should be %d", now));
-        assertEquals(2, validatedResults.shallowOffsetOfMaxTimestamp,
-                "The shallow offset of max timestamp should be 2 if logAppendTime is used");
         assertTrue(validatedResults.messageSizeMaybeChanged,
                 "Message size may have been changed");
 
@@ -2002,19 +1991,6 @@ public class LogValidatorTest {
 
         assertFalse(validatedResults.messageSizeMaybeChanged, "Message size should not have been changed");
 
-        int expectedMaxTimestampOffset;
-        switch (magic) {
-            case RecordBatch.MAGIC_VALUE_V0:
-                expectedMaxTimestampOffset = -1;
-                break;
-            case RecordBatch.MAGIC_VALUE_V1:
-                expectedMaxTimestampOffset = 0;
-                break;
-            default:
-                expectedMaxTimestampOffset = 2;
-                break;
-        }
-        assertEquals(expectedMaxTimestampOffset, validatedResults.shallowOffsetOfMaxTimestamp);
         verifyRecordValidationStats(validatedResults.recordValidationStats, 0, records, false);
     }
 
