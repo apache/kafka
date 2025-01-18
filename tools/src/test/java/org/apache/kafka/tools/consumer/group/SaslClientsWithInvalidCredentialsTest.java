@@ -136,7 +136,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
 
     // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
     @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly")
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
     public void testConsumerGroupServiceWithAuthenticationFailure(String quorum, String groupProtocol) throws Exception {
         ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
         try (Consumer<byte[], byte[]> consumer = createConsumer()) {
@@ -149,7 +149,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     }
 
     @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly")
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
     public void testConsumerGroupServiceWithAuthenticationSuccess(String quorum, String groupProtocol) throws Exception {
         createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2);
         ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
