@@ -24,18 +24,19 @@ import kafka.cluster.EndPoint
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, SaslConfigs, TopicConfig}
+import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.{CompressionType, TimestampType}
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
@@ -43,13 +44,11 @@ import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareCoordinatorConfig, ZkConfigs}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.server.util.Csv
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
-import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
@@ -60,30 +59,6 @@ object KafkaConfig {
   def main(args: Array[String]): Unit = {
     System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
       DynamicBrokerConfig.dynamicConfigUpdateModes))
-  }
-
-  private[kafka] def zooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String): Option[String] = {
-    Option(clientConfig.getProperty(ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName)))
-  }
-
-  private[kafka] def setZooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String, kafkaPropValue: Any): Unit = {
-    clientConfig.setProperty(ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName),
-      kafkaPropName match {
-        case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => (kafkaPropValue.toString.toUpperCase == "HTTPS").toString
-        case ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG | ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG => kafkaPropValue match {
-          case list: java.util.List[_] => list.asScala.mkString(",")
-          case _ => kafkaPropValue.toString
-        }
-        case _ => kafkaPropValue.toString
-    })
-  }
-
-  // For ZooKeeper TLS client authentication to be enabled the client must (at a minimum) configure itself as using TLS
-  // with both a client connection socket and a key store location explicitly set.
-  private[kafka] def zkTlsClientAuthEnabled(zkClientConfig: ZKClientConfig): Boolean = {
-    zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG).contains("true") &&
-      zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG).isDefined &&
-      zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG).isDefined
   }
 
   val configDef = AbstractKafkaConfig.CONFIG_DEF
@@ -192,11 +167,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     this.currentConfig = newConfig
   }
 
-  // The following captures any system properties impacting ZooKeeper TLS configuration
-  // and defines the default values this instance will use if no explicit config is given.
-  // We make it part of each instance rather than the object to facilitate testing.
-  private val zkClientConfigViaSystemProperties = new ZKClientConfig()
-
   override def originals: util.Map[String, AnyRef] =
     if (this eq currentConfig) super.originals else currentConfig.originals
   override def values: util.Map[String, _] =
@@ -250,78 +220,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   private val _quotaConfig = new QuotaConfig(this)
   def quotaConfig: QuotaConfig = _quotaConfig
 
-
-  private def zkBooleanConfigOrSystemPropertyWithDefaultValue(propKey: String): Boolean = {
-    // Use the system property if it exists and the Kafka config value was defaulted rather than actually provided
-    // Need to translate any system property value from true/false (String) to true/false (Boolean)
-    val actuallyProvided = originals.containsKey(propKey)
-    if (actuallyProvided) getBoolean(propKey) else {
-      val sysPropValue = KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey)
-      sysPropValue match {
-        case Some("true") => true
-        case Some(_) => false
-        case _ => getBoolean(propKey) // not specified so use the default value
-      }
-    }
-  }
-
-  private def zkStringConfigOrSystemPropertyWithDefaultValue(propKey: String): String = {
-    // Use the system property if it exists and the Kafka config value was defaulted rather than actually provided
-    val actuallyProvided = originals.containsKey(propKey)
-    if (actuallyProvided) getString(propKey) else {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey) match {
-        case Some(v) => v
-        case _ => getString(propKey) // not specified so use the default value
-      }
-    }
-  }
-
-  private def zkOptionalStringConfigOrSystemProperty(propKey: String): Option[String] = {
-    Option(getString(propKey)).orElse {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey)
-    }
-  }
-  private def zkPasswordConfigOrSystemProperty(propKey: String): Option[Password] = {
-    Option(getPassword(propKey)).orElse {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey).map(new Password(_))
-    }
-  }
-  private def zkListConfigOrSystemProperty(propKey: String): Option[util.List[String]] = {
-    Option(getList(propKey)).orElse {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey).map { sysProp =>
-        sysProp.split("\\s*,\\s*").toBuffer.asJava
-      }
-    }
-  }
-
-  val zkSslClientEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG)
-  val zkClientCnxnSocketClassName = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG)
-  val zkSslKeyStoreLocation = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG)
-  val zkSslKeyStorePassword = zkPasswordConfigOrSystemProperty(ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG)
-  val zkSslKeyStoreType = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG)
-  val zkSslTrustStoreLocation = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG)
-  val zkSslTrustStorePassword = zkPasswordConfigOrSystemProperty(ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG)
-  val zkSslTrustStoreType = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG)
-  val ZkSslProtocol = zkStringConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_PROTOCOL_CONFIG)
-  val ZkSslEnabledProtocols = zkListConfigOrSystemProperty(ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG)
-  val ZkSslCipherSuites = zkListConfigOrSystemProperty(ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG)
-  val ZkSslEndpointIdentificationAlgorithm = {
-    // Use the system property if it exists and the Kafka config value was defaulted rather than actually provided
-    // Need to translate any system property value from true/false to HTTPS/<blank>
-    val kafkaProp = ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
-    val actuallyProvided = originals.containsKey(kafkaProp)
-    if (actuallyProvided)
-      getString(kafkaProp)
-    else {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, kafkaProp) match {
-        case Some("true") => "HTTPS"
-        case Some(_) => ""
-        case None => getString(kafkaProp) // not specified so use the default value
-      }
-    }
-  }
-  val ZkSslCrlEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG)
-  val ZkSslOcspEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG)
   /** ********* General Configuration ***********/
   val brokerIdGenerationEnable: Boolean = getBoolean(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG)
   val maxReservedBrokerId: Int = getInt(ServerConfigs.RESERVED_BROKER_MAX_ID_CONFIG)
@@ -330,6 +228,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val initialRegistrationTimeoutMs: Int = getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG)
   val brokerHeartbeatIntervalMs: Int = getInt(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG)
   val brokerSessionTimeoutMs: Int = getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG)
+  val controllerPerformanceSamplePeriodMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS)
+  val controllerPerformanceAlwaysLogThresholdMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS)
 
   def requiresZookeeper: Boolean = processRoles.isEmpty
   def usesSelfManagedQuorum: Boolean = processRoles.nonEmpty
@@ -526,12 +426,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   /** ********* Controlled shutdown configuration ***********/
-  val controlledShutdownMaxRetries = getInt(ServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG)
-  val controlledShutdownRetryBackoffMs = getLong(ServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG)
   val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
-
-  /** ********* Feature configuration ***********/
-  def isFeatureVersioningSupported = interBrokerProtocolVersion.isFeatureVersioningSupported
 
   /** New group coordinator configs */
   val isNewGroupCoordinatorEnabled = getBoolean(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG)
@@ -541,14 +436,12 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (!protocols.contains(GroupType.CLASSIC)) {
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
-    if (protocols.contains(GroupType.CONSUMER)) {
-      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
-        warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
-      }
+    if (protocols.contains(GroupType.CONSUMER) && !isNewGroupCoordinatorEnabled) {
+      warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported with the new group coordinator.")
     }
     if (protocols.contains(GroupType.SHARE)) {
-      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
-        warn(s"The new '${GroupType.SHARE}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
+      if (!isNewGroupCoordinatorEnabled) {
+        warn(s"The new '${GroupType.SHARE}' rebalance protocol is only supported with the new group coordinator.")
       }
       warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-932 and MUST NOT be used in production.")
@@ -578,10 +471,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   def interBrokerListenerName = getInterBrokerListenerNameAndSecurityProtocol._1
   def interBrokerSecurityProtocol = getInterBrokerListenerNameAndSecurityProtocol._2
-  def controlPlaneListenerName = getControlPlaneListenerNameAndSecurityProtocol.map { case (listenerName, _) => listenerName }
-  def controlPlaneSecurityProtocol = getControlPlaneListenerNameAndSecurityProtocol.map { case (_, securityProtocol) => securityProtocol }
   def saslMechanismInterBrokerProtocol = getString(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG)
-  val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion.isSaslInterBrokerHandshakeRequestEnabled
 
   /** ********* DelegationToken Configuration **************/
   val delegationTokenSecretKey = getPassword(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG)
@@ -656,16 +546,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   def saslMechanismControllerProtocol: String = getString(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG)
 
-  def controlPlaneListener: Option[EndPoint] = {
-    controlPlaneListenerName.map { listenerName =>
-      listeners.filter(endpoint => endpoint.listenerName.value() == listenerName.value()).head
-    }
-  }
-
   def dataPlaneListeners: Seq[EndPoint] = {
     listeners.filterNot { listener =>
       val name = listener.listenerName.value()
-      name.equals(getString(SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG)) ||
         controllerListenerNames.contains(name)
     }
   }
@@ -714,19 +597,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
   }
 
-  private def getControlPlaneListenerNameAndSecurityProtocol: Option[(ListenerName, SecurityProtocol)] = {
-    Option(getString(SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG)) match {
-      case Some(name) =>
-        val listenerName = ListenerName.normalised(name)
-        val securityProtocol = effectiveListenerSecurityProtocolMap.getOrElse(listenerName,
-          throw new ConfigException(s"Listener with ${listenerName.value} defined in " +
-            s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG} not found in ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG}."))
-        Some(listenerName, securityProtocol)
-
-      case None => None
-   }
-  }
-
   private def getSecurityProtocol(protocolName: String, configName: String): SecurityProtocol = {
     try SecurityProtocol.forName(protocolName)
     catch {
@@ -760,31 +630,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
   }
 
-  // Topic IDs are used with all self-managed quorum clusters and ZK cluster with IBP greater than or equal to 2.8
-  def usesTopicId: Boolean =
-    usesSelfManagedQuorum || interBrokerProtocolVersion.isTopicIdsSupported
-
   validateValues()
 
   private def validateValues(): Unit = {
     if (nodeId != brokerId) {
       throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
-    }
-    if (requiresZookeeper) {
-      if (zkConnect == null) {
-        throw new ConfigException(s"Missing required configuration `${ZkConfigs.ZK_CONNECT_CONFIG}` which has no default value.")
-      }
-      if (brokerIdGenerationEnable) {
-        require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be greater than or equal to -1 and not greater than reserved.broker.max.id")
-      } else {
-        require(brokerId >= 0, "broker.id must be greater than or equal to 0")
-      }
-    } else {
-      // KRaft-based metadata quorum
-      if (nodeId < 0) {
-        throw new ConfigException(s"Missing configuration `${KRaftConfigs.NODE_ID_CONFIG}` which is required " +
-          s"when `process.roles` is defined (i.e. when running in KRaft mode).")
-      }
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
@@ -810,10 +660,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       }
     }
 
-    def validateControlPlaneListenerEmptyForKRaft(): Unit = {
-      require(controlPlaneListenerName.isEmpty,
-        s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG} is not supported in KRaft mode.")
-    }
     def validateControllerQuorumVotersMustContainNodeIdForKRaftController(): Unit = {
       require(voterIds.isEmpty || voterIds.contains(nodeId),
         s"If ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${QuorumConfig.QUORUM_VOTERS_CONFIG}=${voterIds.asScala.toSet}")
@@ -835,7 +681,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (processRoles == Set(ProcessRole.BrokerRole)) {
       // KRaft broker-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
-      validateControlPlaneListenerEmptyForKRaft()
       // nodeId must not appear in controller.quorum.voters
       require(!voterIds.contains(nodeId),
         s"If ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${QuorumConfig.QUORUM_VOTERS_CONFIG}=${voterIds.asScala.toSet}")
@@ -860,7 +705,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
-      validateControlPlaneListenerEmptyForKRaft()
       // listeners should only contain listeners also enumerated in the controller listener
       require(
         effectiveAdvertisedControllerListeners.size == listeners.size,
@@ -879,7 +723,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     } else if (isKRaftCombinedMode) {
       // KRaft combined broker and controller
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
-      validateControlPlaneListenerEmptyForKRaft()
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateAdvertisedControllerListenersNonEmptyForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
@@ -911,25 +754,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       s"${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")
 
-    // validate control.plane.listener.name config
-    if (controlPlaneListenerName.isDefined) {
-      require(advertisedBrokerListenerNames.contains(controlPlaneListenerName.get),
-        s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG} must be a listener name defined in ${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG}. " +
-        s"The valid options based on currently configured listeners are ${advertisedBrokerListenerNames.map(_.value).mkString(",")}")
-      // controlPlaneListenerName should be different from interBrokerListenerName
-      require(!controlPlaneListenerName.get.value().equals(interBrokerListenerName.value()),
-        s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG}, when defined, should have a different value from the inter broker listener name. " +
-        s"Currently they both have the value ${controlPlaneListenerName.get}")
-    }
-
-    if (groupCoordinatorConfig.offsetTopicCompressionType == CompressionType.ZSTD)
-      require(interBrokerProtocolVersion.highestSupportedRecordVersion().value >= IBP_2_1_IV0.highestSupportedRecordVersion().value,
-        "offsets.topic.compression.codec zstd can only be used when inter.broker.protocol.version " +
-        s"is set to version ${IBP_2_1_IV0.shortVersion} or higher")
-
     val interBrokerUsesSasl = interBrokerSecurityProtocol == SecurityProtocol.SASL_PLAINTEXT || interBrokerSecurityProtocol == SecurityProtocol.SASL_SSL
-    require(!interBrokerUsesSasl || saslInterBrokerHandshakeRequestEnable || saslMechanismInterBrokerProtocol == SaslConfigs.GSSAPI_MECHANISM,
-      s"Only GSSAPI mechanism is supported for inter-broker communication with SASL when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
     require(!interBrokerUsesSasl || saslEnabledMechanisms(interBrokerListenerName).contains(saslMechanismInterBrokerProtocol),
       s"${BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG} must be included in ${BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG} when SASL is used for inter-broker communication")
     require(queuedMaxBytes <= 0 || queuedMaxBytes >= socketRequestMaxBytes,

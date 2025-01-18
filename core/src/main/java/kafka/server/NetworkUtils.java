@@ -47,7 +47,6 @@ public class NetworkUtils {
             config.interBrokerListenerName(),
             config.saslMechanismInterBrokerProtocol(),
             time,
-            config.saslInterBrokerHandshakeRequestEnable(),
             logContext
         );
 

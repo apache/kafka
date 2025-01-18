@@ -65,7 +65,7 @@ public class ClusterConfigTest {
                 .setControllerSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)
                 .setControllerListenerName(ListenerName.normalised("CONTROLLER"))
                 .setTrustStoreFile(trustStoreFile)
-                .setMetadataVersion(MetadataVersion.IBP_0_8_0)
+                .setMetadataVersion(MetadataVersion.IBP_3_0_IV1)
                 .setServerProperties(Collections.singletonMap("broker", "broker_value"))
                 .setConsumerProperties(Collections.singletonMap("consumer", "consumer_value"))
                 .setProducerProperties(Collections.singletonMap("producer", "producer_value"))

@@ -421,16 +421,16 @@ public class KafkaProducerTest {
             config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
             "max.in.flight.requests.per.connection should be overwritten");
 
-        Properties validProps2 = new Properties() {{
+        Properties invalidProps1 = new Properties() {{
                 putAll(baseProps);
                 setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
             }};
 
-        ConfigException configException = assertThrows(ConfigException.class, () -> new ProducerConfig(validProps2));
+        ConfigException configException = assertThrows(ConfigException.class, () -> new ProducerConfig(invalidProps1));
         assertEquals("To use the idempotent producer, " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION +
                      " must be set to at most 5. Current value is 6.", configException.getMessage());
 
-        Properties invalidProps = new Properties() {{
+        Properties invalidProps2 = new Properties() {{
                 putAll(baseProps);
                 setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
                 setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
@@ -438,10 +438,10 @@ public class KafkaProducerTest {
             }};
         assertThrows(
             ConfigException.class,
-            () -> new ProducerConfig(invalidProps),
+            () -> new ProducerConfig(invalidProps2),
             "Cannot set a transactional.id without also enabling idempotence");
 
-        Properties invalidProps2 = new Properties() {{
+        Properties invalidProps3 = new Properties() {{
                 putAll(baseProps);
                 setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
                 // explicitly enabling idempotence should still throw exception
@@ -449,17 +449,17 @@ public class KafkaProducerTest {
             }};
         assertThrows(
             ConfigException.class,
-            () -> new ProducerConfig(invalidProps2),
+            () -> new ProducerConfig(invalidProps3),
             "Must set max.in.flight.requests.per.connection to at most 5 when using the idempotent producer.");
 
-        Properties invalidProps3 = new Properties() {{
+        Properties invalidProps4 = new Properties() {{
                 putAll(baseProps);
                 setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
                 setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
             }};
         assertThrows(
             ConfigException.class,
-            () -> new ProducerConfig(invalidProps3),
+            () -> new ProducerConfig(invalidProps4),
             "Must set retries to non-zero when using the idempotent producer.");
     }
 
@@ -1456,7 +1456,7 @@ public class KafkaProducerTest {
 
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
-            TestUtils.assertFutureError(producer.send(largeRecord), RecordTooLargeException.class);
+            TestUtils.assertFutureThrows(producer.send(largeRecord), RecordTooLargeException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1493,7 +1493,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureError(producer.send(record), TimeoutException.class);
+            TestUtils.assertFutureThrows(producer.send(record), TimeoutException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1530,7 +1530,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureError(producer.send(record), TimeoutException.class);
+            TestUtils.assertFutureThrows(producer.send(record), TimeoutException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1569,7 +1569,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureError(producer.send(record), InvalidTopicException.class);
+            TestUtils.assertFutureThrows(producer.send(record), InvalidTopicException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1634,7 +1634,6 @@ public class KafkaProducerTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 2)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel((short) 2)
@@ -1701,7 +1700,6 @@ public class KafkaProducerTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 2)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel((short) 2)
@@ -2008,7 +2006,7 @@ public class KafkaProducerTest {
 
         assertEquals(Collections.singleton(invalidTopicName),
                 metadata.fetch().invalidTopics(), "Cluster has incorrect invalid topic list.");
-        TestUtils.assertFutureError(future, InvalidTopicException.class);
+        TestUtils.assertFutureThrows(future, InvalidTopicException.class);
 
         producer.close(Duration.ofMillis(0));
     }
@@ -2271,6 +2269,34 @@ public class KafkaProducerTest {
             producer.send(record, callBack);
             assertEquals(1, MockProducerInterceptor.ON_ACKNOWLEDGEMENT_COUNT.intValue());
         }
+    }
+
+    @Test
+    public void shouldNotInvokeFlushInCallback() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        // only test in idempotence disabled producer for simplicity
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+        AtomicReference<KafkaException> kafkaException = new AtomicReference<>();
+
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+            new StringSerializer(), metadata, client, null, time)) {
+            producer.send(
+                new ProducerRecord<>("topic", "value"),
+                (recordMetadata, exception) -> kafkaException.set(assertThrows(KafkaException.class, producer::flush))
+            );
+        }
+
+        assertNotNull(kafkaException.get());
+        assertEquals("KafkaProducer.flush() invocation inside a callback is not permitted because it may lead to deadlock.",
+            kafkaException.get().getMessage());
     }
 
     @Test

@@ -82,7 +82,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
     /**
-     * @deprecated Since 4.0. Use {@link #MockConsumer(String)}.
+     * @deprecated Since 4.0. Use {@link #MockConsumer(String)} instead.
      */
     @Deprecated
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {

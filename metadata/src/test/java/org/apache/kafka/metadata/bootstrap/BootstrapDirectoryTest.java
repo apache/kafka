@@ -83,7 +83,7 @@ public class BootstrapDirectoryTest {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION,
                     "the minimum version bootstrap with metadata.version 3.3-IV0"),
-                new BootstrapDirectory(testDirectory.path(), Optional.of("2.7")).read());
+                new BootstrapDirectory(testDirectory.path(), Optional.of("3.0")).read());
         }
     }
 

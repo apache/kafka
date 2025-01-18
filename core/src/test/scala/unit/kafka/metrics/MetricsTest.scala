@@ -51,7 +51,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   overridingProps.put(JmxReporter.EXCLUDE_CONFIG, s"$requiredKafkaServerPrefix=ClusterId")
 
   def generateConfigs: Seq[KafkaConfig] =
-    TestUtils.createBrokerConfigs(numNodes, null, enableControlledShutdown = false).
+    TestUtils.createBrokerConfigs(numNodes, enableControlledShutdown = false).
       map(KafkaConfig.fromProps(_, overridingProps))
 
   val nMessages = 2

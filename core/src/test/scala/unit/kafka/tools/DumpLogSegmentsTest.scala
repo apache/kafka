@@ -36,13 +36,13 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordBatch, RecordVersion, SimpleRecord}
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
-import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotValue, ShareUpdateKey, ShareUpdateValue}
-import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde}
+import org.apache.kafka.coordinator.share.generated.{CoordinatorRecordType, ShareSnapshotKey, ShareSnapshotValue, ShareUpdateKey, ShareUpdateValue}
+import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.coordinator.transaction.{TransactionCoordinatorRecordSerde, TransactionLogConfig}
 import org.apache.kafka.metadata.MetadataRecordSerde
@@ -88,6 +88,8 @@ class DumpLogSegmentsTest {
   private def createTestLog = {
     val props = new Properties
     props.setProperty(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "128")
+    // This test uses future timestamps beyond the default of 1 hour.
+    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.MaxValue.toString)
     log = UnifiedLog(
       dir = logDir,
       config = new LogConfig(props),
@@ -100,8 +102,7 @@ class DumpLogSegmentsTest {
       producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
       producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true
+      topicId = None
     )
     log
   }
@@ -401,7 +402,7 @@ class DumpLogSegmentsTest {
     log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
     val secondSegment = log.roll()
-    secondSegment.append(1L, RecordBatch.NO_TIMESTAMP, 1L, MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*))
+    secondSegment.append(1L, MemoryRecords.withRecords(Compression.NONE, metadataRecords: _*))
     secondSegment.flush()
     log.flush(true)
     
@@ -858,7 +859,7 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some("{\"type\":\"0\",\"data\":{\"transactionalId\":\"txnId\"}}"),
-        Some("{\"type\":\"0\",\"data\":{\"producerId\":123,\"producerEpoch\":0,\"transactionTimeoutMs\":0," +
+        Some("{\"version\":\"0\",\"data\":{\"producerId\":123,\"producerEpoch\":0,\"transactionTimeoutMs\":0," +
              "\"transactionStatus\":0,\"transactionPartitions\":[],\"transactionLastUpdateTimestampMs\":0," +
              "\"transactionStartTimestampMs\":0}}")
       ),
@@ -915,7 +916,7 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some("{\"type\":\"0\",\"data\":{\"transactionalId\":\"txnId\"}}"),
-        Some("{\"type\":\"1\",\"data\":{\"producerId\":12,\"previousProducerId\":11,\"nextProducerId\":10," +
+        Some("{\"version\":\"1\",\"data\":{\"producerId\":12,\"previousProducerId\":11,\"nextProducerId\":10," +
              "\"producerEpoch\":2,\"transactionTimeoutMs\":14,\"transactionStatus\":0," +
              "\"transactionPartitions\":[{\"topic\":\"topic1\",\"partitionIds\":[0,1,2]}," +
              "{\"topic\":\"topic2\",\"partitionIds\":[3,4,5]}],\"transactionLastUpdateTimestampMs\":123," +
@@ -1112,14 +1113,14 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some("{\"type\":\"0\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
-        Some("{\"type\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
+        Some("{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
       ),
       parser.parse(serializedRecord(
         new ApiMessageAndVersion(new ShareSnapshotKey()
           .setGroupId("gs1")
           .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
           .setPartition(0),
-          ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION),
+          CoordinatorRecordType.SHARE_SNAPSHOT.id()),
         new ApiMessageAndVersion(new ShareSnapshotValue()
           .setSnapshotEpoch(0)
           .setStateEpoch(0)
@@ -1132,7 +1133,7 @@ class DumpLogSegmentsTest {
               .setDeliveryState(2)
               .setDeliveryCount(1)
           ).asJava),
-          ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION)
+          0.toShort)
       ))
     )
 
@@ -1140,14 +1141,14 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some("{\"type\":\"1\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
-        Some("{\"type\":\"0\",\"data\":{\"snapshotEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
+        Some("{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
       ),
       parser.parse(serializedRecord(
         new ApiMessageAndVersion(new ShareUpdateKey()
           .setGroupId("gs1")
           .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
           .setPartition(0),
-          ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
+          CoordinatorRecordType.SHARE_UPDATE.id()),
         new ApiMessageAndVersion(new ShareUpdateValue()
           .setSnapshotEpoch(0)
           .setLeaderEpoch(0)
@@ -1175,7 +1176,7 @@ class DumpLogSegmentsTest {
             .setGroupId("gs1")
             .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
             .setPartition(0),
-          0.toShort
+          CoordinatorRecordType.SHARE_SNAPSHOT.id()
         ),
         null
       ))

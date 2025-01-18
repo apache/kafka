@@ -479,7 +479,7 @@ class RequestQuotaTest extends BaseRequestTest {
           )
 
         case ApiKeys.WRITE_TXN_MARKERS =>
-          new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(), List.empty.asJava)
+          new WriteTxnMarkersRequest.Builder(java.util.List.of[WriteTxnMarkersRequest.TxnMarkerEntry])
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
           new TxnOffsetCommitRequest.Builder(
@@ -624,7 +624,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
 
         case ApiKeys.VOTE =>
-          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, null, 1, 2, 0, 10))
+          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, null, 1, 2, 0, 10, true))
 
         case ApiKeys.BEGIN_QUORUM_EPOCH =>
           new BeginQuorumEpochRequest.Builder(BeginQuorumEpochRequest.singletonRequest(tp, null, 2, 5))
@@ -638,7 +638,7 @@ class RequestQuotaTest extends BaseRequestTest {
             Topic.CLUSTER_METADATA_TOPIC_PARTITION))
 
         case ApiKeys.ALTER_PARTITION =>
-          new AlterPartitionRequest.Builder(new AlterPartitionRequestData(), true)
+          new AlterPartitionRequest.Builder(new AlterPartitionRequestData())
 
         case ApiKeys.UPDATE_FEATURES =>
           new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
@@ -745,6 +745,9 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.STREAMS_GROUP_DESCRIBE =>
           new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData(), true)
+
+        case ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS =>
+          new DescribeShareGroupOffsetsRequest.Builder(new DescribeShareGroupOffsetsRequestData(), true)
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)

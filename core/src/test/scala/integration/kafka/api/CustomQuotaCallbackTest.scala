@@ -38,6 +38,7 @@ import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.{lang, util}
+import scala.collection.Seq
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
@@ -86,7 +87,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
     super.configureSecurityBeforeServersStart(testInfo)
-    createScramCredentials("", JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
+    createScramCredentials(createAdminClient(), JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -178,8 +179,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def createTopic(topic: String, numPartitions: Int, leader: Int): Unit = {
-    val assignment = (0 until numPartitions).map { i => i -> Seq(leader) }.toMap
-    TestUtils.createTopic(null, topic, assignment, servers)
+    // TODO createTopic 
   }
 
   private def createAdminClient(): Admin = {

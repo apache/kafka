@@ -181,7 +181,7 @@ class BrokerMetadataPublisherTest {
 
   @Test
   def testNewImagePushedToGroupCoordinator(): Unit = {
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, ""))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0))
     val metadataCache = new KRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_1)
     val logManager = mock(classOf[LogManager])
     val replicaManager = mock(classOf[ReplicaManager])

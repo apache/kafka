@@ -74,7 +74,7 @@ class AddPartitionsToTxnManagerTest {
   private val disconnectedResponse = clientResponse(null, disconnected = true)
   private val transactionSupportedOperation = genericErrorSupported
 
-  private val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181"))
+  private val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
 
   @BeforeEach
   def setup(): Unit = {

@@ -859,9 +859,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
             addNullValuedErrors(connectorProps, validatedConnectorConfig);
 
-            ConfigInfos connectorConfigInfo = validateConnectorPluginSpecifiedConfigs(connectorProps, validatedConnectorConfig, enrichedConfigDef, connector, reportStage);
+            // the order of operations here is important, converter validations can add error messages to the connector config
+            // which are collected and converted to ConfigInfos in validateConnectorPluginSpecifiedConfigs
             ConfigInfos converterConfigInfo = validateAllConverterConfigs(connectorProps, validatedConnectorConfig, connectorLoader, reportStage);
             ConfigInfos clientOverrideInfo = validateClientOverrides(connectorProps, connectorType, connector.getClass(), reportStage, doLog);
+            ConfigInfos connectorConfigInfo = validateConnectorPluginSpecifiedConfigs(connectorProps, validatedConnectorConfig, enrichedConfigDef, connector, reportStage);
 
             return mergeConfigInfos(connType,
                     connectorConfigInfo,

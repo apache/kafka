@@ -49,7 +49,7 @@ import scala.util.control.Breaks._
 class KRaftMetadataCache(
   val brokerId: Int,
   val kraftVersionSupplier: Supplier[KRaftVersion]
-) extends MetadataCache with Logging with ConfigRepository {
+) extends MetadataCache with Logging {
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
 
   // This is the cache state. Every MetadataImage instance is immutable, and updates
@@ -151,9 +151,7 @@ class KRaftMetadataCache(
    * @param topicName                   The name of the topic.
    * @param listenerName                The listener name.
    * @param startIndex                  The smallest index of the partitions to be included in the result.
-   * @param upperIndex                  The upper limit of the index of the partitions to be included in the result.
-   *                                    Note that, the upper index can be larger than the largest partition index in
-   *                                    this topic.
+   *                                    
    * @return                            A collection of topic partition metadata and next partition index (-1 means
    *                                    no next partition).
    */
@@ -271,7 +269,7 @@ class KRaftMetadataCache(
    *
    * @param topics                        The iterator of topics and their corresponding first partition id to fetch.
    * @param listenerName                  The listener name.
-   * @param firstTopicPartitionStartIndex The start partition index for the first topic
+   * @param topicPartitionStartIndex      The start partition index for the first topic
    * @param maximumNumberOfPartitions     The max number of partitions to return.
    * @param ignoreTopicsWithExceptions    Whether ignore the topics with exception.
    */
@@ -382,7 +380,7 @@ class KRaftMetadataCache(
   }
 
   override def getBrokerNodes(listenerName: ListenerName): Seq[Node] = {
-    _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).asScala).toSeq
+    _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).toScala).toSeq
   }
 
   // Does NOT include offline replica metadata
@@ -541,11 +539,11 @@ class KRaftMetadataCache(
   override def config(configResource: ConfigResource): Properties =
     _currentImage.configs().configProperties(configResource)
 
-  def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData = {
+  override def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData = {
     _currentImage.clientQuotas().describe(request)
   }
 
-  def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData = {
+  override def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData = {
     _currentImage.scram().describe(request)
   }
 

@@ -66,7 +66,7 @@ class ConnectionQuotasTest {
   }
 
   def brokerPropsWithDefaultConnectionLimits: Properties = {
-    val props = TestUtils.createBrokerConfig(0, null, port = 0)
+    val props = TestUtils.createBrokerConfig(0, port = 0)
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0,REPLICATION://localhost:1,ADMIN://localhost:2")
     // ConnectionQuotas does not limit inter-broker listener even when broker-wide connection limit is reached
     props.put(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "REPLICATION")

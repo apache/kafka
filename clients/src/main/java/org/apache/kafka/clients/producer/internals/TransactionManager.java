@@ -381,6 +381,7 @@ public class TransactionManager {
         if (isTransactionV2Enabled()) {
             log.debug("Begin adding offsets {} for consumer group {} to transaction with transaction protocol V2", offsets, groupMetadata);
             handler = txnOffsetCommitHandler(null, offsets, groupMetadata);
+            transactionStarted = true;
         } else {
             log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
             AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
@@ -411,6 +412,7 @@ public class TransactionManager {
             } else if (isTransactionV2Enabled()) {
                 txnPartitionMap.getOrCreate(topicPartition);
                 partitionsInTransaction.add(topicPartition);
+                transactionStarted = true;
             } else if (transactionContainsPartition(topicPartition) || isPartitionPendingAdd(topicPartition)) {
                 return;
             } else {
@@ -854,11 +856,16 @@ public class TransactionManager {
             return null;
         }
 
-        if (nextRequestHandler.isEndTxn() && (!isTransactionV2Enabled() && !transactionStarted)) {
+        if (nextRequestHandler.isEndTxn() && !transactionStarted) {
             nextRequestHandler.result.done();
             if (currentState != State.FATAL_ERROR) {
-                log.debug("Not sending EndTxn for completed transaction since no partitions " +
-                        "or offsets were successfully added");
+                if (isTransactionV2Enabled) {
+                    log.debug("Not sending EndTxn for completed transaction since no send " +
+                            "or sendOffsetsToTransaction were triggered");
+                } else {
+                    log.debug("Not sending EndTxn for completed transaction since no partitions " +
+                            "or offsets were successfully added");
+                }
                 completeTransaction();
             }
             nextRequestHandler = pendingRequests.poll();

@@ -19,11 +19,11 @@ package kafka.cluster
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
-import kafka.controller.{KafkaController, StateChangeLogger}
+import kafka.controller.StateChangeLogger
 import kafka.log._
 import kafka.log.remote.RemoteLogManager
 import kafka.server._
-import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.DelayedShareFetch
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
@@ -41,7 +41,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
-import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
@@ -154,7 +154,6 @@ object Partition {
     new Partition(topicPartition,
       _topicId = topicId,
       replicaLagTimeMaxMs = replicaManager.config.replicaLagTimeMaxMs,
-      interBrokerProtocolVersion = replicaManager.metadataCache.metadataVersion(),
       localBrokerId = replicaManager.config.brokerId,
       localBrokerEpochSupplier = replicaManager.brokerEpochSupplier,
       time = time,
@@ -307,7 +306,6 @@ case class CommittedPartitionState(
  */
 class Partition(val topicPartition: TopicPartition,
                 val replicaLagTimeMaxMs: Long,
-                interBrokerProtocolVersion: MetadataVersion,
                 localBrokerId: Int,
                 localBrokerEpochSupplier: () => Long,
                 time: Time,
@@ -360,12 +358,6 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  /* Epoch of the controller that last changed the leader. This needs to be initialized correctly upon broker startup.
-   * One way of doing that is through the controller's start replica state change command. When a new broker starts up
-   * the controller sends it a start replica command containing the leader for each partition that the broker hosts.
-   * In addition to the leader, the controller can also send the epoch of the controller that elected the leader for
-   * each partition. */
-  private var controllerEpoch: Int = KafkaController.InitialControllerEpoch
   this.logIdent = s"[Partition $topicPartition broker=$localBrokerId] "
 
   private val tags = Map("topic" -> topic, "partition" -> partitionId.toString).asJava
@@ -751,10 +743,6 @@ class Partition(val topicPartition: TopicPartition,
         return false
       }
 
-      // Record the epoch of the controller that made the leadership decision. This is useful while updating the isr
-      // to maintain the decision maker controller's epoch in the zookeeper path.
-      controllerEpoch = partitionState.controllerEpoch
-
       val currentTimeMs = time.milliseconds
       val isNewLeader = !isLeader
       val isNewLeaderEpoch = partitionState.leaderEpoch > leaderEpoch
@@ -806,7 +794,7 @@ class Partition(val topicPartition: TopicPartition,
         // to ensure that these followers can truncate to the right offset, we must cache the new
         // leader epoch and the start offset since it should be larger than any epoch that a follower
         // would try to query.
-        leaderLog.maybeAssignEpochStartOffset(partitionState.leaderEpoch, leaderEpochStartOffset)
+        leaderLog.assignEpochStartOffset(partitionState.leaderEpoch, leaderEpochStartOffset)
 
         // Initialize lastCaughtUpTime of replicas as well as their lastFetchTimeMs and
         // lastFetchLeaderLogEndOffset.
@@ -862,10 +850,6 @@ class Partition(val topicPartition: TopicPartition,
           s"and partition state $partitionState since the follower is already at a newer partition epoch $partitionEpoch.")
         return false
       }
-
-      // Record the epoch of the controller that made the leadership decision. This is useful while updating the isr
-      // to maintain the decision maker controller's epoch in the zookeeper path
-      controllerEpoch = partitionState.controllerEpoch
 
       val isNewLeaderEpoch = partitionState.leaderEpoch > leaderEpoch
       // The leader should be updated before updateAssignmentAndIsr where we clear the ISR. Or it is possible to meet
@@ -1101,11 +1085,6 @@ class Partition(val topicPartition: TopicPartition,
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
           isBrokerEpochIsrEligible(storedBrokerEpoch, cachedBrokerEpoch)
-
-      // In ZK mode, we just ensure the broker is alive. Although we do not check for shutting down brokers here,
-      // the controller will block them from being added to ISR.
-      case zkMetadataCache: ZkMetadataCache =>
-        zkMetadataCache.hasAliveBroker(followerReplicaId)
 
       case _ => true
     }
@@ -1398,12 +1377,13 @@ class Partition(val topicPartition: TopicPartition,
 
           // Avoid writing to leader if there are not enough insync replicas to make it safe
           if (inSyncSize < minIsr && requiredAcks == -1) {
-            throw new NotEnoughReplicasException(s"The size of the current ISR ${partitionState.isr} " +
-              s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
+            throw new NotEnoughReplicasException(s"The size of the current ISR : $inSyncSize " +
+              s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition, " +
+              s"live replica(s) broker.id are : $inSyncReplicaIds")
           }
 
           val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
-            interBrokerProtocolVersion, requestLocal, verificationGuard)
+            requestLocal, verificationGuard)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))
@@ -1876,8 +1856,7 @@ class Partition(val topicPartition: TopicPartition,
     debug(s"Submitting ISR state change $proposedIsrState")
     val future = alterIsrManager.submit(
       new TopicIdPartition(topicId.getOrElse(Uuid.ZERO_UUID), topicPartition),
-      proposedIsrState.sentLeaderAndIsr,
-      controllerEpoch
+      proposedIsrState.sentLeaderAndIsr
     )
     future.whenComplete { (leaderAndIsr, e) =>
       var hwIncremented = false

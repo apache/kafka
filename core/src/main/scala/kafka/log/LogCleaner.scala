@@ -21,7 +21,6 @@ import java.io.{File, IOException}
 import java.nio._
 import java.util.Date
 import java.util.concurrent.TimeUnit
-import kafka.common._
 import kafka.log.LogCleaner.{CleanerRecopyPercentMetricName, DeadThreadCountMetricName, MaxBufferUtilizationPercentMetricName, MaxCleanTimeMetricName, MaxCompactionDelayMetricsName}
 import kafka.server.{BrokerReconfigurable, KafkaConfig}
 import kafka.utils.{Logging, Pool}
@@ -35,7 +34,7 @@ import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
-import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, OffsetMap, SkimpyOffsetMap, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogCleaningAbortedException, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, OffsetMap, SkimpyOffsetMap, ThreadShutdownException, TransactionIndex}
 import org.apache.kafka.storage.internals.utils.Throttler
 
 import scala.jdk.CollectionConverters._
@@ -684,7 +683,8 @@ private[log] class Cleaner(val id: Int,
 
         try {
           cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainLegacyDeletesAndTxnMarkers, log.config.deleteRetentionMs,
-            log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, upperBoundOffsetOfCleaningRound, stats, currentTime = currentTime)
+            log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers,
+            upperBoundOffsetOfCleaningRound, stats, currentTime = currentTime)
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -810,7 +810,7 @@ private[log] class Cleaner(val id: Int,
       sourceRecords.readInto(readBuffer, position)
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
-      val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)
+      val result = records.filterTo(logCleanerFilter, writeBuffer, decompressionBufferSupplier)
 
       stats.readMessages(result.messagesRead, result.bytesRead)
       stats.recopyMessages(result.messagesRetained, result.bytesRetained)
@@ -824,7 +824,7 @@ private[log] class Cleaner(val id: Int,
         val retained = MemoryRecords.readableRecords(outputBuffer)
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
         // after `Log.replaceSegments` (which acquires the lock) is called
-        dest.append(result.maxOffset, result.maxTimestamp, result.shallowOffsetOfMaxTimestamp(), retained)
+        dest.append(result.maxOffset, retained)
         throttler.maybeThrottle(outputBuffer.limit())
       }
 

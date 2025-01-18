@@ -196,7 +196,7 @@ public class FeatureCommand {
                 );
         versionMappingParser.addArgument("--release-version")
                 .help("The release version to use for the corresponding feature mapping. The minimum is " +
-                        MetadataVersion.IBP_3_0_IV0 + "; the default is " + MetadataVersion.LATEST_PRODUCTION)
+                        MetadataVersion.IBP_3_0_IV1 + "; the default is " + MetadataVersion.LATEST_PRODUCTION)
                 .action(store());
     }
 

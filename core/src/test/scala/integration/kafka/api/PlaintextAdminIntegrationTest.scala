@@ -28,7 +28,6 @@ import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
@@ -36,7 +35,7 @@ import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
@@ -1875,7 +1874,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
                   consumer.poll(JDuration.ofSeconds(5))
                   if (!consumer.assignment.isEmpty && latch.getCount > 0L)
                     latch.countDown()
-                  consumer.commitSync()
+                  try {
+                    consumer.commitSync()
+                  } catch {
+                    case _: CommitFailedException => // Ignore and retry on next iteration.
+                  }
                 }
               } catch {
                 case _: InterruptException => // Suppress the output to stderr
@@ -2237,7 +2240,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
                   consumer.poll(JDuration.ofSeconds(5))
                   if (!consumer.assignment.isEmpty && latch.getCount > 0L)
                     latch.countDown()
-                  consumer.commitSync()
+                  try {
+                    consumer.commitSync()
+                  } catch {
+                    case _: CommitFailedException => // Ignore and retry on next iteration.
+                  }
                 }
               } catch {
                 case _: InterruptException => // Suppress the output to stderr
@@ -3605,7 +3612,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     def validateLogConfig(compressionType: String): Unit = {
       ensureConsistentKRaftMetadata()
-      val topicProps = brokers.head.metadataCache.asInstanceOf[KRaftMetadataCache].topicConfig(topic)
+      val topicProps = brokers.head.metadataCache.topicConfig(topic)
       val logConfig = LogConfig.fromProps(Collections.emptyMap[String, AnyRef], topicProps)
 
       assertEquals(compressionType, logConfig.originals.get(TopicConfig.COMPRESSION_TYPE_CONFIG))
