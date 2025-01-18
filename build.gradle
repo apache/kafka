@@ -49,7 +49,7 @@ ext {
   gradleVersion = versions.gradle
   minClientJavaVersion = 11
   minNonClientJavaVersion = 17
-  modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams-scala", ":test-common:test-common-junit"]
+  modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams-scala", ":test-common:test-common-util"]
 
   buildVersionFileName = "kafka-version.properties"
 
@@ -140,7 +140,7 @@ ext {
     libs.slf4jLog4j2,
     libs.junitPlatformLanucher,
     libs.jacksonDatabindYaml,
-    project(":test-common:test-common-junit")
+    project(":test-common:test-common-util")
   ]
 
   log4jReleaseLibs = [
@@ -1104,8 +1104,8 @@ project(':core') {
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':server').sourceSets.test.output
     testImplementation project(':test-common:test-common-runtime')
-    testImplementation project(':test-common:test-common-api')
-    testImplementation project(':test-common:test-common-junit')
+    testImplementation project(':test-common:test-common-internal-api')
+    testImplementation project(':test-common:test-common-util')
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1366,7 +1366,7 @@ project(':metadata') {
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
 
-    testImplementation project(':test-common:test-common-api')
+    testImplementation project(':test-common:test-common-internal-api')
     testRuntimeOnly project(':test-common:test-common-runtime')
 
     testRuntimeOnly runtimeTestLibs
@@ -1541,10 +1541,10 @@ project(':group-coordinator') {
 }
 
 
-project(':test-common:test-common-api') {
+project(':test-common:test-common-internal-api') {
   // Interfaces, config classes, and other test APIs. Java 17 only
   base {
-    archivesName = "kafka-test-common-api"
+    archivesName = "kafka-test-common-internal-api"
   }
 
   dependencies {
@@ -1560,7 +1560,7 @@ project(':test-common:test-common-api') {
   }
 
   checkstyle {
-    configProperties = checkstyleConfigProperties("import-control-test-common-api.xml")
+    configProperties = checkstyleConfigProperties("import-control-test-common-internal-api.xml")
   }
 
   javadoc {
@@ -1568,10 +1568,10 @@ project(':test-common:test-common-api') {
   }
 }
 
-project(':test-common:test-common-junit') {
+project(':test-common:test-common-util') {
   // Runtime-only JUnit extentions for entire project. Java 11 only
   base {
-    archivesName = "kafka-test-common-junit"
+    archivesName = "kafka-test-common-util"
   }
 
   dependencies {
@@ -1583,7 +1583,7 @@ project(':test-common:test-common-junit') {
   }
 
   checkstyle {
-    configProperties = checkstyleConfigProperties("import-control-test-common-junit.xml")
+    configProperties = checkstyleConfigProperties("import-control-test-common-util.xml")
   }
 
   javadoc {
@@ -1598,7 +1598,7 @@ project(':test-common:test-common-runtime') {
   }
 
   dependencies {
-    implementation project(':test-common:test-common-api')
+    implementation project(':test-common:test-common-internal-api')
     implementation project(':clients')
     implementation project(':core')
     implementation project(':group-coordinator')
@@ -1650,7 +1650,7 @@ project(':transaction-coordinator') {
     testImplementation libs.mockitoCore
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':test-common:test-common-runtime')
-    testImplementation project(':test-common:test-common-api')
+    testImplementation project(':test-common:test-common-internal-api')
 
     testRuntimeOnly runtimeTestLibs
 
@@ -2270,7 +2270,7 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
-    testImplementation project(':test-common:test-common-api')
+    testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server')
     testImplementation project(':server-common')
@@ -2460,7 +2460,7 @@ project(':tools') {
     testImplementation project(':server').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
-    testImplementation project(':test-common:test-common-api')
+    testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
@@ -3518,8 +3518,8 @@ project(':connect:runtime') {
     testImplementation project(':server')
     testImplementation project(':metadata')
     testImplementation project(':server-common')
-    testImplementation project(':test-common:test-common-api')
-    testImplementation project(':test-common:test-common-junit')
+    testImplementation project(':test-common:test-common-internal-api')
+    testImplementation project(':test-common:test-common-util')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server-common')
     testImplementation project(':server')
