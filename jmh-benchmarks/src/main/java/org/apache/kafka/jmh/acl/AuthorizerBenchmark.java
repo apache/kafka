@@ -129,13 +129,13 @@ public class AuthorizerBenchmark {
                 AccessControlEntry allowAce = new AccessControlEntry(
                     principalName, "*", AclOperation.READ, AclPermissionType.ALLOW);
 
-                entries.add(new AclEntry(allowAce));
+                entries.add(new AclEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
 
                 if (shouldDeny()) {
                     // dominantly deny the resource
                     AccessControlEntry denyAce = new AccessControlEntry(
                         principalName, "*", AclOperation.READ, AclPermissionType.DENY);
-                    entries.add(new AclEntry(denyAce));
+                    entries.add(new AclEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
                 }
             }
         }
@@ -146,13 +146,13 @@ public class AuthorizerBenchmark {
         for (int hostId = 0; hostId < hostPreCount; hostId++) {
             AccessControlEntry allowAce = new AccessControlEntry(principal.toString(), "127.0.0." + hostId,
                 AclOperation.READ, AclPermissionType.ALLOW);
-            entriesPrefix.add(new AclEntry(allowAce));
+            entriesPrefix.add(new AclEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
 
             if (shouldDeny()) {
                 // dominantly deny the resource
                 AccessControlEntry denyAce = new AccessControlEntry(principal.toString(), "127.0.0." + hostId,
                     AclOperation.READ, AclPermissionType.DENY);
-                entriesPrefix.add(new AclEntry(denyAce));
+                entriesPrefix.add(new AclEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
             }
         }
 
@@ -170,11 +170,11 @@ public class AuthorizerBenchmark {
 
             AccessControlEntry allowAce = new AccessControlEntry(principal.toString(), hostName,
                 AclOperation.READ, AclPermissionType.ALLOW);
-            entriesWildcard.add(new AclEntry(allowAce));
+            entriesWildcard.add(new AclEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
             if (shouldDeny()) {
                 AccessControlEntry denyAce = new AccessControlEntry(principal.toString(), hostName,
                     AclOperation.READ, AclPermissionType.DENY);
-                entriesWildcard.add(new AclEntry(denyAce));
+                entriesWildcard.add(new AclEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
             }
         }
 

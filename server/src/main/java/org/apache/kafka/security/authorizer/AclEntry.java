@@ -18,6 +18,7 @@ package org.apache.kafka.security.authorizer;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -52,17 +53,9 @@ public class AclEntry extends AccessControlEntry {
     public static final Set<AclOperation> ACL_OPERATIONS = Arrays.stream(AclOperation.values())
         .filter(t -> !(t == AclOperation.UNKNOWN || t == AclOperation.ANY))
         .collect(Collectors.toSet());
-
-    public final AccessControlEntry ace;
-    public final KafkaPrincipal kafkaPrincipal;
-
-    public AclEntry(AccessControlEntry ace) {
-        super(ace.principal(), ace.host(), ace.operation(), ace.permissionType());
-        this.ace = ace;
-
-        kafkaPrincipal = ace.principal() == null
-            ? null
-            : SecurityUtils.parseKafkaPrincipal(ace.principal());
+    
+    public AclEntry(String principal, String host, AclOperation operation, AclPermissionType permissionType) {
+        super(principal, host, operation, permissionType);
     }
 
     public static Set<AclOperation> supportedOperations(ResourceType resourceType) {
@@ -103,7 +96,7 @@ public class AclEntry extends AccessControlEntry {
 
     @Override
     public int hashCode() {
-        return ace.hashCode();
+        return super.hashCode();
     }
 
     @Override
