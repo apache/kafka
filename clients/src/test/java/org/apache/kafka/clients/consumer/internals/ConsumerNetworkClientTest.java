@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -265,6 +266,7 @@ public class ConsumerNetworkClientTest {
         assertEquals(metadataException, exc);
     }
 
+    @Disabled("KAFKA-17554")
     @Test
     public void testFutureCompletionOutsidePoll() throws Exception {
         // Tests the scenario in which the request that is being awaited in one thread

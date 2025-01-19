@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -737,15 +737,12 @@ public class BlockingConnectorTest {
             }
 
             @Override
-            @SuppressWarnings("deprecation")
-            public void commitRecord(SourceRecord record) throws InterruptedException {
-                block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD);
-                super.commitRecord(record);
-            }
-
-            @Override
             public void commitRecord(SourceRecord record, RecordMetadata metadata) throws InterruptedException {
-                block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD_WITH_METADATA);
+                if (metadata == null) {
+                    block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD);
+                } else {
+                    block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD_WITH_METADATA);
+                }
                 super.commitRecord(record, metadata);
             }
         }

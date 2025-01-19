@@ -427,10 +427,10 @@ public class TopologyMetadata {
         return hasNamedTopologies() || evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasOffsetResetOverrides);
     }
 
-    public AutoOffsetResetStrategy offsetResetStrategy(final String topic) {
+    public Optional<AutoOffsetResetStrategy> offsetResetStrategy(final String topic) {
         for (final InternalTopologyBuilder builder : builders.values()) {
             if (builder.containsTopic(topic)) {
-                return builder.offsetResetStrategy(topic);
+                return Optional.ofNullable(builder.offsetResetStrategy(topic));
             }
         }
         log.warn("Unable to look up offset reset strategy for topic {} " +
@@ -439,6 +439,9 @@ public class TopologyMetadata {
                 "persist or appear frequently.",
             topic, namedTopologiesView()
         );
+        // returning `null` for an Optional return type triggers spotbugs
+        // we added an exception for NP_OPTIONAL_RETURN_NULL for this method
+        // when we remove NamedTopologies, we can remove this exception
         return null;
     }
 

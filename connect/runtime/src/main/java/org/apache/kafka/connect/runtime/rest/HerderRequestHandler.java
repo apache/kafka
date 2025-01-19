@@ -33,9 +33,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriBuilder;
 
 public class HerderRequestHandler {
 
@@ -113,6 +113,7 @@ public class HerderRequestHandler {
                 }
                 String forwardUrl = uriBuilder.build().toString();
                 log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
+                // TODO, we may need to set the request timeout as Idle timeout on the HttpClient
                 return translator.translate(restClient.httpRequest(forwardUrl, method, headers, body, resultType));
             } else {
                 log.error("Request '{} {}' failed because it couldn't find the target Connect worker within two hops (between workers).",

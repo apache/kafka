@@ -1426,14 +1426,8 @@ public abstract class AbstractStickyAssignorTest {
     }
 
     private String pad(int num, int digits) {
-        StringBuilder sb = new StringBuilder();
         int iDigits = Integer.toString(num).length();
-
-        for (int i = 1; i <= digits - iDigits; ++i)
-            sb.append("0");
-
-        sb.append(num);
-        return sb.toString();
+        return "0".repeat(Math.max(0, digits - iDigits)) + num;
     }
 
     protected static List<String> topics(String... topics) {

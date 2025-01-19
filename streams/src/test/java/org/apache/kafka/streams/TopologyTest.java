@@ -2257,7 +2257,7 @@ public class TopologyTest {
 
     private TopologyDescription.Source addSource(final String sourceName,
                                                  final String... sourceTopic) {
-        topology.addSource(null, sourceName, null, null, null, sourceTopic);
+        topology.addSource((Topology.AutoOffsetReset) null, sourceName, null, null, null, sourceTopic);
         final StringBuilder allSourceTopics = new StringBuilder(sourceTopic[0]);
         for (int i = 1; i < sourceTopic.length; ++i) {
             allSourceTopics.append(", ").append(sourceTopic[i]);
@@ -2267,7 +2267,7 @@ public class TopologyTest {
 
     private TopologyDescription.Source addSource(final String sourceName,
                                                  final Pattern sourcePattern) {
-        topology.addSource(null, sourceName, null, null, null, sourcePattern);
+        topology.addSource((Topology.AutoOffsetReset) null, sourceName, null, null, null, sourcePattern);
         return new InternalTopologyBuilder.Source(sourceName, null, sourcePattern);
     }
 

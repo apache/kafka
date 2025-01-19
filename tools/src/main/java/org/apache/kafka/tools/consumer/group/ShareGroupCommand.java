@@ -18,21 +18,24 @@ package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.DescribeShareGroupsResult;
+import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
+import org.apache.kafka.clients.admin.ShareMemberAssignment;
 import org.apache.kafka.clients.admin.ShareMemberDescription;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.IOException;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -40,9 +43,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -186,103 +191,185 @@ public class ShareGroupCommand {
         }
 
         public void describeGroups() throws ExecutionException, InterruptedException {
-            String group = opts.options.valueOf(opts.groupOpt);
-            ShareGroupDescription description = getDescribeGroup(group);
-            if (description == null)
-                return;
+            Collection<String> groupIds = opts.options.has(opts.allGroupsOpt)
+                ? listShareGroups()
+                : opts.options.valuesOf(opts.groupOpt);
             if (opts.options.has(opts.membersOpt)) {
-                printMembers(description);
+                TreeMap<String, ShareGroupDescription> members = collectGroupsDescription(groupIds);
+                printMembers(members, opts.options.has(opts.verboseOpt));
             } else if (opts.options.has(opts.stateOpt)) {
-                printStates(description);
+                TreeMap<String, ShareGroupDescription> states = collectGroupsDescription(groupIds);
+                printStates(states, opts.options.has(opts.verboseOpt));
             } else {
-                printOffsets(description);
+                TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> offsets
+                    = collectGroupsOffsets(groupIds);
+                printOffsets(offsets);
             }
         }
 
-        ShareGroupDescription getDescribeGroup(String group) throws ExecutionException, InterruptedException {
-            DescribeShareGroupsResult result = adminClient.describeShareGroups(List.of(group));
-            Map<String, ShareGroupDescription> descriptionMap = result.all().get();
-            if (descriptionMap.containsKey(group)) {
-                return descriptionMap.get(group);
+        Map<String, ShareGroupDescription> describeShareGroups(Collection<String> groupIds) throws ExecutionException, InterruptedException {
+            Map<String, ShareGroupDescription> res = new HashMap<>();
+            Map<String, KafkaFuture<ShareGroupDescription>> stringKafkaFutureMap = adminClient.describeShareGroups(
+                groupIds,
+                new DescribeShareGroupsOptions().timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+            ).describedGroups();
+
+            for (Entry<String, KafkaFuture<ShareGroupDescription>> e : stringKafkaFutureMap.entrySet()) {
+                res.put(e.getKey(), e.getValue().get());
             }
-            return null;
+            return res;
         }
 
-        Map<TopicPartition, Long> getOffsets(Collection<ShareMemberDescription> members) throws ExecutionException, InterruptedException {
-            Set<TopicPartition> allTp = new HashSet<>();
-            for (ShareMemberDescription memberDescription : members) {
-                allTp.addAll(memberDescription.assignment().topicPartitions());
-            }
-            // fetch latest and earliest offsets
-            Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
-            Map<TopicPartition, OffsetSpec> latest = new HashMap<>();
-
-            for (TopicPartition tp : allTp) {
-                earliest.put(tp, OffsetSpec.earliest());
-                latest.put(tp, OffsetSpec.latest());
-            }
-            // This call to obtain the earliest offsets will be replaced once adminClient.listShareGroupOffsets is implemented
-            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestResult = adminClient.listOffsets(earliest).all().get();
-            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latestResult = adminClient.listOffsets(latest).all().get();
-
-            Map<TopicPartition, Long> lag = new HashMap<>();
-            for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
-                lag.put(tp.getKey(), latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset());
-            }
-            return lag;
+        TreeMap<String, ShareGroupDescription> collectGroupsDescription(Collection<String> groupIds) throws ExecutionException, InterruptedException {
+            Map<String, ShareGroupDescription> shareGroups = describeShareGroups(groupIds);
+            TreeMap<String, ShareGroupDescription> res = new TreeMap<>();
+            shareGroups.forEach(res::put);
+            return res;
         }
 
-        private void printOffsets(ShareGroupDescription description) throws ExecutionException, InterruptedException {
-            Map<TopicPartition, Long> offsets = getOffsets(description.members());
-            if (maybePrintEmptyGroupState(description.groupId(), description.groupState(), offsets.size())) {
-                String fmt = printOffsetFormat(description, offsets);
-                System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET");
+        TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> collectGroupsOffsets(Collection<String> groupIds) throws ExecutionException, InterruptedException {
+            Map<String, ShareGroupDescription> shareGroups = describeShareGroups(groupIds);
+            TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> groupOffsets = new TreeMap<>();
 
-                for (Map.Entry<TopicPartition, Long> offset : offsets.entrySet()) {
-                    System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), offset.getValue());
+            shareGroups.forEach((groupId, shareGroup) -> {
+                Set<TopicPartition> allTp = new HashSet<>();
+                for (ShareMemberDescription memberDescription : shareGroup.members()) {
+                    allTp.addAll(memberDescription.assignment().topicPartitions());
                 }
-            }
+
+                // Fetch latest and earliest offsets
+                Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
+                Map<TopicPartition, OffsetSpec> latest = new HashMap<>();
+
+                for (TopicPartition tp : allTp) {
+                    earliest.put(tp, OffsetSpec.earliest());
+                    latest.put(tp, OffsetSpec.latest());
+                }
+
+                // This call to obtain the earliest offsets will be replaced once adminClient.listShareGroupOffsets is implemented
+                try {
+                    Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestResult = adminClient.listOffsets(earliest).all().get();
+                    Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latestResult = adminClient.listOffsets(latest).all().get();
+
+                    Set<SharePartitionOffsetInformation> partitionOffsets = new HashSet<>();
+
+                    for (Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
+                        SharePartitionOffsetInformation partitionOffsetInfo = new SharePartitionOffsetInformation(
+                            groupId,
+                            tp.getKey().topic(),
+                            tp.getKey().partition(),
+                            latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset()
+                        );
+                        partitionOffsets.add(partitionOffsetInfo);
+                    }
+                    groupOffsets.put(groupId, new SimpleImmutableEntry<>(shareGroup, partitionOffsets));
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            return groupOffsets;
         }
 
-        private static String printOffsetFormat(ShareGroupDescription description, Map<TopicPartition, Long> offsets) {
-            int groupLen = Math.max(15, description.groupId().length());
+        private void printOffsets(TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> offsets) {
+            offsets.forEach((groupId, tuple) -> {
+                ShareGroupDescription description = tuple.getKey();
+                Collection<SharePartitionOffsetInformation> offsetsInfo = tuple.getValue();
+                if (maybePrintEmptyGroupState(groupId, description.groupState(), offsetsInfo.size())) {
+                    String fmt = printOffsetFormat(groupId, offsetsInfo);
+                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET");
+
+                    for (SharePartitionOffsetInformation info : offsetsInfo) {
+                        System.out.printf(fmt,
+                            groupId,
+                            info.topic,
+                            info.partition,
+                            info.offset
+                        );
+                    }
+                    System.out.println();
+                }
+            });
+        }
+
+        private static String printOffsetFormat(String groupId, Collection<SharePartitionOffsetInformation> offsetsInfo) {
+            int groupLen = Math.max(15, groupId.length());
             int maxTopicLen = 15;
-            for (TopicPartition topicPartition : offsets.keySet()) {
-                maxTopicLen = Math.max(maxTopicLen, topicPartition.topic().length());
+            for (SharePartitionOffsetInformation info : offsetsInfo) {
+                maxTopicLen = Math.max(maxTopicLen, info.topic.length());
             }
-            return "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %s\n";
+            return "\n%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %s";
         }
 
-        private void printStates(ShareGroupDescription description) {
-            maybePrintEmptyGroupState(description.groupId(), description.groupState(), 1);
+        private void printStates(Map<String, ShareGroupDescription> descriptions, boolean verbose) {
+            descriptions.forEach((groupId, description) -> {
+                maybePrintEmptyGroupState(groupId, description.groupState(), 1);
 
-            int groupLen = Math.max(15, description.groupId().length());
-            String coordinator = description.coordinator().host() + ":" + description.coordinator().port() + "  (" + description.coordinator().idString() + ")";
-            int coordinatorLen = Math.max(25, coordinator.length());
+                int groupLen = Math.max(15, groupId.length());
+                String coordinator = description.coordinator().host() + ":" + description.coordinator().port() + "  (" + description.coordinator().idString() + ")";
+                int coordinatorLen = Math.max(25, coordinator.length());
 
-            String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %s\n";
-            System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "#MEMBERS");
-            System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.members().size());
+                if (verbose) {
+                    String fmt = "\n%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %-12s %-17s %s";
+                    System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "GROUP-EPOCH", "ASSIGNMENT-EPOCH", "#MEMBERS");
+                    System.out.printf(fmt, groupId, coordinator, description.groupState().toString(),
+                        description.groupEpoch(), description.targetAssignmentEpoch(), description.members().size());
+                } else {
+                    String fmt = "\n%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %s";
+                    System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "#MEMBERS");
+                    System.out.printf(fmt, groupId, coordinator, description.groupState().toString(), description.members().size());
+                }
+                System.out.println();
+            });
         }
 
-        private void printMembers(ShareGroupDescription description) {
-            int groupLen = Math.max(15, description.groupId().length());
-            int maxConsumerIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
-            Collection<ShareMemberDescription> members = description.members();
-            if (maybePrintEmptyGroupState(description.groupId(), description.groupState(), description.members().size())) {
-                for (ShareMemberDescription member : members) {
-                    maxConsumerIdLen = Math.max(maxConsumerIdLen, member.consumerId().length());
-                    maxHostLen = Math.max(maxHostLen, member.host().length());
-                    maxClientIdLen = Math.max(maxClientIdLen, member.clientId().length());
-                }
+        private void printMembers(TreeMap<String, ShareGroupDescription> descriptions, boolean verbose) {
+            descriptions.forEach((groupId, description) -> {
+                int groupLen = Math.max(15, groupId.length());
+                int maxConsumerIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
+                Collection<ShareMemberDescription> members = description.members();
+                if (maybePrintEmptyGroupState(groupId, description.groupState(), description.members().size())) {
+                    for (ShareMemberDescription member : members) {
+                        maxConsumerIdLen = Math.max(maxConsumerIdLen, member.consumerId().length());
+                        maxHostLen = Math.max(maxHostLen, member.host().length());
+                        maxClientIdLen = Math.max(maxClientIdLen, member.clientId().length());
+                    }
 
-                String fmt = "%" + -groupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
-                System.out.printf(fmt, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "ASSIGNMENT");
-                for (ShareMemberDescription member : members) {
-                    System.out.printf(fmt, description.groupId(), member.consumerId(), member.host(), member.clientId(),
-                        member.assignment().topicPartitions().stream().map(part -> part.topic() + ":" + part.partition()).collect(Collectors.joining(",")));
+                    if (verbose) {
+                        String fmt = "\n%" + -groupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %-13s %s";
+                        System.out.printf(fmt, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "MEMBER-EPOCH", "ASSIGNMENT");
+                        for (ShareMemberDescription member : members) {
+                            System.out.printf(fmt, groupId, member.consumerId(), member.host(), member.clientId(), member.memberEpoch(), getAssignmentString(member.assignment()));
+                        }
+                    } else {
+                        String fmt = "\n%" + -groupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s";
+                        System.out.printf(fmt, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "ASSIGNMENT");
+                        for (ShareMemberDescription member : members) {
+                            System.out.printf(fmt, groupId, member.consumerId(), member.host(), member.clientId(), getAssignmentString(member.assignment()));
+                        }
+                    }
+                    System.out.println();
                 }
-            }
+            });
+        }
+
+        private String getAssignmentString(ShareMemberAssignment assignment) {
+            Map<String, List<TopicPartition>> grouped = new HashMap<>();
+            assignment.topicPartitions().forEach(tp ->
+                grouped
+                   .computeIfAbsent(tp.topic(), key -> new ArrayList<>())
+                    .add(tp)
+            );
+            return grouped.entrySet().stream().map(entry -> {
+                String topicName = entry.getKey();
+                List<TopicPartition> topicPartitions = entry.getValue();
+                return topicPartitions
+                    .stream()
+                    .map(TopicPartition::partition)
+                    .map(Object::toString)
+                    .sorted()
+                    .collect(Collectors.joining(",", topicName + ":", ""));
+            }).sorted().collect(Collectors.joining(";"));
         }
 
         public void close() {
@@ -294,6 +381,25 @@ public class ShareGroupCommand {
             props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
             props.putAll(configOverrides);
             return Admin.create(props);
+        }
+    }
+
+    static class SharePartitionOffsetInformation {
+        final String group;
+        final String topic;
+        final int partition;
+        final long offset;
+
+        SharePartitionOffsetInformation(
+            String group,
+            String topic,
+            int partition,
+            long offset
+        ) {
+            this.group = group;
+            this.topic = topic;
+            this.partition = partition;
+            this.offset = offset;
         }
     }
 }

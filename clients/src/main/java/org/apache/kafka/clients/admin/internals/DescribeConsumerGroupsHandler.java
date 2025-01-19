@@ -222,7 +222,9 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                     groupMember.clientId(),
                     groupMember.clientHost(),
                     new MemberAssignment(convertAssignment(groupMember.assignment())),
-                    Optional.of(new MemberAssignment(convertAssignment(groupMember.targetAssignment())))
+                    Optional.of(new MemberAssignment(convertAssignment(groupMember.targetAssignment()))),
+                    Optional.of(groupMember.memberEpoch()),
+                    groupMember.memberType() == -1 ? Optional.empty() : Optional.of(groupMember.memberType() == 1)
                 ))
             );
 
@@ -235,7 +237,9 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                     GroupType.CONSUMER,
                     GroupState.parse(describedGroup.groupState()),
                     coordinator,
-                    authorizedOperations
+                    authorizedOperations,
+                    Optional.of(describedGroup.groupEpoch()),
+                    Optional.of(describedGroup.assignmentEpoch())
                 );
             completed.put(groupIdKey, consumerGroupDescription);
         }
@@ -281,7 +285,10 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                         Optional.ofNullable(groupMember.groupInstanceId()),
                         groupMember.clientId(),
                         groupMember.clientHost(),
-                        new MemberAssignment(partitions)));
+                        new MemberAssignment(partitions),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty()));
                 }
                 final ConsumerGroupDescription consumerGroupDescription =
                     new ConsumerGroupDescription(groupIdKey.idValue, protocolType.isEmpty(),
@@ -290,7 +297,9 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                         GroupType.CLASSIC,
                         GroupState.parse(describedGroup.groupState()),
                         coordinator,
-                        authorizedOperations);
+                        authorizedOperations,
+                        Optional.empty(),
+                        Optional.empty());
                 completed.put(groupIdKey, consumerGroupDescription);
             } else {
                 failed.put(groupIdKey, new IllegalArgumentException(

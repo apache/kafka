@@ -19,27 +19,21 @@ package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
 import java.util.{Collections, Properties}
-import kafka.controller.KafkaController
 import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs, ZooKeeperInternals}
-import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.server.config.{QuotaConfig, ZooKeeperInternals}
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.coordinator.group.GroupCoordinator
-import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.StopPartition
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator}
-import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
-import scala.util.Try
 
 /**
   * The ConfigHandler is used to process broker configuration change notifications.
@@ -54,26 +48,18 @@ trait ConfigHandler {
   */
 class TopicConfigHandler(private val replicaManager: ReplicaManager,
                          kafkaConfig: KafkaConfig,
-                         val quotas: QuotaManagers,
-                         kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
+                         val quotas: QuotaManagers) extends ConfigHandler with Logging  {
 
   private def updateLogConfig(topic: String,
                               topicConfig: Properties): Unit = {
     val logManager = replicaManager.logManager
-    // Validate the configurations.
-    val configNamesToExclude = excludedConfigs(topic, topicConfig)
-    val props = new Properties()
-    topicConfig.asScala.foreachEntry { (key, value) =>
-      if (!configNamesToExclude.contains(key)) props.put(key, value)
-    }
 
     val logs = logManager.logsByTopic(topic)
     val wasRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
     val wasCopyDisabled = logs.exists(_.config.remoteLogCopyDisable())
 
-    // kafkaController is only defined in Zookeeper's mode
-    logManager.updateTopicConfig(topic, props, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
-      wasRemoteLogEnabled, kafkaController.isDefined)
+    logManager.updateTopicConfig(topic, topicConfig, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
+      wasRemoteLogEnabled)
     maybeUpdateRemoteLogComponents(topic, logs, wasRemoteLogEnabled, wasCopyDisabled)
   }
 
@@ -139,10 +125,6 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     }
     updateThrottledList(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
     updateThrottledList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
-
-    if (Try(topicConfig.getProperty(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).toBoolean).getOrElse(false)) {
-      kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
-    }
   }
 
   def parseThrottledPartitions(topicConfig: Properties, brokerId: Int, prop: String): Seq[Int] = {
@@ -157,24 +139,6 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
         .filter(_ (1).toInt == brokerId) //Filter this replica
         .map(_ (0).toInt).toSeq //convert to list of partition ids
     }
-  }
-
-  @nowarn("cat=deprecation")
-  private def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
-    // Verify message format version
-    Option(topicConfig.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)).flatMap { versionString =>
-      val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
-      if (messageFormatVersion.shouldIgnore) {
-        if (messageFormatVersion.shouldWarn)
-          warn(messageFormatVersion.topicWarningMessage(topic))
-        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-      } else if (kafkaConfig.interBrokerProtocolVersion.isLessThan(messageFormatVersion.messageFormatVersion)) {
-        warn(s"Topic configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG} is ignored for `$topic` because `$versionString` " +
-          s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
-        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-      } else
-        None
-    }.toSet
   }
 }
 
@@ -211,37 +175,6 @@ class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
       else
         None
     quotaManagers.controllerMutation.updateQuota(sanitizedUser, clientId, sanitizedClientId, controllerMutationQuota)
-  }
-}
-
-/**
- * The ClientIdConfigHandler will process clientId config changes in ZK.
- * The callback provides the clientId and the full properties set read from ZK.
- */
-class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
-
-  def processConfigChanges(sanitizedClientId: String, clientConfig: Properties): Unit = {
-    updateQuotaConfig(None, Some(sanitizedClientId), clientConfig)
-  }
-}
-
-/**
- * The UserConfigHandler will process <user> and <user, client-id> quota changes in ZK.
- * The callback provides the node name containing sanitized user principal, sanitized client-id if this is
- * a <user, client-id> update and the full properties set read from ZK.
- */
-class UserConfigHandler(private val quotaManagers: QuotaManagers, val credentialProvider: CredentialProvider) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
-
-  def processConfigChanges(quotaEntityPath: String, config: Properties): Unit = {
-    // Entity path is <user> or <user>/clients/<client>
-    val entities = quotaEntityPath.split("/")
-    if (entities.length != 1 && entities.length != 3)
-      throw new IllegalArgumentException("Invalid quota entity path: " + quotaEntityPath)
-    val sanitizedUser = entities(0)
-    val sanitizedClientId = if (entities.length == 3) Some(entities(2)) else None
-    updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
-    if (sanitizedClientId.isEmpty && sanitizedUser != ZooKeeperInternals.DEFAULT_STRING)
-      credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
   }
 }
 

@@ -429,7 +429,7 @@ public final class AssignmentsManager {
     }
 
     static Optional<String> globalResponseError(Optional<ClientResponse> response) {
-        if (!response.isPresent()) {
+        if (response.isEmpty()) {
             return Optional.of("Timeout");
         }
         if (response.get().authenticationException() != null) {

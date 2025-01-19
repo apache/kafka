@@ -32,7 +32,7 @@
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },
     { "name": "isKRaftController", "type": "bool", "versions": "4+", "default": "false",
-      "about": "If KRaft controller id is used during migration. See KIP-866" },
+      "about": "If KRaft controller id is used during migration. See KIP-866." },
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "1+", "default": "-1", "ignorable": true,
@@ -58,7 +58,7 @@
       { "name": "TopicName", "type": "string", "versions": "3+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "PartitionStates", "type": "[]StopReplicaPartitionState", "versions": "3+",
-        "about": "The state of each partition", "fields": [
+        "about": "The state of each partition.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "3+",
           "about": "The partition index." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "3+", "default": "-1",

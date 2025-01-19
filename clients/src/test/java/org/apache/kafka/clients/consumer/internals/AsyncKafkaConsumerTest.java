@@ -57,6 +57,7 @@ import org.apache.kafka.clients.consumer.internals.events.TopicRe2JPatternSubscr
 import org.apache.kafka.clients.consumer.internals.events.TopicSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.UpdatePatternSubscriptionEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.Node;
@@ -66,10 +67,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
-import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -135,6 +134,7 @@ import static org.apache.kafka.clients.consumer.internals.AbstractMembershipMana
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -213,7 +213,7 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f, g) -> applicationEventHandler,
+            (a, b, c, d, e, f, g, h) -> applicationEventHandler,
             a -> backgroundEventReaper,
             (a, b, c, d, e, f, g) -> fetchCollector,
             (a, b, c, d) -> metadata,
@@ -227,7 +227,7 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f, g) -> applicationEventHandler,
+            (a, b, c, d, e, f, g, h) -> applicationEventHandler,
             a -> backgroundEventReaper,
             (a, b, c, d, e, f, g) -> fetchCollector,
             (a, b, c, d) -> metadata,
@@ -280,40 +280,6 @@ public class AsyncKafkaConsumerTest {
         consumer.close();
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::assignment);
         assertEquals("This consumer has already been closed.", res.getMessage());
-    }
-
-    @Test
-    public void testUnsubscribeWithInvalidTopicException() {
-        consumer = newConsumer();
-        backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException("Invalid topic name")));
-        completeUnsubscribeApplicationEventSuccessfully();
-        assertDoesNotThrow(() -> consumer.unsubscribe());
-        assertDoesNotThrow(() -> consumer.close());
-    }
-
-    @Test
-    public void testCloseWithInvalidTopicException() {
-        consumer = newConsumer();
-        backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException("Invalid topic name")));
-        completeUnsubscribeApplicationEventSuccessfully();
-        assertDoesNotThrow(() -> consumer.close());
-    }
-
-    @Test
-    public void testUnsubscribeWithTopicAuthorizationException() {
-        consumer = newConsumer();
-        backgroundEventQueue.add(new ErrorEvent(new TopicAuthorizationException(Set.of("test-topic"))));
-        completeUnsubscribeApplicationEventSuccessfully();
-        assertDoesNotThrow(() -> consumer.unsubscribe());
-        assertDoesNotThrow(() -> consumer.close());
-    }
-
-    @Test
-    public void testCloseWithTopicAuthorizationException() {
-        consumer = newConsumer();
-        backgroundEventQueue.add(new ErrorEvent(new TopicAuthorizationException(Set.of("test-topic"))));
-        completeUnsubscribeApplicationEventSuccessfully();
-        assertDoesNotThrow(() -> consumer.close());
     }
 
     @Test
@@ -394,7 +360,7 @@ public class AsyncKafkaConsumerTest {
         assertEquals(topicPartitionOffsets, consumer.committed(topicPartitionOffsets.keySet(), Duration.ofMillis(1000)));
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
         final Metric metric = consumer.metrics()
-            .get(consumer.metricsRegistry().metricName("committed-time-ns-total", "consumer-metrics"));
+            .get(consumer.metricsRegistry().metricName("committed-time-ns-total", CONSUMER_METRIC_GROUP));
         assertTrue((double) metric.metricValue() > 0);
     }
 
@@ -1949,6 +1915,31 @@ public class AsyncKafkaConsumerTest {
                 return true;
             }
         }, "Consumer did not throw the expected UnsupportedVersionException on poll");
+    }
+
+    @Test
+    public void testRecordBackgroundEventQueueSizeAndBackgroundEventQueueTime() {
+        consumer = newConsumer(
+                mock(FetchBuffer.class),
+                mock(ConsumerInterceptors.class),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                mock(SubscriptionState.class),
+                "group-id",
+                "client-id",
+                false);
+        Metrics metrics = consumer.metricsRegistry();
+        AsyncConsumerMetrics kafkaConsumerMetrics = consumer.kafkaConsumerMetrics();
+
+        ConsumerRebalanceListenerCallbackNeededEvent event = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, Collections.emptySortedSet());
+        event.setEnqueuedMs(time.milliseconds());
+        backgroundEventQueue.add(event);
+        kafkaConsumerMetrics.recordBackgroundEventQueueSize(1);
+
+        time.sleep(10);
+        consumer.processBackgroundEvents();
+        assertEquals(0, (double) metrics.metric(metrics.metricName("background-event-queue-size", CONSUMER_METRIC_GROUP)).metricValue());
+        assertEquals(10, (double) metrics.metric(metrics.metricName("background-event-queue-time-avg", CONSUMER_METRIC_GROUP)).metricValue());
+        assertEquals(10, (double) metrics.metric(metrics.metricName("background-event-queue-time-max", CONSUMER_METRIC_GROUP)).metricValue());
     }
 
     private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {

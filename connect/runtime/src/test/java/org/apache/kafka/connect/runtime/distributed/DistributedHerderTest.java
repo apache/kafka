@@ -114,9 +114,9 @@ import java.util.stream.IntStream;
 
 import javax.crypto.SecretKey;
 
+import static jakarta.ws.rs.core.Response.Status.FORBIDDEN;
+import static jakarta.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static java.util.Collections.singletonList;
-import static javax.ws.rs.core.Response.Status.FORBIDDEN;
-import static javax.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import static org.apache.kafka.connect.runtime.AbstractStatus.State.FAILED;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
@@ -320,7 +320,7 @@ public class DistributedHerderTest {
         herder = mock(DistributedHerder.class, withSettings().defaultAnswer(CALLS_REAL_METHODS).useConstructor(new DistributedConfig(HERDER_CONFIG),
                 worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time,
                 noneConnectorClientConfigOverridePolicy, Collections.emptyList(), null, new AutoCloseable[]{uponShutdown}));
-
+        verify(worker).getPlugins();
         configUpdateListener = herder.new ConfigUpdateListener();
         rebalanceListener = herder.new RebalanceListener(time);
         conn1SinkConfig = new SinkConnectorConfig(plugins, CONN1_CONFIG);
@@ -3550,7 +3550,7 @@ public class DistributedHerderTest {
         herder = mock(DistributedHerder.class, withSettings().defaultAnswer(CALLS_REAL_METHODS).useConstructor(new DistributedConfig(HERDER_CONFIG),
                 worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time,
                 noneConnectorClientConfigOverridePolicy, Collections.emptyList(), new MockSynchronousExecutor(), new AutoCloseable[]{}));
-
+        verify(worker, times(2)).getPlugins();
         rebalanceListener = herder.new RebalanceListener(time);
 
         when(member.memberId()).thenReturn("member");
@@ -3992,6 +3992,7 @@ public class DistributedHerderTest {
     public void testModifyOffsetsSourceConnectorExactlyOnceEnabled() throws Exception {
         // Setup herder with exactly-once support for source connectors enabled
         herder = exactlyOnceHerder();
+        verify(worker, times(2)).getPlugins();
         rebalanceListener = herder.new RebalanceListener(time);
         // Get the initial assignment
         when(member.memberId()).thenReturn("leader");
@@ -4057,6 +4058,7 @@ public class DistributedHerderTest {
     public void testModifyOffsetsSourceConnectorExactlyOnceEnabledZombieFencingFailure() {
         // Setup herder with exactly-once support for source connectors enabled
         herder = exactlyOnceHerder();
+        verify(worker, times(2)).getPlugins();
         rebalanceListener = herder.new RebalanceListener(time);
 
         // Get the initial assignment

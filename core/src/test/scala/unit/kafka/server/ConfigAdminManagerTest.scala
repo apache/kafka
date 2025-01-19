@@ -47,7 +47,7 @@ class ConfigAdminManagerTest {
   val logger = LoggerFactory.getLogger(classOf[ConfigAdminManagerTest])
 
   def newConfigAdminManager(brokerId: Integer): ConfigAdminManager = {
-    val config = TestUtils.createBrokerConfig(nodeId = brokerId, zkConnect = null)
+    val config = TestUtils.createBrokerConfig(nodeId = brokerId)
     new ConfigAdminManager(brokerId, new KafkaConfig(config), new MockConfigRepository())
   }
 

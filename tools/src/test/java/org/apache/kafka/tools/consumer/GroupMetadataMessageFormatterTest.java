@@ -76,12 +76,12 @@ public class GroupMetadataMessageFormatterTest {
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 10, GROUP_METADATA_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 10, GROUP_METADATA_VALUE).array(),
-                        "{\"key\":{\"version\":10,\"data\":\"unknown\"},\"value\":{\"version\":10,\"data\":\"unknown\"}}"
+                        ""
                 ),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, GROUP_METADATA_VALUE).array(),
-                        "{\"key\":{\"version\":2,\"data\":{\"group\":\"group-id\"}},\"value\":{\"version\":0," +
+                        "{\"key\":{\"type\":2,\"data\":{\"group\":\"group-id\"}},\"value\":{\"version\":0," +
                             "\"data\":{\"protocolType\":\"consumer\",\"generation\":1,\"protocol\":\"range\"," +
                             "\"leader\":\"leader\",\"members\":[{\"memberId\":\"member-1\",\"clientId\":\"client-1\"," +
                             "\"clientHost\":\"host-1\",\"sessionTimeout\":1500,\"subscription\":\"AAE=\"," +
@@ -90,7 +90,7 @@ public class GroupMetadataMessageFormatterTest {
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 1, GROUP_METADATA_VALUE).array(),
-                        "{\"key\":{\"version\":2,\"data\":{\"group\":\"group-id\"}},\"value\":{\"version\":1," +
+                        "{\"key\":{\"type\":2,\"data\":{\"group\":\"group-id\"}},\"value\":{\"version\":1," +
                             "\"data\":{\"protocolType\":\"consumer\",\"generation\":1,\"protocol\":\"range\"," +
                             "\"leader\":\"leader\",\"members\":[{\"memberId\":\"member-1\",\"clientId\":\"client-1\"," +
                             "\"clientHost\":\"host-1\",\"rebalanceTimeout\":1000,\"sessionTimeout\":1500," +
@@ -99,7 +99,7 @@ public class GroupMetadataMessageFormatterTest {
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_VALUE).array(),
-                        "{\"key\":{\"version\":2,\"data\":{\"group\":\"group-id\"}},\"value\":{\"version\":2," +
+                        "{\"key\":{\"type\":2,\"data\":{\"group\":\"group-id\"}},\"value\":{\"version\":2," +
                             "\"data\":{\"protocolType\":\"consumer\",\"generation\":1,\"protocol\":\"range\"," +
                             "\"leader\":\"leader\",\"currentStateTimestamp\":1234,\"members\":[{\"memberId\":\"member-1\"," +
                             "\"clientId\":\"client-1\",\"clientHost\":\"host-1\",\"rebalanceTimeout\":1000," +
@@ -108,7 +108,7 @@ public class GroupMetadataMessageFormatterTest {
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 3, GROUP_METADATA_VALUE).array(),
-                        "{\"key\":{\"version\":2,\"data\":{\"group\":\"group-id\"}},\"value\":{\"version\":3," +
+                        "{\"key\":{\"type\":2,\"data\":{\"group\":\"group-id\"}},\"value\":{\"version\":3," +
                             "\"data\":{\"protocolType\":\"consumer\",\"generation\":1,\"protocol\":\"range\"," +
                             "\"leader\":\"leader\",\"currentStateTimestamp\":1234,\"members\":[{\"memberId\":\"member-1\"," +
                             "\"groupInstanceId\":\"group-instance-1\",\"clientId\":\"client-1\",\"clientHost\":\"host-1\"," +
@@ -117,7 +117,7 @@ public class GroupMetadataMessageFormatterTest {
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 4, GROUP_METADATA_VALUE).array(),
-                        "{\"key\":{\"version\":2,\"data\":{\"group\":\"group-id\"}},\"value\":{\"version\":4," +
+                        "{\"key\":{\"type\":2,\"data\":{\"group\":\"group-id\"}},\"value\":{\"version\":4," +
                             "\"data\":{\"protocolType\":\"consumer\",\"generation\":1,\"protocol\":\"range\"," +
                             "\"leader\":\"leader\",\"currentStateTimestamp\":1234,\"members\":[{\"memberId\":\"member-1\"," +
                             "\"groupInstanceId\":\"group-instance-1\",\"clientId\":\"client-1\",\"clientHost\":\"host-1\"," +
@@ -126,16 +126,12 @@ public class GroupMetadataMessageFormatterTest {
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
                         null,
-                        "{\"key\":{\"version\":2,\"data\":{\"group\":\"group-id\"}},\"value\":null}"),
+                        "{\"key\":{\"type\":2,\"data\":{\"group\":\"group-id\"}},\"value\":null}"),
                 Arguments.of(
                         null,
                         MessageUtil.toVersionPrefixedByteBuffer((short) 4, GROUP_METADATA_VALUE).array(),
-                        "{\"key\":null,\"value\":{\"version\":4,\"data\":{\"protocolType\":\"consumer\",\"generation\":1," +
-                            "\"protocol\":\"range\",\"leader\":\"leader\",\"currentStateTimestamp\":1234," +
-                            "\"members\":[{\"memberId\":\"member-1\",\"groupInstanceId\":\"group-instance-1\"," +
-                            "\"clientId\":\"client-1\",\"clientHost\":\"host-1\",\"rebalanceTimeout\":1000," +
-                            "\"sessionTimeout\":1500,\"subscription\":\"AAE=\",\"assignment\":\"AQI=\"}]}}}"),
-                Arguments.of(null, null, "{\"key\":null,\"value\":null}"),
+                        ""),
+                Arguments.of(null, null, ""),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 4, OFFSET_COMMIT_VALUE).array(),

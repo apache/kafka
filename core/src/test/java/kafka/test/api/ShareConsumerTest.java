@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -39,10 +40,12 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -58,10 +61,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -77,21 +79,20 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -105,17 +106,12 @@ public class ShareConsumerTest {
     private final TopicPartition tp = new TopicPartition("topic", 0);
     private final TopicPartition tp2 = new TopicPartition("topic2", 0);
     private final TopicPartition warmupTp = new TopicPartition("warmup", 0);
-    private static final String DEFAULT_STATE_PERSISTER = "org.apache.kafka.server.share.persister.DefaultStatePersister";
-    private static final String NO_OP_PERSISTER = "org.apache.kafka.server.share.persister.NoOpShareStatePersister";
+    private List<TopicPartition> sgsTopicPartitions;
 
     private Admin adminClient;
 
     @BeforeEach
     public void createCluster(TestInfo testInfo) throws Exception {
-        String persisterClassName = NO_OP_PERSISTER;
-        if (testInfo.getDisplayName().contains(".persister=")) {
-            persisterClassName = testInfo.getDisplayName().split("=")[1];
-        }
         cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
                 .setNumBrokerNodes(1)
@@ -125,7 +121,6 @@ public class ShareConsumerTest {
             .setConfigProp("group.coordinator.rebalance.protocols", "classic,consumer,share")
             .setConfigProp("group.share.enable", "true")
             .setConfigProp("group.share.partition.max.record.locks", "10000")
-            .setConfigProp("group.share.persister.class.name", persisterClassName)
             .setConfigProp("group.share.record.lock.duration.ms", "15000")
             .setConfigProp("offsets.topic.replication.factor", "1")
             .setConfigProp("share.coordinator.state.topic.min.isr", "1")
@@ -142,6 +137,9 @@ public class ShareConsumerTest {
         createTopic("topic");
         createTopic("topic2");
         adminClient = createAdminClient();
+        sgsTopicPartitions = IntStream.range(0, 3)
+            .mapToObj(part -> new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, part))
+            .toList();
         warmup();
     }
 
@@ -151,9 +149,8 @@ public class ShareConsumerTest {
         cluster.close();
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testPollNoSubscribeFails(String persister) {
+    @Test
+    public void testPollNoSubscribeFails() {
         try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
             assertEquals(Collections.emptySet(), shareConsumer.subscription());
             // "Consumer is not subscribed to any topics."
@@ -161,9 +158,8 @@ public class ShareConsumerTest {
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testSubscribeAndPollNoRecords(String persister) {
+    @Test
+    public void testSubscribeAndPollNoRecords() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
@@ -171,12 +167,12 @@ public class ShareConsumerTest {
             assertEquals(subscription, shareConsumer.subscription());
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testSubscribePollUnsubscribe(String persister) {
+    @Test
+    public void testSubscribePollUnsubscribe() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
@@ -186,12 +182,12 @@ public class ShareConsumerTest {
             shareConsumer.unsubscribe();
             assertEquals(Collections.emptySet(), shareConsumer.subscription());
             assertEquals(0, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testSubscribePollSubscribe(String persister) {
+    @Test
+    public void testSubscribePollSubscribe() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
@@ -203,12 +199,12 @@ public class ShareConsumerTest {
             assertEquals(subscription, shareConsumer.subscription());
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testSubscribeUnsubscribePollFails(String persister) {
+    @Test
+    public void testSubscribeUnsubscribePollFails() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
@@ -220,12 +216,12 @@ public class ShareConsumerTest {
             // "Consumer is not subscribed to any topics."
             assertThrows(IllegalStateException.class, () -> shareConsumer.poll(Duration.ofMillis(500)));
             assertEquals(0, records.count());
+            verifyShareGroupStateTopicRecordsProduced();   // due to leader epoch in read
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testSubscribeSubscribeEmptyPollFails(String persister) {
+    @Test
+    public void testSubscribeSubscribeEmptyPollFails() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
@@ -237,12 +233,12 @@ public class ShareConsumerTest {
             // "Consumer is not subscribed to any topics."
             assertThrows(IllegalStateException.class, () -> shareConsumer.poll(Duration.ofMillis(500)));
             assertEquals(0, records.count());
+            verifyShareGroupStateTopicRecordsProduced();   // due to leader epoch in read
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testSubscriptionAndPoll(String persister) {
+    @Test
+    public void testSubscriptionAndPoll() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -253,12 +249,12 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testSubscriptionAndPollMultiple(String persister) {
+    @Test
+    public void testSubscriptionAndPollMultiple() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -275,13 +271,12 @@ public class ShareConsumerTest {
             producer.send(record);
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @Flaky("KAFKA-18033")
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testAcknowledgementSentOnSubscriptionChange(String persister) throws ExecutionException, InterruptedException {
+    @Test
+    public void testAcknowledgementSentOnSubscriptionChange() throws ExecutionException, InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -312,12 +307,12 @@ public class ShareConsumerTest {
             // Verifying if the callback was invoked without exceptions for the partitions for both topics.
             assertNull(partitionExceptionMap.get(tp));
             assertNull(partitionExceptionMap.get(tp2));
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testAcknowledgementCommitCallbackSuccessfulAcknowledgement(String persister) throws Exception {
+    @Test
+    public void testAcknowledgementCommitCallbackSuccessfulAcknowledgement() throws Exception {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -342,12 +337,12 @@ public class ShareConsumerTest {
 
             // We expect null exception as the acknowledgment error code is null.
             assertNull(partitionExceptionMap.get(tp));
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testAcknowledgementCommitCallbackOnClose(String persister) {
+    @Test
+    public void testAcknowledgementCommitCallbackOnClose() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -372,13 +367,13 @@ public class ShareConsumerTest {
             // We expect null exception as the acknowledgment error code is null.
             assertTrue(partitionExceptionMap.containsKey(tp));
             assertNull(partitionExceptionMap.get(tp));
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
     @Flaky("KAFKA-18033")
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testAcknowledgementCommitCallbackInvalidRecordStateException(String persister) throws Exception {
+    @Test
+    public void testAcknowledgementCommitCallbackInvalidRecordStateException() throws Exception {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -431,9 +426,8 @@ public class ShareConsumerTest {
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testHeaders(String persister) {
+    @Test
+    public void testHeaders() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -454,6 +448,7 @@ public class ShareConsumerTest {
                 if (header != null)
                     assertEquals("headerValue", new String(header.value()));
             }
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
@@ -474,15 +469,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testHeadersSerializerDeserializer(String persister) {
+    @Test
+    public void testHeadersSerializerDeserializer() {
         testHeadersSerializeDeserialize(new BaseConsumerTest.SerializerImpl(), new BaseConsumerTest.DeserializerImpl());
+        verifyShareGroupStateTopicRecordsProduced();
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testMaxPollRecords(String persister) {
+    @Test
+    public void testMaxPollRecords() {
         int numRecords = 10000;
         int maxPollRecords = 2;
 
@@ -510,12 +504,12 @@ public class ShareConsumerTest {
 
                 i++;
             }
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testControlRecordsSkipped(String persister) throws Exception {
+    @Test
+    public void testControlRecordsSkipped() throws Exception {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> transactionalProducer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), "T1");
              KafkaProducer<byte[], byte[]> nonTransactionalProducer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
@@ -555,12 +549,12 @@ public class ShareConsumerTest {
 
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testExplicitAcknowledgeSuccess(String persister) {
+    @Test
+    public void testExplicitAcknowledgeSuccess() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -576,12 +570,12 @@ public class ShareConsumerTest {
             producer.send(record);
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testExplicitAcknowledgeCommitSuccess(String persister) {
+    @Test
+    public void testExplicitAcknowledgeCommitSuccess() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -599,13 +593,12 @@ public class ShareConsumerTest {
             assertEquals(1, result.size());
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @Flaky("KAFKA-18033")
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testExplicitAcknowledgementCommitAsync(String persister) throws InterruptedException {
+    @Test
+    public void testExplicitAcknowledgementCommitAsync() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
@@ -656,13 +649,12 @@ public class ShareConsumerTest {
             }, 30000, 100L, () -> "Didn't receive call to callback");
 
             assertNull(partitionExceptionMap1.get(tp));
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @Flaky("KAFKA-18033")
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testExplicitAcknowledgementCommitAsyncPartialBatch(String persister) {
+    @Test
+    public void testExplicitAcknowledgementCommitAsyncPartialBatch() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -720,12 +712,12 @@ public class ShareConsumerTest {
 
             assertTrue(partitionExceptionMap.containsKey(tp));
             assertNull(partitionExceptionMap.get(tp));
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testExplicitAcknowledgeReleasePollAccept(String persister) {
+    @Test
+    public void testExplicitAcknowledgeReleasePollAccept() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -743,12 +735,12 @@ public class ShareConsumerTest {
             records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testExplicitAcknowledgeReleaseAccept(String persister) {
+    @Test
+    public void testExplicitAcknowledgeReleaseAccept() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -763,13 +755,12 @@ public class ShareConsumerTest {
             records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @Flaky("KAFKA-18033")
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testExplicitAcknowledgeReleaseClose(String persister) {
+    @Test
+    public void testExplicitAcknowledgeReleaseClose() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -782,12 +773,12 @@ public class ShareConsumerTest {
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
             records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testExplicitAcknowledgeThrowsNotInBatch(String persister) {
+    @Test
+    public void testExplicitAcknowledgeThrowsNotInBatch() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -804,12 +795,12 @@ public class ShareConsumerTest {
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
             assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(consumedRecord));
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testImplicitAcknowledgeFailsExplicit(String persister) {
+    @Test
+    public void testImplicitAcknowledgeFailsExplicit() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -825,12 +816,12 @@ public class ShareConsumerTest {
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
             assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(consumedRecord));
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testImplicitAcknowledgeCommitSync(String persister) {
+    @Test
+    public void testImplicitAcknowledgeCommitSync() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -848,12 +839,12 @@ public class ShareConsumerTest {
             assertEquals(0, result.size());
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testImplicitAcknowledgementCommitAsync(String persister) throws InterruptedException {
+    @Test
+    public void testImplicitAcknowledgementCommitAsync() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -887,12 +878,12 @@ public class ShareConsumerTest {
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Acknowledgement commit callback did not receive the response yet");
 
             assertNull(partitionExceptionMap1.get(tp));
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testFetchRecordLargerThanMaxPartitionFetchBytes(String persister) throws Exception {
+    @Test
+    public void testFetchRecordLargerThanMaxPartitionFetchBytes() throws Exception {
         int maxPartitionFetchBytes = 10000;
 
         alterShareAutoOffsetReset("group1", "earliest");
@@ -908,13 +899,13 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
 
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
-            assertEquals(1, records.count());
+            assertEquals(2, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testMultipleConsumersWithDifferentGroupIds(String persister) throws InterruptedException {
+    @Test
+    public void testMultipleConsumersWithDifferentGroupIds() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         alterShareAutoOffsetReset("group2", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
@@ -960,12 +951,12 @@ public class ShareConsumerTest {
                 int records2 = shareConsumer2Records.addAndGet(shareConsumer2.poll(Duration.ofMillis(2000)).count());
                 return records1 == 3 && records2 == 5;
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for both consumers for the last batch");
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testMultipleConsumersInGroupSequentialConsumption(String persister) {
+    @Test
+    public void testMultipleConsumersInGroupSequentialConsumption() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
@@ -1001,9 +992,9 @@ public class ShareConsumerTest {
     }
 
     @Flaky("KAFKA-18033")
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testMultipleConsumersInGroupConcurrentConsumption(String persister) {
+    @Test
+    public void testMultipleConsumersInGroupConcurrentConsumption()
+            throws InterruptedException, ExecutionException, TimeoutException {
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
 
         int consumerCount = 4;
@@ -1013,51 +1004,36 @@ public class ShareConsumerTest {
         String groupId = "group1";
         alterShareAutoOffsetReset(groupId, "earliest");
 
-        ExecutorService producerExecutorService = Executors.newFixedThreadPool(producerCount);
-        ExecutorService consumerExecutorService = Executors.newFixedThreadPool(consumerCount);
-
+        List<CompletableFuture<Void>> producerFutures = new ArrayList<>();
         for (int i = 0; i < producerCount; i++) {
-            producerExecutorService.submit(() -> produceMessages(messagesPerProducer));
+            producerFutures.add(CompletableFuture.runAsync(() -> produceMessages(messagesPerProducer)));
         }
 
-        ConcurrentLinkedQueue<CompletableFuture<Integer>> futures = new ConcurrentLinkedQueue<>();
         int maxBytes = 100000;
+        List<CompletableFuture<Integer>> consumerFutures = new ArrayList<>();
         for (int i = 0; i < consumerCount; i++) {
             final int consumerNumber = i + 1;
-            consumerExecutorService.submit(() -> {
-                CompletableFuture<Integer> future = new CompletableFuture<>();
-                futures.add(future);
-                consumeMessages(totalMessagesConsumed, producerCount * messagesPerProducer, groupId, consumerNumber, 30, true, future, maxBytes);
-            });
+            consumerFutures.add(CompletableFuture.supplyAsync(() ->
+                    consumeMessages(totalMessagesConsumed,
+                            producerCount * messagesPerProducer, groupId, consumerNumber,
+                            30, true, maxBytes)));
         }
 
-        producerExecutorService.shutdown();
-        consumerExecutorService.shutdown();
+        CompletableFuture.allOf(producerFutures.toArray(CompletableFuture[]::new)).get(60, TimeUnit.SECONDS);
+        CompletableFuture.allOf(consumerFutures.toArray(CompletableFuture[]::new)).get(60, TimeUnit.SECONDS);
 
-        try {
-            assertTrue(producerExecutorService.awaitTermination(60, TimeUnit.SECONDS)); // Wait for all producer threads to complete
-            assertTrue(consumerExecutorService.awaitTermination(60, TimeUnit.SECONDS)); // Wait for all consumer threads to complete
-            int totalResult = 0;
-            for (CompletableFuture<Integer> future : futures) {
-                totalResult += future.get();
-            }
-            assertEquals(producerCount * messagesPerProducer, totalMessagesConsumed.get());
-            assertEquals(producerCount * messagesPerProducer, totalResult);
-        } catch (Exception e) {
-            fail("Exception occurred : " + e.getMessage());
-        }
+        int totalResult = consumerFutures.stream().mapToInt(CompletableFuture::join).sum();
+        assertEquals(producerCount * messagesPerProducer, totalResult);
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    @SuppressWarnings("NPathComplexity")
-    public void testMultipleConsumersInMultipleGroupsConcurrentConsumption(String persister) {
+    @Test
+    public void testMultipleConsumersInMultipleGroupsConcurrentConsumption()
+            throws ExecutionException, InterruptedException, TimeoutException {
         AtomicInteger totalMessagesConsumedGroup1 = new AtomicInteger(0);
         AtomicInteger totalMessagesConsumedGroup2 = new AtomicInteger(0);
         AtomicInteger totalMessagesConsumedGroup3 = new AtomicInteger(0);
 
         int producerCount = 4;
-        int consumerCount = 2;
         int messagesPerProducer = 2000;
         final int totalMessagesSent = producerCount * messagesPerProducer;
 
@@ -1069,105 +1045,52 @@ public class ShareConsumerTest {
         alterShareAutoOffsetReset(groupId2, "earliest");
         alterShareAutoOffsetReset(groupId3, "earliest");
 
-        ExecutorService producerExecutorService = Executors.newFixedThreadPool(producerCount);
-        ExecutorService shareGroupExecutorService1 = Executors.newFixedThreadPool(consumerCount);
-        ExecutorService shareGroupExecutorService2 = Executors.newFixedThreadPool(consumerCount);
-        ExecutorService shareGroupExecutorService3 = Executors.newFixedThreadPool(consumerCount);
-
-        CountDownLatch startSignal = new CountDownLatch(producerCount);
-
-        ConcurrentLinkedQueue<CompletableFuture<Integer>> producerFutures = new ConcurrentLinkedQueue<>();
-
+        List<CompletableFuture<Integer>> producerFutures = new ArrayList<>();
         for (int i = 0; i < producerCount; i++) {
-            producerExecutorService.submit(() -> {
-                CompletableFuture<Integer> future = produceMessages(messagesPerProducer);
-                producerFutures.add(future);
-                startSignal.countDown();
-            });
+            producerFutures.add(CompletableFuture.supplyAsync(() -> produceMessages(messagesPerProducer)));
         }
-
-        ConcurrentLinkedQueue<CompletableFuture<Integer>> futures1 = new ConcurrentLinkedQueue<>();
-        ConcurrentLinkedQueue<CompletableFuture<Integer>> futures2 = new ConcurrentLinkedQueue<>();
-        ConcurrentLinkedQueue<CompletableFuture<Integer>> futures3 = new ConcurrentLinkedQueue<>();
-
         // Wait for the producers to run
-        try {
-            boolean signalled = startSignal.await(15, TimeUnit.SECONDS);
-            assertTrue(signalled);
-        } catch (InterruptedException e) {
-            fail("Exception awaiting start signal");
-        }
+        assertDoesNotThrow(() -> CompletableFuture.allOf(producerFutures.toArray(CompletableFuture[]::new))
+                .get(15, TimeUnit.SECONDS), "Exception awaiting produceMessages");
+        int actualMessageSent = producerFutures.stream().mapToInt(CompletableFuture::join).sum();
+
+        List<CompletableFuture<Integer>> consumeMessagesFutures1 = new ArrayList<>();
+        List<CompletableFuture<Integer>> consumeMessagesFutures2 = new ArrayList<>();
+        List<CompletableFuture<Integer>> consumeMessagesFutures3 = new ArrayList<>();
 
         int maxBytes = 100000;
-
-        for (int i = 0; i < consumerCount; i++) {
+        for (int i = 0; i < 2; i++) {
             final int consumerNumber = i + 1;
-            shareGroupExecutorService1.submit(() -> {
-                CompletableFuture<Integer> future = new CompletableFuture<>();
-                futures1.add(future);
-                consumeMessages(totalMessagesConsumedGroup1, totalMessagesSent, "group1", consumerNumber, 100, true, future, maxBytes);
-            });
-            shareGroupExecutorService2.submit(() -> {
-                CompletableFuture<Integer> future = new CompletableFuture<>();
-                futures2.add(future);
-                consumeMessages(totalMessagesConsumedGroup2, totalMessagesSent, "group2", consumerNumber, 100, true, future, maxBytes);
-            });
-            shareGroupExecutorService3.submit(() -> {
-                CompletableFuture<Integer> future = new CompletableFuture<>();
-                futures3.add(future);
-                consumeMessages(totalMessagesConsumedGroup3, totalMessagesSent, "group3", consumerNumber, 100, true, future, maxBytes);
-            });
+            consumeMessagesFutures1.add(CompletableFuture.supplyAsync(() ->
+                    consumeMessages(totalMessagesConsumedGroup1, totalMessagesSent,
+                            "group1", consumerNumber, 100, true, maxBytes)));
+
+            consumeMessagesFutures2.add(CompletableFuture.supplyAsync(() ->
+                    consumeMessages(totalMessagesConsumedGroup2, totalMessagesSent,
+                            "group2", consumerNumber, 100, true, maxBytes)));
+
+            consumeMessagesFutures3.add(CompletableFuture.supplyAsync(() ->
+                    consumeMessages(totalMessagesConsumedGroup3, totalMessagesSent,
+                            "group3", consumerNumber, 100, true, maxBytes)));
         }
-        producerExecutorService.shutdown();
-        shareGroupExecutorService1.shutdown();
-        shareGroupExecutorService2.shutdown();
-        shareGroupExecutorService3.shutdown();
-        try {
-            shareGroupExecutorService1.awaitTermination(120, TimeUnit.SECONDS); // Wait for all consumer threads for group 1 to complete
-            shareGroupExecutorService2.awaitTermination(120, TimeUnit.SECONDS); // Wait for all consumer threads for group 2 to complete
-            shareGroupExecutorService3.awaitTermination(120, TimeUnit.SECONDS); // Wait for all consumer threads for group 3 to complete
 
-            int totalResult1 = 0;
-            for (CompletableFuture<Integer> future : futures1) {
-                totalResult1 += future.get();
-            }
+        CompletableFuture.allOf(Stream.of(consumeMessagesFutures1.stream(), consumeMessagesFutures2.stream(),
+                        consumeMessagesFutures3.stream()).flatMap(Function.identity()).toArray(CompletableFuture[]::new))
+                .get(120, TimeUnit.SECONDS);
 
-            int totalResult2 = 0;
-            for (CompletableFuture<Integer> future : futures2) {
-                totalResult2 += future.get();
-            }
+        int totalResult1 = consumeMessagesFutures1.stream().mapToInt(CompletableFuture::join).sum();
+        int totalResult2 = consumeMessagesFutures2.stream().mapToInt(CompletableFuture::join).sum();
+        int totalResult3 = consumeMessagesFutures3.stream().mapToInt(CompletableFuture::join).sum();
 
-            int totalResult3 = 0;
-            for (CompletableFuture<Integer> future : futures3) {
-                totalResult3 += future.get();
-            }
-
-            assertEquals(totalMessagesSent, totalMessagesConsumedGroup1.get());
-            assertEquals(totalMessagesSent, totalMessagesConsumedGroup2.get());
-            assertEquals(totalMessagesSent, totalMessagesConsumedGroup3.get());
-            assertEquals(totalMessagesSent, totalResult1);
-            assertEquals(totalMessagesSent, totalResult2);
-            assertEquals(totalMessagesSent, totalResult3);
-
-            int actualMessagesSent = 0;
-            try {
-                producerExecutorService.awaitTermination(60, TimeUnit.SECONDS); // Wait for all producer threads to complete
-
-                for (CompletableFuture<Integer> future : producerFutures) {
-                    actualMessagesSent += future.get();
-                }
-            } catch (Exception e) {
-                fail("Exception occurred : " + e.getMessage());
-            }
-            assertEquals(totalMessagesSent, actualMessagesSent);
-        } catch (Exception e) {
-            fail("Exception occurred : " + e.getMessage());
-        }
+        assertEquals(totalMessagesSent, totalResult1);
+        assertEquals(totalMessagesSent, totalResult2);
+        assertEquals(totalMessagesSent, totalResult3);
+        assertEquals(totalMessagesSent, actualMessageSent);
+        verifyShareGroupStateTopicRecordsProduced();
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testConsumerCloseInGroupSequential(String persister) {
+    @Test
+    public void testConsumerCloseInGroupSequential() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
@@ -1209,12 +1132,13 @@ public class ShareConsumerTest {
             }
             shareConsumer2.close();
             assertEquals(totalMessages, consumer1MessageCount + consumer2MessageCount);
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testMultipleConsumersInGroupFailureConcurrentConsumption(String persister) {
+    @Test
+    public void testMultipleConsumersInGroupFailureConcurrentConsumption()
+            throws InterruptedException, ExecutionException, TimeoutException {
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
 
         int consumerCount = 4;
@@ -1225,64 +1149,40 @@ public class ShareConsumerTest {
 
         alterShareAutoOffsetReset(groupId, "earliest");
 
-        ExecutorService consumerExecutorService = Executors.newFixedThreadPool(consumerCount);
-        ExecutorService producerExecutorService = Executors.newFixedThreadPool(producerCount);
-
+        List<CompletableFuture<Void>> produceMessageFutures = new ArrayList<>();
         for (int i = 0; i < producerCount; i++) {
-            Runnable task = () -> produceMessages(messagesPerProducer);
-            producerExecutorService.submit(task);
+            produceMessageFutures.add(CompletableFuture.runAsync(() -> produceMessages(messagesPerProducer)));
         }
-
-        ConcurrentLinkedQueue<CompletableFuture<Integer>> futuresSuccess = new ConcurrentLinkedQueue<>();
-
-        CountDownLatch startSignal = new CountDownLatch(1);
 
         int maxBytes = 1000000;
 
-        consumerExecutorService.submit(() -> {
-            // The "failing" consumer polls but immediately closes, which releases the records for the other consumers
-            CompletableFuture<Integer> future = new CompletableFuture<>();
-            AtomicInteger failedMessagesConsumed = new AtomicInteger(0);
-            consumeMessages(failedMessagesConsumed, producerCount * messagesPerProducer, groupId, 0, 1, false, future);
-            startSignal.countDown();
-        });
+        // The "failing" consumer polls but immediately closes, which releases the records for the other consumers
+        CompletableFuture<Integer> failedMessagesConsumedFuture = CompletableFuture.supplyAsync(
+                () -> consumeMessages(new AtomicInteger(0), producerCount * messagesPerProducer, groupId,
+                        0, 1, false));
 
         // Wait for the failed consumer to run
-        try {
-            boolean signalled = startSignal.await(15, TimeUnit.SECONDS);
-            assertTrue(signalled);
-        } catch (InterruptedException e) {
-            fail("Exception awaiting start signal");
-        }
+        assertDoesNotThrow(() -> failedMessagesConsumedFuture.get(15, TimeUnit.SECONDS),
+                "Exception awaiting consumeMessages");
 
+        List<CompletableFuture<Integer>> consumeMessagesFutures = new ArrayList<>();
         for (int i = 0; i < consumerCount; i++) {
             final int consumerNumber = i + 1;
-            consumerExecutorService.submit(() -> {
-                CompletableFuture<Integer> future = new CompletableFuture<>();
-                futuresSuccess.add(future);
-                consumeMessages(totalMessagesConsumed, producerCount * messagesPerProducer, groupId, consumerNumber, 40, true, future, maxBytes);
-            });
+            consumeMessagesFutures.add(CompletableFuture.supplyAsync(
+                    () -> consumeMessages(totalMessagesConsumed, producerCount * messagesPerProducer,
+                            groupId, consumerNumber, 40, true, maxBytes)));
         }
-        producerExecutorService.shutdown();
-        consumerExecutorService.shutdown();
-        try {
-            producerExecutorService.awaitTermination(60, TimeUnit.SECONDS); // Wait for all producer threads to complete
-            consumerExecutorService.awaitTermination(60, TimeUnit.SECONDS); // Wait for all consumer threads to complete
-            int totalSuccessResult = 0;
-            for (CompletableFuture<Integer> future : futuresSuccess) {
-                totalSuccessResult += future.get();
-            }
-            assertEquals(producerCount * messagesPerProducer, totalMessagesConsumed.get());
-            assertEquals(producerCount * messagesPerProducer, totalSuccessResult);
-        } catch (Exception e) {
-            fail("Exception occurred : " + e.getMessage());
-        }
+
+        CompletableFuture.allOf(produceMessageFutures.toArray(CompletableFuture[]::new)).get(60, TimeUnit.SECONDS);
+        CompletableFuture.allOf(consumeMessagesFutures.toArray(CompletableFuture[]::new)).get(60, TimeUnit.SECONDS);
+
+        int totalSuccessResult = consumeMessagesFutures.stream().mapToInt(CompletableFuture::join).sum();
+        assertEquals(producerCount * messagesPerProducer, totalSuccessResult);
+        verifyShareGroupStateTopicRecordsProduced();
     }
 
-    @Flaky("KAFKA-18025")
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testAcquisitionLockTimeoutOnConsumer(String persister) throws InterruptedException {
+    @Test
+    public void testAcquisitionLockTimeoutOnConsumer() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -1337,6 +1237,7 @@ public class ShareConsumerTest {
 
             consumerRecords = shareConsumer.poll(Duration.ofMillis(1000));
             assertEquals(0, consumerRecords.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
@@ -1344,9 +1245,8 @@ public class ShareConsumerTest {
      * Test to verify that the acknowledgement commit callback cannot invoke methods of KafkaShareConsumer.
      * The exception thrown is verified in {@link TestableAcknowledgementCommitCallbackWithShareConsumer}
      */
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testAcknowledgementCommitCallbackCallsShareConsumerDisallowed(String persister) {
+    @Test
+    public void testAcknowledgementCommitCallbackCallsShareConsumerDisallowed() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -1364,6 +1264,7 @@ public class ShareConsumerTest {
             // The acknowledgement commit callback will be called and the exception is thrown.
             // This is verified inside the onComplete() method implementation.
             shareConsumer.poll(Duration.ofMillis(500));
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
@@ -1387,10 +1288,8 @@ public class ShareConsumerTest {
      * Test to verify that the acknowledgement commit callback can invoke KafkaShareConsumer.wakeup() and it
      * wakes up the enclosing poll.
      */
-    @Flaky("KAFKA-18033")
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testAcknowledgementCommitCallbackCallsShareConsumerWakeup(String persister) throws InterruptedException {
+    @Test
+    public void testAcknowledgementCommitCallbackCallsShareConsumerWakeup() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -1420,6 +1319,7 @@ public class ShareConsumerTest {
                 }
                 return exceptionThrown.get();
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive expected exception");
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
@@ -1440,10 +1340,8 @@ public class ShareConsumerTest {
      * Test to verify that the acknowledgement commit callback can throw an exception, and it is propagated
      * to the caller of poll().
      */
-    @Flaky("KAFKA-18033")
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testAcknowledgementCommitCallbackThrowsException(String persister) throws InterruptedException {
+    @Test
+    public void testAcknowledgementCommitCallbackThrowsException() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -1467,6 +1365,7 @@ public class ShareConsumerTest {
                 }
                 return exceptionThrown.get();
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive expected exception");
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
@@ -1481,9 +1380,8 @@ public class ShareConsumerTest {
      * Test to verify that calling Thread.interrupt() before KafkaShareConsumer.poll(Duration)
      * causes it to throw InterruptException
      */
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testPollThrowsInterruptExceptionIfInterrupted(String persister) {
+    @Test
+    public void testPollThrowsInterruptExceptionIfInterrupted() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
 
@@ -1498,7 +1396,7 @@ public class ShareConsumerTest {
                 Thread.interrupted();
             }
 
-            assertDoesNotThrow(() -> shareConsumer.poll(Duration.ZERO));
+            assertDoesNotThrow(() -> shareConsumer.poll(Duration.ZERO), "Failed to consume records");
         }
     }
 
@@ -1506,9 +1404,8 @@ public class ShareConsumerTest {
      * Test to verify that InvalidTopicException is thrown if the consumer subscribes
      * to an invalid topic.
      */
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testSubscribeOnInvalidTopicThrowsInvalidTopicException(String persister) {
+    @Test
+    public void testSubscribeOnInvalidTopicThrowsInvalidTopicException() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
 
@@ -1524,9 +1421,8 @@ public class ShareConsumerTest {
      * Test to ensure that a wakeup when records are buffered doesn't prevent the records
      * being returned on the next poll.
      */
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testWakeupWithFetchedRecordsAvailable(String persister) {
+    @Test
+    public void testWakeupWithFetchedRecordsAvailable() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -1542,12 +1438,12 @@ public class ShareConsumerTest {
 
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testSubscriptionFollowedByTopicCreation(String persister) throws InterruptedException {
+    @Test
+    public void testSubscriptionFollowedByTopicCreation() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
              KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
@@ -1571,12 +1467,12 @@ public class ShareConsumerTest {
             producer.send(record);
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testSubscriptionAndPollFollowedByTopicDeletion(String persister) throws InterruptedException, ExecutionException {
+    @Test
+    public void testSubscriptionAndPollFollowedByTopicDeletion() throws InterruptedException, ExecutionException {
         String topic1 = "bar";
         String topic2 = "baz";
         createTopic(topic1);
@@ -1613,12 +1509,12 @@ public class ShareConsumerTest {
             producer.send(recordTopic2).get();
             TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "incorrect number of records");
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testLsoMovementByRecordsDeletion(String persister) {
+    @Test
+    public void testLsoMovementByRecordsDeletion() {
         String groupId = "group1";
 
         alterShareAutoOffsetReset(groupId, "earliest");
@@ -1627,69 +1523,40 @@ public class ShareConsumerTest {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), 0, null, "key".getBytes(), "value".getBytes());
 
             // We write 10 records to the topic, so they would be written from offsets 0-9 on the topic.
-            try {
-                for (int i = 0; i < 10; i++) {
-                    producer.send(record).get();
-                }
-            } catch (Exception e) {
-                fail("Failed to send records: " + e);
+            for (int i = 0; i < 10; i++) {
+                assertDoesNotThrow(() -> producer.send(record).get(), "Failed to send records");
             }
 
             // We delete records before offset 5, so the LSO should move to 5.
             adminClient.deleteRecords(Collections.singletonMap(tp, RecordsToDelete.beforeOffset(5L)));
 
-            AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
-            CompletableFuture<Integer> future = new CompletableFuture<>();
-            consumeMessages(totalMessagesConsumed, 5, groupId, 1, 10, true, future);
+            int messageCount = consumeMessages(new AtomicInteger(0), 5, groupId, 1, 10, true);
             // The records returned belong to offsets 5-9.
-            assertEquals(5, totalMessagesConsumed.get());
-            try {
-                assertEquals(5, future.get());
-            } catch (Exception e) {
-                fail("Exception occurred : " + e.getMessage());
-            }
+            assertEquals(5, messageCount);
 
             // We write 5 records to the topic, so they would be written from offsets 10-14 on the topic.
-            try {
-                for (int i = 0; i < 5; i++) {
-                    producer.send(record).get();
-                }
-            } catch (Exception e) {
-                fail("Failed to send records: " + e);
+            for (int i = 0; i < 5; i++) {
+                assertDoesNotThrow(() -> producer.send(record).get(), "Failed to send records");
             }
 
             // We delete records before offset 14, so the LSO should move to 14.
             adminClient.deleteRecords(Collections.singletonMap(tp, RecordsToDelete.beforeOffset(14L)));
 
-            totalMessagesConsumed = new AtomicInteger(0);
-            future = new CompletableFuture<>();
-            consumeMessages(totalMessagesConsumed, 1, groupId, 1, 10, true, future);
+            int consumeMessagesCount = consumeMessages(new AtomicInteger(0), 1, groupId, 1, 10, true);
             // The record returned belong to offset 14.
-            assertEquals(1, totalMessagesConsumed.get());
-            try {
-                assertEquals(1, future.get());
-            } catch (Exception e) {
-                fail("Exception occurred : " + e.getMessage());
-            }
+            assertEquals(1, consumeMessagesCount);
 
             // We delete records before offset 15, so the LSO should move to 15 and now no records should be returned.
             adminClient.deleteRecords(Collections.singletonMap(tp, RecordsToDelete.beforeOffset(15L)));
 
-            totalMessagesConsumed = new AtomicInteger(0);
-            future = new CompletableFuture<>();
-            consumeMessages(totalMessagesConsumed, 0, groupId, 1, 5, true, future);
-            assertEquals(0, totalMessagesConsumed.get());
-            try {
-                assertEquals(0, future.get());
-            } catch (Exception e) {
-                fail("Exception occurred : " + e.getMessage());
-            }
+            messageCount = consumeMessages(new AtomicInteger(0), 0, groupId, 1, 5, true);
+            assertEquals(0, messageCount);
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testShareAutoOffsetResetDefaultValue(String persister) {
+    @Test
+    public void testShareAutoOffsetResetDefaultValue() {
         try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
              KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
 
@@ -1710,12 +1577,12 @@ public class ShareConsumerTest {
             records = shareConsumer.poll(Duration.ofMillis(5000));
             // Now the next record should be consumed successfully
             assertEquals(1, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testShareAutoOffsetResetEarliest(String persister) {
+    @Test
+    public void testShareAutoOffsetResetEarliest() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
              KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
@@ -1735,12 +1602,12 @@ public class ShareConsumerTest {
             records = shareConsumer.poll(Duration.ofMillis(5000));
             // The next records should also be consumed successfully
             assertEquals(1, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testShareAutoOffsetResetEarliestAfterLsoMovement(String persister) throws Exception {
+    @Test
+    public void testShareAutoOffsetResetEarliestAfterLsoMovement() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
              KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
@@ -1749,29 +1616,22 @@ public class ShareConsumerTest {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             // We write 10 records to the topic, so they would be written from offsets 0-9 on the topic.
-            try {
-                for (int i = 0; i < 10; i++) {
-                    producer.send(record).get();
-                }
-            } catch (Exception e) {
-                fail("Failed to send records: " + e);
+            for (int i = 0; i < 10; i++) {
+                assertDoesNotThrow(() -> producer.send(record).get(), "Failed to send records");
             }
 
             // We delete records before offset 5, so the LSO should move to 5.
             adminClient.deleteRecords(Collections.singletonMap(tp, RecordsToDelete.beforeOffset(5L)));
 
-            AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
-            CompletableFuture<Integer> future = new CompletableFuture<>();
-            consumeMessages(totalMessagesConsumed, 5, "group1", 1, 10, true, future);
+            int consumedMessageCount = consumeMessages(new AtomicInteger(0), 5, "group1", 1, 10, true);
             // The records returned belong to offsets 5-9.
-            assertEquals(5, totalMessagesConsumed.get());
-            assertEquals(5, future.get());
+            assertEquals(5, consumedMessageCount);
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.persister={0}")
-    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
-    public void testShareAutoOffsetResetMultipleGroupsWithDifferentValue(String persister) {
+    @Test
+    public void testShareAutoOffsetResetMultipleGroupsWithDifferentValue() {
         alterShareAutoOffsetReset("group1", "earliest");
         alterShareAutoOffsetReset("group2", "latest");
         try (KafkaShareConsumer<byte[], byte[]> shareConsumerEarliest = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
@@ -1806,30 +1666,89 @@ public class ShareConsumerTest {
             records2 = shareConsumerLatest.poll(Duration.ofMillis(5000));
             // The next record should also be consumed successfully by group2
             assertEquals(1, records2.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    private CompletableFuture<Integer> produceMessages(int messageCount) {
-        CompletableFuture<Integer> future = new CompletableFuture<>();
-        Future<?>[] recordFutures = new Future<?>[messageCount];
-        int messagesSent = 0;
+    @Test
+    public void testShareAutoOffsetResetByDuration() throws Exception {
+        // Set auto offset reset to 1 hour before current time
+        alterShareAutoOffsetReset("group1", "by_duration:PT1H");
+        
+        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
+             KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+
+            long currentTime = System.currentTimeMillis();
+            long twoHoursAgo = currentTime - TimeUnit.HOURS.toMillis(2);
+            long thirtyMinsAgo = currentTime - TimeUnit.MINUTES.toMillis(30);
+            
+            // Produce messages with different timestamps
+            ProducerRecord<byte[], byte[]> oldRecord = new ProducerRecord<>(tp.topic(), tp.partition(), 
+                twoHoursAgo, "old_key".getBytes(), "old_value".getBytes());
+            ProducerRecord<byte[], byte[]> recentRecord = new ProducerRecord<>(tp.topic(), tp.partition(),
+                thirtyMinsAgo, "recent_key".getBytes(), "recent_value".getBytes());
+            ProducerRecord<byte[], byte[]> currentRecord = new ProducerRecord<>(tp.topic(), tp.partition(),
+                currentTime, "current_key".getBytes(), "current_value".getBytes());
+
+            producer.send(oldRecord).get();
+            producer.send(recentRecord).get();
+            producer.send(currentRecord).get();
+            producer.flush();
+
+            shareConsumer.subscribe(Collections.singleton(tp.topic()));
+            
+            // Should only receive messages from last hour (recent and current)
+            List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 2);
+            assertEquals(2, records.size());
+            
+            // Verify timestamps and order
+            assertEquals(thirtyMinsAgo, records.get(0).timestamp());
+            assertEquals("recent_key", new String(records.get(0).key()));
+            assertEquals(currentTime, records.get(1).timestamp());
+            assertEquals("current_key", new String(records.get(1).key()));
+        }
+
+        // Set the auto offset reset to 3 hours before current time
+        // so the consumer should consume all messages (3 records)
+        alterShareAutoOffsetReset("group2", "by_duration:PT3H");
+        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group2");
+             KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+
+            shareConsumer.subscribe(Collections.singleton(tp.topic()));
+            List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 3);
+            assertEquals(3, records.size());
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @Test
+    public void testShareAutoOffsetResetByDurationInvalidFormat() throws Exception {
+        // Test invalid duration format
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
+        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
+        
+        // Test invalid duration format
+        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
+            GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:1h"), AlterConfigOp.OpType.SET)));
+        ExecutionException e1 = assertThrows(ExecutionException.class, () -> 
+            adminClient.incrementalAlterConfigs(alterEntries).all().get());
+        assertInstanceOf(InvalidConfigurationException.class, e1.getCause());
+
+        // Test negative duration
+        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
+            GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:-PT1H"), AlterConfigOp.OpType.SET)));
+        ExecutionException e2 = assertThrows(ExecutionException.class, () -> 
+            adminClient.incrementalAlterConfigs(alterEntries).all().get());
+        assertInstanceOf(InvalidConfigurationException.class, e2.getCause());
+    }
+
+    private int produceMessages(int messageCount) {
         try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            for (int i = 0; i < messageCount; i++) {
-                recordFutures[i] = producer.send(record);
-            }
-            for (int i = 0; i < messageCount; i++) {
-                try {
-                    recordFutures[i].get();
-                    messagesSent++;
-                } catch (Exception e) {
-                    fail("Failed to send record: " + e);
-                }
-            }
-        } finally {
-            future.complete(messagesSent);
+            IntStream.range(0, messageCount).forEach(__ -> producer.send(record));
+            producer.flush();
         }
-        return future;
+        return messageCount;
     }
 
     private void produceMessagesWithTimestamp(int messageCount, long startingTimestamp) {
@@ -1843,47 +1762,47 @@ public class ShareConsumerTest {
         }
     }
 
-    private void consumeMessages(AtomicInteger totalMessagesConsumed,
+    private int consumeMessages(AtomicInteger totalMessagesConsumed,
                                  int totalMessages,
                                  String groupId,
                                  int consumerNumber,
                                  int maxPolls,
-                                 boolean commit,
-                                 CompletableFuture<Integer> future) {
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), groupId)) {
-            shareConsumer.subscribe(Collections.singleton(tp.topic()));
-            consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit, future);
-        } catch (Exception e) {
-            fail("Consumer " + consumerNumber + " failed with exception: " + e);
-        }
+                                 boolean commit) {
+        return assertDoesNotThrow(() -> {
+            try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                    new ByteArrayDeserializer(), new ByteArrayDeserializer(), groupId)) {
+                shareConsumer.subscribe(Collections.singleton(tp.topic()));
+                return consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit);
+            }
+        }, "Consumer " + consumerNumber + " failed with exception");
     }
 
-    private void consumeMessages(AtomicInteger totalMessagesConsumed,
+    private int consumeMessages(AtomicInteger totalMessagesConsumed,
                                  int totalMessages,
                                  String groupId,
                                  int consumerNumber,
                                  int maxPolls,
                                  boolean commit,
-                                 CompletableFuture<Integer> future,
                                  int maxFetchBytes) {
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), groupId, Map.of(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxFetchBytes))) {
-            shareConsumer.subscribe(Collections.singleton(tp.topic()));
-            consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit, future);
-        } catch (Exception e) {
-            fail("Consumer " + consumerNumber + " failed with exception: " + e);
-        }
+        return assertDoesNotThrow(() -> {
+            try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                    new ByteArrayDeserializer(), new ByteArrayDeserializer(), groupId,
+                    Map.of(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxFetchBytes))) {
+                shareConsumer.subscribe(Collections.singleton(tp.topic()));
+                return consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit);
+            }
+        }, "Consumer " + consumerNumber + " failed with exception");
     }
 
-    private void consumeMessages(KafkaShareConsumer<byte[], byte[]> consumer,
+    private int consumeMessages(KafkaShareConsumer<byte[], byte[]> consumer,
                                  AtomicInteger totalMessagesConsumed,
                                  int totalMessages,
                                  int consumerNumber,
                                  int maxPolls,
-                                 boolean commit,
-                                 CompletableFuture<Integer> future) {
-        int messagesConsumed = 0;
-        int retries = 0;
-        try {
+                                 boolean commit) {
+        return assertDoesNotThrow(() -> {
+            int messagesConsumed = 0;
+            int retries = 0;
             if (totalMessages > 0) {
                 while (totalMessagesConsumed.get() < totalMessages && retries < maxPolls) {
                     ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(2000));
@@ -1904,11 +1823,8 @@ public class ShareConsumerTest {
                 // Complete acknowledgement of the records
                 consumer.commitSync(Duration.ofMillis(10000));
             }
-        } catch (Exception e) {
-            fail("Consumer " + consumerNumber + " failed with exception: " + e);
-        } finally {
-            future.complete(messagesConsumed);
-        }
+            return messagesConsumed;
+        }, "Consumer " + consumerNumber + " failed with exception");
     }
 
     private <K, V> List<ConsumerRecord<K, V>> consumeRecords(KafkaShareConsumer<K, V> consumer,
@@ -1919,29 +1835,27 @@ public class ShareConsumerTest {
             ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(100));
             records.forEach(accumulatedRecords::add);
             long currentTimeMs = System.currentTimeMillis();
-            if (currentTimeMs - startTimeMs > 60000) {
-                fail("Timed out before consuming expected records.");
-            }
+            assertFalse(currentTimeMs - startTimeMs > 60000, "Timed out before consuming expected records.");
         }
         return accumulatedRecords;
     }
 
     private void createTopic(String topicName) {
         Properties props = cluster.clientProperties();
-        try (Admin admin = Admin.create(props)) {
-            admin.createTopics(Collections.singleton(new NewTopic(topicName, 1, (short) 1))).all().get();
-        } catch (Exception e) {
-            fail("Failed to create topic");
-        }
+        assertDoesNotThrow(() -> {
+            try (Admin admin = Admin.create(props)) {
+                admin.createTopics(Collections.singleton(new NewTopic(topicName, 1, (short) 1))).all().get();
+            }
+        }, "Failed to create topic");
     }
 
     private void deleteTopic(String topicName) {
         Properties props = cluster.clientProperties();
-        try (Admin admin = Admin.create(props)) {
-            admin.deleteTopics(Collections.singleton(topicName)).all().get();
-        } catch (Exception e) {
-            fail("Failed to create topic");
-        }
+        assertDoesNotThrow(() -> {
+            try (Admin admin = Admin.create(props)) {
+                admin.deleteTopics(Collections.singleton(topicName)).all().get();
+            }
+        }, "Failed to delete topic");
     }
 
     private Admin createAdminClient() {
@@ -1981,11 +1895,9 @@ public class ShareConsumerTest {
         return new KafkaShareConsumer<>(props, keyDeserializer, valueDeserializer);
     }
 
-    private void warmup() throws InterruptedException, ExecutionException, TimeoutException {
+    private void warmup() throws InterruptedException {
         createTopic(warmupTp.topic());
-        TestUtils.waitForCondition(() ->
-                !cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL")).isEmpty(),
-            DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
+        waitForMetadataCache();
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(warmupTp.topic(), warmupTp.partition(), null, "key".getBytes(), "value".getBytes());
         Set<String> subscription = Collections.singleton(warmupTp.topic());
         alterShareAutoOffsetReset("warmupgroup1", "earliest");
@@ -2001,18 +1913,48 @@ public class ShareConsumerTest {
         }
     }
 
+    private void waitForMetadataCache() throws InterruptedException {
+        TestUtils.waitForCondition(() ->
+                !cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL")).isEmpty(),
+            DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
+    }
+
+    private void verifyShareGroupStateTopicRecordsProduced() {
+        try {
+            Map<String, Object> consumerConfigs = new HashMap<>();
+            consumerConfigs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+            consumerConfigs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+            consumerConfigs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+
+            try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfigs)) {
+                consumer.assign(sgsTopicPartitions);
+                consumer.seekToBeginning(sgsTopicPartitions);
+                Set<ConsumerRecord<byte[], byte[]>> records = new HashSet<>();
+                TestUtils.waitForCondition(() -> {
+                        ConsumerRecords<byte[], byte[]> msgs = consumer.poll(Duration.ofMillis(5000L));
+                        if (msgs.count() > 0) {
+                            msgs.records(Topic.SHARE_GROUP_STATE_TOPIC_NAME).forEach(records::add);
+                        }
+                        return records.size() > 2; // +2 because of extra warmup records
+                    },
+                    30000L,
+                    200L,
+                    () -> "no records produced"
+                );
+            }
+        } catch (InterruptedException e) {
+            fail(e);
+        }
+    }
+
     private void alterShareAutoOffsetReset(String groupId, String newValue) {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
         alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
             GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, newValue), AlterConfigOp.OpType.SET)));
         AlterConfigsOptions alterOptions = new AlterConfigsOptions();
-        try {
-            adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
+        assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
                 .all()
-                .get(60, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            fail("Exception was thrown: ", e);
-        }
+                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
     }
 }

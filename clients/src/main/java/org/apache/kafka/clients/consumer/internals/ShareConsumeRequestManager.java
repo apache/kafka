@@ -203,15 +203,17 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             if (acknowledgementsToSend != null) {
                                 metricsManager.recordAcknowledgementSent(acknowledgementsToSend.size());
                                 fetchAcknowledgementsInFlight.put(tip, acknowledgementsToSend);
+
+                                sessionHandler.addPartitionToFetch(tip, acknowledgementsToSend);
+                                handlerMap.put(node, sessionHandler);
+
+                                partitionsToForgetMap.putIfAbsent(node, new ArrayList<>());
+                                partitionsToForgetMap.get(node).add(tip);
+
+                                topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
+                                fetchedPartitions.add(tip);
+                                log.debug("Added fetch request for previously subscribed partition {} to node {}", tip, node.id());
                             }
-
-                            sessionHandler.addPartitionToFetch(tip, acknowledgementsToSend);
-                            partitionsToForgetMap.putIfAbsent(node, new ArrayList<>());
-                            partitionsToForgetMap.get(node).add(tip);
-
-                            topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
-                            fetchedPartitions.add(tip);
-                            log.debug("Added fetch request for previously subscribed partition {} to node {}", tip, node.id());
                         }
                     }
                 }
@@ -990,16 +992,18 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
 
             ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId, fetchConfig);
-            Node nodeToSend = metadata.fetch().nodeById(nodeId);
 
-            log.trace("Building acknowledgements to send : {}", finalAcknowledgementsToSend);
-            nodesWithPendingRequests.add(nodeId);
             isProcessed = false;
+            Node nodeToSend = metadata.fetch().nodeById(nodeId);
 
             if (requestBuilder == null) {
                 handleSessionErrorCode(Errors.SHARE_SESSION_NOT_FOUND);
                 return null;
-            } else {
+            } else if (nodeToSend != null) {
+                nodesWithPendingRequests.add(nodeId);
+
+                log.trace("Building acknowledgements to send : {}", finalAcknowledgementsToSend);
+
                 inFlightAcknowledgements.putAll(finalAcknowledgementsToSend);
                 if (incompleteAcknowledgements.isEmpty()) {
                     acknowledgementsToSend.clear();
@@ -1017,6 +1021,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 };
                 return unsentRequest.whenComplete(responseHandler);
             }
+
+            return null;
         }
 
         int getInFlightAcknowledgementsCount(TopicIdPartition tip) {
@@ -1082,12 +1088,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * being sent.
          */
         void handleSessionErrorCode(Errors errorCode) {
-            inFlightAcknowledgements.forEach((tip, acks) -> {
+            Map<TopicIdPartition, Acknowledgements> acknowledgementsMapToClear =
+                    incompleteAcknowledgements.isEmpty() ? acknowledgementsToSend : incompleteAcknowledgements;
+
+            acknowledgementsMapToClear.forEach((tip, acks) -> {
                 if (acks != null) {
                     acks.setAcknowledgeErrorCode(errorCode);
                 }
                 resultHandler.complete(tip, acks, onCommitAsync());
             });
+            acknowledgementsMapToClear.clear();
             processingComplete();
         }
 
@@ -1161,14 +1171,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * signal the completion when all results are known.
          */
         public void complete(TopicIdPartition partition, Acknowledgements acknowledgements, boolean isCommitAsync) {
-            if (acknowledgements != null) {
+            if (!isCommitAsync && acknowledgements != null) {
                 result.put(partition, acknowledgements);
             }
             // For commitAsync, we do not wait for other results to complete, we prepare a background event
             // for every ShareAcknowledgeResponse.
             // For commitAsync, we send out a background event for every TopicIdPartition, so we use a singletonMap each time.
             if (isCommitAsync) {
-                maybeSendShareAcknowledgeCommitCallbackEvent(Collections.singletonMap(partition, acknowledgements));
+                if (acknowledgements != null) {
+                    maybeSendShareAcknowledgeCommitCallbackEvent(Collections.singletonMap(partition, acknowledgements));
+                }
             } else if (remainingResults != null && remainingResults.decrementAndGet() == 0) {
                 maybeSendShareAcknowledgeCommitCallbackEvent(result);
                 future.ifPresent(future -> future.complete(result));
