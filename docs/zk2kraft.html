@@ -164,5 +164,17 @@
                 In Kraft mode, Zookeeper is not used, so the metrics is removed.
             </p>
         </li>
+        <li>
+            <p>
+                Remove the metrics which is monitoring the number of Zookeeper migrations.
+            </p>
+            <ul>
+                <li><code>kafka.controller:type=KafkaController,name=MigratingZkBrokerCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ZkMigrationState</code></li>
+            </ul>
+            <p>
+                Kafka remove all zookeeper dependencies, so the metrics is removed.
+            </p>
+        </li>
     </ul>
 </div>
