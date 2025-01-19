@@ -182,6 +182,7 @@ class MetadataCacheTest {
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
     val brokers = Seq(new RegisterBrokerRecord()
       .setBrokerId(0)
+      .setFenced(false)
       .setEndPoints(new BrokerEndpointCollection(Seq(new BrokerEndpoint()
         .setHost("foo")
         .setPort(9092)
@@ -284,6 +285,7 @@ class MetadataCacheTest {
     val topic = "topic"
     val topicId = Uuid.randomUuid()
 
+    val partitionEpoch = 3
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
     val endPoints = new BrokerEndpointCollection(Seq(new BrokerEndpoint()
@@ -294,6 +296,7 @@ class MetadataCacheTest {
 
     val brokers = Seq(new RegisterBrokerRecord()
         .setBrokerId(0)
+        .setFenced(false)
         .setEndPoints(endPoints))
 
     val topicRecords = Seq(new TopicRecord()
@@ -312,6 +315,7 @@ class MetadataCacheTest {
         .setLeader(leader)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(isr)
+        .setPartitionEpoch(partitionEpoch)
         .setReplicas(replicas))
     MetadataCacheTest.updateCache(cache, brokers ++ topicRecords ++ partitionStates)
 
