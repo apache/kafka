@@ -16,9 +16,10 @@
  */
 package kafka.security.authorizer
 
+import com.fasterxml.jackson.databind.ObjectMapper
+
 import java.nio.charset.StandardCharsets.UTF_8
-import kafka.utils.Json
-import org.apache.kafka.common.acl.AccessControlEntry
+import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -36,13 +37,34 @@ class AclEntryTest {
 
   @Test
   def testAclJsonConversion(): Unit = {
+    val objectMapper = new ObjectMapper()
+    val jsonNode = objectMapper.readTree(AclJson)
+
     val acl1 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice").toString, "host1", READ, DENY))
     val acl2 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob").toString, "*", READ, ALLOW))
     val acl3 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob").toString, "host1", READ, DENY))
+    val exceptedAcls = new util.HashSet[AclEntry](util.Arrays.asList(acl1, acl2, acl3))
 
-    val acls = new util.HashSet[AclEntry](util.Arrays.asList(acl1, acl2, acl3))
+    val aclsNode = jsonNode.get("acls")
+    val acls = new util.HashSet[AclEntry]()
 
-    assertEquals(acls, AclEntry.fromBytes(Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls))))
-    assertEquals(acls, AclEntry.fromBytes(AclJson.getBytes(UTF_8)))
+    aclsNode.forEach(aclNode => {
+      val host = aclNode.get("host").asText
+      val permissionType = AclPermissionType.valueOf(aclNode.get("permissionType").asText.toUpperCase)
+      val operation = AclOperation.fromString(aclNode.get("operation").asText)
+      val principal = aclNode.get("principal").asText
+
+      val aclEntry = new AclEntry(new AccessControlEntry(
+        principal,
+        host,
+        operation,
+        permissionType
+      ))
+
+      acls.add(aclEntry)
+    })
+
+    assertEquals(exceptedAcls, acls)
+    assertEquals(exceptedAcls, AclEntry.fromBytes(AclJson.getBytes(UTF_8)))
   }
 }
