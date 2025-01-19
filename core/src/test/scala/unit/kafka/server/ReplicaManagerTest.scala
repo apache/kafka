@@ -4550,67 +4550,6 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testPartitionMetadataFileCreatedAfterPreviousRequestWithoutIds(): Unit = {
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
-    try {
-      val brokerList = Seq[Integer](0, 1).asJava
-      val topicPartition = new TopicPartition(topic, 0)
-      val topicPartition2 = new TopicPartition(topic, 1)
-
-      def leaderAndIsrRequest(topicIds: util.Map[String, Uuid], version: Short, partition: Int = 0, leaderEpoch: Int = 0): LeaderAndIsrRequest =
-        new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(partition)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(leaderEpoch)
-          .setIsr(brokerList)
-          .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(true)).asJava,
-        topicIds,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-
-      // Send a request without a topic ID so that we have a log without a topic ID associated to the partition.
-      val response = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(Collections.emptyMap(), 4), (_, _) => ())
-      assertEquals(Errors.NONE, response.partitionErrors(Collections.emptyMap()).get(topicPartition))
-      assertTrue(replicaManager.localLog(topicPartition).isDefined)
-      val log = replicaManager.localLog(topicPartition).get
-      assertFalse(log.partitionMetadataFile.get.exists())
-      assertTrue(log.topicId.isEmpty)
-
-      val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(topicIds.asJava, ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
-      assertEquals(Errors.NONE, response2.partitionErrors(topicNames.asJava).get(topicPartition))
-      assertTrue(replicaManager.localLog(topicPartition).isDefined)
-      assertTrue(log.partitionMetadataFile.get.exists())
-      assertTrue(log.topicId.isDefined)
-      assertEquals(topicId, log.topicId.get)
-
-      // Repeat with partition 2, but in this case, update the leader epoch
-      // Send a request without a topic ID so that we have a log without a topic ID associated to the partition.
-      val response3 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(Collections.emptyMap(), 4, 1), (_, _) => ())
-      assertEquals(Errors.NONE, response3.partitionErrors(Collections.emptyMap()).get(topicPartition2))
-      assertTrue(replicaManager.localLog(topicPartition2).isDefined)
-      val log2 = replicaManager.localLog(topicPartition2).get
-      assertFalse(log2.partitionMetadataFile.get.exists())
-      assertTrue(log2.topicId.isEmpty)
-
-      val response4 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(topicIds.asJava, ApiKeys.LEADER_AND_ISR.latestVersion, 1, 1), (_, _) => ())
-      assertEquals(Errors.NONE, response4.partitionErrors(topicNames.asJava).get(topicPartition2))
-      assertTrue(replicaManager.localLog(topicPartition2).isDefined)
-      assertTrue(log2.partitionMetadataFile.get.exists())
-      assertTrue(log2.topicId.isDefined)
-      assertEquals(topicId, log2.topicId.get)
-
-      assertEquals(topicId, log.partitionMetadataFile.get.read().topicId)
-      assertEquals(topicId, log2.partitionMetadataFile.get.read().topicId)
-    } finally {
-      replicaManager.shutdown(checkpointHW = false)
-    }
-  }
-
-  @Test
   def testInconsistentIdReturnsError(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
@@ -4660,12 +4599,11 @@ class ReplicaManagerTest {
     try {
       val brokerList = Seq[Integer](0, 1).asJava
       val topicPartition = new TopicPartition(topic, 0)
-      val topicPartitionFoo = new TopicPartition("foo", 0)
       val topicPartitionFake = new TopicPartition("fakeTopic", 0)
       val topicIds = Map(topic -> Uuid.ZERO_UUID, "foo" -> Uuid.randomUuid()).asJava
       val topicNames = topicIds.asScala.map(_.swap).asJava
 
-      def leaderAndIsrRequest(epoch: Int, name: String, version: Short): LeaderAndIsrRequest =
+      def leaderAndIsrRequest(epoch: Int, name: String): LeaderAndIsrRequest =
         new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
           Seq(new LeaderAndIsrRequest.PartitionState()
             .setTopicName(name)
@@ -4681,32 +4619,19 @@ class ReplicaManagerTest {
           Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
 
       // There is no file if the topic does not have an associated topic ID.
-      val response = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "fakeTopic", ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
+      val response = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "fakeTopic"), (_, _) => ())
       assertTrue(replicaManager.localLog(topicPartitionFake).isDefined)
       val log = replicaManager.localLog(topicPartitionFake).get
       assertFalse(log.partitionMetadataFile.get.exists())
       assertEquals(Errors.NONE, response.partitionErrors(topicNames).get(topicPartition))
 
       // There is no file if the topic has the default UUID.
-      val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, topic, ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
+      val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, topic), (_, _) => ())
       assertTrue(replicaManager.localLog(topicPartition).isDefined)
       val log2 = replicaManager.localLog(topicPartition).get
       assertFalse(log2.partitionMetadataFile.get.exists())
       assertEquals(Errors.NONE, response2.partitionErrors(topicNames).get(topicPartition))
 
-      // There is no file if the request an older version
-      val response3 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "foo", 0), (_, _) => ())
-      assertTrue(replicaManager.localLog(topicPartitionFoo).isDefined)
-      val log3 = replicaManager.localLog(topicPartitionFoo).get
-      assertFalse(log3.partitionMetadataFile.get.exists())
-      assertEquals(Errors.NONE, response3.partitionErrors(topicNames).get(topicPartitionFoo))
-
-      // There is no file if the request is an older version
-      val response4 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(1, "foo", 4), (_, _) => ())
-      assertTrue(replicaManager.localLog(topicPartitionFoo).isDefined)
-      val log4 = replicaManager.localLog(topicPartitionFoo).get
-      assertFalse(log4.partitionMetadataFile.get.exists())
-      assertEquals(Errors.NONE, response4.partitionErrors(topicNames).get(topicPartitionFoo))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -6078,38 +6003,6 @@ class ReplicaManagerTest {
     val fetchState = manager.getFetcher(tp).flatMap(_.fetchState(tp))
     assertTrue(fetchState.isDefined)
     assertEquals(expectedTopicId, fetchState.get.topicId)
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testPartitionFetchStateUpdatesWithTopicIdChanges(startsWithTopicId: Boolean): Unit = {
-    val aliveBrokersIds = Seq(0, 1)
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      brokerId = 0, aliveBrokersIds)
-    try {
-      val tp = new TopicPartition(topic, 0)
-      val leaderAndIsr = new LeaderAndIsr(1, aliveBrokersIds.toList.map(Int.box).asJava)
-
-      // This test either starts with a topic ID in the PartitionFetchState and removes it on the next request (startsWithTopicId)
-      // or does not start with a topic ID in the PartitionFetchState and adds one on the next request (!startsWithTopicId)
-      val startingId = if (startsWithTopicId) topicId else Uuid.ZERO_UUID
-      val startingIdOpt = if (startsWithTopicId) Some(topicId) else None
-      val leaderAndIsrRequest1 = makeLeaderAndIsrRequest(startingId, tp, aliveBrokersIds, leaderAndIsr)
-      val leaderAndIsrResponse1 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
-      assertEquals(Errors.NONE, leaderAndIsrResponse1.error)
-
-      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, startingIdOpt)
-
-      val endingId = if (!startsWithTopicId) topicId else Uuid.ZERO_UUID
-      val endingIdOpt = if (!startsWithTopicId) Some(topicId) else None
-      val leaderAndIsrRequest2 = makeLeaderAndIsrRequest(endingId, tp, aliveBrokersIds, leaderAndIsr)
-      val leaderAndIsrResponse2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest2, (_, _) => ())
-      assertEquals(Errors.NONE, leaderAndIsrResponse2.error)
-
-      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, endingIdOpt)
-    } finally {
-      replicaManager.shutdown(checkpointHW = false)
-    }
   }
 
   @Test
