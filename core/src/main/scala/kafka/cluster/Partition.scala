@@ -27,7 +27,6 @@ import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.DelayedShareFetch
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
@@ -767,14 +766,7 @@ class Partition(val topicPartition: TopicPartition,
         LeaderRecoveryState.RECOVERED
       )
 
-      try {
-        createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetDirectoryId)
-      } catch {
-        case e: ZooKeeperClientException =>
-          stateChangeLogger.error(s"A ZooKeeper client exception has occurred and makeLeader will be skipping the " +
-            s"state change for the partition $topicPartition with leader epoch: $leaderEpoch.", e)
-          return false
-      }
+      createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetDirectoryId)
 
       val leaderLog = localLogOrException
 
@@ -868,14 +860,7 @@ class Partition(val topicPartition: TopicPartition,
         LeaderRecoveryState.of(partitionState.leaderRecoveryState)
       )
 
-      try {
-        createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
-      } catch {
-        case e: ZooKeeperClientException =>
-          stateChangeLogger.error(s"A ZooKeeper client exception has occurred. makeFollower will be skipping the " +
-            s"state change for the partition $topicPartition with leader epoch: $leaderEpoch.", e)
-          return false
-      }
+      createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
 
       val followerLog = localLogOrException
       if (isNewLeaderEpoch) {
