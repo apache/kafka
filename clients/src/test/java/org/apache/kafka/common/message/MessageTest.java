@@ -1066,23 +1066,25 @@ public final class MessageTest {
     @Test
     public void testMessageVersions() {
         for (ApiKeys apiKey : ApiKeys.values()) {
-            Message message = null;
-            try {
-                message = ApiMessageType.fromApiKey(apiKey.id).newRequest();
-            } catch (UnsupportedVersionException e) {
-                fail("No request message spec found for API " + apiKey);
+            if (apiKey.hasValidVersion()) {
+                Message message = null;
+                try {
+                    message = ApiMessageType.fromApiKey(apiKey.id).newRequest();
+                } catch (UnsupportedVersionException e) {
+                    fail("No request message spec found for API " + apiKey);
+                }
+                assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
+                        "Request message spec for " + apiKey + " only " + "supports versions up to " +
+                                message.highestSupportedVersion());
+                try {
+                    message = ApiMessageType.fromApiKey(apiKey.id).newResponse();
+                } catch (UnsupportedVersionException e) {
+                    fail("No response message spec found for API " + apiKey);
+                }
+                assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
+                        "Response message spec for " + apiKey + " only " + "supports versions up to " +
+                                message.highestSupportedVersion());
             }
-            assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
-                "Request message spec for " + apiKey + " only " + "supports versions up to " +
-                message.highestSupportedVersion());
-            try {
-                message = ApiMessageType.fromApiKey(apiKey.id).newResponse();
-            } catch (UnsupportedVersionException e) {
-                fail("No response message spec found for API " + apiKey);
-            }
-            assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
-                "Response message spec for " + apiKey + " only " + "supports versions up to " +
-                message.highestSupportedVersion());
         }
     }
 

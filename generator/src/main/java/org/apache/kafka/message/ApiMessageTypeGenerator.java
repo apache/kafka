@@ -62,6 +62,8 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         String requestSchema() {
             if (requestSpec == null) {
                 return "null";
+            } else if (!requestSpec.hasValidVersion()) {
+                return "new Schema[0]";
             } else {
                 return String.format("%sData.SCHEMAS", requestSpec.name());
             }
@@ -70,6 +72,8 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         String responseSchema() {
             if (responseSpec == null) {
                 return "null";
+            } else if (!requestSpec.hasValidVersion()) {
+                return "new Schema[0]";
             } else {
                 return String.format("%sData.SCHEMAS", responseSpec.name());
             }
@@ -301,12 +305,15 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("switch (apiKey) {%n");
         buffer.incrementIndent();
         for (Map.Entry<Short, ApiData> entry : apis.entrySet()) {
-            buffer.printf("case %d:%n", entry.getKey());
-            buffer.incrementIndent();
-            buffer.printf("return new %s%sData();%n",
-                entry.getValue().name(),
-                MessageGenerator.capitalizeFirst(type));
-            buffer.decrementIndent();
+            MessageSpec spec = messageSpec(type, entry.getKey(), entry.getValue());
+            if (spec.hasValidVersion()) {
+                buffer.printf("case %d:%n", entry.getKey());
+                buffer.incrementIndent();
+                buffer.printf("return new %s%sData();%n",
+                    entry.getValue().name(),
+                    MessageGenerator.capitalizeFirst(type));
+                buffer.decrementIndent();
+            }
         }
         buffer.printf("default:%n");
         buffer.incrementIndent();
@@ -355,18 +362,9 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 buffer.decrementIndent();
                 continue;
             }
-            ApiData data = entry.getValue();
-            MessageSpec spec;
-            if (type.equals("request")) {
-                spec = data.requestSpec;
-            } else if (type.equals("response")) {
-                spec = data.responseSpec;
-            } else {
-                throw new RuntimeException("Invalid type " + type + " for generateHeaderVersion");
-            }
-            if (spec == null) {
-                throw new RuntimeException("failed to find " + type + " for API key " + apiKey);
-            }
+            MessageSpec spec = messageSpec(type, apiKey, entry.getValue());
+            if (!spec.hasValidVersion())
+                continue;
             VersionConditional.forVersions(spec.flexibleVersions(),
                 spec.validVersions()).
                 ifMember(__ -> {
@@ -395,6 +393,20 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("}%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
+    }
+
+    private static MessageSpec messageSpec(String type, short apiKey, ApiData apiData) {
+        MessageSpec spec;
+        if (type.equals("request")) {
+            spec = apiData.requestSpec;
+        } else if (type.equals("response")) {
+            spec = apiData.responseSpec;
+        } else {
+            throw new RuntimeException("Invalid type " + type);
+        }
+        if (spec == null)
+            throw new RuntimeException("failed to find " + type + " for API key " + apiKey);
+        return spec;
     }
 
     private void generateListenerTypesEnum() {

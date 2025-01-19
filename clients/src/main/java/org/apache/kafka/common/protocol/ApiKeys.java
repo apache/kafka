@@ -255,6 +255,10 @@ public enum ApiKeys {
         return apiVersion >= messageType.lowestDeprecatedVersion() && apiVersion <= messageType.highestDeprecatedVersion();
     }
 
+    public boolean hasValidVersion() {
+        return oldestVersion() <= latestVersion();
+    }
+
     public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion) {
         short oldestVersion = oldestVersion();
         short latestVersion = latestVersion(enableUnstableLastVersion);

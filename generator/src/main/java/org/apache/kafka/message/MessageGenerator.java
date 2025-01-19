@@ -240,20 +240,20 @@ public final class MessageGenerator {
         List<TypeClassGenerator> typeClassGenerators =
                 createTypeClassGenerators(packageName, typeClassGeneratorTypes);
         HashSet<String> outputFileNames = new HashSet<>();
-        try (DirectoryStream<Path> directoryStream = Files
-                .newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
+        try (DirectoryStream<Path> directoryStream = Files.newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
             for (Path inputPath : directoryStream) {
                 try {
-                    MessageSpec spec = JSON_SERDE.
-                        readValue(inputPath.toFile(), MessageSpec.class);
-                    List<MessageClassGenerator> generators =
-                        createMessageClassGenerators(packageName, messageClassGeneratorTypes);
-                    for (MessageClassGenerator generator : generators) {
-                        String name = generator.outputName(spec) + JAVA_SUFFIX;
-                        outputFileNames.add(name);
-                        Path outputPath = Paths.get(outputDir, name);
-                        try (BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
-                            generator.generateAndWrite(spec, writer);
+                    MessageSpec spec = JSON_SERDE.readValue(inputPath.toFile(), MessageSpec.class);
+                    if (spec.hasValidVersion()) {
+                        List<MessageClassGenerator> generators =
+                                createMessageClassGenerators(packageName, messageClassGeneratorTypes);
+                        for (MessageClassGenerator generator : generators) {
+                            String name = generator.outputName(spec) + JAVA_SUFFIX;
+                            outputFileNames.add(name);
+                            Path outputPath = Paths.get(outputDir, name);
+                            try (BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
+                                generator.generateAndWrite(spec, writer);
+                            }
                         }
                     }
                     numProcessed++;

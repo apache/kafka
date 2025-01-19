@@ -18,6 +18,7 @@
 package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Schema;
 
 import org.junit.jupiter.api.Test;
@@ -57,24 +58,31 @@ public class ApiMessageTypeTest {
     @Test
     public void testUniqueness() {
         Set<Short> ids = new HashSet<>();
+        Set<String> apiNames = new HashSet<>();
         Set<String> requestNames = new HashSet<>();
         Set<String> responseNames = new HashSet<>();
+        int apiKeysWithNoValidVersionCount = 0;
         for (ApiMessageType type : ApiMessageType.values()) {
             assertFalse(ids.contains(type.apiKey()),
                 "found two ApiMessageType objects with id " + type.apiKey());
             ids.add(type.apiKey());
-            String requestName = type.newRequest().getClass().getSimpleName();
-            assertFalse(requestNames.contains(requestName),
-                "found two ApiMessageType objects with requestName " + requestName);
-            requestNames.add(requestName);
-            String responseName = type.newResponse().getClass().getSimpleName();
-            assertFalse(responseNames.contains(responseName),
-                "found two ApiMessageType objects with responseName " + responseName);
-            responseNames.add(responseName);
+            ApiKeys apiKey = ApiKeys.forId(type.apiKey());
+            if (apiKey.hasValidVersion()) {
+                String requestName = type.newRequest().getClass().getSimpleName();
+                assertFalse(requestNames.contains(requestName),
+                        "found two ApiMessageType objects with requestName " + requestName);
+                requestNames.add(requestName);
+                String responseName = type.newResponse().getClass().getSimpleName();
+                assertFalse(responseNames.contains(responseName),
+                        "found two ApiMessageType objects with responseName " + responseName);
+                responseNames.add(responseName);
+            } else
+                ++apiKeysWithNoValidVersionCount;
         }
         assertEquals(ApiMessageType.values().length, ids.size());
-        assertEquals(ApiMessageType.values().length, requestNames.size());
-        assertEquals(ApiMessageType.values().length, responseNames.size());
+        int expectedNamesCount = ApiMessageType.values().length - apiKeysWithNoValidVersionCount;
+        assertEquals(expectedNamesCount, requestNames.size());
+        assertEquals(expectedNamesCount, responseNames.size());
     }
 
     @Test
