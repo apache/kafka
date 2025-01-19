@@ -254,9 +254,11 @@ class MetadataCacheTest {
     val topicRecords = Seq(new TopicRecord().setName(topic).setTopicId(topicId))
 
     val leaderEpoch = 1
+    val partitionEpoch = 3
     val partitionStates = Seq(new PartitionRecord()
         .setTopicId(topicId)
         .setPartitionId(0)
+        .setPartitionEpoch(partitionEpoch)
         .setLeader(leader)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(asList(0))
