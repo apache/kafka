@@ -784,7 +784,7 @@ class MetadataCacheTest {
 
   @ParameterizedTest
   @MethodSource(Array("cacheProvider"))
-  def testGetPartitionInfo(cache: MetadataCache): Unit = {
+  def testGetLeaderAndIsr(cache: MetadataCache): Unit = {
     val topic = "topic"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
@@ -819,14 +819,12 @@ class MetadataCacheTest {
 
     MetadataCacheTest.updateCache(cache, brokers ++ topicRecords ++ partitionStates)
 
-    val partitionState = cache.getPartitionInfo(topic, partitionIndex).get
-    assertEquals(topic, partitionState.topicName())
-    assertEquals(partitionIndex, partitionState.partitionIndex())
-    assertEquals(-1, partitionState.controllerEpoch())
-    assertEquals(leader, partitionState.leader())
-    assertEquals(leaderEpoch, partitionState.leaderEpoch())
-    assertEquals(isr, partitionState.isr())
-    assertEquals(replicas, partitionState.replicas())
+    val leaderAndIsr = cache.getLeaderAndIsr(topic, partitionIndex)
+    assertEquals(Some(leader), leaderAndIsr.map(_.leader()))
+    assertEquals(Some(leaderEpoch), leaderAndIsr.map(_.leaderEpoch()))
+    assertEquals(Some(isr), leaderAndIsr.map(_.isr()))
+    assertEquals(Some(-1), leaderAndIsr.map(_.partitionEpoch()))
+    assertEquals(Some(LeaderRecoveryState.RECOVERED), leaderAndIsr.map(_.leaderRecoveryState()))
   }
 
   @Test
