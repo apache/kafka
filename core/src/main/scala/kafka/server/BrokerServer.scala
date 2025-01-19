@@ -223,7 +223,6 @@ class BrokerServer(
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
         s"broker-${config.nodeId}-",
-        isZkBroker = false,
         logDirs = logManager.directoryIdsSet,
         () => new Thread(() => shutdown(), "kafka-shutdown-thread").start())
 
