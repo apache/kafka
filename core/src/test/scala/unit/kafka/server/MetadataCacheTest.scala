@@ -47,6 +47,29 @@ object MetadataCacheTest {
       MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.KRAFT_VERSION_0)
     )
 
+  def updateCache(cache: MetadataCache, records: Seq[ApiMessage]): Unit = {
+    cache match {
+      case c: KRaftMetadataCache => {
+        val image = c.currentImage()
+        val partialImage = new MetadataImage(
+          new MetadataProvenance(100L, 10, 1000L, true),
+          image.features(),
+          ClusterImage.EMPTY,
+          image.topics(),
+          image.configs(),
+          image.clientQuotas(),
+          image.producerIds(),
+          image.acls(),
+          image.scram(),
+          image.delegationTokens())
+        val delta = new MetadataDelta.Builder().setImage(partialImage).build()
+        records.foreach(record => delta.replay(record))
+        c.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L, true)))
+      }
+      case _ => throw new RuntimeException("Unsupported cache type")
+    }
+  }
+
   def updateCache(cache: MetadataCache, request: UpdateMetadataRequest, records: Seq[ApiMessage] = List()): Unit = {
     cache match {
       case c: KRaftMetadataCache => {

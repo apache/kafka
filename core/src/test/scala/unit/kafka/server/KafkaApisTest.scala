@@ -54,7 +54,9 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequ
 import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
 import org.apache.kafka.common.message.ShareFetchRequestData.{AcknowledgementBatch, ForgottenTopic}
 import org.apache.kafka.common.message.ShareFetchResponseData.{AcquiredRecords, PartitionData, ShareFetchableTopicResponse}
-import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
+import org.apache.kafka.common.metadata.{TopicRecord, PartitionRecord, RegisterBrokerRecord}
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
+import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -3564,16 +3566,17 @@ class KafkaApisTest extends Logging {
   def testUnauthorizedTopicMetadataRequest(): Unit = {
     // 1. Set up broker information
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val broker = new UpdateMetadataBroker()
-      .setId(0)
-      .setRack("rack")
-      .setEndpoints(Seq(
-        new UpdateMetadataEndpoint()
-          .setHost("broker0")
-          .setPort(9092)
-          .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-          .setListener(plaintextListener.value)
-      ).asJava)
+    val endpoints = new BrokerEndpointCollection()
+    endpoints.add(
+      new BrokerEndpoint()
+        .setHost("broker0")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(plaintextListener.value)
+    )
+    MetadataCacheTest.updateCache(metadataCache,
+      Seq(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints))
+    )
 
     // 2. Set up authorizer
     val authorizer: Authorizer = mock(classOf[Authorizer])
@@ -3599,29 +3602,21 @@ class KafkaApisTest extends Logging {
     // 3. Set up MetadataCache
     val authorizedTopicId = Uuid.randomUuid()
     val unauthorizedTopicId = Uuid.randomUuid()
+    addTopicToMetadataCache(authorizedTopic, 1, topicId = authorizedTopicId)
+    addTopicToMetadataCache(unauthorizedTopic, 1, topicId = unauthorizedTopicId)
 
-    val topicIds = new util.HashMap[String, Uuid]()
-    topicIds.put(authorizedTopic, authorizedTopicId)
-    topicIds.put(unauthorizedTopic, unauthorizedTopicId)
-
-    def createDummyPartitionStates(topic: String) = {
-      new UpdateMetadataPartitionState()
-        .setTopicName(topic)
-        .setPartitionIndex(0)
-        .setControllerEpoch(0)
+    def createDummyPartitionRecord(topicId: Uuid) = {
+      new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
         .setLeader(0)
         .setLeaderEpoch(0)
         .setReplicas(Collections.singletonList(0))
-        .setZkVersion(0)
         .setIsr(Collections.singletonList(0))
     }
 
-    // Send UpdateMetadataReq to update MetadataCache
-    val partitionStates = Seq(unauthorizedTopic, authorizedTopic).map(createDummyPartitionStates)
-
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, partitionStates.asJava, Seq(broker).asJava, topicIds).build()
-    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
+    val partitionRecords = Seq(authorizedTopicId, unauthorizedTopicId).map(createDummyPartitionRecord)
+    MetadataCacheTest.updateCache(metadataCache, partitionRecords)
 
     // 4. Send TopicMetadataReq using topicId
     val metadataReqByTopicId = new MetadataRequest.Builder(util.Arrays.asList(authorizedTopicId, unauthorizedTopicId)).build()
@@ -8986,30 +8981,28 @@ class KafkaApisTest extends Logging {
   @Test
   def testDescribeClusterRequest(): Unit = {
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val brokers = Seq(
-      new UpdateMetadataBroker()
-        .setId(0)
-        .setRack("rack")
-        .setEndpoints(Seq(
-          new UpdateMetadataEndpoint()
-            .setHost("broker0")
-            .setPort(9092)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(plaintextListener.value)
-        ).asJava),
-      new UpdateMetadataBroker()
-        .setId(1)
-        .setRack("rack")
-        .setEndpoints(Seq(
-          new UpdateMetadataEndpoint()
-            .setHost("broker1")
-            .setPort(9092)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(plaintextListener.value)).asJava)
+    val endpoints = new BrokerEndpointCollection()
+    endpoints.add(
+      new BrokerEndpoint()
+        .setHost("broker0")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(plaintextListener.value)
     )
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
-    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
+    endpoints.add(
+      new BrokerEndpoint()
+        .setHost("broker1")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(plaintextListener.value)
+    )
+
+    MetadataCacheTest.updateCache(metadataCache,
+      Seq(new RegisterBrokerRecord()
+        .setBrokerId(brokerId)
+        .setRack("rack")
+        .setFenced(false)
+        .setEndPoints(endpoints)))
 
     val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
       .setIncludeClusterAuthorizedOperations(true)).build()
@@ -9032,35 +9025,37 @@ class KafkaApisTest extends Logging {
   private def updateMetadataCacheWithInconsistentListeners(): (ListenerName, ListenerName) = {
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
     val anotherListener = new ListenerName("LISTENER2")
-    val brokers = Seq(
-      new UpdateMetadataBroker()
-        .setId(0)
-        .setRack("rack")
-        .setEndpoints(Seq(
-          new UpdateMetadataEndpoint()
-            .setHost("broker0")
-            .setPort(9092)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(plaintextListener.value),
-          new UpdateMetadataEndpoint()
-            .setHost("broker0")
-            .setPort(9093)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(anotherListener.value)
-        ).asJava),
-      new UpdateMetadataBroker()
-        .setId(1)
-        .setRack("rack")
-        .setEndpoints(Seq(
-          new UpdateMetadataEndpoint()
-            .setHost("broker1")
-            .setPort(9092)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(plaintextListener.value)).asJava)
+
+    val endpoints0 = new BrokerEndpointCollection()
+    endpoints0.add(
+      new BrokerEndpoint()
+        .setHost("broker0")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(plaintextListener.value)
     )
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
-    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
+    endpoints0.add(
+      new BrokerEndpoint()
+        .setHost("broker0")
+        .setPort(9093)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(anotherListener.value)
+    )
+
+    val endpoints1 = new BrokerEndpointCollection()
+    endpoints1.add(
+      new BrokerEndpoint()
+        .setHost("broker1")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(plaintextListener.value)
+    )
+
+    MetadataCacheTest.updateCache(metadataCache,
+      Seq(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints0),
+      new RegisterBrokerRecord().setBrokerId(1).setRack("rack").setFenced(false).setEndPoints(endpoints1))
+    )
+
     (plaintextListener, anotherListener)
   }
 
@@ -9250,51 +9245,64 @@ class KafkaApisTest extends Logging {
     ).asInstanceOf[T]
   }
 
-  private def createBasicMetadataRequest(topic: String,
-                                         numPartitions: Int,
-                                         brokerEpoch: Long,
-                                         numBrokers: Int,
-                                         topicId: Uuid): UpdateMetadataRequest = {
+  private def createBasicMetadata(topic: String,
+                                  numPartitions: Int,
+                                  brokerEpoch: Long,
+                                  numBrokers: Int,
+                                  topicId: Uuid): Seq[ApiMessage] = {
+
+    val results = new mutable.ArrayBuffer[ApiMessage]()
+    val topicRecord = new TopicRecord().setName(topic).setTopicId(topicId)
+    results += topicRecord
+
     val replicas = List(0.asInstanceOf[Integer]).asJava
 
-    def createPartitionState(partition: Int) = new UpdateMetadataPartitionState()
-      .setTopicName(topic)
-      .setPartitionIndex(partition)
-      .setControllerEpoch(1)
+    def createPartitionRecord(partition: Int) = new PartitionRecord()
+      .setTopicId(topicId)
+      .setPartitionId(partition)
       .setLeader(0)
       .setLeaderEpoch(1)
       .setReplicas(replicas)
-      .setZkVersion(0)
       .setIsr(replicas)
 
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val partitionStates = (0 until numPartitions).map(createPartitionState)
+    val partitionRecords = (0 until numPartitions).map(createPartitionRecord)
     val liveBrokers = (0 until numBrokers).map(
-      brokerId => createMetadataBroker(brokerId, plaintextListener))
-    new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, brokerEpoch, partitionStates.asJava, liveBrokers.asJava, Collections.singletonMap(topic, topicId)).build()
+      brokerId => createMetadataBroker(brokerId, plaintextListener, brokerEpoch))
+    partitionRecords.foreach(record => results += record)
+    liveBrokers.foreach(record => results +=record)
+
+    results.toSeq
   }
 
   private def setupBasicMetadataCache(topic: String, numPartitions: Int, numBrokers: Int, topicId: Uuid): Unit = {
-    val updateMetadataRequest = createBasicMetadataRequest(topic, numPartitions, 0, numBrokers, topicId)
-    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
+    val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
+    MetadataCacheTest.updateCache(metadataCache, updateMetadata)
   }
 
   private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1, topicId: Uuid = Uuid.ZERO_UUID): Unit = {
-    val updateMetadataRequest = createBasicMetadataRequest(topic, numPartitions, 0, numBrokers, topicId)
-    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
+    val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
+    MetadataCacheTest.updateCache(metadataCache, updateMetadata)
   }
 
   private def createMetadataBroker(brokerId: Int,
-                                   listener: ListenerName): UpdateMetadataBroker = {
-    new UpdateMetadataBroker()
-      .setId(brokerId)
-      .setRack("rack")
-      .setEndpoints(Seq(new UpdateMetadataEndpoint()
+                                   listener: ListenerName,
+                                   brokerEpoch: Long): RegisterBrokerRecord = {
+    val endpoints = new BrokerEndpointCollection()
+    endpoints.add(
+      new BrokerEndpoint()
         .setHost("broker" + brokerId)
         .setPort(9092)
         .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-        .setListener(listener.value)).asJava)
+        .setName(listener.value)
+    )
+
+    new RegisterBrokerRecord()
+      .setBrokerId(brokerId)
+      .setRack("rack")
+      .setFenced(false)
+      .setEndPoints(endpoints)
+      .setBrokerEpoch(brokerEpoch)
   }
 
   @Test
