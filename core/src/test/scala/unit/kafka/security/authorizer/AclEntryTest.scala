@@ -43,7 +43,7 @@ class AclEntryTest {
     val acl1 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice").toString, "host1", READ, DENY))
     val acl2 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob").toString, "*", READ, ALLOW))
     val acl3 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob").toString, "host1", READ, DENY))
-    val exceptedAcls = new util.HashSet[AclEntry](util.Arrays.asList(acl1, acl2, acl3))
+    val expectedAcls = new util.HashSet[AclEntry](util.Arrays.asList(acl1, acl2, acl3))
 
     val aclsNode = jsonNode.get("acls")
     val acls = new util.HashSet[AclEntry]()
@@ -64,7 +64,7 @@ class AclEntryTest {
       acls.add(aclEntry)
     })
 
-    assertEquals(exceptedAcls, acls)
-    assertEquals(exceptedAcls, AclEntry.fromBytes(AclJson.getBytes(UTF_8)))
+    assertEquals(expectedAcls, acls)
+    assertEquals(expectedAcls, AclEntry.fromBytes(AclJson.getBytes(UTF_8)))
   }
 }
