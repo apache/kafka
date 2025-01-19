@@ -188,11 +188,11 @@ class MetadataCacheTest {
         .setPort(9092)
         .setSecurityProtocol(securityProtocol.id)
         .setName(listenerName.value)).iterator.asJava)))
-    val metadataCacheBrokerId = 0
+
     // leader is not available. expect LEADER_NOT_AVAILABLE for any metadata version.
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, listenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, brokers, listenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, listenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, brokers, listenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = true)
   }
 
@@ -233,17 +233,16 @@ class MetadataCacheTest {
         .setBrokerId(1)
         .setFenced(false)
         .setEndPoints(broker1Endpoints))
-    val metadataCacheBrokerId = 0
+
     // leader available in cache but listener name not present. expect LISTENER_NOT_FOUND error for new metadata version
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, sslListenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, brokers, sslListenerName,
       leader = 1, Errors.LISTENER_NOT_FOUND, errorUnavailableListeners = true)
     // leader available in cache but listener name not present. expect LEADER_NOT_AVAILABLE error for old metadata version
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, sslListenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, brokers, sslListenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
   }
 
   private def verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache: MetadataCache,
-                                                                       metadataCacheBrokerId: Int,
                                                                        brokers: Seq[RegisterBrokerRecord],
                                                                        listenerName: ListenerName,
                                                                        leader: Int,
