@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.{ApiMessage, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{DirectoryId, Uuid}
-import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, MetadataProvenance}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.KRaftVersion
 import org.junit.jupiter.api.Assertions._
@@ -52,7 +52,7 @@ object MetadataCacheTest {
         val partialImage = new MetadataImage(
           new MetadataProvenance(100L, 10, 1000L, true),
           image.features(),
-          ClusterImage.EMPTY,
+          image.cluster(),
           image.topics(),
           image.configs(),
           image.clientQuotas(),
