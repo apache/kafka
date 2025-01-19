@@ -17,14 +17,12 @@
 
 package kafka.server
 
-import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.security.InvalidKeyException
 
 import javax.crypto.spec.SecretKeySpec
 import javax.crypto.{Mac, SecretKey}
 import kafka.utils.Logging
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.{ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.security.scram.ScramCredential
@@ -37,18 +35,7 @@ import scala.collection.mutable
 
 object DelegationTokenManager {
   private val DefaultHmacAlgorithm = "HmacSHA512"
-  val CurrentVersion = 3
   val ErrorTimestamp = -1
-
-  /**
-   *
-   * @param tokenId
-   * @param secretKey
-   * @return
-   */
-  def createHmac(tokenId: String, secretKey: String) : Array[Byte] = {
-    createHmac(tokenId, createSecretKey(secretKey.getBytes(StandardCharsets.UTF_8)))
-  }
 
   /**
    * Convert the byte[] to a secret key
@@ -102,13 +89,7 @@ class DelegationTokenManager(val config: KafkaConfig,
                              val time: Time) extends Logging {
   this.logIdent = s"[Token Manager on Node ${config.brokerId}]: "
 
-  protected val lock = new Object()
-
   import DelegationTokenManager._
-
-  type CreateResponseCallback = CreateTokenResult => Unit
-  type RenewResponseCallback = (Errors, Long) => Unit
-  type ExpireResponseCallback = (Errors, Long) => Unit
 
   val secretKey: SecretKey = {
     val keyBytes =  if (config.tokenAuthEnabled) config.delegationTokenSecretKey.value.getBytes(StandardCharsets.UTF_8) else null
@@ -117,26 +98,6 @@ class DelegationTokenManager(val config: KafkaConfig,
       createSecretKey(keyBytes)
   }
 
-  val tokenMaxLifetime: Long = config.delegationTokenMaxLifeMs
-  val defaultTokenRenewTime: Long = config.delegationTokenExpiryTimeMs
-
-  def startup(): Unit = {
-      // Nothing to do. Overridden for Zk case
-  }
-
-  def shutdown(): Unit = {
-      // Nothing to do. Overridden for Zk case
-  }
-
-  /**
-   *
-   * @param token
-   */
-  protected def updateCache(token: DelegationToken): Unit = {
-    val hmacString = token.hmacAsBase64String
-    val scramCredentialMap =  prepareScramCredentials(hmacString)
-    tokenCache.updateCache(token, scramCredentialMap.asJava)
-  }
   /**
    * @param hmacString
    */
@@ -157,38 +118,9 @@ class DelegationTokenManager(val config: KafkaConfig,
    * @param token
    */
   def updateToken(token: DelegationToken): Unit = {
-    updateCache(token)
-  }
-
-  /**
-   *
-   * @param owner
-   * @param renewers
-   * @param maxLifeTimeMs
-   * @param responseCallback
-   */
-  def createToken(owner: KafkaPrincipal,
-                  tokenRequester: KafkaPrincipal,
-                  renewers: List[KafkaPrincipal],
-                  maxLifeTimeMs: Long,
-                  responseCallback: CreateResponseCallback): Unit = {
-    // Must be forwarded to KRaft Controller or handled in DelegationTokenManagerZk
-    throw new IllegalStateException("API createToken was not forwarded to a handler.")
-  }
-
-  /**
-   *
-   * @param principal
-   * @param hmac
-   * @param renewLifeTimeMs
-   * @param renewCallback
-   */
-  def renewToken(principal: KafkaPrincipal,
-                 hmac: ByteBuffer,
-                 renewLifeTimeMs: Long,
-                 renewCallback: RenewResponseCallback): Unit = {
-    // Must be forwarded to KRaft Controller or handled in DelegationTokenManagerZk
-    throw new IllegalStateException("API renewToken was not forwarded to a handler.")
+    val hmacString = token.hmacAsBase64String
+    val scramCredentialMap = prepareScramCredentials(hmacString)
+    tokenCache.updateCache(token, scramCredentialMap.asJava)
   }
 
   def getDelegationToken(tokenInfo: TokenInformation): DelegationToken = {
@@ -198,85 +130,13 @@ class DelegationTokenManager(val config: KafkaConfig,
 
   /**
    *
-   * @param principal
-   * @param hmac
-   * @param expireLifeTimeMs
-   * @param expireResponseCallback
-   */
-  def expireToken(principal: KafkaPrincipal,
-                  hmac: ByteBuffer,
-                  expireLifeTimeMs: Long,
-                  expireResponseCallback: ExpireResponseCallback): Unit = {
-    // Must be forwarded to KRaft Controller or handled in DelegationTokenManagerZk
-    throw new IllegalStateException("API expireToken was not forwarded to a handler.")
-  }
-
-  /**
-   *
    * @param tokenId
    */
   def removeToken(tokenId: String): Unit = {
-    removeCache(tokenId)
-  }
-
-  /**
-   *
-   * @param tokenId
-   */
-  protected def removeCache(tokenId: String): Unit = {
     tokenCache.removeCache(tokenId)
   }
 
-  /**
-   *
-   * @return
-   */
-  def expireTokens(): Unit = {
-    lock.synchronized {
-      for (tokenInfo <- getAllTokenInformation) {
-        val now = time.milliseconds
-        if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
-          info(s"Delegation token expired for token: ${tokenInfo.tokenId} for owner: ${tokenInfo.owner}")
-          removeToken(tokenInfo.tokenId)
-        }
-      }
-    }
-  }
-
-  def getAllTokenInformation: List[TokenInformation] = tokenCache.tokens.asScala.toList
-
   def getTokens(filterToken: TokenInformation => Boolean): List[DelegationToken] = {
-    getAllTokenInformation.filter(filterToken).map(token => getDelegationToken(token))
-  }
-
-}
-
-case class CreateTokenResult(owner: KafkaPrincipal,
-                             tokenRequester: KafkaPrincipal,
-                             issueTimestamp: Long,
-                             expiryTimestamp: Long,
-                             maxTimestamp: Long,
-                             tokenId: String,
-                             hmac: Array[Byte],
-                             error: Errors) {
-
-  override def equals(other: Any): Boolean = {
-    other match {
-      case that: CreateTokenResult =>
-        error.equals(that.error) &&
-          owner.equals(that.owner) &&
-          tokenRequester.equals(that.tokenRequester) &&
-          tokenId.equals(that.tokenId) &&
-          issueTimestamp.equals(that.issueTimestamp) &&
-          expiryTimestamp.equals(that.expiryTimestamp) &&
-          maxTimestamp.equals(that.maxTimestamp) &&
-          (hmac sameElements that.hmac)
-      case _ => false
-    }
-  }
-
-  override def hashCode(): Int = {
-    val fields = Seq(owner, tokenRequester, issueTimestamp, expiryTimestamp, maxTimestamp, tokenId, hmac, error)
-    fields.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+    tokenCache.tokens.asScala.toList.filter(filterToken).map(token => getDelegationToken(token))
   }
 }
