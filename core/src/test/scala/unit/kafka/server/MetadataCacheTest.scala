@@ -202,8 +202,8 @@ class MetadataCacheTest {
     // return LEADER_NOT_AVAILABLE or LISTENER_NOT_FOUND errors for old and new versions respectively.
     val plaintextListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
     val sslListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.SSL)
-    val broker0Endpoints = new BrokerEndpointCollection()
-    broker0Endpoints.addAll(Seq(new BrokerEndpoint()
+    val broker0Endpoints = new BrokerEndpointCollection(Seq(
+      new BrokerEndpoint()
         .setHost("host0")
         .setPort(9092)
         .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
@@ -213,15 +213,15 @@ class MetadataCacheTest {
         .setPort(9093)
         .setSecurityProtocol(SecurityProtocol.SSL.id)
         .setName(sslListenerName.value)
-      ).asJava
-    )
+    ).iterator.asJava)
 
-    val broker1Endpoints = new BrokerEndpointCollection()
-    broker1Endpoints.addAll(Seq(new BrokerEndpoint()
+    val broker1Endpoints = new BrokerEndpointCollection(Seq(
+      new BrokerEndpoint()
         .setHost("host1")
         .setPort(9092)
         .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-        .setName(plaintextListenerName.value)).asJava)
+        .setName(plaintextListenerName.value)
+    ).iterator.asJava)
 
     val brokers = Seq(
       new RegisterBrokerRecord()
