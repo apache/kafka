@@ -62,10 +62,6 @@ public class AclEntry extends AccessControlEntry {
     public static final String WILDCARD_PRINCIPAL_STRING = WILDCARD_PRINCIPAL.toString();
     public static final String WILDCARD_HOST = "*";
     public static final String WILDCARD_RESOURCE = ResourcePattern.WILDCARD_RESOURCE;
-    public static final String RESOURCE_SEPARATOR = ":";
-    public static final Set<ResourceType> RESOURCE_TYPES = Arrays.stream(ResourceType.values())
-        .filter(t -> !(t == ResourceType.UNKNOWN || t == ResourceType.ANY))
-        .collect(Collectors.toSet());
     public static final Set<AclOperation> ACL_OPERATIONS = Arrays.stream(AclOperation.values())
         .filter(t -> !(t == AclOperation.UNKNOWN || t == AclOperation.ANY))
         .collect(Collectors.toSet());
@@ -140,47 +136,27 @@ public class AclEntry extends AccessControlEntry {
         return res;
     }
 
-    public static Map<String, Object> toJsonCompatibleMap(Set<AclEntry> acls) {
-        Map<String, Object> res = new HashMap<>();
-        res.put(AclEntry.VERSION_KEY, AclEntry.CURRENT_VERSION);
-        res.put(AclEntry.ACLS_KEY, acls.stream().map(AclEntry::toMap).collect(Collectors.toList()));
-        return res;
-    }
-
     public static Set<AclOperation> supportedOperations(ResourceType resourceType) {
-        switch (resourceType) {
-            case TOPIC:
-                return new HashSet<>(Arrays.asList(READ, WRITE, CREATE, DESCRIBE, DELETE, ALTER, DESCRIBE_CONFIGS, ALTER_CONFIGS));
-            case GROUP:
-                return new HashSet<>(Arrays.asList(READ, DESCRIBE, DELETE, DESCRIBE_CONFIGS, ALTER_CONFIGS));
-            case CLUSTER:
-                return new HashSet<>(Arrays.asList(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE));
-            case TRANSACTIONAL_ID:
-                return new HashSet<>(Arrays.asList(DESCRIBE, WRITE));
-            case DELEGATION_TOKEN:
-                return Collections.singleton(DESCRIBE);
-            case USER:
-                return new HashSet<>(Arrays.asList(CREATE_TOKENS, DESCRIBE_TOKENS));
-            default:
-                throw new IllegalArgumentException("Not a concrete resource type");
-        }
+        return switch (resourceType) {
+            case TOPIC -> new HashSet<>(Arrays.asList(READ, WRITE, CREATE, DESCRIBE, DELETE, ALTER, DESCRIBE_CONFIGS, ALTER_CONFIGS));
+            case GROUP -> new HashSet<>(Arrays.asList(READ, DESCRIBE, DELETE, DESCRIBE_CONFIGS, ALTER_CONFIGS));
+            case CLUSTER -> new HashSet<>(Arrays.asList(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE));
+            case TRANSACTIONAL_ID -> new HashSet<>(Arrays.asList(DESCRIBE, WRITE));
+            case DELEGATION_TOKEN -> Collections.singleton(DESCRIBE);
+            case USER -> new HashSet<>(Arrays.asList(CREATE_TOKENS, DESCRIBE_TOKENS));
+            default -> throw new IllegalArgumentException("Not a concrete resource type");
+        };
     }
 
     public static Errors authorizationError(ResourceType resourceType) {
-        switch (resourceType) {
-            case TOPIC:
-                return Errors.TOPIC_AUTHORIZATION_FAILED;
-            case GROUP:
-                return Errors.GROUP_AUTHORIZATION_FAILED;
-            case CLUSTER:
-                return Errors.CLUSTER_AUTHORIZATION_FAILED;
-            case TRANSACTIONAL_ID:
-                return Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED;
-            case DELEGATION_TOKEN:
-                return Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED;
-            default:
-                throw new IllegalArgumentException("Authorization error type not known");
-        }
+        return switch (resourceType) {
+            case TOPIC -> Errors.TOPIC_AUTHORIZATION_FAILED;
+            case GROUP -> Errors.GROUP_AUTHORIZATION_FAILED;
+            case CLUSTER -> Errors.CLUSTER_AUTHORIZATION_FAILED;
+            case TRANSACTIONAL_ID -> Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED;
+            case DELEGATION_TOKEN -> Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED;
+            default -> throw new IllegalArgumentException("Authorization error type not known");
+        };
     }
 
     public Map<String, Object> toMap() {
