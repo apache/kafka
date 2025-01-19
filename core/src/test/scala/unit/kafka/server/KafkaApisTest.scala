@@ -3602,10 +3602,6 @@ class KafkaApisTest extends Logging {
     // 3. Set up MetadataCache
     val authorizedTopicId = Uuid.randomUuid()
     val unauthorizedTopicId = Uuid.randomUuid()
-
-    val topicIds = new util.HashMap[String, Uuid]()
-    topicIds.put(authorizedTopic, authorizedTopicId)
-    topicIds.put(unauthorizedTopic, unauthorizedTopicId)
     addTopicToMetadataCache(authorizedTopic, 1, topicId = authorizedTopicId)
     addTopicToMetadataCache(unauthorizedTopic, 1, topicId = unauthorizedTopicId)
 
@@ -9250,10 +9246,10 @@ class KafkaApisTest extends Logging {
   }
 
   private def createBasicMetadata(topic: String,
-                                         numPartitions: Int,
-                                         brokerEpoch: Long,
-                                         numBrokers: Int,
-                                         topicId: Uuid): Seq[ApiMessage] = {
+                                  numPartitions: Int,
+                                  brokerEpoch: Long,
+                                  numBrokers: Int,
+                                  topicId: Uuid): Seq[ApiMessage] = {
 
     val results = new mutable.ArrayBuffer[ApiMessage]()
     val topicRecord = new TopicRecord().setName(topic).setTopicId(topicId)
