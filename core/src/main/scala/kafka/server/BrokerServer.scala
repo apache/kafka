@@ -254,7 +254,7 @@ class BrokerServer(
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,
         config,
-        Some(forwardingManager),
+        forwardingManager,
         brokerFeatures,
         metadataCache,
         Some(clientMetricsManager)
