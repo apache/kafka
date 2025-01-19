@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.util.Arrays;
 import java.util.Collections;
