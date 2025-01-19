@@ -25,6 +25,7 @@ import kafka.log.remote.RemoteLogManager
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS
 import org.apache.kafka.server.log.remote.quota.RLMQuotaMetrics
 import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
+import kafka.server.ReplicaManager.StopReplicaPartitionState
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.server.share.DelayedShareFetch
 import kafka.utils.TestUtils.waitUntilTrue
@@ -35,9 +36,8 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidPidMappingException, KafkaStorageException}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.{DeleteRecordsResponseData}
+import org.apache.kafka.common.message.DeleteRecordsResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -2183,10 +2183,7 @@ class ReplicaManagerTest {
       // We have a fetch in purgatory, now receive a stop replica request and
       // assert that the fetch returns with a NOT_LEADER error
       replicaManager.stopReplicas(2, 0, 0,
-        mutable.Map(tp0 -> new StopReplicaPartitionState()
-          .setPartitionIndex(tp0.partition)
-          .setDeletePartition(true)
-          .setLeaderEpoch(LeaderAndIsr.EPOCH_DURING_DELETE)))
+        mutable.Map(tp0 -> StopReplicaPartitionState(LeaderAndIsr.EPOCH_DURING_DELETE, true)))
 
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.assertFired.error)
     } finally {
@@ -2226,10 +2223,7 @@ class ReplicaManagerTest {
       when(replicaManager.metadataCache.contains(tp0)).thenReturn(true)
 
       replicaManager.stopReplicas(2, 0, 0,
-        mutable.Map(tp0 -> new StopReplicaPartitionState()
-          .setPartitionIndex(tp0.partition)
-          .setDeletePartition(true)
-          .setLeaderEpoch(LeaderAndIsr.EPOCH_DURING_DELETE)))
+        mutable.Map(tp0 -> new StopReplicaPartitionState(LeaderAndIsr.EPOCH_DURING_DELETE, true)))
 
       assertNotNull(produceResult.get)
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, produceResult.get.error)
@@ -3627,12 +3621,7 @@ class ReplicaManagerTest {
 
       replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
-      val partitionStates = Map(tp0 -> new StopReplicaPartitionState()
-        .setPartitionIndex(tp0.partition)
-        .setLeaderEpoch(1)
-        .setDeletePartition(false)
-      )
-
+      val partitionStates = Map(tp0 -> StopReplicaPartitionState(1, false))
       val (_, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
       assertEquals(Errors.STALE_CONTROLLER_EPOCH, error)
       if (enableRemoteStorage) {
@@ -3664,12 +3653,7 @@ class ReplicaManagerTest {
       replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
       replicaManager.markPartitionOffline(tp0)
 
-      val partitionStates = Map(tp0 -> new StopReplicaPartitionState()
-        .setPartitionIndex(tp0.partition)
-        .setLeaderEpoch(1)
-        .setDeletePartition(false)
-      )
-
+      val partitionStates = Map(tp0 -> StopReplicaPartitionState(1, false))
       val (result, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
       assertEquals(Errors.NONE, error)
       assertEquals(Map(tp0 -> Errors.KAFKA_STORAGE_ERROR), result)
@@ -3717,12 +3701,7 @@ class ReplicaManagerTest {
         Files.createFile(dir.toPath)
       }
 
-      val partitionStates = Map(tp0 -> new StopReplicaPartitionState()
-        .setPartitionIndex(tp0.partition)
-        .setLeaderEpoch(1)
-        .setDeletePartition(deletePartitions)
-      )
-
+      val partitionStates = Map(tp0 -> new StopReplicaPartitionState(1, deletePartitions))
       val (result, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
       assertEquals(Errors.NONE, error)
 
@@ -4421,12 +4400,7 @@ class ReplicaManagerTest {
         partition.log.get.partitionMetadataFile = Some(mockPartitionMetadataFile)
       }
 
-      val partitionStates = Map(tp0 -> new StopReplicaPartitionState()
-        .setPartitionIndex(tp0.partition)
-        .setLeaderEpoch(leaderEpoch)
-        .setDeletePartition(deletePartition)
-      )
-
+      val partitionStates = Map(tp0 -> StopReplicaPartitionState(leaderEpoch, deletePartition))
       val (result, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
       assertEquals(Errors.NONE, error)
       assertEquals(Map(tp0 -> expectedOutput), result)
@@ -6288,12 +6262,7 @@ class ReplicaManagerTest {
 
       val requestLeaderEpoch = 1
       val deleteLocalLog = true
-      val partitionStates = Map(tp0 -> new StopReplicaPartitionState()
-        .setPartitionIndex(tp0.partition)
-        .setLeaderEpoch(requestLeaderEpoch)
-        .setDeletePartition(deleteLocalLog)
-      )
-
+      val partitionStates = Map(tp0 -> StopReplicaPartitionState(requestLeaderEpoch, deleteLocalLog))
       val (result, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
 
       assertEquals(Errors.NONE, error)
