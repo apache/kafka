@@ -115,7 +115,6 @@ class MetadataCacheTest {
 
     val topic0Record = new TopicRecord().setName(topic0).setTopicId(topicIds.get(topic0))
     val topic1Record = new TopicRecord().setName(topic1).setTopicId(topicIds.get(topic1))
-    MetadataCacheTest.updateCache(cache, brokers ++ Seq(topic0Record, topic1Record))
 
     val partitionStates = Seq(
       new PartitionRecord()
@@ -139,7 +138,7 @@ class MetadataCacheTest {
         .setLeaderEpoch(2)
         .setIsr(asList(2, 1))
         .setReplicas(asList(2, 1, 3)))
-    MetadataCacheTest.updateCache(cache, partitionStates)
+    MetadataCacheTest.updateCache(cache, brokers ++ Seq(topic0Record, topic1Record) ++ partitionStates)
 
     for (securityProtocol <- Seq(SecurityProtocol.PLAINTEXT, SecurityProtocol.SSL)) {
       val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
@@ -187,7 +186,8 @@ class MetadataCacheTest {
         .setHost("foo")
         .setPort(9092)
         .setSecurityProtocol(securityProtocol.id)
-        .setName(listenerName.value)).iterator.asJava)))
+        .setName(listenerName.value)
+      ).iterator.asJava)))
 
     // leader is not available. expect LEADER_NOT_AVAILABLE for any metadata version.
     verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, brokers, listenerName,
@@ -293,7 +293,8 @@ class MetadataCacheTest {
         .setHost("foo")
         .setPort(9092)
         .setSecurityProtocol(securityProtocol.id)
-        .setName(listenerName.value)).iterator.asJava)
+        .setName(listenerName.value)
+    ).iterator.asJava)
 
     val brokers = Seq(new RegisterBrokerRecord()
         .setBrokerId(0)
@@ -366,7 +367,8 @@ class MetadataCacheTest {
         .setHost("foo")
         .setPort(9092)
         .setSecurityProtocol(securityProtocol.id)
-        .setName(listenerName.value)).iterator.asJava)
+        .setName(listenerName.value)
+    ).iterator.asJava)
 
     val brokers = Seq(new RegisterBrokerRecord()
       .setBrokerId(0)
@@ -440,10 +442,10 @@ class MetadataCacheTest {
         .setHost("foo")
         .setPort(9092)
         .setSecurityProtocol(securityProtocol.id)
-        .setName(ListenerName.forSecurityProtocol(securityProtocol).value)).iterator.asJava))
+        .setName(ListenerName.forSecurityProtocol(securityProtocol).value)
+      ).iterator.asJava))
 
     val topicRecord = new TopicRecord().setName(topic).setTopicId(topicId)
-    MetadataCacheTest.updateCache(cache, Seq(brokers, topicRecord))
 
     val leader = 0
     val leaderEpoch = 0
@@ -456,7 +458,7 @@ class MetadataCacheTest {
       .setLeaderEpoch(leaderEpoch)
       .setIsr(isr)
       .setReplicas(replicas))
-    MetadataCacheTest.updateCache(cache, partitionStates)
+    MetadataCacheTest.updateCache(cache, Seq(brokers, topicRecord) ++ partitionStates)
 
     val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
     assertEquals(1, topicMetadata.size)
@@ -483,7 +485,8 @@ class MetadataCacheTest {
             .setHost("foo")
             .setPort(9092)
             .setSecurityProtocol(securityProtocol.id)
-            .setName(ListenerName.forSecurityProtocol(securityProtocol).value)).iterator.asJava))
+            .setName(ListenerName.forSecurityProtocol(securityProtocol).value)
+          ).iterator.asJava))
       }
       val leader = 0
       val leaderEpoch = 0
@@ -671,22 +674,29 @@ class MetadataCacheTest {
     new BrokerEndpointCollection()
     val brokers = Seq(
       new RegisterBrokerRecord().setBrokerEpoch(brokerEpoch).setFenced(false).setBrokerId(0)
-        .setEndPoints(new BrokerEndpointCollection(Seq(new BrokerEndpoint().setHost("foo0").setPort(9092).setSecurityProtocol(securityProtocol.id).setName(listenerName.value)).iterator.asJava)),
+        .setEndPoints(new BrokerEndpointCollection(Seq(new BrokerEndpoint().setHost("foo0").setPort(9092)
+          .setSecurityProtocol(securityProtocol.id).setName(listenerName.value)
+        ).iterator.asJava)),
       new RegisterBrokerRecord().setBrokerEpoch(brokerEpoch).setFenced(false).setBrokerId(1)
-        .setEndPoints(new BrokerEndpointCollection(Seq(new BrokerEndpoint().setHost("foo1").setPort(9093).setSecurityProtocol(securityProtocol.id).setName(listenerName.value)).iterator.asJava)),
+        .setEndPoints(new BrokerEndpointCollection(Seq(new BrokerEndpoint().setHost("foo1").setPort(9093)
+          .setSecurityProtocol(securityProtocol.id).setName(listenerName.value)
+        ).iterator.asJava)),
       new RegisterBrokerRecord().setBrokerEpoch(brokerEpoch).setFenced(false).setBrokerId(2)
-        .setEndPoints(new BrokerEndpointCollection(Seq(new BrokerEndpoint().setHost("foo2").setPort(9094).setSecurityProtocol(securityProtocol.id).setName(listenerName.value)).iterator.asJava)),
+        .setEndPoints(new BrokerEndpointCollection(Seq(new BrokerEndpoint().setHost("foo2").setPort(9094)
+          .setSecurityProtocol(securityProtocol.id).setName(listenerName.value)
+        ).iterator.asJava)),
       new RegisterBrokerRecord().setBrokerEpoch(brokerEpoch).setFenced(false).setBrokerId(3)
-        .setEndPoints(new BrokerEndpointCollection(Seq(new BrokerEndpoint().setHost("foo3").setPort(9095).setSecurityProtocol(securityProtocol.id).setName(listenerName.value)).iterator.asJava)),
+        .setEndPoints(new BrokerEndpointCollection(Seq(new BrokerEndpoint().setHost("foo3").setPort(9095)
+          .setSecurityProtocol(securityProtocol.id).setName(listenerName.value)
+        ).iterator.asJava)),
     )
-    MetadataCacheTest.updateCache(metadataCache, brokers)
 
     var recordSeq = Seq[ApiMessage](
       new TopicRecord().setName(topic0).setTopicId(topicIds.get(topic0)),
       new TopicRecord().setName(topic1).setTopicId(topicIds.get(topic1))
     )
     recordSeq = recordSeq ++ partitionMap.values.toSeq
-    MetadataCacheTest.updateCache(metadataCache, recordSeq)
+    MetadataCacheTest.updateCache(metadataCache, brokers ++ recordSeq)
 
     def checkTopicMetadata(topic: String, partitionIds: Set[Int], partitions: mutable.Buffer[DescribeTopicPartitionsResponsePartition]): Unit = {
       partitions.foreach(partition => {
@@ -804,10 +814,10 @@ class MetadataCacheTest {
           .setHost("foo")
           .setPort(9092)
           .setSecurityProtocol(securityProtocol.id)
-          .setName(listenerName.value)).iterator.asJava)))
+          .setName(listenerName.value)
+        ).iterator.asJava)))
 
-    MetadataCacheTest.updateCache(cache, brokers)
-    MetadataCacheTest.updateCache(cache, topicRecords ++ partitionStates)
+    MetadataCacheTest.updateCache(cache, brokers ++ topicRecords ++ partitionStates)
 
     val partitionState = cache.getPartitionInfo(topic, partitionIndex).get
     assertEquals(topic, partitionState.topicName())
