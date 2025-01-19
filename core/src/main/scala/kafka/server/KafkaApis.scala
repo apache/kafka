@@ -3473,14 +3473,4 @@ object KafkaApis {
     FetchResponse.sizeOf(versionId, responseData.entrySet
       .iterator.asScala.filter(element => element.getKey.topicPartition.topic != null && quota.isThrottled(element.getKey.topicPartition)).asJava)
   }
-
-  // visible for testing
-  private[server] def shouldNeverReceive(request: RequestChannel.Request): Exception = {
-    new UnsupportedVersionException(s"Should never receive when using a Raft-based metadata quorum: ${request.header.apiKey()}")
-  }
-
-  // visible for testing
-  private[server] def shouldAlwaysForward(request: RequestChannel.Request): Exception = {
-    new UnsupportedVersionException(s"Should always be forwarded to the Active Controller when using a Raft-based metadata quorum: ${request.header.apiKey}")
-  }
 }
