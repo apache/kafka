@@ -2053,24 +2053,35 @@ class LogCleanerTest extends Logging {
       logDirFailureChannel = new LogDirFailureChannel(1),
       time = time)
 
-    val cleaners = mutable.ArrayBuffer[logCleaner.CleanerThread]()
+    val cleaners = logCleaner.cleaners
 
     val cleaner1 = new logCleaner.CleanerThread(1)
     cleaner1.lastStats = new CleanerStats(time)
-    cleaner1.lastStats.bufferUtilization = 0.75d
+    cleaner1.lastStats.bufferUtilization = 0.75
     cleaners += cleaner1
 
     val cleaner2 = new logCleaner.CleanerThread(2)
     cleaner2.lastStats = new CleanerStats(time)
-    cleaner2.lastStats.bufferUtilization = 0.85d
+    cleaner2.lastStats.bufferUtilization = 0.85
     cleaners += cleaner2
 
     val cleaner3 = new logCleaner.CleanerThread(3)
     cleaner3.lastStats = new CleanerStats(time)
-    cleaner3.lastStats.bufferUtilization = 0.65d
+    cleaner3.lastStats.bufferUtilization = 0.65
     cleaners += cleaner3
 
     assertEquals(0, logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization))
+
+    cleaners.clear()
+
+    cleaner1.lastStats.bufferUtilization = 5d
+    cleaners += cleaner1
+    cleaner2.lastStats.bufferUtilization = 6d
+    cleaners += cleaner2
+    cleaner3.lastStats.bufferUtilization = 7d
+    cleaners += cleaner3
+
+    assertEquals(7, logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization))
   }
 
   private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
