@@ -17,7 +17,7 @@
 
 package kafka.server.metadata
 
-import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache}
+import kafka.server.{KRaftCachedControllerId, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common._
@@ -454,7 +454,7 @@ class KRaftMetadataCache(
    * Clients do not have direct access to the controller in the KRaft world, as explained
    * in KIP-590.
    */
-  override def getControllerId: Option[CachedControllerId] =
+  override def getControllerId: Option[KRaftCachedControllerId] =
     getRandomAliveBroker(_currentImage).map(KRaftCachedControllerId)
 
   override def getRandomAliveBrokerId: Option[Int] = {

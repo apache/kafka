@@ -30,14 +30,9 @@ import scala.collection._
 
 /**
  * Used to represent the controller id cached in the metadata cache of the broker. This trait is
- * extended to represent if the controller is KRaft controller or Zk controller.
+ * extended to represent if the controller is KRaft controller.
  */
-sealed trait CachedControllerId {
-  val id: Int
-}
-
-case class ZkCachedControllerId(id: Int) extends CachedControllerId
-case class KRaftCachedControllerId(id: Int) extends CachedControllerId
+case class KRaftCachedControllerId(id: Int)
 
 trait MetadataCache extends ConfigRepository {
   /**
@@ -100,7 +95,7 @@ trait MetadataCache extends ConfigRepository {
 
   def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): Map[Int, Node]
 
-  def getControllerId: Option[CachedControllerId]
+  def getControllerId: Option[KRaftCachedControllerId]
 
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster
 
