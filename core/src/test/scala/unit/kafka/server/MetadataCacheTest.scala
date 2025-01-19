@@ -263,7 +263,7 @@ class MetadataCacheTest {
         .setLeaderEpoch(leaderEpoch)
         .setIsr(asList(0))
         .setReplicas(asList(0)))
-    MetadataCacheTest.updateCache(cache, topicRecords ++ partitionStates)
+    MetadataCacheTest.updateCache(cache, brokers ++ topicRecords ++ partitionStates)
 
     val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableListeners = errorUnavailableListeners)
     assertEquals(1, topicMetadatas.size)
