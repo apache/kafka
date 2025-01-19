@@ -28,12 +28,6 @@ import java.util
 import java.util.function.Supplier
 import scala.collection._
 
-/**
- * Used to represent the controller id cached in the metadata cache of the broker. This trait is
- * extended to represent if the controller is KRaft controller.
- */
-case class KRaftCachedControllerId(id: Int)
-
 trait MetadataCache extends ConfigRepository {
   /**
    * Return topic metadata for a given set of topics and listener. See KafkaApis#handleTopicMetadataRequest for details
@@ -94,8 +88,6 @@ trait MetadataCache extends ConfigRepository {
   def getPartitionLeaderEndpoint(topic: String, partitionId: Int, listenerName: ListenerName): Option[Node]
 
   def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): Map[Int, Node]
-
-  def getControllerId: Option[KRaftCachedControllerId]
 
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster
 

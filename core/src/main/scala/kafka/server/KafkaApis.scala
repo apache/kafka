@@ -2405,10 +2405,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         brokers
       },
       () => {
-        metadataCache.getControllerId match {
-          case Some(value) => metadataCache.getRandomAliveBrokerId.getOrElse(- 1)
-          case None => -1
-        }
+        metadataCache.getRandomAliveBrokerId.getOrElse(-1)
       }
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
