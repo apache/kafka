@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public final class LeaderAndIsrRequest {
@@ -98,9 +99,12 @@ public final class LeaderAndIsrRequest {
     private static Map<String, TopicState> groupByTopic(List<PartitionState> partitionStates, Map<String, Uuid> topicIds) {
         Map<String, TopicState> topicStates = new HashMap<>();
         for (PartitionState partition : partitionStates) {
-            TopicState topicState = topicStates.computeIfAbsent(partition.topicName(), t -> new TopicState()
-                .setTopicName(partition.topicName())
-                .setTopicId(topicIds.getOrDefault(partition.topicName(), Uuid.ZERO_UUID)));
+            TopicState topicState = topicStates.computeIfAbsent(partition.topicName(), t -> {
+                var topic = new TopicState();
+                topic.topicName = partition.topicName();
+                topic.topicId = topicIds.getOrDefault(partition.topicName(), Uuid.ZERO_UUID);
+                return topic;
+            });
             topicState.partitionStates().add(partition);
         }
         return topicStates;
@@ -163,42 +167,6 @@ public final class LeaderAndIsrRequest {
             this.partitionStates = new ArrayList<>(0);
         }
 
-        @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof TopicState)) return false;
-            TopicState other = (TopicState) obj;
-            if (this.topicName == null) {
-                if (other.topicName != null) return false;
-            } else {
-                if (!this.topicName.equals(other.topicName)) return false;
-            }
-            if (!this.topicId.equals(other.topicId)) return false;
-            if (this.partitionStates == null) {
-                if (other.partitionStates != null) return false;
-            } else {
-                if (!this.partitionStates.equals(other.partitionStates)) return false;
-            }
-            return true;
-        }
-
-        @Override
-        public int hashCode() {
-            int hashCode = 0;
-            hashCode = 31 * hashCode + (topicName == null ? 0 : topicName.hashCode());
-            hashCode = 31 * hashCode + topicId.hashCode();
-            hashCode = 31 * hashCode + (partitionStates == null ? 0 : partitionStates.hashCode());
-            return hashCode;
-        }
-
-        @Override
-        public String toString() {
-            return "LeaderAndIsrTopicState("
-                    + "topicName=" + ((topicName == null) ? "null" : "'" + topicName.toString() + "'")
-                    + ", topicId=" + topicId.toString()
-                    + ", partitionStates=" + MessageUtil.deepToString(partitionStates.iterator())
-                    + ")";
-        }
-
         public String topicName() {
             return this.topicName;
         }
@@ -211,19 +179,28 @@ public final class LeaderAndIsrRequest {
             return this.partitionStates;
         }
 
-        public TopicState setTopicName(String v) {
-            this.topicName = v;
-            return this;
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass())
+                return false;
+            TopicState that = (TopicState) o;
+            return Objects.equals(topicName, that.topicName) &&
+                    Objects.equals(topicId, that.topicId) &&
+                    Objects.equals(partitionStates, that.partitionStates);
         }
 
-        public TopicState setTopicId(Uuid v) {
-            this.topicId = v;
-            return this;
+        @Override
+        public int hashCode() {
+            return Objects.hash(topicName, topicId, partitionStates);
         }
 
-        public TopicState setPartitionStates(List<PartitionState> v) {
-            this.partitionStates = v;
-            return this;
+        @Override
+        public String toString() {
+            return "LeaderAndIsrTopicState("
+                    + "topicName='" + topicName + "'"
+                    + ", topicId=" + topicId
+                    + ", partitionStates=" + MessageUtil.deepToString(partitionStates.iterator())
+                    + ")";
         }
     }
 
@@ -256,68 +233,34 @@ public final class LeaderAndIsrRequest {
             this.leaderRecoveryState = (byte) 0;
         }
 
-        @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
         @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof PartitionState)) return false;
-            PartitionState other = (PartitionState) obj;
-            if (this.topicName == null) {
-                if (other.topicName != null) return false;
-            } else {
-                if (!this.topicName.equals(other.topicName)) return false;
-            }
-            if (partitionIndex != other.partitionIndex) return false;
-            if (controllerEpoch != other.controllerEpoch) return false;
-            if (leader != other.leader) return false;
-            if (leaderEpoch != other.leaderEpoch) return false;
-            if (this.isr == null) {
-                if (other.isr != null) return false;
-            } else {
-                if (!this.isr.equals(other.isr)) return false;
-            }
-            if (partitionEpoch != other.partitionEpoch) return false;
-            if (this.replicas == null) {
-                if (other.replicas != null) return false;
-            } else {
-                if (!this.replicas.equals(other.replicas)) return false;
-            }
-            if (this.addingReplicas == null) {
-                if (other.addingReplicas != null) return false;
-            } else {
-                if (!this.addingReplicas.equals(other.addingReplicas)) return false;
-            }
-            if (this.removingReplicas == null) {
-                if (other.removingReplicas != null) return false;
-            } else {
-                if (!this.removingReplicas.equals(other.removingReplicas)) return false;
-            }
-            if (isNew != other.isNew) return false;
-            if (leaderRecoveryState != other.leaderRecoveryState) return false;
-            return true;
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            PartitionState that = (PartitionState) o;
+            return partitionIndex == that.partitionIndex &&
+                    controllerEpoch == that.controllerEpoch &&
+                    leader == that.leader &&
+                    leaderEpoch == that.leaderEpoch &&
+                    partitionEpoch == that.partitionEpoch &&
+                    isNew == that.isNew &&
+                    leaderRecoveryState == that.leaderRecoveryState &&
+                    Objects.equals(topicName, that.topicName) &&
+                    Objects.equals(isr, that.isr) &&
+                    Objects.equals(replicas, that.replicas) &&
+                    Objects.equals(addingReplicas, that.addingReplicas) &&
+                    Objects.equals(removingReplicas, that.removingReplicas);
         }
 
         @Override
         public int hashCode() {
-            int hashCode = 0;
-            hashCode = 31 * hashCode + (topicName == null ? 0 : topicName.hashCode());
-            hashCode = 31 * hashCode + partitionIndex;
-            hashCode = 31 * hashCode + controllerEpoch;
-            hashCode = 31 * hashCode + leader;
-            hashCode = 31 * hashCode + leaderEpoch;
-            hashCode = 31 * hashCode + (isr == null ? 0 : isr.hashCode());
-            hashCode = 31 * hashCode + partitionEpoch;
-            hashCode = 31 * hashCode + (replicas == null ? 0 : replicas.hashCode());
-            hashCode = 31 * hashCode + (addingReplicas == null ? 0 : addingReplicas.hashCode());
-            hashCode = 31 * hashCode + (removingReplicas == null ? 0 : removingReplicas.hashCode());
-            hashCode = 31 * hashCode + (isNew ? 1231 : 1237);
-            hashCode = 31 * hashCode + leaderRecoveryState;
-            return hashCode;
+            return Objects.hash(topicName, partitionIndex, controllerEpoch, leader, leaderEpoch, isr, partitionEpoch,
+                    replicas, addingReplicas, removingReplicas, isNew, leaderRecoveryState);
         }
 
         @Override
         public String toString() {
             return "LeaderAndIsrPartitionState("
-                    + "topicName=" + ((topicName == null) ? "null" : "'" + topicName + "'")
+                    + "topicName='" + topicName + "'"
                     + ", partitionIndex=" + partitionIndex
                     + ", controllerEpoch=" + controllerEpoch
                     + ", leader=" + leader
