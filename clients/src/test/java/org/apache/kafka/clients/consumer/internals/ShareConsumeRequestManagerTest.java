@@ -336,6 +336,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
+        acknowledgements.setAcknowledgeErrorCode(Errors.NONE);
         assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
     }
@@ -369,6 +370,8 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
+        acknowledgements.setAcknowledgeErrorCode(Errors.NONE);
+        assertEquals(completedAcknowledgements.get(0).get(tip0), acknowledgements);
         assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
     }
@@ -407,12 +410,14 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(null, true);
         networkClientDelegate.poll(time.timer(0));
 
+        acknowledgements.setAcknowledgeErrorCode(Errors.UNKNOWN_SERVER_ERROR);
         assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
         assertEquals(Errors.UNKNOWN_SERVER_ERROR, completedAcknowledgements.get(0).get(tip0).getAcknowledgeErrorCode());
         completedAcknowledgements.clear();
 
         assertEquals(1, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
 
+        acknowledgements2.setAcknowledgeErrorCode(Errors.SHARE_SESSION_NOT_FOUND);
         TestUtils.retryOnExceptionWithTimeout(() -> {
             assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
             // We expect the remaining acknowledgements to be cleared due to share session epoch being set to 0.
@@ -508,6 +513,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
+        acknowledgements.setAcknowledgeErrorCode(Errors.NONE);
         assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
     }
@@ -547,6 +553,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
+        acknowledgements.setAcknowledgeErrorCode(Errors.NONE);
         assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
     }
@@ -657,9 +664,9 @@ public class ShareConsumeRequestManagerTest {
         shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements));
 
         Acknowledgements acknowledgements2 = Acknowledgements.empty();
-        acknowledgements.add(4L, AcknowledgeType.ACCEPT);
-        acknowledgements.add(5L, AcknowledgeType.ACCEPT);
-        acknowledgements.add(6L, AcknowledgeType.ACCEPT);
+        acknowledgements2.add(4L, AcknowledgeType.ACCEPT);
+        acknowledgements2.add(5L, AcknowledgeType.ACCEPT);
+        acknowledgements2.add(6L, AcknowledgeType.ACCEPT);
 
         shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements2));
 
@@ -1092,6 +1099,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
+        acknowledgements.setAcknowledgeErrorCode(Errors.NONE);
         assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
 
         completedAcknowledgements.clear();

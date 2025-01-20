@@ -431,7 +431,7 @@ public class ShareSessionHandlerTest {
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(0L, AcknowledgeType.ACCEPT);
 
-        handler.addPartitionToFetch(foo0, acknowledgements);
+        handler.addPartitionToFetch(foo0, Collections.singletonList(acknowledgements));
 
         // As we start with a ShareAcknowledge on epoch 0, we expect a null response.
         assertNull(handler.newShareAcknowledgeBuilder(groupId, fetchConfig));

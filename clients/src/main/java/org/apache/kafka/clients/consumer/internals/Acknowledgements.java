@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.Errors;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 
 /**
@@ -307,5 +308,22 @@ public class Acknowledgements {
         }
         sb.append(")");
         return sb.toString();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(acknowledgements, acknowledgeErrorCode);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        Acknowledgements other = (Acknowledgements) o;
+        return this.acknowledgements.equals(other.acknowledgements) && this.acknowledgeErrorCode == other.acknowledgeErrorCode;
     }
 }

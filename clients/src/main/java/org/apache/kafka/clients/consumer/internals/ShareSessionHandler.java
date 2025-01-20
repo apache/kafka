@@ -76,7 +76,7 @@ public class ShareSessionHandler {
     /*
      * The acknowledgements to be included in the next ShareFetch/ShareAcknowledge request.
      */
-    private LinkedHashMap<TopicIdPartition, Acknowledgements> nextAcknowledgements;
+    private LinkedHashMap<TopicIdPartition, List<Acknowledgements>> nextAcknowledgements;
 
     public ShareSessionHandler(LogContext logContext, int node, Uuid memberId) {
         this.log = logContext.logger(ShareSessionHandler.class);
@@ -96,9 +96,9 @@ public class ShareSessionHandler {
         return Collections.unmodifiableCollection(sessionPartitions.values());
     }
 
-    public void addPartitionToFetch(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
+    public void addPartitionToFetch(TopicIdPartition topicIdPartition, List<Acknowledgements> partitionAcknowledgements) {
         nextPartitions.put(topicIdPartition.topicPartition(), topicIdPartition);
-        if (partitionAcknowledgements != null) {
+        if (partitionAcknowledgements != null && !partitionAcknowledgements.isEmpty()) {
             nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
         }
     }
@@ -162,9 +162,12 @@ public class ShareSessionHandler {
         removed.addAll(replaced);
 
         Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches = new HashMap<>();
-        nextAcknowledgements.forEach((partition, acknowledgements) -> acknowledgementBatches.put(partition, acknowledgements.getAcknowledgementBatches()
-                .stream().map(AcknowledgementBatch::toShareFetchRequest)
-                .collect(Collectors.toList())));
+        nextAcknowledgements.forEach((partition, acknowledgementsList) ->
+            acknowledgementsList.forEach(acknowledgements ->
+                acknowledgementBatches.computeIfAbsent(partition, p -> new ArrayList<>())
+                    .addAll(acknowledgements.getAcknowledgementBatches()
+                            .stream().map(AcknowledgementBatch::toShareFetchRequest)
+                            .collect(Collectors.toList()))));
 
         nextPartitions = new LinkedHashMap<>();
         nextAcknowledgements = new LinkedHashMap<>();
@@ -184,10 +187,12 @@ public class ShareSessionHandler {
         }
 
         Map<TopicIdPartition, List<ShareAcknowledgeRequestData.AcknowledgementBatch>> acknowledgementBatches = new HashMap<>();
-        nextAcknowledgements.forEach((partition, acknowledgements) ->
-                acknowledgementBatches.put(partition, acknowledgements.getAcknowledgementBatches()
+        nextAcknowledgements.forEach((partition, acknowledgementsList) ->
+            acknowledgementsList.forEach(acknowledgements ->
+                acknowledgementBatches.computeIfAbsent(partition, p -> new ArrayList<>())
+                    .addAll(acknowledgements.getAcknowledgementBatches()
                         .stream().map(AcknowledgementBatch::toShareAcknowledgeRequest)
-                        .collect(Collectors.toList())));
+                        .collect(Collectors.toList()))));
 
         nextAcknowledgements = new LinkedHashMap<>();
 
