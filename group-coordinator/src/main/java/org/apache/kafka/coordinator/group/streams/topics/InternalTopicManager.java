@@ -148,6 +148,19 @@ public class InternalTopicManager {
 
         decidedPartitionCountsForInternalTopics.putAll(repartitionTopics.setup());
 
+        enforceCopartitioning(topology, copartitionGroupsBySubtopology, log,
+            decidedPartitionCountsForInternalTopics, copartitionedTopicsEnforcer);
+
+        decidedPartitionCountsForInternalTopics.putAll(changelogTopics.setup());
+
+        return decidedPartitionCountsForInternalTopics;
+    }
+
+    private static void enforceCopartitioning(final StreamsTopology topology,
+                                              final Map<String, Collection<Set<String>>> copartitionGroupsBySubtopology,
+                                              final Logger log,
+                                              final Map<String, Integer> decidedPartitionCountsForInternalTopics,
+                                              final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer) {
         final Set<String> fixedRepartitionTopics =
             topology.subtopologies().values().stream().flatMap(x ->
                 x.repartitionSourceTopics().stream().filter(y -> y.partitions() != 0)
@@ -170,10 +183,6 @@ public class InternalTopicManager {
                 }
             }
         }
-
-        decidedPartitionCountsForInternalTopics.putAll(changelogTopics.setup());
-
-        return decidedPartitionCountsForInternalTopics;
     }
 
     private static Map<String, CreatableTopic> missingInternalTopics(Map<String, ConfiguredSubtopology> subtopologyMap,
@@ -241,9 +250,8 @@ public class InternalTopicManager {
         return creatableTopic;
     }
 
-    private static ConfiguredSubtopology fromPersistedSubtopology(
-        final StreamsGroupTopologyValue.Subtopology subtopology,
-        Map<String, Integer> decidedPartitionCountsForInternalTopics
+    private static ConfiguredSubtopology fromPersistedSubtopology(final StreamsGroupTopologyValue.Subtopology subtopology,
+                                                                  final Map<String, Integer> decidedPartitionCountsForInternalTopics
     ) {
         return new ConfiguredSubtopology(
             new HashSet<>(subtopology.sourceTopics()),
@@ -257,9 +265,8 @@ public class InternalTopicManager {
         );
     }
 
-    private static ConfiguredInternalTopic fromPersistedTopicInfo(
-        final StreamsGroupTopologyValue.TopicInfo topicInfo,
-        Map<String, Integer> decidedPartitionCountsForInternalTopics) {
+    private static ConfiguredInternalTopic fromPersistedTopicInfo(final StreamsGroupTopologyValue.TopicInfo topicInfo,
+                                                                  final Map<String, Integer> decidedPartitionCountsForInternalTopics) {
         if (topicInfo.partitions() == 0 && !decidedPartitionCountsForInternalTopics.containsKey(topicInfo.name())) {
             throw new IllegalStateException("Number of partitions must be set for topic " + topicInfo.name());
         }
@@ -277,7 +284,8 @@ public class InternalTopicManager {
     }
 
     private static Collection<Set<String>> copartitionGroupsFromPersistedSubtopology(
-        final StreamsGroupTopologyValue.Subtopology subtopology) {
+        final StreamsGroupTopologyValue.Subtopology subtopology
+    ) {
         return subtopology.copartitionGroups().stream().map(copartitionGroup ->
             Stream.concat(
                 copartitionGroup.sourceTopics().stream()

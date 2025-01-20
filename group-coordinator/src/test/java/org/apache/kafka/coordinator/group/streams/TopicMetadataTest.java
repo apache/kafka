@@ -26,10 +26,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TopicMetadataTest {
+
+    @Test
+    public void testConstructor() {
+        assertDoesNotThrow(() ->
+            new TopicMetadata(Uuid.randomUuid(), "valid-topic", 3, new HashMap<>()));
+    }
 
     @Test
     public void testConstructorWithZeroUuid() {
@@ -58,10 +65,17 @@ public class TopicMetadataTest {
     }
 
     @Test
+    public void testConstructorWithZeroNumPartitions() {
+        Exception exception = assertThrows(IllegalArgumentException.class, () ->
+            new TopicMetadata(Uuid.randomUuid(), "valid-topic", 0, new HashMap<>()));
+        assertEquals("Number of partitions must be positive.", exception.getMessage());
+    }
+
+    @Test
     public void testConstructorWithNegativeNumPartitions() {
         Exception exception = assertThrows(IllegalArgumentException.class, () ->
             new TopicMetadata(Uuid.randomUuid(), "valid-topic", -1, new HashMap<>()));
-        assertEquals("Number of partitions cannot be negative.", exception.getMessage());
+        assertEquals("Number of partitions must be positive.", exception.getMessage());
     }
 
     @Test
