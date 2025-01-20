@@ -23,7 +23,7 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestHeader, RequestTestUtils}
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
-import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
 
@@ -32,13 +32,27 @@ import java.util.Collections
 class ProcessorTest {
 
   @Test
-  def testParseRequestHeaderWithDisabledApi(): Unit = {
+  def testParseRequestHeaderWithDisabledApiVersion(): Unit = {
     val requestHeader = RequestTestUtils.serializeRequestHeader(
       new RequestHeader(ApiKeys.INIT_PRODUCER_ID, 0, "clientid", 0))
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER, true,
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
-    assertThrows(classOf[InvalidRequestException], (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
+    val e = assertThrows(classOf[InvalidRequestException],
+      (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "INIT_PRODUCER_ID with listener type CONTROLLER should throw InvalidRequestException exception")
+    assertTrue(e.toString.contains("disabled version"));
+  }
+
+  @Test
+  def testParseRequestHeaderWithUnsupportedApi(): Unit = {
+    val requestHeader = RequestTestUtils.serializeRequestHeader(
+      new RequestHeader(ApiKeys.LEADER_AND_ISR, 0, "clientid", 0))
+    val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
+      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
+    val e = assertThrows(classOf[InvalidRequestException],
+      (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
+      "LEADER_AND_ISR should throw InvalidRequestException exception")
+    assertTrue(e.toString.contains("unsupported api"));
   }
 
   @Test
@@ -47,8 +61,10 @@ class ProcessorTest {
       new RequestHeader(ApiKeys.PRODUCE, 0, "clientid", 0))
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
-    assertThrows(classOf[UnsupportedVersionException], (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
+    val e = assertThrows(classOf[UnsupportedVersionException],
+      (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "PRODUCE v0 should throw UnsupportedVersionException exception")
+    assertTrue(e.toString.contains("unsupported version"));
   }
 
 }
