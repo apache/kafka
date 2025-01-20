@@ -18,6 +18,7 @@
 package kafka.log
 
 import kafka.common._
+import kafka.log.LogCleaner.MaxBufferUtilizationPercentMetricName
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, Logging, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
@@ -2073,6 +2074,54 @@ class LogCleanerTest extends Logging {
     cleaners += cleaner3
 
     assertEquals(0.85, logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization))
+  }
+
+  @Test
+  def testMaxBufferUtilizationPercentMetric(): Unit = {
+    val logCleaner = new LogCleaner(
+      new CleanerConfig(true),
+      logDirs = Array(TestUtils.tempDir(), TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, UnifiedLog](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time
+    )
+
+    def assertMaxBufferUtilizationPercent(expected: Int): Unit = {
+      val gauge = logCleaner.metricsGroup.newGauge(MaxBufferUtilizationPercentMetricName,
+        () => (logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization) * 100).toInt)
+      assertEquals(expected, gauge.value())
+    }
+
+    // No CleanerThreads
+    assertMaxBufferUtilizationPercent(0)
+
+    val cleaners = logCleaner.cleaners
+
+    val cleaner1 = new logCleaner.CleanerThread(1)
+    cleaner1.lastStats = new CleanerStats(time)
+    cleaner1.lastStats.bufferUtilization = 0.75
+    cleaners += cleaner1
+
+    val cleaner2 = new logCleaner.CleanerThread(2)
+    cleaner2.lastStats = new CleanerStats(time)
+    cleaner2.lastStats.bufferUtilization = 0.85
+    cleaners += cleaner2
+
+    val cleaner3 = new logCleaner.CleanerThread(3)
+    cleaner3.lastStats = new CleanerStats(time)
+    cleaner3.lastStats.bufferUtilization = 0.65
+    cleaners += cleaner3
+
+    // expect the gauge value to reflect the maximum bufferUtilization
+    assertMaxBufferUtilizationPercent(85)
+
+    // Update bufferUtilization and verify the gauge value updates
+    cleaner1.lastStats.bufferUtilization = 0.9
+    assertMaxBufferUtilizationPercent(90)
+
+    // All CleanerThreads have the same bufferUtilization
+    cleaners.foreach(_.lastStats.bufferUtilization = 0.5)
+    assertMaxBufferUtilizationPercent(50)
   }
 
   private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
