@@ -667,7 +667,7 @@ class ReplicaManagerTest {
             .setIsNew(true)).asJava,
           Collections.singletonMap(topic, Uuid.randomUuid()),
           Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava,
-          AbstractControlRequest.Type.UNKNOWN
+          LeaderAndIsrRequest.Type.UNKNOWN
         ).build()
         replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
         replicaManager.getPartitionOrException(new TopicPartition(topic, partition))

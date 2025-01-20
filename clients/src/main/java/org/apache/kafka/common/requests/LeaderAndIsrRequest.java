@@ -20,7 +20,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.requests.AbstractControlRequest.Type;
 import org.apache.kafka.common.utils.FlattenedIterator;
 
 import java.util.ArrayList;
@@ -34,6 +33,24 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 public final class LeaderAndIsrRequest {
+
+    /**
+     * Indicates if a controller request is incremental, full, or unknown.
+     */
+    public enum Type {
+        UNKNOWN(0),
+        INCREMENTAL(1),
+        FULL(2);
+
+        private final byte type;
+        Type(int type) {
+            this.type = (byte) type;
+        }
+
+        public byte toByte() {
+            return type;
+        }
+    }
 
     public static class Builder {
         protected final int controllerId;
