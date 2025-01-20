@@ -17,7 +17,6 @@
 
 package org.apache.kafka.message;
 
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
