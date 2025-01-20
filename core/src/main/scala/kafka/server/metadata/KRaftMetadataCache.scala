@@ -18,6 +18,7 @@
 package kafka.server.metadata
 
 import kafka.server.MetadataCache
+import kafka.server.metadata.KRaftMetadataCache.{getOfflineReplicas, getRandomAliveBroker}
 import kafka.utils.Logging
 import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common._
