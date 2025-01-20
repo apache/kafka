@@ -36,6 +36,7 @@ import org.junit.jupiter.params.provider.MethodSource
 import java.util
 import java.util.Arrays.asList
 import java.util.Collections
+import java.util.stream.Collectors
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -519,10 +520,11 @@ class MetadataCacheTest {
 
     // Set up broker data for the metadata cache
     val numBrokers = 10
+    val fencedBrokerId = numBrokers / 3
     val brokerRecords = (0 until numBrokers).map { brokerId =>
       new RegisterBrokerRecord()
         .setBrokerId(brokerId)
-        .setFenced(false)
+        .setFenced(brokerId == fencedBrokerId)
         .setRack("rack" + (brokerId % 3))
         .setEndPoints(new BrokerEndpointCollection(
           Seq(new BrokerEndpoint()
@@ -545,31 +547,51 @@ class MetadataCacheTest {
     val numPartitions = replicaSets.length
     val partitionRecords = (0 until numPartitions).map { partitionId =>
       val replicas = replicaSets(partitionId)
+      val nonFencedReplicas = replicas.stream().filter(id => id != fencedBrokerId).collect(Collectors.toList())
       new PartitionRecord()
         .setTopicId(topicId)
         .setPartitionId(partitionId)
         .setReplicas(replicas)
         .setLeader(replicas.get(0))
-        .setIsr(replicas)
-        .setEligibleLeaderReplicas(replicas)
+        .setIsr(nonFencedReplicas)
+        .setEligibleLeaderReplicas(nonFencedReplicas)
     }
 
     // Load the prepared data in the metadata cache
     MetadataCacheTest.updateCache(cache, brokerRecords ++ topicRecords ++ partitionRecords)
 
-    var seenReplicaSets: Set[scala.collection.Set[Int]] = Set.empty
     (0 until numPartitions).foreach { partitionId =>
       val tp = new TopicPartition(topic, partitionId)
       val brokerIdToNodeMap = cache.getPartitionReplicaEndpoints(tp, listenerName)
       val replicaSet = brokerIdToNodeMap.keySet
-      // Verify that we haven't seen before the replica set for this partition
-      assertFalse(seenReplicaSets.contains(replicaSet),
-                  s"Already seen replica set $replicaSet before partition $partitionId")
-      seenReplicaSets += replicaSet
-      // Verify that for each partition we have exactly $replicationFactor endpoints
-      assertEquals(replicationFactor,
-                   replicaSet.size,
-                   s"Unexpected replica set $replicaSet for partition $partitionId")
+      val expectedReplicaSet = partitionRecords(partitionId).replicas().asScala.toSet
+      // Verify that we have endpoints for exactly the non-fenced brokers of the replica set
+      if (expectedReplicaSet.contains(fencedBrokerId)) {
+        assertEquals(expectedReplicaSet,
+                     replicaSet + fencedBrokerId,
+                     s"Unexpected partial replica set for partition $partitionId")
+      } else {
+        assertEquals(expectedReplicaSet,
+                     replicaSet,
+                     s"Unexpected replica set for partition $partitionId")
+      }
+      // Verify that the endpoint data for each non-fenced replica is as expected
+      replicaSet.foreach { brokerId =>
+        val brokerNode =
+          brokerIdToNodeMap.getOrElse(
+            brokerId, fail(s"No brokerNode for broker $brokerId and partition $partitionId"))
+        val expectedBroker = brokerRecords(brokerId)
+        val expectedEndpoint = expectedBroker.endPoints().find(listenerName.value())
+        assertEquals(expectedEndpoint.host(),
+                     brokerNode.host(),
+                     s"Unexpected host for broker $brokerId and partition $partitionId")
+        assertEquals(expectedEndpoint.port(),
+                     brokerNode.port(),
+                     s"Unexpected port for broker $brokerId and partition $partitionId")
+        assertEquals(expectedBroker.rack(),
+                     brokerNode.rack(),
+                     s"Unexpected rack for broker $brokerId and partition $partitionId")
+      }
     }
 
     val tp = new TopicPartition(topic, numPartitions)
