@@ -10308,6 +10308,102 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testReadShareGroupStateSummarySuccess(): Unit = {
+    val topicId = Uuid.randomUuid();
+    val readSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
+      .setGroupId("group1")
+      .setTopics(List(
+        new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+          .setTopicId(topicId)
+          .setPartitions(List(
+            new ReadShareGroupStateSummaryRequestData.PartitionData()
+              .setPartition(1)
+              .setLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+
+    val readStateSummaryResultData: util.List[ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult] = List(
+      new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+        .setTopicId(topicId)
+        .setPartitions(List(
+          new ReadShareGroupStateSummaryResponseData.PartitionResult()
+            .setPartition(1)
+            .setErrorCode(Errors.NONE.code())
+            .setErrorMessage(null)
+            .setStateEpoch(1)
+            .setStartOffset(10)
+        ).asJava)
+    ).asJava
+
+    val config = Map(
+      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
+    )
+
+    val response = getReadShareGroupSummaryResponse(
+      readSummaryRequestData,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      verifyNoErr = true,
+      null,
+      readStateSummaryResultData
+    )
+
+    assertNotNull(response.data)
+    assertEquals(1, response.data.results.size)
+  }
+
+  @Test
+  def testReadShareGroupStateSummaryAuthorizationFailed(): Unit = {
+    val topicId = Uuid.randomUuid();
+    val readSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
+      .setGroupId("group1")
+      .setTopics(List(
+        new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+          .setTopicId(topicId)
+          .setPartitions(List(
+            new ReadShareGroupStateSummaryRequestData.PartitionData()
+              .setPartition(1)
+              .setLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+
+    val readStateSummaryResultData: util.List[ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult] = List(
+      new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+        .setTopicId(topicId)
+        .setPartitions(List(
+          new ReadShareGroupStateSummaryResponseData.PartitionResult()
+            .setPartition(1)
+            .setErrorCode(Errors.NONE.code())
+            .setErrorMessage(null)
+            .setStateEpoch(1)
+            .setStartOffset(10)
+        ).asJava)
+    ).asJava
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
+
+    val config = Map(
+      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
+    )
+
+    val response = getReadShareGroupSummaryResponse(
+      readSummaryRequestData,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      verifyNoErr = false,
+      authorizer,
+      readStateSummaryResultData
+    )
+
+    assertNotNull(response.data)
+    assertEquals(1, response.data.results.size)
+    response.data.results.forEach(readResult => {
+      assertEquals(1, readResult.partitions.size)
+      assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED.code(), readResult.partitions.get(0).errorCode())
+    })
+  }
+
+  @Test
   def testWriteShareGroupStateSuccess(): Unit = {
     val topicId = Uuid.randomUuid();
     val writeRequestData = new WriteShareGroupStateRequestData()
@@ -10472,6 +10568,35 @@ class KafkaApisTest extends Logging {
       val expectedReadShareGroupStateResponseData = new ReadShareGroupStateResponseData()
         .setResults(readStateResult)
       assertEquals(expectedReadShareGroupStateResponseData, response.data)
+    }
+    response
+  }
+
+  def getReadShareGroupSummaryResponse(requestData: ReadShareGroupStateSummaryRequestData, configOverrides: Map[String, String] = Map.empty,
+                                verifyNoErr: Boolean = true, authorizer: Authorizer = null,
+                                readStateSummaryResult: util.List[ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult]): ReadShareGroupStateSummaryResponse = {
+    val requestChannelRequest = buildRequest(new ReadShareGroupStateSummaryRequest.Builder(requestData, true).build())
+
+    val future = new CompletableFuture[ReadShareGroupStateSummaryResponseData]()
+    when(shareCoordinator.readStateSummary(
+      any[RequestContext],
+      any[ReadShareGroupStateSummaryRequestData]
+    )).thenReturn(future)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(
+      overrideProperties = configOverrides,
+      authorizer = Option(authorizer),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching())
+
+    future.complete(new ReadShareGroupStateSummaryResponseData()
+      .setResults(readStateSummaryResult))
+
+    val response = verifyNoThrottling[ReadShareGroupStateSummaryResponse](requestChannelRequest)
+    if (verifyNoErr) {
+      val expectedReadShareGroupStateSummaryResponseData = new ReadShareGroupStateSummaryResponseData()
+        .setResults(readStateSummaryResult)
+      assertEquals(expectedReadShareGroupStateSummaryResponseData, response.data)
     }
     response
   }

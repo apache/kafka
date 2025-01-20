@@ -64,16 +64,16 @@ public class ReadShareGroupStateSummaryRequest extends AbstractRequest {
     public ReadShareGroupStateSummaryResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> results = new ArrayList<>();
         data.topics().forEach(
-                topicResult -> results.add(new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
-                        .setTopicId(topicResult.topicId())
-                        .setPartitions(topicResult.partitions().stream()
-                                .map(partitionData -> new ReadShareGroupStateSummaryResponseData.PartitionResult()
-                                        .setPartition(partitionData.partition())
-                                        .setErrorCode(Errors.forException(e).code())
-                                        .setErrorMessage(Errors.forException(e).message()))
-                                .collect(Collectors.toList()))));
+            topicResult -> results.add(new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                .setTopicId(topicResult.topicId())
+                .setPartitions(topicResult.partitions().stream()
+                    .map(partitionData -> new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                        .setPartition(partitionData.partition())
+                        .setErrorCode(Errors.forException(e).code())
+                        .setErrorMessage(Errors.forException(e).message()))
+                    .collect(Collectors.toList()))));
         return new ReadShareGroupStateSummaryResponse(new ReadShareGroupStateSummaryResponseData()
-                .setResults(results));
+            .setResults(results));
     }
 
     @Override
@@ -83,8 +83,8 @@ public class ReadShareGroupStateSummaryRequest extends AbstractRequest {
 
     public static ReadShareGroupStateSummaryRequest parse(ByteBuffer buffer, short version) {
         return new ReadShareGroupStateSummaryRequest(
-                new ReadShareGroupStateSummaryRequestData(new ByteBufferAccessor(buffer), version),
-                version
+            new ReadShareGroupStateSummaryRequestData(new ByteBufferAccessor(buffer), version),
+            version
         );
     }
 }

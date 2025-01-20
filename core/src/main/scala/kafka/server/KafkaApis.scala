@@ -3165,9 +3165,22 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): Unit = {
     val readShareGroupStateSummaryRequest = request.body[ReadShareGroupStateSummaryRequest]
-    // TODO: Implement the ReadShareGroupStateSummaryRequest handling
-    requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    shareCoordinator match {
+      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        readShareGroupStateSummaryRequest.getErrorResponse(requestThrottleMs,
+          new ApiException("Share coordinator is not enabled.")))
+        CompletableFuture.completedFuture[Unit](())
+      case Some(coordinator) => coordinator.readStateSummary(request.context, readShareGroupStateSummaryRequest.data)
+        .handle[Unit] { (response, exception) =>
+          if (exception != null) {
+            requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(exception))
+          } else {
+            requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateSummaryResponse(response))
+          }
+        }
+    }
   }
 
   def handleDescribeShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
