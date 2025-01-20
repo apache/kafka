@@ -18,7 +18,6 @@
 package kafka.server.metadata
 
 import kafka.server.KafkaConfig
-import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
@@ -26,12 +25,10 @@ import org.apache.kafka.server.fault.FaultHandler
 
 
 class DynamicClientQuotaPublisher(
-  clusterId: String,
   conf: KafkaConfig,
   faultHandler: FaultHandler,
   nodeType: String,
   clientQuotaMetadataManager: ClientQuotaMetadataManager,
-  quotaManagers: QuotaManagers
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
   logIdent = s"[${name()}] "
 
@@ -51,17 +48,6 @@ class DynamicClientQuotaPublisher(
   ): Unit = {
     val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
     try {
-      quotaManagers.clientQuotaCallback().ifPresent(clientQuotaCallback => {
-        if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
-          val cluster = KRaftMetadataCache.toCluster(clusterId, newImage)
-          if (clientQuotaCallback.updateClusterMetadata(cluster)) {
-            quotaManagers.fetch.updateQuotaMetricConfigs()
-            quotaManagers.produce.updateQuotaMetricConfigs()
-            quotaManagers.request.updateQuotaMetricConfigs()
-            quotaManagers.controllerMutation.updateQuotaMetricConfigs()
-          }
-        }
-      })
       Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
         clientQuotaMetadataManager.update(clientQuotasDelta)
       }
