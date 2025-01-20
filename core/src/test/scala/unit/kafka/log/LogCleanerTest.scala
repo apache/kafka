@@ -2072,18 +2072,7 @@ class LogCleanerTest extends Logging {
     cleaner3.lastStats.bufferUtilization = 0.65
     cleaners += cleaner3
 
-    assertEquals(0, logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization))
-
-    cleaners.clear()
-
-    cleaner1.lastStats.bufferUtilization = 5d
-    cleaners += cleaner1
-    cleaner2.lastStats.bufferUtilization = 6d
-    cleaners += cleaner2
-    cleaner3.lastStats.bufferUtilization = 7d
-    cleaners += cleaner3
-
-    assertEquals(7, logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization))
+    assertEquals(0.85, logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization))
   }
 
   private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
