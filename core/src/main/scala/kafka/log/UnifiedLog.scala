@@ -85,13 +85,6 @@ import scala.jdk.OptionConverters.{RichOption, RichOptional, RichOptionalInt}
  * @param _topicId optional Uuid to specify the topic ID for the topic if it exists. Should only be specified when
  *                first creating the log through Partition.makeLeader or Partition.makeFollower. When reloading a log,
  *                this field will be populated by reading the topic ID value from partition.metadata if it exists.
- * @param keepPartitionMetadataFile boolean flag to indicate whether the partition.metadata file should be kept in the
- *                                  log directory. A partition.metadata file is only created when the raft controller is used
- *                                  or the ZK controller and this broker's inter-broker protocol version is at least 2.8.
- *                                  This file will persist the topic ID on the broker. If inter-broker protocol for a ZK controller
- *                                  is downgraded below 2.8, a topic ID may be lost and a new ID generated upon re-upgrade.
- *                                  If the inter-broker protocol version on a ZK cluster is below 2.8, partition.metadata
- *                                  will be deleted to avoid ID conflicts upon re-upgrade.
  * @param remoteStorageSystemEnable flag to indicate whether the system level remote log storage is enabled or not.
  */
 @threadsafe
@@ -102,7 +95,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                  @volatile var leaderEpochCache: LeaderEpochFileCache,
                  val producerStateManager: ProducerStateManager,
                  @volatile private var _topicId: Option[Uuid],
-                 val keepPartitionMetadataFile: Boolean,
                  val remoteStorageSystemEnable: Boolean = false,
                  @volatile private var logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER) extends Logging with AutoCloseable {
 
@@ -190,40 +182,26 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /**
    * Initialize topic ID information for the log by maintaining the partition metadata file and setting the in-memory _topicId.
-   * Delete partition metadata file if the version does not support topic IDs.
    * Set _topicId based on a few scenarios:
-   *   - Recover topic ID if present and topic IDs are supported. Ensure we do not try to assign a provided topicId that is inconsistent
+   *   - Recover topic ID if present. Ensure we do not try to assign a provided topicId that is inconsistent
    *     with the ID on file.
-   *   - If we were provided a topic ID when creating the log, partition metadata files are supported, and one does not yet exist
+   *   - If we were provided a topic ID when creating the log and one does not yet exist
    *     set _topicId and write to the partition metadata file.
-   *   - Otherwise set _topicId to None
    */
   private def initializeTopicId(): Unit =  {
     val partMetadataFile = partitionMetadataFile.getOrElse(
       throw new KafkaException("The partitionMetadataFile should have been initialized"))
 
     if (partMetadataFile.exists()) {
-      if (keepPartitionMetadataFile) {
-        val fileTopicId = partMetadataFile.read().topicId
-        if (_topicId.isDefined && !_topicId.contains(fileTopicId))
-          throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
-            s"but log already contained topic ID $fileTopicId")
+      val fileTopicId = partMetadataFile.read().topicId
+      if (_topicId.isDefined && !_topicId.contains(fileTopicId))
+        throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+          s"but log already contained topic ID $fileTopicId")
 
-        _topicId = Some(fileTopicId)
-
-      } else {
-        try partMetadataFile.delete()
-        catch {
-          case e: IOException =>
-            error(s"Error while trying to delete partition metadata file $partMetadataFile", e)
-        }
-      }
-    } else if (keepPartitionMetadataFile) {
+      _topicId = Some(fileTopicId)
+    } else {
       _topicId.foreach(partMetadataFile.record)
       scheduler.scheduleOnce("flush-metadata-file", () => maybeFlushMetadataFile())
-    } else {
-      // We want to keep the file and the in-memory topic ID in sync.
-      _topicId = None
     }
   }
 
@@ -493,17 +471,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         }
 
       case None =>
-        if (keepPartitionMetadataFile) {
-          _topicId = Some(topicId)
-          partitionMetadataFile match {
-            case Some(partMetadataFile) =>
-              if (!partMetadataFile.exists()) {
-                partMetadataFile.record(topicId)
-                scheduler.scheduleOnce("flush-metadata-file", () => maybeFlushMetadataFile())
-              }
-            case _ => warn(s"The topic id $topicId will not be persisted to the partition metadata file " +
-              "since the partition is deleted")
-          }
+        _topicId = Some(topicId)
+        partitionMetadataFile match {
+          case Some(partMetadataFile) =>
+            if (!partMetadataFile.exists()) {
+              partMetadataFile.record(topicId)
+              scheduler.scheduleOnce("flush-metadata-file", () => maybeFlushMetadataFile())
+            }
+          case _ => warn(s"The topic id $topicId will not be persisted to the partition metadata file " +
+            "since the partition is deleted")
         }
     }
   }
@@ -815,7 +791,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
             validRecords = validateAndOffsetAssignResult.validatedRecords
             appendInfo.setMaxTimestamp(validateAndOffsetAssignResult.maxTimestampMs)
-            appendInfo.setShallowOffsetOfMaxTimestamp(validateAndOffsetAssignResult.shallowOffsetOfMaxTimestamp)
             appendInfo.setLastOffset(offset.value - 1)
             appendInfo.setRecordValidationStats(validateAndOffsetAssignResult.recordValidationStats)
             if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
@@ -901,7 +876,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               // will be cleaned up after the log directory is recovered. Note that the end offset of the
               // ProducerStateManager will not be updated and the last stable offset will not advance
               // if the append to the transaction index fails.
-              localLog.append(appendInfo.lastOffset, appendInfo.maxTimestamp, appendInfo.shallowOffsetOfMaxTimestamp, validRecords)
+              localLog.append(appendInfo.lastOffset, validRecords)
               updateHighWatermarkWithLogEndOffset()
 
               // update the producer state
@@ -1182,7 +1157,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     else
       OptionalInt.empty()
 
-    new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, shallowOffsetOfMaxTimestamp,
+    new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp,
       RecordBatch.NO_TIMESTAMP, logStartOffset, RecordValidationStats.EMPTY, sourceCompression,
       validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], LeaderHwChange.NONE)
   }
@@ -1989,7 +1964,6 @@ object UnifiedLog extends Logging {
             logDirFailureChannel: LogDirFailureChannel,
             lastShutdownClean: Boolean = true,
             topicId: Option[Uuid],
-            keepPartitionMetadataFile: Boolean,
             numRemainingSegments: ConcurrentMap[String, Integer] = new ConcurrentHashMap[String, Integer],
             remoteStorageSystemEnable: Boolean = false,
             logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
@@ -2034,7 +2008,6 @@ object UnifiedLog extends Logging {
       leaderEpochCache,
       producerStateManager,
       topicId,
-      keepPartitionMetadataFile,
       remoteStorageSystemEnable,
       logOffsetsListener)
   }

@@ -142,10 +142,10 @@ script will be called on the VM just prior to executing the client.
 def create_verifiable_client_implementation(context, parent):
     """Factory for generating a verifiable client implementation class instance
 
-    :param parent: parent class instance, either VerifiableConsumer or VerifiableProducer
+    :param parent: parent class instance, either VerifiableConsumer, VerifiableProducer or VerifiableShareConsumer
 
     This will first check for a fully qualified client implementation class name
-    in context.globals as "Verifiable<type>" where <type> is "Producer" or "Consumer",
+    in context.globals as "Verifiable<type>" where <type> is "Producer" or "Consumer" or "ShareConsumer",
     followed by "VerifiableClient" (which should implement both).
     The global object layout is: {"class": "<full class name>", "..anything..": ..}.
 
@@ -232,11 +232,11 @@ class VerifiableClient (object):
 
 class VerifiableClientJava (VerifiableClient):
     """
-    Verifiable Consumer and Producer using the official Java client.
+    Verifiable Consumer, ShareConsumer and Producer using the official Java client.
     """
     def __init__(self, parent, conf=None):
         """
-        :param parent: The parent instance, either VerifiableConsumer or VerifiableProducer
+        :param parent: The parent instance, either VerifiableConsumer, VerifiableShareConsumer or VerifiableProducer
         :param conf: Optional conf object (the --globals VerifiableX object)
         """
         super(VerifiableClientJava, self).__init__()
@@ -267,7 +267,7 @@ class VerifiableClientDummy (VerifiableClient):
     """
     def __init__(self, parent, conf=None):
         """
-        :param parent: The parent instance, either VerifiableConsumer or VerifiableProducer
+        :param parent: The parent instance, either VerifiableConsumer, VerifiableShareConsumer or VerifiableProducer
         :param conf: Optional conf object (the --globals VerifiableX object)
         """
         super(VerifiableClientDummy, self).__init__()

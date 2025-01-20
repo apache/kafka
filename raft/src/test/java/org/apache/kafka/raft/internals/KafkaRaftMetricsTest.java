@@ -116,6 +116,7 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordVoterQuorumState(KRaftVersion kraftVersion) {
         boolean withDirectoryId = kraftVersion.featureLevel() > 0;
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2), withDirectoryId);
+        Uuid voter2DirectoryId = voterMap.get(2).voterKey().directoryId().orElse(Uuid.ZERO_UUID);
         voterMap.put(
             localId,
             VoterSetTest.voterNode(
@@ -131,9 +132,22 @@ public class KafkaRaftMetricsTest {
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
+        // unattached
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
-        assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
-        assertEquals((double) -1L, getMetric(metrics, "current-vote").metricValue());
+        assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
+        assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            Uuid.ZERO_UUID.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
+        assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
+        assertEquals((double) -1, getMetric(metrics, "high-watermark").metricValue());
+
+        // prospective
+        state.transitionToProspective();
+        assertEquals("prospective", getMetric(metrics, "current-state").metricValue());
+        assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
+        assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
         assertEquals(
             Uuid.ZERO_UUID.toString(),
             getMetric(metrics, "current-vote-directory-id").metricValue()
@@ -141,17 +155,59 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
+        // prospective with votedKey
+        state.prospectiveAddVotedState(0, ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID));
+        assertEquals("prospective-voted", getMetric(metrics, "current-state").metricValue());
+        assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
+        assertEquals((double) 1, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            Uuid.ZERO_UUID.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
+        assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
+        assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
+
+        // follower with votedKey and leader
+        state.transitionToFollower(0, 2, voters.listeners(2));
+        assertEquals("follower", getMetric(metrics, "current-state").metricValue());
+        assertEquals((double) 2, getMetric(metrics, "current-leader").metricValue());
+        assertEquals((double) 1, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            Uuid.ZERO_UUID.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
+        assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
+        assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
+
+        // follower with updated HW
+        state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(5L));
+        assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
+
+        // prospective with votedKey and leader
+        state.transitionToProspective();
+        assertEquals("prospective-voted", getMetric(metrics, "current-state").metricValue());
+        assertEquals((double) 2, getMetric(metrics, "current-leader").metricValue());
+        assertEquals((double) 1, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            Uuid.ZERO_UUID.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
+        assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
+        assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
+
+        // candidate
         state.transitionToCandidate();
         assertEquals("candidate", getMetric(metrics, "current-state").metricValue());
-        assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
+        assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-vote").metricValue());
         assertEquals(
             localDirectoryId.toString(),
             getMetric(metrics, "current-vote-directory-id").metricValue()
         );
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
-        assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
+        assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
+        // leader
         state.candidateStateOrThrow().recordGrantedVote(1);
         state.transitionToLeader(2L, accumulator);
         assertEquals("leader", getMetric(metrics, "current-state").metricValue());
@@ -162,16 +218,18 @@ public class KafkaRaftMetricsTest {
             getMetric(metrics, "current-vote-directory-id").metricValue()
         );
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
-        assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
+        assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue()); // todo, bug fix
 
-        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L), voters);
+        // leader with updated HW
+        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(10L), voters);
         state.leaderStateOrThrow().updateReplicaState(
             voterMap.get(1).voterKey(),
             0,
-            new LogOffsetMetadata(5L)
+            new LogOffsetMetadata(10L)
         );
-        assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
+        assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
+        // follower
         state.transitionToFollower(2, 1, voters.listeners(1));
         assertEquals("follower", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
@@ -181,25 +239,25 @@ public class KafkaRaftMetricsTest {
             getMetric(metrics, "current-vote-directory-id").metricValue()
         );
         assertEquals((double) 2, getMetric(metrics, "current-epoch").metricValue());
-        assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
-
-        state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(10L));
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToUnattachedVotedState(3, ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID));
-        assertEquals("voted", getMetric(metrics, "current-state").metricValue());
+        // unattached with votedKey
+        state.transitionToUnattached(3, OptionalInt.empty());
+        state.unattachedAddVotedState(3, ReplicaKey.of(2, voter2DirectoryId));
+        assertEquals("unattached-voted", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) 2, getMetric(metrics, "current-vote").metricValue());
         assertEquals(
-            Uuid.ZERO_UUID.toString(),
+            voter2DirectoryId.toString(),
             getMetric(metrics, "current-vote-directory-id").metricValue()
         );
         assertEquals((double) 3, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToUnattached(4);
+        // unattached with leader without votedKey
+        state.transitionToUnattached(4, OptionalInt.of(1));
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
-        assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
+        assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
         assertEquals(
             Uuid.ZERO_UUID.toString(),
@@ -244,7 +302,7 @@ public class KafkaRaftMetricsTest {
         state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(10L));
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToUnattached(4);
+        state.transitionToUnattached(4, OptionalInt.empty());
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
