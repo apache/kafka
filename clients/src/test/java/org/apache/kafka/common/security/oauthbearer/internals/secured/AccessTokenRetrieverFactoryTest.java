@@ -50,7 +50,6 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
         File tmpDir = createTempDir("access-token");
         File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", expected);
 
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         Map<String, Object> jaasConfig = Collections.emptyMap();
 
@@ -64,7 +63,6 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
     public void testConfigureRefreshingFileAccessTokenRetrieverWithInvalidDirectory() {
         // Should fail because the parent path doesn't exist.
         String file = new File("/tmp/this-directory-does-not-exist/foo.json").toURI().toString();
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, file);
         Map<String, Object> jaasConfig = Collections.emptyMap();
         assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetrieverFactory.create(configs, jaasConfig), "that doesn't exist");
@@ -72,10 +70,9 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
 
     @Test
     public void testConfigureRefreshingFileAccessTokenRetrieverWithInvalidFile() throws Exception {
-        // Should fail because the parent path exists, the file itself doesn't.
+        // Should fail because while the parent path exists, the file itself doesn't.
         File tmpDir = createTempDir("this-directory-does-exist");
         File accessTokenFile = new File(tmpDir, "this-file-does-not-exist.json");
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         Map<String, Object> jaasConfig = Collections.emptyMap();
         assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetrieverFactory.create(configs, jaasConfig), "that doesn't exist");
@@ -83,13 +80,13 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
 
     @Test
     public void testSaslOauthbearerTokenEndpointUrlIsNotAllowed() throws Exception {
-        // Should fail because the while the parent path exists, the file itself doesn't.
+        // Should fail because while the parent path exists, the file itself doesn't.
         File tmpDir = createTempDir("not_allowed");
         File accessTokenFile = new File(tmpDir, "not_allowed.json");
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "nothing");
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         assertThrowsWithMessage(IllegalArgumentException.class, () -> AccessTokenRetrieverFactory.create(configs, Collections.emptyMap()),
-                accessTokenFile.toURI().toString() + " is not allowed. Update System property 'org.apache.kafka.sasl.oauthbearer.allowed.urls' to allow " + accessTokenFile.toURI().toString());
+                ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
     }
 
     @ParameterizedTest

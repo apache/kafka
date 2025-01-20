@@ -246,7 +246,7 @@ public class ConfigurationUtils {
 
         String value = get(urlConfig);
         if (!allowedLoginModuleList.contains(value)) {
-            throw new IllegalArgumentException(value + " is not allowed. Update System property '"
+            throw new IllegalArgumentException(value + " is not allowed. Update system property '"
                     + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
         }
     }
