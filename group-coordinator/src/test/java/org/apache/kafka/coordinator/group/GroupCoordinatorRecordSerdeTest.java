@@ -41,7 +41,6 @@ public class GroupCoordinatorRecordSerdeTest {
     public void testSerializeKey() {
         GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
         CoordinatorRecord record = CoordinatorRecord.record(
-            (short) 3,
             new ConsumerGroupMetadataKey().setGroupId("group"),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue().setEpoch(10),
@@ -59,7 +58,6 @@ public class GroupCoordinatorRecordSerdeTest {
     public void testSerializeValue() {
         GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
         CoordinatorRecord record = CoordinatorRecord.record(
-            (short) 3,
             new ConsumerGroupMetadataKey().setGroupId("group"),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue().setEpoch(10),
@@ -77,7 +75,6 @@ public class GroupCoordinatorRecordSerdeTest {
     public void testSerializeNullValue() {
         GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
         CoordinatorRecord record = CoordinatorRecord.tombstone(
-            (short) 1,
             new ConsumerGroupMetadataKey().setGroupId("group")
         );
 

@@ -31,24 +31,17 @@ import java.util.Objects;
 public class CoordinatorRecord {
 
     public static CoordinatorRecord record(
-        short type,
         ApiMessage key,
         ApiMessageAndVersion value
     ) {
-        return new CoordinatorRecord(type, key, value);
+        return new CoordinatorRecord(key, value);
     }
 
     public static CoordinatorRecord tombstone(
-        short type,
         ApiMessage key
     ) {
-        return new CoordinatorRecord(type, key, null);
+        return new CoordinatorRecord(key, null);
     }
-
-    /**
-     * The type of the record.
-     */
-    private final short type;
 
     /**
      * The key of the record.
@@ -68,11 +61,12 @@ public class CoordinatorRecord {
      * @param value A key or null.
      */
     private CoordinatorRecord(
-        short type,
         ApiMessage key,
         ApiMessageAndVersion value
     ) {
-        this.type = type;
+        if (value != null && value.message().apiKey() != key.apiKey()) {
+            throw new IllegalArgumentException("The key and the value must have the same type.");
+        }
         this.key = Objects.requireNonNull(key);
         this.value = value;
     }
@@ -81,7 +75,7 @@ public class CoordinatorRecord {
      * @return The type.
      */
     public short type() {
-        return this.type;
+        return this.key.apiKey();
     }
 
     /**
@@ -103,16 +97,16 @@ public class CoordinatorRecord {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         CoordinatorRecord that = (CoordinatorRecord) o;
-        return type == that.type && Objects.equals(key, that.key) && Objects.equals(value, that.value);
+        return Objects.equals(key, that.key) && Objects.equals(value, that.value);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, key, value);
+        return Objects.hash(key, value);
     }
 
     @Override
     public String toString() {
-        return "CoordinatorRecord(short=" + type + ", key=" + key + ", value=" + value + ")";
+        return "CoordinatorRecord(key=" + key + ", value=" + value + ")";
     }
 }

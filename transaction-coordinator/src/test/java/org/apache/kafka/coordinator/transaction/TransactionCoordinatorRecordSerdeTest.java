@@ -40,7 +40,6 @@ public class TransactionCoordinatorRecordSerdeTest {
     public void testSerializeKey() {
         TransactionCoordinatorRecordSerde serializer = new TransactionCoordinatorRecordSerde();
         CoordinatorRecord record = CoordinatorRecord.record(
-            (short) 0,
             new TransactionLogKey().setTransactionalId("txnId"),
             new ApiMessageAndVersion(
                 new TransactionLogValue(),
@@ -58,7 +57,6 @@ public class TransactionCoordinatorRecordSerdeTest {
     public void testSerializeValue() {
         TransactionCoordinatorRecordSerde serializer = new TransactionCoordinatorRecordSerde();
         CoordinatorRecord record = CoordinatorRecord.record(
-            (short) 0,
             new TransactionLogKey().setTransactionalId("txnId"),
             new ApiMessageAndVersion(
                 new TransactionLogValue(),
@@ -76,7 +74,6 @@ public class TransactionCoordinatorRecordSerdeTest {
     public void testSerializeNullValue() {
         TransactionCoordinatorRecordSerde serializer = new TransactionCoordinatorRecordSerde();
         CoordinatorRecord record = CoordinatorRecord.tombstone(
-            (short) 0,
             new TransactionLogKey().setTransactionalId("txnId")
         );
 

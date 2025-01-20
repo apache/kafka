@@ -52,7 +52,6 @@ public class ShareCoordinatorRecordHelpersTest {
         );
 
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
-            (short) 0,
             new ShareSnapshotKey()
                 .setGroupId(groupId)
                 .setTopicId(topicId)
@@ -94,7 +93,6 @@ public class ShareCoordinatorRecordHelpersTest {
         );
 
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
-            (short) 1,
             new ShareUpdateKey()
                 .setGroupId(groupId)
                 .setTopicId(topicId)

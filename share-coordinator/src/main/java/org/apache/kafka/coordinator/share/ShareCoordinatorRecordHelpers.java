@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.share.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
@@ -30,7 +29,6 @@ import java.util.stream.Collectors;
 public class ShareCoordinatorRecordHelpers {
     public static CoordinatorRecord newShareSnapshotRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
         return CoordinatorRecord.record(
-            CoordinatorRecordType.SHARE_SNAPSHOT.id(),
             new ShareSnapshotKey()
                 .setGroupId(groupId)
                 .setTopicId(topicId)
@@ -54,7 +52,6 @@ public class ShareCoordinatorRecordHelpers {
 
     public static CoordinatorRecord newShareSnapshotUpdateRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
         return CoordinatorRecord.record(
-            CoordinatorRecordType.SHARE_UPDATE.id(),
             new ShareUpdateKey()
                 .setGroupId(groupId)
                 .setTopicId(topicId)

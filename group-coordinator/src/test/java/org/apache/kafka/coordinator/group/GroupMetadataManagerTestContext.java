@@ -229,7 +229,6 @@ public class GroupMetadataManagerTestContext {
         GroupMetadataValue value
     ) {
         return CoordinatorRecord.record(
-            (short) 2,
             new GroupMetadataKey()
                 .setGroup(groupId),
             new ApiMessageAndVersion(
