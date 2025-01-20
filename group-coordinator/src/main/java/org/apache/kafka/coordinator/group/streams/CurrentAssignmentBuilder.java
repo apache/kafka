@@ -88,10 +88,8 @@ public class CurrentAssignmentBuilder {
      * @param targetAssignment      The target assignment.
      * @return This object.
      */
-    public CurrentAssignmentBuilder withTargetAssignment(
-        int targetAssignmentEpoch,
-        TaskTuple targetAssignment
-    ) {
+    public CurrentAssignmentBuilder withTargetAssignment(int targetAssignmentEpoch,
+                                                         TaskTuple targetAssignment) {
         this.targetAssignmentEpoch = targetAssignmentEpoch;
         this.targetAssignment = Objects.requireNonNull(targetAssignment);
         return this;
@@ -102,13 +100,11 @@ public class CurrentAssignmentBuilder {
      * used by the state machine to determine if an active task is free or still used by another
      * member, and if there is still a task on a specific process that is not yet revoked.
      *
-     * @param currentActiveTaskProcessId A BiFunction which gets the memberId of a subtopology id /
-     *                                   partition id pair.
+     * @param currentActiveTaskProcessId A BiFunction which gets the process ID of a subtopology ID /
+     *                                   partition ID pair.
      * @return This object.
      */
-    public CurrentAssignmentBuilder withCurrentActiveTaskProcessId(
-        BiFunction<String, Integer, String> currentActiveTaskProcessId
-    ) {
+    public CurrentAssignmentBuilder withCurrentActiveTaskProcessId(BiFunction<String, Integer, String> currentActiveTaskProcessId) {
         this.currentActiveTaskProcessId = Objects.requireNonNull(currentActiveTaskProcessId);
         return this;
     }
@@ -118,8 +114,8 @@ public class CurrentAssignmentBuilder {
      * used by the state machine to determine if there is still a task on a specific process that is
      * not yet revoked.
      *
-     * @param currentStandbyTaskProcessIds A BiFunction which gets the memberIds of a subtopology
-     *                                     ids / partition ids pair.
+     * @param currentStandbyTaskProcessIds A BiFunction which gets the process IDs of a subtopology
+     *                                     ID / partition ID pair.
      * @return This object.
      */
     public CurrentAssignmentBuilder withCurrentStandbyTaskProcessIds(
@@ -134,13 +130,11 @@ public class CurrentAssignmentBuilder {
      * used by the state machine to determine if there is still a task on a specific process that is
      * not yet revoked.
      *
-     * @param currentWarmupTaskProcessIds A BiFunction which gets the memberIds of a subtopology ids
-     *                                    / partition ids pair.
+     * @param currentWarmupTaskProcessIds A BiFunction which gets the process IDs of a subtopology ID
+     *                                    / partition ID pair.
      * @return This object.
      */
-    public CurrentAssignmentBuilder withCurrentWarmupTaskProcessIds(
-        BiFunction<String, Integer, Set<String>> currentWarmupTaskProcessIds
-    ) {
+    public CurrentAssignmentBuilder withCurrentWarmupTaskProcessIds(BiFunction<String, Integer, Set<String>> currentWarmupTaskProcessIds) {
         this.currentWarmupTaskProcessIds = Objects.requireNonNull(currentWarmupTaskProcessIds);
         return this;
     }
@@ -153,9 +147,7 @@ public class CurrentAssignmentBuilder {
      * @param ownedAssignment A collection of active, standby and warm-up tasks
      * @return This object.
      */
-    protected CurrentAssignmentBuilder withOwnedAssignment(
-        TaskTuple ownedAssignment
-    ) {
+    protected CurrentAssignmentBuilder withOwnedAssignment(TaskTuple ownedAssignment) {
         this.ownedTasks = Optional.ofNullable(ownedAssignment);
         return this;
     }
@@ -259,42 +251,59 @@ public class CurrentAssignmentBuilder {
         allSubtopologyIds.addAll(currentAssignment.keySet());
 
         for (String subtopologyId : allSubtopologyIds) {
-            Set<Integer> currentPartitions = currentAssignment.getOrDefault(subtopologyId, Collections.emptySet());
-            Set<Integer> targetPartitions = targetAssignment.getOrDefault(subtopologyId, Collections.emptySet());
-
-            // Result Assigned Partitions = Current Partitions ∩ Target Partitions
-            // i.e. we remove all partitions from the current assignment that are not in the target
-            //         assignment
-            Set<Integer> resultAssignedPartitions = new HashSet<>(currentPartitions);
-            resultAssignedPartitions.retainAll(targetPartitions);
-
-            // Result Partitions Pending Revocation = Current Partitions - Result Assigned Partitions
-            // i.e. we will ask the member to revoke all partitions in its current assignment that
-            //      are not in the target assignment
-            Set<Integer> resultPartitionsPendingRevocation = new HashSet<>(currentPartitions);
-            resultPartitionsPendingRevocation.removeAll(resultAssignedPartitions);
-
-            // Result Partitions Pending Assignment = Target Partitions - Result Assigned Partitions - Unreleased Partitions
-            // i.e. we will ask the member to assign all partitions in its target assignment,
-            //      except those that are already assigned, and those that are unrelead
-            Set<Integer> resultPartitionsPendingAssignment = new HashSet<>(targetPartitions);
-            resultPartitionsPendingAssignment.removeAll(resultAssignedPartitions);
-            hasUnreleasedTasks = resultPartitionsPendingAssignment.removeIf(partitionId ->
-                isUnreleasedTask.test(subtopologyId, partitionId)
-            ) || hasUnreleasedTasks;
-
-            if (!resultAssignedPartitions.isEmpty()) {
-                resultAssignedTasks.put(subtopologyId, resultAssignedPartitions);
-            }
-
-            if (!resultPartitionsPendingRevocation.isEmpty()) {
-                resultTasksPendingRevocation.put(subtopologyId, resultPartitionsPendingRevocation);
-            }
-
-            if (!resultPartitionsPendingAssignment.isEmpty()) {
-                resultTasksPendingAssignment.put(subtopologyId, resultPartitionsPendingAssignment);
-            }
+            hasUnreleasedTasks |= computeAssignmentDifferenceForOneSubtopology(
+                subtopologyId,
+                currentAssignment.getOrDefault(subtopologyId, Collections.emptySet()),
+                targetAssignment.getOrDefault(subtopologyId, Collections.emptySet()),
+                resultAssignedTasks,
+                resultTasksPendingRevocation,
+                resultTasksPendingAssignment,
+                isUnreleasedTask
+            );
         }
+        return hasUnreleasedTasks;
+    }
+
+    private static boolean computeAssignmentDifferenceForOneSubtopology(final String subtopologyId,
+                                                                        final Set<Integer> currentTasksForThisSubtopology,
+                                                                        final Set<Integer> targetTasksForThisSubtopology,
+                                                                        final Map<String, Set<Integer>> resultAssignedTasks,
+                                                                        final Map<String, Set<Integer>> resultTasksPendingRevocation,
+                                                                        final Map<String, Set<Integer>> resultTasksPendingAssignment,
+                                                                        final BiPredicate<String, Integer> isUnreleasedTask) {
+        // Result Assigned Tasks = Current Tasks ∩ Target Tasks
+        // i.e. we remove all tasks from the current assignment that are not in the target
+        //         assignment
+        Set<Integer> resultAssignedTasksForThisSubtopology = new HashSet<>(currentTasksForThisSubtopology);
+        resultAssignedTasksForThisSubtopology.retainAll(targetTasksForThisSubtopology);
+
+        // Result Tasks Pending Revocation = Current Tasks - Result Assigned Tasks
+        // i.e. we will ask the member to revoke all tasks in its current assignment that
+        //      are not in the target assignment
+        Set<Integer> resultTasksPendingRevocationForThisSubtopology = new HashSet<>(currentTasksForThisSubtopology);
+        resultTasksPendingRevocationForThisSubtopology.removeAll(resultAssignedTasksForThisSubtopology);
+
+        // Result Tasks Pending Assignment = Target Tasks - Result Assigned Tasks - Unreleased Tasks
+        // i.e. we will ask the member to assign all tasks in its target assignment,
+        //      except those that are already assigned, and those that are unreleased
+        Set<Integer> resultTasksPendingAssignmentForThisSubtopology = new HashSet<>(targetTasksForThisSubtopology);
+        resultTasksPendingAssignmentForThisSubtopology.removeAll(resultAssignedTasksForThisSubtopology);
+        boolean hasUnreleasedTasks = resultTasksPendingAssignmentForThisSubtopology.removeIf(taskId ->
+            isUnreleasedTask.test(subtopologyId, taskId)
+        );
+
+        if (!resultAssignedTasksForThisSubtopology.isEmpty()) {
+            resultAssignedTasks.put(subtopologyId, resultAssignedTasksForThisSubtopology);
+        }
+
+        if (!resultTasksPendingRevocationForThisSubtopology.isEmpty()) {
+            resultTasksPendingRevocation.put(subtopologyId, resultTasksPendingRevocationForThisSubtopology);
+        }
+
+        if (!resultTasksPendingAssignmentForThisSubtopology.isEmpty()) {
+            resultTasksPendingAssignment.put(subtopologyId, resultTasksPendingAssignmentForThisSubtopology);
+        }
+
         return hasUnreleasedTasks;
     }
 
@@ -385,12 +394,11 @@ public class CurrentAssignmentBuilder {
         );
     }
 
-    private StreamsGroupMember buildNewMember(
-        final int memberEpoch,
-        final TaskTuple newTasksPendingRevocation,
-        final TaskTuple newAssignedTasks,
-        final TaskTuple newTasksPendingAssignment,
-        final boolean hasUnreleasedTasks) {
+    private StreamsGroupMember buildNewMember(final int memberEpoch,
+                                              final TaskTuple newTasksPendingRevocation,
+                                              final TaskTuple newAssignedTasks,
+                                              final TaskTuple newTasksPendingAssignment,
+                                              final boolean hasUnreleasedTasks) {
 
         final boolean hasTasksToBeRevoked =
             (!newTasksPendingRevocation.isEmpty())

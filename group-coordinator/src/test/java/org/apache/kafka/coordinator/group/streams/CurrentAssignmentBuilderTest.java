@@ -33,46 +33,48 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CurrentAssignmentBuilderTest {
 
+    private static final String SUBTOPOLOGY_ID1 = Uuid.randomUuid().toString();
+    private static final String SUBTOPOLOGY_ID2 = Uuid.randomUuid().toString();
+    private static final String PROCESS_ID = "process_id";
+    private static final String MEMBER_NAME = "member";
+
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testStableToStable(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
         StreamsGroupMember member =
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.STABLE)
-                .setProcessId("process")
+                .setProcessId(PROCESS_ID)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(10)
                 .setAssignedTasks(
                     mkTaskTuple(
                         taskRole,
-                        mkTasks(subtopologyId1, 1, 2),
-                        mkTasks(subtopologyId2, 3, 4)))
+                        mkTasks(SUBTOPOLOGY_ID1, 1, 2),
+                        mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
                 .setTasksPendingRevocation(TaskTuple.EMPTY)
                 .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 1, 2),
-                mkTasks(subtopologyId2, 3, 4)))
-            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> "process")
+                mkTasks(SUBTOPOLOGY_ID1, 1, 2),
+                mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
+            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
             .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.STABLE)
-                .setProcessId("process")
+                .setProcessId(PROCESS_ID)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setAssignedTasks(mkTaskTuple(
                     taskRole,
-                    mkTasks(subtopologyId1, 1, 2),
-                    mkTasks(subtopologyId2, 3, 4)))
+                    mkTasks(SUBTOPOLOGY_ID1, 1, 2),
+                    mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
                 .setTasksPendingRevocation(TaskTuple.EMPTY)
                 .build(),
             updatedMember
@@ -82,24 +84,21 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testStableToStableWithNewTasks(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.STABLE)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 1, 2),
-                mkTasks(subtopologyId2, 3, 4)))
+                mkTasks(SUBTOPOLOGY_ID1, 1, 2),
+                mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
             .setTasksPendingRevocation(TaskTuple.EMPTY)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 1, 2, 4),
-                mkTasks(subtopologyId2, 3, 4, 7)))
+                mkTasks(SUBTOPOLOGY_ID1, 1, 2, 4),
+                mkTasks(SUBTOPOLOGY_ID2, 3, 4, 7)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
@@ -107,14 +106,14 @@ public class CurrentAssignmentBuilderTest {
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.STABLE)
-                .setProcessId("process")
+                .setProcessId(PROCESS_ID)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setAssignedTasks(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 1, 2, 4),
-                    mkTasks(subtopologyId2, 3, 4, 7)))
+                    mkTasks(SUBTOPOLOGY_ID1, 1, 2, 4),
+                    mkTasks(SUBTOPOLOGY_ID2, 3, 4, 7)))
                 .setTasksPendingRevocation(TaskTuple.EMPTY)
                 .build(),
             updatedMember
@@ -124,24 +123,21 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testStableToUnrevokedTasks(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.STABLE)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 1, 2),
-                mkTasks(subtopologyId2, 3, 4)))
+                mkTasks(SUBTOPOLOGY_ID1, 1, 2),
+                mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
             .setTasksPendingRevocation(TaskTuple.EMPTY)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 4, 5)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 4, 5)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
@@ -149,17 +145,17 @@ public class CurrentAssignmentBuilderTest {
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.UNREVOKED_TASKS)
-                .setProcessId("process")
+                .setProcessId(PROCESS_ID)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(10)
                 .setAssignedTasks(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 2),
-                    mkTasks(subtopologyId2, 4)))
+                    mkTasks(SUBTOPOLOGY_ID1, 2),
+                    mkTasks(SUBTOPOLOGY_ID2, 4)))
                 .setTasksPendingRevocation(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 1),
-                    mkTasks(subtopologyId2, 3)))
+                    mkTasks(SUBTOPOLOGY_ID1, 1),
+                    mkTasks(SUBTOPOLOGY_ID2, 3)))
                 .build(),
             updatedMember
         );
@@ -168,39 +164,36 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testStableToUnreleasedTasks(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.STABLE)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 1, 2),
-                mkTasks(subtopologyId2, 3, 4)))
+                mkTasks(SUBTOPOLOGY_ID1, 1, 2),
+                mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
             .setTasksPendingRevocation(TaskTuple.EMPTY)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 1, 2, 4),
-                mkTasks(subtopologyId2, 3, 4, 7)))
-            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> "process")
+                mkTasks(SUBTOPOLOGY_ID1, 1, 2, 4),
+                mkTasks(SUBTOPOLOGY_ID2, 3, 4, 7)))
+            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
             .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.UNRELEASED_TASKS)
-                .setProcessId("process")
+                .setProcessId(PROCESS_ID)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setAssignedTasks(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 1, 2),
-                    mkTasks(subtopologyId2, 3, 4)))
+                    mkTasks(SUBTOPOLOGY_ID1, 1, 2),
+                    mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
                 .setTasksPendingRevocation(TaskTuple.EMPTY)
                 .build(),
             updatedMember
@@ -210,26 +203,23 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testStableToUnreleasedTasksWithOwnedTasksNotHavingRevokedTasks(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.STABLE)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 1, 2),
-                mkTasks(subtopologyId2, 3, 4)))
+                mkTasks(SUBTOPOLOGY_ID1, 1, 2),
+                mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
             .setTasksPendingRevocation(TaskTuple.EMPTY)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 1, 2),
-                mkTasks(subtopologyId2, 3, 5)))
+                mkTasks(SUBTOPOLOGY_ID1, 1, 2),
+                mkTasks(SUBTOPOLOGY_ID2, 3, 5)))
             .withCurrentActiveTaskProcessId((subtopologyId, __) ->
-                subtopologyId2.equals(subtopologyId) ? "process" : null
+                SUBTOPOLOGY_ID2.equals(subtopologyId) ? PROCESS_ID : null
             )
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
@@ -238,14 +228,14 @@ public class CurrentAssignmentBuilderTest {
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.UNRELEASED_TASKS)
-                .setProcessId("process")
+                .setProcessId(PROCESS_ID)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setAssignedTasks(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 1, 2),
-                    mkTasks(subtopologyId2, 3)))
+                    mkTasks(SUBTOPOLOGY_ID1, 1, 2),
+                    mkTasks(SUBTOPOLOGY_ID2, 3)))
                 .setTasksPendingRevocation(TaskTuple.EMPTY)
                 .build(),
             updatedMember
@@ -255,44 +245,41 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testUnrevokedTasksToStable(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNREVOKED_TASKS)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 1),
-                mkTasks(subtopologyId2, 4)))
+                mkTasks(SUBTOPOLOGY_ID1, 1),
+                mkTasks(SUBTOPOLOGY_ID2, 4)))
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
             .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
             .withOwnedAssignment(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.STABLE)
-                .setProcessId("process")
+                .setProcessId(PROCESS_ID)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setAssignedTasks(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 2, 3),
-                    mkTasks(subtopologyId2, 5, 6)))
+                    mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                    mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
                 .setTasksPendingRevocation(TaskTuple.EMPTY)
                 .build(),
             updatedMember
@@ -302,27 +289,24 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testRemainsInUnrevokedTasks(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNREVOKED_TASKS)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 1),
-                mkTasks(subtopologyId2, 4)))
+                mkTasks(SUBTOPOLOGY_ID1, 1),
+                mkTasks(SUBTOPOLOGY_ID2, 4)))
             .build();
 
         CurrentAssignmentBuilder currentAssignmentBuilder = new CurrentAssignmentBuilder(
             member)
             .withTargetAssignment(12, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 3),
-                mkTasks(subtopologyId2, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 6)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
@@ -340,8 +324,8 @@ public class CurrentAssignmentBuilderTest {
             member,
             currentAssignmentBuilder
                 .withOwnedAssignment(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 1, 2, 3),
-                    mkTasks(subtopologyId2, 5, 6)))
+                    mkTasks(SUBTOPOLOGY_ID1, 1, 2, 3),
+                    mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
                 .build()
         );
 
@@ -349,8 +333,8 @@ public class CurrentAssignmentBuilderTest {
             member,
             currentAssignmentBuilder
                 .withOwnedAssignment(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 2, 3),
-                    mkTasks(subtopologyId2, 4, 5, 6)))
+                    mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                    mkTasks(SUBTOPOLOGY_ID2, 4, 5, 6)))
                 .build()
         );
     }
@@ -358,44 +342,41 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testUnrevokedTasksToUnrevokedTasks(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNREVOKED_TASKS)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 1),
-                mkTasks(subtopologyId2, 4)))
+                mkTasks(SUBTOPOLOGY_ID1, 1),
+                mkTasks(SUBTOPOLOGY_ID2, 4)))
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(12, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 3),
-                mkTasks(subtopologyId2, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 6)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withOwnedAssignment(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.UNREVOKED_TASKS)
-                .setProcessId("process")
+                .setProcessId(PROCESS_ID)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setAssignedTasks(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 3),
-                    mkTasks(subtopologyId2, 6)))
+                    mkTasks(SUBTOPOLOGY_ID1, 3),
+                    mkTasks(SUBTOPOLOGY_ID2, 6)))
                 .setTasksPendingRevocation(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 2),
-                    mkTasks(subtopologyId2, 5)))
+                    mkTasks(SUBTOPOLOGY_ID1, 2),
+                    mkTasks(SUBTOPOLOGY_ID2, 5)))
                 .build(),
             updatedMember
         );
@@ -404,43 +385,40 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testUnrevokedTasksToUnreleasedTasks(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNREVOKED_TASKS)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(10)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(TaskTuple.EMPTY)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3, 4),
-                mkTasks(subtopologyId2, 5, 6, 7)))
-            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> "process")
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3, 4),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
+            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
             .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
             .withOwnedAssignment(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6))
             )
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.UNRELEASED_TASKS)
-                .setProcessId("process")
+                .setProcessId(PROCESS_ID)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
                 .setAssignedTasks(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 2, 3),
-                    mkTasks(subtopologyId2, 5, 6)))
+                    mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                    mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
                 .setTasksPendingRevocation(TaskTuple.EMPTY)
                 .build(),
             updatedMember
@@ -450,40 +428,37 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testUnreleasedTasksToStable(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNRELEASED_TASKS)
             .setProcessId("process1")
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(TaskTuple.EMPTY)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(12, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
-            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> "process")
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
+            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.singleton("process"))
+                (subtopologyId, partitionId) -> Collections.singleton(PROCESS_ID))
             .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) ->
-                Collections.singleton("process"))
+                Collections.singleton(PROCESS_ID))
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.STABLE)
                 .setProcessId("process1")
                 .setMemberEpoch(12)
                 .setPreviousMemberEpoch(11)
                 .setAssignedTasks(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 2, 3),
-                    mkTasks(subtopologyId2, 5, 6)))
+                    mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                    mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
                 .setTasksPendingRevocation(TaskTuple.EMPTY)
                 .build(),
             updatedMember
@@ -493,24 +468,21 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testUnreleasedTasksToStableWithNewTasks(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNRELEASED_TASKS)
             .setProcessId("process1")
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(TaskTuple.EMPTY)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3, 4),
-                mkTasks(subtopologyId2, 5, 6, 7)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3, 4),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
@@ -518,14 +490,14 @@ public class CurrentAssignmentBuilderTest {
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.STABLE)
                 .setProcessId("process1")
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
                 .setAssignedTasks(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 2, 3, 4),
-                    mkTasks(subtopologyId2, 5, 6, 7)))
+                    mkTasks(SUBTOPOLOGY_ID1, 2, 3, 4),
+                    mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
                 .setTasksPendingRevocation(TaskTuple.EMPTY)
                 .build(),
             updatedMember
@@ -535,29 +507,26 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testUnreleasedTasksToUnreleasedTasks(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNRELEASED_TASKS)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(TaskTuple.EMPTY)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3, 4),
-                mkTasks(subtopologyId2, 5, 6, 7)))
-            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> "process")
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3, 4),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
+            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.singleton("process"))
+                (subtopologyId, partitionId) -> Collections.singleton(PROCESS_ID))
             .withCurrentWarmupTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.singleton("process"))
+                (subtopologyId, partitionId) -> Collections.singleton(PROCESS_ID))
             .build();
 
         assertEquals(member, updatedMember);
@@ -567,31 +536,28 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testUnreleasedTasksToUnreleasedTasksOtherUnreleasedTaskRole(TaskRole taskRole) {
         // The unreleased task is owned by a task of a different role on the same process.
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNRELEASED_TASKS)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(TaskTuple.EMPTY)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3, 4),
-                mkTasks(subtopologyId2, 5, 6, 7)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3, 4),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> (taskRole == TaskRole.STANDBY)
-                    ? Collections.emptySet() : Collections.singleton("process"))
+                    ? Collections.emptySet() : Collections.singleton(PROCESS_ID))
             .withCurrentWarmupTaskProcessIds(
                 (subtopologyId, partitionId) -> (taskRole == TaskRole.STANDBY)
-                    ? Collections.singleton("process") : Collections.emptySet())
+                    ? Collections.singleton(PROCESS_ID) : Collections.emptySet())
             .build();
 
         assertEquals(member, updatedMember);
@@ -602,37 +568,33 @@ public class CurrentAssignmentBuilderTest {
         // The unreleased task remains unreleased, because it is owned by any other instance in
         // an active role, no matter the process.
         // The task that is not unreleased can be assigned.
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNRELEASED_TASKS)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setAssignedTasks(mkTaskTuple(TaskRole.ACTIVE,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
-            .setTasksPendingRevocation(TaskTuple.EMPTY)
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .build();
 
-        StreamsGroupMember expectedMember = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember expectedMember = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNRELEASED_TASKS)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setAssignedTasks(mkTaskTuple(TaskRole.ACTIVE,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6, 7)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
             .setTasksPendingRevocation(TaskTuple.EMPTY)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, mkTaskTuple(TaskRole.ACTIVE,
-                mkTasks(subtopologyId1, 2, 3, 4),
-                mkTasks(subtopologyId2, 5, 6, 7)))
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3, 4),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) ->
-                (subtopologyId.equals(subtopologyId1) && partitionId == 4) ? "anyOtherProcess"
+                (subtopologyId.equals(SUBTOPOLOGY_ID1) && partitionId == 4) ? "anyOtherProcess"
                     : null)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
@@ -646,42 +608,41 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testUnreleasedTasksToUnrevokedTasks(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNRELEASED_TASKS)
             .setProcessId("process1")
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2, 3),
-                mkTasks(subtopologyId2, 5, 6)))
-            .setTasksPendingRevocation(TaskTuple.EMPTY)
+                mkTasks(SUBTOPOLOGY_ID1, 2, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
+            .setTasksPendingRevocation(mkTaskTuple(TaskRole.ACTIVE,
+                mkTasks(SUBTOPOLOGY_ID1, 4),
+                mkTasks(SUBTOPOLOGY_ID2, 7)))
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(12, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 3),
-                mkTasks(subtopologyId2, 6)))
-            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> "process")
+                mkTasks(SUBTOPOLOGY_ID1, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 6)))
+            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
             .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.UNREVOKED_TASKS)
                 .setProcessId("process1")
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
                 .setAssignedTasks(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 3),
-                    mkTasks(subtopologyId2, 6)))
+                    mkTasks(SUBTOPOLOGY_ID1, 3),
+                    mkTasks(SUBTOPOLOGY_ID2, 6)))
                 .setTasksPendingRevocation(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 2),
-                    mkTasks(subtopologyId2, 5)))
+                    mkTasks(SUBTOPOLOGY_ID1, 2),
+                    mkTasks(SUBTOPOLOGY_ID2, 5)))
                 .build(),
             updatedMember
         );
@@ -690,37 +651,34 @@ public class CurrentAssignmentBuilderTest {
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testUnknownState(TaskRole taskRole) {
-        String subtopologyId1 = Uuid.randomUuid().toString();
-        String subtopologyId2 = Uuid.randomUuid().toString();
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNKNOWN)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
-            .setProcessId("process")
+            .setProcessId(PROCESS_ID)
             .setAssignedTasks(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 3),
-                mkTasks(subtopologyId2, 6)))
+                mkTasks(SUBTOPOLOGY_ID1, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 6)))
             .setTasksPendingRevocation(mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 2),
-                mkTasks(subtopologyId2, 5)))
+                mkTasks(SUBTOPOLOGY_ID1, 2),
+                mkTasks(SUBTOPOLOGY_ID2, 5)))
             .build();
 
         // When the member is in an unknown state, the member is first to force
         // a reset of the client side member state.
         assertThrows(FencedMemberEpochException.class, () -> new CurrentAssignmentBuilder(member)
             .withTargetAssignment(12, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 3),
-                mkTasks(subtopologyId2, 6)))
-            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> "process")
+                mkTasks(SUBTOPOLOGY_ID1, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 6)))
+            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .build());
 
         // Then the member rejoins with no owned tasks.
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(12, mkTaskTuple(taskRole,
-                mkTasks(subtopologyId1, 3),
-                mkTasks(subtopologyId2, 6)))
-            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> "process")
+                mkTasks(SUBTOPOLOGY_ID1, 3),
+                mkTasks(SUBTOPOLOGY_ID2, 6)))
+            .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> Collections.emptySet())
             .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
@@ -728,14 +686,14 @@ public class CurrentAssignmentBuilderTest {
             .build();
 
         assertEquals(
-            new StreamsGroupMember.Builder("member")
+            new StreamsGroupMember.Builder(MEMBER_NAME)
                 .setState(MemberState.STABLE)
-                .setProcessId("process")
+                .setProcessId(PROCESS_ID)
                 .setMemberEpoch(12)
                 .setPreviousMemberEpoch(11)
                 .setAssignedTasks(mkTaskTuple(taskRole,
-                    mkTasks(subtopologyId1, 3),
-                    mkTasks(subtopologyId2, 6)))
+                    mkTasks(SUBTOPOLOGY_ID1, 3),
+                    mkTasks(SUBTOPOLOGY_ID2, 6)))
                 .setTasksPendingRevocation(TaskTuple.EMPTY)
                 .build(),
             updatedMember

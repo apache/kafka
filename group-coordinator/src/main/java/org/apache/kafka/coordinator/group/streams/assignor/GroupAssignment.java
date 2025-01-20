@@ -22,7 +22,7 @@ import java.util.Objects;
 /**
  * The task assignment for a streams group.
  *
- * @param members The member assignments keyed by member id.
+ * @param members The member assignments keyed by member ID.
  */
 public record GroupAssignment(Map<String, MemberAssignment> members) {
 

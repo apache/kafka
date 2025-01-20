@@ -313,9 +313,7 @@ public record StreamsGroupMember(String memberId,
      *
      * @return The StreamsGroupMember mapped as StreamsGroupDescribeResponseData.Member.
      */
-    public StreamsGroupDescribeResponseData.Member asStreamsGroupDescribeMember(
-        TaskTuple targetAssignment
-    ) {
+    public StreamsGroupDescribeResponseData.Member asStreamsGroupDescribeMember(TaskTuple targetAssignment) {
         final StreamsGroupDescribeResponseData.Assignment describedTargetAssignment =
             new StreamsGroupDescribeResponseData.Assignment();
 
@@ -355,9 +353,7 @@ public record StreamsGroupMember(String memberId,
             );
     }
 
-    private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMap(
-        Map<String, Set<Integer>> tasks
-    ) {
+    private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMap(Map<String, Set<Integer>> tasks) {
         List<StreamsGroupDescribeResponseData.TaskIds> taskIds = new ArrayList<>();
         tasks.forEach((subtopologyId, partitionSet) -> {
             taskIds.add(new StreamsGroupDescribeResponseData.TaskIds()
@@ -370,10 +366,7 @@ public record StreamsGroupMember(String memberId,
     /**
      * @return True if the two provided members have different assigned tasks.
      */
-    public static boolean hasAssignedTasksChanged(
-        StreamsGroupMember member1,
-        StreamsGroupMember member2
-    ) {
+    public static boolean hasAssignedTasksChanged(StreamsGroupMember member1, StreamsGroupMember member2) {
         return !member1.assignedTasks().equals(member2.assignedTasks());
     }
 }

@@ -75,7 +75,7 @@ public record TaskTuple(Map<String, Set<Integer>> activeTasks,
         return new TaskTuple(mergedActiveTasks, mergedStandbyTasks, mergedWarmupTasks);
     }
 
-    private Map<String, Set<Integer>> merge(final Map<String, Set<Integer>> tasks1, final Map<String, Set<Integer>> tasks2) {
+    private static Map<String, Set<Integer>> merge(final Map<String, Set<Integer>> tasks1, final Map<String, Set<Integer>> tasks2) {
         HashMap<String, Set<Integer>> result = new HashMap<>();
         tasks1.forEach((subtopologyId, tasks) ->
             result.put(subtopologyId, new HashSet<>(tasks)));
@@ -108,9 +108,7 @@ public record TaskTuple(Map<String, Set<Integer>> activeTasks,
      * @param record The record.
      * @return A {{@link TaskTuple}}.
      */
-    public static TaskTuple fromTargetAssignmentRecord(
-        StreamsGroupTargetAssignmentMemberValue record
-    ) {
+    public static TaskTuple fromTargetAssignmentRecord(StreamsGroupTargetAssignmentMemberValue record) {
         return new TaskTuple(
             record.activeTasks().stream()
                 .collect(Collectors.toMap(

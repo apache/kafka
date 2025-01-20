@@ -40,10 +40,8 @@ public class TaskAssignmentTestUtil {
         };
     }
 
-    public static Map.Entry<String, Set<Integer>> mkTasks(
-        String subtopologyId,
-        Integer... tasks
-    ) {
+    public static Map.Entry<String, Set<Integer>> mkTasks(String subtopologyId,
+                                                          Integer... tasks) {
         return new AbstractMap.SimpleEntry<>(
             subtopologyId,
             new HashSet<>(List.of(tasks))
