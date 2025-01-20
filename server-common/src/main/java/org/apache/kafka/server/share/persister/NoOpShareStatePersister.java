@@ -86,13 +86,13 @@ public class NoOpShareStatePersister implements Persister {
     @Override
     public CompletableFuture<ReadShareGroupStateSummaryResult> readSummary(ReadShareGroupStateSummaryParameters request) {
         GroupTopicPartitionData<PartitionIdLeaderEpochData> reqData = request.groupTopicPartitionData();
-        List<TopicData<PartitionStateErrorData>> resultArgs = new ArrayList<>();
+        List<TopicData<PartitionStateSummaryData>> resultArgs = new ArrayList<>();
         // we will fetch topic and partition info from the request and
         // return valid but default response (keep partition id and topic from request but initialize other
         // values as default).
         for (TopicData<PartitionIdLeaderEpochData> topicData : reqData.topicsData()) {
             resultArgs.add(new TopicData<>(topicData.topicId(), topicData.partitions().stream().
-                map(partitionIdData -> PartitionFactory.newPartitionStateErrorData(
+                map(partitionIdData -> PartitionFactory.newPartitionStateSummaryData(
                     partitionIdData.partition(), PartitionFactory.DEFAULT_STATE_EPOCH, PartitionFactory.UNINITIALIZED_START_OFFSET, PartitionFactory.DEFAULT_ERROR_CODE, PartitionFactory.DEFAULT_ERR_MESSAGE))
                 .collect(Collectors.toList())));
         }
