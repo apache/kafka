@@ -332,7 +332,7 @@ class ControllerServer(
         config,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        clientQuotaMetadataManager,
+        clientQuotaMetadataManager
       ))
 
       // Set up the DynamicTopicClusterQuotaPublisher. This will enable quotas for the cluster and topics.
