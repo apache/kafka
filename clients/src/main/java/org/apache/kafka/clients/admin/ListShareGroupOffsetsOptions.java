@@ -14,12 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server
 
-import org.apache.kafka.server.purgatory.DelayedOperationKey
+package org.apache.kafka.clients.admin;
 
-/* used by delayed-topic operations */
-case class TopicKey(topic: String) extends DelayedOperationKey {
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-  override def keyLabel: String = topic
+import java.util.Map;
+
+/**
+ * Options for {@link Admin#listShareGroupOffsets(Map, ListShareGroupOffsetsOptions)}.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
+ */
+@InterfaceStability.Evolving
+public class ListShareGroupOffsetsOptions extends AbstractOptions<ListShareGroupOffsetsOptions> {
 }
