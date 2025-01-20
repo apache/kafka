@@ -368,7 +368,7 @@ object QuorumTestHarness {
 
   /**
    * Verify that a previous test that doesn't use QuorumTestHarness hasn't left behind an unexpected thread.
-   * This assumes that brokers, ZooKeeper clients, producers and consumers are not created in another @BeforeClass,
+   * This assumes that brokers, admin clients, producers and consumers are not created in another @BeforeClass,
    * which is true for core tests where this harness is used.
    */
   @BeforeAll
