@@ -117,10 +117,10 @@ class LogCleaner(initialConfig: CleanerConfig,
 
   /**
    * @param f to compute the result
-   * @return the max value (int value) or 0 if there is no cleaner
+   * @return the max value or 0 if there is no cleaner
    */
-  private[log] def maxOverCleanerThreads(f: CleanerThread => Double): Int =
-    cleaners.map(f).maxOption.getOrElse(0.0d).toInt
+  private[log] def maxOverCleanerThreads(f: CleanerThread => Double): Double =
+    cleaners.map(f).maxOption.getOrElse(0.0d)
 
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
   metricsGroup.newGauge(MaxBufferUtilizationPercentMetricName,
