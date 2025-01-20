@@ -17,7 +17,7 @@
 
 package kafka.server.metadata
 
-import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache}
+import kafka.server.MetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common._
@@ -49,7 +49,7 @@ import scala.util.control.Breaks._
 class KRaftMetadataCache(
   val brokerId: Int,
   val kraftVersionSupplier: Supplier[KRaftVersion]
-) extends MetadataCache with Logging with ConfigRepository {
+) extends MetadataCache with Logging {
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
 
   // This is the cache state. Every MetadataImage instance is immutable, and updates
@@ -448,15 +448,6 @@ class KRaftMetadataCache(
     result
   }
 
-  /**
-   * Choose a random broker node to report as the controller. We do this because we want
-   * the client to send requests destined for the controller to a random broker.
-   * Clients do not have direct access to the controller in the KRaft world, as explained
-   * in KIP-590.
-   */
-  override def getControllerId: Option[CachedControllerId] =
-    getRandomAliveBroker(_currentImage).map(KRaftCachedControllerId)
-
   override def getRandomAliveBrokerId: Option[Int] = {
     getRandomAliveBroker(_currentImage)
   }
@@ -539,11 +530,11 @@ class KRaftMetadataCache(
   override def config(configResource: ConfigResource): Properties =
     _currentImage.configs().configProperties(configResource)
 
-  def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData = {
+  override def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData = {
     _currentImage.clientQuotas().describe(request)
   }
 
-  def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData = {
+  override def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData = {
     _currentImage.scram().describe(request)
   }
 

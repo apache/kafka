@@ -524,8 +524,8 @@ public class LocalLog {
         );
     }
 
-    public void append(long lastOffset, long largestTimestamp, long shallowOffsetOfMaxTimestamp, MemoryRecords records) throws IOException {
-        segments.activeSegment().append(lastOffset, largestTimestamp, shallowOffsetOfMaxTimestamp, records);
+    public void append(long lastOffset, MemoryRecords records) throws IOException {
+        segments.activeSegment().append(lastOffset, records);
         updateLogEndOffset(lastOffset + 1);
     }
 

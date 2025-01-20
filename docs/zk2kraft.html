@@ -97,6 +97,15 @@
         </li>
         <li>
             <p>
+                Removed dynamic configurations which relies on ZooKeeper. In KRaft mode, to change these configurations,
+                you need to restart the broker/controller.
+            </p>
+            <ul>
+                <li><code>advertised.listeners</code></li>
+            </ul>
+        </li>
+        <li>
+            <p>
                 Removed Zookeeper related configurations.
             </p>
             <ul>
