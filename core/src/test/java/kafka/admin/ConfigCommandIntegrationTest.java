@@ -320,7 +320,7 @@ public class ConfigCommandIntegrationTest {
     private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
         try (Admin client = cluster.admin()) {
-            alterConfigWithAdmin(client, brokerIdOrDefault, Collections.singletonMap("invalid", "2"), alterOpts);
+            alterConfigWithAdmin(client, brokerIdOrDefault, Map.of("invalid", "2"), alterOpts);
 
             Stream<String> describeCommand = Stream.concat(
                     Stream.concat(
@@ -340,7 +340,7 @@ public class ConfigCommandIntegrationTest {
     public void testUpdateInvalidTopicConfigs() throws ExecutionException, InterruptedException {
         List<String> alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "topics", "--alter");
         try (Admin client = cluster.admin()) {
-            client.createTopics(Collections.singletonList(new NewTopic("test-config-topic", 1, (short) 1))).all().get();
+            client.createTopics(List.of(new NewTopic("test-config-topic", 1, (short) 1))).all().get();
             assertInstanceOf(
                     InvalidConfigurationException.class,
                     assertThrows(
