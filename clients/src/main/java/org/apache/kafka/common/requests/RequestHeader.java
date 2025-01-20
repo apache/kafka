@@ -130,7 +130,7 @@ public class RequestHeader implements AbstractRequestResponse {
             short apiVersion = buffer.getShort();
             ApiKeys apiKey = ApiKeys.forId(apiKeyId);
 
-            // `apiKey.requestHeaderVersion` will fail if there are no valid versions - we do the check first in order to
+            // `apiKey.requestHeaderVersion` will fail if there are no valid versions - we do this check first in order to
             // provide a more helpful message
             if (!apiKey.hasValidVersion())
                 throw new InvalidRequestException("Unsupported api with key " + apiKeyId + " (" + apiKey.name + ") and version " + apiVersion);
