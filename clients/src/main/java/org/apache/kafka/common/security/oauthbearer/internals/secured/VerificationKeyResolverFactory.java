@@ -55,6 +55,7 @@ public class VerificationKeyResolverFactory {
         String saslMechanism,
         Map<String, Object> jaasConfig) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        cu.throwIfURLIsNotAllowed(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
         URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
         if (jwksEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {

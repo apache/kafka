@@ -53,6 +53,7 @@ public class AccessTokenRetrieverFactory  {
         String saslMechanism,
         Map<String, Object> jaasConfig) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        cu.throwIfURLIsNotAllowed(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
         URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
         if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {

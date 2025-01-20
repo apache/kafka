@@ -17,19 +17,19 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.config.ConfigException;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Collections;
 import java.util.Map;
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
+public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
 
     @AfterEach
     public void tearDown() throws Exception {
@@ -37,48 +37,44 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testConfigureRefreshingFileAccessTokenRetriever() throws Exception {
-        String expected = "{}";
-
+    public void testConfigureRefreshingFileVerificationKeyResolver() throws Exception {
         File tmpDir = createTempDir("access-token");
-        File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", expected);
+        File verificationKeyFile = createTempFile(tmpDir, "access-token-", ".json", "{}");
 
-        Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
+        Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
         Map<String, Object> jaasConfig = Collections.emptyMap();
 
-        try (AccessTokenRetriever accessTokenRetriever = AccessTokenRetrieverFactory.create(configs, jaasConfig)) {
-            accessTokenRetriever.init();
-            assertEquals(expected, accessTokenRetriever.retrieve());
-        }
+        // verify it won't throw exception
+        try (CloseableVerificationKeyResolver verificationKeyResolver = VerificationKeyResolverFactory.create(configs, jaasConfig)) { }
     }
 
     @Test
-    public void testConfigureRefreshingFileAccessTokenRetrieverWithInvalidDirectory() {
+    public void testConfigureRefreshingFileVerificationKeyResolverWithInvalidDirectory() {
         // Should fail because the parent path doesn't exist.
         String file = new File("/tmp/this-directory-does-not-exist/foo.json").toURI().toString();
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, file);
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
         Map<String, Object> jaasConfig = Collections.emptyMap();
-        assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetrieverFactory.create(configs, jaasConfig), "that doesn't exist");
+        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, jaasConfig), "that doesn't exist");
     }
 
     @Test
-    public void testConfigureRefreshingFileAccessTokenRetrieverWithInvalidFile() throws Exception {
+    public void testConfigureRefreshingFileVerificationKeyResolverWithInvalidFile() throws Exception {
         // Should fail because while the parent path exists, the file itself doesn't.
         File tmpDir = createTempDir("this-directory-does-exist");
-        File accessTokenFile = new File(tmpDir, "this-file-does-not-exist.json");
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
+        File verificationKeyFile = new File(tmpDir, "this-file-does-not-exist.json");
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
         Map<String, Object> jaasConfig = Collections.emptyMap();
-        assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetrieverFactory.create(configs, jaasConfig), "that doesn't exist");
+        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, jaasConfig), "that doesn't exist");
     }
 
     @Test
     public void testSaslOauthbearerTokenEndpointUrlIsNotAllowed() throws Exception {
         // Should fail because the file is not in the allowed list
         File tmpDir = createTempDir("not_allowed");
-        File accessTokenFile = new File(tmpDir, "not_allowed.json");
+        File verificationKeyFile = new File(tmpDir, "not_allowed.json");
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "nothing");
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
-        assertThrowsWithMessage(IllegalArgumentException.class, () -> AccessTokenRetrieverFactory.create(configs, Collections.emptyMap()),
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
+        assertThrowsWithMessage(IllegalArgumentException.class, () -> VerificationKeyResolverFactory.create(configs, Collections.emptyMap()),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
     }
 }
