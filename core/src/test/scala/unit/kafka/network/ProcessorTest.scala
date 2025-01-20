@@ -20,6 +20,7 @@ package kafka.network
 import kafka.server.SimpleApiVersionManager
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.message.RequestHeaderData
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestHeader, RequestTestUtils}
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
@@ -40,19 +41,25 @@ class ProcessorTest {
     val e = assertThrows(classOf[InvalidRequestException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "INIT_PRODUCER_ID with listener type CONTROLLER should throw InvalidRequestException exception")
-    assertTrue(e.toString.contains("disabled version"));
+    assertTrue(e.toString.contains("disabled api"));
   }
 
   @Test
   def testParseRequestHeaderWithUnsupportedApi(): Unit = {
-    val requestHeader = RequestTestUtils.serializeRequestHeader(
-      new RequestHeader(ApiKeys.LEADER_AND_ISR, 0, "clientid", 0))
+    // We have to use `RequestHeaderData` since `ApiMessageType` doesn't support this protocol api
+    val headerVersion = 0.toShort
+    val requestHeaderData = new RequestHeaderData()
+      .setRequestApiKey(ApiKeys.LEADER_AND_ISR.id)
+      .setRequestApiVersion(headerVersion)
+      .setClientId("clientid")
+      .setCorrelationId(0);
+    val requestHeader = RequestTestUtils.serializeRequestHeader(new RequestHeader(requestHeaderData, headerVersion))
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
     val e = assertThrows(classOf[InvalidRequestException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "LEADER_AND_ISR should throw InvalidRequestException exception")
-    assertTrue(e.toString.contains("unsupported api"));
+    assertTrue(e.toString.contains("Unsupported api"));
   }
 
   @Test

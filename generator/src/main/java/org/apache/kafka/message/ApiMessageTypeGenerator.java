@@ -353,6 +353,11 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             short apiKey = entry.getKey();
             ApiData apiData = entry.getValue();
             String name = apiData.name();
+
+            MessageSpec spec = messageSpec(type, apiKey, entry.getValue());
+            if (!spec.hasValidVersion())
+                continue;
+
             buffer.printf("case %d: // %s%n", apiKey, MessageGenerator.capitalizeFirst(name));
             buffer.incrementIndent();
             if (type.equals("response") && apiKey == 18) {
@@ -362,9 +367,6 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 buffer.decrementIndent();
                 continue;
             }
-            MessageSpec spec = messageSpec(type, apiKey, entry.getValue());
-            if (!spec.hasValidVersion())
-                continue;
             VersionConditional.forVersions(spec.flexibleVersions(),
                 spec.validVersions()).
                 ifMember(__ -> {

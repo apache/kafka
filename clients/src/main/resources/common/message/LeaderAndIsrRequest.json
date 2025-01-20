@@ -17,5 +17,6 @@
   "apiKey": 4,
   "type": "request",
   "name": "LeaderAndIsrRequest",
+  // This request was removed in Apache Kafka 4.0.
   "validVersions": "none"
 }
