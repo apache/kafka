@@ -354,11 +354,11 @@ class KRaftMetadataCache(
     Option(_currentImage.cluster.broker(brokerId)).count(!_.fenced()) == 1
   }
 
-  def isBrokerFenced(brokerId: Int): Boolean = {
+  override def isBrokerFenced(brokerId: Int): Boolean = {
     Option(_currentImage.cluster.broker(brokerId)).count(_.fenced) == 1
   }
 
-  def isBrokerShuttingDown(brokerId: Int): Boolean = {
+  override def isBrokerShuttingDown(brokerId: Int): Boolean = {
     Option(_currentImage.cluster.broker(brokerId)).count(_.inControlledShutdown) == 1
   }
 
@@ -461,7 +461,7 @@ class KRaftMetadataCache(
     }
   }
 
-  def getAliveBrokerEpoch(brokerId: Int): Option[Long] = {
+  override def getAliveBrokerEpoch(brokerId: Int): Option[Long] = {
     Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
       map(brokerRegistration => brokerRegistration.epoch())
   }

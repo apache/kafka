@@ -55,6 +55,12 @@ trait MetadataCache extends ConfigRepository {
 
   def getAliveBrokers(): Iterable[BrokerMetadata]
 
+  def getAliveBrokerEpoch(brokerId: Int): Option[Long]
+
+  def isBrokerFenced(brokerId: Int): Boolean
+
+  def isBrokerShuttingDown(brokerId: Int): Boolean
+
   def getTopicId(topicName: String): Uuid
 
   def getTopicName(topicId: Uuid): Option[String]
