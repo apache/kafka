@@ -20,6 +20,7 @@ package kafka.server.handlers;
 import kafka.network.RequestChannel;
 import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
+import kafka.server.MetadataCache;
 import kafka.server.metadata.KRaftMetadataCache;
 import kafka.utils.TestUtils;
 
@@ -200,8 +201,8 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionEpoch(2)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
         );
-        KRaftMetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
-        updateKraftMetadataCache(metadataCache, records);
+        MetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
+        updateKraftMetadataCache((KRaftMetadataCache) metadataCache, records);
         DescribeTopicPartitionsRequestHandler handler =
             new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizer)), createKafkaDefaultConfig());
 
@@ -402,8 +403,8 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionEpoch(2)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
         );
-        KRaftMetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
-        updateKraftMetadataCache(metadataCache, records);
+        MetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
+        updateKraftMetadataCache((KRaftMetadataCache) metadataCache, records);
         DescribeTopicPartitionsRequestHandler handler =
             new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizer)), createKafkaDefaultConfig());
 

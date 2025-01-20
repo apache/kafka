@@ -273,7 +273,7 @@ class KRaftMetadataCache(
    * @param maximumNumberOfPartitions     The max number of partitions to return.
    * @param ignoreTopicsWithExceptions    Whether ignore the topics with exception.
    */
-  def getTopicMetadataForDescribeTopicResponse(
+  override def describeTopicResponse(
     topics: Iterator[String],
     listenerName: ListenerName,
     topicPartitionStartIndex: String => Int,

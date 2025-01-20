@@ -795,6 +795,7 @@ class ReplicaManagerTest {
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
+      when(replicaManager.metadataCache.getAliveBrokerEpoch(1)).thenReturn(Option(brokerEpoch))
 
       val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
@@ -917,6 +918,7 @@ class ReplicaManagerTest {
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
+      when(replicaManager.metadataCache.getAliveBrokerEpoch(1)).thenReturn(Option(brokerEpoch))
       val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
@@ -1001,6 +1003,7 @@ class ReplicaManagerTest {
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2))
     try {
       val brokerList = Seq[Integer](0, 1, 2).asJava
+      when(rm.metadataCache.getAliveBrokerEpoch(1)).thenReturn(Option(brokerEpoch))
 
       val partition = rm.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
@@ -1063,6 +1066,7 @@ class ReplicaManagerTest {
     val leaderEpoch = 5
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
       brokerId = 0, aliveBrokersIds)
+    when(replicaManager.metadataCache.getAliveBrokerEpoch(1)).thenReturn(Option(brokerEpoch))
     try {
       val tp = new TopicPartition(topic, 0)
       val tidp = new TopicIdPartition(topicId, tp)
@@ -1162,6 +1166,7 @@ class ReplicaManagerTest {
     val leaderEpoch = 5
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
       brokerId = 0, aliveBrokersIds)
+    when(replicaManager.metadataCache.getAliveBrokerEpoch(1)).thenReturn(Option(brokerEpoch))
     try {
       val tp = new TopicPartition(topic, 0)
       val tidp = new TopicIdPartition(topicId, tp)
@@ -1283,6 +1288,7 @@ class ReplicaManagerTest {
   @Test
   def testFetchMessagesWhenNotFollowerForOnePartition(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2))
+    when(replicaManager.metadataCache.getAliveBrokerEpoch(1)).thenReturn(Option(brokerEpoch))
 
     try {
       // Create 2 partitions, assign replica 0 as the leader for both a different follower (1 and 2) for each
@@ -1733,6 +1739,7 @@ class ReplicaManagerTest {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
 
+      when(replicaManager.metadataCache.getAliveBrokerEpoch(followerBrokerId)).thenReturn(Option(brokerEpoch))
       when(replicaManager.metadataCache.getPartitionReplicaEndpoints(
         tp0,
         new ListenerName("default")
@@ -1802,6 +1809,7 @@ class ReplicaManagerTest {
     val (replicaManager, _) = prepareReplicaManagerAndLogManager(timer,
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true, topicId = Some(topicId))
+    when(replicaManager.metadataCache.getAliveBrokerEpoch(leaderBrokerId)).thenReturn(Option(brokerEpoch))
     try {
 
       val brokerList = Seq[Integer](0, 1).asJava
@@ -5231,6 +5239,7 @@ class ReplicaManagerTest {
     val numOfRecords = 3
     val topicPartition = new TopicPartition("foo", 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
+    when(replicaManager.metadataCache.getAliveBrokerEpoch(otherId)).thenReturn(Option(brokerEpoch))
 
     try {
       // Make the local replica the leader
@@ -5298,6 +5307,7 @@ class ReplicaManagerTest {
     val numOfRecords = 3
     val topicPartition = new TopicPartition("foo", 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
+    when(replicaManager.metadataCache.getAliveBrokerEpoch(otherId)).thenReturn(Option(brokerEpoch))
 
     try {
       // Make the local replica the follower
@@ -5650,6 +5660,7 @@ class ReplicaManagerTest {
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
+    when(replicaManager.metadataCache.getAliveBrokerEpoch(otherId)).thenReturn(Option(brokerEpoch))
 
     try {
       // Make the local replica the leader
@@ -6109,6 +6120,7 @@ class ReplicaManagerTest {
     val leaderEpoch = 5
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
       brokerId = 0, aliveBrokersIds)
+    when(replicaManager.metadataCache.getAliveBrokerEpoch(1)).thenReturn(Option(brokerEpoch))
     try {
       val tp = new TopicPartition(topic, 0)
       val tidp = new TopicIdPartition(topicId, tp)

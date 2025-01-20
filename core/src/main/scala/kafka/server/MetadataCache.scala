@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import org.apache.kafka.admin.BrokerMetadata
-import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData, DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData, MetadataResponseData, UpdateMetadataRequestData}
+import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData, DescribeTopicPartitionsResponseData, DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData, MetadataResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
@@ -110,6 +110,14 @@ trait MetadataCache extends ConfigRepository {
   def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData
 
   def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData
+
+  def describeTopicResponse(
+    topics: Iterator[String],
+    listenerName: ListenerName,
+    topicPartitionStartIndex: String => Int,
+    maximumNumberOfPartitions: Int,
+    ignoreTopicsWithExceptions: Boolean
+  ): DescribeTopicPartitionsResponseData
 }
 
 object MetadataCache {
