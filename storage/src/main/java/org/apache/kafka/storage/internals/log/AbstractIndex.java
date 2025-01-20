@@ -400,7 +400,7 @@ public abstract class AbstractIndex implements Closeable {
      * Forcefully free the buffer's mmap.
      */
     // Visible for testing, we can make this protected once OffsetIndexTest is in the same package as this class
-    public void forceUnmap() throws IOException {
+    protected void forceUnmap() throws IOException {
         try {
             ByteBufferUnmapper.unmap(file.getAbsolutePath(), mmap);
         } finally {
