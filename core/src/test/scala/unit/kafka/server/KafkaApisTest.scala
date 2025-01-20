@@ -3596,6 +3596,8 @@ class KafkaApisTest extends Logging {
 
     val response = sendMetadataRequestWithInconsistentListeners(new ListenerName("PALINTEXT"))
     val responseTopics = response.topicMetadata().asScala.map { metadata => metadata.topic() }
+
+    // verify we don't create topic when getAllTopicMetadata
     verify(autoTopicCreationManager, never).createTopics(any(), any(), any())
     assertEquals(List("remaining-topic"), responseTopics)
     assertTrue(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION).isEmpty)
