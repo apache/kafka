@@ -17,8 +17,7 @@
 
 package kafka.server.metadata
 
-import kafka.server.metadata.KRaftMetadataCache.{getOfflineReplicas, getRandomAliveBroker}
-import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache}
+import kafka.server.MetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common._
@@ -422,15 +421,6 @@ class KRaftMetadataCache(
     }
     result
   }
-
-  /**
-   * Choose a random broker node to report as the controller. We do this because we want
-   * the client to send requests destined for the controller to a random broker.
-   * Clients do not have direct access to the controller in the KRaft world, as explained
-   * in KIP-590.
-   */
-  override def getControllerId: Option[CachedControllerId] =
-    getRandomAliveBroker(_currentImage).map(KRaftCachedControllerId)
 
   override def getRandomAliveBrokerId: Option[Int] = {
     getRandomAliveBroker(_currentImage)

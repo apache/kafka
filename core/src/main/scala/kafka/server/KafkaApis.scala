@@ -952,12 +952,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
-    val controllerId = {
-      metadataCache.getControllerId.flatMap {
-        case ZkCachedControllerId(id) => Some(id)
-        case KRaftCachedControllerId(_) => metadataCache.getRandomAliveBrokerId
-      }
-    }
+    val controllerId = metadataCache.getRandomAliveBrokerId
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
        MetadataResponse.prepareResponse(
@@ -2410,14 +2405,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         brokers
       },
       () => {
-        metadataCache.getControllerId match {
-          case Some(value) =>
-            value match {
-              case ZkCachedControllerId (id) => id
-              case KRaftCachedControllerId (_) => metadataCache.getRandomAliveBrokerId.getOrElse(- 1)
-            }
-          case None => -1
-        }
+        metadataCache.getRandomAliveBrokerId.getOrElse(-1)
       }
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -3177,9 +3165,22 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): Unit = {
     val readShareGroupStateSummaryRequest = request.body[ReadShareGroupStateSummaryRequest]
-    // TODO: Implement the ReadShareGroupStateSummaryRequest handling
-    requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    shareCoordinator match {
+      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        readShareGroupStateSummaryRequest.getErrorResponse(requestThrottleMs,
+          new ApiException("Share coordinator is not enabled.")))
+        CompletableFuture.completedFuture[Unit](())
+      case Some(coordinator) => coordinator.readStateSummary(request.context, readShareGroupStateSummaryRequest.data)
+        .handle[Unit] { (response, exception) =>
+          if (exception != null) {
+            requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(exception))
+          } else {
+            requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateSummaryResponse(response))
+          }
+        }
+    }
   }
 
   def handleDescribeShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
@@ -3472,15 +3473,5 @@ object KafkaApis {
         responseData.put(new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic(), partition.partitionIndex)), partition)))
     FetchResponse.sizeOf(versionId, responseData.entrySet
       .iterator.asScala.filter(element => element.getKey.topicPartition.topic != null && quota.isThrottled(element.getKey.topicPartition)).asJava)
-  }
-
-  // visible for testing
-  private[server] def shouldNeverReceive(request: RequestChannel.Request): Exception = {
-    new UnsupportedVersionException(s"Should never receive when using a Raft-based metadata quorum: ${request.header.apiKey()}")
-  }
-
-  // visible for testing
-  private[server] def shouldAlwaysForward(request: RequestChannel.Request): Exception = {
-    new UnsupportedVersionException(s"Should always be forwarded to the Active Controller when using a Raft-based metadata quorum: ${request.header.apiKey}")
   }
 }
