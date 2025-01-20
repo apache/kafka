@@ -64,11 +64,20 @@ public class CoordinatorRecord {
         ApiMessage key,
         ApiMessageAndVersion value
     ) {
-        if (value != null && value.message().apiKey() != key.apiKey()) {
-            throw new IllegalArgumentException("The key and the value must have the same type.");
-        }
         this.key = Objects.requireNonNull(key);
+        if (key.apiKey() < 0) {
+            throw new IllegalArgumentException("The key must have a type.");
+        }
+
         this.value = value;
+        if (value != null) {
+            if (value.message().apiKey() < 0) {
+                throw new IllegalArgumentException("The value must have a type.");
+            }
+            if (value.message().apiKey() != key.apiKey()) {
+                throw new IllegalArgumentException("The key and the value must have the same type.");
+            }
+        }
     }
 
     /**
