@@ -235,17 +235,17 @@ public class ConfigurationUtils {
 
     // make sure the url is in the "org.apache.kafka.sasl.oauthbearer.allowed.urls" system property
     public void throwIfURLIsNotAllowed(String urlConfig) {
-        String allowedLoginModuleProp = System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
-        if (allowedLoginModuleProp == null) {
+        String allowedUrlsProp = System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+        if (allowedUrlsProp == null) {
             // by default, we accept all URLs
             return;
         }
-        Set<String> allowedLoginModuleList = Arrays.stream(allowedLoginModuleProp.split(","))
+        Set<String> allowedUrlsList = Arrays.stream(allowedUrlsProp.split(","))
                 .map(String::trim)
                 .collect(Collectors.toSet());
 
         String value = get(urlConfig);
-        if (!allowedLoginModuleList.contains(value)) {
+        if (!allowedUrlsList.contains(value)) {
             throw new IllegalArgumentException(value + " is not allowed. Update system property '"
                     + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
         }
