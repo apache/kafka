@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -29,17 +30,64 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class StreamsRebalanceData {
 
+    public static class TaskId implements Comparable<TaskId> {
+
+        private final String subtopologyId;
+        private final int partitionId;
+
+        public TaskId(final String subtopologyId, final int partitionId) {
+            this.subtopologyId = subtopologyId;
+            this.partitionId = partitionId;
+        }
+
+        public int partitionId() {
+            return partitionId;
+        }
+
+        public String subtopologyId() {
+            return subtopologyId;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            TaskId taskId = (TaskId) o;
+            return partitionId == taskId.partitionId && Objects.equals(subtopologyId, taskId.subtopologyId);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(subtopologyId, partitionId);
+        }
+
+        @Override
+        public int compareTo(TaskId taskId) {
+            Objects.requireNonNull(taskId, "taskId cannot be null");
+            return Comparator.comparing(TaskId::subtopologyId)
+                .thenComparingInt(TaskId::partitionId).compare(this, taskId);
+        }
+
+        @Override
+        public String toString() {
+            return "TaskId{" +
+                "subtopologyId=" + subtopologyId +
+                ", partitionId=" + partitionId +
+                '}';
+        }
+    }
+
     public static class Assignment {
 
         public static final Assignment EMPTY = new Assignment();
 
-        public final Set<TaskId> activeTasks = new HashSet<>();
+        private final Set<TaskId> activeTasks = new HashSet<>();
 
-        public final Set<TaskId> standbyTasks = new HashSet<>();
+        private final Set<TaskId> standbyTasks = new HashSet<>();
 
-        public final Set<TaskId> warmupTasks = new HashSet<>();
+        private final Set<TaskId> warmupTasks = new HashSet<>();
 
-        public Assignment() {
+        private Assignment() {
         }
 
         public Assignment(final Set<TaskId> activeTasks,
@@ -79,54 +127,6 @@ public class StreamsRebalanceData {
                 "activeTasks=" + activeTasks +
                 ", standbyTasks=" + standbyTasks +
                 ", warmupTasks=" + warmupTasks +
-                '}';
-        }
-    }
-
-    public static class TaskId implements Comparable<TaskId> {
-
-        private final String subtopologyId;
-        private final int partitionId;
-
-        public int partitionId() {
-            return partitionId;
-        }
-
-        public String subtopologyId() {
-            return subtopologyId;
-        }
-
-        public TaskId(final String subtopologyId, final int partitionId) {
-            this.subtopologyId = subtopologyId;
-            this.partitionId = partitionId;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            TaskId taskId = (TaskId) o;
-            return partitionId == taskId.partitionId && Objects.equals(subtopologyId, taskId.subtopologyId);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(subtopologyId, partitionId);
-        }
-
-        @Override
-        public int compareTo(TaskId taskId) {
-            if (subtopologyId.equals(taskId.subtopologyId)) {
-                return partitionId - taskId.partitionId;
-            }
-            return subtopologyId.compareTo(taskId.subtopologyId);
-        }
-
-        @Override
-        public String toString() {
-            return "TaskId{" +
-                "subtopologyId=" + subtopologyId +
-                ", partitionId=" + partitionId +
                 '}';
         }
     }
