@@ -148,8 +148,13 @@ public class InternalTopicManager {
 
         decidedPartitionCountsForInternalTopics.putAll(repartitionTopics.setup());
 
-        enforceCopartitioning(topology, copartitionGroupsBySubtopology, log,
-            decidedPartitionCountsForInternalTopics, copartitionedTopicsEnforcer);
+        enforceCopartitioning(
+            topology,
+            copartitionGroupsBySubtopology,
+            log,
+            decidedPartitionCountsForInternalTopics,
+            copartitionedTopicsEnforcer
+        );
 
         decidedPartitionCountsForInternalTopics.putAll(changelogTopics.setup());
 
