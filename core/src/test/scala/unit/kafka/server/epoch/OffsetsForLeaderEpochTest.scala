@@ -28,7 +28,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.server.common.OffsetAndEpoch
+import org.apache.kafka.server.common.{KRaftVersion, OffsetAndEpoch}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.junit.jupiter.api.Assertions._
@@ -38,7 +38,7 @@ import org.mockito.Mockito.{mock, when}
 import scala.jdk.CollectionConverters._
 
 class OffsetsForLeaderEpochTest {
-  private val config = TestUtils.createBrokerConfigs(1, TestUtils.MockZkConnect).map(KafkaConfig.fromProps).head
+  private val config = TestUtils.createBrokerConfigs(1).map(KafkaConfig.fromProps).head
   private val time = new MockTime
   private val metrics = new Metrics
   private val alterIsrManager = TestUtils.createAlterIsrManager()
@@ -72,7 +72,7 @@ class OffsetsForLeaderEpochTest {
       scheduler = null,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+      metadataCache = MetadataCache.kRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterIsrManager)
     val partition = replicaManager.createPartition(tp)
@@ -101,7 +101,7 @@ class OffsetsForLeaderEpochTest {
       scheduler = null,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+      metadataCache = MetadataCache.kRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterIsrManager)
     replicaManager.createPartition(tp)
@@ -132,7 +132,7 @@ class OffsetsForLeaderEpochTest {
       scheduler = null,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+      metadataCache = MetadataCache.kRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterIsrManager)
 

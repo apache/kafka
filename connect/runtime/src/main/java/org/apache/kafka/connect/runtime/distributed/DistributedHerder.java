@@ -2193,8 +2193,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     boolean isPossibleExpiredKeyException(long initialRequestTime, Throwable error) {
-        if (error instanceof ConnectRestException) {
-            ConnectRestException connectError = (ConnectRestException) error;
+        if (error instanceof ConnectRestException connectError) {
             return connectError.statusCode() == Response.Status.FORBIDDEN.getStatusCode()
                 && initialRequestTime + TimeUnit.MINUTES.toMillis(1) >= time.milliseconds();
         }
@@ -2565,9 +2564,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof DistributedHerderRequest))
+            if (!(o instanceof DistributedHerderRequest other))
                 return false;
-            DistributedHerderRequest other = (DistributedHerderRequest) o;
             return compareTo(other) == 0;
         }
 

@@ -18,11 +18,11 @@
   "type": "request",
   "listeners": ["zkBroker", "broker", "controller"],
   "name": "CreateAclsRequest",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   // Version 1 adds resource pattern type.
   // Version 2 enables flexible versions.
   // Version 3 adds user resource type.
-  "validVersions": "0-3",
-  "deprecatedVersions": "0",
+  "validVersions": "1-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "Creations", "type": "[]AclCreation", "versions": "0+",

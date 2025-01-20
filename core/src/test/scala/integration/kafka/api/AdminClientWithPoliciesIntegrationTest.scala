@@ -64,7 +64,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     Map[String, Object](AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()).asJava
 
   override def generateConfigs: collection.Seq[KafkaConfig] = {
-    val configs = TestUtils.createBrokerConfigs(brokerCount, null)
+    val configs = TestUtils.createBrokerConfigs(brokerCount)
     configs.foreach(overrideNodeConfigs)
     configs.map(KafkaConfig.fromProps)
   }

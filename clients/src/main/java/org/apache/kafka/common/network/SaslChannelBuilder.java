@@ -85,7 +85,6 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private final String clientSaslMechanism;
     private final ConnectionMode connectionMode;
     private final Map<String, JaasContext> jaasContexts;
-    private final boolean handshakeRequestEnable;
     private final CredentialCache credentialCache;
     private final DelegationTokenCache tokenCache;
     private final Map<String, LoginManager> loginManagers;
@@ -108,7 +107,6 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                               ListenerName listenerName,
                               boolean isInterBrokerListener,
                               String clientSaslMechanism,
-                              boolean handshakeRequestEnable,
                               CredentialCache credentialCache,
                               DelegationTokenCache tokenCache,
                               String sslClientAuthOverride,
@@ -122,7 +120,6 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         this.securityProtocol = securityProtocol;
         this.listenerName = listenerName;
         this.isInterBrokerListener = isInterBrokerListener;
-        this.handshakeRequestEnable = handshakeRequestEnable;
         this.clientSaslMechanism = clientSaslMechanism;
         this.credentialCache = credentialCache;
         this.tokenCache = tokenCache;
@@ -295,7 +292,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                                                                String servicePrincipal,
                                                                TransportLayer transportLayer, Subject subject) {
         return new SaslClientAuthenticator(configs, callbackHandler, id, subject, servicePrincipal,
-                serverHost, clientSaslMechanism, handshakeRequestEnable, transportLayer, time, logContext);
+                serverHost, clientSaslMechanism, transportLayer, time, logContext);
     }
 
     // Package private for testing

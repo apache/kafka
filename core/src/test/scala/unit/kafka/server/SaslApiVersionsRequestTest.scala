@@ -16,7 +16,7 @@
   */
 package kafka.server
 
-import kafka.api.{KafkaSasl, SaslSetup}
+import kafka.api.SaslSetup
 import kafka.security.JaasTestUtils
 import kafka.server.SaslApiVersionsRequestTest.{kafkaClientSaslMechanism, kafkaServerSaslMechanisms}
 import org.apache.kafka.common.test.api.{ClusterTemplate, Type, ClusterTestExtensions, ClusterConfig, ClusterInstance}
@@ -51,7 +51,6 @@ object SaslApiVersionsRequestTest {
 
     // Configure control plane listener to make sure we have separate listeners for testing.
     val serverProperties =  new java.util.HashMap[String, String]()
-    serverProperties.put(SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG, controlPlaneListenerName)
     serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
     serverProperties.put("listeners", s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
     serverProperties.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
@@ -74,7 +73,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
   @BeforeEach
   def setupSasl(): Unit = {
     sasl = new SaslSetup() {}
-    sasl.startSasl(sasl.jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    sasl.startSasl(sasl.jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
   }
 
   @ClusterTemplate("saslApiVersionsRequestClusterConfig")

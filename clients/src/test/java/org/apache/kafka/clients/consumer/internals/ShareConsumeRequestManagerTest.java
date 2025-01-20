@@ -60,6 +60,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.ShareAcknowledgeResponse;
+import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -96,8 +97,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -549,6 +552,89 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testResultHandlerOnCommitAsync() {
+        buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(null, Optional.empty());
+
+        // Passing null acknowledgements should mean we do not send the background event at all.
+        resultHandler.complete(tip0, null, true);
+        assertEquals(0, completedAcknowledgements.size());
+
+        // Setting isCommitAsync to false should still not send any background event
+        // as we have initialized remainingResults to null.
+        resultHandler.complete(tip0, acknowledgements, false);
+        assertEquals(0, completedAcknowledgements.size());
+
+        // Sending non-null acknowledgements means we do send the background event
+        resultHandler.complete(tip0, acknowledgements, true);
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+    }
+
+    @Test
+    public void testResultHandlerOnCommitSync() {
+        buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        final CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future = new CompletableFuture<>();
+
+        // Initializing resultCount to 3.
+        AtomicInteger resultCount = new AtomicInteger(3);
+
+        ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(resultCount, Optional.of(future));
+
+        // We only send the background event after all results have been completed.
+        resultHandler.complete(tip0, acknowledgements, false);
+        assertEquals(0, completedAcknowledgements.size());
+        assertFalse(future.isDone());
+
+        resultHandler.complete(t2ip0, null, false);
+        assertEquals(0, completedAcknowledgements.size());
+        assertFalse(future.isDone());
+
+        // After third response is received, we send the background event.
+        resultHandler.complete(tip1, acknowledgements, false);
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(2, completedAcknowledgements.get(0).size());
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(3, completedAcknowledgements.get(0).get(tip1).size());
+        assertTrue(future.isDone());
+    }
+
+    @Test
+    public void testResultHandlerCompleteIfEmpty() {
+        buildRequestManager();
+
+        final CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future = new CompletableFuture<>();
+
+        // Initializing resultCount to 1.
+        AtomicInteger resultCount = new AtomicInteger(1);
+
+        ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(resultCount, Optional.of(future));
+
+        resultHandler.completeIfEmpty();
+        assertFalse(future.isDone());
+
+        resultCount.decrementAndGet();
+
+        resultHandler.completeIfEmpty();
+        assertTrue(future.isDone());
+    }
+
+    @Test
     public void testBatchingAcknowledgeRequestStates() {
         buildRequestManager();
 
@@ -764,6 +850,13 @@ public class ShareConsumeRequestManagerTest {
         shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        client.prepareResponse(fullAcknowledgeResponse(tip1, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        // We should send a fetch to the newly subscribed partition.
+        assertEquals(1, sendFetches());
+
     }
 
     @Test
@@ -794,6 +887,129 @@ public class ShareConsumeRequestManagerTest {
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
         assertEquals(3.0,
                 metrics.metrics().get(metrics.metricInstance(shareFetchMetricsRegistry.acknowledgementSendTotal)).metricValue());
+    }
+
+    @Test
+    public void testShareFetchWithSubscriptionChangeMultipleNodes() {
+        buildRequestManager();
+
+        subscriptions.subscribeToShareGroup(Collections.singleton(topicName));
+        Set<TopicPartition> partitions = new HashSet<>();
+        partitions.add(tp0);
+        partitions.add(tp1);
+        subscriptions.assignFromSubscribed(Collections.singletonList(tp0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
+                        tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+        Node tp0Leader = metadata.fetch().leaderFor(tp0);
+        Node tp1Leader = metadata.fetch().leaderFor(tp1);
+
+        assertEquals(nodeId0, tp0Leader);
+        assertEquals(nodeId1, tp1Leader);
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, emptyAcquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(0L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(1L, AcknowledgeType.RELEASE);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+
+        // Send acknowledgements via ShareFetch
+        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, acknowledgements));
+        fetchRecords();
+        // Subscription changes.
+        subscriptions.assignFromSubscribed(Collections.singletonList(tp1));
+
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(2, pollResult.unsentRequests.size());
+
+        ShareFetchRequest.Builder builder1, builder2;
+        if (pollResult.unsentRequests.get(0).node().get() == nodeId0) {
+            builder1 = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+            builder2 = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(1).requestBuilder();
+            assertEquals(nodeId1, pollResult.unsentRequests.get(1).node().get());
+        } else {
+            builder1 = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(1).requestBuilder();
+            builder2 = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+            assertEquals(nodeId0, pollResult.unsentRequests.get(1).node().get());
+            assertEquals(nodeId1, pollResult.unsentRequests.get(0).node().get());
+        }
+
+        // Verify the builder data for node0.
+        assertEquals(1, builder1.data().topics().size());
+        assertEquals(tip0.topicId(), builder1.data().topics().get(0).topicId());
+        assertEquals(1, builder1.data().topics().get(0).partitions().size());
+        assertEquals(0, builder1.data().topics().get(0).partitions().get(0).partitionIndex());
+        assertEquals(1, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().size());
+        assertEquals(0L, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).firstOffset());
+        assertEquals(2L, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).lastOffset());
+
+        assertEquals(1, builder1.data().forgottenTopicsData().size());
+        assertEquals(tip0.topicId(), builder1.data().forgottenTopicsData().get(0).topicId());
+        assertEquals(1, builder1.data().forgottenTopicsData().get(0).partitions().size());
+        assertEquals(0, builder1.data().forgottenTopicsData().get(0).partitions().get(0));
+
+        // Verify the builder data for node1.
+        assertEquals(1, builder2.data().topics().size());
+        assertEquals(tip1.topicId(), builder2.data().topics().get(0).topicId());
+        assertEquals(1, builder2.data().topics().get(0).partitions().size());
+        assertEquals(1, builder2.data().topics().get(0).partitions().get(0).partitionIndex());
+    }
+
+    @Test
+    public void testShareFetchWithSubscriptionChangeMultipleNodesEmptyAcknowledgements() {
+        buildRequestManager();
+
+        subscriptions.subscribeToShareGroup(Collections.singleton(topicName));
+        subscriptions.assignFromSubscribed(Collections.singletonList(tp0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
+                        tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+        Node tp0Leader = metadata.fetch().leaderFor(tp0);
+        Node tp1Leader = metadata.fetch().leaderFor(tp1);
+
+        assertEquals(nodeId0, tp0Leader);
+        assertEquals(nodeId1, tp1Leader);
+
+        // Send the first ShareFetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        // Prepare an empty response
+        client.prepareResponse(fullFetchResponse(tip0, records, emptyAcquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        fetchRecords();
+
+        // Change the subscription.
+        subscriptions.assignFromSubscribed(Collections.singletonList(tp1));
+
+
+        // Now we will be sending the request to node1 only as leader for tip1 is node1.
+        // We do not build the request for tip0 as there are no acknowledgements to send.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        assertEquals(nodeId1, pollResult.unsentRequests.get(0).node().get());
+
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+
+        assertEquals(1, builder.data().topics().size());
+        assertEquals(tip1.topicId(), builder.data().topics().get(0).topicId());
+        assertEquals(1, builder.data().topics().get(0).partitions().size());
+        assertEquals(1, builder.data().topics().get(0).partitions().get(0).partitionIndex());
+        assertEquals(0, builder.data().forgottenTopicsData().size());
     }
 
     @Test
@@ -1249,7 +1465,7 @@ public class ShareConsumeRequestManagerTest {
                 new SimpleRecord(null, "value".getBytes()));
 
         // Remove the last record to simulate compaction
-        MemoryRecords.FilterResult result = records.filterTo(tp0, new MemoryRecords.RecordFilter(0, 0) {
+        MemoryRecords.FilterResult result = records.filterTo(new MemoryRecords.RecordFilter(0, 0) {
             @Override
             protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new BatchRetentionResult(BatchRetention.DELETE_EMPTY, false);
@@ -1259,7 +1475,7 @@ public class ShareConsumeRequestManagerTest {
             protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return record.key() != null;
             }
-        }, ByteBuffer.allocate(1024), Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        }, ByteBuffer.allocate(1024), BufferSupplier.NO_CACHING);
         result.outputBuffer().flip();
         MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.outputBuffer());
 
@@ -1724,10 +1940,22 @@ public class ShareConsumeRequestManagerTest {
             return pollResult.unsentRequests.size();
         }
 
+        private NetworkClientDelegate.PollResult sendFetchesReturnPollResult() {
+            fetch(new HashMap<>());
+            NetworkClientDelegate.PollResult pollResult = poll(time.milliseconds());
+            networkClientDelegate.addAll(pollResult.unsentRequests);
+            return pollResult;
+        }
+
         private int sendAcknowledgements() {
             NetworkClientDelegate.PollResult pollResult = poll(time.milliseconds());
             networkClientDelegate.addAll(pollResult.unsentRequests);
             return pollResult.unsentRequests.size();
+        }
+
+        public ResultHandler buildResultHandler(final AtomicInteger remainingResults,
+                                                final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future) {
+            return new ResultHandler(remainingResults, future);
         }
 
         public Tuple<AcknowledgeRequestState> requestStates(int nodeId) {

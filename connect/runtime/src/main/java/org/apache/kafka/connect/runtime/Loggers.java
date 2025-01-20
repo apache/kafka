@@ -19,19 +19,22 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 
-import org.apache.log4j.Level;
-import org.apache.log4j.LogManager;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.Configurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /**
  * Manages logging levels on a single worker. Supports dynamic adjustment and querying
@@ -44,12 +47,24 @@ public class Loggers {
 
     private static final Logger log = LoggerFactory.getLogger(Loggers.class);
 
-    /**
-     * Log4j uses "root" (case-insensitive) as name of the root logger.
-     */
     private static final String ROOT_LOGGER_NAME = "root";
 
+    /**
+     * Log4j uses "root" (case-insensitive) as name of the root logger.
+     * Note: In log4j, the root logger's name was "root" and Kafka also followed that name for dynamic logging control feature.
+     *
+     * While log4j2 changed the root logger's name to empty string (see: [[LogManager.ROOT_LOGGER_NAME]]),
+     * for backward-compatibility purposes, we accept both empty string and "root" as valid root logger names.
+     * This is why we have a dedicated definition that includes both values.
+     */
+    private static final List<String> VALID_ROOT_LOGGER_NAMES = List.of(LogManager.ROOT_LOGGER_NAME, ROOT_LOGGER_NAME);
+
     private final Time time;
+
+    /**
+     * Maps logger names to their last modification timestamps.
+     * Note: The logger name "root" refers to the actual root logger of log4j2.
+     */
     private final Map<String, Long> lastModifiedTimes;
 
     public Loggers(Time time) {
@@ -66,18 +81,17 @@ public class Loggers {
     public synchronized LoggerLevel level(String logger) {
         Objects.requireNonNull(logger, "Logger may not be null");
 
-        org.apache.log4j.Logger foundLogger = null;
-        if (ROOT_LOGGER_NAME.equalsIgnoreCase(logger)) {
+        org.apache.logging.log4j.Logger foundLogger = null;
+        if (isValidRootLoggerName(logger)) {
             foundLogger = rootLogger();
         } else {
-            Enumeration<org.apache.log4j.Logger> en = currentLoggers();
+            var currentLoggers = currentLoggers().values();
             // search within existing loggers for the given name.
             // using LogManger.getLogger() will create a logger if it doesn't exist
             // (potential leak since these don't get cleaned up).
-            while (en.hasMoreElements()) {
-                org.apache.log4j.Logger l = en.nextElement();
-                if (logger.equals(l.getName())) {
-                    foundLogger = l;
+            for (org.apache.logging.log4j.Logger currentLogger : currentLoggers) {
+                if (logger.equals(currentLogger.getName())) {
+                    foundLogger = currentLogger;
                     break;
                 }
             }
@@ -96,20 +110,16 @@ public class Loggers {
      * @return the levels of all known loggers; may be empty, but never null
      */
     public synchronized Map<String, LoggerLevel> allLevels() {
-        Map<String, LoggerLevel> result = new TreeMap<>();
-
-        Enumeration<org.apache.log4j.Logger> enumeration = currentLoggers();
-        Collections.list(enumeration)
-                .stream()
-                .filter(logger -> logger.getLevel() != null)
-                .forEach(logger -> result.put(logger.getName(), loggerLevel(logger)));
-
-        org.apache.log4j.Logger root = rootLogger();
-        if (root.getLevel() != null) {
-            result.put(ROOT_LOGGER_NAME, loggerLevel(root));
-        }
-
-        return result;
+        return currentLoggers()
+            .values()
+            .stream()
+            .filter(logger -> !logger.getLevel().equals(Level.OFF))
+            .collect(Collectors.toMap(
+                this::getLoggerName,
+                this::loggerLevel,
+                (existing, replacing) -> replacing,
+                TreeMap::new)
+            );
     }
 
     /**
@@ -122,14 +132,25 @@ public class Loggers {
     public synchronized List<String> setLevel(String namespace, Level level) {
         Objects.requireNonNull(namespace, "Logging namespace may not be null");
         Objects.requireNonNull(level, "Level may not be null");
+        String internalNameSpace = isValidRootLoggerName(namespace) ? LogManager.ROOT_LOGGER_NAME : namespace;
 
-        log.info("Setting level of namespace {} and children to {}", namespace, level);
-        List<org.apache.log4j.Logger> childLoggers = loggers(namespace);
+        log.info("Setting level of namespace {} and children to {}", internalNameSpace, level);
+
+        var loggers = loggers(internalNameSpace);
+        var nameToLevel = allLevels();
 
         List<String> result = new ArrayList<>();
-        for (org.apache.log4j.Logger logger: childLoggers) {
-            setLevel(logger, level);
-            result.add(logger.getName());
+        Configurator.setAllLevels(internalNameSpace, level);
+        for (org.apache.logging.log4j.Logger logger : loggers) {
+            // We need to track level changes for each logger and record their update timestamps  to ensure this method
+            // correctly returns only the loggers whose levels were actually modified.
+            String name = getLoggerName(logger);
+            String newLevel = logger.getLevel().name();
+            String oldLevel = nameToLevel.getOrDefault(name, new LoggerLevel("", time.milliseconds())).level();
+            if (!newLevel.equalsIgnoreCase(oldLevel)) {
+                lastModifiedTimes.put(name, time.milliseconds());
+                result.add(name);
+            }
         }
         Collections.sort(result);
 
@@ -143,25 +164,24 @@ public class Loggers {
      * @return all loggers that fall under the given namespace; never null, and will always contain
      * at least one logger (the ancestor logger for the namespace)
      */
-    private synchronized List<org.apache.log4j.Logger> loggers(String namespace) {
+    private synchronized Collection<org.apache.logging.log4j.Logger> loggers(String namespace) {
         Objects.requireNonNull(namespace, "Logging namespace may not be null");
 
-        if (ROOT_LOGGER_NAME.equalsIgnoreCase(namespace)) {
-            List<org.apache.log4j.Logger> result = Collections.list(currentLoggers());
-            result.add(rootLogger());
-            return result;
+        if (isValidRootLoggerName(namespace)) {
+            return currentLoggers().values();
         }
 
-        List<org.apache.log4j.Logger> result = new ArrayList<>();
-        org.apache.log4j.Logger ancestorLogger = lookupLogger(namespace);
-        Enumeration<org.apache.log4j.Logger> en = currentLoggers();
+        var result = new ArrayList<org.apache.logging.log4j.Logger>();
+        var nameToLogger = currentLoggers();
+        var ancestorLogger = lookupLogger(namespace);
+        var currentLoggers = nameToLogger.values();
+
         boolean present = false;
-        while (en.hasMoreElements()) {
-            org.apache.log4j.Logger current = en.nextElement();
-            if (current.getName().startsWith(namespace)) {
-                result.add(current);
+        for (org.apache.logging.log4j.Logger currentLogger : currentLoggers) {
+            if (currentLogger.getName().startsWith(namespace)) {
+                result.add(currentLogger);
             }
-            if (namespace.equals(current.getName())) {
+            if (namespace.equals(currentLogger.getName())) {
                 present = true;
             }
         }
@@ -174,43 +194,42 @@ public class Loggers {
     }
 
     // visible for testing
-    org.apache.log4j.Logger lookupLogger(String logger) {
-        return LogManager.getLogger(logger);
+    org.apache.logging.log4j.Logger lookupLogger(String logger) {
+        return LogManager.getLogger(isValidRootLoggerName(logger) ? LogManager.ROOT_LOGGER_NAME : logger);
     }
 
-    @SuppressWarnings("unchecked")
-    // visible for testing
-    Enumeration<org.apache.log4j.Logger> currentLoggers() {
-        return LogManager.getCurrentLoggers();
+    Map<String, org.apache.logging.log4j.Logger> currentLoggers() {
+        LoggerContext context = (LoggerContext) LogManager.getContext(false);
+        var results = new HashMap<String, org.apache.logging.log4j.Logger>();
+        context.getConfiguration().getLoggers().forEach((name, logger) -> results.put(name, LogManager.getLogger(name)));
+        context.getLoggerRegistry().getLoggers().forEach(logger -> results.put(logger.getName(), logger));
+        return results;
     }
 
     // visible for testing
-    org.apache.log4j.Logger rootLogger() {
+    org.apache.logging.log4j.Logger rootLogger() {
         return LogManager.getRootLogger();
     }
 
-    private void setLevel(org.apache.log4j.Logger logger, Level level) {
-        Level currentLevel = logger.getLevel();
-        if (currentLevel == null)
-            currentLevel = logger.getEffectiveLevel();
-
-        if (level.equals(currentLevel)) {
-            log.debug("Skipping update for logger {} since its level is already {}", logger.getName(), level);
-            return;
-        }
-
-        log.debug("Setting level of logger {} (excluding children) to {}", logger.getName(), level);
-        logger.setLevel(level);
-        lastModifiedTimes.put(logger.getName(), time.milliseconds());
+    private LoggerLevel loggerLevel(org.apache.logging.log4j.Logger logger) {
+        Long lastModified = lastModifiedTimes.get(getLoggerName(logger));
+        return new LoggerLevel(Objects.toString(logger.getLevel()), lastModified);
     }
 
-    private LoggerLevel loggerLevel(org.apache.log4j.Logger logger) {
-        Level level = logger.getLevel();
-        if (level == null)
-            level = logger.getEffectiveLevel();
-
-        Long lastModified = lastModifiedTimes.get(logger.getName());
-        return new LoggerLevel(Objects.toString(level), lastModified);
+    private boolean isValidRootLoggerName(String namespace) {
+        return VALID_ROOT_LOGGER_NAMES.stream()
+            .anyMatch(rootLoggerNames -> rootLoggerNames.equalsIgnoreCase(namespace));
     }
 
+    /**
+     * Converts logger name to ensure backward compatibility between log4j and log4j2.
+     * If the logger name is empty (log4j2's root logger representation), converts it to "root" (log4j's style).
+     * Otherwise, returns the original logger name.
+     *
+     * @param logger The logger instance to get the name from
+     * @return The logger name - returns "root" for empty string, otherwise returns the original logger name
+     */
+    private String getLoggerName(org.apache.logging.log4j.Logger logger) {
+        return logger.getName().equals(LogManager.ROOT_LOGGER_NAME) ? ROOT_LOGGER_NAME : logger.getName();
+    }
 }

@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -118,7 +117,7 @@ public class GlobalStateStoreProviderTest {
         when(mockContext.taskId()).thenReturn(new TaskId(0, 0));
         when(mockContext.appConfigs()).thenReturn(CONFIGS);
         for (final StateStore store : stores.values()) {
-            store.init((StateStoreContext) mockContext, null);
+            store.init(mockContext, null);
         }
     }
 
@@ -128,7 +127,7 @@ public class GlobalStateStoreProviderTest {
             new GlobalStateStoreProvider(Collections.singletonMap("global", new NoOpReadOnlyStore<>()));
         final List<ReadOnlyKeyValueStore<Object, Object>> stores =
             provider.stores("global", QueryableStoreTypes.keyValueStore());
-        assertEquals(stores.size(), 1);
+        assertEquals(1, stores.size());
     }
 
     @Test

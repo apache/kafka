@@ -21,10 +21,8 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -34,7 +32,6 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * Group configuration related parameters and supporting methods like validation, etc. are
@@ -53,8 +50,14 @@ public final class GroupConfig extends AbstractConfig {
     public static final String SHARE_RECORD_LOCK_DURATION_MS_CONFIG = "share.record.lock.duration.ms";
 
     public static final String SHARE_AUTO_OFFSET_RESET_CONFIG = "share.auto.offset.reset";
-    public static final String SHARE_AUTO_OFFSET_RESET_DEFAULT = ShareGroupAutoOffsetReset.LATEST.toString();
-    public static final String SHARE_AUTO_OFFSET_RESET_DOC = "The strategy to initialize the share-partition start offset.";
+    public static final String SHARE_AUTO_OFFSET_RESET_DEFAULT = ShareGroupAutoOffsetResetStrategy.LATEST.name();
+    public static final String SHARE_AUTO_OFFSET_RESET_DOC = "The strategy to initialize the share-partition start offset. " +
+        "<ul><li>earliest: automatically reset the offset to the earliest offset</li>" +
+        "<li>latest: automatically reset the offset to the latest offset</li>" +
+        "<li>by_duration:&lt;duration&gt;: automatically reset the offset to a configured duration from the current timestamp. " +
+        "&lt;duration&gt; must be specified in ISO8601 format (PnDTnHnMn.nS). " +
+        "Negative duration is not allowed.</li>" +
+        "<li>anything else: throw exception to the share consumer.</li></ul>";
 
     public final int consumerSessionTimeoutMs;
 
@@ -102,7 +105,7 @@ public final class GroupConfig extends AbstractConfig {
         .define(SHARE_AUTO_OFFSET_RESET_CONFIG,
             STRING,
             SHARE_AUTO_OFFSET_RESET_DEFAULT,
-            in(Utils.enumOptions(ShareGroupAutoOffsetReset.class)),
+            new ShareGroupAutoOffsetResetStrategy.Validator(),
             MEDIUM,
             SHARE_AUTO_OFFSET_RESET_DOC);
 
@@ -223,8 +226,8 @@ public final class GroupConfig extends AbstractConfig {
     /**
      * The default share group auto offset reset strategy.
      */
-    public static ShareGroupAutoOffsetReset defaultShareAutoOffsetReset() {
-        return ShareGroupAutoOffsetReset.valueOf(SHARE_AUTO_OFFSET_RESET_DEFAULT.toUpperCase(Locale.ROOT));
+    public static ShareGroupAutoOffsetResetStrategy defaultShareAutoOffsetReset() {
+        return ShareGroupAutoOffsetResetStrategy.fromString(SHARE_AUTO_OFFSET_RESET_DEFAULT);
     }
 
     /**
@@ -265,16 +268,7 @@ public final class GroupConfig extends AbstractConfig {
     /**
      * The share group auto offset reset strategy.
      */
-    public ShareGroupAutoOffsetReset shareAutoOffsetReset() {
-        return ShareGroupAutoOffsetReset.valueOf(shareAutoOffsetReset.toUpperCase(Locale.ROOT));
-    }
-
-    public enum ShareGroupAutoOffsetReset {
-        LATEST, EARLIEST;
-
-        @Override
-        public String toString() {
-            return super.toString().toLowerCase(Locale.ROOT);
-        }
+    public ShareGroupAutoOffsetResetStrategy shareAutoOffsetReset() {
+        return ShareGroupAutoOffsetResetStrategy.fromString(shareAutoOffsetReset);
     }
 }

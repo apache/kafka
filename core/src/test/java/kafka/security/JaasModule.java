@@ -23,15 +23,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class JaasModule {
-    public static JaasModule zkDigestModule(boolean debug, Map<String, String> entries) {
-        String name = "org.apache.zookeeper.server.auth.DigestLoginModule";
-        return new JaasModule(
-            name,
-            debug,
-            entries
-        );
-    }
-
     public static JaasModule krb5LoginModule(boolean useKeyTab, boolean storeKey, String keyTab, String principal, boolean debug, Optional<String> serviceName, boolean isIbmSecurity) {
         String name = isIbmSecurity ? "com.ibm.security.auth.module.Krb5LoginModule" : "com.sun.security.auth.module.Krb5LoginModule";
 
