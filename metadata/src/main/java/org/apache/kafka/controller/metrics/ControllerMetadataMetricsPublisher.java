@@ -134,7 +134,6 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
         }
         metrics.setFencedBrokerCount(fencedBrokers);
         metrics.setActiveBrokerCount(activeBrokers);
-        metrics.setMigratingZkBrokerCount(zkBrokers);
 
         int totalPartitions = 0;
         int offlinePartitions = 0;

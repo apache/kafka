@@ -157,9 +157,6 @@ class ControllerMetricsChanges {
         if (activeBrokersChange != 0) {
             metrics.addToActiveBrokerCount(activeBrokersChange);
         }
-        if (migratingZkBrokersChange != 0) {
-            metrics.addToMigratingZkBrokerCount(migratingZkBrokersChange);
-        }
         if (globalTopicsChange != 0) {
             metrics.addToGlobalTopicCount(globalTopicsChange);
         }
