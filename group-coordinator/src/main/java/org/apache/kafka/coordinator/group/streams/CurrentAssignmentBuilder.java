@@ -237,14 +237,12 @@ public class CurrentAssignmentBuilder {
      * not in the current assignment, and can be assigned currently (i.e., they are not owned by
      * another member, as defined by the `isUnreleasedTask` predicate).
      */
-    private boolean computeAssignmentDifference(
-        Map<String, Set<Integer>> currentAssignment,
-        Map<String, Set<Integer>> targetAssignment,
-        Map<String, Set<Integer>> resultAssignedTasks,
-        Map<String, Set<Integer>> resultTasksPendingRevocation,
-        Map<String, Set<Integer>> resultTasksPendingAssignment,
-        BiPredicate<String, Integer> isUnreleasedTask
-    ) {
+    private boolean computeAssignmentDifference(Map<String, Set<Integer>> currentAssignment,
+                                                Map<String, Set<Integer>> targetAssignment,
+                                                Map<String, Set<Integer>> resultAssignedTasks,
+                                                Map<String, Set<Integer>> resultTasksPendingRevocation,
+                                                Map<String, Set<Integer>> resultTasksPendingAssignment,
+                                                BiPredicate<String, Integer> isUnreleasedTask) {
         boolean hasUnreleasedTasks = false;
 
         Set<String> allSubtopologyIds = new HashSet<>(targetAssignment.keySet());
@@ -315,10 +313,8 @@ public class CurrentAssignmentBuilder {
      * @param memberAssignedTasks The assigned tasks of the member to use.
      * @return A new StreamsGroupMember.
      */
-    private StreamsGroupMember computeNextAssignment(
-        int memberEpoch,
-        TaskTuple memberAssignedTasks
-    ) {
+    private StreamsGroupMember computeNextAssignment(int memberEpoch,
+                                                     TaskTuple memberAssignedTasks) {
         Map<String, Set<Integer>> newActiveAssignedTasks = new HashMap<>();
         Map<String, Set<Integer>> newActiveTasksPendingRevocation = new HashMap<>();
         Map<String, Set<Integer>> newActiveTasksPendingAssignment = new HashMap<>();
