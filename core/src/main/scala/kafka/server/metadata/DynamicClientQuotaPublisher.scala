@@ -48,9 +48,9 @@ class DynamicClientQuotaPublisher(
   ): Unit = {
     val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
     try {
-      Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
-        clientQuotaMetadataManager.update(clientQuotasDelta)
-      }
+        Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
+          clientQuotaMetadataManager.update(clientQuotasDelta)
+        }
     } catch {
       case t: Throwable => faultHandler.handleFault("Uncaught exception while " +
         s"publishing dynamic client quota changes from $deltaName", t)
