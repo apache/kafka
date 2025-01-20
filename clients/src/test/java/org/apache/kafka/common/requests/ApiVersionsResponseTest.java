@@ -33,6 +33,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -111,20 +112,19 @@ public class ApiVersionsResponseTest {
             ApiKeys.JOIN_GROUP.latestVersion(), commonResponse);
     }
 
-    @ParameterizedTest
-    @EnumSource(names = {"BROKER"})
-    public void shouldReturnAllKeysWhenThrottleMsIsDefaultThrottle(ListenerType listenerType) {
+    @Test
+    public void shouldReturnAllKeysWhenThrottleMsIsDefaultThrottle() {
         ApiVersionsResponse response = new ApiVersionsResponse.Builder().
             setThrottleTimeMs(AbstractResponse.DEFAULT_THROTTLE_TIME).
             setApiVersions(ApiVersionsResponse.filterApis(
-                listenerType,
+                ListenerType.BROKER,
                 true,
                 true)).
             setSupportedFeatures(Features.emptySupportedFeatures()).
             setFinalizedFeatures(Collections.emptyMap()).
             setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
             build();
-        assertEquals(new HashSet<>(ApiKeys.apisForListener(listenerType)), apiKeysInResponse(response));
+        assertEquals(new HashSet<>(ApiKeys.apisForListener(ListenerType.BROKER)), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
         assertTrue(response.data().supportedFeatures().isEmpty());
         assertTrue(response.data().finalizedFeatures().isEmpty());
@@ -160,24 +160,24 @@ public class ApiVersionsResponseTest {
             build();
         verifyApiKeysForTelemetry(response, 0);
     }
-
+    
     @Test
-    public void testMetadataQuorumApisAreDisabled() {
+    public void testBrokerApisAreEnabled() {
         ApiVersionsResponse response = new ApiVersionsResponse.Builder().
-            setThrottleTimeMs(AbstractResponse.DEFAULT_THROTTLE_TIME).
-            setApiVersions(ApiVersionsResponse.filterApis(
-                ListenerType.BROKER,
-                true,
-                true)).
-            setSupportedFeatures(Features.emptySupportedFeatures()).
-            setFinalizedFeatures(Collections.emptyMap()).
-            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
-            build();
-        // Ensure that APIs needed for the KRaft mode are not exposed through ApiVersions until we are ready for them
-        HashSet<ApiKeys> exposedApis = apiKeysInResponse(response);
-        assertFalse(exposedApis.contains(ApiKeys.VOTE));
-        assertFalse(exposedApis.contains(ApiKeys.BEGIN_QUORUM_EPOCH));
-        assertFalse(exposedApis.contains(ApiKeys.END_QUORUM_EPOCH));
+                setThrottleTimeMs(AbstractResponse.DEFAULT_THROTTLE_TIME).
+                setApiVersions(ApiVersionsResponse.filterApis(
+                        ListenerType.BROKER,
+                        true,
+                        true)).
+                setSupportedFeatures(Features.emptySupportedFeatures()).
+                setFinalizedFeatures(Collections.emptyMap()).
+                setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
+                build();
+
+        HashSet<ApiKeys> exposed = apiKeysInResponse(response);
+        Arrays.stream(ApiKeys.values())
+                .filter(key -> key.messageType.listeners().contains(ListenerType.BROKER))
+                .forEach(key -> assertTrue(exposed.contains(key)));
     }
 
     @Test
