@@ -26,7 +26,7 @@ public class LRUCache<K, V> implements Cache<K, V> {
     private final LinkedHashMap<K, V> cache;
 
     public LRUCache(final int maxSize) {
-        cache = new LinkedHashMap<K, V>(16, .75f, true) {
+        cache = new LinkedHashMap<>(16, .75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
                 return this.size() > maxSize; // require this. prefix to make lgtm.com happy

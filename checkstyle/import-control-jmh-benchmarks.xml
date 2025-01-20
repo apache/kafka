@@ -58,6 +58,7 @@
     <allow pkg="org.apache.kafka.image"/>
     <allow pkg="org.apache.kafka.metadata"/>
     <allow pkg="org.apache.kafka.timeline" />
+    <allow pkg="org.apache.kafka.coordinator.transaction"/>
     <allow pkg="org.apache.kafka.connect" />
     <allow pkg="org.apache.kafka.network" />
     <allow class="org.apache.kafka.raft.QuorumConfig"/>

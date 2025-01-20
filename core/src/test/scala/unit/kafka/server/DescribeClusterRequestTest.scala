@@ -69,11 +69,6 @@ class DescribeClusterRequestTest extends BaseRequestTest {
         .setRack(server.config.rack.orNull)
     }.toSet
 
-    var expectedControllerId = 0
-    if (!isKRaftTest()) {
-      // in KRaft mode DescribeClusterRequest will return a random broker id as the controllerId (KIP-590)
-      expectedControllerId = servers.filter(_.kafkaController.isActive).last.config.brokerId
-    }
     val expectedClusterId = brokers.last.clusterId
 
     val expectedClusterAuthorizedOperations = if (includeClusterAuthorizedOperations) {
@@ -92,11 +87,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
         .build(version.toShort)
       val describeClusterResponse = sentDescribeClusterRequest(describeClusterRequest)
 
-      if (isKRaftTest()) {
-        assertTrue(0 to brokerCount contains describeClusterResponse.data.controllerId)
-      } else {
-        assertEquals(expectedControllerId, describeClusterResponse.data.controllerId)
-      }
+      assertTrue(0 to brokerCount contains describeClusterResponse.data.controllerId)
       assertEquals(expectedClusterId, describeClusterResponse.data.clusterId)
       assertEquals(expectedClusterAuthorizedOperations, describeClusterResponse.data.clusterAuthorizedOperations)
       assertEquals(expectedBrokers, describeClusterResponse.data.brokers.asScala.toSet)

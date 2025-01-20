@@ -31,10 +31,7 @@ import java.util.Set;
 public class Protocol {
 
     private static String indentString(int size) {
-        StringBuilder b = new StringBuilder(size);
-        for (int i = 0; i < size; i++)
-            b.append(" ");
-        return b.toString();
+        return " ".repeat(Math.max(0, size));
     }
 
     private static void schemaToBnfHtml(Schema schema, StringBuilder b, int indentSize) {

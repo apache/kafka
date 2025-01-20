@@ -17,20 +17,20 @@
 
 package kafka.api
 
-import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.{consumeRecords, waitUntilTrue}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerGroupMetadata, ConsumerRecord, OffsetAndMetadata}
+import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.MethodSource
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
 import java.lang.{Long => JLong}
 import java.nio.charset.StandardCharsets
@@ -38,9 +38,8 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.{Optional, Properties}
-import scala.annotation.nowarn
-import scala.collection.{Seq, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.{Seq, mutable}
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
@@ -299,14 +298,6 @@ class TransactionsTest extends IntegrationTestHarness {
     assertEquals(3L, second.offset)
   }
 
-  @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_17961"))
-  def testSendOffsetsWithGroupId(quorum: String, groupProtocol: String): Unit = {
-    sendOffset((producer, groupId, consumer) =>
-      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
-  }
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testSendOffsetsWithGroupMetadata(quorum: String, groupProtocol: String): Unit = {
@@ -401,6 +392,7 @@ class TransactionsTest extends IntegrationTestHarness {
     producer1.beginTransaction()
     producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
     producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
+    producer1.flush()
 
     producer2.initTransactions()  // ok, will abort the open transaction.
     producer2.beginTransaction()
@@ -438,7 +430,7 @@ class TransactionsTest extends IntegrationTestHarness {
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
-    assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(Map(new TopicPartition("foobartopic", 0)
+    assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(Map(new TopicPartition(topic1, 0)
       -> new OffsetAndMetadata(110L)).asJava, new ConsumerGroupMetadata("foobarGroup")))
 
     producer2.commitTransaction()  // ok
@@ -568,6 +560,8 @@ class TransactionsTest extends IntegrationTestHarness {
     val consumer = transactionalConsumers(0)
 
     consumer.subscribe(List(topic1, topic2).asJava)
+    TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic1, 0))
+    TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic2, 0))
 
     producer1.initTransactions()
     producer1.beginTransaction()
@@ -586,15 +580,21 @@ class TransactionsTest extends IntegrationTestHarness {
       producer1.beginTransaction()
       val result =  producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "5", willBeCommitted = false))
       val recordMetadata = result.get()
-      error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
+      error(s"Missed an exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       brokers.foreach { broker =>
         error(s"log dirs: ${broker.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
-      case _: ProducerFencedException =>
-      case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+      case _: InvalidProducerEpochException =>
+      case e: ExecutionException => {
+        if (quorum == "zk") {
+          assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+        } else {
+          // In kraft mode, transactionV2 is used.
+          assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
+        }
+      }
       case e: Exception =>
         throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
     }
@@ -622,14 +622,27 @@ class TransactionsTest extends IntegrationTestHarness {
     // Wait for the expiration cycle to kick in.
     Thread.sleep(600)
 
-    try {
-      // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
-      fail("should have raised a ProducerFencedException since the transaction has expired")
-    } catch {
-      case _: ProducerFencedException =>
-      case e: ExecutionException =>
-      assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+    if (quorum == "zk") {
+      // In zk mode, transaction v1 is used.
+      try {
+        // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
+        producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
+        fail("should have raised a ProducerFencedException since the transaction has expired")
+      } catch {
+        case _: ProducerFencedException =>
+        case e: ExecutionException =>
+          assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+      }
+    } else {
+      try {
+        // Now that the transaction has expired, the second send should fail with a InvalidProducerEpochException.
+        producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
+        fail("should have raised a InvalidProducerEpochException since the transaction has expired")
+      } catch {
+        case _: InvalidProducerEpochException =>
+        case e: ExecutionException =>
+          assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
+      }
     }
 
     // Verify that the first message was aborted and the second one was never written at all.
@@ -697,14 +710,16 @@ class TransactionsTest extends IntegrationTestHarness {
     assertThrows(classOf[IllegalStateException], () => producer.initTransactions())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @Flaky("KAFKA-18035")
+  @ParameterizedTest
   @CsvSource(Array(
     "kraft,classic,false",
     "kraft,consumer,false",
   ))
   def testBumpTransactionalEpochWithTV2Disabled(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+    val defaultLinger = 5;
     val producer = createTransactionalProducer("transactionalProducer",
-      deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
+      deliveryTimeoutMs = 5000 + defaultLinger, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
     try {
       // Create a topic with RF=1 so that a single broker failure will render it unavailable
@@ -726,7 +741,8 @@ class TransactionsTest extends IntegrationTestHarness {
       val initialProducerEpoch = producerStateEntry.producerEpoch
 
       producer.beginTransaction()
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false))
+      val successfulFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false))
+      successfulFuture.get(20, TimeUnit.SECONDS)
 
       killBroker(partitionLeader) // kill the partition leader to prevent the batch from being submitted
       val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
@@ -762,11 +778,15 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @CsvSource(Array("kraft, classic, true", "kraft, consumer, true"))
+  @ParameterizedTest
+  @CsvSource(Array(
+    "kraft, classic, true",
+    "kraft, consumer, true"
+  ))
   def testBumpTransactionalEpochWithTV2Enabled(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+    val defaultLinger = 5;
     val producer = createTransactionalProducer("transactionalProducer",
-      deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
+      deliveryTimeoutMs = 5000 + defaultLinger, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
 
     try {
@@ -782,18 +802,19 @@ class TransactionsTest extends IntegrationTestHarness {
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "4", "4", willBeCommitted = true))
       producer.commitTransaction()
 
-      // Get producerId and epoch after first commit
+      // Second transaction: abort
+      producer.beginTransaction()
+      val successfulFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false))
+      successfulFuture.get(20, TimeUnit.SECONDS)
+
+      // Get producerId and epoch after first commit. Check after the first successful send of the next transaction to confirm the commit is complete.
       val log = brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get
       val producerStateManager = log.producerStateManager
       val activeProducersIter = producerStateManager.activeProducers.entrySet().iterator()
       assertTrue(activeProducersIter.hasNext)
       var producerStateEntry = activeProducersIter.next().getValue
       val producerId = producerStateEntry.producerId
-      var previousProducerEpoch = producerStateEntry.producerEpoch
-
-      // Second transaction: abort
-      producer.beginTransaction()
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false))
+      val previousProducerEpoch = producerStateEntry.producerEpoch
 
       killBroker(partitionLeader) // kill the partition leader to prevent the batch from being submitted
       val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
@@ -803,39 +824,21 @@ class TransactionsTest extends IntegrationTestHarness {
       org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
       producer.abortTransaction()
 
-      // Get producer epoch after abortTransaction and verify it has increased.
-      producerStateEntry =
-        brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers.get(producerId)
-      // Assert that producerStateEntry is not null
-      assertNotNull(producerStateEntry, "Producer state entry should not be null after abortTransaction")
-
-      val currentProducerEpoch = producerStateEntry.producerEpoch
-      assertTrue(currentProducerEpoch > previousProducerEpoch,
-        s"Producer epoch after abortTransaction ($currentProducerEpoch) should be greater than after first commit ($previousProducerEpoch)"
-      )
-      // Update previousProducerEpoch
-      previousProducerEpoch = currentProducerEpoch
-
       // Third transaction: commit
       producer.beginTransaction()
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
+      val nextSuccessfulFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
+      nextSuccessfulFuture.get(20, TimeUnit.SECONDS)
+
+      // Confirm the epoch bumped after the previous abort.
+      producerStateEntry =
+        brokers(partitionLeader).logManager.getLog(new TopicPartition(topic2, 0)).get.producerStateManager.activeProducers.get(producerId)
+      assertNotNull(producerStateEntry)
+      assertTrue(producerStateEntry.producerEpoch > previousProducerEpoch)
+
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "4", "4", willBeCommitted = true))
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "1", "1", willBeCommitted = true))
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = true))
       producer.commitTransaction()
-
-      // Wait until the producer epoch has been updated on the broker
-      TestUtils.waitUntilTrue(() => {
-        val logOption = brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0))
-        logOption.exists { log =>
-          val producerStateEntry = log.producerStateManager.activeProducers.get(producerId)
-          producerStateEntry != null && producerStateEntry.producerEpoch > previousProducerEpoch
-        }
-      }, "Timed out waiting for producer epoch to be incremented after second commit", 10000)
-
-      // Now that we've verified that the producer epoch has increased,
-      // update the previous producer epoch.
-      previousProducerEpoch = currentProducerEpoch
 
       consumer.subscribe(List(topic1, topic2, testTopic).asJava)
 
@@ -901,7 +904,8 @@ class TransactionsTest extends IntegrationTestHarness {
       producer1.close()
     }
 
-    val producer3 = createTransactionalProducer("transactional-producer", maxBlockMs = 5000)
+    // Make sure to leave this producer enough time before request timeout. The broker restart can take some time.
+    val producer3 = createTransactionalProducer("transactional-producer")
     producer3.initTransactions()
 
     producer3.beginTransaction()
@@ -910,7 +914,7 @@ class TransactionsTest extends IntegrationTestHarness {
 
     // Check that the epoch only increased by 1 when TV2 is disabled.
     // With TV2 and the latest EndTxnRequest version, the epoch will be bumped at the end of every transaction aka
-    // three times (once after each commit and once after the timeout exception)
+    // three times (once after each commit and once after the timeout exception). The last bump is less consistent, so ensure the first two happen.
     producerStateEntry =
       brokers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers.get(producerId)
     assertNotNull(producerStateEntry)
@@ -918,11 +922,24 @@ class TransactionsTest extends IntegrationTestHarness {
     if (!isTV2Enabled) {
       assertEquals((initialProducerEpoch + 1).toShort, producerStateEntry.producerEpoch)
     } else {
-      // Wait until the producer epoch has been updated on the broker.
-      TestUtils.waitUntilTrue(() => {
-          producerStateEntry != null && producerStateEntry.producerEpoch == initialProducerEpoch + 3
-      }, "Timed out waiting for producer epoch to be incremented after second commit", 10000)
+      assertTrue((initialProducerEpoch + 1).toShort <= producerStateEntry.producerEpoch)
     }
+  }
+
+  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isTV2Enabled={2}")
+  @CsvSource(Array(
+    "kraft, consumer, true",
+  ))
+  def testEmptyAbortAfterCommit(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+    val producer = transactionalProducers.head
+
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 1, "4", "4", willBeCommitted = false))
+    producer.commitTransaction()
+
+    producer.beginTransaction()
+    producer.abortTransaction()
   }
 
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,

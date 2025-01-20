@@ -78,7 +78,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
 
     // Start from version 1 because version 0 goes to ZK.
-    for (version <- 1 to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.OFFSET_COMMIT.oldestVersion to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
       // Commit offset.
       commitOffset(
         groupId = "grp",

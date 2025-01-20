@@ -44,6 +44,7 @@
     <allow pkg="org.apache.kafka.common.utils" />
     <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
     <allow pkg="org.apache.kafka.common.memory" />
+    <allow pkg="org.apache.kafka.common.test" />
 
 
     <subpackage name="server">

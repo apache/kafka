@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
@@ -82,7 +81,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     /**
      * The number of subscribers or regular expressions per topic.
      */
-    protected final TimelineHashMap<String, Integer> subscribedTopicNames;
+    protected final TimelineHashMap<String, SubscriptionCount> subscribedTopicNames;
 
     /**
      * The metadata associated with each subscribed topic name.
@@ -221,7 +220,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * @return An immutable map containing all the subscribed topic names
      *         with the subscribers counts per topic.
      */
-    public Map<String, Integer> subscribedTopicNames() {
+    public Map<String, SubscriptionCount> subscribedTopicNames() {
         return Collections.unmodifiableMap(subscribedTopicNames);
     }
 
@@ -378,7 +377,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
      */
     public Map<String, TopicMetadata> computeSubscriptionMetadata(
-        Map<String, Integer> subscribedTopicNames,
+        Map<String, SubscriptionCount> subscribedTopicNames,
         TopicsImage topicsImage,
         ClusterImage clusterImage
     ) {
@@ -441,18 +440,23 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
+     * Updates the subscription type.
+     */
+    protected void maybeUpdateGroupSubscriptionType() {
+        subscriptionType.set(subscriptionType(subscribedTopicNames, members.size()));
+    }
+
+    /**
      * Updates the subscribed topic names count.
-     * The subscription type is updated as a consequence.
      *
      * @param oldMember The old member.
      * @param newMember The new member.
      */
-    protected void maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(
+    protected void maybeUpdateSubscribedTopicNames(
         ModernGroupMember oldMember,
         ModernGroupMember newMember
     ) {
         maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
-        subscriptionType.set(subscriptionType(subscribedTopicNames, members.size()));
     }
 
     /**
@@ -463,19 +467,19 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * @param newMember             The new member.
      */
     private static void maybeUpdateSubscribedTopicNames(
-        Map<String, Integer> subscribedTopicCount,
+        Map<String, SubscriptionCount> subscribedTopicCount,
         ModernGroupMember oldMember,
         ModernGroupMember newMember
     ) {
         if (oldMember != null) {
             oldMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, Utils::decValue)
+                subscribedTopicCount.compute(topicName, SubscriptionCount::decNameCount)
             );
         }
 
         if (newMember != null) {
             newMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, Utils::incValue)
+                subscribedTopicCount.compute(topicName, SubscriptionCount::incNameCount)
             );
         }
     }
@@ -488,11 +492,11 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      *
      * @return Copy of the map of topics to the count of number of subscribers.
      */
-    public Map<String, Integer> computeSubscribedTopicNames(
+    public Map<String, SubscriptionCount> computeSubscribedTopicNames(
         ModernGroupMember oldMember,
         ModernGroupMember newMember
     ) {
-        Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
+        Map<String, SubscriptionCount> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
         maybeUpdateSubscribedTopicNames(
             subscribedTopicNames,
             oldMember,
@@ -508,10 +512,10 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      *
      * @return Copy of the map of topics to the count of number of subscribers.
      */
-    public Map<String, Integer> computeSubscribedTopicNames(
+    public Map<String, SubscriptionCount> computeSubscribedTopicNames(
         Set<? extends ModernGroupMember> removedMembers
     ) {
-        Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
+        Map<String, SubscriptionCount> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
         if (removedMembers != null) {
             removedMembers.forEach(removedMember ->
                 maybeUpdateSubscribedTopicNames(
@@ -533,15 +537,15 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      *         otherwise, {@link SubscriptionType#HETEROGENEOUS}.
      */
     public static SubscriptionType subscriptionType(
-        Map<String, Integer> subscribedTopicNames,
+        Map<String, SubscriptionCount> subscribedTopicNames,
         int numberOfMembers
     ) {
         if (subscribedTopicNames.isEmpty()) {
             return HOMOGENEOUS;
         }
 
-        for (int subscriberCount : subscribedTopicNames.values()) {
-            if (subscriberCount != numberOfMembers) {
+        for (SubscriptionCount subscriberCount : subscribedTopicNames.values()) {
+            if (subscriberCount.byNameCount != numberOfMembers) {
                 return HETEROGENEOUS;
             }
         }

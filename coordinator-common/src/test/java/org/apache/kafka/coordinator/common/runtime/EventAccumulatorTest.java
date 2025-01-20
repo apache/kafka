@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class EventAccumulatorTest {
 
-    private class MockEvent implements EventAccumulator.Event<Integer> {
+    private static class MockEvent implements EventAccumulator.Event<Integer> {
         int key;
         int value;
 
@@ -153,7 +153,7 @@ public class EventAccumulatorTest {
         accumulator.addLast(event2);
         assertEquals(3, accumulator.size());
 
-        MockEvent event = null;
+        MockEvent event;
 
         // Poll event0.
         event = accumulator.poll();

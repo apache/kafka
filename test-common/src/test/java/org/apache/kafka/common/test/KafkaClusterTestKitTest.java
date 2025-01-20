@@ -32,8 +32,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class KafkaClusterTestKitTest {
     @ParameterizedTest
@@ -136,6 +138,19 @@ public class KafkaClusterTestKitTest {
                 assertTrue(Paths.get(controller.metadataDirectory()).startsWith(baseDirectory)));
             cluster.nodes().brokerNodes().values().forEach(broker ->
                 assertTrue(Paths.get(broker.metadataDirectory()).startsWith(baseDirectory)));
+        }
+    }
+    @Test
+    public void testExposedFaultHandlers() {
+        TestKitNodes nodes = new TestKitNodes.Builder()
+            .setNumBrokerNodes(1)
+            .setNumControllerNodes(1)
+            .build();
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
+            assertNotNull(cluster.fatalFaultHandler(), "Fatal fault handler should not be null");
+            assertNotNull(cluster.nonFatalFaultHandler(), "Non-fatal fault handler should not be null");
+        } catch (Exception e) {
+            fail("Failed to initialize cluster", e);
         }
     }
 }

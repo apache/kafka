@@ -18,6 +18,8 @@
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "OffsetFetchRequest",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
+  //
   // In version 0, the request read offsets from ZK.
   //
   // Starting in version 1, the broker supports fetching offsets from the internal __consumer_offsets topic.
@@ -36,8 +38,7 @@
   //
   // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). It adds
   // the MemberId and MemberEpoch fields. Those are filled in and validated when the new consumer protocol is used.
-  "validVersions": "0-9",
-  "deprecatedVersions": "0",
+  "validVersions": "1-9",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0-7", "entityType": "groupId",
@@ -50,11 +51,11 @@
         "about": "The partition indexes we would like to fetch offsets for." }
     ]},
     { "name": "Groups", "type": "[]OffsetFetchRequestGroup", "versions": "8+",
-      "about": "Each group we would like to fetch offsets for", "fields": [
+      "about": "Each group we would like to fetch offsets for.", "fields": [
       { "name": "GroupId", "type": "string", "versions": "8+", "entityType": "groupId",
         "about": "The group ID."},
       { "name": "MemberId", "type": "string", "versions": "9+", "nullableVersions": "9+", "default": "null", "ignorable": true,
-        "about": "The member id" },
+        "about": "The member id." },
       { "name": "MemberEpoch", "type": "int32", "versions": "9+", "default": "-1", "ignorable": true,
         "about": "The member epoch if using the new consumer protocol (KIP-848)." },
       { "name": "Topics", "type": "[]OffsetFetchRequestTopics", "versions": "8+", "nullableVersions": "8+",

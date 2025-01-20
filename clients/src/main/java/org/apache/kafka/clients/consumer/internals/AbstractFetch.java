@@ -416,7 +416,7 @@ public abstract class AbstractFetch implements Closeable {
 
             Optional<Node> leaderOpt = position.currentLeader.leader;
 
-            if (!leaderOpt.isPresent()) {
+            if (leaderOpt.isEmpty()) {
                 log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
                 metadata.requestUpdate(false);
                 continue;

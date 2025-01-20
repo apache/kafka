@@ -27,6 +27,7 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.NoOpProcessorWrapper;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 
@@ -38,6 +39,7 @@ import java.util.Properties;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
@@ -57,6 +59,8 @@ import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
@@ -68,13 +72,26 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSi
  * Streams configs that apply at the topology level. The values in the {@link StreamsConfig} parameter of the
  * {@link org.apache.kafka.streams.KafkaStreams} constructor or the {@link KafkaStreamsNamedTopologyWrapper} constructor (deprecated)
  * will determine the defaults, which can then be overridden for specific topologies by passing them in when creating the
- * topology builders via the {@link org.apache.kafka.streams.StreamsBuilder#StreamsBuilder(TopologyConfig) StreamsBuilder(TopologyConfig)} method.
+ * topology builders via the {@link StreamsBuilder#StreamsBuilder(TopologyConfig)} constructor for DSL applications,
+ * or the {@link Topology#Topology(TopologyConfig)} for PAPI applications.
+ * <p>
+ * Note that some configs, such as the {@code processor.wrapper.class} config, can only take effect while the
+ * topology is being built, which means they have to be passed in as a TopologyConfig to the
+ * {@link Topology#Topology(TopologyConfig)} constructor (PAPI) or the
+ * {@link StreamsBuilder#StreamsBuilder(TopologyConfig)} constructor (DSL).
+ * If they are only set in the configs passed in to the KafkaStreams constructor, it will be too late for them
+ * to be applied and the config will be ignored.
  */
 @SuppressWarnings("deprecation")
 public final class TopologyConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
     static {
         CONFIG = new ConfigDef()
+            .define(PROCESSOR_WRAPPER_CLASS_CONFIG,
+                    Type.CLASS,
+                    NoOpProcessorWrapper.class.getName(),
+                    Importance.LOW,
+                    PROCESSOR_WRAPPER_CLASS_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                 Type.INT,
                 null,
@@ -147,8 +164,8 @@ public final class TopologyConfig extends AbstractConfig {
     public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
     public final Supplier<ProcessingExceptionHandler> processingExceptionHandlerSupplier;
 
-    public TopologyConfig(final StreamsConfig globalAppConfigs) {
-        this(null, globalAppConfigs, new Properties());
+    public TopologyConfig(final StreamsConfig configs) {
+        this(null, configs, mkObjectProperties(configs.originals()));
     }
 
     public TopologyConfig(final String topologyName, final StreamsConfig globalAppConfigs, final Properties topologyOverrides) {

@@ -142,6 +142,7 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
     cur_suite: Optional[TestSuite] = None
     partial_test_case = None
     test_case_failed = False
+    test_case_skipped = False
     for (event, elem) in xml.etree.ElementTree.iterparse(fp, events=["start", "end"]):
         if event == "start":
             if elem.tag == "testsuite":
@@ -158,6 +159,7 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
                 test_time = float(elem.get("time", 0.0))
                 partial_test_case = partial(TestCase, test_name, class_name, test_time)
                 test_case_failed = False
+                test_case_skipped = False
             elif elem.tag == "failure":
                 failure_message = elem.get("message")
                 if failure_message:
@@ -171,11 +173,12 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
             elif elem.tag == "skipped":
                 skipped = partial_test_case(None, None, None)
                 cur_suite.skipped_tests.append(skipped)
+                test_case_skipped = True
             else:
                 pass
         elif event == "end":
             if elem.tag == "testcase":
-                if not test_case_failed:
+                if not test_case_failed and not test_case_skipped:
                     passed = partial_test_case(None, None, None)
                     cur_suite.passed_tests.append(passed)
                 partial_test_case = None
@@ -303,7 +306,7 @@ if __name__ == "__main__":
                     logger.debug(f"Found skipped test: {skipped_test}")
                     skipped_table.append((simple_class_name, skipped_test.test_name))
 
-                # Collect all tests that were run as part of quarantinedTest
+                # Only collect quarantined tests from the "quarantinedTest" task
                 if task == "quarantinedTest":
                     for test in all_suite_passed.values():
                         simple_class_name = test.class_name.split(".")[-1]
@@ -329,59 +332,89 @@ if __name__ == "__main__":
     # The stdout (print) goes to the workflow step console output.
     # The stderr (logger) is redirected to GITHUB_STEP_SUMMARY which becomes part of the HTML job summary.
     report_url = get_env("JUNIT_REPORT_URL")
-    report_md = f"Download [HTML report]({report_url})."
-    summary = (f"{total_run} tests cases run in {duration}. "
+    if report_url:
+        report_md = f"Download [HTML report]({report_url})."
+    else:
+        report_md = "No report available. JUNIT_REPORT_URL was missing."
+    summary = (f"{total_run} tests cases run in {duration}.\n\n"
                f"{total_success} {PASSED}, {total_failures} {FAILED}, "
-               f"{total_flaky} {FLAKY}, {total_skipped} {SKIPPED}, and {total_errors} errors.")
+               f"{total_flaky} {FLAKY}, {total_skipped} {SKIPPED}, {len(quarantined_table)} {QUARANTINED}, and {total_errors} errors.")
     print("## Test Summary\n")
-    print(f"{summary} {report_md}\n")
+    print(f"{summary}\n\n{report_md}\n")
+
+    # Failed
     if len(failed_table) > 0:
-        logger.info(f"Found {len(failed_table)} test failures:")
-        print("### Failed Tests\n")
+        print("<details open=\"true\">")
+        print(f"<summary>Failed Tests {FAILED} ({len(failed_table)})</summary>\n")
         print(f"| Module | Test | Message | Time |")
         print(f"| ------ | ---- | ------- | ---- |")
+        logger.info(f"Found {len(failed_table)} test failures:")
         for row in failed_table:
             logger.info(f"{FAILED} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+        print("\n</details>")
     print("\n")
+
+    # Flaky
     if len(flaky_table) > 0:
-        logger.info(f"Found {len(flaky_table)} flaky test failures:")
-        print("### Flaky Tests\n")
+        print("<details open=\"true\">")
+        print(f"<summary>Flaky Tests {FLAKY} ({len(flaky_table)})</summary>\n")
         print(f"| Module | Test | Message | Time |")
         print(f"| ------ | ---- | ------- | ---- |")
+        logger.info(f"Found {len(flaky_table)} flaky test failures:")
         for row in flaky_table:
             logger.info(f"{FLAKY} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+        print("\n</details>")
     print("\n")
+
+    # Skipped
     if len(skipped_table) > 0:
         print("<details>")
-        print(f"<summary>{len(skipped_table)} Skipped Tests</summary>\n")
+        print(f"<summary>Skipped Tests {SKIPPED} ({len(skipped_table)})</summary>\n")
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
+        logger.debug(f"::group::Found {len(skipped_table)} skipped tests")
         for row in skipped_table:
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+            logger.debug(f"{row[0]} > {row[1]}")
         print("\n</details>")
+        logger.debug("::endgroup::")
+    print("\n")
 
+    # Quarantined
     if len(quarantined_table) > 0:
-        logger.info(f"Ran {len(quarantined_table)} quarantined test:")
         print("<details>")
-        print(f"<summary>{len(quarantined_table)} Quarantined Tests</summary>\n")
+        print(f"<summary>Quarantined Tests {QUARANTINED} ({len(quarantined_table)})</summary>\n")
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
+        logger.debug(f"::group::Found {len(quarantined_table)} quarantined tests")
         for row in quarantined_table:
-            logger.info(f"{QUARANTINED} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+            logger.debug(f"{row[0]} > {row[1]}")
         print("\n</details>")
+        logger.debug("::endgroup::")
+
+    print("<hr/>")
 
     # Print special message if there was a timeout
-    exit_code = get_env("GRADLE_EXIT_CODE", int)
-    if exit_code == 124:
+    test_exit_code = get_env("GRADLE_TEST_EXIT_CODE", int)
+    quarantined_test_exit_code = get_env("GRADLE_QUARANTINED_TEST_EXIT_CODE", int)
+
+    if test_exit_code == 124 or quarantined_test_exit_code == 124:
+        # Special handling for timeouts. The exit code 124 is emitted by 'timeout' command used in build.yml.
+        # A watchdog script "thread-dump.sh" will use jstack to force a thread dump for any Gradle process
+        # still running after the timeout. We capture the exit codes of the two test tasks and pass them to
+        # this script. If either "test" or "quarantinedTest" fails due to timeout, we want to fail the overall build.
         thread_dump_url = get_env("THREAD_DUMP_URL")
-        logger.debug(f"Gradle command timed out. These are partial results!")
+        if test_exit_code == 124:
+            logger.debug(f"Gradle task for 'test' timed out. These are partial results!")
+        else:
+            logger.debug(f"Gradle task for 'quarantinedTest' timed out. These are partial results!")
         logger.debug(summary)
         if thread_dump_url:
             print(f"\nThe JUnit tests were cancelled due to a timeout. Thread dumps were generated before the job was cancelled. "
@@ -390,7 +423,7 @@ if __name__ == "__main__":
         else:
             logger.debug(f"Failing this step because the tests timed out. Thread dumps were not archived, check logs in JUnit step.")
         exit(1)
-    elif exit_code in (0, 1):
+    elif test_exit_code in (0, 1):
         logger.debug(summary)
         if total_failures > 0:
             logger.debug(f"Failing this step due to {total_failures} test failures")
@@ -401,5 +434,5 @@ if __name__ == "__main__":
         else:
             exit(0)
     else:
-        logger.debug(f"Gradle had unexpected exit code {exit_code}. Failing this step")
+        logger.debug(f"Gradle had unexpected exit code {test_exit_code}. Failing this step")
         exit(1)

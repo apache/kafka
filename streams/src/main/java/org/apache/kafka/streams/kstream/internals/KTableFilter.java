@@ -20,8 +20,13 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
+
+import java.util.Collections;
+import java.util.Set;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
@@ -34,17 +39,20 @@ public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn,
     private final String queryableName;
     private boolean sendOldValues;
     private boolean useVersionedSemantics = false;
+    private final StoreFactory storeFactory;
 
     KTableFilter(final KTableImpl<KIn, ?, VIn> parent,
                  final Predicate<? super KIn, ? super VIn> predicate,
                  final boolean filterNot,
-                 final String queryableName) {
+                 final String queryableName,
+                 final StoreFactory storeFactory) {
         this.parent = parent;
         this.predicate = predicate;
         this.filterNot = filterNot;
         this.queryableName = queryableName;
         // If upstream is already materialized, enable sending old values to avoid sending unnecessary tombstones:
         this.sendOldValues = parent.enableSendingOldValues(false);
+        this.storeFactory = storeFactory;
     }
 
     public void setUseVersionedSemantics(final boolean useVersionedSemantics) {
@@ -59,6 +67,14 @@ public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn,
     @Override
     public Processor<KIn, Change<VIn>, KIn, Change<VIn>> get() {
         return new KTableFilterProcessor();
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        if (storeFactory == null) {
+            return null;
+        }
+        return Collections.singleton(new StoreFactory.FactoryWrappingStoreBuilder<>(storeFactory));
     }
 
     @Override

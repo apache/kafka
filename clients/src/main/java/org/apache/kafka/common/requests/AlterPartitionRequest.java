@@ -68,14 +68,12 @@ public class AlterPartitionRequest extends AbstractRequest {
          * @param data The data to be sent. Note that because the version of the
          *             request is not known at this time, it is expected that all
          *             topics have a topic id and a topic name set.
-         * @param canUseTopicIds True if version 2 and above can be used.
          */
-        public Builder(AlterPartitionRequestData data, boolean canUseTopicIds) {
+        public Builder(AlterPartitionRequestData data) {
             super(
                 ApiKeys.ALTER_PARTITION,
                 ApiKeys.ALTER_PARTITION.oldestVersion(),
-                // Version 1 is the maximum version that can be used without topic ids.
-                canUseTopicIds ? ApiKeys.ALTER_PARTITION.latestVersion() : 1
+                ApiKeys.ALTER_PARTITION.latestVersion()
             );
             this.data = data;
         }

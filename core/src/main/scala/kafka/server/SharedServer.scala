@@ -17,9 +17,10 @@
 
 package kafka.server
 
+import kafka.metrics.KafkaMetricsReporter
 import kafka.raft.KafkaRaftManager
 import kafka.server.Server.MetricsPrefix
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.{CoreUtils, Logging, VerifiableProperties}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
@@ -101,6 +102,9 @@ class SharedServer(
   val faultHandlerFactory: FaultHandlerFactory,
   val socketFactory: ServerSocketFactory
 ) extends Logging {
+  KafkaMetricsReporter.startReporters(VerifiableProperties(sharedServerConfig.originals))
+  KafkaYammerMetrics.INSTANCE.configure(sharedServerConfig.originals)
+
   private val logContext: LogContext = new LogContext(s"[SharedServer id=${sharedServerConfig.nodeId}] ")
   this.logIdent = logContext.logPrefix
   private var started = false
@@ -264,7 +268,7 @@ class SharedServer(
           // This is only done in tests.
           metrics = new Metrics()
         }
-        sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
+        sharedServerConfig.dynamicConfig.initialize(clientMetricsReceiverPluginOpt = None)
 
         if (sharedServerConfig.processRoles.contains(ProcessRole.BrokerRole)) {
           brokerMetrics = new BrokerServerMetrics(metrics)

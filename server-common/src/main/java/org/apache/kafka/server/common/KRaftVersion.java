@@ -28,6 +28,8 @@ public enum KRaftVersion implements FeatureVersion {
 
     public static final String FEATURE_NAME = "kraft.version";
 
+    public static final KRaftVersion LATEST_PRODUCTION = KRAFT_VERSION_1;
+
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
 

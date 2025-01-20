@@ -138,9 +138,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
             if (broker.remoteLogManagerOpt().isDefined()) {
                 RemoteLogManager remoteLogManager = broker.remoteLogManagerOpt().get();
                 RemoteStorageManager storageManager = remoteLogManager.storageManager();
-                if (storageManager instanceof ClassLoaderAwareRemoteStorageManager) {
-                    ClassLoaderAwareRemoteStorageManager loaderAwareRSM =
-                            (ClassLoaderAwareRemoteStorageManager) storageManager;
+                if (storageManager instanceof ClassLoaderAwareRemoteStorageManager loaderAwareRSM) {
                     if (loaderAwareRSM.delegate() instanceof LocalTieredStorage) {
                         storages.add((LocalTieredStorage) loaderAwareRSM.delegate());
                     }

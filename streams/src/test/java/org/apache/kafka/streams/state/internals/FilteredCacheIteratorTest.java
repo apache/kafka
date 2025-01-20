@@ -30,7 +30,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -91,7 +91,7 @@ public class FilteredCacheIteratorTest {
 
     @Test
     public void shouldAllowEntryMatchingHasNextCondition() {
-        final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toList(allIterator);
+        final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toListAndCloseIterator(allIterator);
         assertThat(keyValues, equalTo(entries));
     }
 
@@ -122,7 +122,7 @@ public class FilteredCacheIteratorTest {
 
     @Test
     public void shouldFilterEntriesNotMatchingHasNextCondition() {
-        final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toList(firstEntryIterator);
+        final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toListAndCloseIterator(firstEntryIterator);
         assertThat(keyValues, equalTo(Collections.singletonList(firstEntry)));
     }
 

@@ -40,26 +40,18 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
 public class ProduceRequest extends AbstractRequest {
+    public static final short LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 = 11;
 
-    public static Builder forMagic(byte magic, ProduceRequestData data) {
-        // Message format upgrades correspond with a bump in the produce request version. Older
-        // message format versions are generally not supported by the produce request versions
-        // following the bump.
-
-        final short minVersion;
-        final short maxVersion;
-        if (magic < RecordBatch.MAGIC_VALUE_V2) {
-            minVersion = 2;
-            maxVersion = 2;
-        } else {
-            minVersion = 3;
-            maxVersion = ApiKeys.PRODUCE.latestVersion();
-        }
-        return new Builder(minVersion, maxVersion, data);
+    public static Builder builder(ProduceRequestData data, boolean useTransactionV1Version) {
+        // When we use transaction V1 protocol in transaction we set the request version upper limit to
+        // LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 so that the broker knows that we're using transaction protocol V1.
+        short maxVersion = useTransactionV1Version ?
+            LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 : ApiKeys.PRODUCE.latestVersion();
+        return new Builder(ApiKeys.PRODUCE.oldestVersion(), maxVersion, data);
     }
 
-    public static Builder forCurrentMagic(ProduceRequestData data) {
-        return forMagic(RecordBatch.CURRENT_MAGIC_VALUE, data);
+    public static Builder builder(ProduceRequestData data) {
+        return builder(data, false);
     }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
@@ -223,53 +215,33 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public static void validateRecords(short version, BaseRecords baseRecords) {
-        if (version >= 3) {
-            if (baseRecords instanceof Records) {
-                Records records = (Records) baseRecords;
-                Iterator<? extends RecordBatch> iterator = records.batches().iterator();
-                if (!iterator.hasNext())
-                    throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
-                            "one record batch per partition");
+        if (baseRecords instanceof Records) {
+            Records records = (Records) baseRecords;
+            Iterator<? extends RecordBatch> iterator = records.batches().iterator();
+            if (!iterator.hasNext())
+                throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
+                        "one record batch per partition");
 
-                RecordBatch entry = iterator.next();
-                if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
-                    throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
-                            "contain record batches with magic version 2");
-                if (version < 7 && entry.compressionType() == CompressionType.ZSTD) {
-                    throw new UnsupportedCompressionTypeException("Produce requests with version " + version + " are not allowed to " +
-                            "use ZStandard compression");
-                }
-
-                if (iterator.hasNext())
-                    throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
-                            "contain exactly one record batch per partition");
+            RecordBatch entry = iterator.next();
+            if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
+                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
+                        "contain record batches with magic version 2");
+            if (version < 7 && entry.compressionType() == CompressionType.ZSTD) {
+                throw new UnsupportedCompressionTypeException("Produce requests with version " + version + " are not allowed to " +
+                        "use ZStandard compression");
             }
-        }
 
-        // Note that we do not do similar validation for older versions to ensure compatibility with
-        // clients which send the wrong magic version in the wrong version of the produce request. The broker
-        // did not do this validation before, so we maintain that behavior here.
+            if (iterator.hasNext())
+                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
+                        "contain exactly one record batch per partition");
+        }
     }
 
     public static ProduceRequest parse(ByteBuffer buffer, short version) {
         return new ProduceRequest(new ProduceRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
-    public static byte requiredMagicForVersion(short produceRequestVersion) {
-        if (produceRequestVersion < ApiKeys.PRODUCE.oldestVersion() || produceRequestVersion > ApiKeys.PRODUCE.latestVersion())
-            throw new IllegalArgumentException("Magic value to use for produce request version " +
-                    produceRequestVersion + " is not known");
-
-        switch (produceRequestVersion) {
-            case 0:
-            case 1:
-                return RecordBatch.MAGIC_VALUE_V0;
-
-            case 2:
-                return RecordBatch.MAGIC_VALUE_V1;
-
-            default:
-                return RecordBatch.MAGIC_VALUE_V2;
-        }
+    public static boolean isTransactionV2Requested(short version) {
+        return version > LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
     }
 }

@@ -177,7 +177,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // poll only when the coordinator node is known.
-        if (!coordinatorRequestManager.coordinator().isPresent())
+        if (coordinatorRequestManager.coordinator().isEmpty())
             return EMPTY;
 
         if (closing) {
@@ -477,7 +477,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     private Throwable commitSyncExceptionForError(Throwable error) {
         if (error instanceof StaleMemberEpochException) {
-            return new CommitFailedException("OffsetCommit failed with stale member epoch."
+            return new CommitFailedException("OffsetCommit failed with stale member epoch. "
                 + Errors.STALE_MEMBER_EPOCH.message());
         }
         return error;

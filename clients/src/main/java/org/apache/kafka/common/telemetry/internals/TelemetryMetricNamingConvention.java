@@ -41,7 +41,7 @@ public class TelemetryMetricNamingConvention {
     public static MetricNamingStrategy<MetricName> getClientTelemetryMetricNamingStrategy(String prefix) {
         Objects.requireNonNull(prefix, "prefix cannot be null");
 
-        return new MetricNamingStrategy<MetricName>() {
+        return new MetricNamingStrategy<>() {
             @Override
             public MetricKey metricKey(MetricName metricName) {
                 Objects.requireNonNull(metricName, "metric name cannot be null");

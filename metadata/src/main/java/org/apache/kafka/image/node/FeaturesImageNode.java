@@ -68,8 +68,6 @@ public class FeaturesImageNode implements MetadataNode {
     public MetadataNode child(String name) {
         if (name.equals(METADATA_VERSION)) {
             return new MetadataLeafNode(image.metadataVersion().toString());
-        } else if (name.equals(ZK_MIGRATION_STATE)) {
-            return new MetadataLeafNode(image.zkMigrationState().toString());
         } else if (name.startsWith(FINALIZED_PREFIX)) {
             String key = name.substring(FINALIZED_PREFIX.length());
             return new MetadataLeafNode(

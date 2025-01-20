@@ -20,7 +20,7 @@ package kafka.server
 import com.yammer.metrics.core.Meter
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.CoreUtils.inLock
-import kafka.utils.{DelayedItem, Logging, Pool}
+import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -30,6 +30,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{ClientIdAndBroker, InvalidRecordException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -93,8 +94,6 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch]
 
-  protected val isOffsetForLeaderEpochSupported: Boolean
-
   override def shutdown(): Unit = {
     initiateShutdown()
     inLock(partitionMapLock) {
@@ -150,7 +149,7 @@ abstract class AbstractFetcherThread(name: String,
     partitionStates.partitionStateMap.forEach { (tp, state) =>
       if (state.isTruncating) {
         latestEpoch(tp) match {
-          case Some(epoch) if isOffsetForLeaderEpochSupported =>
+          case Some(epoch) =>
             partitionsWithEpochs += tp -> new EpochData()
               .setPartition(tp.partition)
               .setCurrentLeaderEpoch(state.currentLeaderEpoch)
@@ -789,7 +788,7 @@ abstract class AbstractFetcherThread(name: String,
         Option(partitionStates.stateValue(partition)).foreach { currentFetchState =>
           if (!currentFetchState.isDelayed) {
             partitionStates.updateAndMoveToEnd(partition, PartitionFetchState(currentFetchState.topicId, currentFetchState.fetchOffset,
-              currentFetchState.lag, currentFetchState.currentLeaderEpoch, Some(new DelayedItem(delay)),
+              currentFetchState.lag, currentFetchState.currentLeaderEpoch, Some(delay),
               currentFetchState.state, currentFetchState.lastFetchedEpoch))
           }
         }
@@ -945,17 +944,19 @@ object PartitionFetchState {
 /**
  * case class to keep partition offset and its state(truncatingLog, delayed)
  * This represents a partition as being either:
- * (1) Truncating its log, for example having recently become a follower
- * (2) Delayed, for example due to an error, where we subsequently back off a bit
- * (3) ReadyForFetch, the is the active state where the thread is actively fetching data.
+ * (1) Truncating its log, for example, having recently become a follower
+ * (2) Delayed, for example, due to an error, where we subsequently back off a bit
+ * (3) ReadyForFetch, the active state where the thread is actively fetching data.
  */
 case class PartitionFetchState(topicId: Option[Uuid],
                                fetchOffset: Long,
                                lag: Option[Long],
                                currentLeaderEpoch: Int,
-                               delay: Option[DelayedItem],
+                               delay: Option[Long],
                                state: ReplicaState,
                                lastFetchedEpoch: Option[Int]) {
+
+  private val dueMs = delay.map(_ + Time.SYSTEM.milliseconds)
 
   def isReadyForFetch: Boolean = state == Fetching && !isDelayed
 
@@ -963,7 +964,7 @@ case class PartitionFetchState(topicId: Option[Uuid],
 
   def isTruncating: Boolean = state == Truncating && !isDelayed
 
-  def isDelayed: Boolean = delay.exists(_.getDelay(TimeUnit.MILLISECONDS) > 0)
+  def isDelayed: Boolean = dueMs.exists(_ > Time.SYSTEM.milliseconds)
 
   override def toString: String = {
     s"FetchState(topicId=$topicId" +
@@ -972,7 +973,7 @@ case class PartitionFetchState(topicId: Option[Uuid],
       s", lastFetchedEpoch=$lastFetchedEpoch" +
       s", state=$state" +
       s", lag=$lag" +
-      s", delay=${delay.map(_.delayMs).getOrElse(0)}ms" +
+      s", delay=${delay.getOrElse(0)}ms" +
       s")"
   }
 

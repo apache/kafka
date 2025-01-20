@@ -186,8 +186,7 @@ public class PluginsTest {
         assertNotNull(connectRestExtensions);
         assertEquals(1, connectRestExtensions.size(), "One Rest Extension expected");
         assertNotNull(connectRestExtensions.get(0));
-        assertTrue(connectRestExtensions.get(0) instanceof TestConnectRestExtension,
-            "Should be instance of TestConnectRestExtension");
+        assertInstanceOf(TestConnectRestExtension.class, connectRestExtensions.get(0), "Should be instance of TestConnectRestExtension");
         assertNotNull(((TestConnectRestExtension) connectRestExtensions.get(0)).configs);
         assertEquals(config.originals(),
                      ((TestConnectRestExtension) connectRestExtensions.get(0)).configs);

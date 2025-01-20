@@ -17,10 +17,10 @@
 package kafka.server.share;
 
 import kafka.cluster.Partition;
-import kafka.log.OffsetResultHolder;
 import kafka.server.LogReadResult;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
+import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.common.MetricName;
@@ -64,8 +64,9 @@ import org.apache.kafka.server.share.context.ShareFetchContext;
 import org.apache.kafka.server.share.context.ShareSessionContext;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchKey;
+import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
-import org.apache.kafka.server.share.fetch.ShareFetchData;
+import org.apache.kafka.server.share.fetch.ShareFetch;
 import org.apache.kafka.server.share.persister.NoOpShareStatePersister;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.session.ShareSession;
@@ -80,6 +81,7 @@ import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
+import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -123,6 +125,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atMost;
@@ -131,6 +134,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @Timeout(120)
@@ -143,6 +147,7 @@ public class SharePartitionManagerTest {
     private static final short MAX_FETCH_RECORDS = 500;
     private static final int DELAYED_SHARE_FETCH_MAX_WAIT_MS = 2000;
     private static final int DELAYED_SHARE_FETCH_TIMEOUT_MS = 3000;
+    private static final int BATCH_SIZE = 500;
     private static final FetchParams FETCH_PARAMS = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(),
         FetchRequest.ORDINARY_CONSUMER_ID, -1, DELAYED_SHARE_FETCH_MAX_WAIT_MS,
         1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty(), true);
@@ -223,7 +228,7 @@ public class SharePartitionManagerTest {
 
         ShareRequestMetadata reqMetadata2 = new ShareRequestMetadata(memberId, ShareRequestMetadata.FINAL_EPOCH);
 
-        // shareFetchData is not empty, but the maxBytes of topic partition is 0, which means this is added only for acknowledgements.
+        // shareFetch is not empty, but the maxBytes of topic partition is 0, which means this is added only for acknowledgements.
         // New context should be created successfully
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData3 = Collections.singletonMap(new TopicIdPartition(tpId1, new TopicPartition("foo", 0)),
                 new ShareFetchRequest.SharePartitionData(tpId1, 0));
@@ -257,7 +262,7 @@ public class SharePartitionManagerTest {
 
         ShareRequestMetadata reqMetadata2 = new ShareRequestMetadata(memberId, ShareRequestMetadata.FINAL_EPOCH);
 
-        // shareFetchData is not empty and the maxBytes of topic partition is not 0, which means this is trying to fetch on a Final request.
+        // shareFetch is not empty and the maxBytes of topic partition is not 0, which means this is trying to fetch on a Final request.
         // New context should throw an error
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData3 = Collections.singletonMap(new TopicIdPartition(tpId1, new TopicPartition("foo", 0)),
                 new ShareFetchRequest.SharePartitionData(tpId1, PARTITION_MAX_BYTES));
@@ -1068,15 +1073,18 @@ public class SharePartitionManagerTest {
 
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, partitionMaxBytes);
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE,
+            partitionMaxBytes);
         Mockito.verify(mockReplicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, partitionMaxBytes);
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE,
+            partitionMaxBytes);
         Mockito.verify(mockReplicaManager, times(2)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, partitionMaxBytes);
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE,
+            partitionMaxBytes);
         Mockito.verify(mockReplicaManager, times(3)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
 
@@ -1180,7 +1188,8 @@ public class SharePartitionManagerTest {
         try {
             for (int i = 0; i != threadCount; ++i) {
                 executorService.submit(() -> {
-                    sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, partitionMaxBytes);
+                    sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS,
+                        BATCH_SIZE, partitionMaxBytes);
                 });
                 // We are blocking the main thread at an interval of 10 threads so that the currently running executorService threads can complete.
                 if (i % 10 == 0)
@@ -1225,7 +1234,8 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+                BATCH_SIZE, partitionMaxBytes);
         Mockito.verify(mockReplicaManager, times(0)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result = future.join();
@@ -1255,7 +1265,8 @@ public class SharePartitionManagerTest {
 
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+        sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, BATCH_SIZE,
+            partitionMaxBytes);
         // Since the nextFetchOffset does not point to endOffset + 1, i.e. some of the records in the cachedState are AVAILABLE,
         // even though the maxInFlightMessages limit is exceeded, replicaManager.readFromLog should be called
         Mockito.verify(mockReplicaManager, times(1)).readFromLog(
@@ -1325,9 +1336,11 @@ public class SharePartitionManagerTest {
         assertEquals(Errors.NONE.code(), result.get(tp1).errorCode());
         assertEquals(2, result.get(tp2).partitionIndex());
         assertEquals(Errors.INVALID_RECORD_STATE.code(), result.get(tp2).errorCode());
+        assertEquals("Unable to release acquired records for the batch", result.get(tp2).errorMessage());
         // tp3 was not a part of partitionCacheMap.
         assertEquals(4, result.get(tp3).partitionIndex());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp3).errorCode());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.message(), result.get(tp3).errorMessage());
     }
 
     @Test
@@ -1582,6 +1595,7 @@ public class SharePartitionManagerTest {
         assertTrue(result.containsKey(tp));
         assertEquals(0, result.get(tp).partitionIndex());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp).errorCode());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.message(), result.get(tp).errorMessage());
     }
 
     @Test
@@ -1612,6 +1626,7 @@ public class SharePartitionManagerTest {
         assertTrue(result.containsKey(tp));
         assertEquals(0, result.get(tp).partitionIndex());
         assertEquals(Errors.INVALID_REQUEST.code(), result.get(tp).errorCode());
+        assertEquals("Member is not the owner of batch record", result.get(tp).errorMessage());
     }
 
     @Test
@@ -1634,6 +1649,7 @@ public class SharePartitionManagerTest {
         assertTrue(result.containsKey(tp));
         assertEquals(3, result.get(tp).partitionIndex());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp).errorCode());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.message(), result.get(tp).errorMessage());
     }
 
     @Test
@@ -1665,19 +1681,20 @@ public class SharePartitionManagerTest {
         partitionCacheMap.put(new SharePartitionKey(groupId, tp1), sp1);
         partitionCacheMap.put(new SharePartitionKey(groupId, tp2), sp2);
 
-        ShareFetchData shareFetchData = new ShareFetchData(
-                FETCH_PARAMS,
-                groupId,
-                Uuid.randomUuid().toString(),
-                new CompletableFuture<>(),
-                partitionMaxBytes,
-                100);
+        ShareFetch shareFetch = new ShareFetch(
+            FETCH_PARAMS,
+            groupId,
+            Uuid.randomUuid().toString(),
+            new CompletableFuture<>(),
+            partitionMaxBytes,
+            BATCH_SIZE,
+            100);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
         mockReplicaManagerDelayedShareFetch(mockReplicaManager, delayedShareFetchPurgatory);
-        when(sp1.fetchOffsetMetadata()).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         mockTopicIdPartitionToReturnDataEqualToMinBytes(mockReplicaManager, tp1, 2);
 
         // Initially you cannot acquire records for both sp1 and sp2.
@@ -1700,9 +1717,10 @@ public class SharePartitionManagerTest {
         sharePartitions.put(tp2, sp2);
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
-            .withShareFetchData(shareFetchData)
+            .withShareFetchData(shareFetch)
             .withReplicaManager(mockReplicaManager)
             .withSharePartitions(sharePartitions)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build();
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch, delayedShareFetchWatchKeys);
@@ -1727,6 +1745,8 @@ public class SharePartitionManagerTest {
 
         Mockito.verify(sp1, times(1)).nextFetchOffset();
         Mockito.verify(sp2, times(0)).nextFetchOffset();
+        assertTrue(delayedShareFetch.lock().tryLock());
+        delayedShareFetch.lock().unlock();
     }
 
     @Test
@@ -1765,13 +1785,14 @@ public class SharePartitionManagerTest {
         partitionCacheMap.put(new SharePartitionKey(groupId, tp2), sp2);
         partitionCacheMap.put(new SharePartitionKey(groupId, tp3), sp3);
 
-        ShareFetchData shareFetchData = new ShareFetchData(
-                FETCH_PARAMS,
-                groupId,
-                Uuid.randomUuid().toString(),
-                new CompletableFuture<>(),
-                partitionMaxBytes,
-                100);
+        ShareFetch shareFetch = new ShareFetch(
+            FETCH_PARAMS,
+            groupId,
+            Uuid.randomUuid().toString(),
+            new CompletableFuture<>(),
+            partitionMaxBytes,
+            BATCH_SIZE,
+            100);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
@@ -1801,7 +1822,7 @@ public class SharePartitionManagerTest {
         sharePartitions.put(tp3, sp3);
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
-            .withShareFetchData(shareFetchData)
+            .withShareFetchData(shareFetch)
             .withReplicaManager(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .build();
@@ -1825,6 +1846,8 @@ public class SharePartitionManagerTest {
 
         Mockito.verify(sp1, times(0)).nextFetchOffset();
         Mockito.verify(sp2, times(0)).nextFetchOffset();
+        assertTrue(delayedShareFetch.lock().tryLock());
+        delayedShareFetch.lock().unlock();
     }
 
     @Test
@@ -1861,19 +1884,20 @@ public class SharePartitionManagerTest {
         partitionCacheMap.put(new SharePartitionKey(groupId, tp1), sp1);
         partitionCacheMap.put(new SharePartitionKey(groupId, tp2), sp2);
 
-        ShareFetchData shareFetchData = new ShareFetchData(
-                FETCH_PARAMS,
-                groupId,
-                Uuid.randomUuid().toString(),
-                new CompletableFuture<>(),
-                partitionMaxBytes,
-                100);
+        ShareFetch shareFetch = new ShareFetch(
+            FETCH_PARAMS,
+            groupId,
+            Uuid.randomUuid().toString(),
+            new CompletableFuture<>(),
+            partitionMaxBytes,
+            BATCH_SIZE,
+            100);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
         mockReplicaManagerDelayedShareFetch(mockReplicaManager, delayedShareFetchPurgatory);
-        when(sp1.fetchOffsetMetadata()).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         mockTopicIdPartitionToReturnDataEqualToMinBytes(mockReplicaManager, tp1, 1);
 
         // Initially you cannot acquire records for both sp1 and sp2.
@@ -1897,9 +1921,10 @@ public class SharePartitionManagerTest {
         sharePartitions.put(tp2, sp2);
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
-            .withShareFetchData(shareFetchData)
+            .withShareFetchData(shareFetch)
             .withReplicaManager(mockReplicaManager)
             .withSharePartitions(sharePartitions)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build();
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch, delayedShareFetchWatchKeys);
@@ -1923,6 +1948,8 @@ public class SharePartitionManagerTest {
 
         Mockito.verify(sp1, times(1)).nextFetchOffset();
         Mockito.verify(sp2, times(0)).nextFetchOffset();
+        assertTrue(delayedShareFetch.lock().tryLock());
+        delayedShareFetch.lock().unlock();
     }
 
     @Test
@@ -1965,13 +1992,14 @@ public class SharePartitionManagerTest {
         partitionCacheMap.put(new SharePartitionKey(groupId, tp2), sp2);
         partitionCacheMap.put(new SharePartitionKey(groupId, tp3), sp3);
 
-        ShareFetchData shareFetchData = new ShareFetchData(
-                FETCH_PARAMS,
-                groupId,
-                Uuid.randomUuid().toString(),
-                new CompletableFuture<>(),
-                partitionMaxBytes,
-                100);
+        ShareFetch shareFetch = new ShareFetch(
+            FETCH_PARAMS,
+            groupId,
+            Uuid.randomUuid().toString(),
+            new CompletableFuture<>(),
+            partitionMaxBytes,
+            BATCH_SIZE,
+            100);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
@@ -2002,7 +2030,7 @@ public class SharePartitionManagerTest {
         sharePartitions.put(tp3, sp3);
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
-            .withShareFetchData(shareFetchData)
+            .withShareFetchData(shareFetch)
             .withReplicaManager(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .build();
@@ -2025,6 +2053,8 @@ public class SharePartitionManagerTest {
 
         Mockito.verify(sp1, times(0)).nextFetchOffset();
         Mockito.verify(sp2, times(0)).nextFetchOffset();
+        assertTrue(delayedShareFetch.lock().tryLock());
+        delayedShareFetch.lock().unlock();
     }
 
     @Test
@@ -2053,7 +2083,8 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+                BATCH_SIZE, partitionMaxBytes);
         // Verify that the fetch request is completed.
         TestUtils.waitForCondition(
             future::isDone,
@@ -2063,8 +2094,75 @@ public class SharePartitionManagerTest {
         // Verify that replica manager fetch is not called.
         Mockito.verify(mockReplicaManager, times(0)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
+        assertFalse(pendingInitializationFuture.isDone());
         // Complete the pending initialization future.
         pendingInitializationFuture.complete(null);
+    }
+
+    @Test
+    public void testDelayedInitializationShouldCompleteFetchRequest() throws Exception {
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+        Uuid fooId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+
+        SharePartition sp0 = mock(SharePartition.class);
+        Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
+
+        // Keep the 2 initialization futures pending and 1 completed with leader not available exception.
+        CompletableFuture<Void> pendingInitializationFuture1 = new CompletableFuture<>();
+        CompletableFuture<Void> pendingInitializationFuture2 = new CompletableFuture<>();
+        when(sp0.maybeInitialize()).
+            thenReturn(pendingInitializationFuture1)
+            .thenReturn(pendingInitializationFuture2)
+            .thenReturn(CompletableFuture.failedFuture(new LeaderNotAvailableException("Leader not available")));
+
+        DelayedOperationPurgatory<DelayedShareFetch> shareFetchPurgatorySpy = spy(new DelayedOperationPurgatory<>(
+            "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
+            DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true));
+        mockReplicaManagerDelayedShareFetch(mockReplicaManager, shareFetchPurgatorySpy);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCacheMap(partitionCacheMap).withReplicaManager(mockReplicaManager).withTimer(mockTimer)
+            .build();
+
+        // Send 3 requests for share fetch for same share partition.
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future1 =
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+                BATCH_SIZE, partitionMaxBytes);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future2 =
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+                BATCH_SIZE, partitionMaxBytes);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future3 =
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+                BATCH_SIZE, partitionMaxBytes);
+
+        Mockito.verify(sp0, times(3)).maybeInitialize();
+        Mockito.verify(mockReplicaManager, times(3)).addDelayedShareFetchRequest(any(), any());
+        Mockito.verify(shareFetchPurgatorySpy, times(3)).tryCompleteElseWatch(any(), any());
+        Mockito.verify(shareFetchPurgatorySpy, times(0)).checkAndComplete(any());
+
+        // All 3 requests should be pending.
+        assertFalse(future1.isDone());
+        assertFalse(future2.isDone());
+        assertFalse(future3.isDone());
+
+        // Complete one pending initialization future.
+        pendingInitializationFuture1.complete(null);
+        Mockito.verify(mockReplicaManager, times(1)).completeDelayedShareFetchRequest(any());
+        Mockito.verify(shareFetchPurgatorySpy, times(1)).checkAndComplete(any());
+
+        pendingInitializationFuture2.complete(null);
+        Mockito.verify(mockReplicaManager, times(2)).completeDelayedShareFetchRequest(any());
+        Mockito.verify(shareFetchPurgatorySpy, times(2)).checkAndComplete(any());
+
+        // Verify that replica manager fetch is not called.
+        Mockito.verify(mockReplicaManager, times(0)).readFromLog(
+            any(), any(), any(ReplicaQuota.class), anyBoolean());
     }
 
     @Test
@@ -2091,7 +2189,8 @@ public class SharePartitionManagerTest {
         // Return LeaderNotAvailableException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new LeaderNotAvailableException("Leader not available")));
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+                BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
@@ -2100,77 +2199,90 @@ public class SharePartitionManagerTest {
         // between SharePartitionManager and SharePartition to retry the request as SharePartition is not yet ready.
         assertFalse(future.isCompletedExceptionally());
         assertTrue(future.join().isEmpty());
+        Mockito.verify(sp0, times(0)).markFenced();
         // Verify that the share partition is still in the cache on LeaderNotAvailableException.
         assertEquals(1, partitionCacheMap.size());
 
         // Return IllegalStateException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new IllegalStateException("Illegal state")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         validateShareFetchFutureException(future, tp0, Errors.UNKNOWN_SERVER_ERROR, "Illegal state");
+        Mockito.verify(sp0, times(1)).markFenced();
         assertTrue(partitionCacheMap.isEmpty());
 
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return CoordinatorNotAvailableException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new CoordinatorNotAvailableException("Coordinator not available")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         validateShareFetchFutureException(future, tp0, Errors.COORDINATOR_NOT_AVAILABLE, "Coordinator not available");
+        Mockito.verify(sp0, times(2)).markFenced();
         assertTrue(partitionCacheMap.isEmpty());
 
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return InvalidRequestException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new InvalidRequestException("Invalid request")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         validateShareFetchFutureException(future, tp0, Errors.INVALID_REQUEST, "Invalid request");
+        Mockito.verify(sp0, times(3)).markFenced();
         assertTrue(partitionCacheMap.isEmpty());
 
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return FencedStateEpochException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new FencedStateEpochException("Fenced state epoch")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         validateShareFetchFutureException(future, tp0, Errors.FENCED_STATE_EPOCH, "Fenced state epoch");
+        Mockito.verify(sp0, times(4)).markFenced();
         assertTrue(partitionCacheMap.isEmpty());
 
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return NotLeaderOrFollowerException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new NotLeaderOrFollowerException("Not leader or follower")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         validateShareFetchFutureException(future, tp0, Errors.NOT_LEADER_OR_FOLLOWER, "Not leader or follower");
+        Mockito.verify(sp0, times(5)).markFenced();
         assertTrue(partitionCacheMap.isEmpty());
 
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return RuntimeException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new RuntimeException("Runtime exception")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         validateShareFetchFutureException(future, tp0, Errors.UNKNOWN_SERVER_ERROR, "Runtime exception");
+        Mockito.verify(sp0, times(6)).markFenced();
         assertTrue(partitionCacheMap.isEmpty());
     }
 
@@ -2192,7 +2304,8 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS, partitionMaxBytes);
+            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS,
+                BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
@@ -2225,7 +2338,8 @@ public class SharePartitionManagerTest {
 
         // Validate when exception is thrown.
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS, partitionMaxBytes);
+            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS,
+                BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
@@ -2234,7 +2348,8 @@ public class SharePartitionManagerTest {
         assertTrue(partitionCacheMap.isEmpty());
 
         // Validate when partition is not leader.
-        future = sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS, partitionMaxBytes);
+        future = sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS,
+            BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
@@ -2247,18 +2362,25 @@ public class SharePartitionManagerTest {
     public void testSharePartitionPartialInitializationFailure() throws Exception {
         String groupId = "grp";
         Uuid memberId1 = Uuid.randomUuid();
+        // For tp0, share partition instantiation will fail.
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        // For tp1, share fetch should succeed.
         TopicIdPartition tp1 = new TopicIdPartition(memberId1, new TopicPartition("foo", 1));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = Map.of(tp0, PARTITION_MAX_BYTES, tp1, PARTITION_MAX_BYTES);
+        // For tp2, share partition initialization will fail.
+        TopicIdPartition tp2 = new TopicIdPartition(memberId1, new TopicPartition("foo", 2));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = Map.of(
+            tp0, PARTITION_MAX_BYTES,
+            tp1, PARTITION_MAX_BYTES,
+            tp2, PARTITION_MAX_BYTES);
 
-        // Mark partition1 as not the leader.
-        Partition partition1 = mock(Partition.class);
-        when(partition1.isLeader()).thenReturn(false);
-
+        // Mark partition0 as not the leader.
+        Partition partition0 = mock(Partition.class);
+        when(partition0.isLeader()).thenReturn(false);
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         when(replicaManager.getPartitionOrException(any()))
-            .thenReturn(partition1);
+            .thenReturn(partition0);
 
+        // Mock share partition for tp1, so it can succeed.
         SharePartition sp1 = mock(SharePartition.class);
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionKey(groupId, tp1), sp1);
@@ -2266,13 +2388,18 @@ public class SharePartitionManagerTest {
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
         when(sp1.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
-        when(sp1.acquire(anyString(), anyInt(), any())).thenReturn(new ShareAcquiredRecords(Collections.emptyList(), 0));
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), any())).thenReturn(new ShareAcquiredRecords(Collections.emptyList(), 0));
+
+        // Fail initialization for tp2.
+        SharePartition sp2 = mock(SharePartition.class);
+        partitionCacheMap.put(new SharePartitionKey(groupId, tp2), sp2);
+        when(sp2.maybeInitialize()).thenReturn(CompletableFuture.failedFuture(new FencedStateEpochException("Fenced state epoch")));
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
             DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
         mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
-        when(sp1.fetchOffsetMetadata()).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 1);
 
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp1))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -2284,16 +2411,22 @@ public class SharePartitionManagerTest {
 
         // Validate when exception is thrown.
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS, partitionMaxBytes);
+            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS,
+                BATCH_SIZE, partitionMaxBytes);
         assertTrue(future.isDone());
         assertFalse(future.isCompletedExceptionally());
 
         Map<TopicIdPartition, PartitionData> partitionDataMap = future.get();
-        // For now only 1 successful partition is included, this will be fixed in subsequents PRs.
-        assertEquals(1, partitionDataMap.size());
+        assertEquals(3, partitionDataMap.size());
+        assertTrue(partitionDataMap.containsKey(tp0));
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code(), partitionDataMap.get(tp0).errorCode());
         assertTrue(partitionDataMap.containsKey(tp1));
         assertEquals(Errors.NONE.code(), partitionDataMap.get(tp1).errorCode());
+        assertTrue(partitionDataMap.containsKey(tp2));
+        assertEquals(Errors.FENCED_STATE_EPOCH.code(), partitionDataMap.get(tp2).errorCode());
+        assertEquals("Fenced state epoch", partitionDataMap.get(tp2).errorMessage());
 
+        Mockito.verify(replicaManager, times(0)).completeDelayedShareFetchRequest(any());
         Mockito.verify(replicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
     }
@@ -2326,7 +2459,8 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+                BATCH_SIZE, partitionMaxBytes);
         validateShareFetchFutureException(future, tp0, Errors.UNKNOWN_SERVER_ERROR, "Exception");
         // Verify that the share partition is still in the cache on exception.
         assertEquals(1, partitionCacheMap.size());
@@ -2334,7 +2468,8 @@ public class SharePartitionManagerTest {
         // Throw NotLeaderOrFollowerException from replica manager fetch which should evict instance from the cache.
         doThrow(new NotLeaderOrFollowerException("Leader exception")).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            BATCH_SIZE, partitionMaxBytes);
         validateShareFetchFutureException(future, tp0, Errors.NOT_LEADER_OR_FOLLOWER, "Leader exception");
         assertTrue(partitionCacheMap.isEmpty());
     }
@@ -2380,7 +2515,8 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+                BATCH_SIZE, partitionMaxBytes);
         validateShareFetchFutureException(future, tp0, Errors.FENCED_STATE_EPOCH, "Fenced exception");
         // Verify that tp1 is still in the cache on exception.
         assertEquals(1, partitionCacheMap.size());
@@ -2394,9 +2530,103 @@ public class SharePartitionManagerTest {
         // Throw FencedStateEpochException from replica manager fetch which should evict instance from the cache.
         doThrow(new FencedStateEpochException("Fenced exception again")).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            BATCH_SIZE, partitionMaxBytes);
         validateShareFetchFutureException(future, List.of(tp0, tp1), Errors.FENCED_STATE_EPOCH, "Fenced exception again");
         assertTrue(partitionCacheMap.isEmpty());
+    }
+
+    @Test
+    public void testListenerRegistration() {
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+
+        ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
+        Partition partition = mockPartition();
+        when(mockReplicaManager.getPartitionOrException(Mockito.any())).thenReturn(partition);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(mockReplicaManager)
+            .withTimer(mockTimer)
+            .build();
+
+        sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, BATCH_SIZE,
+            partitionMaxBytes);
+        // Validate that the listener is registered.
+        verify(mockReplicaManager, times(2)).maybeAddListener(any(), any());
+    }
+
+    @Test
+    public void testSharePartitionListenerOnFailed() {
+        SharePartitionKey sharePartitionKey = new SharePartitionKey("grp",
+            new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0)));
+        Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
+
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCacheMap);
+        testSharePartitionListener(sharePartitionKey, partitionCacheMap, mockReplicaManager, partitionListener::onFailed);
+    }
+
+    @Test
+    public void testSharePartitionListenerOnDeleted() {
+        SharePartitionKey sharePartitionKey = new SharePartitionKey("grp",
+            new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0)));
+        Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
+
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCacheMap);
+        testSharePartitionListener(sharePartitionKey, partitionCacheMap, mockReplicaManager, partitionListener::onDeleted);
+    }
+
+    @Test
+    public void testSharePartitionListenerOnBecomingFollower() {
+        SharePartitionKey sharePartitionKey = new SharePartitionKey("grp",
+            new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0)));
+        Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
+
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCacheMap);
+        testSharePartitionListener(sharePartitionKey, partitionCacheMap, mockReplicaManager, partitionListener::onBecomingFollower);
+    }
+
+    private void testSharePartitionListener(
+        SharePartitionKey sharePartitionKey,
+        Map<SharePartitionKey, SharePartition> partitionCacheMap,
+        ReplicaManager mockReplicaManager,
+        Consumer<TopicPartition> listenerConsumer
+    ) {
+        // Add another share partition to the cache.
+        TopicPartition tp = new TopicPartition("foo", 1);
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
+        SharePartitionKey spk = new SharePartitionKey("grp", tpId);
+
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
+        partitionCacheMap.put(sharePartitionKey, sp0);
+        partitionCacheMap.put(spk, sp1);
+
+        // Invoke listener for first share partition.
+        listenerConsumer.accept(sharePartitionKey.topicIdPartition().topicPartition());
+
+        // Validate that the share partition is removed from the cache.
+        assertEquals(1, partitionCacheMap.size());
+        assertFalse(partitionCacheMap.containsKey(sharePartitionKey));
+        verify(sp0, times(1)).markFenced();
+        verify(mockReplicaManager, times(1)).removeListener(any(), any());
+
+        // Invoke listener for non-matching share partition.
+        listenerConsumer.accept(tp);
+        // The non-matching share partition should not be removed as the listener is attached to a different topic partition.
+        assertEquals(1, partitionCacheMap.size());
+        verify(sp1, times(0)).markFenced();
+        // Verify the remove listener is not called for the second share partition.
+        verify(mockReplicaManager, times(1)).removeListener(any(), any());
     }
 
     private ShareFetchResponseData.PartitionData noErrorShareFetchResponse() {
@@ -2493,7 +2723,7 @@ public class SharePartitionManagerTest {
 
     private void mockFetchOffsetForTimestamp(ReplicaManager replicaManager) {
         FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(-1L, 0L, Optional.empty());
-        Mockito.doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).
+        Mockito.doReturn(new OffsetResultHolder(Optional.of(timestampAndOffset), Optional.empty())).
             when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
     }
 

@@ -124,7 +124,7 @@ public class ListTransactionsHandler extends AdminApiHandler.Batched<AllBrokersS
         }
 
         AllBrokersStrategy.BrokerKey key = keys.iterator().next();
-        if (!key.brokerId.isPresent() || key.brokerId.getAsInt() != brokerId) {
+        if (key.brokerId.isEmpty() || key.brokerId.getAsInt() != brokerId) {
             throw new IllegalArgumentException("Unexpected broker key: " + key);
         }
 

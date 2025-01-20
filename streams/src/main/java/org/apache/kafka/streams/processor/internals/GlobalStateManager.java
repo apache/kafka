@@ -22,7 +22,7 @@ import java.util.Set;
 
 public interface GlobalStateManager extends StateManager {
 
-    void setGlobalProcessorContext(final InternalProcessorContext processorContext);
+    void setGlobalProcessorContext(final InternalProcessorContext<?, ?> processorContext);
 
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished

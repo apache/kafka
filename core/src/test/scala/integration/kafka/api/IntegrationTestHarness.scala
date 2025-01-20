@@ -66,22 +66,15 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull, interBrokerSecurityProtocol = Some(securityProtocol),
+    val cfgs = TestUtils.createBrokerConfigs(brokerCount, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     configureListeners(cfgs)
     modifyConfigs(cfgs)
-    if (isZkMigrationTest()) {
-      cfgs.foreach(_.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true"))
-    }
     if (isShareGroupTest()) {
       cfgs.foreach(_.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share"))
       cfgs.foreach(_.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true"))
     }
-
-    if(isKRaftTest()) {
-      cfgs.foreach(_.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, TestUtils.tempDir().getAbsolutePath))
-    }
-
+    cfgs.foreach(_.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, TestUtils.tempDir().getAbsolutePath))
     insertControllerListenersIfNeeded(cfgs)
     cfgs.map(KafkaConfig.fromProps)
   }
@@ -106,16 +99,14 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   private def insertControllerListenersIfNeeded(props: Seq[Properties]): Unit = {
-    if (isKRaftTest()) {
-      props.foreach { config =>
-        // Add a security protocol for the controller endpoints, if one is not already set.
-        val securityPairs = config.getProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "").split(",")
-        val toAdd = config.getProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "").split(",").filter(
-          e => !securityPairs.exists(_.startsWith(s"$e:")))
-        if (toAdd.nonEmpty) {
-          config.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, (securityPairs ++
-            toAdd.map(e => s"$e:${controllerListenerSecurityProtocol.toString}")).mkString(","))
-        }
+    props.foreach { config =>
+      // Add a security protocol for the controller endpoints, if one is not already set.
+      val securityPairs = config.getProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "").split(",")
+      val toAdd = config.getProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "").split(",").filter(
+        e => !securityPairs.exists(_.startsWith(s"$e:")))
+      if (toAdd.nonEmpty) {
+        config.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, (securityPairs ++
+          toAdd.map(e => s"$e:${controllerListenerSecurityProtocol.toString}")).mkString(","))
       }
     }
   }

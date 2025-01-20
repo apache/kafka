@@ -21,7 +21,7 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.PartitionInfo;
@@ -165,8 +165,8 @@ public class StreamThreadStateStoreProviderTest {
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
 
         final StreamsConfig streamsConfig = new StreamsConfig(properties);
-        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        final MockConsumer<byte[], byte[]> mockRestoreConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
+        final MockConsumer<byte[], byte[]> mockRestoreConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
         final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>();
         final MockAdminClient mockAdminClient = MockAdminClient.create().build();
         configureClients(mockRestoreConsumer, mockAdminClient, "applicationId-kv-store-changelog");

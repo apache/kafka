@@ -396,6 +396,11 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         }
     }
 
+    @Override
+    public boolean isReady(TopicIdPartition topicIdPartition) {
+        return remotePartitionMetadataStore.isInitialized(topicIdPartition);
+    }
+
     private void initializeResources() {
         log.info("Initializing topic-based RLMM resources");
         final NewTopic remoteLogMetadataTopicRequest = createRemoteLogMetadataTopicRequest();

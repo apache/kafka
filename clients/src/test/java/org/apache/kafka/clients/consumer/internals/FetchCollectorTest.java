@@ -214,7 +214,7 @@ public class FetchCollectorTest {
         assignAndSeek(topicAPartition0);
 
         // Create a FetchCollector that fails on CompletedFetch initialization.
-        fetchCollector = new FetchCollector<String, String>(logContext,
+        fetchCollector = new FetchCollector<>(logContext,
                 metadata,
                 subscriptions,
                 fetchConfig,

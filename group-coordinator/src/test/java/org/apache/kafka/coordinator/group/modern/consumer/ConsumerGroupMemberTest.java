@@ -26,6 +26,8 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -246,8 +248,9 @@ public class ConsumerGroupMemberTest {
         assertEquals(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), member.partitionsPendingRevocation());
     }
 
-    @Test
-    public void testAsConsumerGroupDescribeMember() {
+    @ParameterizedTest(name = "{displayName}.withClassicMemberMetadata={0}")
+    @ValueSource(booleans = {true, false})
+    public void testAsConsumerGroupDescribeMember(boolean withClassicMemberMetadata) {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
         Uuid topicId3 = Uuid.randomUuid();
@@ -287,6 +290,8 @@ public class ConsumerGroupMemberTest {
             .setClientHost(clientHost)
             .setSubscribedTopicNames(subscribedTopicNames)
             .setSubscribedTopicRegex(subscribedTopicRegex)
+            .setClassicMemberMetadata(withClassicMemberMetadata ? new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(toClassicProtocolCollection("range")) : null)
             .build();
 
         ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment, metadataImage.topics());
@@ -315,7 +320,8 @@ public class ConsumerGroupMemberTest {
                             .setTopicName("topic4")
                             .setPartitions(new ArrayList<>(item.getValue()))
                     ).collect(Collectors.toList()))
-            );
+            )
+            .setMemberType(withClassicMemberMetadata ? (byte) 0 : (byte) 1);
 
         assertEquals(expected, actual);
     }
@@ -344,7 +350,8 @@ public class ConsumerGroupMemberTest {
 
         ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()
             .setMemberId(memberId.toString())
-            .setSubscribedTopicRegex("");
+            .setSubscribedTopicRegex("")
+            .setMemberType((byte) 1);
         ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(null,
             new MetadataImageBuilder()
                 .addTopic(Uuid.randomUuid(), "foo", 3)

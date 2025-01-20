@@ -42,8 +42,8 @@ import java.util.concurrent.locks.ReentrantLock;
 public abstract class DelayedOperation extends TimerTask {
 
     private final AtomicBoolean completed = new AtomicBoolean(false);
-    // Visible for testing
-    final Lock lock;
+
+    protected final Lock lock;
 
     public DelayedOperation(long delayMs, Optional<Lock> lockOpt) {
         this(delayMs, lockOpt.orElse(new ReentrantLock()));
