@@ -152,9 +152,9 @@ public class RequestHeader implements AbstractRequestResponse {
             return header;
         } catch (UnsupportedVersionException e) {
             throw new InvalidRequestException("Unknown API key " + apiKeyId, e);
+        } catch (InvalidRequestException e) {
+            throw e;
         } catch (Throwable ex) {
-            if (ex instanceof InvalidRequestException)
-                throw ex;
             throw new InvalidRequestException("Error parsing request header. Our best guess of the apiKeyId is: " +
                     apiKeyId, ex);
         }

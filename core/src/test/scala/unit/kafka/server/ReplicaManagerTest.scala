@@ -6008,7 +6008,6 @@ class ReplicaManagerTest {
   @Test
   def testReplicaAlterLogDirs(): Unit = {
     val tp = new TopicPartition(topic, 0)
-    val topicId = this.topicId
 
     val mockReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
