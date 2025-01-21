@@ -250,7 +250,7 @@ public class StreamsRebalanceData {
     private final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(Assignment.EMPTY);
 
     public StreamsRebalanceData(Map<String, Subtopology> subtopologies) {
-        this.subtopologies = subtopologies;
+        this.subtopologies = Map.copyOf(Objects.requireNonNull(subtopologies, "Subtopologies cannot be null"));
     }
 
     public Map<String, Subtopology> subtopologies() {

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -258,18 +259,34 @@ public class StreamsRebalanceDataTest {
     }
 
     @Test
-    public void topicInfoShouldNotBeModifiable() {
-        final StreamsRebalanceData.TopicInfo topicInfo = new StreamsRebalanceData.TopicInfo(
-            Optional.of(1),
-            Optional.of((short) 1),
-            Map.of("key1", "value1")
-                .entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
-        );
+    public void streamsRebalanceDataShouldNotHaveModifiableSubtopologies() {
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(new HashMap<>());
 
         assertThrows(
             UnsupportedOperationException.class,
-            () -> topicInfo.topicConfigs().put("key2", "value2")
+            () -> streamsRebalanceData.subtopologies().put("subtopologyId2", new StreamsRebalanceData.Subtopology(
+                Set.of(),
+                Set.of(),
+                Map.of(),
+                Map.of(),
+                List.of()
+            ))
         );
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldNotAcceptNulls() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData(null)
+        );
+        assertEquals("Subtopologies cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldBeConstructedWithEmptyAssignment() {
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(new HashMap<>());
+
+        assertEquals(StreamsRebalanceData.Assignment.EMPTY, streamsRebalanceData.reconciledAssignment());
     }
 }
