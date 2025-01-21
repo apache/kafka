@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
