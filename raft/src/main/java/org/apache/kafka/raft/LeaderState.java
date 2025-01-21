@@ -708,10 +708,6 @@ public class LeaderState<T> implements EpochState {
         }
     }
 
-    public KafkaRaftMetrics getKafkaRaftMetrics() {
-        return kafkaRaftMetrics;
-    }
-
     public static class ReplicaState implements Comparable<ReplicaState> {
         private ReplicaKey replicaKey;
         private Endpoints listeners;

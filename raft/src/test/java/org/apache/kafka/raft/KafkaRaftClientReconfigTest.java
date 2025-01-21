@@ -2359,7 +2359,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Check expected metrics values for leader
@@ -2422,8 +2422,13 @@ public class KafkaRaftClientReconfigTest {
         context.deliverResponse(request.correlationId(), request.destination(), response);
         context.client.poll();
 
+        // Bump the context epoch after resignation completes
+        context.time.sleep(context.electionTimeoutMs() * 2L);
+        context.client.poll();
+        assertEquals(epoch + 1, context.currentEpoch());
+
         // Become leader again and verify metrics values have been reset
-        context.becomeLeader();
+        context.unattachedToLeader();
         assertEquals(0, getMetric(context.metrics, "number-of-observers").metricValue());
         assertEquals(false, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
     }

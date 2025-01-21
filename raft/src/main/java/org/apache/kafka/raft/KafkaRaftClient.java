@@ -743,7 +743,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void onBecomeFollower(long currentTimeMs) {
         kafkaRaftMetrics.maybeUpdateElectionLatency(currentTimeMs);
-        kafkaRaftMetrics.removeLeaderMetrics();
 
         resetConnections();
 
