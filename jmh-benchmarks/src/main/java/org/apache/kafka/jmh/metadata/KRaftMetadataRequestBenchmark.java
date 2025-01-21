@@ -40,7 +40,6 @@ import kafka.server.share.SharePartitionManager;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -141,12 +140,7 @@ public class KRaftMetadataRequestBenchmark {
         MetadataDelta buildupMetadataDelta = new MetadataDelta(MetadataImage.EMPTY);
         IntStream.range(0, 5).forEach(brokerId -> {
             RegisterBrokerRecord.BrokerEndpointCollection endpoints = new RegisterBrokerRecord.BrokerEndpointCollection();
-            endpoints(brokerId).forEach(endpoint ->
-                endpoints.add(new RegisterBrokerRecord.BrokerEndpoint().
-                    setHost(endpoint.host()).
-                    setPort(endpoint.port()).
-                    setName(endpoint.listener()).
-                    setSecurityProtocol(endpoint.securityProtocol())));
+            endpoints(brokerId).forEach(endpoint -> endpoints.add(endpoint));
             buildupMetadataDelta.replay(new RegisterBrokerRecord().
                 setBrokerId(brokerId).
                 setBrokerEpoch(100L).
@@ -172,13 +166,13 @@ public class KRaftMetadataRequestBenchmark {
         metadataCache.setImage(buildupMetadataDelta.apply(MetadataProvenance.EMPTY));
     }
 
-    private List<UpdateMetadataEndpoint> endpoints(final int brokerId) {
+    private List<RegisterBrokerRecord.BrokerEndpoint> endpoints(final int brokerId) {
         return Collections.singletonList(
-                new UpdateMetadataEndpoint()
-                        .setHost("host_" + brokerId)
-                        .setPort(9092)
-                        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-                        .setListener(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT).value()));
+                new RegisterBrokerRecord.BrokerEndpoint().
+                        setHost("host_" + brokerId).
+                        setPort(9092).
+                        setName(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT).value()).
+                        setSecurityProtocol(SecurityProtocol.PLAINTEXT.id));
     }
 
     private KafkaApis createKafkaApis() {
