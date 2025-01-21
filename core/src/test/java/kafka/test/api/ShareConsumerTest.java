@@ -48,8 +48,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -148,7 +146,7 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testPollNoSubscribeFails() {
         setup();
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             assertEquals(Collections.emptySet(), shareConsumer.subscription());
             // "Consumer is not subscribed to any topics."
             assertThrows(IllegalStateException.class, () -> shareConsumer.poll(Duration.ofMillis(500)));
@@ -159,7 +157,7 @@ public class ShareConsumerTest {
     public void testSubscribeAndPollNoRecords() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
             shareConsumer.subscribe(subscription);
             assertEquals(subscription, shareConsumer.subscription());
@@ -173,7 +171,7 @@ public class ShareConsumerTest {
     public void testSubscribePollUnsubscribe() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
             shareConsumer.subscribe(subscription);
             assertEquals(subscription, shareConsumer.subscription());
@@ -189,7 +187,7 @@ public class ShareConsumerTest {
     public void testSubscribePollSubscribe() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
             shareConsumer.subscribe(subscription);
             assertEquals(subscription, shareConsumer.subscription());
@@ -207,7 +205,7 @@ public class ShareConsumerTest {
     public void testSubscribeUnsubscribePollFails() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
             shareConsumer.subscribe(subscription);
             assertEquals(subscription, shareConsumer.subscription());
@@ -225,7 +223,7 @@ public class ShareConsumerTest {
     public void testSubscribeSubscribeEmptyPollFails() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
             shareConsumer.subscribe(subscription);
             assertEquals(subscription, shareConsumer.subscription());
@@ -243,8 +241,8 @@ public class ShareConsumerTest {
     public void testSubscriptionAndPoll() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -260,8 +258,8 @@ public class ShareConsumerTest {
     public void testSubscriptionAndPollMultiple() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -283,8 +281,8 @@ public class ShareConsumerTest {
     public void testAcknowledgementSentOnSubscriptionChange() throws ExecutionException, InterruptedException {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
             Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
@@ -320,8 +318,8 @@ public class ShareConsumerTest {
     public void testAcknowledgementCommitCallbackSuccessfulAcknowledgement() throws Exception {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
             Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
@@ -351,8 +349,8 @@ public class ShareConsumerTest {
     public void testAcknowledgementCommitCallbackOnClose() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
             Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
@@ -383,8 +381,8 @@ public class ShareConsumerTest {
     public void testAcknowledgementCommitCallbackInvalidRecordStateException() throws Exception {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
             Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
@@ -438,8 +436,8 @@ public class ShareConsumerTest {
     public void testHeaders() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             int numRecords = 1;
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -463,8 +461,16 @@ public class ShareConsumerTest {
 
     private void testHeadersSerializeDeserialize(Serializer<byte[]> serializer, Deserializer<byte[]> deserializer) {
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), serializer);
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(deserializer, new ByteArrayDeserializer(), "group1")) {
+        Map<String, Object> producerConfig = Map.of(
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, serializer.getClass().getName()
+        );
+
+        Map<String, Object> consumerConfig = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer.getClass().getName()
+        );
+
+        try (Producer<byte[], byte[]> producer = createProducer(producerConfig);
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", consumerConfig)) {
 
             int numRecords = 1;
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -492,8 +498,8 @@ public class ShareConsumerTest {
         int maxPollRecords = 2;
 
         alterShareAutoOffsetReset("group1", "earliest");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
-                 "group1", Collections.singletonMap(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, String.valueOf(maxPollRecords)))) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1",
+            Collections.singletonMap(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, String.valueOf(maxPollRecords)))) {
 
             long startingTimestamp = System.currentTimeMillis();
             produceMessagesWithTimestamp(numRecords, startingTimestamp);
@@ -523,9 +529,9 @@ public class ShareConsumerTest {
     public void testControlRecordsSkipped() throws Exception {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> transactionalProducer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), "T1");
-             Producer<byte[], byte[]> nonTransactionalProducer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
+             Producer<byte[], byte[]> nonTransactionalProducer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
 
@@ -569,8 +575,8 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeSuccess() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -591,8 +597,8 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeCommitSuccess() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -615,9 +621,9 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgementCommitAsync() throws InterruptedException {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -672,8 +678,8 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgementCommitAsyncPartialBatch() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -736,8 +742,8 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeReleasePollAccept() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -760,8 +766,8 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeReleaseAccept() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -781,8 +787,8 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeReleaseClose() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -800,8 +806,8 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeThrowsNotInBatch() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -823,8 +829,8 @@ public class ShareConsumerTest {
     public void testImplicitAcknowledgeFailsExplicit() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -845,8 +851,8 @@ public class ShareConsumerTest {
     public void testImplicitAcknowledgeCommitSync() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -869,8 +875,8 @@ public class ShareConsumerTest {
     public void testImplicitAcknowledgementCommitAsync() throws InterruptedException {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -911,9 +917,13 @@ public class ShareConsumerTest {
         int maxPartitionFetchBytes = 10000;
 
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
-                 "group1", Collections.singletonMap(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(maxPartitionFetchBytes)))) {
+        try (
+            Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Collections.singletonMap(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(maxPartitionFetchBytes))
+            )
+        ) {
 
             ProducerRecord<byte[], byte[]> smallRecord = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> bigRecord = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), new byte[maxPartitionFetchBytes]);
@@ -933,9 +943,9 @@ public class ShareConsumerTest {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
         alterShareAutoOffsetReset("group2", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group2")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group2")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
 
@@ -984,9 +994,9 @@ public class ShareConsumerTest {
     public void testMultipleConsumersInGroupSequentialConsumption() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             shareConsumer1.subscribe(Collections.singleton(tp.topic()));
@@ -1121,9 +1131,9 @@ public class ShareConsumerTest {
     public void testConsumerCloseInGroupSequential() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             shareConsumer1.subscribe(Collections.singleton(tp.topic()));
@@ -1215,8 +1225,8 @@ public class ShareConsumerTest {
     public void testAcquisitionLockTimeoutOnConsumer() throws InterruptedException {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> producerRecord1 = new ProducerRecord<>(tp.topic(), tp.partition(), null,
                 "key_1".getBytes(), "value_1".getBytes());
@@ -1280,8 +1290,8 @@ public class ShareConsumerTest {
     public void testAcknowledgementCommitCallbackCallsShareConsumerDisallowed() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -1324,8 +1334,8 @@ public class ShareConsumerTest {
     public void testAcknowledgementCommitCallbackCallsShareConsumerWakeup() throws InterruptedException {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -1377,8 +1387,8 @@ public class ShareConsumerTest {
     public void testAcknowledgementCommitCallbackThrowsException() throws InterruptedException {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -1418,7 +1428,7 @@ public class ShareConsumerTest {
     public void testPollThrowsInterruptExceptionIfInterrupted() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
 
@@ -1443,7 +1453,7 @@ public class ShareConsumerTest {
     public void testSubscribeOnInvalidTopicThrowsInvalidTopicException() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             shareConsumer.subscribe(Collections.singleton("topic abc"));
 
@@ -1461,8 +1471,8 @@ public class ShareConsumerTest {
     public void testWakeupWithFetchedRecordsAvailable() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -1483,8 +1493,8 @@ public class ShareConsumerTest {
     public void testSubscriptionFollowedByTopicCreation() throws InterruptedException {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             String topic = "foo";
             shareConsumer.subscribe(Collections.singleton(topic));
@@ -1518,8 +1528,8 @@ public class ShareConsumerTest {
         createTopic(topic2);
 
         alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> recordTopic1 = new ProducerRecord<>(topic1, 0, null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> recordTopic2 = new ProducerRecord<>(topic2, 0, null, "key".getBytes(), "value".getBytes());
@@ -1559,7 +1569,7 @@ public class ShareConsumerTest {
 
         alterShareAutoOffsetReset(groupId, "earliest");
         try (
-            Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
+            Producer<byte[], byte[]> producer = createProducer();
             Admin adminClient = createAdminClient()
         ) {
 
@@ -1601,8 +1611,8 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testShareAutoOffsetResetDefaultValue() {
         setup();
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
+             Producer<byte[], byte[]> producer = createProducer()) {
 
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -1629,8 +1639,8 @@ public class ShareConsumerTest {
     public void testShareAutoOffsetResetEarliest() {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
+             Producer<byte[], byte[]> producer = createProducer()) {
 
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -1656,8 +1666,8 @@ public class ShareConsumerTest {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (
-            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-            Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
+            Producer<byte[], byte[]> producer = createProducer();
             Admin adminClient = createAdminClient()
         ) {
 
@@ -1684,9 +1694,9 @@ public class ShareConsumerTest {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
         alterShareAutoOffsetReset("group2", "latest");
-        try (ShareConsumer<byte[], byte[]> shareConsumerEarliest = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             ShareConsumer<byte[], byte[]> shareConsumerLatest = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group2");
-             Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (ShareConsumer<byte[], byte[]> shareConsumerEarliest = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumerLatest = createShareConsumer("group2");
+             Producer<byte[], byte[]> producer = createProducer()) {
 
             shareConsumerEarliest.subscribe(Collections.singleton(tp.topic()));
 
@@ -1726,8 +1736,8 @@ public class ShareConsumerTest {
         // Set auto offset reset to 1 hour before current time
         alterShareAutoOffsetReset("group1", "by_duration:PT1H");
         
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
+             Producer<byte[], byte[]> producer = createProducer()) {
 
             long currentTime = System.currentTimeMillis();
             long twoHoursAgo = currentTime - TimeUnit.HOURS.toMillis(2);
@@ -1762,8 +1772,8 @@ public class ShareConsumerTest {
         // Set the auto offset reset to 3 hours before current time
         // so the consumer should consume all messages (3 records)
         alterShareAutoOffsetReset("group2", "by_duration:PT3H");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group2");
-             Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group2");
+             Producer<byte[], byte[]> producer = createProducer()) {
 
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
             List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 3);
@@ -1797,7 +1807,7 @@ public class ShareConsumerTest {
     }
 
     private int produceMessages(int messageCount) {
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (Producer<byte[], byte[]> producer = createProducer()) {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             IntStream.range(0, messageCount).forEach(__ -> producer.send(record));
             producer.flush();
@@ -1806,7 +1816,7 @@ public class ShareConsumerTest {
     }
 
     private void produceMessagesWithTimestamp(int messageCount, long startingTimestamp) {
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (Producer<byte[], byte[]> producer = createProducer()) {
             for (int i = 0; i < messageCount; i++) {
                 ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), startingTimestamp + i,
                     ("key " + i).getBytes(), ("value " + i).getBytes());
@@ -1824,7 +1834,7 @@ public class ShareConsumerTest {
                                  boolean commit) {
         return assertDoesNotThrow(() -> {
             try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
-                    new ByteArrayDeserializer(), new ByteArrayDeserializer(), groupId)) {
+                    groupId)) {
                 shareConsumer.subscribe(Collections.singleton(tp.topic()));
                 return consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit);
             }
@@ -1840,7 +1850,7 @@ public class ShareConsumerTest {
                                  int maxFetchBytes) {
         return assertDoesNotThrow(() -> {
             try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
-                    new ByteArrayDeserializer(), new ByteArrayDeserializer(), groupId,
+                    groupId,
                     Map.of(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxFetchBytes))) {
                 shareConsumer.subscribe(Collections.singleton(tp.topic()));
                 return consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit);
@@ -1914,48 +1924,36 @@ public class ShareConsumerTest {
         return cluster.admin();
     }
 
-    private <K, V> Producer<K, V> createProducer(Serializer<K> keySerializer,
-                                                 Serializer<V> valueSerializer) {
-        return cluster.producer(
-            Map.of(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass().getName(),
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass().getName()
-            )
-        );
+    private <K, V> Producer<K, V> createProducer() {
+        return cluster.producer();
     }
 
-    private <K, V> Producer<K, V> createProducer(Serializer<K> keySerializer,
-                                                      Serializer<V> valueSerializer,
-                                                      String transactionalId) {
+    private <K, V> Producer<K, V> createProducer(Map<String, Object> config) {
+        return cluster.producer(config);
+    }
+
+    private <K, V> Producer<K, V> createProducer(String transactionalId) {
         return cluster.producer(
             Map.of(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass().getName(),
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass().getName(),
                 ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId
             )
         );
     }
 
-    private <K, V> ShareConsumer<K, V> createShareConsumer(Deserializer<K> keyDeserializer,
-                                                           Deserializer<V> valueDeserializer,
-                                                           String groupId) {
+    private <K, V> ShareConsumer<K, V> createShareConsumer(String groupId) {
         return cluster.shareConsumer(
             Map.of(
-                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName(),
-                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName(),
                 ConsumerConfig.GROUP_ID_CONFIG, groupId
             )
         );
     }
 
-    private <K, V> ShareConsumer<K, V> createShareConsumer(Deserializer<K> keyDeserializer,
-                                                           Deserializer<V> valueDeserializer,
-                                                           String groupId,
-                                                           Map<?, ?> additionalProperties) {
+    private <K, V> ShareConsumer<K, V> createShareConsumer(
+        String groupId,
+        Map<?, ?> additionalProperties
+    ) {
         Properties props = new Properties();
         props.putAll(additionalProperties);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         Map<String, Object> conf = new HashMap<>();
         props.forEach((k, v) -> conf.put((String) k, v));
@@ -1968,8 +1966,8 @@ public class ShareConsumerTest {
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(warmupTp.topic(), warmupTp.partition(), null, "key".getBytes(), "value".getBytes());
         Set<String> subscription = Collections.singleton(warmupTp.topic());
         alterShareAutoOffsetReset("warmupgroup1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "warmupgroup1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("warmupgroup1")) {
 
             producer.send(record);
             producer.flush();
