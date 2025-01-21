@@ -728,8 +728,7 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A ConsumerGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a consumer group.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false.
      * @throws IllegalStateException    if the group does not have the expected type.
      * Package private for testing.
      */
@@ -866,8 +865,7 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A ShareGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a share group.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false.
      * @throws IllegalStateException    if the group does not have the expected type.
      *
      * Package private for testing.
