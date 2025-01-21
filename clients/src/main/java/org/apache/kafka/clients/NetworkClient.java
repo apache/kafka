@@ -1047,7 +1047,6 @@ public class NetworkClient implements KafkaClient {
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(
             apiVersionsResponse.data().apiKeys(),
             apiVersionsResponse.data().supportedFeatures(),
-            apiVersionsResponse.data().zkMigrationReady(),
             apiVersionsResponse.data().finalizedFeatures(),
             apiVersionsResponse.data().finalizedFeaturesEpoch());
         apiVersions.update(node, nodeVersionInfo);

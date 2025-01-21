@@ -33,10 +33,17 @@
     <h5><a id="upgrade_400_notable" href="#upgrade_400_notable">Notable changes in 4.0.0</a></h5>
     <ul>
         <li>
-            Old protocol API versions have been removed. Users should ensure brokers are version 2.1 or higher before upgrading the Java clients to 4.0.
-            Similarly, users should ensure their Java clients version 2.1 or higher before upgrading the brokers to 4.0. Finally, care also needs to be
-            taken when it comes to kafka clients that are not part of Apache Kafka, please see
+            Old protocol API versions have been removed. Users should ensure brokers are version 2.1 or higher before upgrading the Java clients
+	    (including Connect and Kafka Streams which use the clients internally) to 4.0.
+            Similarly, users should ensure their Java clients (including Connect and Kafka Streams) version is 2.1 or higher before upgrading the brokers to 4.0.
+	    Finally, care also needs to be taken when it comes to kafka clients that are not part of Apache Kafka, please see
             <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896%3A+Remove+old+client+protocol+API+versions+in+Kafka+4.0">KIP-896</a> for the details.
+        </li>
+        <li>
+            Before updating your Kafka cluster which build on Zookeeper to Kafka 4.0, you must understand what the updates and changes 
+            are between Zookeeper mode and Kraft mode. See the following page to learn about some of the significant changes in 
+            latest Kafka releases.
+            <!--#include virtual="zk2kraft.html" -->
         </li>
         <li>A number of deprecated classes, methods, configurations and tools have been removed.
             <ul>
@@ -102,6 +109,10 @@
                         </li>
                         <li>
                             The <code>remote.log.manager.thread.pool.size</code> configuration default value was changed to 2 from 10.
+                            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
+                        </li>
+                        <li>
+                            The minimum <code>segment.bytes/log.segment.bytes</code> has changed from 14 bytes to 1MB.
                             See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
                         </li>
                     </ul>
@@ -212,6 +223,9 @@
                         </li>
                         <li>The deprecated <code>sendOffsetsToTransaction(Map&lt;TopicPartition, OffsetAndMetadata&gt;, String)</code> method has been removed from the Producer API.
                         </li>
+                        <li>The default <code>linger.ms</code> changed from 0 to 5 in Apache Kafka 4.0 as the efficiency gains from larger batches typically result in 
+                            similar or lower producer latency despite the increased linger.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Admin client</b>
@@ -258,12 +272,26 @@
                         </li>
                     </ul>
                 </li>
+                <li><b>Kafka Streams</b>
+                    <ul>
+                        <li>
+			    All public API, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, with the exception of <code>JoinWindows.of()</code> and <code>JoinWindows#grace()</code>.
+			    See <a href="https://issues.apache.org/jira/browse/KAFKA-17531">KAFKA-17531</a> for details.
+                        </li>
+                        <li>
+			    The most important changes are highlighted in the <a href=""/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
+                        </li>
+                        <li>
+			    For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
+                        </li>
+                    </ul>
+                </li>
             </ul>
         </li>
         <li>Other changes:
             <ul>
                 <li>
-                    The minimum Java version required by clients and streams applications has been increased from Java 8 to Java 11
+                    The minimum Java version required by clients and Kafka Streams applications has been increased from Java 8 to Java 11
                     while brokers, connect and tools now require Java 17.
                     See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> and
                     <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510">KIP-1013</a> for more details.
@@ -299,6 +327,20 @@
                     The criteria for identifying internal topics in ReplicationPolicy and DefaultReplicationPolicy have
                     been updated to enable the replication of topics that appear to be internal but aren't truly internal to Kafka and Mirror Maker 2.
                     See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1074%3A+Allow+the+replication+of+user+internal+topics">KIP-1074</a> for more details.
+                </li>
+                <li>
+                    KIP-714 is now enabled for Kafka Streams via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1076%3A++Metrics+for+client+applications+KIP-714+extension">KIP-1076</a>.
+		    This allows to not only collect the metric of the internally used clients of a Kafka Streams appliction via a broker-side plugin,
+		    but also to collect the <a href="/{{version}}/documentation/#kafka_streams_monitoring">metrics</a> of the Kafka Streams runtime itself.
+            </li>
+                    The default value of 'num.recovery.threads.per.data.dir' has been changed from 1 to 2. The impact of this is faster
+                    recovery post unclean shutdown at the expense of extra IO cycles.
+                    See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
+                </li>
+                <li>
+                    The default value of 'message.timestamp.after.max.ms' has been changed from Long.Max to 1 hour. The impact of this messages with a 
+                    timestamp of more than 1 hour in the future will be rejected when message.timestamp.type=CreateTime is set.
+                    See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
                 </li>
             </ul>
         </li>

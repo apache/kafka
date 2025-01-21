@@ -314,7 +314,6 @@ public class TestLinearWriteSpeed {
                 new LogDirFailureChannel(10),
                 true,
                 Option.empty(),
-                true,
                 new CopyOnWriteMap<>(),
                 false,
                 LogOffsetsListener.NO_OP_OFFSETS_LISTENER

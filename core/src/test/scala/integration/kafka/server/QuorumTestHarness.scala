@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import kafka.controller.ControllerEventManager
-
 import java.io.File
 import java.net.InetSocketAddress
 import java.util
@@ -393,7 +391,7 @@ object QuorumTestHarness {
     // when broker ports are reused (e.g. auto-create topics) as well as threads
     // which reset static JAAS configuration.
     val unexpectedThreadNames = Set(
-      ControllerEventManager.ControllerEventThreadName,
+      "controller-event-thread",
       KafkaProducer.NETWORK_THREAD_PREFIX,
       AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
       AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
@@ -441,4 +439,8 @@ object QuorumTestHarness {
 
   // The following is for tests that only work with the classic group protocol because of relying on Zookeeper
   def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit: java.util.stream.Stream[Arguments] = stream.Stream.of(Arguments.of("zk", GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)))
+
+  // The following parameter groups are to *temporarily* avoid bugs with the CONSUMER group protocol Consumer
+  // implementation that would otherwise cause tests to fail.
+  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_18034: stream.Stream[Arguments] = getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly
 }

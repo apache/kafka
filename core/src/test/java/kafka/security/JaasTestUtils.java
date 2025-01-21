@@ -31,7 +31,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -71,12 +70,6 @@ public class JaasTestUtils {
     }
 
     private static final boolean IS_IBM_SECURITY = Java.isIbmJdk() && !Java.isIbmJdkSemeru();
-
-    private static final String ZK_SERVER_CONTEXT_NAME = "Server";
-    private static final String ZK_CLIENT_CONTEXT_NAME = "Client";
-    private static final String ZK_USER_SUPER_PASSWD = "adminpasswd";
-    private static final String ZK_USER = "fpj";
-    private static final String ZK_USER_PASSWORD = "fpjsecret";
 
     public static final String KAFKA_SERVER_CONTEXT_NAME = "KafkaServer";
     public static final String KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME = "kafka";
@@ -170,20 +163,6 @@ public class JaasTestUtils {
         Map<String, String> tokenProps = new HashMap<>();
         tokenProps.put("tokenauth", "true");
         return JaasModule.scramLoginModule(tokenId, password, false, tokenProps).toString();
-    }
-
-    public static List<JaasSection> zkSections() {
-        Map<String, String> zkServerEntries = new HashMap<>();
-        zkServerEntries.put("user_super", ZK_USER_SUPER_PASSWD);
-        zkServerEntries.put("user_" + ZK_USER, ZK_USER_PASSWORD);
-        JaasSection zkServerSection = new JaasSection(ZK_SERVER_CONTEXT_NAME, Collections.singletonList(JaasModule.zkDigestModule(false, zkServerEntries)));
-
-        Map<String, String> zkClientEntries = new HashMap<>();
-        zkClientEntries.put("username", ZK_USER);
-        zkClientEntries.put("password", ZK_USER_PASSWORD);
-        JaasSection zkClientSection = new JaasSection(ZK_CLIENT_CONTEXT_NAME, Collections.singletonList(JaasModule.zkDigestModule(false, zkClientEntries)));
-
-        return Arrays.asList(zkServerSection, zkClientSection);
     }
 
     public static JaasSection kafkaServerSection(String contextName, List<String> mechanisms, Optional<File> keytabLocation) {

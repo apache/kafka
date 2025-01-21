@@ -49,7 +49,22 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
             ServerSocketChannel socketChannel = getSocketForListenerAndMarkAsUsed(
                 nodeId,
                 listenerName);
+
             if (socketChannel != null) {
+                if (socketChannel.isOpen()) {
+                    return socketChannel;
+                }
+                // When restarting components(e.g. controllers, brokers) in tests, we want to reuse the same
+                // port that was previously allocated to maintain consistent addressing
+                // so the client can reconnect to the same port.
+                // Since those components would close the socket when they are restarted,
+                // we need to rebind the socket to the same port.
+                socketAddress = new InetSocketAddress(socketAddress.getHostString(), socketChannel.socket().getLocalPort());
+                socketChannel = ServerSocketFactory.INSTANCE.openServerSocket(
+                        listenerName,
+                        socketAddress,
+                        listenBacklogSize,
+                        recvBufferSize);
                 return socketChannel;
             }
             return ServerSocketFactory.INSTANCE.openServerSocket(

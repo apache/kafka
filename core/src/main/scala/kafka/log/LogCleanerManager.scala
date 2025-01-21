@@ -21,14 +21,13 @@ import java.lang.{Long => JLong}
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
-import kafka.common.LogCleaningAbortedException
 import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
-import org.apache.kafka.storage.internals.log.LogDirFailureChannel
+import org.apache.kafka.storage.internals.log.{LogCleaningAbortedException, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util.Comparator
@@ -533,21 +532,15 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   def maintainUncleanablePartitions(): Unit = {
     // Remove deleted partitions from uncleanablePartitions
     inLock(lock) {
-      // Note: we don't use retain or filterInPlace method in this function because retain is deprecated in
-      // scala 2.13 while filterInPlace is not available in scala 2.12.
-
       // Remove deleted partitions
-      uncleanablePartitions.values.foreach {
-        partitions =>
-          val partitionsToRemove = partitions.filterNot(logs.contains).toList
-          partitionsToRemove.foreach { partitions.remove }
+      uncleanablePartitions.values.foreach { partitions =>
+        partitions.filterInPlace(logs.contains)
       }
 
       // Remove entries with empty partition set.
-      val logDirsToRemove = uncleanablePartitions.filter {
-        case (_, partitions) => partitions.isEmpty
-      }.keys.toList
-      logDirsToRemove.foreach { uncleanablePartitions.remove }
+      uncleanablePartitions.filterInPlace {
+        case (_, partitions) => partitions.nonEmpty
+      }
     }
   }
 

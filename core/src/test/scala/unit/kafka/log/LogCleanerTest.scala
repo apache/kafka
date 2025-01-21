@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.common._
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, Logging, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
@@ -29,7 +28,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -216,8 +215,7 @@ class LogCleanerTest extends Logging {
                       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
                       leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
-                      _topicId = None,
-                      keepPartitionMetadataFile = true) {
+                      _topicId = None) {
       override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment]): Unit = {
         deleteStartLatch.countDown()
         if (!deleteCompleteLatch.await(5000, TimeUnit.MILLISECONDS)) {
@@ -1218,7 +1216,7 @@ class LogCleanerTest extends Logging {
 
     def distinctValuesBySegment = log.logSegments.asScala.map(s => s.log.records.asScala.map(record => TestUtils.readString(record.value)).toSet.size).toSeq
 
-    val disctinctValuesBySegmentBeforeClean = distinctValuesBySegment
+    val distinctValuesBySegmentBeforeClean = distinctValuesBySegment
     assertTrue(distinctValuesBySegment.reverse.tail.forall(_ > N),
       "Test is not effective unless each segment contains duplicates. Increase segment size or decrease number of keys.")
 
@@ -1226,10 +1224,10 @@ class LogCleanerTest extends Logging {
 
     val distinctValuesBySegmentAfterClean = distinctValuesBySegment
 
-    assertTrue(disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
+    assertTrue(distinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
       .take(numCleanableSegments).forall { case (before, after) => after < before },
       "The cleanable segments should have fewer number of values after cleaning")
-    assertTrue(disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
+    assertTrue(distinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
       .slice(numCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 }, "The uncleanable segments should have the same number of values after cleaning")
   }
 
@@ -1241,9 +1239,9 @@ class LogCleanerTest extends Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // create 6 segments with only one message in each segment
-    def createRecorcs = TestUtils.singletonRecords(value = Array.fill[Byte](25)(0), key = 1.toString.getBytes)
+    def createRecords = TestUtils.singletonRecords(value = Array.fill[Byte](25)(0), key = 1.toString.getBytes)
     for (_ <- 0 until 6)
-      log.appendAsLeader(createRecorcs, leaderEpoch = 0)
+      log.appendAsLeader(createRecords, leaderEpoch = 0)
 
     val logToClean = LogToClean(new TopicPartition("test", 0), log, log.activeSegment.baseOffset, log.activeSegment.baseOffset)
 
@@ -1918,7 +1916,10 @@ class LogCleanerTest extends Logging {
 
   @Test
   def testCleanTombstone(): Unit = {
-    val logConfig = new LogConfig(new Properties())
+    val properties = new Properties()
+    // This test uses future timestamps beyond the default of 1 hour.
+    properties.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.MaxValue.toString)
+    val logConfig = new LogConfig(properties)
 
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(10)
@@ -2044,6 +2045,45 @@ class LogCleanerTest extends Logging {
     }
   }
 
+  @Test
+  def testMaxOverCleanerThreads(): Unit = {
+    val logCleaner =  new LogCleaner(new CleanerConfig(true),
+      logDirs = Array(TestUtils.tempDir(), TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, UnifiedLog](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time)
+
+    val cleaners = logCleaner.cleaners
+
+    val cleaner1 = new logCleaner.CleanerThread(1)
+    cleaner1.lastStats = new CleanerStats(time)
+    cleaner1.lastStats.bufferUtilization = 0.75
+    cleaners += cleaner1
+
+    val cleaner2 = new logCleaner.CleanerThread(2)
+    cleaner2.lastStats = new CleanerStats(time)
+    cleaner2.lastStats.bufferUtilization = 0.85
+    cleaners += cleaner2
+
+    val cleaner3 = new logCleaner.CleanerThread(3)
+    cleaner3.lastStats = new CleanerStats(time)
+    cleaner3.lastStats.bufferUtilization = 0.65
+    cleaners += cleaner3
+
+    assertEquals(0, logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization))
+
+    cleaners.clear()
+
+    cleaner1.lastStats.bufferUtilization = 5d
+    cleaners += cleaner1
+    cleaner2.lastStats.bufferUtilization = 6d
+    cleaners += cleaner2
+    cleaner3.lastStats.bufferUtilization = 7d
+    cleaners += cleaner3
+
+    assertEquals(7, logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization))
+  }
+
   private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for (((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.appendAsFollower(messageWithOffset(key, value, offset)).lastOffset
@@ -2093,8 +2133,7 @@ class LogCleanerTest extends Logging {
       producerStateManagerConfig = producerStateManagerConfig,
       producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true
+      topicId = None
     )
   }
 
