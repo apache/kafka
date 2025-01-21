@@ -158,6 +158,7 @@ public class ConfigurationUtils {
      * Validates that the configured URL that:
      *
      * <li>
+     *     <ul>is in the allow-list</ul>
      *     <ul>is well-formed</ul>
      *     <ul>contains a scheme</ul>
      *     <ul>uses either HTTP, HTTPS, or file protocols</ul>
@@ -185,6 +186,8 @@ public class ConfigurationUtils {
 
         if (!(protocol.equals("http") || protocol.equals("https") || protocol.equals("file")))
             throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", name, value, protocol));
+
+        throwIfURLIsNotAllowed(value);
 
         return url;
     }
@@ -234,15 +237,15 @@ public class ConfigurationUtils {
         return (T) configs.get(name);
     }
 
+    // visible for testing
     // make sure the url is in the "org.apache.kafka.sasl.oauthbearer.allowed.urls" system property
-    public void throwIfURLIsNotAllowed(String urlConfig) {
-        Set<String> allowedLoginModuleList = Arrays.stream(
+    void throwIfURLIsNotAllowed(String value) {
+        Set<String> allowedUrlsList = Arrays.stream(
                         System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT).split(","))
                 .map(String::trim)
                 .collect(Collectors.toSet());
-        String value = get(urlConfig);
-        if (!allowedLoginModuleList.contains(value)) {
-            throw new IllegalArgumentException(value + " is not allowed. Update system property '"
+        if (!allowedUrlsList.contains(value)) {
+            throw new ConfigException(value + " is not allowed. Update system property '"
                     + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
         }
     }

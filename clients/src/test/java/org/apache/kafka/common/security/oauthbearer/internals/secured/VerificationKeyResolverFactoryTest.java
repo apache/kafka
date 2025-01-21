@@ -72,11 +72,11 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
 
     @Test
     public void testSaslOauthbearerTokenEndpointUrlIsNotAllowed() throws Exception {
-        // Should fail because while the parent path exists, the file itself doesn't.
+        // Should fail if the URL is not allowed
         File tmpDir = createTempDir("not_allowed");
         File verificationKeyFile = new File(tmpDir, "not_allowed.json");
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
-        assertThrowsWithMessage(IllegalArgumentException.class, () -> VerificationKeyResolverFactory.create(configs, Collections.emptyMap()),
+        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, Collections.emptyMap()),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
     }
 }

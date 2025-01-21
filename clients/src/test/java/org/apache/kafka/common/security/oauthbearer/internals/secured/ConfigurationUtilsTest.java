@@ -93,6 +93,7 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
     }
 
     private void testUrl(String value) {
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, value == null ? "" : value);
         Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
         ConfigurationUtils cu = new ConfigurationUtils(configs);
         cu.validateUrl(URL_CONFIG_NAME);
@@ -141,7 +142,7 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testAllowedSaslOauthbearerUrlSystemProperty() {
+    public void testThrowIfURLIsNotAllowed() {
         String url = "http://www.example.com";
         String fileUrl = "file:///etc/passwd";
         Map<String, Object> configs = new HashMap<>();
@@ -150,24 +151,25 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
         ConfigurationUtils cu = new ConfigurationUtils(configs);
 
         // By default, no URL is allowed
-        assertThrowsWithMessage(IllegalArgumentException.class, () -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME),
+        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(url),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
-        assertThrowsWithMessage(IllegalArgumentException.class, () -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME),
+        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(fileUrl),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
 
         // add one url into allowed list
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url);
-        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME));
-        assertThrowsWithMessage(IllegalArgumentException.class, () -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME),
+        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(url));
+        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(fileUrl),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
 
         // add all urls into allowed list
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url + "," + fileUrl);
-        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME));
-        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME));
+        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(url));
+        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(fileUrl));
     }
 
     protected void testFile(String value) {
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, value == null ? "" : value);
         Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
         ConfigurationUtils cu = new ConfigurationUtils(configs);
         cu.validateFile(URL_CONFIG_NAME);
