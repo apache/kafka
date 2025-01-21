@@ -873,7 +873,7 @@ public class ClusterControlManagerTest {
             setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
             setFeatureControlManager(new FeatureControlManager.Builder().build()).
             setBrokerUncleanShutdownHandler((brokerId, records) -> {
-                records.add(new ApiMessageAndVersion(new PartitionChangeRecord(),PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION));
+                records.add(new ApiMessageAndVersion(new PartitionChangeRecord(), PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION));
             }).
             build();
         clusterControl.activate();
