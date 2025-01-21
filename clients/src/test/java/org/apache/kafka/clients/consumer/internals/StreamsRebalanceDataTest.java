@@ -203,7 +203,7 @@ public class StreamsRebalanceDataTest {
     }
 
     @Test
-    public void subtopologyShouldBeModifiable() {
+    public void subtopologyShouldNotBeModifiable() {
         final StreamsRebalanceData.Subtopology subtopology = new StreamsRebalanceData.Subtopology(
             new HashSet<>(Set.of("sourceTopic1")),
             new HashSet<>(Set.of("repartitionSinkTopic1")),
@@ -238,5 +238,38 @@ public class StreamsRebalanceDataTest {
         );
     }
 
+    @Test
+    public void topicInfoShouldNotAcceptNulls() {
+        final Exception exception1 = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData.TopicInfo(null, Optional.of((short) 1), Map.of())
+        );
+        assertEquals("Number of partitions cannot be null", exception1.getMessage());
+        final Exception exception2 = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData.TopicInfo(Optional.of(1), null, Map.of())
+        );
+        assertEquals("Replication factor cannot be null", exception2.getMessage());
+        final Exception exception3 = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), null)
+        );
+        assertEquals("Additional topic configs cannot be null", exception3.getMessage());
+    }
 
+    @Test
+    public void topicInfoShouldNotBeModifiable() {
+        final StreamsRebalanceData.TopicInfo topicInfo = new StreamsRebalanceData.TopicInfo(
+            Optional.of(1),
+            Optional.of((short) 1),
+            Map.of("key1", "value1")
+                .entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
+        );
+
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> topicInfo.topicConfigs().put("key2", "value2")
+        );
+    }
 }

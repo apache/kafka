@@ -217,9 +217,10 @@ public class StreamsRebalanceData {
         public TopicInfo(final Optional<Integer> numPartitions,
                          final Optional<Short> replicationFactor,
                          final Map<String, String> topicConfigs) {
-            this.numPartitions = numPartitions;
-            this.replicationFactor = replicationFactor;
-            this.topicConfigs = topicConfigs;
+            this.numPartitions = Objects.requireNonNull(numPartitions, "Number of partitions cannot be null");
+            this.replicationFactor = Objects.requireNonNull(replicationFactor, "Replication factor cannot be null");
+            this.topicConfigs =
+                Map.copyOf(Objects.requireNonNull(topicConfigs, "Additional topic configs cannot be null"));
         }
 
         public Optional<Integer> numPartitions() {
