@@ -22,7 +22,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import java.util.Objects;
 
 /**
- * A Record which contains a type, an {{@link ApiMessage}} as key and
+ * A Record which contains an {{@link ApiMessage}} as key and
  * an {{@link ApiMessageAndVersion}} as value. The value could be null to
  * represent a tombstone.
  *
