@@ -49,7 +49,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -87,15 +86,6 @@ public class KafkaShareConsumerTest {
 
     private final Time time = new MockTime();
     private final SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
-
-    private KafkaShareConsumer<String, String> consumer;
-
-    @AfterEach
-    public void cleanup() {
-        if (consumer != null) {
-            consumer.close(Duration.ZERO);
-        }
-    }
 
     @Test
     public void testVerifyHeartbeats() throws InterruptedException {
@@ -156,6 +146,8 @@ public class KafkaShareConsumerTest {
         final AtomicReference<Uuid> memberId = new AtomicReference<>();
         final AtomicBoolean memberLeft = shareGroupHeartbeatGenerator(client, coordinator, memberId, ti1p0);
 
+        // [A] A SHARE_FETCH in a new share session, fetching from topic topicId1, with no acknowledgements included.
+        // The response includes 2 records which are acquired.
         client.prepareResponseFrom(body -> {
             ShareFetchRequest request = (ShareFetchRequest) body;
             return request.data().groupId().equals(groupId) &&
@@ -166,6 +158,7 @@ public class KafkaShareConsumerTest {
                 request.data().topics().get(0).partitions().get(0).acknowledgementBatches().isEmpty();
         }, shareFetchResponse(ti1p0, 2), node);
 
+        // [B] A SHARE_ACKNOWLEDGE for the two records acquired in [A].
         client.prepareResponseFrom(body -> {
             ShareAcknowledgeRequest request = (ShareAcknowledgeRequest) body;
             return request.data().groupId().equals(groupId) &&
@@ -176,6 +169,7 @@ public class KafkaShareConsumerTest {
                 request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).acknowledgeTypes().get(0) == (byte) 1;
         }, shareAcknowledgeResponse(ti1p0), node);
 
+        // [C] A SHARE_ACKNOWLEDGE which closes the share session.
         client.prepareResponseFrom(body -> {
             ShareAcknowledgeRequest request = (ShareAcknowledgeRequest) body;
             return request.data().groupId().equals(groupId) &&
@@ -191,15 +185,15 @@ public class KafkaShareConsumerTest {
             time.sleep(heartbeatIntervalMs);
             Thread.sleep(heartbeatIntervalMs);
 
-            // This will be a SHARE_GROUP_HEARTBEAT to establish the membership and then a SHARE_FETCH
+            // This will be a SHARE_GROUP_HEARTBEAT to establish the membership and then a SHARE_FETCH [A]
             consumer.poll(Duration.ofMillis(heartbeatIntervalMs));
 
             time.sleep(heartbeatIntervalMs);
 
-            // This will be a SHARE_ACKNOWLEDGE
+            // This will be a SHARE_ACKNOWLEDGE [B]
             consumer.commitSync();
 
-            // This will be a SHARE_ACKNOWLEDGE and a final SHARE_GROUP_HEARTBEAT to leave the group
+            // This will be a SHARE_ACKNOWLEDGE [C] and a final SHARE_GROUP_HEARTBEAT to leave the group
             consumer.close(Duration.ZERO);
 
             assertTrue(memberLeft.get());
@@ -255,6 +249,10 @@ public class KafkaShareConsumerTest {
         return new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
     }
 
+    // This method generates a sequence of prepared SHARE_GROUP_HEARTBEAT responses with increasing member epochs.
+    // Each time that a SHARE_GROUP_HEARTBEAT response matches the prepared response matcher, the next prepared
+    // response is added, until the matching requests member epoch is -1, indicating that the member is leaving
+    // the group.
     private AtomicBoolean shareGroupHeartbeatGenerator(MockClient client, Node coordinator, AtomicReference<Uuid> memberId, TopicIdPartition tip) {
         AtomicBoolean memberLeft = new AtomicBoolean();
         AtomicInteger heartbeatsReceived = new AtomicInteger();
@@ -269,13 +267,11 @@ public class KafkaShareConsumerTest {
                 memberId.set(Uuid.fromString(request.data().memberId()));
             }
             if (request.data().memberEpoch() == -1) {
-                System.out.println("MEMBER LEFT");
                 memberLeft.set(true);
             } else {
                 shareGroupHeartbeat(client, coordinator, memberId, memberEpoch + 1, tip, heartbeatsReceived, memberLeft);
             }
-            int heartbeatCount = heartbeatsReceived.addAndGet(1);
-            System.out.println("HEARTBEAT COUNT=" + heartbeatCount);
+            heartbeatsReceived.addAndGet(1);
             return true;
         }, shareGroupHeartbeatResponse(memberId.get(), memberEpoch, tip), coordinator);
     }
