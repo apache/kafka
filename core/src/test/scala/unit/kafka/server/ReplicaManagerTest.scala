@@ -29,6 +29,7 @@ import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.{DelayedShareFetch, SharePartition}
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.TestUtils
+import kafka.server.AbstractFetcherThread
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
@@ -37,7 +38,7 @@ import org.apache.kafka.common.errors.InvalidPidMappingException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.{DeleteRecordsResponseData, FetchResponseData, ShareFetchResponseData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.Monitorable
 import org.apache.kafka.common.metrics.PluginMetrics
@@ -109,7 +110,7 @@ class ReplicaManagerTest {
 
   private val topic = "test-topic"
   private val topicId = Uuid.fromString("YK2ed2GaTH2JpgzUaJ8tgg")
-  private val topicIds = scala.Predef.Map("test-topic" -> topicId)
+  private val topicIds = scala.Predef.Map(topic -> topicId)
   private val topicNames = topicIds.map(_.swap)
   private val transactionalId = "txn"
   private val time = new MockTime
@@ -123,13 +124,13 @@ class ReplicaManagerTest {
   private var mockRemoteLogManager: RemoteLogManager = _
   private var addPartitionsToTxnManager: AddPartitionsToTxnManager = _
   private var brokerTopicStats: BrokerTopicStats = _
+  private var image: MetadataImage = _
   private val metadataCache: KRaftMetadataCache = mock(classOf[KRaftMetadataCache])
   private val quotaExceededThrottleTime = 1000
   private val quotaAvailableThrottleTime = 0
 
   // Constants defined for readability
-  private val zkVersion = 0
-  private val correlationId = 0
+  private val brokerId = 0
   private val controllerEpoch = 0
   private val brokerEpoch = 0L
 
@@ -159,6 +160,14 @@ class ReplicaManagerTest {
     }
     // make sure metadataCache can map between topic name and id
     setupMetadataCacheWithTopicIds(topicIds, metadataCache)
+
+    val metadataDelta = new MetadataDelta.Builder().build()
+    metadataDelta.replay(new FeatureLevelRecord()
+      .setName(MetadataVersion.FEATURE_NAME)
+      .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()))
+    metadataDelta.replay(new TopicRecord().setName(topic).setTopicId(topicId))
+    image = metadataDelta.apply(new MetadataProvenance(100L, 10, 1000L, true))
+
   }
 
   private def setupMetadataCacheWithTopicIds(topicIds: Map[String, Uuid], metadataCache:MetadataCache): Unit = {
@@ -271,19 +280,20 @@ class ReplicaManagerTest {
     }
   }
 
-  private def mockGetAliveBrokerFunctions(cache: MetadataCache, aliveBrokers: Seq[Node]): Unit = {
+  private def mockGetAliveBrokerFunctions(cache: MetadataCache, aliveBrokers: util.List[Node]): Unit = {
     when(cache.hasAliveBroker(anyInt)).thenAnswer(new Answer[Boolean]() {
       override def answer(invocation: InvocationOnMock): Boolean = {
-        aliveBrokers.map(_.id()).contains(invocation.getArgument(0).asInstanceOf[Int])
+        aliveBrokers.asScala.map(_.id()).contains(invocation.getArgument(0).asInstanceOf[Int])
       }
     })
     when(cache.getAliveBrokerNode(anyInt, any[ListenerName])).
       thenAnswer(new Answer[Optional[Node]]() {
         override def answer(invocation: InvocationOnMock): Optional[Node] = {
-          Optional.of(aliveBrokers.find(node => node.id == invocation.getArgument(0).asInstanceOf[Integer]).get)
+          Optional.of(aliveBrokers.asScala.find(node => node.id == invocation.getArgument(0).asInstanceOf[Integer]).get)
         }
       })
-    when(cache.getAliveBrokerNodes(any[ListenerName])).thenReturn(aliveBrokers.asJava)
+    when(cache.getAliveBrokerEpoch(any)).thenReturn(Optional.of(brokerEpoch))
+    when(cache.getAliveBrokerNodes(any[ListenerName])).thenReturn(aliveBrokers)
   }
 
   @Test
@@ -294,7 +304,7 @@ class ReplicaManagerTest {
     props.put("log.dirs", dir1.getAbsolutePath + "," + dir2.getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val logManager = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)), new LogConfig(new Properties()))
-    mockGetAliveBrokerFunctions(metadataCache, Seq(new Node(0, "host0", 0)))
+    mockGetAliveBrokerFunctions(metadataCache, util.List.of(new Node(0, "host0", 0)))
     when(metadataCache.metadataVersion()).thenReturn(MetadataVersion.MINIMUM_VERSION)
     val rm = new ReplicaManager(
       metrics = metrics,
@@ -312,19 +322,17 @@ class ReplicaManagerTest {
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
 
-      rm.becomeLeaderOrFollower(0, new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(0)
-          .setIsr(Seq[Integer](0).asJava)
-          .setPartitionEpoch(0)
-          .setReplicas(Seq[Integer](0).asJava)
-          .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(0, "host1", 0)).asJava).build(), (_, _) => ())
+      val topicsDelta = new TopicsDelta(image.topics())
+      topicsDelta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(0)
+        .setLeaderEpoch(0)
+        .setIsr(Seq[Integer](0).asJava)
+        .setPartitionEpoch(0)
+        .setReplicas(Seq[Integer](0).asJava)
+      )
+      rm.applyDelta(topicsDelta, image)
       appendRecords(rm, new TopicPartition(topic, 0),
         MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("first message".getBytes()), new SimpleRecord("second message".getBytes())))
       logManager.maybeUpdatePreferredLogDir(new TopicPartition(topic, 0), dir2.getAbsolutePath)
@@ -355,8 +363,8 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val logManager = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)), new LogConfig(new Properties()))
     val spyLogManager = spy(logManager)
-    val metadataCache: MetadataCache = mock(classOf[MetadataCache])
-    mockGetAliveBrokerFunctions(metadataCache, Seq(new Node(0, "host0", 0)))
+    val metadataCache: MetadataCache = mock(classOf[KRaftMetadataCache])
+    mockGetAliveBrokerFunctions(metadataCache, util.List.of(new Node(0, "host0", 0)))
     when(metadataCache.metadataVersion()).thenReturn(MetadataVersion.MINIMUM_VERSION)
     val tp0 = new TopicPartition(topic, 0)
     val rm = new ReplicaManager(
@@ -375,23 +383,18 @@ class ReplicaManagerTest {
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), Option.apply(topicId))
 
-      val response = rm.becomeLeaderOrFollower(0, new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(0)
-          .setIsr(Seq[Integer](0).asJava)
-          .setPartitionEpoch(0)
-          .setReplicas(Seq[Integer](0).asJava)
-          .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(0, "host1", 0)).asJava).build(), (_, _) => ())
-      // expect the errorCounts only has 1 entry with Errors.NONE
-      val errorCounts = response.errorCounts()
-      assertEquals(1, response.errorCounts().size())
-      assertNotNull(errorCounts.get(Errors.NONE))
+      val topicsDelta = new TopicsDelta(image.topics())
+      topicsDelta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(0)
+        .setLeaderEpoch(0)
+        .setIsr(Seq[Integer](0).asJava)
+        .setPartitionEpoch(0)
+        .setReplicas(Seq[Integer](0).asJava)
+      )
+      rm.applyDelta(topicsDelta, image)
+
       spyLogManager.maybeUpdatePreferredLogDir(tp0, dir2.getAbsolutePath)
 
       if (futureLogCreated) {
@@ -426,7 +429,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val logProps = new Properties()
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)), new LogConfig(logProps))
-    val aliveBrokers = Seq(new Node(0, "host0", 0), new Node(1, "host1", 1))
+    val aliveBrokers = util.List.of(new Node(0, "host0", 0), new Node(1, "host1", 1))
     mockGetAliveBrokerFunctions(metadataCache, aliveBrokers)
     when(metadataCache.metadataVersion()).thenReturn(MetadataVersion.MINIMUM_VERSION)
     val rm = new ReplicaManager(
@@ -442,26 +445,22 @@ class ReplicaManagerTest {
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
-      val topicIds = Collections.singletonMap(topic, topicId)
-
       val partition = rm.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
       // Make this replica the leader.
-      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(0)
-          .setIsr(brokerList)
-          .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(false)).asJava,
-        topicIds,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+      val topicsDelta1 = new TopicsDelta(image.topics())
+      topicsDelta1.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(0)
+        .setLeaderEpoch(0)
+        .setIsr(brokerList)
+        .setPartitionEpoch(0)
+        .setReplicas(brokerList)
+      )
+      rm.applyDelta(topicsDelta1, image)
+
       rm.getPartitionOrException(new TopicPartition(topic, 0))
         .localLogOrException
 
@@ -471,20 +470,17 @@ class ReplicaManagerTest {
       }
 
       // Make this replica the follower
-      val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(1)
-          .setLeaderEpoch(1)
-          .setIsr(brokerList)
-          .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(false)).asJava,
-        topicIds,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      rm.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
+      val topicsDelta2 = new TopicsDelta(image.topics())
+      topicsDelta2.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(1)
+        .setLeaderEpoch(1)
+        .setIsr(brokerList)
+        .setPartitionEpoch(0)
+        .setReplicas(brokerList)
+      )
+      rm.applyDelta(topicsDelta2, image)
 
       assertTrue(appendResult.hasFired)
     } finally {
@@ -546,21 +542,23 @@ class ReplicaManagerTest {
         .createLogIfNotExists(isNew = false, isFutureReplica = false,
           new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
-      def leaderAndIsrRequest(epoch: Int): LeaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
+      def topicsDelta(epoch: Int): TopicsDelta = {
+        val delta = new MetadataDelta.Builder().setImage(image).build()
+        delta.replay(new TopicRecord().setName(topic).setTopicId(topicId))
+        val metadataImage = delta.apply(new MetadataProvenance(100L, 10, 1000L, true))
+        val topicsDelta = new TopicsDelta(metadataImage.topics())
+        topicsDelta.replay(new PartitionRecord()
+          .setTopicId(topicId)
+          .setPartitionId(0)
           .setLeader(0)
           .setLeaderEpoch(epoch)
           .setIsr(brokerList)
           .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(true)).asJava,
-        topicIds.asJava,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+          .setReplicas(brokerList))
+        topicsDelta
+      }
 
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0), (_, _) => ())
+      replicaManager.applyDelta(topicsDelta(0), image)
       val partition = replicaManager.getPartitionOrException(new TopicPartition(topic, 0))
       assertEquals(1, replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).size)
 
@@ -572,7 +570,7 @@ class ReplicaManagerTest {
       // make sure the future log is created
       replicaManager.futureLocalLogOrException(topicPartition)
       assertEquals(1, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
-      (1 to loopEpochChange).foreach(epoch => replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(epoch), (_, _) => ()))
+      (1 to loopEpochChange).foreach(epoch => replicaManager.applyDelta(topicsDelta(epoch), image))
       // wait for the ReplicaAlterLogDirsThread to complete
       TestUtils.waitUntilTrue(() => {
         replicaManager.replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
@@ -607,21 +605,21 @@ class ReplicaManagerTest {
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
+      val delta = new MetadataDelta.Builder().setImage(image).build()
+      delta.replay(new TopicRecord().setName(topic).setTopicId(topicId))
+      val metadataImage = delta.apply(new MetadataProvenance(100L, 10, 1000L, true))
+      val topicsDelta = new TopicsDelta(metadataImage.topics())
       // Make this replica the leader.
-      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
+      topicsDelta.replay(new PartitionRecord()
+          .setTopicId(topicId)
+          .setPartitionId(0)
           .setLeader(0)
           .setLeaderEpoch(0)
           .setIsr(brokerList)
           .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(true)).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+          .setReplicas(brokerList))
+      System.err.println("RRRR " + metadataImage)
+      replicaManager.applyDelta(topicsDelta, metadataImage)
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0))
         .localLogOrException
 
@@ -672,23 +670,23 @@ class ReplicaManagerTest {
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
       // Make this replica the leader for the partitions.
+      val delta = new MetadataDelta.Builder().setImage(image).build()
+      delta.replay(new TopicRecord().setName(topic).setTopicId(topicId))
+      val metadataImage = delta.apply(new MetadataProvenance(100L, 10, 1000L, true))
+      val topicsDelta = new TopicsDelta(metadataImage.topics())
+
       Seq(0, 1).foreach { partition =>
-        val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-          Seq(new LeaderAndIsrRequest.PartitionState()
-            .setTopicName(topic)
-            .setPartitionIndex(partition)
-            .setControllerEpoch(0)
+        topicsDelta.replay(
+          new PartitionRecord()
+            .setTopicId(topicId)
+            .setPartitionId(partition)
             .setLeader(0)
             .setLeaderEpoch(0)
             .setIsr(brokerList)
             .setPartitionEpoch(0)
             .setReplicas(brokerList)
-            .setIsNew(true)).asJava,
-          Collections.singletonMap(topic, topicId),
-          Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava,
-          LeaderAndIsrRequest.Type.UNKNOWN
-        ).build()
-        replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
+        )
+        replicaManager.applyDelta(topicsDelta, metadataImage)
         replicaManager.getPartitionOrException(new TopicPartition(topic, partition))
           .localLogOrException
       }
@@ -753,26 +751,27 @@ class ReplicaManagerTest {
     try {
       assertLateTransactionCount(Some(0))
 
+      val delta = new MetadataDelta.Builder().setImage(image).build()
+      delta.replay(new TopicRecord().setName(topic).setTopicId(topicId))
+      val metadataImage = delta.apply(new MetadataProvenance(100L, 10, 1000L, true))
+      val topicsDelta = new TopicsDelta(metadataImage.topics())
+
       val partition = replicaManager.createPartition(topicPartition)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
       // Make this replica the leader.
       val brokerList = Seq[Integer](0, 1, 2).asJava
-      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
+      val partitionRecord = new PartitionRecord()
+          .setTopicId(topicId)
+          .setPartitionId(0)
           .setLeader(0)
           .setLeaderEpoch(0)
           .setIsr(brokerList)
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
-          .setIsNew(true)).asJava,
-        topicIds.asJava,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+      topicsDelta.replay(partitionRecord)
+      replicaManager.applyDelta(topicsDelta, metadataImage)
 
       // Start a transaction
       val producerId = 234L
@@ -819,21 +818,23 @@ class ReplicaManagerTest {
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
+      val delta = new MetadataDelta.Builder().setImage(image).build()
+      delta.replay(new TopicRecord().setName(topic).setTopicId(topicId))
+      delta.replay(new RegisterBrokerRecord().setBrokerId(config.brokerId).setFenced(false).setBrokerEpoch(brokerEpoch))
+      val metadataImage = delta.apply(new MetadataProvenance(100L, 10, 1000L, true))
+      val topicsDelta = new TopicsDelta(metadataImage.topics())
+
       // Make this replica the leader.
-      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
+      val partitionRecord = new PartitionRecord()
+          .setTopicId(topicId)
+          .setPartitionId(0)
           .setLeader(0)
           .setLeaderEpoch(0)
           .setIsr(brokerList)
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
-          .setIsNew(true)).asJava,
-        topicIds.asJava,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+      topicsDelta.replay(partitionRecord)
+      replicaManager.applyDelta(topicsDelta, metadataImage)
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0))
         .localLogOrException
 
@@ -941,21 +942,22 @@ class ReplicaManagerTest {
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
+      val delta = new MetadataDelta.Builder().setImage(image).build()
+      delta.replay(new TopicRecord().setName(topic).setTopicId(topicId))
+      val metadataImage = delta.apply(new MetadataProvenance(100L, 10, 1000L, true))
+      val topicsDelta = new TopicsDelta(metadataImage.topics())
       // Make this replica the leader.
-      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
+      val partitionRecord = new PartitionRecord()
+          .setTopicId(topicId)
+          .setPartitionId(0)
           .setLeader(0)
           .setLeaderEpoch(0)
           .setIsr(brokerList)
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
-          .setIsNew(true)).asJava,
-        topicIds.asJava,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+
+      topicsDelta.replay(partitionRecord)
+      replicaManager.applyDelta(topicsDelta, metadataImage)
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0))
         .localLogOrException
 
@@ -1027,22 +1029,17 @@ class ReplicaManagerTest {
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
 
       // Make this replica the leader.
-      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(0)
-          .setIsr(brokerList)
-          .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(false)).asJava,
-        topicIds.asJava,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1), new Node(2, "host2", 2)).asJava).build()
-      rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
-      rm.getPartitionOrException(new TopicPartition(topic, 0))
-        .localLogOrException
+      val topicsDelta = new TopicsDelta(image.topics())
+      topicsDelta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(0)
+        .setLeaderEpoch(0)
+        .setIsr(brokerList)
+        .setPartitionEpoch(0)
+        .setReplicas(brokerList)
+      )
+      rm.applyDelta(topicsDelta, image)
 
       // Append a couple of messages.
       for (i <- 1 to 2) {
@@ -1089,22 +1086,17 @@ class ReplicaManagerTest {
       val replicas = aliveBrokersIds.toList.map(Int.box).asJava
 
       // Broker 0 becomes leader of the partition
-      val leaderAndIsrPartitionState = new LeaderAndIsrRequest.PartitionState()
-        .setTopicName(topic)
-        .setPartitionIndex(0)
-        .setControllerEpoch(0)
+      val topicsDelta = new TopicsDelta(image.topics())
+      topicsDelta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
         .setLeader(0)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(replicas)
         .setPartitionEpoch(0)
         .setReplicas(replicas)
-        .setIsNew(true)
-      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(leaderAndIsrPartitionState).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      val leaderAndIsrResponse = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
-      assertEquals(Errors.NONE, leaderAndIsrResponse.error)
+      )
+      replicaManager.applyDelta(topicsDelta, image)
 
       // Follower replica state is initialized, but initial state is not known
       assertTrue(replicaManager.onlinePartition(tp).isDefined)
@@ -1188,25 +1180,19 @@ class ReplicaManagerTest {
       val replicas = aliveBrokersIds.toList.map(Int.box).asJava
 
       // Broker 0 becomes leader of the partition
-      val leaderAndIsrPartitionState = new LeaderAndIsrRequest.PartitionState()
-        .setTopicName(topic)
-        .setPartitionIndex(0)
-        .setControllerEpoch(0)
+      val topicsDelta1 = new TopicsDelta(image.topics())
+      topicsDelta1.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
         .setLeader(0)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(replicas)
         .setPartitionEpoch(0)
         .setReplicas(replicas)
-        .setIsNew(true)
-      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(leaderAndIsrPartitionState).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      val leaderAndIsrResponse = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
-      assertEquals(Errors.NONE, leaderAndIsrResponse.error)
+      )
+      replicaManager.applyDelta(topicsDelta1, image)
 
       assertEquals(Some(topicId), replicaManager.getPartitionOrException(tp).topicId)
-
       // We receive one valid request from the follower and replica state is updated
       var successfulFetch: Seq[(TopicIdPartition, FetchPartitionData)] = Seq()
 
@@ -1245,28 +1231,28 @@ class ReplicaManagerTest {
       assertEquals(Errors.NONE, fetch2.get.error)
 
       // Next create a topic without a topic ID written in the log.
-      val tp2 = new TopicPartition("noIdTopic", 0)
-      val tidp2 = new TopicIdPartition(Uuid.randomUuid(), tp2)
+      val tpName2 = "noIdTopic"
+      val tp2 = new TopicPartition(tpName2, 0)
+      val tpId2 = Uuid.ZERO_UUID
+      val tidp2 = new TopicIdPartition(tpId2, tp2)
+
+      val metadataDelta = new MetadataDelta.Builder().setImage(image).build()
+      metadataDelta.replay(new TopicRecord().setName(tpName2).setTopicId(tpId2))
+      image = metadataDelta.apply(new MetadataProvenance(100L, 10, 1000L, true))
 
       // Broker 0 becomes leader of the partition
-      val leaderAndIsrPartitionState2 = new LeaderAndIsrRequest.PartitionState()
-        .setTopicName("noIdTopic")
-        .setPartitionIndex(0)
-        .setControllerEpoch(0)
+      val topicsDelta2 = new TopicsDelta(image.topics())
+      topicsDelta2.replay(new PartitionRecord()
+        .setTopicId(tpId2)
+        .setPartitionId(0)
         .setLeader(0)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(replicas)
         .setPartitionEpoch(0)
         .setReplicas(replicas)
-        .setIsNew(true)
-      val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(leaderAndIsrPartitionState2).asJava,
-        Collections.emptyMap(),
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      val leaderAndIsrResponse2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest2, (_, _) => ())
-      assertEquals(Errors.NONE, leaderAndIsrResponse2.error)
-
-      assertEquals(None, replicaManager.getPartitionOrException(tp2).topicId)
+      )
+      replicaManager.applyDelta(topicsDelta2, image)
+      assertEquals(Some(Uuid.ZERO_UUID), replicaManager.getPartitionOrException(tp2).topicId)
 
       // Fetch messages simulating the request containing a topic ID. We should not have an error.
       fetchPartitions(
@@ -1311,39 +1297,34 @@ class ReplicaManagerTest {
       val tidp0 = new TopicIdPartition(topicId, tp0)
       val tidp1 = new TopicIdPartition(topicId, tp1)
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-      replicaManager.createPartition(tp1).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, topicId = Option(topicId), None)
+      replicaManager.createPartition(tp1).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, topicId = Option(topicId), None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val partition1Replicas = Seq[Integer](0, 2).asJava
-      val topicIds = Map(tp0.topic -> topicId, tp1.topic -> topicId).asJava
       val leaderEpoch = 0
-      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(
-          new LeaderAndIsrRequest.PartitionState()
-            .setTopicName(tp0.topic)
-            .setPartitionIndex(tp0.partition)
-            .setControllerEpoch(0)
-            .setLeader(leaderEpoch)
-            .setLeaderEpoch(0)
-            .setIsr(partition0Replicas)
-            .setPartitionEpoch(0)
-            .setReplicas(partition0Replicas)
-            .setIsNew(true),
-          new LeaderAndIsrRequest.PartitionState()
-            .setTopicName(tp1.topic)
-            .setPartitionIndex(tp1.partition)
-            .setControllerEpoch(0)
-            .setLeader(0)
-            .setLeaderEpoch(leaderEpoch)
-            .setIsr(partition1Replicas)
-            .setPartitionEpoch(0)
-            .setReplicas(partition1Replicas)
-            .setIsNew(true)
-        ).asJava,
-        topicIds,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
+      val topicsDelta0 = new TopicsDelta(image.topics())
+      topicsDelta0.replay(new PartitionRecord()
+        .setTopicId(tidp0.topicId())
+        .setPartitionId(tidp0.partition())
+        .setLeader(leaderEpoch)
+        .setLeaderEpoch(0)
+        .setIsr(partition0Replicas)
+        .setPartitionEpoch(0)
+        .setReplicas(partition0Replicas)
+      )
+      replicaManager.applyDelta(topicsDelta0, image)
 
+      val topicsDelta1 = new TopicsDelta(image.topics())
+      topicsDelta0.replay(new PartitionRecord()
+        .setTopicId(tidp1.topicId())
+        .setPartitionId(tidp1.partition())
+        .setLeader(0)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(partition1Replicas)
+        .setPartitionEpoch(0)
+        .setReplicas(partition1Replicas)
+      )
+      replicaManager.applyDelta(topicsDelta1, image)
       // Append a couple of messages.
       for (i <- 1 to 2) {
         appendRecords(replicaManager, tp0, TestUtils.singletonRecords(s"message $i".getBytes)).onFire { response =>
@@ -1415,8 +1396,6 @@ class ReplicaManagerTest {
     val topicPartition = 0
     val followerBrokerId = 0
     val leaderBrokerId = 1
-    val controllerId = 0
-    val controllerEpoch = 0
     var leaderEpoch = 1
     val leaderEpochIncrement = 2
     val aliveBrokerIds = Seq[Integer](followerBrokerId, leaderBrokerId)
@@ -1433,7 +1412,7 @@ class ReplicaManagerTest {
       val tp = new TopicPartition(topic, topicPartition)
       val partition = replicaManager.createPartition(tp)
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, topicId = Option(topicId))
       partition.makeFollower(
         leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds),
         offsetCheckpoints,
@@ -1442,15 +1421,15 @@ class ReplicaManagerTest {
       // Make local partition a follower - because epoch increased by more than 1, truncation should
       // trigger even though leader does not change
       leaderEpoch += leaderEpochIncrement
-      val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(
-        controllerId, controllerEpoch, brokerEpoch,
-        Seq(leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds)).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(followerBrokerId, "host1", 0),
-          new Node(leaderBrokerId, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest0,
-        (_, followers) => assertEquals(followerBrokerId, followers.head.partitionId))
-      assertTrue(countDownLatch.await(1000L, TimeUnit.MILLISECONDS))
+      val topicsDelta0 = new TopicsDelta(image.topics())
+      topicsDelta0.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(partition.partitionId)
+        .setLeader(0)
+        .setLeaderEpoch(leaderEpoch)
+        .setPartitionEpoch(0)
+      )
+      replicaManager.applyDelta(topicsDelta0, image)
 
       // Truncation should have happened once
       if (expectTruncation) {
@@ -1522,20 +1501,17 @@ class ReplicaManagerTest {
       val tidp0 = new TopicIdPartition(topicId, tp0)
 
       // Make this replica the follower
-      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(1)
-          .setLeaderEpoch(1)
-          .setIsr(brokerList)
-          .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest, (_, _) => ())
+      val topicsDelta = new TopicsDelta(image.topics())
+      topicsDelta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(1)
+        .setLeaderEpoch(1)
+        .setIsr(brokerList)
+        .setPartitionEpoch(0)
+        .setReplicas(brokerList)
+      )
+      replicaManager.applyDelta(topicsDelta, image)
 
       val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
         InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
@@ -1575,20 +1551,17 @@ class ReplicaManagerTest {
       val tidp0 = new TopicIdPartition(topicId, tp0)
 
       // Make this replica the leader
-      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(1)
-          .setIsr(brokerList)
-          .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest, (_, _) => ())
+      val topicsDelta = new TopicsDelta(image.topics())
+      topicsDelta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(0)
+        .setLeaderEpoch(1)
+        .setIsr(brokerList)
+        .setPartitionEpoch(0)
+        .setReplicas(brokerList)
+      )
+      replicaManager.applyDelta(topicsDelta, image)
 
       val metadata = new DefaultClientMetadata("rack-a", "client-id",
         InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
@@ -1630,24 +1603,17 @@ class ReplicaManagerTest {
       ))
 
       // Make this replica the leader and remove follower from ISR.
-      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(
-        0,
-        0,
-        brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(leaderBrokerId)
-          .setLeaderEpoch(1)
-          .setIsr(Seq[Integer](leaderBrokerId).asJava)
-          .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(leaderNode, followerNode).asJava).build()
-
-      replicaManager.becomeLeaderOrFollower(2, leaderAndIsrRequest, (_, _) => ())
+      val topicsDelta = new TopicsDelta(image.topics())
+      topicsDelta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(leaderBrokerId)
+        .setLeaderEpoch(1)
+        .setIsr(Seq[Integer](leaderBrokerId).asJava)
+        .setPartitionEpoch(0)
+        .setReplicas(brokerList)
+      )
+      replicaManager.applyDelta(topicsDelta, image)
 
       appendRecords(replicaManager, tp0, TestUtils.singletonRecords(s"message".getBytes)).onFire { response =>
         assertEquals(Errors.NONE, response.error)
@@ -1697,20 +1663,16 @@ class ReplicaManagerTest {
       val tidp0 = new TopicIdPartition(topicId, tp0)
 
       // Make this replica the follower
-      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(1)
-          .setLeaderEpoch(1)
-          .setIsr(brokerList)
-          .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest, (_, _) => ())
+      val topicsDelta = new TopicsDelta(image.topics())
+      topicsDelta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(0)
+        .setLeaderEpoch(1)
+        .setIsr(brokerList)
+        .setPartitionEpoch(0)
+        .setReplicas(brokerList)
+      )
 
       val metadata = new DefaultClientMetadata("rack-a", "client-id",
         InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS, "default")
@@ -1755,20 +1717,17 @@ class ReplicaManagerTest {
 
       // Make this replica the leader
       val leaderEpoch = 1
-      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(leaderEpoch)
-          .setIsr(brokerList)
-          .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest, (_, _) => ())
+      val topicsDelta = new TopicsDelta(image.topics())
+      topicsDelta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(0)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(brokerList)
+        .setPartitionEpoch(0)
+        .setReplicas(brokerList)
+      )
+      replicaManager.applyDelta(topicsDelta, image)
 
       // The leader must record the follower's fetch offset to make it eligible for follower fetch selection
       val followerFetchData = new PartitionData(topicId, 0L, 0L, Int.MaxValue, Optional.of(Int.box(leaderEpoch)), Optional.empty[Integer])
@@ -1822,20 +1781,17 @@ class ReplicaManagerTest {
       val tidp0 = new TopicIdPartition(topicId, tp0)
 
       // Make this replica the follower
-      val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(1)
-          .setIsr(brokerList)
-          .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
+      val topicsDelta = new TopicsDelta(image.topics())
+      topicsDelta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(0)
+        .setLeaderEpoch(1)
+        .setIsr(brokerList)
+        .setPartitionEpoch(0)
+        .setReplicas(brokerList)
+      )
+      replicaManager.applyDelta(topicsDelta, image)
 
       val simpleRecords = Seq(new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes))
       val appendResult = appendRecords(replicaManager, tp0,
@@ -1920,22 +1876,19 @@ class ReplicaManagerTest {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Option(tidp0.topicId))
       val partition0Replicas = Seq[Integer](0, 1).asJava
-      val becomeFollowerRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(tp0.topic)
-          .setPartitionIndex(tp0.partition)
-          .setControllerEpoch(0)
-          .setLeader(1)
-          .setLeaderEpoch(0)
-          .setIsr(partition0Replicas)
-          .setPartitionEpoch(0)
-          .setReplicas(partition0Replicas)
-          .setIsNew(true)).asJava,
-        topicIds.asJava,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
+      val topicsDelta = new TopicsDelta(image.topics())
+      topicsDelta.replay(new PartitionRecord()
+        .setTopicId(tidp0.topicId)
+        .setPartitionId(tp0.partition)
+        .setLeader(1)
+        .setLeaderEpoch(0)
+        .setIsr(partition0Replicas)
+        .setPartitionEpoch(0)
+        .setReplicas(partition0Replicas)
+      )
+      replicaManager.applyDelta(topicsDelta, image)
 
       // Fetch from follower, with non-empty ClientMetadata (FetchRequest v11+)
       val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
@@ -2821,7 +2774,7 @@ class ReplicaManagerTest {
       30000,
       leaderEpochCache,
       producerStateManager,
-      Optional.empty,
+      topicId,
       false,
       LogOffsetsListener.NO_OP_OFFSETS_LISTENER) {
 
@@ -2845,7 +2798,11 @@ class ReplicaManagerTest {
     val topicPartitionObj = new TopicPartition(topic, topicPartition)
     val mockLogMgr: LogManager = mock(classOf[LogManager])
     when(mockLogMgr.liveLogDirs).thenReturn(config.logDirs.asScala.map(new File(_).getAbsoluteFile))
-    when(mockLogMgr.getOrCreateLog(ArgumentMatchers.eq(topicPartitionObj), ArgumentMatchers.eq(false), ArgumentMatchers.eq(false), any(), any())).thenReturn(mockLog)
+    when(mockLogMgr.getOrCreateLog(ArgumentMatchers.eq(topicPartitionObj), ArgumentMatchers.eq(false), ArgumentMatchers.eq(false), any(), any())).thenAnswer(invocation => {
+      val args = invocation.getArguments
+      println(s"[Mock] getOrCreateLog called with: ${args.mkString(", ")}")
+      mockLog
+    })
     when(mockLogMgr.getLog(topicPartitionObj, isFuture = false)).thenReturn(Some(mockLog))
     when(mockLogMgr.getLog(topicPartitionObj, isFuture = true)).thenReturn(None)
     val allLogs = new ConcurrentHashMap[TopicPartition, UnifiedLog]()
@@ -2856,13 +2813,14 @@ class ReplicaManagerTest {
     val aliveBrokerIds = Seq[Integer](followerBrokerId, leaderBrokerId)
     val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId))
 
-    mockGetAliveBrokerFunctions(metadataCache, aliveBrokers)
+    mockGetAliveBrokerFunctions(metadataCache, aliveBrokers.asJava)
     when(metadataCache.getPartitionReplicaEndpoints(
       any[TopicPartition], any[ListenerName])).
         thenReturn(util.Map.of(leaderBrokerId, new Node(leaderBrokerId, "host1", 9092, "rack-a"),
           followerBrokerId, new Node(followerBrokerId, "host2", 9092, "rack-b")))
     when(metadataCache.metadataVersion()).thenReturn(MetadataVersion.MINIMUM_VERSION)
     when(metadataCache.getAliveBrokerEpoch(leaderBrokerId)).thenReturn(util.Optional.of(brokerEpoch))
+    when(metadataCache.getImage()).thenReturn(image)
     val mockProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
       "Produce", timer, 0, false)
     val mockFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
@@ -2953,7 +2911,7 @@ class ReplicaManagerTest {
       .setLeader(leaderBrokerId)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(aliveBrokerIds.asJava)
-      .setPartitionEpoch(zkVersion)
+      .setPartitionEpoch(brokerId)
       .setReplicas(aliveBrokerIds.asJava)
       .setIsNew(isNew)
   }
@@ -2990,6 +2948,7 @@ class ReplicaManagerTest {
                             requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
     val topicIdPartition = new TopicIdPartition(topicId, partition)
+
     def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
       val response = responses.get(topicIdPartition)
       assertTrue(response.isDefined)
@@ -3284,7 +3243,7 @@ class ReplicaManagerTest {
     val logConfig = new LogConfig(logProps)
     when(mockLog.config).thenReturn(logConfig)
     when(mockLog.remoteLogEnabled()).thenReturn(enableRemoteStorage)
-    val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId))
+    val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId)).asJava
     brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.isRemoteStorageSystemEnabled)
 
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
@@ -3353,6 +3312,7 @@ class ReplicaManagerTest {
         threadNamePrefix: Option[String],
         quotaManager: ReplicationQuotaManager
       ): ReplicaFetcherManager = {
+
         mockReplicaFetcherManager.getOrElse {
           if (buildRemoteLogAuxState) {
             super.createReplicaFetcherManager(
@@ -3418,11 +3378,8 @@ class ReplicaManagerTest {
 
   @Test
   def testOldLeaderLosesMetricsWhenReassignPartitions(): Unit = {
-    val controllerEpoch = 0
     val leaderEpoch = 0
     val leaderEpochIncrement = 1
-    val correlationId = 0
-    val controllerId = 0
     val mockTopicStats1: BrokerTopicStats = mock(classOf[BrokerTopicStats])
     val (rm0, rm1) = prepareDifferentReplicaManagers(mock(classOf[BrokerTopicStats]), mockTopicStats1)
 
@@ -3434,65 +3391,58 @@ class ReplicaManagerTest {
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val partition1Replicas = Seq[Integer](1, 0).asJava
       val topicIds = Map(tp0.topic -> Uuid.randomUuid(), tp1.topic -> Uuid.randomUuid()).asJava
-
-      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(controllerId, 0, brokerEpoch,
-        Seq(
-          new LeaderAndIsrRequest.PartitionState()
-            .setTopicName(tp0.topic)
-            .setPartitionIndex(tp0.partition)
-            .setControllerEpoch(controllerEpoch)
-            .setLeader(0)
-            .setLeaderEpoch(leaderEpoch)
-            .setIsr(partition0Replicas)
-            .setPartitionEpoch(0)
-            .setReplicas(partition0Replicas)
-            .setIsNew(true),
-          new LeaderAndIsrRequest.PartitionState()
-            .setTopicName(tp1.topic)
-            .setPartitionIndex(tp1.partition)
-            .setControllerEpoch(controllerEpoch)
-            .setLeader(1)
-            .setLeaderEpoch(leaderEpoch)
-            .setIsr(partition1Replicas)
-            .setPartitionEpoch(0)
-            .setReplicas(partition1Replicas)
-            .setIsNew(true)
-        ).asJava,
-        topicIds,
-        Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
-
-      rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest1, (_, _) => ())
-      rm1.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest1, (_, _) => ())
+      val topicsDelta0 = new TopicsDelta(image.topics())
+      topicsDelta0.replay(new PartitionRecord()
+        .setTopicId(topicIds.get(tp0))
+        .setPartitionId(tp0.partition)
+        .setLeader(0)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(partition0Replicas)
+        .setPartitionEpoch(0)
+        .setReplicas(partition0Replicas)
+      )
 
       // make broker 0 the leader of partition 1 so broker 1 loses its leadership position
-      val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder( controllerId, controllerEpoch, brokerEpoch,
-        Seq(
-          new LeaderAndIsrRequest.PartitionState()
-            .setTopicName(tp0.topic)
-            .setPartitionIndex(tp0.partition)
-            .setControllerEpoch(controllerEpoch)
-            .setLeader(0)
-            .setLeaderEpoch(leaderEpoch + leaderEpochIncrement)
-            .setIsr(partition0Replicas)
-            .setPartitionEpoch(0)
-            .setReplicas(partition0Replicas)
-            .setIsNew(true),
-          new LeaderAndIsrRequest.PartitionState()
-            .setTopicName(tp1.topic)
-            .setPartitionIndex(tp1.partition)
-            .setControllerEpoch(controllerEpoch)
-            .setLeader(0)
-            .setLeaderEpoch(leaderEpoch + leaderEpochIncrement)
-            .setIsr(partition1Replicas)
-            .setPartitionEpoch(0)
-            .setReplicas(partition1Replicas)
-            .setIsNew(true)
-        ).asJava,
-        topicIds,
-        Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
+      val topicsDelta1 = new TopicsDelta(image.topics())
+      topicsDelta1.replay(new PartitionRecord()
+        .setTopicId(topicIds.get(tp1))
+        .setPartitionId(tp1.partition)
+        .setLeader(1)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(partition1Replicas)
+        .setPartitionEpoch(0)
+        .setReplicas(partition1Replicas)
+      )
 
-      rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
-      rm1.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
+      rm0.applyDelta(topicsDelta0, image)
+      rm1.applyDelta(topicsDelta1, image)
+
+      // make broker 0 the leader of partition 1 so broker 1 loses its leadership position
+      val topicsDelta2 = new TopicsDelta(image.topics())
+      topicsDelta0.replay(new PartitionRecord()
+        .setTopicId(topicIds.get(tp0))
+        .setPartitionId(tp0.partition)
+        .setLeader(0)
+        .setLeaderEpoch(leaderEpoch + leaderEpochIncrement)
+        .setIsr(partition0Replicas)
+        .setPartitionEpoch(0)
+        .setReplicas(partition0Replicas)
+      )
+
+      // make broker 0 the leader of partition 1 so broker 1 loses its leadership position
+      val topicsDelta3 = new TopicsDelta(image.topics())
+      topicsDelta1.replay(new PartitionRecord()
+        .setTopicId(topicIds.get(tp1))
+        .setPartitionId(tp1.partition)
+        .setLeader(0)
+        .setLeaderEpoch(leaderEpoch + leaderEpochIncrement)
+        .setIsr(partition1Replicas)
+        .setPartitionEpoch(0)
+        .setReplicas(partition1Replicas)
+      )
+
+      rm0.applyDelta(topicsDelta2, image)
+      rm1.applyDelta(topicsDelta3, image)
     } finally {
       Utils.tryAll(util.Arrays.asList[Callable[Void]](
         () => {
@@ -3620,11 +3570,12 @@ class ReplicaManagerTest {
     val mockLogMgr0 = TestUtils.createLogManager(config0.logDirs.asScala.map(new File(_)))
     val mockLogMgr1 = TestUtils.createLogManager(config1.logDirs.asScala.map(new File(_)))
 
-    val metadataCache0: MetadataCache = mock(classOf[MetadataCache])
-    val metadataCache1: MetadataCache = mock(classOf[MetadataCache])
-    val aliveBrokers = Seq(new Node(0, "host0", 0), new Node(1, "host1", 1))
+    val metadataCache0: KRaftMetadataCache = mock(classOf[KRaftMetadataCache])
+    val metadataCache1: KRaftMetadataCache = mock(classOf[KRaftMetadataCache])
+    val aliveBrokers = util.List.of(new Node(0, "host0", 0), new Node(1, "host1", 1))
     mockGetAliveBrokerFunctions(metadataCache0, aliveBrokers)
     mockGetAliveBrokerFunctions(metadataCache1, aliveBrokers)
+    when(metadataCache.getImage()).thenReturn(image)
     when(metadataCache0.metadataVersion()).thenReturn(MetadataVersion.MINIMUM_VERSION)
     when(metadataCache1.metadataVersion()).thenReturn(MetadataVersion.MINIMUM_VERSION)
 
