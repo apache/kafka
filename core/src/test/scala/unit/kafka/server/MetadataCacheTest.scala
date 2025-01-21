@@ -41,6 +41,7 @@ import org.junit.jupiter.params.provider.MethodSource
 import java.util
 import java.util.Arrays.asList
 import java.util.Collections
+import java.util.stream.Collectors
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -643,6 +644,114 @@ class MetadataCacheTest {
     assertEquals(Seq(expectedNode0, expectedNode1), partitionInfo.replicas.toSeq)
     assertEquals(Seq(expectedNode0, expectedNode1), partitionInfo.inSyncReplicas.toSeq)
     assertEquals(Seq(expectedNode1), partitionInfo.offlineReplicas.toSeq)
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def testGetPartitionReplicaEndpoints(cache: MetadataCache): Unit = {
+    val securityProtocol = SecurityProtocol.PLAINTEXT
+    val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
+
+    // Set up broker data for the metadata cache
+    val numBrokers = 10
+    // Set only the last broker in the list to be offline in order to allow easy
+    // indexing of brokers in the brokerStates list - the index in the list will
+    // be the same as the brokerId of the broker at that position.
+    val offlineBrokerId = numBrokers - 1
+    val brokerStates = (0 until numBrokers - 1).map { brokerId =>
+      new UpdateMetadataBroker()
+        .setId(brokerId)
+        .setRack("rack" + (brokerId % 3))
+        .setEndpoints(
+          Seq(new UpdateMetadataEndpoint()
+            .setHost("foo" + brokerId)
+            .setPort(9092)
+            .setSecurityProtocol(securityProtocol.id)
+            .setListener(listenerName.value)
+          ).asJava)
+    }
+
+    val topic = "many-partitions-topic"
+    val topicId = Uuid.randomUuid()
+
+    // Set up a number of partitions such that each different combination of
+    // $replicationFactor brokers is made a replica set for exactly one partition
+    val replicationFactor = 3
+    val replicaSets = getAllReplicaSets(numBrokers, replicationFactor)
+    val numPartitions = replicaSets.length
+    val partitionStates = (0 until numPartitions).map { partitionId =>
+      val replicas = replicaSets(partitionId)
+      val onlineReplicas = replicas.stream().filter(id => id != offlineBrokerId).collect(Collectors.toList())
+      new UpdateMetadataPartitionState()
+        .setTopicName(topic)
+        .setPartitionIndex(partitionId)
+        .setReplicas(replicas)
+        .setLeader(onlineReplicas.get(0))
+        .setIsr(onlineReplicas)
+        .setOfflineReplicas(Collections.singletonList(offlineBrokerId))
+    }
+
+    // Load the prepared data in the metadata cache
+    val version = ApiKeys.UPDATE_METADATA.latestVersion
+    val controllerId = 0
+    val controllerEpoch = 123
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(
+      version,
+      controllerId,
+      controllerEpoch,
+      brokerEpoch,
+      partitionStates.asJava,
+      brokerStates.asJava,
+      Collections.singletonMap(topic, topicId)).build()
+    MetadataCacheTest.updateCache(cache, updateMetadataRequest)
+
+    (0 until numPartitions).foreach { partitionId =>
+      val tp = new TopicPartition(topic, partitionId)
+      val brokerIdToNodeMap = cache.getPartitionReplicaEndpoints(tp, listenerName)
+      val replicaSet = brokerIdToNodeMap.keySet
+      val expectedReplicaSet = partitionStates(partitionId).replicas().asScala.toSet
+      // Verify that we have endpoints for exactly the non-fenced brokers of the replica set
+      if (expectedReplicaSet.contains(offlineBrokerId)) {
+        assertEquals(expectedReplicaSet,
+                     replicaSet + offlineBrokerId,
+                     s"Unexpected partial replica set for partition $partitionId")
+      } else {
+        assertEquals(expectedReplicaSet,
+                     replicaSet,
+                     s"Unexpected replica set for partition $partitionId")
+      }
+      // Verify that the endpoint data for each non-fenced replica is as expected
+      replicaSet.foreach { brokerId =>
+        val brokerNode =
+          brokerIdToNodeMap.getOrElse(
+            brokerId, fail(s"No brokerNode for broker $brokerId and partition $partitionId"))
+        val expectedBroker = brokerStates(brokerId)
+        val expectedEndpoint = expectedBroker.endpoints().get(0)
+        assertEquals(securityProtocol.id, expectedEndpoint.securityProtocol())
+        assertEquals(listenerName.value(), expectedEndpoint.listener())
+        assertEquals(expectedEndpoint.host(),
+                     brokerNode.host(),
+                     s"Unexpected host for broker $brokerId and partition $partitionId")
+        assertEquals(expectedEndpoint.port(),
+                     brokerNode.port(),
+                     s"Unexpected port for broker $brokerId and partition $partitionId")
+        assertEquals(expectedBroker.rack(),
+                     brokerNode.rack(),
+                     s"Unexpected rack for broker $brokerId and partition $partitionId")
+      }
+    }
+
+    val tp = new TopicPartition(topic, numPartitions)
+    val brokerIdToNodeMap = cache.getPartitionReplicaEndpoints(tp, listenerName)
+    assertTrue(brokerIdToNodeMap.isEmpty)
+  }
+
+  private def getAllReplicaSets(numBrokers: Int,
+                                replicationFactor: Int): Array[util.List[Integer]] = {
+    (0 until numBrokers)
+      .combinations(replicationFactor)
+      .map(replicaSet => replicaSet.map(Integer.valueOf).toList.asJava)
+      .toArray
   }
 
   @Test
