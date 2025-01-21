@@ -164,5 +164,16 @@
                 In Kraft mode, Zookeeper is not used, so the metrics is removed.
             </p>
         </li>
+        <li>
+            <p>
+                Remove the controller metrics. In Kraft mode, there is no broker which is elected as controller to communicate with ZooKeeper.
+            </p>
+            <ul>
+                <li><code>kafka.controller:type=ControllerChannelManager</code></li>
+                <li><code>kafka.controller:type=ControllerEventManager</code></li>
+                <li><code>kafka.controller:type=KafkaController</code></li>
+                <li><code>kafka.controller:type=ControllerStats</code></li>
+            </ul>
+        </li>
     </ul>
 </div>
