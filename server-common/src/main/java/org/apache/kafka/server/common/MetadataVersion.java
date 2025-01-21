@@ -157,7 +157,7 @@ public enum MetadataVersion {
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
     /**
-     * An array containing all of the MetadataVersion entries.
+     * An array containing all the MetadataVersion entries.
      *
      * This is essentially a cached copy of MetadataVersion.values. Unlike that function, it doesn't
      * allocate a new array each time.
@@ -168,10 +168,6 @@ public enum MetadataVersion {
     private final String release;
     private final String ibpVersion;
     private final boolean didMetadataChange;
-
-    MetadataVersion(int featureLevel, String release, String subVersion) {
-        this(featureLevel, release, subVersion, true);
-    }
 
     MetadataVersion(int featureLevel, String release, String subVersion, boolean didMetadataChange) {
         this.featureLevel = (short) featureLevel;
@@ -198,10 +194,6 @@ public enum MetadataVersion {
 
     public boolean isNoOpRecordSupported() {
         return this.isAtLeast(IBP_3_3_IV1);
-    }
-
-    public boolean isApiForwardingEnabled() {
-        return this.isAtLeast(IBP_3_4_IV0);
     }
 
     public boolean isScramSupported() {

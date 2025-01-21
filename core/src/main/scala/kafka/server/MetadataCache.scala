@@ -19,25 +19,15 @@ package kafka.server
 
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import org.apache.kafka.admin.BrokerMetadata
-import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData, DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData, MetadataResponseData, UpdateMetadataRequestData}
+import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData, DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData, MetadataResponseData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
 import java.util.function.Supplier
 import scala.collection._
-
-/**
- * Used to represent the controller id cached in the metadata cache of the broker. This trait is
- * extended to represent if the controller is KRaft controller or Zk controller.
- */
-sealed trait CachedControllerId {
-  val id: Int
-}
-
-case class ZkCachedControllerId(id: Int) extends CachedControllerId
-case class KRaftCachedControllerId(id: Int) extends CachedControllerId
 
 trait MetadataCache extends ConfigRepository {
   /**
@@ -76,7 +66,7 @@ trait MetadataCache extends ConfigRepository {
 
   def getBrokerNodes(listenerName: ListenerName): Iterable[Node]
 
-  def getPartitionInfo(topic: String, partitionId: Int): Option[UpdateMetadataRequestData.UpdateMetadataPartitionState]
+  def getLeaderAndIsr(topic: String, partitionId: Int): Option[LeaderAndIsr]
 
   /**
    * Return the number of partitions in the given topic, or None if the given topic does not exist.
@@ -99,8 +89,6 @@ trait MetadataCache extends ConfigRepository {
   def getPartitionLeaderEndpoint(topic: String, partitionId: Int, listenerName: ListenerName): Option[Node]
 
   def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): Map[Int, Node]
-
-  def getControllerId: Option[CachedControllerId]
 
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster
 

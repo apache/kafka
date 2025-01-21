@@ -46,9 +46,7 @@ public class ServerConfigs {
 
     public static final String BROKER_ID_CONFIG = "broker.id";
     public static final int BROKER_ID_DEFAULT = -1;
-    public static final String BROKER_ID_DOC = "The broker id for this server. If unset, a unique broker id will be generated." +
-            "To avoid conflicts between ZooKeeper generated broker id's and user configured broker id's, generated broker ids " +
-            "start from " + RESERVED_BROKER_MAX_ID_CONFIG + " + 1.";
+    public static final String BROKER_ID_DOC = "The broker id for this server.";
 
     public static final String MESSAGE_MAX_BYTES_CONFIG = "message.max.bytes";
     public static final String MESSAGE_MAX_BYTES_DOC = TopicConfig.MAX_MESSAGE_BYTES_DOC +
