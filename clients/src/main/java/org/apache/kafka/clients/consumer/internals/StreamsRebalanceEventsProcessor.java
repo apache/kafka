@@ -156,38 +156,38 @@ public class StreamsRebalanceEventsProcessor {
 
     private StreamsOnTasksRevokedCallbackCompletedEvent invokeOnTasksRevokedCallback(final Set<StreamsRebalanceData.TaskId> activeTasksToRevoke,
                                                                                      final CompletableFuture<Void> future) {
+        final Optional<KafkaException> error;
         final Optional<Exception> exceptionFromCallback = rebalanceCallbacks.onTasksRevoked(activeTasksToRevoke);
-        return exceptionFromCallback
-            .map(exception ->
-                new StreamsOnTasksRevokedCallbackCompletedEvent(
-                    future,
-                    Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exception, "Task revocation callback throws an error"))
-                ))
-            .orElseGet(() -> new StreamsOnTasksRevokedCallbackCompletedEvent(future, Optional.empty()));
+        if (exceptionFromCallback.isPresent()) {
+            error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exceptionFromCallback.get(), "Task revocation callback throws an error"));
+        } else {
+            error = Optional.empty();
+        }
+        return new StreamsOnTasksRevokedCallbackCompletedEvent(future, error);
     }
 
     private StreamsOnTasksAssignedCallbackCompletedEvent invokeOnTasksAssignedCallback(final StreamsRebalanceData.Assignment assignment,
                                                                                        final CompletableFuture<Void> future) {
-        Optional<KafkaException> error = Optional.empty();
+        final Optional<KafkaException> error;
         final Optional<Exception> exceptionFromCallback = rebalanceCallbacks.onTasksAssigned(assignment);
         if (exceptionFromCallback.isPresent()) {
             error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exceptionFromCallback.get(), "Task assignment callback throws an error"));
         } else {
+            error = Optional.empty();
             streamsRebalanceData.setReconciledAssignment(assignment);
         }
         return new StreamsOnTasksAssignedCallbackCompletedEvent(future, error);
     }
 
     private StreamsOnAllTasksLostCallbackCompletedEvent invokeOnAllTasksLostCallback(final CompletableFuture<Void> future) {
-        final Optional<Exception> exceptionFromCallback = rebalanceCallbacks.onAllTasksLost();
         final Optional<KafkaException> error;
+        final Optional<Exception> exceptionFromCallback = rebalanceCallbacks.onAllTasksLost();
         if (exceptionFromCallback.isPresent()) {
             error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exceptionFromCallback.get(), "All tasks lost callback throws an error"));
         } else {
             error = Optional.empty();
             streamsRebalanceData.setReconciledAssignment(StreamsRebalanceData.Assignment.EMPTY);
         }
-
         return new StreamsOnAllTasksLostCallbackCompletedEvent(future, error);
     }
 
