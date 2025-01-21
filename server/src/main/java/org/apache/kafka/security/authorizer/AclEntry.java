@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.security.authorizer;
 
-import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclOperation;
-import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -43,7 +41,7 @@ import static org.apache.kafka.common.acl.AclOperation.IDEMPOTENT_WRITE;
 import static org.apache.kafka.common.acl.AclOperation.READ;
 import static org.apache.kafka.common.acl.AclOperation.WRITE;
 
-public class AclEntry extends AccessControlEntry {
+public class AclEntry {
 
     public static final KafkaPrincipal WILDCARD_PRINCIPAL = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "*");
     public static final String WILDCARD_PRINCIPAL_STRING = WILDCARD_PRINCIPAL.toString();
@@ -52,10 +50,6 @@ public class AclEntry extends AccessControlEntry {
     public static final Set<AclOperation> ACL_OPERATIONS = Arrays.stream(AclOperation.values())
         .filter(t -> !(t == AclOperation.UNKNOWN || t == AclOperation.ANY))
         .collect(Collectors.toSet());
-    
-    public AclEntry(String principal, String host, AclOperation operation, AclPermissionType permissionType) {
-        super(principal, host, operation, permissionType);
-    }
 
     public static Set<AclOperation> supportedOperations(ResourceType resourceType) {
         switch (resourceType) {
@@ -91,20 +85,5 @@ public class AclEntry extends AccessControlEntry {
             default:
                 throw new IllegalArgumentException("Authorization error type not known");
         }
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o); // to keep spotbugs happy
-    }
-
-    @Override
-    public String toString() {
-        return String.format("%s has %s permission for operations: %s from hosts: %s", principal(), permissionType().name(), operation(), host());
     }
 }
