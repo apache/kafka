@@ -63,6 +63,7 @@ import java.util.Random;
  * Leader transitions to:
  *    Unattached:  After learning of a new election with a higher epoch
  *    Resigned:    When shutting down gracefully
+ *    Follower:    After discovering a leader with a larger epoch
  *
  * Follower transitions to:
  *    Unattached:  After learning of a new election with a higher epoch
