@@ -1925,7 +1925,7 @@ public class ShareConsumerTest {
     }
 
     private <K, V> Producer<K, V> createProducer() {
-        return cluster.producer();
+        return createProducer(Map.of());
     }
 
     private <K, V> Producer<K, V> createProducer(Map<String, Object> config) {
@@ -1933,7 +1933,7 @@ public class ShareConsumerTest {
     }
 
     private <K, V> Producer<K, V> createProducer(String transactionalId) {
-        return cluster.producer(
+        return createProducer(
             Map.of(
                 ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId
             )
@@ -1941,11 +1941,7 @@ public class ShareConsumerTest {
     }
 
     private <K, V> ShareConsumer<K, V> createShareConsumer(String groupId) {
-        return cluster.shareConsumer(
-            Map.of(
-                ConsumerConfig.GROUP_ID_CONFIG, groupId
-            )
-        );
+        return createShareConsumer(groupId, Map.of());
     }
 
     private <K, V> ShareConsumer<K, V> createShareConsumer(
