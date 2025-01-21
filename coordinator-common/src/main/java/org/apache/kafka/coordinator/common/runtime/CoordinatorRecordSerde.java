@@ -115,8 +115,8 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
      * Concrete child class must provide implementation which returns appropriate
      * type of {@link ApiMessage} objects representing the value.
      *
-     * @param recordVersion - short representing version
+     * @param recordType - short representing type
      * @return ApiMessage object
      */
-    protected abstract ApiMessage apiMessageValueFor(short recordVersion);
+    protected abstract ApiMessage apiMessageValueFor(short recordType);
 }

@@ -26,13 +26,12 @@ import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{Cursor, DescribeTopicPartitionsResponsePartition, DescribeTopicPartitionsResponseTopic}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.image.MetadataImage
-import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
+import org.apache.kafka.metadata.{BrokerRegistration, LeaderAndIsr, PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
@@ -383,19 +382,11 @@ class KRaftMetadataCache(
     _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).toScala).toSeq
   }
 
-  // Does NOT include offline replica metadata
-  override def getPartitionInfo(topicName: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
+  override def getLeaderAndIsr(topicName: String, partitionId: Int): Option[LeaderAndIsr] = {
     Option(_currentImage.topics().getTopic(topicName)).
       flatMap(topic => Option(topic.partitions().get(partitionId))).
-      flatMap(partition => Some(new UpdateMetadataPartitionState().
-        setTopicName(topicName).
-        setPartitionIndex(partitionId).
-        setControllerEpoch(-1). // Controller epoch is not stored in the cache.
-        setLeader(partition.leader).
-        setLeaderEpoch(partition.leaderEpoch).
-        setIsr(Replicas.toList(partition.isr)).
-        setZkVersion(partition.partitionEpoch).
-        setReplicas(Replicas.toList(partition.replicas))))
+      flatMap(partition => Some(new LeaderAndIsr(partition.leader, partition.leaderEpoch,
+        util.Arrays.asList(partition.isr.map(i => i: java.lang.Integer): _*), partition.leaderRecoveryState, partition.partitionEpoch)))
   }
 
   override def numPartitions(topicName: String): Option[Int] = {
