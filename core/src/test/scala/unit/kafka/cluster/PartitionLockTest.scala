@@ -334,6 +334,11 @@ class PartitionLockTest extends Logging {
       }
     }
 
+    val controllerEpoch = 0
+    val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
+    val isr = replicas
+    replicas.forEach(replicaId => when(metadataCache.getAliveBrokerEpoch(replicaId)).thenReturn(Some(1L)))
+
     val topicIdPartition = new TopicIdPartition(partition.topicId.getOrElse(Uuid.ZERO_UUID), topicPartition)
     when(offsetCheckpoints.fetch(
       ArgumentMatchers.anyString,
@@ -345,10 +350,6 @@ class PartitionLockTest extends Logging {
     )).thenReturn(new CompletableFuture[LeaderAndIsr]())
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-
-    val controllerEpoch = 0
-    val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
-    val isr = replicas
 
     assertTrue(partition.makeLeader(new LeaderAndIsrPartitionState()
       .setControllerEpoch(controllerEpoch)
