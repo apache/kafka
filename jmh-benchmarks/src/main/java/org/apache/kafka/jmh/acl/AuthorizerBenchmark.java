@@ -178,8 +178,8 @@ public class AuthorizerBenchmark {
         for (Map.Entry<ResourcePattern, Set<AccessControlEntry>> entryMap : aclEntries.entrySet()) {
             ResourcePattern resourcePattern = entryMap.getKey();
 
-            for (AccessControlEntry AccessControlEntry : entryMap.getValue()) {
-                StandardAcl standardAcl = StandardAcl.fromAclBinding(new AclBinding(resourcePattern, AccessControlEntry));
+            for (AccessControlEntry accessControlEntry : entryMap.getValue()) {
+                StandardAcl standardAcl = StandardAcl.fromAclBinding(new AclBinding(resourcePattern, accessControlEntry));
                 authorizer.addAcl(Uuid.randomUuid(), standardAcl);
             }
             authorizer.completeInitialLoad();
