@@ -140,7 +140,6 @@ public class Assertions {
         CoordinatorRecord actual
     ) {
         try {
-            assertEquals(expected.type(), actual.type());
             assertApiMessage(expected.key(), actual.key());
             assertApiMessageAndVersionEquals(expected.value(), actual.value());
         } catch (AssertionFailedError e) {

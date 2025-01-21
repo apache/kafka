@@ -211,7 +211,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         ApiMessageAndVersion value = record.value();
 
         try {
-            switch (CoordinatorRecordType.fromId(record.type())) {
+            switch (CoordinatorRecordType.fromId(key.apiKey())) {
                 case SHARE_SNAPSHOT:
                     handleShareSnapshot((ShareSnapshotKey) key, (ShareSnapshotValue) messageOrNull(value), offset);
                     break;

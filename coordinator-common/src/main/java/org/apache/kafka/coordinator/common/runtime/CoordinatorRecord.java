@@ -81,13 +81,6 @@ public class CoordinatorRecord {
     }
 
     /**
-     * @return The type.
-     */
-    public short type() {
-        return this.key.apiKey();
-    }
-
-    /**
      * @return The key.
      */
     public ApiMessage key() {

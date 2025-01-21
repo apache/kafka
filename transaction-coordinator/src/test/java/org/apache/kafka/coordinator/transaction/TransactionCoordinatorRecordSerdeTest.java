@@ -48,7 +48,7 @@ public class TransactionCoordinatorRecordSerdeTest {
         );
 
         assertArrayEquals(
-            MessageUtil.toVersionPrefixedBytes(record.type(), record.key()),
+            MessageUtil.toCoordinatorTypePrefixedBytes(record.key().apiKey(), record.key()),
             serializer.serializeKey(record)
         );
     }

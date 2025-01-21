@@ -51,7 +51,7 @@ public class ShareCoordinatorRecordSerdeTest {
         CoordinatorRecord record = getShareSnapshotRecord("groupId", Uuid.randomUuid(), 1);
 
         assertArrayEquals(
-            MessageUtil.toVersionPrefixedBytes(record.type(), record.key()),
+            MessageUtil.toVersionPrefixedBytes(record.key().apiKey(), record.key()),
             serde.serializeKey(record)
         );
     }
@@ -82,7 +82,7 @@ public class ShareCoordinatorRecordSerdeTest {
     public void testDeserialize() {
         CoordinatorRecord record = getShareSnapshotRecord("groupId", Uuid.randomUuid(), 1);
         ApiMessage key = record.key();
-        ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(record.type(), key);
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(record.key().apiKey(), key);
 
         ApiMessageAndVersion value = record.value();
         ByteBuffer valueBuffer = MessageUtil.toVersionPrefixedByteBuffer(value.version(), value.message());
@@ -101,7 +101,6 @@ public class ShareCoordinatorRecordSerdeTest {
         ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(CoordinatorRecordType.SHARE_SNAPSHOT.id(), key);
 
         CoordinatorRecord record = serde.deserialize(keyBuffer, null);
-        assertEquals(CoordinatorRecordType.SHARE_SNAPSHOT.id(), record.type());
         assertEquals(key, record.key());
         assertNull(record.value());
     }
@@ -140,7 +139,7 @@ public class ShareCoordinatorRecordSerdeTest {
                 .setPartition(1),
             CoordinatorRecordType.SHARE_SNAPSHOT.id()
         );
-        ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key.version(), key.message());
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(0);
 
@@ -206,7 +205,7 @@ public class ShareCoordinatorRecordSerdeTest {
             ApiMessageAndVersion valMessageAndVersion = new ApiMessageAndVersion(val, version);
 
             CoordinatorRecord record = serde.deserialize(
-                MessageUtil.toVersionPrefixedByteBuffer(recordType, key),
+                MessageUtil.toCoordinatorTypePrefixedByteBuffer(recordType, key),
                 MessageUtil.toVersionPrefixedByteBuffer(version, val)
             );
 

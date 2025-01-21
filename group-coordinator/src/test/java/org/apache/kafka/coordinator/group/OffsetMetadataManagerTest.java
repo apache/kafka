@@ -495,7 +495,7 @@ public class OffsetMetadataManagerTest {
                 throw new IllegalStateException("Received a null key in " + record);
             }
 
-            switch (CoordinatorRecordType.fromId(record.type())) {
+            switch (CoordinatorRecordType.fromId(record.key().apiKey())) {
                 case OFFSET_COMMIT:
                     offsetMetadataManager.replay(
                         lastWrittenOffset,
@@ -506,7 +506,7 @@ public class OffsetMetadataManagerTest {
                     break;
 
                 default:
-                    throw new IllegalStateException("Received an unknown record type " + record.type()
+                    throw new IllegalStateException("Received an unknown record type " + record.key().apiKey()
                         + " in " + record);
             }
 

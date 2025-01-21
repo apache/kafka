@@ -32,7 +32,6 @@ public class CoordinatorRecordTest {
         ApiMessage key = mock(ApiMessage.class);
         ApiMessageAndVersion value = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
         CoordinatorRecord record = CoordinatorRecord.record(key, value);
-        assertEquals((short) 0, record.type());
         assertEquals(key, record.key());
         assertEquals(value, record.value());
     }

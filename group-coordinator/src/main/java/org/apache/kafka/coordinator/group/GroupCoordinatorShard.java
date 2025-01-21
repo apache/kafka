@@ -795,15 +795,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         short producerEpoch,
         CoordinatorRecord record
     ) throws RuntimeException {
-        short type = record.type();
         ApiMessage key = record.key();
         ApiMessageAndVersion value = record.value();
 
         CoordinatorRecordType recordType;
         try {
-            recordType = CoordinatorRecordType.fromId(type);
+            recordType = CoordinatorRecordType.fromId(key.apiKey());
         } catch (UnsupportedVersionException ex) {
-            throw new IllegalStateException("Received an unknown record type " + type
+            throw new IllegalStateException("Received an unknown record type " + key.apiKey()
                 + " in " + record, ex);
         }
 

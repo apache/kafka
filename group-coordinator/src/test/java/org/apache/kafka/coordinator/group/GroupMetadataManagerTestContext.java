@@ -1515,7 +1515,7 @@ public class GroupMetadataManagerTestContext {
             throw new IllegalStateException("Received a null key in " + record);
         }
 
-        switch (CoordinatorRecordType.fromId(record.type())) {
+        switch (CoordinatorRecordType.fromId(record.key().apiKey())) {
             case GROUP_METADATA:
                 groupMetadataManager.replay(
                     (GroupMetadataKey) key,
@@ -1615,7 +1615,7 @@ public class GroupMetadataManagerTestContext {
                 break;
 
             default:
-                throw new IllegalStateException("Received an unknown record type " + record.type()
+                throw new IllegalStateException("Received an unknown record type " + record.key().apiKey()
                     + " in " + record);
         }
 

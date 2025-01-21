@@ -49,7 +49,7 @@ public class GroupCoordinatorRecordSerdeTest {
         );
 
         assertArrayEquals(
-            MessageUtil.toVersionPrefixedBytes(record.type(), record.key()),
+            MessageUtil.toVersionPrefixedBytes(record.key().apiKey(), record.key()),
             serializer.serializeKey(record)
         );
     }
@@ -95,7 +95,6 @@ public class GroupCoordinatorRecordSerdeTest {
         ByteBuffer valueBuffer = MessageUtil.toVersionPrefixedByteBuffer(value.version(), value.message());
 
         CoordinatorRecord record = serde.deserialize(keyBuffer, valueBuffer);
-        assertEquals((short) 3, record.type());
         assertEquals(key, record.key());
         assertEquals(value, record.value());
     }
@@ -108,7 +107,6 @@ public class GroupCoordinatorRecordSerdeTest {
         ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer((short) 3, key);
 
         CoordinatorRecord record = serde.deserialize(keyBuffer, null);
-        assertEquals((short) 3, record.type());
         assertEquals(key, record.key());
         assertNull(record.value());
     }
