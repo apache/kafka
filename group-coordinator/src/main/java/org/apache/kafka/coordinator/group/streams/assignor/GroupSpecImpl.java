@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -26,10 +27,12 @@ import java.util.Objects;
  * @param assignmentConfigs Any configurations passed to the assignor.
  */
 public record GroupSpecImpl(Map<String, AssignmentMemberSpec> members,
+                            List<String> subtopologies,
                             Map<String, String> assignmentConfigs) implements GroupSpec {
 
     public GroupSpecImpl {
         Objects.requireNonNull(members);
+        Objects.requireNonNull(subtopologies);
         Objects.requireNonNull(assignmentConfigs);
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -50,6 +51,7 @@ public class GroupSpecImplTest {
 
         groupSpec = new GroupSpecImpl(
             members,
+            new ArrayList<>(),
             new HashMap<>()
         );
     }
