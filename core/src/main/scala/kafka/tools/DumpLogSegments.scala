@@ -33,7 +33,7 @@ import org.apache.kafka.common.message.SnapshotFooterRecordJsonConverter
 import org.apache.kafka.common.message.SnapshotHeaderRecordJsonConverter
 import org.apache.kafka.common.message.VotersRecordJsonConverter
 import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordType}
-import org.apache.kafka.common.protocol.{ApiMessage, ByteBufferAccessor, Message}
+import org.apache.kafka.common.protocol.{ApiMessage, ByteBufferAccessor}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.generated.{CoordinatorRecordJsonConverters => GroupCoordinatorRecordJsonConverters, CoordinatorRecordType => GroupCoordinatorRecordType, GroupMetadataValue, GroupMetadataValueJsonConverter}
@@ -42,7 +42,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
 import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde
 import org.apache.kafka.coordinator.share.generated.{CoordinatorRecordJsonConverters => ShareCoordinatorRecordJsonConverters}
 import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde
-import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogKeyJsonConverter, TransactionLogValue, TransactionLogValueJsonConverter}
+import org.apache.kafka.coordinator.transaction.generated.{CoordinatorRecordJsonConverters => TransactionCoordinatorRecordJsonConverters}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
@@ -527,29 +527,17 @@ object DumpLogSegments {
   class TransactionLogMessageParser extends MessageParser[String, String] {
     private val serde = new TransactionCoordinatorRecordSerde()
 
-    private def prepareKey(message: Message, version: Short): String = {
-      val messageAsJson = message match {
-        case m: TransactionLogKey =>
-          TransactionLogKeyJsonConverter.write(m, version)
-        case _ => throw new UnknownRecordTypeException(version)
-      }
-
+    private def prepareKey(message: ApiMessage): String = {
       val json = new ObjectNode(JsonNodeFactory.instance)
-      json.set("type", new TextNode(version.toString))
-      json.set("data", messageAsJson)
+      json.set("type", new TextNode(message.apiKey.toString))
+      json.set("data", TransactionCoordinatorRecordJsonConverters.writeRecordKeyAsJson(message))
       json.toString
     }
 
-    private def prepareValue(message: Message, version: Short): String = {
-      val messageAsJson = message match {
-        case m: TransactionLogValue =>
-          TransactionLogValueJsonConverter.write(m, version)
-        case _ => throw new UnknownRecordTypeException(version)
-      }
-
+    private def prepareValue(message: ApiMessage, version: Short): String = {
       val json = new ObjectNode(JsonNodeFactory.instance)
       json.set("version", new TextNode(version.toString))
-      json.set("data", messageAsJson)
+      json.set("data", TransactionCoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version))
       json.toString
     }
 
@@ -561,7 +549,7 @@ object DumpLogSegments {
       try {
         val r = serde.deserialize(record.key, record.value)
         (
-          Some(prepareKey(r.key.message, r.key.version)),
+          Some(prepareKey(r.key.message)),
           Option(r.value).map(v => prepareValue(v.message, v.version)).orElse(Some("<DELETE>"))
         )
       } catch {

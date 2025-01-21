@@ -27,12 +27,10 @@ import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.DelayedShareFetch
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
 import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -328,7 +326,7 @@ class Partition(val topicPartition: TopicPartition,
 
   // lock to prevent the follower replica log update while checking if the log dir could be replaced with future log.
   private val futureLogLock = new Object()
-  // The current epoch for the partition for KRaft controllers. The current ZK version for the legacy controllers.
+  // The current epoch for the partition for KRaft controllers.
   @volatile private var partitionEpoch: Int = LeaderAndIsr.INITIAL_PARTITION_EPOCH
   @volatile private var leaderEpoch: Int = LeaderAndIsr.INITIAL_LEADER_EPOCH - 1
   // start offset for 'leaderEpoch' above (leader epoch of the current leader for this partition),
@@ -727,7 +725,7 @@ class Partition(val topicPartition: TopicPartition,
    * from the time when this broker was the leader last time) and setting the new leader and ISR.
    * If the leader replica id does not change, return false to indicate the replica manager.
    */
-  def makeLeader(partitionState: LeaderAndIsrPartitionState,
+  def makeLeader(partitionState: LeaderAndIsrRequest.PartitionState,
                  highWatermarkCheckpoints: OffsetCheckpoints,
                  topicId: Option[Uuid],
                  targetDirectoryId: Option[Uuid] = None): Boolean = {
@@ -767,14 +765,7 @@ class Partition(val topicPartition: TopicPartition,
         LeaderRecoveryState.RECOVERED
       )
 
-      try {
-        createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetDirectoryId)
-      } catch {
-        case e: ZooKeeperClientException =>
-          stateChangeLogger.error(s"A ZooKeeper client exception has occurred and makeLeader will be skipping the " +
-            s"state change for the partition $topicPartition with leader epoch: $leaderEpoch.", e)
-          return false
-      }
+      createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetDirectoryId)
 
       val leaderLog = localLogOrException
 
@@ -840,7 +831,7 @@ class Partition(val topicPartition: TopicPartition,
    * replica manager that state is already correct and the become-follower steps can
    * be skipped.
    */
-  def makeFollower(partitionState: LeaderAndIsrPartitionState,
+  def makeFollower(partitionState: LeaderAndIsrRequest.PartitionState,
                    highWatermarkCheckpoints: OffsetCheckpoints,
                    topicId: Option[Uuid],
                    targetLogDirectoryId: Option[Uuid] = None): Boolean = {
@@ -868,14 +859,7 @@ class Partition(val topicPartition: TopicPartition,
         LeaderRecoveryState.of(partitionState.leaderRecoveryState)
       )
 
-      try {
-        createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
-      } catch {
-        case e: ZooKeeperClientException =>
-          stateChangeLogger.error(s"A ZooKeeper client exception has occurred. makeFollower will be skipping the " +
-            s"state change for the partition $topicPartition with leader epoch: $leaderEpoch.", e)
-          return false
-      }
+      createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
 
       val followerLog = localLogOrException
       if (isNewLeaderEpoch) {
@@ -895,7 +879,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def createLogInAssignedDirectoryId(partitionState: LeaderAndIsrPartitionState, highWatermarkCheckpoints: OffsetCheckpoints, topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): Unit = {
+  private def createLogInAssignedDirectoryId(partitionState: LeaderAndIsrRequest.PartitionState, highWatermarkCheckpoints: OffsetCheckpoints, topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): Unit = {
     targetLogDirectoryId match {
       case Some(directoryId) =>
         if (logManager.onlineLogDirId(directoryId) || !logManager.hasOfflineLogDirs() || directoryId == DirectoryId.UNASSIGNED) {

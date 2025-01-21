@@ -245,7 +245,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
-      brokers(0).metadataCache.getPartitionInfo(topic, partition).exists(_.leaderEpoch == epoch)
+      brokers(0).metadataCache.getLeaderAndIsr(topic, partition).exists(_.leaderEpoch == epoch)
     }, "Epoch didn't change")
   }
 
