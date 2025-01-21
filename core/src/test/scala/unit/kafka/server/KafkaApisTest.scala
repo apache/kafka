@@ -3594,7 +3594,7 @@ class KafkaApisTest extends Logging {
         .setIsInternal(false)
     ))
 
-    val response = sendMetadataRequestWithInconsistentListeners(new ListenerName("PALINTEXT"))
+    val response = sendMetadataRequestWithInconsistentListeners(new ListenerName("PLAINTEXT"))
     val responseTopics = response.topicMetadata().asScala.map { metadata => metadata.topic() }
 
     // verify we don't create topic when getAllTopicMetadata
