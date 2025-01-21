@@ -858,7 +858,8 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Gets or maybe creates a share group.
+     * The method should be called on the replay path.
+     * Gets or maybe creates a share group and updates the groups map if a new group is created.
      *
      * @param groupId           The group id.
      * @param createIfNotExists A boolean indicating whether the group should be
@@ -866,7 +867,8 @@ public class GroupMetadataManager {
      *
      * @return A ShareGroup.
      * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a consumer group.
+     *                                  if the group is not a share group.
+     * @throws IllegalStateException    if the group does not have the expected type.
      *
      * Package private for testing.
      */
