@@ -25,11 +25,11 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractResponse, AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, MetadataResponse}
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -41,6 +41,7 @@ import org.mockito.ArgumentMatchers.{any, anyLong, anyString}
 import org.mockito.MockedConstruction.Context
 import org.mockito.Mockito.{mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
 
+import java.util
 import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -218,7 +219,7 @@ class AddPartitionsToTxnManagerTest {
     }
 
     // The transaction state topic does not exist.
-    when(metadataCache.getPartitionInfo(Topic.TRANSACTION_STATE_TOPIC_NAME, 0))
+    when(metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, 0))
       .thenReturn(Option.empty)
     checkError()
 
@@ -403,12 +404,8 @@ class AddPartitionsToTxnManagerTest {
   }
 
   private def mockTransactionStateMetadata(partitionIndex: Int, leaderId: Int, leaderNode: Option[Node]): Unit = {
-    when(metadataCache.getPartitionInfo(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionIndex))
-      .thenReturn(Some(
-        new UpdateMetadataPartitionState()
-          .setTopicName(Topic.TRANSACTION_STATE_TOPIC_NAME)
-          .setPartitionIndex(partitionIndex)
-          .setLeader(leaderId)))
+    when(metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionIndex))
+      .thenReturn(Some(new LeaderAndIsr(leaderId, util.Arrays.asList(leaderId))))
     if (leaderId != MetadataResponse.NO_LEADER_ID) {
       when(metadataCache.getAliveBrokerNode(leaderId, config.interBrokerListenerName))
         .thenReturn(leaderNode)
