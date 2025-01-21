@@ -44,7 +44,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -888,7 +887,9 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertDateValues() {
-        java.util.Date current = new java.util.Date();
+        LocalDateTime localTime = LocalDateTime.now();
+        ZoneOffset zoneOffset = ZoneId.systemDefault().getRules().getOffset(localTime);
+        java.util.Date current = new java.util.Date(localTime.toEpochSecond(zoneOffset) * 1000);
         long currentMillis = current.getTime() % MILLIS_PER_DAY;
         long days = current.getTime() / MILLIS_PER_DAY;
 
@@ -902,12 +903,10 @@ public class ValuesTest {
         assertEquals(currentDate, d2);
 
         // ISO8601 strings - accept a string matching pattern "yyyy-MM-dd"
-        // Values.convertToDate convert the "yyyy-MM-dd" string will miss the time and timezone information, 
-        // so we need to adjust the date from the current timezone to UTC0
-        TimeZone tz = TimeZone.getDefault();
-        java.util.Date currentDate3 = new java.util.Date(current.getTime() - currentMillis - tz.getOffset(current.getTime()));
+        LocalDateTime localTimeTruncated = localTime.truncatedTo(ChronoUnit.DAYS);
         java.util.Date d3 = Values.convertToDate(Date.SCHEMA, LocalDate.ofEpochDay(days).format(DateTimeFormatter.ISO_LOCAL_DATE));
-        assertEquals(currentDate3, d3);
+        LocalDateTime date3 = LocalDateTime.ofInstant(Instant.ofEpochMilli(d3.getTime()), ZoneId.systemDefault());
+        assertEquals(localTimeTruncated, date3);
 
         // Days as string
         java.util.Date d4 = Values.convertToDate(Date.SCHEMA, Long.toString(days));
