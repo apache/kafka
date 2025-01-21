@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Map;
@@ -81,21 +82,36 @@ public class StreamsRebalanceData {
 
         public static final Assignment EMPTY = new Assignment();
 
-        private final Set<TaskId> activeTasks = new HashSet<>();
+        private final Set<TaskId> activeTasks;
 
-        private final Set<TaskId> standbyTasks = new HashSet<>();
+        private final Set<TaskId> standbyTasks;
 
-        private final Set<TaskId> warmupTasks = new HashSet<>();
+        private final Set<TaskId> warmupTasks;
 
         private Assignment() {
+            this.activeTasks = Set.of();
+            this.standbyTasks = Set.of();
+            this.warmupTasks = Set.of();
         }
 
         public Assignment(final Set<TaskId> activeTasks,
                           final Set<TaskId> standbyTasks,
                           final Set<TaskId> warmupTasks) {
-            this.activeTasks.addAll(activeTasks);
-            this.standbyTasks.addAll(standbyTasks);
-            this.warmupTasks.addAll(warmupTasks);
+            this.activeTasks = Collections.unmodifiableSet(Objects.requireNonNull(activeTasks, "Active tasks cannot be null"));
+            this.standbyTasks = Collections.unmodifiableSet(Objects.requireNonNull(standbyTasks, "Standby tasks cannot be null"));
+            this.warmupTasks = Collections.unmodifiableSet(Objects.requireNonNull(warmupTasks, "Warmup tasks cannot be null"));
+        }
+
+        public Set<TaskId> activeTasks() {
+            return activeTasks;
+        }
+
+        public Set<TaskId> standbyTasks() {
+            return standbyTasks;
+        }
+
+        public Set<TaskId> warmupTasks() {
+            return warmupTasks;
         }
 
         @Override
