@@ -298,7 +298,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getPartitionInfo(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -364,7 +364,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         (x.leaderReplicaIdOpt.getOrElse(-1), x.getLeaderEpoch)
       case Left(x) =>
         debug(s"Unable to retrieve local leaderId and Epoch with error $x, falling back to metadata cache")
-        metadataCache.getPartitionInfo(tp.topic, tp.partition) match {
+        metadataCache.getLeaderAndIsr(tp.topic, tp.partition) match {
           case Some(pinfo) => (pinfo.leader(), pinfo.leaderEpoch())
           case None => (-1, -1)
         }
@@ -2004,7 +2004,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getPartitionInfo(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -2325,7 +2325,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new OffsetDeleteRequestData.OffsetDeleteRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getPartitionInfo(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -3165,9 +3165,22 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): Unit = {
     val readShareGroupStateSummaryRequest = request.body[ReadShareGroupStateSummaryRequest]
-    // TODO: Implement the ReadShareGroupStateSummaryRequest handling
-    requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    shareCoordinator match {
+      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        readShareGroupStateSummaryRequest.getErrorResponse(requestThrottleMs,
+          new ApiException("Share coordinator is not enabled.")))
+        CompletableFuture.completedFuture[Unit](())
+      case Some(coordinator) => coordinator.readStateSummary(request.context, readShareGroupStateSummaryRequest.data)
+        .handle[Unit] { (response, exception) =>
+          if (exception != null) {
+            requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(exception))
+          } else {
+            requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateSummaryResponse(response))
+          }
+        }
+    }
   }
 
   def handleDescribeShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {

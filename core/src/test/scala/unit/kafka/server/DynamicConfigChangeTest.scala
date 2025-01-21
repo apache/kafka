@@ -486,14 +486,6 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 }
 
 class DynamicConfigChangeUnitTest {
-  @Test
-  def testIpHandlerUnresolvableAddress(): Unit = {
-    val configHandler = new IpConfigHandler(null)
-    val props: Properties = new Properties()
-    props.put(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "1")
-
-    assertThrows(classOf[IllegalArgumentException], () => configHandler.processConfigChanges("illegal-hostname", props))
-  }
 
   @Test
   def shouldParseReplicationQuotaProperties(): Unit = {

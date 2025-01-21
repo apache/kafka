@@ -14,21 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.config;
+package org.apache.kafka.common.protocol;
 
-import java.util.List;
+import org.junit.jupiter.api.Test;
 
-/**
- * Represents all the entities that can be configured.
- */
-public class ConfigType {
-    public static final String TOPIC = "topics";
-    public static final String CLIENT = "clients";
-    public static final String USER = "users";
-    public static final String BROKER = "brokers";
-    public static final String IP = "ips";
-    public static final String CLIENT_METRICS = "client-metrics";
-    public static final String GROUP = "groups";
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
-    public static final List<String> ALL = List.of(TOPIC, CLIENT, USER, BROKER, IP, CLIENT_METRICS, GROUP);
+public class ProtocolTest {
+
+    @Test
+    public void testToHtml() {
+        var html = Protocol.toHtml();
+        assertFalse(html.isBlank());
+        assertFalse(html.contains("LeaderAndIsr"), "Removed LeaderAndIsr should not show in HTML");
+    }
+
 }

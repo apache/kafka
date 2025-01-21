@@ -14,21 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.config;
 
-import java.util.List;
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Map;
 
 /**
- * Represents all the entities that can be configured.
+ * Options for {@link Admin#listShareGroupOffsets(Map, ListShareGroupOffsetsOptions)}.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
  */
-public class ConfigType {
-    public static final String TOPIC = "topics";
-    public static final String CLIENT = "clients";
-    public static final String USER = "users";
-    public static final String BROKER = "brokers";
-    public static final String IP = "ips";
-    public static final String CLIENT_METRICS = "client-metrics";
-    public static final String GROUP = "groups";
-
-    public static final List<String> ALL = List.of(TOPIC, CLIENT, USER, BROKER, IP, CLIENT_METRICS, GROUP);
+@InterfaceStability.Evolving
+public class ListShareGroupOffsetsOptions extends AbstractOptions<ListShareGroupOffsetsOptions> {
 }
