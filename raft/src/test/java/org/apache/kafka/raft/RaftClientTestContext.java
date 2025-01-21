@@ -65,6 +65,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.raft.utils.ApiMessageUtils;
 import org.apache.kafka.raft.utils.BeginQuorumEpochRpc;
 import org.apache.kafka.raft.utils.DescribeQuorumRpc;
 import org.apache.kafka.raft.utils.DynamicReconfigRpc;
@@ -622,7 +623,7 @@ public final class RaftClientTestContext {
                 deliverResponse(
                     request.correlationId(),
                     request.destination(),
-                    RaftUtil.errorResponse(ApiKeys.VOTE, Errors.UNSUPPORTED_VERSION)
+                    ApiMessageUtils.parseErrorResponse(ApiKeys.VOTE, Errors.UNSUPPORTED_VERSION)
                 );
             } else {
                 VoteResponseData voteResponse = voteResponse(true, OptionalInt.empty(), epoch);

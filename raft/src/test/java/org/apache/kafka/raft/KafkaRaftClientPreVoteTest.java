@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
+import org.apache.kafka.raft.utils.ApiMessageUtils;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -795,7 +796,7 @@ public class KafkaRaftClientPreVoteTest {
         context.deliverResponse(
             voteRequests.get(0).correlationId(),
             voteRequests.get(0).destination(),
-            RaftUtil.errorResponse(ApiKeys.VOTE, Errors.UNSUPPORTED_VERSION)
+            ApiMessageUtils.parseErrorResponse(ApiKeys.VOTE, Errors.UNSUPPORTED_VERSION)
         );
 
         // Local should transition to Candidate since it realizes remote node does not support PreVote.
@@ -837,7 +838,7 @@ public class KafkaRaftClientPreVoteTest {
         context.deliverResponse(
             voteRequests.get(1).correlationId(),
             voteRequests.get(1).destination(),
-            RaftUtil.errorResponse(ApiKeys.VOTE, Errors.UNSUPPORTED_VERSION)
+            ApiMessageUtils.parseErrorResponse(ApiKeys.VOTE, Errors.UNSUPPORTED_VERSION)
         );
         context.client.poll();
         assertEquals(epoch + 2, context.currentEpoch());
