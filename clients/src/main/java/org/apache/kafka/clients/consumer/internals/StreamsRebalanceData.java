@@ -37,7 +37,7 @@ public class StreamsRebalanceData {
         private final int partitionId;
 
         public TaskId(final String subtopologyId, final int partitionId) {
-            this.subtopologyId = subtopologyId;
+            this.subtopologyId = Objects.requireNonNull(subtopologyId, "Subtopology ID cannot be null");
             this.partitionId = partitionId;
         }
 

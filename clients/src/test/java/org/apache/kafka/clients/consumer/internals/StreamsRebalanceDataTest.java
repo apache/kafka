@@ -7,7 +7,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -28,6 +27,12 @@ public class StreamsRebalanceDataTest {
         assertNotEquals(task.hashCode(), taskUnequalSubtopology.hashCode());
         assertNotEquals(task, taskUnequalPartition);
         assertNotEquals(task.hashCode(), taskUnequalSubtopology.hashCode());
+    }
+
+    @Test
+    public void taskIdShouldNotAcceptNulls() {
+        final Exception exception = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.TaskId(null, 1));
+        assertEquals("Subtopology ID cannot be null", exception.getMessage());
     }
 
     @Test
