@@ -48,7 +48,7 @@ public class TransactionCoordinatorRecordSerdeTest {
         );
 
         assertArrayEquals(
-            MessageUtil.toCoordinatorTypePrefixedBytes(record.key().apiKey(), record.key()),
+            MessageUtil.toCoordinatorTypePrefixedBytes(record.key()),
             serializer.serializeKey(record)
         );
     }
@@ -85,7 +85,7 @@ public class TransactionCoordinatorRecordSerdeTest {
         TransactionCoordinatorRecordSerde serde = new TransactionCoordinatorRecordSerde();
 
         ApiMessage key = new TransactionLogKey().setTransactionalId("txnId");
-        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer((short) 0, key);
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         ApiMessageAndVersion value = new ApiMessageAndVersion(
             new TransactionLogValue(),
@@ -103,7 +103,7 @@ public class TransactionCoordinatorRecordSerdeTest {
         TransactionCoordinatorRecordSerde serde = new TransactionCoordinatorRecordSerde();
 
         ApiMessage key = new TransactionLogKey().setTransactionalId("txnId");
-        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer((short) 0, key);
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         CoordinatorRecord record = serde.deserialize(keyBuffer, null);
         assertEquals(key, record.key());
@@ -144,7 +144,7 @@ public class TransactionCoordinatorRecordSerdeTest {
         TransactionCoordinatorRecordSerde serde = new TransactionCoordinatorRecordSerde();
 
         ApiMessage key = new TransactionLogKey().setTransactionalId("txnId");
-        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer((short) 0, key);
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(0);
 
@@ -178,7 +178,7 @@ public class TransactionCoordinatorRecordSerdeTest {
         TransactionCoordinatorRecordSerde serde = new TransactionCoordinatorRecordSerde();
 
         ApiMessage key = new TransactionLogKey().setTransactionalId("txnId");
-        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer((short) 0, key);
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(2);
         valueBuffer.putShort((short) 0);
@@ -193,11 +193,10 @@ public class TransactionCoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserializeAllRecordTypes() {
-        roundTrip((short) 0, new TransactionLogKey().setTransactionalId("id"), new TransactionLogValue());
+        roundTrip(new TransactionLogKey().setTransactionalId("id"), new TransactionLogValue());
     }
 
     private void roundTrip(
-        short recordType,
         ApiMessage key,
         ApiMessage val
     ) {
@@ -207,7 +206,7 @@ public class TransactionCoordinatorRecordSerdeTest {
             ApiMessageAndVersion valMessageAndVersion = new ApiMessageAndVersion(val, version);
 
             CoordinatorRecord record = serde.deserialize(
-                MessageUtil.toCoordinatorTypePrefixedByteBuffer(recordType, key),
+                MessageUtil.toCoordinatorTypePrefixedByteBuffer(key),
                 MessageUtil.toVersionPrefixedByteBuffer(version, val)
             );
 

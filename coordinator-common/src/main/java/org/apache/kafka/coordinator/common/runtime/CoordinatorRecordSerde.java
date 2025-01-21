@@ -44,7 +44,6 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
     public byte[] serializeKey(CoordinatorRecord record) {
         // Record does not accept a null key.
         return MessageUtil.toCoordinatorTypePrefixedBytes(
-            record.key().apiKey(),
             record.key()
         );
     }

@@ -644,7 +644,7 @@ class DumpLogSegmentsTest {
 
   private def serializedRecord(key: ApiMessage, value: ApiMessageAndVersion): Record = {
     TestUtils.singletonRecords(
-      key = MessageUtil.toCoordinatorTypePrefixedBytes(key.apiKey, key),
+      key = MessageUtil.toCoordinatorTypePrefixedBytes(key),
       value = if (value == null) null else MessageUtil.toVersionPrefixedBytes(value.version, value.message)
     ).records.iterator.next
   }

@@ -86,7 +86,7 @@ public class GroupCoordinatorRecordSerdeTest {
         GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
         ApiMessage key = new ConsumerGroupMetadataKey().setGroupId("foo");
-        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer((short) 3, key);
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         ApiMessageAndVersion value = new ApiMessageAndVersion(
             new ConsumerGroupMetadataValue().setEpoch(10),
@@ -104,7 +104,7 @@ public class GroupCoordinatorRecordSerdeTest {
         GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
         ApiMessage key = new ConsumerGroupMetadataKey().setGroupId("foo");
-        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer((short) 3, key);
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         CoordinatorRecord record = serde.deserialize(keyBuffer, null);
         assertEquals(key, record.key());
@@ -201,12 +201,11 @@ public class GroupCoordinatorRecordSerdeTest {
     @Test
     public void testDeserializeAllRecordTypes() {
         for (CoordinatorRecordType record : CoordinatorRecordType.values()) {
-            roundTrip(record.id(), record.newRecordKey(), record.newRecordValue());
+            roundTrip(record.newRecordKey(), record.newRecordValue());
         }
     }
 
     private void roundTrip(
-        short recordType,
         ApiMessage key,
         ApiMessage val
     ) {
@@ -216,7 +215,7 @@ public class GroupCoordinatorRecordSerdeTest {
             ApiMessageAndVersion valMessageAndVersion = new ApiMessageAndVersion(val, version);
 
             CoordinatorRecord record = serde.deserialize(
-                MessageUtil.toCoordinatorTypePrefixedByteBuffer(recordType, key),
+                MessageUtil.toCoordinatorTypePrefixedByteBuffer(key),
                 MessageUtil.toVersionPrefixedByteBuffer(version, val)
             );
 
