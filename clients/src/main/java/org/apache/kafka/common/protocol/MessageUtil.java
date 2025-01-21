@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.protocol;
 
-import com.google.protobuf.Api;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.utils.Utils;
 
