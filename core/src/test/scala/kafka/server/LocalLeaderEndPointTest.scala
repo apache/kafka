@@ -21,11 +21,10 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -223,8 +222,8 @@ class LocalLeaderEndPointTest extends Logging {
   private def buildLeaderAndIsrRequest(leaderEpoch: Int): LeaderAndIsrRequest = {
     val brokerList = Seq[Integer](sourceBroker.id).asJava
     val topicIds = Collections.singletonMap(topic, topicId)
-    new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, 0,
-      Seq(new LeaderAndIsrPartitionState()
+    new LeaderAndIsrRequest.Builder(0, 0, 0,
+      Seq(new LeaderAndIsrRequest.PartitionState()
         .setTopicName(topic)
         .setPartitionIndex(topicPartition.partition())
         .setControllerEpoch(0)

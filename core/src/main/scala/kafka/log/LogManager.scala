@@ -35,7 +35,6 @@ import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
-import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrRequest}
 import org.apache.kafka.image.TopicsImage
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
 
@@ -1612,50 +1611,6 @@ object LogManager {
       case None =>
         info(s"Found stray log dir $log: the topicId $topicId does not exist in the metadata image")
         true
-    }
-  }
-
-  /**
-   * Find logs which should not be on the current broker, according to the full LeaderAndIsrRequest.
-   *
-   * @param brokerId        The ID of the current broker.
-   * @param request         The full LeaderAndIsrRequest, containing all partitions owned by the broker.
-   * @param logs            A collection of Log objects.
-   *
-   * @return                The topic partitions which are no longer needed on this broker.
-   */
-  def findStrayReplicas(
-    brokerId: Int,
-    request: LeaderAndIsrRequest,
-    logs: Iterable[UnifiedLog]
-  ): Iterable[TopicPartition] = {
-    if (request.requestType() != AbstractControlRequest.Type.FULL) {
-      throw new RuntimeException("Cannot use incremental LeaderAndIsrRequest to find strays.")
-    }
-    val partitions = new util.HashMap[TopicPartition, Uuid]()
-    request.data().topicStates().forEach(topicState => {
-      topicState.partitionStates().forEach(partition => {
-        partitions.put(new TopicPartition(topicState.topicName(), partition.partitionIndex()),
-          topicState.topicId())
-      })
-    })
-    logs.flatMap { log =>
-      val topicId = log.topicId.getOrElse {
-        throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
-          "which is not allowed when running in KRaft mode.")
-      }
-      Option(partitions.get(log.topicPartition)) match {
-        case Some(id) =>
-          if (id.equals(topicId)) {
-            None
-          } else {
-            info(s"Found stray log dir $log: this partition now exists with topic ID $id not $topicId.")
-            Some(log.topicPartition)
-          }
-        case None =>
-          info(s"Found stray log dir $log: this partition does not exist in the new full LeaderAndIsrRequest.")
-          Some(log.topicPartition)
-      }
     }
   }
 }

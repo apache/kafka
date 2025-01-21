@@ -35,20 +35,19 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 public class KRaftConfigs {
     /** KRaft mode configs */
     public static final String PROCESS_ROLES_CONFIG = "process.roles";
-    public static final String PROCESS_ROLES_DOC = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
-            "This configuration is only applicable for clusters in KRaft (Kafka Raft) mode (instead of ZooKeeper). Leave this config undefined or empty for ZooKeeper clusters.";
-
+    public static final String PROCESS_ROLES_DOC = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. ";
+    
     public static final String INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG = "initial.broker.registration.timeout.ms";
     public static final int INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_DEFAULT = 60000;
     public static final String INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_DOC = "When initially registering with the controller quorum, the number of milliseconds to wait before declaring failure and exiting the broker process.";
 
     public static final String BROKER_HEARTBEAT_INTERVAL_MS_CONFIG = "broker.heartbeat.interval.ms";
     public static final int BROKER_HEARTBEAT_INTERVAL_MS_DEFAULT = 2000;
-    public static final String BROKER_HEARTBEAT_INTERVAL_MS_DOC = "The length of time in milliseconds between broker heartbeats. Used when running in KRaft mode.";
+    public static final String BROKER_HEARTBEAT_INTERVAL_MS_DOC = "The length of time in milliseconds between broker heartbeats.";
 
     public static final String BROKER_SESSION_TIMEOUT_MS_CONFIG = "broker.session.timeout.ms";
     public static final int BROKER_SESSION_TIMEOUT_MS_DEFAULT = 9000;
-    public static final String BROKER_SESSION_TIMEOUT_MS_DOC = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in KRaft mode.";
+    public static final String BROKER_SESSION_TIMEOUT_MS_DOC = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made.";
 
 
     public static final String NODE_ID_CONFIG = "node.id";
@@ -57,7 +56,7 @@ public class KRaftConfigs {
             "This is required configuration when running in KRaft mode.";
 
     public static final String METADATA_LOG_DIR_CONFIG = "metadata.log.dir";
-    public static final String METADATA_LOG_DIR_DOC = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
+    public static final String METADATA_LOG_DIR_DOC = "This configuration determines where we put the metadata log. " +
             "If it is not set, the metadata log is placed in the first log directory from log.dirs.";
 
     public static final String METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG = "metadata.log.max.snapshot.interval.ms";
@@ -78,8 +77,7 @@ public class KRaftConfigs {
 
     public static final String CONTROLLER_LISTENER_NAMES_CONFIG = "controller.listener.names";
     public static final String CONTROLLER_LISTENER_NAMES_DOC = "A comma-separated list of the names of the listeners used by the controller. This is required " +
-            "if running in KRaft mode. When communicating with the controller quorum, the broker will always use the first listener in this list.\n " +
-            "Note: The ZooKeeper-based controller should not set this configuration.";
+            "when communicating with the controller quorum, the broker will always use the first listener in this list.";
 
     public static final String SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG = "sasl.mechanism.controller.protocol";
     public static final String SASL_MECHANISM_CONTROLLER_PROTOCOL_DOC = "SASL mechanism used for communication with controllers. Default is GSSAPI.";
