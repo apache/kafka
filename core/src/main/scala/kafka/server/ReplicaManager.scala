@@ -257,8 +257,6 @@ object ReplicaManager {
     timestamp < 0 &&
       (!timestampMinSupportedVersion.contains(timestamp) || version < timestampMinSupportedVersion(timestamp))
   }
-
-  case class StopReplicaPartitionState(leaderEpoch: Int, deletePartition: Boolean)
 }
 
 class ReplicaManager(val config: KafkaConfig,
