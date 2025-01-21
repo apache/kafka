@@ -244,9 +244,9 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
                                          final String functionName,
                                          final KeyValueStoreMaterializer<K, T> storeFactory) {
 
-        return aggregateBuilder.build(
+        return aggregateBuilder.buildNonWindowed(
             new NamedInternal(functionName),
-            storeFactory,
+            storeFactory.storeName(),
             aggregateSupplier,
             storeFactory.queryableStoreName(),
             storeFactory.keySerde(),

@@ -180,7 +180,7 @@ Deletion of requested consumer groups ('my-group', 'my-other-group') was success
   --reset-offsets also has the following scenarios to choose from (at least one scenario must be selected):
   <ul>
     <li>
-      --to-datetime &lt;String: datetime&gt; : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'
+      --to-datetime &lt;String: datetime&gt; : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'
     </li>
     <li>
       --to-earliest : Reset offsets to earliest offset.
@@ -2783,8 +2783,13 @@ All the following metrics have a recording level of <code>info</code>:
   </tr>
   <tr>
     <td>state</td>
-    <td>The state of the Kafka Streams client.</td>
+    <td>The state of the Kafka Streams client as a string.</td>
     <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+    <td>client-state</td>
+    <td>The state of the Kafka Streams client as a number (<code>ordinal()</code> of the corresponding enum).</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+),process-id=([-.\w]+)</td>
   </tr>
   <tr>
     <td>alive-stream-threads</td>
@@ -2795,6 +2800,11 @@ All the following metrics have a recording level of <code>info</code>:
       <td>failed-stream-threads</td>
       <td>The number of failed stream threads since the start of the Kafka Streams client.</td>
       <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+      <td>recording-level</td>
+      <td>The metric recording level as a number (0 = INFO, 1 = DEBUG, 2 = TRACE).</td>
+      <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+),process-id=([-.\w]+)</td>
   </tr>
   </tbody>
 </table>
@@ -2807,6 +2817,16 @@ All the following metrics have a recording level of <code>info</code>:
         <th>Metric/Attribute name</th>
         <th>Description</th>
         <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>state</td>
+        <td>The state of the thread as a string.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>thread-state</td>
+        <td>The state of the thread as a number (<code>ordinal()</code> of the corresponding enum).</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+),process-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>commit-latency-avg</td>
@@ -3455,7 +3475,7 @@ customized state stores; for built-in state stores, currently we have:
     </tr>
     <tr>
       <td>number-open-files</td>
-      <td>The number of current open files.</td>
+      <td>This metric will return constant -1 because the RocksDB's counter NO_FILE_CLOSES has been removed in RocksDB 9.7.3</td>
       <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
     </tr>
     <tr>
@@ -3753,7 +3773,7 @@ Feature: metadata.version       SupportedMinVersion: 3.0-IV1    SupportedMaxVers
   this flag when formatting brokers -- only when formatting controllers.)<p>
 
 <pre><code class="language-bash">
-  $ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller_static.properties
+  $ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller.properties
   Cannot set kraft.version to 1 unless KIP-853 configuration is present. Try removing the --feature flag for kraft.version.
 </code></pre><p>
 
@@ -3837,7 +3857,7 @@ foo
 
   <ul>
     <li>Kafka server's <code>process.role</code> should be set to either <code>broker</code> or <code>controller</code> but not both. Combined mode can be used in development environments, but it should be avoided in critical deployment environments.</li>
-    <li>For redundancy, a Kafka cluster should use 3 or 5 controllers, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. In the rare case of a partial network failure it is possible for the cluster metadata quorum to become unavailable. This limitation will be addressed in a future release of Kafka.</li>
+    <li>For redundancy, a Kafka cluster should use 3 or more controllers, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. For the KRaft controller cluster to withstand <code>N</code> concurrent failures the controller cluster must include <code>2N + 1</code> controllers.</li>
     <li>The Kafka controllers store all the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
   </ul>
 

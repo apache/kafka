@@ -190,8 +190,7 @@ public class TopicIds implements Set<Uuid> {
 
     @Override
     public boolean contains(Object o) {
-        if (o instanceof Uuid) {
-            Uuid topicId = (Uuid) o;
+        if (o instanceof Uuid topicId) {
             String topicName = resolver.name(topicId);
             if (topicName == null) return false;
             return topicNames.contains(topicName);

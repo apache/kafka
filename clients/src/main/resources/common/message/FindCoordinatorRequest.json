@@ -31,7 +31,6 @@
   // Version 6 adds support for share groups (KIP-932).
   // For key type SHARE (2), the coordinator key format is "groupId:topicId:partition".
   "validVersions": "0-6",
-  "deprecatedVersions": "0",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "Key", "type": "string", "versions": "0-3",

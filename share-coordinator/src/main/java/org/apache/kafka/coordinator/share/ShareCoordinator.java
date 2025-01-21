@@ -19,6 +19,8 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.requests.RequestContext;
@@ -32,11 +34,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.IntSupplier;
 
 public interface ShareCoordinator {
-    short SHARE_SNAPSHOT_RECORD_KEY_VERSION = 0;
-    short SHARE_SNAPSHOT_RECORD_VALUE_VERSION = 0;
-    short SHARE_UPDATE_RECORD_KEY_VERSION = 1;
-    short SHARE_UPDATE_RECORD_VALUE_VERSION = 1;
-
     /**
      * Return the partition index for the given key.
      *
@@ -80,6 +77,14 @@ public interface ShareCoordinator {
      * @return completable future comprising read RPC response data
      */
     CompletableFuture<ReadShareGroupStateResponseData> readState(RequestContext context, ReadShareGroupStateRequestData request);
+
+    /**
+     * Handle read share state summary call
+     * @param context - represents the incoming read summary request context
+     * @param request - actual RPC request object
+     * @return completable future comprising ReadShareGroupStateSummaryRequestData
+     */
+    CompletableFuture<ReadShareGroupStateSummaryResponseData> readStateSummary(RequestContext context, ReadShareGroupStateSummaryRequestData request);
 
     /**
      * Called when new coordinator is elected

@@ -19,7 +19,7 @@ package kafka.server
 
 import com.typesafe.scalalogging.Logger
 import kafka.utils.Logging
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
@@ -326,7 +326,7 @@ trait FetchContext extends Logging {
     * Updates the fetch context with new partition information.  Generates response data.
     * The response data may require subsequent down-conversion.
     */
-  def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse
+  def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP, nodeEndpoints: util.List[Node]): FetchResponse
 
   def partitionsToLogString(partitions: util.Collection[TopicIdPartition]): String =
     FetchSession.partitionsToLogString(partitions, isTraceEnabled)
@@ -334,8 +334,8 @@ trait FetchContext extends Logging {
   /**
     * Return an empty throttled response due to quota violation.
     */
-  def getThrottledResponse(throttleTimeMs: Int): FetchResponse =
-    FetchResponse.of(Errors.NONE, throttleTimeMs, INVALID_SESSION_ID, new FetchSession.RESP_MAP)
+  def getThrottledResponse(throttleTimeMs: Int, nodeEndpoints: util.List[Node]): FetchResponse =
+    FetchResponse.of(Errors.NONE, throttleTimeMs, INVALID_SESSION_ID, new FetchSession.RESP_MAP, nodeEndpoints)
 }
 
 /**
@@ -352,9 +352,9 @@ class SessionErrorContext(val error: Errors,
   }
 
   // Because of the fetch session error, we don't know what partitions were supposed to be in this request.
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP, nodeEndpoints: util.List[Node]): FetchResponse = {
     debug(s"Session error fetch context returning $error")
-    FetchResponse.of(error, 0, INVALID_SESSION_ID, new FetchSession.RESP_MAP)
+    FetchResponse.of(error, 0, INVALID_SESSION_ID, new FetchSession.RESP_MAP, nodeEndpoints)
   }
 }
 
@@ -382,9 +382,9 @@ class SessionlessFetchContext(val fetchData: util.Map[TopicIdPartition, FetchReq
     FetchResponse.sizeOf(versionId, updates.entrySet.iterator)
   }
 
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP, nodeEndpoints: util.List[Node]): FetchResponse = {
     debug(s"Sessionless fetch context returning ${partitionsToLogString(updates.keySet)}")
-    FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, updates)
+    FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, updates, nodeEndpoints)
   }
 }
 
@@ -430,7 +430,7 @@ class FullFetchContext(private val time: Time,
     FetchResponse.sizeOf(versionId, updates.entrySet.iterator)
   }
 
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP, nodeEndpoints: util.List[Node]): FetchResponse = {
     def createNewSession: FetchSession.CACHE_MAP = {
       val cachedPartitions = new FetchSession.CACHE_MAP(updates.size)
       updates.forEach { (part, respData) =>
@@ -444,7 +444,7 @@ class FullFetchContext(private val time: Time,
         updates.size, usesTopicIds, () => createNewSession)
     debug(s"Full fetch context with session id $responseSessionId returning " +
       s"${partitionsToLogString(updates.keySet)}")
-    FetchResponse.of(Errors.NONE, 0, responseSessionId, updates)
+    FetchResponse.of(Errors.NONE, 0, responseSessionId, updates, nodeEndpoints)
   }
 }
 
@@ -533,7 +533,7 @@ class IncrementalFetchContext(private val time: Time,
     }
   }
 
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP, nodeEndpoints: util.List[Node]): FetchResponse = {
     session.synchronized {
       // Check to make sure that the session epoch didn't change in between
       // creating this fetch context and generating this response.
@@ -541,7 +541,7 @@ class IncrementalFetchContext(private val time: Time,
       if (session.epoch != expectedEpoch) {
         info(s"Incremental fetch session ${session.id} expected epoch $expectedEpoch, but " +
           s"got ${session.epoch}.  Possible duplicate request.")
-        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, 0, session.id, new FetchSession.RESP_MAP)
+        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, 0, session.id, new FetchSession.RESP_MAP, nodeEndpoints)
       } else {
         // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
         val partitionIter = new PartitionIterator(updates.entrySet.iterator, true)
@@ -550,12 +550,12 @@ class IncrementalFetchContext(private val time: Time,
         }
         debug(s"Incremental fetch context with session id ${session.id} returning " +
           s"${partitionsToLogString(updates.keySet)}")
-        FetchResponse.of(Errors.NONE, 0, session.id, updates)
+        FetchResponse.of(Errors.NONE, 0, session.id, updates, nodeEndpoints)
       }
     }
   }
 
-  override def getThrottledResponse(throttleTimeMs: Int): FetchResponse = {
+  override def getThrottledResponse(throttleTimeMs: Int, nodeEndpoints: util.List[Node]): FetchResponse = {
     session.synchronized {
       // Check to make sure that the session epoch didn't change in between
       // creating this fetch context and generating this response.
@@ -563,9 +563,9 @@ class IncrementalFetchContext(private val time: Time,
       if (session.epoch != expectedEpoch) {
         info(s"Incremental fetch session ${session.id} expected epoch $expectedEpoch, but " +
           s"got ${session.epoch}.  Possible duplicate request.")
-        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, throttleTimeMs, session.id, new FetchSession.RESP_MAP)
+        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, throttleTimeMs, session.id, new FetchSession.RESP_MAP, nodeEndpoints)
       } else {
-        FetchResponse.of(Errors.NONE, throttleTimeMs, session.id, new FetchSession.RESP_MAP)
+        FetchResponse.of(Errors.NONE, throttleTimeMs, session.id, new FetchSession.RESP_MAP, nodeEndpoints)
       }
     }
   }

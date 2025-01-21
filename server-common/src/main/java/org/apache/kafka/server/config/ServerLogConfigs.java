@@ -19,7 +19,6 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.TopicConfig;
 
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
 import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFIX;
 
 /**
@@ -106,19 +105,6 @@ public class ServerLogConfigs {
     public static final String LOG_PRE_ALLOCATE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.PREALLOCATE_CONFIG);
     public static final String LOG_PRE_ALLOCATE_ENABLE_DOC = "Should pre allocate file when create new segment? If you are using Kafka on Windows, you probably need to set it to true.";
 
-    /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
-    /**
-     * @deprecated since "3.0"
-     */
-    @Deprecated
-    public static final String LOG_MESSAGE_FORMAT_VERSION_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG);
-    @Deprecated
-    public static final String LOG_MESSAGE_FORMAT_VERSION_DEFAULT = IBP_3_0_IV1.version();
-    public static final String LOG_MESSAGE_FORMAT_VERSION_DOC = "Specify the message format version the broker will use to append messages to the logs. The value should be a valid MetadataVersion. " +
-            "Some examples are: 0.8.2, 0.9.0.0, 0.10.0, check MetadataVersion for more details. By setting a particular message format version, the " +
-            "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting this value incorrectly " +
-            "will cause consumers with older versions to break as they will receive messages with a format that they don't understand.";
-
     public static final String LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG);
     public static final String LOG_MESSAGE_TIMESTAMP_TYPE_DEFAULT = "CreateTime";
     public static final String LOG_MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is message create time or log append time. The value should be either " +
@@ -132,7 +118,7 @@ public class ServerLogConfigs {
             "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
             "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime.";
     public static final String LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
-    public static final long LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT = Long.MAX_VALUE;
+    public static final long LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT = 3600000; // 1 hour
     public static final String LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC = "This configuration sets the allowable timestamp difference between the " +
             "message timestamp and the broker's timestamp. The message timestamp can be later than or equal to the broker's " +
             "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
@@ -140,7 +126,7 @@ public class ServerLogConfigs {
             "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime.";
 
     public static final String NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG = "num.recovery.threads.per.data.dir";
-    public static final int NUM_RECOVERY_THREADS_PER_DATA_DIR_DEFAULT = 1;
+    public static final int NUM_RECOVERY_THREADS_PER_DATA_DIR_DEFAULT = 2;
     public static final String NUM_RECOVERY_THREADS_PER_DATA_DIR_DOC = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown";
 
     public static final String AUTO_CREATE_TOPICS_ENABLE_CONFIG = "auto.create.topics.enable";
@@ -165,13 +151,6 @@ public class ServerLogConfigs {
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG = "alter.config.policy.class.name";
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_DOC = "The alter configs policy class that should be used for validation. The class should " +
             "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface.";
-    public static final String LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
-    public static final boolean LOG_MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT = true;
-    public static final String LOG_MESSAGE_DOWNCONVERSION_ENABLE_DOC = "This configuration controls whether " +
-            "down-conversion of message formats is enabled to satisfy consume requests. When set to <code>false</code>, " +
-            "broker will not perform down-conversion for consumers expecting an older message format. The broker responds " +
-            "with <code>UNSUPPORTED_VERSION</code> error for consume requests from such older clients. This configuration" +
-            "does not apply to any message format conversion that might be required for replication to followers.";
 
     public static final String LOG_INITIAL_TASK_DELAY_MS_CONFIG = LOG_PREFIX + "initial.task.delay.ms";
     public static final long LOG_INITIAL_TASK_DELAY_MS_DEFAULT = 30 * 1000L;

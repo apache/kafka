@@ -231,7 +231,7 @@ public class WorkerSourceTaskTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.noopOperator());
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.noneOperator());
     }
 
     private void createWorkerTaskWithErrorToleration() {
@@ -239,7 +239,7 @@ public class WorkerSourceTaskTest {
     }
 
     private void createWorkerTask(TargetState initialState) {
-        createWorkerTask(initialState, RetryWithToleranceOperatorTest.noopOperator());
+        createWorkerTask(initialState, RetryWithToleranceOperatorTest.noneOperator());
     }
 
     private void createWorkerTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator) {

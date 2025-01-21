@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -43,6 +44,7 @@ import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -70,8 +72,11 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.LegacyOffsetCommitKey;
+import org.apache.kafka.coordinator.group.generated.LegacyOffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
@@ -727,7 +732,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public void onLoaded(MetadataImage newImage) {
         MetadataDelta emptyDelta = new MetadataDelta(newImage);
         groupMetadataManager.onNewMetadataImage(newImage, emptyDelta);
-        offsetMetadataManager.onNewMetadataImage(newImage, emptyDelta);
         coordinatorMetrics.activateMetricsShard(metricsShard);
 
         groupMetadataManager.onLoaded();
@@ -752,7 +756,26 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     @Override
     public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
         groupMetadataManager.onNewMetadataImage(newImage, delta);
-        offsetMetadataManager.onNewMetadataImage(newImage, delta);
+    }
+
+    private static OffsetCommitKey convertLegacyOffsetCommitKey(
+        LegacyOffsetCommitKey key
+    ) {
+        return new OffsetCommitKey()
+            .setGroup(key.group())
+            .setTopic(key.topic())
+            .setPartition(key.partition());
+    }
+
+    private static OffsetCommitValue convertLegacyOffsetCommitValue(
+        LegacyOffsetCommitValue value
+    ) {
+        if (value == null) return null;
+
+        return new OffsetCommitValue()
+            .setOffset(value.offset())
+            .setCommitTimestamp(value.commitTimestamp())
+            .setMetadata(value.metadata());
     }
 
     /**
@@ -772,120 +795,136 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         short producerEpoch,
         CoordinatorRecord record
     ) throws RuntimeException {
-        ApiMessageAndVersion key = record.key();
+        ApiMessage key = record.key();
         ApiMessageAndVersion value = record.value();
 
-        switch (key.version()) {
-            case 0:
-            case 1:
+        CoordinatorRecordType recordType;
+        try {
+            recordType = CoordinatorRecordType.fromId(key.apiKey());
+        } catch (UnsupportedVersionException ex) {
+            throw new IllegalStateException("Received an unknown record type " + key.apiKey()
+                + " in " + record, ex);
+        }
+
+        switch (recordType) {
+            case LEGACY_OFFSET_COMMIT:
                 offsetMetadataManager.replay(
                     offset,
                     producerId,
-                    (OffsetCommitKey) key.message(),
+                    convertLegacyOffsetCommitKey((LegacyOffsetCommitKey) key),
+                    convertLegacyOffsetCommitValue((LegacyOffsetCommitValue) Utils.messageOrNull(value))
+                );
+                break;
+
+            case OFFSET_COMMIT:
+                offsetMetadataManager.replay(
+                    offset,
+                    producerId,
+                    (OffsetCommitKey) key,
                     (OffsetCommitValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 2:
+            case GROUP_METADATA:
                 groupMetadataManager.replay(
-                    (GroupMetadataKey) key.message(),
+                    (GroupMetadataKey) key,
                     (GroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 3:
+            case CONSUMER_GROUP_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupMetadataKey) key.message(),
+                    (ConsumerGroupMetadataKey) key,
                     (ConsumerGroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 4:
+            case CONSUMER_GROUP_PARTITION_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupPartitionMetadataKey) key.message(),
+                    (ConsumerGroupPartitionMetadataKey) key,
                     (ConsumerGroupPartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 5:
+            case CONSUMER_GROUP_MEMBER_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupMemberMetadataKey) key.message(),
+                    (ConsumerGroupMemberMetadataKey) key,
                     (ConsumerGroupMemberMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 6:
+            case CONSUMER_GROUP_TARGET_ASSIGNMENT_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupTargetAssignmentMetadataKey) key.message(),
+                    (ConsumerGroupTargetAssignmentMetadataKey) key,
                     (ConsumerGroupTargetAssignmentMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 7:
+            case CONSUMER_GROUP_TARGET_ASSIGNMENT_MEMBER:
                 groupMetadataManager.replay(
-                    (ConsumerGroupTargetAssignmentMemberKey) key.message(),
+                    (ConsumerGroupTargetAssignmentMemberKey) key,
                     (ConsumerGroupTargetAssignmentMemberValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 8:
+            case CONSUMER_GROUP_CURRENT_MEMBER_ASSIGNMENT:
                 groupMetadataManager.replay(
-                    (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
+                    (ConsumerGroupCurrentMemberAssignmentKey) key,
                     (ConsumerGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 9:
+            case SHARE_GROUP_PARTITION_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupPartitionMetadataKey) key.message(),
+                    (ShareGroupPartitionMetadataKey) key,
                     (ShareGroupPartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 10:
+            case SHARE_GROUP_MEMBER_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupMemberMetadataKey) key.message(),
+                    (ShareGroupMemberMetadataKey) key,
                     (ShareGroupMemberMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 11:
+            case SHARE_GROUP_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupMetadataKey) key.message(),
+                    (ShareGroupMetadataKey) key,
                     (ShareGroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 12:
+            case SHARE_GROUP_TARGET_ASSIGNMENT_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupTargetAssignmentMetadataKey) key.message(),
+                    (ShareGroupTargetAssignmentMetadataKey) key,
                     (ShareGroupTargetAssignmentMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 13:
+            case SHARE_GROUP_TARGET_ASSIGNMENT_MEMBER:
                 groupMetadataManager.replay(
-                    (ShareGroupTargetAssignmentMemberKey) key.message(),
+                    (ShareGroupTargetAssignmentMemberKey) key,
                     (ShareGroupTargetAssignmentMemberValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 14:
+            case SHARE_GROUP_CURRENT_MEMBER_ASSIGNMENT:
                 groupMetadataManager.replay(
-                    (ShareGroupCurrentMemberAssignmentKey) key.message(),
+                    (ShareGroupCurrentMemberAssignmentKey) key,
                     (ShareGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 16:
+            case CONSUMER_GROUP_REGULAR_EXPRESSION:
                 groupMetadataManager.replay(
-                    (ConsumerGroupRegularExpressionKey) key.message(),
+                    (ConsumerGroupRegularExpressionKey) key,
                     (ConsumerGroupRegularExpressionValue) Utils.messageOrNull(value)
                 );
                 break;
 
             default:
-                throw new IllegalStateException("Received an unknown record type " + key.version()
+                throw new IllegalStateException("Received an unknown record type " + recordType
                     + " in " + record);
         }
     }

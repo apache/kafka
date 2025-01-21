@@ -14,14 +14,15 @@
 // limitations under the License.
 
 {
-  "type": "data",
+  "apiKey": 16,
+  "type": "coordinator-key",
   "name": "ConsumerGroupRegularExpressionKey",
-  "validVersions": "16",
+  "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "16",
+    { "name": "GroupId", "type": "string", "versions": "0",
       "about": "The group id." },
-    { "name": "RegularExpression", "type": "string", "versions": "16",
+    { "name": "RegularExpression", "type": "string", "versions": "0",
       "about": "The regular expression." }
   ]
 }

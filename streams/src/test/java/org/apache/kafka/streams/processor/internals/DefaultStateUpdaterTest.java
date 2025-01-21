@@ -290,7 +290,11 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task2);
 
         verifyFailedTasks(IllegalStateException.class, task1);
-        assertFalse(stateUpdater.isRunning());
+        waitForCondition(
+            () -> !stateUpdater.isRunning(),
+            VERIFICATION_TIMEOUT,
+            "Did not switch to non-running within the given timeout!"
+        );
     }
 
     @Test
@@ -1015,6 +1019,8 @@ class DefaultStateUpdaterTest {
         verifyRestoredActiveTasks();
         verifyUpdatingTasks(task2);
         verifyExceptionsAndFailedTasks();
+        // shutdown ensures that the test does not end before changelog reader methods verified below are called
+        stateUpdater.shutdown(Duration.ofMinutes(1));
         verify(changelogReader, times(1)).enforceRestoreActive();
         verify(changelogReader, times(1)).transitToUpdateStandby();
     }
@@ -1152,6 +1158,8 @@ class DefaultStateUpdaterTest {
     public void shouldResumeStandbyTask() throws Exception {
         final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         shouldResumeStatefulTask(task);
+        // shutdown ensures that the test does not end before changelog reader methods verified below are called
+        stateUpdater.shutdown(Duration.ofMinutes(1));
         verify(changelogReader, times(2)).transitToUpdateStandby();
     }
 

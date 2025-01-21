@@ -38,8 +38,7 @@ jobs:
   build:
     uses: ./.github/workflows/build.yml
     with:
-      gradle-cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
-      gradle-cache-write-only: ${{ github.ref == 'refs/heads/trunk' }}
+      is-trunk: ${{ github.ref == 'refs/heads/trunk' }}
       is-public-fork: ${{ github.event.pull_request.head.repo.fork || false }}
     secrets:
       inherit

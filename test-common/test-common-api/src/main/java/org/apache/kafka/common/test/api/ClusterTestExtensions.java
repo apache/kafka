@@ -32,7 +32,6 @@ import org.junit.platform.commons.util.ReflectionUtils;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -102,10 +101,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private static final String PROCESS_REAPER_THREAD_PREFIX = "process reaper";
     private static final String RMI_THREAD_PREFIX = "RMI";
     private static final String DETECT_THREAD_LEAK_KEY = "detectThreadLeak";
-    private static final Set<String> SKIPPED_THREAD_PREFIX = Collections.unmodifiableSet(Stream.of(
-            METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX, FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX,
-            ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX, RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX)
-            .collect(Collectors.toSet()));
+    private static final Set<String> SKIPPED_THREAD_PREFIX = Set.of(METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX,
+            FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX, ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX,
+            RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX);
 
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {

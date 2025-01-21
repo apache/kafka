@@ -59,7 +59,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -1435,6 +1435,7 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
+    @Tag("flaky") // "KAFKA-18310"
     @Test
     public void testWakeupAfterSyncGroupSentExternalCompletion() throws Exception {
         setupCoordinator();
@@ -1471,6 +1472,7 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
+    @Tag("flaky") // "KAFKA-18310"
     @Test
     public void testWakeupAfterSyncGroupReceived() throws Exception {
         setupCoordinator();
@@ -1504,8 +1506,8 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
+    @Tag("flaky") // KAFKA-15474 and KAFKA-18310
     @Test
-    @Disabled("KAFKA-15474")
     public void testWakeupAfterSyncGroupReceivedExternalCompletion() throws Exception {
         setupCoordinator();
 

@@ -18,6 +18,8 @@ package kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager;
@@ -28,12 +30,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.ClusterTests;
+import org.apache.kafka.common.test.api.Type;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -44,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(ClusterTestExtensions.class)
 public class ConsumerIntegrationTest {
@@ -183,6 +188,58 @@ public class ConsumerIntegrationTest {
                 }
                 Thread.sleep(300);
             }
+        }
+    }
+
+    @ClusterTest(types = {Type.KRAFT}, brokers = 3)
+    public void testLeaderEpoch(ClusterInstance clusterInstance) throws Exception {
+        String topic = "test-topic";
+        clusterInstance.createTopic(topic, 1, (short) 2);
+        var msgNum = 10;
+        sendMsg(clusterInstance, topic, msgNum);
+
+        try (var consumer = clusterInstance.consumer()) {
+            TopicPartition targetTopicPartition = new TopicPartition(topic, 0);
+            List<TopicPartition> topicPartitions = List.of(targetTopicPartition);
+            consumer.assign(topicPartitions);
+            consumer.seekToBeginning(List.of(targetTopicPartition));
+
+            int consumed = 0;
+            while (consumed < msgNum) {
+                ConsumerRecords<Object, Object> records = consumer.poll(Duration.ofMillis(1000));
+                for (ConsumerRecord<Object, Object> record : records) {
+                    assertTrue(record.leaderEpoch().isPresent());
+                    assertEquals(0, record.leaderEpoch().get());
+                }
+                consumed += records.count();
+            }
+
+            // make the leader epoch increment by shutdown the leader broker
+            clusterInstance.shutdownBroker(clusterInstance.getLeaderBrokerId(targetTopicPartition));
+
+            sendMsg(clusterInstance, topic, msgNum);
+
+            consumed = 0;
+            while (consumed < msgNum) {
+                ConsumerRecords<Object, Object> records = consumer.poll(Duration.ofMillis(1000));
+                for (ConsumerRecord<Object, Object> record : records) {
+                    assertTrue(record.leaderEpoch().isPresent());
+                    assertEquals(1, record.leaderEpoch().get());
+                }
+                consumed += records.count();
+            }
+        }
+    }
+
+    private void sendMsg(ClusterInstance clusterInstance, String topic, int sendMsgNum) {
+        try (var producer = clusterInstance.producer(Map.of(
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                ProducerConfig.ACKS_CONFIG, "-1"))) {
+            for (int i = 0; i < sendMsgNum; i++) {
+                producer.send(new ProducerRecord<>(topic, ("key_" + i), ("value_" + i)));
+            }
+            producer.flush();
         }
     }
 }

@@ -125,7 +125,7 @@ public class KafkaRaftClientReconfigTest {
             SnapshotWriterReaderTest.assertControlSnapshot(expectedBootstrapRecords, reader);
         }
 
-        context.becomeLeader();
+        context.unattachedToLeader();
 
         // check if leader writes 3 bootstrap records to the log
         Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
@@ -159,7 +159,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(0)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // check that leader does not respond with bootstrap snapshot id when follower fetches offset 0
@@ -207,7 +207,7 @@ public class KafkaRaftClientReconfigTest {
         );
 
         // check leader does not write bootstrap records to log
-        context.becomeLeader();
+        context.unattachedToLeader();
 
         Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
@@ -337,7 +337,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Check expected metrics values for leader
@@ -426,7 +426,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
         InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
@@ -491,7 +491,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
         InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
@@ -521,7 +521,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
@@ -577,7 +577,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
@@ -615,7 +615,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
@@ -660,7 +660,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         ReplicaKey newVoter = replicaKey(follower.id(), true);
@@ -705,7 +705,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
@@ -777,7 +777,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
@@ -837,7 +837,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
@@ -897,7 +897,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
@@ -950,7 +950,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Check expected metrics values for leader
@@ -1008,7 +1008,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, false);
@@ -1047,7 +1047,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         assertTrue(context.client.quorum().isVoter(follower2));
@@ -1105,7 +1105,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Check expected metrics values for leader
@@ -1188,7 +1188,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
 
         // empty cluster id is rejected
         context.deliverRequest(context.removeVoterRequest("", follower1));
@@ -1237,7 +1237,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Establish a HWM and fence previous leaders
@@ -1275,7 +1275,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
 
         // Attempt to remove follower2
         context.deliverRequest(context.removeVoterRequest(follower2));
@@ -1297,7 +1297,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Establish a HWM and fence previous leaders
@@ -1327,7 +1327,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Establish a HWM and fence previous leaders
@@ -1357,7 +1357,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Establish a HWM and fence previous leaders
@@ -1409,7 +1409,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Establish a HWM and fence previous leaders
@@ -1453,7 +1453,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Establish a HWM and fence previous leaders
@@ -1495,7 +1495,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Establish a HWM and fence previous leaders
@@ -1540,7 +1540,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
@@ -1588,7 +1588,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         assertTrue(context.client.quorum().isVoter(follower));
@@ -1658,7 +1658,7 @@ public class KafkaRaftClientReconfigTest {
             .withLocalListeners(localListeners)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         assertTrue(context.client.quorum().isVoter(follower));
@@ -1693,7 +1693,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // empty cluster id is rejected
@@ -1744,7 +1744,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -1777,7 +1777,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -1839,7 +1839,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Attempt to update the follower
@@ -1884,7 +1884,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Establish a HWM and fence previous leaders
@@ -1935,7 +1935,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Establish a HWM and fence previous leaders
@@ -1986,7 +1986,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Establish a HWM and fence previous leaders
@@ -2037,7 +2037,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);

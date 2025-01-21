@@ -17,13 +17,6 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.kstream.SessionWindows;
-import org.apache.kafka.streams.kstream.SlidingWindows;
-import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.kstream.internals.KStreamSessionWindowAggregate;
-import org.apache.kafka.streams.kstream.internals.KStreamSlidingWindowAggregate;
-import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 
 public final class GraphGraceSearchUtil {
     private GraphGraceSearchUtil() {}
@@ -32,6 +25,7 @@ public final class GraphGraceSearchUtil {
         return findAndVerifyWindowGrace(graphNode, "");
     }
 
+    @SuppressWarnings("rawtypes")
     private static long findAndVerifyWindowGrace(final GraphNode graphNode, final String chain) {
         // error base case: we traversed off the end of the graph without finding a window definition
         if (graphNode == null) {
@@ -40,11 +34,8 @@ public final class GraphGraceSearchUtil {
             );
         }
         // base case: return if this node defines a grace period.
-        {
-            final Long gracePeriod = extractGracePeriod(graphNode);
-            if (gracePeriod != null) {
-                return gracePeriod;
-            }
+        if (graphNode instanceof GracePeriodGraphNode) {
+            return ((GracePeriodGraphNode) graphNode).gracePeriod();
         }
 
         final String newChain = chain.equals("") ? graphNode.nodeName() : graphNode.nodeName() + "->" + chain;
@@ -70,27 +61,4 @@ public final class GraphGraceSearchUtil {
         return inheritedGrace;
     }
 
-    @SuppressWarnings("rawtypes")
-    private static Long extractGracePeriod(final GraphNode node) {
-        if (node instanceof StatefulProcessorNode) {
-            final ProcessorSupplier processorSupplier = ((StatefulProcessorNode) node).processorParameters().processorSupplier();
-            if (processorSupplier instanceof KStreamWindowAggregate) {
-                final KStreamWindowAggregate kStreamWindowAggregate = (KStreamWindowAggregate) processorSupplier;
-                final Windows windows = kStreamWindowAggregate.windows();
-                return windows.gracePeriodMs();
-            } else if (processorSupplier instanceof KStreamSessionWindowAggregate) {
-                final KStreamSessionWindowAggregate kStreamSessionWindowAggregate = (KStreamSessionWindowAggregate) processorSupplier;
-                final SessionWindows windows = kStreamSessionWindowAggregate.windows();
-                return windows.gracePeriodMs() + windows.inactivityGap();
-            } else if (processorSupplier instanceof KStreamSlidingWindowAggregate) {
-                final KStreamSlidingWindowAggregate kStreamSlidingWindowAggregate = (KStreamSlidingWindowAggregate) processorSupplier;
-                final SlidingWindows windows = kStreamSlidingWindowAggregate.windows();
-                return windows.gracePeriodMs();
-            } else {
-                return null;
-            }
-        } else {
-            return null;
-        }
-    }
 }

@@ -20,11 +20,14 @@ package org.apache.kafka.coordinator.share;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
+import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
@@ -39,7 +42,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.config.ShareCoordinatorConfig;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
@@ -151,14 +153,11 @@ class ShareCoordinatorShardTest {
 
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 
-        CoordinatorRecord record1 = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareSnapshotKey()
-                    .setGroupId(GROUP_ID)
-                    .setTopicId(TOPIC_ID)
-                    .setPartition(PARTITION),
-                (short) 0
-            ),
+        CoordinatorRecord record1 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(PARTITION),
             new ApiMessageAndVersion(
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
@@ -174,14 +173,11 @@ class ShareCoordinatorShardTest {
             )
         );
 
-        CoordinatorRecord record2 = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareSnapshotKey()
-                    .setGroupId(GROUP_ID)
-                    .setTopicId(TOPIC_ID)
-                    .setPartition(PARTITION),
-                (short) 0
-            ),
+        CoordinatorRecord record2 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(PARTITION),
             new ApiMessageAndVersion(
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(1)
@@ -567,6 +563,34 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
+    public void testReadStateSummarySuccess() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+
+        SharePartitionKey coordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
+
+        writeAndReplayDefaultRecord(shard);
+
+        ReadShareGroupStateSummaryRequestData request = new ReadShareGroupStateSummaryRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setLeaderEpoch(1)))));
+
+        CoordinatorResult<ReadShareGroupStateSummaryResponseData, CoordinatorRecord> result = shard.readStateSummary(request);
+
+        assertEquals(ReadShareGroupStateSummaryResponse.toResponseData(
+            TOPIC_ID,
+            PARTITION,
+            0,
+            0
+        ), result.response());
+
+        assertEquals(0, shard.getLeaderMapValue(coordinatorKey));
+    }
+
+    @Test
     public void testReadStateInvalidRequestData() {
         ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
 
@@ -587,6 +611,35 @@ class ShareCoordinatorShardTest {
         CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> result = shard.readStateAndMaybeUpdateLeaderEpoch(request);
 
         ReadShareGroupStateResponseData expectedData = ReadShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, partition, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_PARTITION_ID.getMessage());
+
+        assertEquals(expectedData, result.response());
+
+        // Leader epoch should not be changed because the request failed.
+        assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
+    }
+
+    @Test
+    public void testReadStateSummaryInvalidRequestData() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+
+        int partition = -1;
+
+        writeAndReplayDefaultRecord(shard);
+
+        SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
+
+        ReadShareGroupStateSummaryRequestData request = new ReadShareGroupStateSummaryRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.PartitionData()
+                    .setPartition(partition)
+                    .setLeaderEpoch(5)))));
+
+        CoordinatorResult<ReadShareGroupStateSummaryResponseData, CoordinatorRecord> result = shard.readStateSummary(request);
+
+        ReadShareGroupStateSummaryResponseData expectedData = ReadShareGroupStateSummaryResponse.toErrorResponseData(
             TOPIC_ID, partition, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_PARTITION_ID.getMessage());
 
         assertEquals(expectedData, result.response());

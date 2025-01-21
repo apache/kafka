@@ -24,7 +24,6 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
@@ -42,7 +41,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Header;
@@ -1261,25 +1259,6 @@ public class FetchRequestManagerTest {
         assertEquals(15L, consumerRecords.get(0).offset());
         assertEquals(20L, consumerRecords.get(1).offset());
         assertEquals(30L, consumerRecords.get(2).offset());
-    }
-
-    /**
-     * Test the case where the client makes a pre-v3 FetchRequest, but the server replies with only a partial
-     * request. This happens when a single message is larger than the per-partition limit.
-     */
-    @Test
-    public void testFetchRequestWhenRecordTooLarge() {
-        try {
-            buildFetcher();
-
-            client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.FETCH.id, (short) 2, (short) 2));
-            makeFetchRequestWithIncompleteRecord();
-            assertThrows(RecordTooLargeException.class, this::collectFetch);
-            // the position should not advance since no data has been returned
-            assertEquals(0, subscriptions.position(tp0).offset);
-        } finally {
-            client.setNodeApiVersions(NodeApiVersions.create());
-        }
     }
 
     /**
@@ -2553,7 +2532,7 @@ public class FetchRequestManagerTest {
                 new SimpleRecord(null, "value".getBytes()));
 
         // Remove the last record to simulate compaction
-        MemoryRecords.FilterResult result = records.filterTo(tp0, new MemoryRecords.RecordFilter(0, 0) {
+        MemoryRecords.FilterResult result = records.filterTo(new MemoryRecords.RecordFilter(0, 0) {
             @Override
             protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new BatchRetentionResult(BatchRetention.DELETE_EMPTY, false);
@@ -2563,7 +2542,7 @@ public class FetchRequestManagerTest {
             protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return record.key() != null;
             }
-        }, ByteBuffer.allocate(1024), Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        }, ByteBuffer.allocate(1024), BufferSupplier.NO_CACHING);
         result.outputBuffer().flip();
         MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.outputBuffer());
 

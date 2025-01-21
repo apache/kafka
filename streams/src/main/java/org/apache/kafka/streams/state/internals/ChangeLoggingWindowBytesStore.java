@@ -41,7 +41,7 @@ class ChangeLoggingWindowBytesStore
     }
 
     private final boolean retainDuplicates;
-    InternalProcessorContext context;
+    InternalProcessorContext<?, ?> internalContext;
     private int seqnum = 0;
     private final ChangeLoggingKeySerializer keySerializer;
 
@@ -54,10 +54,10 @@ class ChangeLoggingWindowBytesStore
     }
 
     @Override
-    public void init(final StateStoreContext context,
+    public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
-        this.context = asInternalProcessorContext(context);
-        super.init(context, root);
+        internalContext = asInternalProcessorContext(stateStoreContext);
+        super.init(stateStoreContext, root);
     }
 
     @Override
@@ -129,7 +129,7 @@ class ChangeLoggingWindowBytesStore
     }
 
     void log(final Bytes key, final byte[] value) {
-        context.logChange(name(), key, value, context.timestamp(), wrapped().getPosition());
+        internalContext.logChange(name(), key, value, internalContext.timestamp(), wrapped().getPosition());
     }
 
     private int maybeUpdateSeqnumForDups() {

@@ -130,7 +130,11 @@ public enum ApiKeys {
     READ_SHARE_GROUP_STATE(ApiMessageType.READ_SHARE_GROUP_STATE, true),
     WRITE_SHARE_GROUP_STATE(ApiMessageType.WRITE_SHARE_GROUP_STATE, true),
     DELETE_SHARE_GROUP_STATE(ApiMessageType.DELETE_SHARE_GROUP_STATE, true),
-    READ_SHARE_GROUP_STATE_SUMMARY(ApiMessageType.READ_SHARE_GROUP_STATE_SUMMARY, true);
+    READ_SHARE_GROUP_STATE_SUMMARY(ApiMessageType.READ_SHARE_GROUP_STATE_SUMMARY, true),
+    STREAMS_GROUP_HEARTBEAT(ApiMessageType.STREAMS_GROUP_HEARTBEAT),
+    STREAMS_GROUP_DESCRIBE(ApiMessageType.STREAMS_GROUP_DESCRIBE),
+    DESCRIBE_SHARE_GROUP_OFFSETS(ApiMessageType.DESCRIBE_SHARE_GROUP_OFFSETS);
+    
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
@@ -194,7 +198,7 @@ public enum ApiKeys {
     private static boolean shouldRetainsBufferReference(Schema[] requestSchemas) {
         boolean requestRetainsBufferReference = false;
         for (Schema requestVersionSchema : requestSchemas) {
-            if (retainsBufferReference(requestVersionSchema)) {
+            if (requestVersionSchema != null && retainsBufferReference(requestVersionSchema)) {
                 requestRetainsBufferReference = true;
                 break;
             }
@@ -249,6 +253,15 @@ public enum ApiKeys {
 
     public boolean isVersionDeprecated(short apiVersion) {
         return apiVersion >= messageType.lowestDeprecatedVersion() && apiVersion <= messageType.highestDeprecatedVersion();
+    }
+
+    /**
+     * Returns `true` if there is at least one valid version, `false` otherwise. When `false` is returned, it typically
+     * means that the protocol api is no longer supported, but the api key remains assigned to the removed api so we
+     * do not accidentally reuse it for a different api.
+     */
+    public boolean hasValidVersion() {
+        return oldestVersion() <= latestVersion();
     }
 
     public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion) {

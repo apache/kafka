@@ -105,7 +105,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     }
   }
 
-  private def handleIpQuota(ipEntity: QuotaEntity, quotaDelta: ClientQuotaDelta): Unit = {
+  private[metadata] def handleIpQuota(ipEntity: QuotaEntity, quotaDelta: ClientQuotaDelta): Unit = {
     val inetAddress = ipEntity match {
       case IpEntity(ip) =>
         try {

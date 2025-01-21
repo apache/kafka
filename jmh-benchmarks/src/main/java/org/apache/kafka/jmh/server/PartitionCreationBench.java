@@ -31,8 +31,8 @@ import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -109,7 +109,7 @@ public class PartitionCreationBench {
 
         this.scheduler = new KafkaScheduler(1, true, "scheduler-thread");
         this.brokerProperties = KafkaConfig.fromProps(TestUtils.createBrokerConfig(
-                0, null, true, true, 9092, Option.empty(), Option.empty(),
+                0, true, true, 9092, Option.empty(), Option.empty(),
                 Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1,
                 (short) 1, false));
         this.metrics = new Metrics();
@@ -141,7 +141,6 @@ public class PartitionCreationBench {
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(failureChannel).
             setTime(Time.SYSTEM).
-            setKeepPartitionMetadataFile(true).
             build();
         scheduler.startup();
         this.quotaManagers = QuotaFactory.instantiate(this.brokerProperties, this.metrics, this.time, "");
@@ -200,7 +199,7 @@ public class PartitionCreationBench {
             inSync.add(1);
             inSync.add(2);
 
-            LeaderAndIsrRequestData.LeaderAndIsrPartitionState partitionState = new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
+            LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
                     .setControllerEpoch(0)
                     .setLeader(0)
                     .setLeaderEpoch(0)

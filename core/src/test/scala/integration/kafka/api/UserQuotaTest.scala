@@ -31,7 +31,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some("GSSAPI"), KafkaSasl, JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some("GSSAPI"), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
     quotaTestClients.alterClientQuotas(
       quotaTestClients.clientQuotaAlteration(
@@ -41,6 +41,8 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
     )
     quotaTestClients.waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
   }
+
+  // @Flaky("KAFKA-8073") -> testThrottledProducerConsumer (in super class)
 
   @AfterEach
   override def tearDown(): Unit = {

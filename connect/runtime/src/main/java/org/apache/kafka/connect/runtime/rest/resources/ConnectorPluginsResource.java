@@ -34,7 +34,6 @@ import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException
 import org.apache.maven.artifact.versioning.VersionRange;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -149,7 +148,7 @@ public class ConnectorPluginsResource {
                         .filter(p -> PluginType.SINK.toString().equals(p.type()) || PluginType.SOURCE.toString().equals(p.type()))
                         .collect(Collectors.toList()));
             } else {
-                return Collections.unmodifiableList(new ArrayList<>(connectorPlugins));
+                return List.copyOf(connectorPlugins);
             }
         }
     }

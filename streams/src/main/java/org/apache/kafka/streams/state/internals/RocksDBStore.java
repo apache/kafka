@@ -155,26 +155,26 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @Override
-    public void init(final StateStoreContext context,
+    public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
         // open the DB dir
-        metricsRecorder.init(metricsImpl(context), context.taskId());
-        openDB(context.appConfigs(), context.stateDir());
+        metricsRecorder.init(metricsImpl(stateStoreContext), stateStoreContext.taskId());
+        openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
 
-        final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
+        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        this.context = context;
-        context.register(
+        this.context = stateStoreContext;
+        stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreBatch,
             () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-            context.appConfigs(),
+            stateStoreContext.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
             false);
     }

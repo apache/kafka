@@ -29,7 +29,6 @@ import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, 
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kafka.cluster.Partition
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
@@ -79,7 +78,6 @@ class GroupCoordinatorTest {
   var groupCoordinator: GroupCoordinator = _
   var replicaManager: ReplicaManager = _
   var scheduler: KafkaScheduler = _
-  var zkClient: KafkaZkClient = _
 
   private val groupId = "groupId"
   private val protocolType = "consumer"
@@ -100,7 +98,7 @@ class GroupCoordinatorTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    val props = TestUtils.createBrokerConfig(0)
     props.setProperty(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, GroupMinSessionTimeout.toString)
     props.setProperty(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, GroupMaxSessionTimeout.toString)
     props.setProperty(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG, GroupMaxSize.toString)
@@ -111,10 +109,6 @@ class GroupCoordinatorTest {
 
     replicaManager = mock(classOf[ReplicaManager])
 
-    zkClient = mock(classOf[KafkaZkClient])
-    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    when(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).thenReturn(Some(2))
-
     timer = new MockTimer
 
     val config = KafkaConfig.fromProps(props)
@@ -123,8 +117,8 @@ class GroupCoordinatorTest {
     val rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", timer, 1000, config.brokerId, false, true)
 
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, new Metrics())
-    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.groupCoordinatorConfig.offsetsTopicPartitions),
-      enableMetadataExpiration = false)
+    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
+    groupCoordinator.startup(() => 2, enableMetadataExpiration = false)
 
     // add the partition into the owned partition list
     groupPartitionId = groupCoordinator.partitionFor(groupId)
@@ -201,7 +195,7 @@ class GroupCoordinatorTest {
 
   @Test
   def testOffsetsRetentionMsIntegerOverflow(): Unit = {
-    val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    val props = TestUtils.createBrokerConfig(0)
     props.setProperty(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG, Integer.MAX_VALUE.toString)
     val config = KafkaConfig.fromProps(props)
     val offsetConfig = GroupCoordinator.offsetConfig(config)
@@ -416,6 +410,8 @@ class GroupCoordinatorTest {
     }
 
     // advance clock by GroupInitialRebalanceDelay to complete first InitialDelayedJoin
+    when(replicaManager.onlinePartition(any[TopicPartition]))
+      .thenReturn(Some(mock(classOf[Partition])))
     timer.advanceClock(DefaultRebalanceTimeout + 1)
 
     // Awaiting results
@@ -636,8 +632,8 @@ class GroupCoordinatorTest {
   }
 
   private def verifySessionExpiration(groupId: String): Unit = {
-    when(replicaManager.getMagic(any[TopicPartition]))
-      .thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any[TopicPartition]))
+      .thenReturn(Some(mock(classOf[Partition])))
 
     timer.advanceClock(DefaultSessionTimeout + 1)
 
@@ -1591,6 +1587,7 @@ class GroupCoordinatorTest {
     assertEquals(newGeneration, followerJoinGroupResult.generationId)
 
     val leaderId = leaderJoinGroupResult.memberId
+    when(replicaManager.onlinePartition(any[TopicPartition])).thenReturn(Some(mock(classOf[Partition])))
     val leaderSyncGroupResult = syncGroupLeader(groupId, leaderJoinGroupResult.generationId, leaderId, Map(leaderId -> Array[Byte]()))
     assertEquals(Errors.NONE, leaderSyncGroupResult.error)
     assertTrue(getGroup(groupId).is(Stable))
@@ -1749,7 +1746,6 @@ class GroupCoordinatorTest {
 
     when(replicaManager.getPartition(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)))
       .thenReturn(HostedPartition.None)
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
     timer.advanceClock(DefaultSessionTimeout + 100)
 
@@ -2061,8 +2057,6 @@ class GroupCoordinatorTest {
     assertEquals(1, group.numPending)
     assertEquals(Stable, group.currentState)
 
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
-
     // advance clock to timeout the pending member
     assertEquals(Set(firstMemberId), group.allMembers)
     assertEquals(1, group.numPending)
@@ -2155,7 +2149,6 @@ class GroupCoordinatorTest {
     // Advancing Clock by > 100 (session timeout for third and fourth member)
     // and < 500 (for first and second members). This will force the coordinator to attempt join
     // completion on heartbeat expiration (since we are in PendingRebalance stage).
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
     timer.advanceClock(120)
 
     assertGroupState(groupState = CompletingRebalance)
@@ -2230,8 +2223,8 @@ class GroupCoordinatorTest {
     }
 
     // Advance part the rebalance timeout to trigger the delayed operation.
-    when(replicaManager.getMagic(any[TopicPartition]))
-      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
+    when(replicaManager.onlinePartition(any[TopicPartition]))
+      .thenReturn(Some(mock(classOf[Partition])))
 
     timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
 
@@ -2618,7 +2611,6 @@ class GroupCoordinatorTest {
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     val partition: Partition = mock(classOf[Partition])
 
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
@@ -3514,7 +3506,6 @@ class GroupCoordinatorTest {
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     val partition: Partition = mock(classOf[Partition])
 
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
@@ -3549,7 +3540,6 @@ class GroupCoordinatorTest {
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     val partition: Partition = mock(classOf[Partition])
 
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
@@ -3609,7 +3599,6 @@ class GroupCoordinatorTest {
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     val partition: Partition = mock(classOf[Partition])
 
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
@@ -3690,7 +3679,6 @@ class GroupCoordinatorTest {
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     val partition: Partition = mock(classOf[Partition])
 
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
@@ -3733,7 +3721,6 @@ class GroupCoordinatorTest {
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     val partition: Partition = mock(classOf[Partition])
 
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
@@ -3928,8 +3915,6 @@ class GroupCoordinatorTest {
                             supportSkippingAssignment: Boolean = true): Future[JoinGroupResult] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
 
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
-
     groupCoordinator.handleJoinGroup(groupId, memberId, groupInstanceId, requireKnownMemberId, supportSkippingAssignment,
       "clientId", "clientHost", rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
     responseFuture
@@ -3967,7 +3952,6 @@ class GroupCoordinatorTest {
        )
       )
     })
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
     groupCoordinator.handleJoinGroup(groupId, memberId, Some(groupInstanceId), requireKnownMemberId, supportSkippingAssignment,
       "clientId", "clientHost", rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
@@ -4004,7 +3988,7 @@ class GroupCoordinatorTest {
         )
       }
     )
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
+    when(replicaManager.onlinePartition(any[TopicPartition])).thenReturn(Some(mock(classOf[Partition])))
 
     groupCoordinator.handleSyncGroup(groupId, generation, leaderId, protocolType, protocolName,
       groupInstanceId, assignment, responseCallback)
@@ -4150,7 +4134,7 @@ class GroupCoordinatorTest {
         )
       )
     })
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
+    when(replicaManager.onlinePartition(any[TopicPartition])).thenReturn(Some(mock(classOf[Partition])))
 
     groupCoordinator.handleCommitOffsets(groupId, memberId, groupInstanceId, generationId, offsets, responseCallback)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
@@ -4208,7 +4192,7 @@ class GroupCoordinatorTest {
         )
       )
     })
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+    when(replicaManager.onlinePartition(any[TopicPartition])).thenReturn(Some(mock(classOf[Partition])))
 
     groupCoordinator.handleTxnCommitOffsets(groupId, transactionalId, producerId, producerEpoch,
       memberId, groupInstanceId, generationId, offsets, responseCallback, RequestLocal.noCaching, ApiKeys.TXN_OFFSET_COMMIT.latestVersion())
@@ -4232,7 +4216,7 @@ class GroupCoordinatorTest {
 
     when(replicaManager.getPartition(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)))
       .thenReturn(HostedPartition.None)
-    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
+    when(replicaManager.onlinePartition(any[TopicPartition])).thenReturn(Some(mock(classOf[Partition])))
 
     groupCoordinator.handleLeaveGroup(groupId, memberIdentities, responseCallback)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))

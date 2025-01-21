@@ -26,6 +26,9 @@ import java.util.Map;
  * happens while attempting to produce result records.
  */
 public class DefaultProductionExceptionHandler implements ProductionExceptionHandler {
+    /**
+     * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ProducerRecord, Exception)} instead.
+     */
     @SuppressWarnings("deprecation")
     @Deprecated
     @Override

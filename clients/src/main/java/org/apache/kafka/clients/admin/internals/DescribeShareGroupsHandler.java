@@ -121,7 +121,8 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                     groupMember.memberId(),
                     groupMember.clientId(),
                     groupMember.clientHost(),
-                    new ShareMemberAssignment(convertAssignment(groupMember.assignment()))
+                    new ShareMemberAssignment(convertAssignment(groupMember.assignment())),
+                    groupMember.memberEpoch()
                 ))
             );
 
@@ -130,6 +131,8 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                     memberDescriptions,
                     GroupState.parse(describedGroup.groupState()),
                     coordinator,
+                    describedGroup.groupEpoch(),
+                    describedGroup.assignmentEpoch(),
                     authorizedOperations);
             completed.put(groupIdKey, shareGroupDescription);
         }

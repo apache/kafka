@@ -17,11 +17,11 @@
   "apiKey": 3,
   "type": "response",
   "name": "MetadataResponse",
+  // Versions 0-3 were removed in Apache Kafka 4.0, Version 4 is the new baseline.
+  //
   // Version 1 adds fields for the rack of each broker, the controller id, and
   // whether or not the topic is internal.
-  //
   // Version 2 adds the cluster ID field.
-  //
   // Version 3 adds the throttle time.
   //
   // Version 4 is the same as version 3.
@@ -43,7 +43,7 @@
   // by the DescribeCluster API (KIP-700).
   // Version 12 supports topicId.
   // Version 13 supports top-level error code in the response.
-  "validVersions": "0-13",
+  "validVersions": "4-13",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,

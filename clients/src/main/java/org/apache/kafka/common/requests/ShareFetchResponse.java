@@ -123,10 +123,6 @@ public class ShareFetchResponse extends AbstractResponse {
     /**
      * Returns `partition.records` as `Records` (instead of `BaseRecords`). If `records` is `null`, returns `MemoryRecords.EMPTY`.
      *
-     * <p>If this response was deserialized after a share fetch, this method should never fail. An example where this would
-     * fail is a down-converted response (e.g. LazyDownConversionRecords) on the broker (before it's serialized and
-     * sent on the wire).
-     *
      * @param partition partition data
      * @return Records or empty record if the records in PartitionData is null.
      */

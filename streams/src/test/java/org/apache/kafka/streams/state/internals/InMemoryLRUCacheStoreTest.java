@@ -133,7 +133,6 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
         assertEquals(3, driver.numFlushedEntryRemoved());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testRestoreEvict() {
         store.close();

@@ -29,7 +29,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -59,7 +59,7 @@ public class ForeignTableJoinProcessorSupplierTests {
         Serdes.String()
     );
 
-    private MockInternalNewProcessorContext<String, SubscriptionResponseWrapper<String>> context = null;
+    private MockInternalProcessorContext<String, SubscriptionResponseWrapper<String>> context = null;
     private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = null;
     private Processor<String, Change<String>, String, SubscriptionResponseWrapper<String>> processor = null;
     private File stateDir;
@@ -68,7 +68,7 @@ public class ForeignTableJoinProcessorSupplierTests {
     public void setUp() {
         stateDir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        context = new MockInternalNewProcessorContext<>(props, new TaskId(0, 0), stateDir);
+        context = new MockInternalProcessorContext<>(props, new TaskId(0, 0), stateDir);
 
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
         processor = new ForeignTableJoinProcessorSupplier<String, String, String>(
