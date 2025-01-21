@@ -97,9 +97,9 @@ public class StreamsRebalanceData {
         public Assignment(final Set<TaskId> activeTasks,
                           final Set<TaskId> standbyTasks,
                           final Set<TaskId> warmupTasks) {
-            this.activeTasks = Collections.unmodifiableSet(Objects.requireNonNull(activeTasks, "Active tasks cannot be null"));
-            this.standbyTasks = Collections.unmodifiableSet(Objects.requireNonNull(standbyTasks, "Standby tasks cannot be null"));
-            this.warmupTasks = Collections.unmodifiableSet(Objects.requireNonNull(warmupTasks, "Warmup tasks cannot be null"));
+            this.activeTasks = Set.copyOf(Objects.requireNonNull(activeTasks, "Active tasks cannot be null"));
+            this.standbyTasks = Set.copyOf(Objects.requireNonNull(standbyTasks, "Standby tasks cannot be null"));
+            this.warmupTasks = Set.copyOf(Objects.requireNonNull(warmupTasks, "Warmup tasks cannot be null"));
         }
 
         public Set<TaskId> activeTasks() {
@@ -149,11 +149,11 @@ public class StreamsRebalanceData {
 
     public static class Subtopology {
 
-        public final Set<String> sourceTopics;
-        public final Set<String> repartitionSinkTopics;
-        public final Map<String, TopicInfo> stateChangelogTopics;
-        public final Map<String, TopicInfo> repartitionSourceTopics;
-        public final Collection<Set<String>> copartitionGroups;
+        private final Set<String> sourceTopics;
+        private final Set<String> repartitionSinkTopics;
+        private final Map<String, TopicInfo> stateChangelogTopics;
+        private final Map<String, TopicInfo> repartitionSourceTopics;
+        private final Collection<Set<String>> copartitionGroups;
 
         public Subtopology(final Set<String> sourceTopics,
                            final Set<String> repartitionSinkTopics,
@@ -161,11 +161,39 @@ public class StreamsRebalanceData {
                            final Map<String, TopicInfo> stateChangelogTopics,
                            final Collection<Set<String>> copartitionGroups
         ) {
-            this.sourceTopics = sourceTopics;
-            this.repartitionSinkTopics = repartitionSinkTopics;
-            this.stateChangelogTopics = stateChangelogTopics;
-            this.repartitionSourceTopics = repartitionSourceTopics;
-            this.copartitionGroups = copartitionGroups;
+            this.sourceTopics = Set.copyOf(Objects.requireNonNull(sourceTopics, "Subtopology ID cannot be null"));
+            this.repartitionSinkTopics =
+                Set.copyOf(Objects.requireNonNull(repartitionSinkTopics, "Repartition sink topics cannot be null"));
+            this.repartitionSourceTopics =
+                Map.copyOf(Objects.requireNonNull(repartitionSourceTopics, "Repartition source topics cannot be null"));
+            this.stateChangelogTopics =
+                Map.copyOf(Objects.requireNonNull(stateChangelogTopics, "State changelog topics cannot be null"));
+            this.copartitionGroups =
+                Collections.unmodifiableCollection(Objects.requireNonNull(
+                    copartitionGroups,
+                    "Co-partition groups cannot be null"
+                    )
+                );
+        }
+
+        public Set<String> sourceTopics() {
+            return sourceTopics;
+        }
+
+        public Set<String> repartitionSinkTopics() {
+            return repartitionSinkTopics;
+        }
+
+        public Map<String, TopicInfo> stateChangelogTopics() {
+            return stateChangelogTopics;
+        }
+
+        public Map<String, TopicInfo> repartitionSourceTopics() {
+            return repartitionSourceTopics;
+        }
+
+        public Collection<Set<String>> copartitionGroups() {
+            return copartitionGroups;
         }
 
         @Override
@@ -182,9 +210,9 @@ public class StreamsRebalanceData {
 
     public static class TopicInfo {
 
-        public final Optional<Integer> numPartitions;
-        public final Optional<Short> replicationFactor;
-        public final Map<String, String> topicConfigs;
+        private final Optional<Integer> numPartitions;
+        private final Optional<Short> replicationFactor;
+        private final Map<String, String> topicConfigs;
 
         public TopicInfo(final Optional<Integer> numPartitions,
                          final Optional<Short> replicationFactor,
@@ -192,6 +220,18 @@ public class StreamsRebalanceData {
             this.numPartitions = numPartitions;
             this.replicationFactor = replicationFactor;
             this.topicConfigs = topicConfigs;
+        }
+
+        public Optional<Integer> numPartitions() {
+            return numPartitions;
+        }
+
+        public Optional<Short> replicationFactor() {
+            return replicationFactor;
+        }
+
+        public Map<String, String> topicConfigs() {
+            return topicConfigs;
         }
 
         @Override

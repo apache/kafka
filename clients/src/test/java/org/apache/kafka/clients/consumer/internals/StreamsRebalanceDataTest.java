@@ -3,8 +3,16 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -47,7 +55,7 @@ public class StreamsRebalanceDataTest {
     }
 
     @Test
-    public void shouldNotModifyEmptyAssignment() {
+    public void emptyAssignmentShouldNotBeModifiable() {
         final StreamsRebalanceData.Assignment emptyAssignment = StreamsRebalanceData.Assignment.EMPTY;
 
         assertThrows(
@@ -65,11 +73,11 @@ public class StreamsRebalanceDataTest {
     }
 
     @Test
-    public void shouldNotModifyAssignment() {
+    public void assignmentShouldNotBeModifiable() {
         final StreamsRebalanceData.Assignment assignment = new StreamsRebalanceData.Assignment(
-            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1)),
-            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2)),
-            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3))
+            new HashSet<>(Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1))),
+            new HashSet<>(Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2))),
+            new HashSet<>(Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3)))
         );
 
         assertThrows(
@@ -164,4 +172,71 @@ public class StreamsRebalanceDataTest {
         assertEquals(emptyAssignment, copy);
         assertNotSame(emptyAssignment, copy);
     }
+
+    @Test
+    public void subtopologyShouldNotAcceptNulls() {
+        final Exception exception1 = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData.Subtopology(null, Set.of(), Map.of(), Map.of(), List.of())
+        );
+        assertEquals("Subtopology ID cannot be null", exception1.getMessage());
+        final Exception exception2 = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData.Subtopology(Set.of(), null, Map.of(), Map.of(), List.of())
+        );
+        assertEquals("Repartition sink topics cannot be null", exception2.getMessage());
+        final Exception exception3 = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData.Subtopology(Set.of(), Set.of(), null, Map.of(), List.of())
+        );
+        assertEquals("Repartition source topics cannot be null", exception3.getMessage());
+        final Exception exception4 = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData.Subtopology(Set.of(), Set.of(), Map.of(), null, List.of())
+        );
+        assertEquals("State changelog topics cannot be null", exception4.getMessage());
+        final Exception exception5 = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData.Subtopology(Set.of(), Set.of(), Map.of(), Map.of(), null)
+        );
+        assertEquals("Co-partition groups cannot be null", exception5.getMessage());
+    }
+
+    @Test
+    public void subtopologyShouldBeModifiable() {
+        final StreamsRebalanceData.Subtopology subtopology = new StreamsRebalanceData.Subtopology(
+            new HashSet<>(Set.of("sourceTopic1")),
+            new HashSet<>(Set.of("repartitionSinkTopic1")),
+            Map.of("repartitionSourceTopic1", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of()))
+                .entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
+            Map.of("stateChangelogTopic1", new StreamsRebalanceData.TopicInfo(Optional.of(0), Optional.of((short) 1), Map.of()))
+                .entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
+            new ArrayList<>(List.of(Set.of("sourceTopic1")))
+        );
+
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> subtopology.sourceTopics().add("sourceTopic2")
+        );
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> subtopology.repartitionSinkTopics().add("repartitionSinkTopic2")
+        );
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> subtopology.repartitionSourceTopics().put("repartitionSourceTopic2", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of()))
+        );
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> subtopology.stateChangelogTopics().put("stateChangelogTopic2", new StreamsRebalanceData.TopicInfo(Optional.of(0), Optional.of((short) 1), Map.of()))
+        );
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> subtopology.copartitionGroups().add(Set.of("sourceTopic2"))
+        );
+    }
+
+
 }
