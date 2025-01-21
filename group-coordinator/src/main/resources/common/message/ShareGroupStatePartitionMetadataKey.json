@@ -15,12 +15,13 @@
 
 // KIP-932 is in development. This schema is subject to non-backwards-compatible changes.
 {
-  "type": "data",
+  "apiKey": 15,
+  "type": "coordinator-key",
   "name": "ShareGroupStatePartitionMetadataKey",
-  "validVersions": "15",
+  "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "15",
+    { "name": "GroupId", "type": "string", "versions": "0",
       "about": "The group id." }
   ]
 }

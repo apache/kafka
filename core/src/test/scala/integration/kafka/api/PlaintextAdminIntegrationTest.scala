@@ -28,7 +28,6 @@ import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
@@ -36,7 +35,7 @@ import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
@@ -57,9 +56,9 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogFileUtils}
 import org.apache.kafka.test.TestUtils.{DEFAULT_MAX_WAIT_MS, assertFutureThrows}
-import org.apache.log4j.PropertyConfigurator
+import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
+import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 import org.slf4j.LoggerFactory
@@ -89,16 +88,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
+    Configurator.reconfigure();
     brokerLoggerConfigResource = new ConfigResource(
       ConfigResource.Type.BROKER_LOGGER, brokers.head.config.brokerId.toString)
-  }
-
-  @AfterEach
-  override def tearDown(): Unit = {
-    // Due to the fact that log4j is not re-initialized across tests, changing a logger's log level persists
-    // across test classes. We need to clean up the changes done after testing.
-    resetLogging()
-    super.tearDown()
   }
 
   @ParameterizedTest
@@ -593,6 +585,30 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       nodeStrs = nodes.map(node => s"${node.host}:${node.port}").toList.sorted
     } while (nodeStrs.size < brokerStrs.size)
     assertEquals(brokerStrs.mkString(","), nodeStrs.mkString(","))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testListNodesWithFencedBroker(quorum: String): Unit = {
+    client = createAdminClient
+    val fencedBrokerId = brokers.last.config.brokerId
+    killBroker(fencedBrokerId, JDuration.ofMillis(0))
+    // It takes a few seconds for a broker to get fenced after being killed
+    // So we retry until only 2 of 3 brokers returned in the result or the max wait is reached
+    TestUtils.retry(20000) {
+      assertTrue(client.describeCluster().nodes().get().asScala.size.equals(brokers.size - 1))
+    }
+
+    // List nodes again but this time include the fenced broker
+    val nodes = client.describeCluster(new DescribeClusterOptions().includeFencedBrokers(true)).nodes().get().asScala
+    assertTrue(nodes.size.equals(brokers.size))
+    nodes.foreach(node => {
+      if (node.id().equals(fencedBrokerId)) {
+        assertTrue(node.isFenced)
+      } else {
+        assertFalse(node.isFenced)
+      }
+    })
   }
 
   @ParameterizedTest
@@ -1793,7 +1809,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * Test the consumer group APIs.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_17960"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testConsumerGroups(quorum: String, groupProtocol: String): Unit = {
     val config = createConfig
     client = Admin.create(config)
@@ -1858,7 +1874,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
                   consumer.poll(JDuration.ofSeconds(5))
                   if (!consumer.assignment.isEmpty && latch.getCount > 0L)
                     latch.countDown()
-                  consumer.commitSync()
+                  try {
+                    consumer.commitSync()
+                  } catch {
+                    case _: CommitFailedException => // Ignore and retry on next iteration.
+                  }
                 }
               } catch {
                 case _: InterruptException => // Suppress the output to stderr
@@ -1921,12 +1941,22 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           // Test that we can get information about the test consumer group.
           assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
           var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
+          if (groupType == GroupType.CLASSIC) {
+            assertTrue(testGroupDescription.groupEpoch.isEmpty)
+            assertTrue(testGroupDescription.targetAssignmentEpoch.isEmpty)
+          } else {
+            assertEquals(Optional.of(3), testGroupDescription.groupEpoch)
+            assertEquals(Optional.of(3), testGroupDescription.targetAssignmentEpoch)
+          }
 
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup)
           assertEquals(groupInstanceSet.size, testGroupDescription.members().size())
           val members = testGroupDescription.members()
-          members.asScala.foreach(member => assertEquals(testClientId, member.clientId()))
+          members.asScala.foreach { member =>
+            assertEquals(testClientId, member.clientId)
+            assertEquals(if (groupType == GroupType.CLASSIC) Optional.empty else Optional.of(true), member.upgraded)
+          }
           val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
           topicSet.foreach { topic =>
             val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
@@ -2061,8 +2091,91 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   /**
    * Test the consumer group APIs.
    */
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testConsumerGroupWithMemberMigration(quorum: String): Unit = {
+    val config = createConfig
+    client = Admin.create(config)
+    var classicConsumer: Consumer[Array[Byte], Array[Byte]] = null
+    var consumerConsumer: Consumer[Array[Byte], Array[Byte]] = null
+    try {
+      // Verify that initially there are no consumer groups to list.
+      val list1 = client.listConsumerGroups
+      assertEquals(0, list1.all.get.size)
+      assertEquals(0, list1.errors.get.size)
+      assertEquals(0, list1.valid.get.size)
+      val testTopicName = "test_topic"
+      val testNumPartitions = 2
+
+      client.createTopics(util.Arrays.asList(
+        new NewTopic(testTopicName, testNumPartitions, 1.toShort),
+      )).all.get
+      waitForTopics(client, List(testTopicName), List())
+
+      val producer = createProducer()
+      try {
+        producer.send(new ProducerRecord(testTopicName, 0, null, null))
+        producer.send(new ProducerRecord(testTopicName, 1, null, null))
+        producer.flush()
+      } finally {
+        Utils.closeQuietly(producer, "producer")
+      }
+
+      val testGroupId = "test_group_id"
+      val testClassicClientId = "test_classic_client_id"
+      val testConsumerClientId = "test_consumer_client_id"
+
+      val newConsumerConfig = new Properties(consumerConfig)
+      newConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+      newConsumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, testClassicClientId)
+      consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name)
+
+      classicConsumer = createConsumer(configOverrides = newConsumerConfig)
+      classicConsumer.subscribe(List(testTopicName).asJava)
+      classicConsumer.poll(JDuration.ofMillis(1000))
+
+      newConsumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, testConsumerClientId)
+      consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name)
+      consumerConsumer = createConsumer(configOverrides = newConsumerConfig)
+      consumerConsumer.subscribe(List(testTopicName).asJava)
+      consumerConsumer.poll(JDuration.ofMillis(1000))
+
+      TestUtils.waitUntilTrue(() => {
+        classicConsumer.poll(JDuration.ofMillis(100))
+        consumerConsumer.poll(JDuration.ofMillis(100))
+        val describeConsumerGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava).all.get
+        describeConsumerGroupResult.containsKey(testGroupId) &&
+          describeConsumerGroupResult.get(testGroupId).groupState == GroupState.STABLE &&
+          describeConsumerGroupResult.get(testGroupId).members.size == 2
+      }, s"Expected to find 2 members in a stable group $testGroupId")
+
+      val describeConsumerGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava).all.get
+      val group = describeConsumerGroupResult.get(testGroupId)
+      assertNotNull(group)
+      assertEquals(Optional.of(2), group.groupEpoch)
+      assertEquals(Optional.of(2), group.targetAssignmentEpoch)
+
+      val classicMember = group.members.asScala.find(_.clientId == testClassicClientId)
+      assertTrue(classicMember.isDefined)
+      assertEquals(Optional.of(2), classicMember.get.memberEpoch)
+      assertEquals(Optional.of(false), classicMember.get.upgraded)
+
+      val consumerMember = group.members.asScala.find(_.clientId == testConsumerClientId)
+      assertTrue(consumerMember.isDefined)
+      assertEquals(Optional.of(2), consumerMember.get.memberEpoch)
+      assertEquals(Optional.of(true), consumerMember.get.upgraded)
+    } finally {
+      Utils.closeQuietly(classicConsumer, "classicConsumer")
+      Utils.closeQuietly(consumerConsumer, "consumerConsumer")
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  /**
+   * Test the consumer group APIs.
+   */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_17960"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testConsumerGroupsDeprecatedConsumerGroupState(quorum: String, groupProtocol: String): Unit = {
     val config = createConfig
     client = Admin.create(config)
@@ -2127,7 +2240,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
                   consumer.poll(JDuration.ofSeconds(5))
                   if (!consumer.assignment.isEmpty && latch.getCount > 0L)
                     latch.countDown()
-                  consumer.commitSync()
+                  try {
+                    consumer.commitSync()
+                  } catch {
+                    case _: CommitFailedException => // Ignore and retry on next iteration.
+                  }
                 }
               } catch {
                 case _: InterruptException => // Suppress the output to stderr
@@ -2147,7 +2264,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           TestUtils.waitUntilTrue(() => {
             val matching = client.listConsumerGroups.all.get.asScala.filter(group =>
               group.groupId == testGroupId &&
-                group.state.get == ConsumerGroupState.STABLE)
+                group.state.get == ConsumerGroupState.STABLE &&
+                group.groupState.get == GroupState.STABLE)
             matching.size == 1
           }, s"Expected to be able to list $testGroupId")
 
@@ -2155,7 +2273,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
             val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
               group.groupId == testGroupId &&
-                group.state.get == ConsumerGroupState.STABLE)
+                group.state.get == ConsumerGroupState.STABLE &&
+                group.groupState.get == GroupState.STABLE)
             matching.size == 1
           }, s"Expected to be able to list $testGroupId in group type $groupType")
 
@@ -2164,7 +2283,18 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
               .inStates(Set(ConsumerGroupState.STABLE).asJava)
             val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
               group.groupId == testGroupId &&
-                group.state.get == ConsumerGroupState.STABLE)
+                group.state.get == ConsumerGroupState.STABLE &&
+                group.groupState.get == GroupState.STABLE)
+            matching.size == 1
+          }, s"Expected to be able to list $testGroupId in group type $groupType and state Stable")
+
+          TestUtils.waitUntilTrue(() => {
+            val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
+              .inGroupStates(Set(GroupState.STABLE).asJava)
+            val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+              group.groupId == testGroupId &&
+                group.state.get == ConsumerGroupState.STABLE &&
+                group.groupState.get == GroupState.STABLE)
             matching.size == 1
           }, s"Expected to be able to list $testGroupId in group type $groupType and state Stable")
 
@@ -2172,12 +2302,29 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             val options = new ListConsumerGroupsOptions().inStates(Set(ConsumerGroupState.STABLE).asJava)
             val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
               group.groupId == testGroupId &&
-                group.state.get == ConsumerGroupState.STABLE)
+                group.state.get == ConsumerGroupState.STABLE &&
+                group.groupState.get == GroupState.STABLE)
+            matching.size == 1
+          }, s"Expected to be able to list $testGroupId in state Stable")
+
+          TestUtils.waitUntilTrue(() => {
+            val options = new ListConsumerGroupsOptions().inGroupStates(Set(GroupState.STABLE).asJava)
+            val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+              group.groupId == testGroupId &&
+                group.state.get == ConsumerGroupState.STABLE &&
+                group.groupState.get == GroupState.STABLE)
             matching.size == 1
           }, s"Expected to be able to list $testGroupId in state Stable")
 
           TestUtils.waitUntilTrue(() => {
             val options = new ListConsumerGroupsOptions().inStates(Set(ConsumerGroupState.EMPTY).asJava)
+            val matching = client.listConsumerGroups(options).all.get.asScala.filter(
+              _.groupId == testGroupId)
+            matching.isEmpty
+          }, s"Expected to find zero groups")
+
+          TestUtils.waitUntilTrue(() => {
+            val options = new ListConsumerGroupsOptions().inGroupStates(Set(GroupState.EMPTY).asJava)
             val matching = client.listConsumerGroups(options).all.get.asScala.filter(
               _.groupId == testGroupId)
             matching.isEmpty
@@ -2516,9 +2663,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Expected to find all groups")
 
       val classicConsumers = client.describeClassicGroups(groupIds.asJavaCollection).all().get()
-      assertNotNull(classicConsumers.get(classicGroupId))
-      assertEquals(classicGroupId, classicConsumers.get(classicGroupId).groupId())
-      assertEquals("consumer", classicConsumers.get(classicGroupId).protocol())
+      val classicConsumer = classicConsumers.get(classicGroupId)
+      assertNotNull(classicConsumer)
+      assertEquals(classicGroupId, classicConsumer.groupId)
+      assertEquals("consumer", classicConsumer.protocol)
+      assertFalse(classicConsumer.members.isEmpty)
+      classicConsumer.members.forEach(member => assertTrue(member.upgraded.isEmpty))
 
       assertNotNull(classicConsumers.get(simpleGroupId))
       assertEquals(simpleGroupId, classicConsumers.get(simpleGroupId).groupId())
@@ -3440,8 +3590,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("kraft"))
   def testLongTopicNames(quorum: String): Unit = {
     val client = createAdminClient
-    val longTopicName = String.join("", Collections.nCopies(249, "x"));
-    val invalidTopicName = String.join("", Collections.nCopies(250, "x"));
+    val longTopicName = String.join("", Collections.nCopies(249, "x"))
+    val invalidTopicName = String.join("", Collections.nCopies(250, "x"))
     val newTopics2 = Seq(new NewTopic(invalidTopicName, 3, 3.toShort),
                          new NewTopic(longTopicName, 3, 3.toShort))
     val results = client.createTopics(newTopics2.asJava).values()
@@ -3462,7 +3612,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     def validateLogConfig(compressionType: String): Unit = {
       ensureConsistentKRaftMetadata()
-      val topicProps = brokers.head.metadataCache.asInstanceOf[KRaftMetadataCache].topicConfig(topic)
+      val topicProps = brokers.head.metadataCache.topicConfig(topic)
       val logConfig = LogConfig.fromProps(Collections.emptyMap[String, AnyRef], topicProps)
 
       assertEquals(compressionType, logConfig.originals.get(TopicConfig.COMPRESSION_TYPE_CONFIG))
@@ -3522,7 +3672,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testIncrementalAlterConfigsForLog4jLogLevels(quorum: String): Unit = {
     client = createAdminClient
 
-    val ancestorLogger = "kafka";
+    val ancestorLogger = "kafka"
     val initialLoggerConfig = describeBrokerLoggers()
     val initialAncestorLogLevel = initialLoggerConfig.get("kafka").value()
     val initialControllerServerLogLevel = initialLoggerConfig.get("kafka.server.ControllerServer").value()
@@ -3619,6 +3769,27 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val newAncestorLoggerConfig = describeBrokerLoggers()
     assertEquals(newAncestorLogLevel, newAncestorLoggerConfig.get(ancestorLogger).value())
     assertEquals(newAncestorLogLevel, newAncestorLoggerConfig.get("kafka.server.ControllerServer").value())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testIncrementalAlterConfigsForLog4jLogLevelsCanSetToRootLogger(quorum: String): Unit = {
+    client = createAdminClient
+    val initialLoggerConfig = describeBrokerLoggers()
+    val initialRootLogLevel = initialLoggerConfig.get(Log4jController.ROOT_LOGGER).value()
+    val newRootLogLevel = LogLevelConfig.DEBUG_LOG_LEVEL
+
+    val alterRootLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, newRootLogLevel), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+
+    alterBrokerLoggers(alterRootLoggerEntry, validateOnly = true)
+    val validatedRootLoggerConfig = describeBrokerLoggers()
+    assertEquals(initialRootLogLevel, validatedRootLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+
+    alterBrokerLoggers(alterRootLoggerEntry)
+    val changedRootLoggerConfig = describeBrokerLoggers()
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
   }
 
   @ParameterizedTest
@@ -3962,18 +4133,5 @@ object PlaintextAdminIntegrationTest {
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
     assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
-  }
-
-  /**
-   * Resets the logging configuration after the test.
-   */
-  def resetLogging(): Unit = {
-    org.apache.log4j.LogManager.resetConfiguration()
-    val stream = this.getClass.getResourceAsStream("/log4j.properties")
-    try {
-      PropertyConfigurator.configure(stream)
-    } finally {
-      stream.close()
-    }
   }
 }

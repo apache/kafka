@@ -59,7 +59,7 @@
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The name of the topic." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "The partition indexes to add to the transaction" }
+        "about": "The partition indexes to add to the transaction." }
     ]}
   ]
 }

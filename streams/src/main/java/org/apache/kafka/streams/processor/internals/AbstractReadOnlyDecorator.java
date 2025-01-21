@@ -49,7 +49,7 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
     }
 
     @Override
-    public void init(final StateStoreContext context,
+    public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }

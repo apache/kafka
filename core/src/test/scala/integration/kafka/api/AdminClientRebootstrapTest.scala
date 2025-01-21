@@ -20,7 +20,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 class AdminClientRebootstrapTest extends RebootstrapTest {
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum=kraft.useRebootstrapTriggerMs={0}")
   @ValueSource(booleans = Array(false, true))
   def testRebootstrap(useRebootstrapTriggerMs: Boolean): Unit = {
 

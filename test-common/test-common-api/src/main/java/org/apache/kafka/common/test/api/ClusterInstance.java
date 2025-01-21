@@ -27,6 +27,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -37,9 +38,12 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.serialization.BytesDeserializer;
-import org.apache.kafka.common.serialization.BytesSerializer;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -58,6 +62,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -159,10 +164,10 @@ public interface ClusterInstance {
 
     default <K, V> Producer<K, V> producer(Map<String, Object> configs) {
         Map<String, Object> props = new HashMap<>(configs);
-        props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, BytesSerializer.class.getName());
-        props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, BytesSerializer.class.getName());
+        props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaProducer<>(props);
+        return new KafkaProducer<>(setClientSaslConfig(props));
     }
 
     default <K, V> Producer<K, V> producer() {
@@ -171,12 +176,12 @@ public interface ClusterInstance {
 
     default <K, V> Consumer<K, V> consumer(Map<String, Object> configs) {
         Map<String, Object> props = new HashMap<>(configs);
-        props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class.getName());
-        props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class.getName());
+        props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaConsumer<>(props);
+        return new KafkaConsumer<>(setClientSaslConfig(props));
     }
 
     default <K, V> Consumer<K, V> consumer() {
@@ -192,7 +197,23 @@ public interface ClusterInstance {
             props.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
             props.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
         }
-        return Admin.create(props);
+        return Admin.create(setClientSaslConfig(props));
+    }
+
+    default Map<String, Object> setClientSaslConfig(Map<String, Object> configs) {
+        Map<String, Object> props = new HashMap<>(configs);
+        if (config().brokerSecurityProtocol() == SecurityProtocol.SASL_PLAINTEXT) {
+            props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
+            props.putIfAbsent(SaslConfigs.SASL_MECHANISM, "PLAIN");
+            props.putIfAbsent(
+                SaslConfigs.SASL_JAAS_CONFIG,
+                String.format(
+                    "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                    JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
+                )
+            );
+        }
+        return props;
     }
 
     default Admin admin(Map<String, Object> configs) {
@@ -333,6 +354,22 @@ public interface ClusterInstance {
                 actualEntries.set(accessControlEntrySet);
                 return accessControlEntrySet.containsAll(entries) && entries.containsAll(accessControlEntrySet);
             }, "expected acls: " + entries + ", actual acls: " + actualEntries.get());
+        }
+    }
+
+    /**
+     * Returns the broker id of leader partition.
+     */
+    default int getLeaderBrokerId(TopicPartition topicPartition) throws ExecutionException, InterruptedException {
+        try (var admin = admin()) {
+            String topic = topicPartition.topic();
+            TopicDescription description = admin.describeTopics(List.of(topic)).topicNameValues().get(topic).get();
+
+            return description.partitions().stream()
+                    .filter(tp -> tp.partition() == topicPartition.partition())
+                    .mapToInt(tp -> tp.leader().id())
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
     }
 }

@@ -48,15 +48,13 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -113,33 +111,6 @@ public class KStreamImplTest {
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private final MockApiProcessorSupplier<String, String, Void, Void> processorSupplier = new MockApiProcessorSupplier<>();
     private final MockApiFixedKeyProcessorSupplier<String, String, Void> fixedKeyProcessorSupplier = new MockApiFixedKeyProcessorSupplier<>();
-    @SuppressWarnings("deprecation")
-    private final org.apache.kafka.streams.kstream.ValueTransformerSupplier<String, Iterable<String>> flatValueTransformerSupplier =
-        () -> new org.apache.kafka.streams.kstream.ValueTransformer<String, Iterable<String>>() {
-            @Override
-            public void init(final ProcessorContext context) {}
-
-            @Override
-            public Iterable<String> transform(final String value) {
-                return Collections.singleton(value);
-            }
-
-            @Override
-            public void close() {}
-        };
-    private final ValueTransformerWithKeySupplier<String, String, Iterable<String>> flatValueTransformerWithKeySupplier =
-        () -> new ValueTransformerWithKey<String, String, Iterable<String>>() {
-            @Override
-            public void init(final ProcessorContext context) {}
-
-            @Override
-            public Iterable<String> transform(final String key, final String value) {
-                return Collections.singleton(value);
-            }
-
-            @Override
-            public void close() {}
-        };
 
     private StreamsBuilder builder;
     private KStream<String, String> testStream;
@@ -1620,230 +1591,6 @@ public class KStreamImplTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValues() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues((org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Iterable<Object>>) null));
-        assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValues() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues((ValueTransformerWithKeySupplier<Object, Object, Iterable<Object>>) null));
-        assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValuesWithStores() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                (org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Iterable<Object>>) null,
-                "stateStore"));
-        assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValuesWithStores() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                (ValueTransformerWithKeySupplier<Object, Object, Iterable<Object>>) null,
-                "stateStore"));
-        assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValuesWithNamed() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                (org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Iterable<Object>>) null,
-                Named.as("flatValueTransformer")));
-        assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValuesWithNamed() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                (ValueTransformerWithKeySupplier<Object, Object, Iterable<Object>>) null,
-                Named.as("flatValueWithKeyTransformer")));
-        assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValuesWithNamedAndStores() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                (org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Iterable<Object>>) null,
-                Named.as("flatValueTransformer"),
-                "stateStore"));
-        assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValuesWithNamedAndStores() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                (ValueTransformerWithKeySupplier<Object, Object, Iterable<Object>>) null,
-                Named.as("flatValueWitKeyTransformer"),
-                "stateStore"));
-        assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueSupplier() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerSupplier,
-                (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueWithKeySupplier() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerWithKeySupplier,
-                (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueSupplier() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerSupplier,
-                (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueWithKeySupplier() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerWithKeySupplier,
-                (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueSupplierAndNamed() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerSupplier,
-                Named.as("flatValueTransformer"),
-                (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueWithKeySupplierAndNamed() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerWithKeySupplier,
-                Named.as("flatValueWitKeyTransformer"),
-                (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueSupplierAndNamed() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerSupplier,
-                Named.as("flatValueTransformer"),
-                (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueWithKeySupplierAndNamed() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerWithKeySupplier,
-                Named.as("flatValueWitKeyTransformer"),
-                (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueSupplier() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerSupplier,
-                (Named) null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueWithKeySupplier() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerWithKeySupplier,
-                (Named) null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueSupplierAndStores() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerSupplier,
-                (Named) null,
-                "storeName"));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueWithKeySupplierAndStore() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.flatTransformValues(
-                flatValueTransformerWithKeySupplier,
-                (Named) null,
-                "storeName"));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
-    }
-
-    @Test
     public void shouldNotAllowNullProcessSupplierOnProcess() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2063,9 +1810,8 @@ public class KStreamImplTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
-    public void shouldProcessWithOldProcessorAndState() {
+    public void shouldProcessWithProcessorAndState() {
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -2079,16 +1825,19 @@ public class KStreamImplTest {
         ));
 
         builder.stream(input, consumed)
-            .process(() -> new org.apache.kafka.streams.processor.Processor<String, String>() {
+            .process(() -> new Processor<String, String, String, String>() {
                 private KeyValueStore<String, Integer> sumStore;
 
                 @Override
-                public void init(final ProcessorContext context) {
+                public void init(final ProcessorContext<String, String> context) {
                     this.sumStore = context.getStateStore("sum");
                 }
 
                 @Override
-                public void process(final String key, final String value) {
+                public void process(final Record<String, String> record) {
+                    final String key = record.key();
+                    final String value = record.value();
+
                     final Integer counter = sumStore.get(key);
                     if (counter == null) {
                         sumStore.putIfAbsent(key, value.length());
@@ -2099,10 +1848,6 @@ public class KStreamImplTest {
                             sumStore.put(key, counter + value.length());
                         }
                     }
-                }
-
-                @Override
-                public void close() {
                 }
             }, Named.as("p"), "sum");
 
@@ -2142,9 +1887,8 @@ public class KStreamImplTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
-    public void shouldBindStateWithOldProcessorSupplier() {
+    public void shouldBindStateWithProcessorSupplier() {
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -2152,20 +1896,23 @@ public class KStreamImplTest {
         final String input = "input";
 
         builder.stream(input, consumed)
-            .process(new org.apache.kafka.streams.processor.ProcessorSupplier<String, String>() {
+            .process(new ProcessorSupplier<String, String, String, String>() {
 
                 @Override
-                public org.apache.kafka.streams.processor.Processor<String, String> get() {
-                    return new org.apache.kafka.streams.processor.Processor<String, String>() {
+                public Processor<String, String, String, String> get() {
+                    return new Processor<>() {
                         private KeyValueStore<String, Integer> sumStore;
 
                         @Override
-                        public void init(final ProcessorContext context) {
+                        public void init(final ProcessorContext<String, String> context) {
                             this.sumStore = context.getStateStore("sum");
                         }
 
                         @Override
-                        public void process(final String key, final String value) {
+                        public void process(final Record<String, String> record) {
+                            final String key = record.key();
+                            final String value = record.value();
+
                             final Integer counter = sumStore.get(key);
                             if (counter == null) {
                                 sumStore.putIfAbsent(key, value.length());
@@ -2177,14 +1924,9 @@ public class KStreamImplTest {
                                 }
                             }
                         }
-
-                        @Override
-                        public void close() {
-                        }
                     };
                 }
 
-                @SuppressWarnings("unchecked")
                 @Override
                 public Set<StoreBuilder<?>> stores() {
                     final Set<StoreBuilder<?>> stores = new HashSet<>();
@@ -2230,72 +1972,6 @@ public class KStreamImplTest {
             assertEquals(2, sumStore.get("B").intValue());
             assertEquals(3, sumStore.get("C").intValue());
             assertEquals(4, sumStore.get("D").intValue());
-        }
-    }
-
-    @Test
-    public void shouldBindStateWithOldProcessor() {
-        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final String input = "input";
-        final String output = "output";
-
-        builder.stream(input, consumed)
-            .process(() -> new ContextualProcessor<String, String, String, Integer>() {
-                @Override
-                public void process(final Record<String, String> record) {
-                    context().forward(record.withValue(record.value().length()));
-                }
-            }, Named.as("p"))
-            .to(output, Produced.valueSerde(Serdes.Integer()));
-
-        final String topologyDescription = builder.build().describe().toString();
-
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n" +
-                "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
-                "      --> p\n" +
-                "    Processor: p (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000001\n" +
-                "      <-- KSTREAM-SOURCE-0000000000\n" +
-                "    Sink: KSTREAM-SINK-0000000001 (topic: output)\n" +
-                "      <-- p\n\n")
-        );
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(
-                    input,
-                    new StringSerializer(),
-                    new StringSerializer()
-                );
-            final TestOutputTopic<String, Integer> outputTopic =
-                driver.createOutputTopic(
-                    output,
-                    new StringDeserializer(),
-                    new IntegerDeserializer()
-                );
-
-            inputTopic.pipeInput("A", "0", 5L);
-            inputTopic.pipeInput("B", "00", 100L);
-            inputTopic.pipeInput("C", "000", 0L);
-            inputTopic.pipeInput("D", "0000", 0L);
-            inputTopic.pipeInput("A", "00000", 10L);
-            inputTopic.pipeInput("A", "000000", 8L);
-
-            final List<TestRecord<String, Integer>> outputExpectRecords = new ArrayList<>();
-            outputExpectRecords.add(new TestRecord<>("A", 1, Instant.ofEpochMilli(5L)));
-            outputExpectRecords.add(new TestRecord<>("B", 2, Instant.ofEpochMilli(100L)));
-            outputExpectRecords.add(new TestRecord<>("C", 3, Instant.ofEpochMilli(0L)));
-            outputExpectRecords.add(new TestRecord<>("D", 4, Instant.ofEpochMilli(0L)));
-            outputExpectRecords.add(new TestRecord<>("A", 5, Instant.ofEpochMilli(10L)));
-            outputExpectRecords.add(new TestRecord<>("A", 6, Instant.ofEpochMilli(8L)));
-
-            assertEquals(outputTopic.readRecordsToList(), outputExpectRecords);
         }
     }
 

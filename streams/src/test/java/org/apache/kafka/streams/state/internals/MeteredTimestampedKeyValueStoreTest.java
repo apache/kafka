@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -95,7 +94,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     @Mock
     private KeyValueStore<Bytes, byte[]> inner;
     @Mock
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
     private MockTime mockTime;
 
     private static final Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
@@ -143,7 +142,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     }
 
     private void init() {
-        metered.init((StateStoreContext) context, metered);
+        metered.init(context, metered);
     }
 
     @Test
@@ -156,8 +155,8 @@ public class MeteredTimestampedKeyValueStoreTest {
             Serdes.String(),
             new ValueAndTimestampSerde<>(Serdes.String())
         );
-        doNothing().when(inner).init((StateStoreContext) context, outer);
-        outer.init((StateStoreContext) context, outer);
+        doNothing().when(inner).init(context, outer);
+        outer.init(context, outer);
     }
 
     @Test
@@ -195,7 +194,7 @@ public class MeteredTimestampedKeyValueStoreTest {
             keySerde,
             valueSerde
         );
-        metered.init((StateStoreContext) context, metered);
+        metered.init(context, metered);
 
         metered.get(KEY);
         metered.put(KEY, VALUE_AND_TIMESTAMP);
@@ -240,8 +239,8 @@ public class MeteredTimestampedKeyValueStoreTest {
         init();
 
         final RawAndDeserializedValue<String> valueWithBinary = metered.getWithBinary(KEY);
-        assertEquals(valueWithBinary.value, VALUE_AND_TIMESTAMP);
-        assertArrayEquals(valueWithBinary.serializedValue, VALUE_AND_TIMESTAMP_BYTES);
+        assertEquals(VALUE_AND_TIMESTAMP, valueWithBinary.value);
+        assertArrayEquals(VALUE_AND_TIMESTAMP_BYTES, valueWithBinary.serializedValue);
     }
 
     @Test
@@ -408,7 +407,7 @@ public class MeteredTimestampedKeyValueStoreTest {
             null,
             null
         );
-        store.init((StateStoreContext) context, inner);
+        store.init(context, inner);
 
         try {
             store.put("key", ValueAndTimestamp.make(42L, 60000));
@@ -434,7 +433,7 @@ public class MeteredTimestampedKeyValueStoreTest {
             Serdes.String(),
             new ValueAndTimestampSerde<>(Serdes.Long())
         );
-        store.init((StateStoreContext) context, inner);
+        store.init(context, inner);
 
         try {
             store.put("key", ValueAndTimestamp.make(42L, 60000));
@@ -446,6 +445,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         }
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTrackOpenIteratorsMetric() {
         setUp();
@@ -457,13 +457,14 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
 
-        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all()) {
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> unused = metered.all()) {
             assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
         }
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTimeIteratorDuration() {
         setUp();
@@ -478,7 +479,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
         assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
 
-        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all()) {
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> unused = metered.all()) {
             // nothing to do, just close immediately
             mockTime.sleep(2);
         }
@@ -495,6 +496,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTrackOldestOpenIteratorTimestamp() {
         setUp();
@@ -509,7 +511,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         KeyValueIterator<String, ValueAndTimestamp<String>> second = null;
         final long secondTimestamp;
         try {
-            try (final KeyValueIterator<String, ValueAndTimestamp<String>> first = metered.all()) {
+            try (final KeyValueIterator<String, ValueAndTimestamp<String>> unused = metered.all()) {
                 final long oldestTimestamp = mockTime.milliseconds();
                 assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
                 mockTime.sleep(100);

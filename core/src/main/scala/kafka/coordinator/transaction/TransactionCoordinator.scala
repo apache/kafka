@@ -133,7 +133,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           try {
             val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
               producerId = producerIdManager.generateProducerId(),
-              previousProducerId = RecordBatch.NO_PRODUCER_ID,
+              prevProducerId = RecordBatch.NO_PRODUCER_ID,
               nextProducerId = RecordBatch.NO_PRODUCER_ID,
               producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
               lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
@@ -221,7 +221,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       //      could be a retry after a valid epoch bump that the producer never received the response for
       txnMetadata.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH ||
         producerIdAndEpoch.producerId == txnMetadata.producerId ||
-        (producerIdAndEpoch.producerId == txnMetadata.previousProducerId && TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch))
+        (producerIdAndEpoch.producerId == txnMetadata.prevProducerId && TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch))
     }
 
     if (txnMetadata.pendingTransitionInProgress) {
@@ -391,6 +391,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback,
+                                       clientTransactionVersion: TransactionVersion,
                                        requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
       debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
@@ -420,7 +421,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               // this is an optimization: if the partitions are already in the metadata reply OK immediately
               Left(Errors.NONE)
             } else {
-              Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.milliseconds()))
+              Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.milliseconds(), clientTransactionVersion))
             }
           }
       }
@@ -757,7 +758,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             // Note that, it can only happen when the current state is Ongoing.
             isEpochFence = txnMetadata.pendingState.contains(PrepareEpochFence)
             // True if the client retried a request that had overflowed the epoch, and a new producer ID is stored in the txnMetadata
-            val retryOnOverflow = !isEpochFence && txnMetadata.previousProducerId == producerId &&
+            val retryOnOverflow = !isEpochFence && txnMetadata.prevProducerId == producerId &&
               producerEpoch == Short.MaxValue - 1 && txnMetadata.producerEpoch == 0
             // True if the client retried an endTxn request, and the bumped producer epoch is stored in the txnMetadata.
             val retryOnEpochBump = !isEpochFence && txnMetadata.producerEpoch == producerEpoch + 1
@@ -813,10 +814,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
             if (txnMetadata.producerId != producerId && !retryOnOverflow)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-            else if (!isValidEpoch)
-              Left(Errors.PRODUCER_FENCED)
             else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
+            else if (!isValidEpoch)
+              Left(Errors.PRODUCER_FENCED)
             else txnMetadata.state match {
               case Ongoing =>
                 val nextState = if (txnMarkerResult == TransactionResult.COMMIT)

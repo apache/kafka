@@ -70,8 +70,7 @@ public class VersionRange {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof VersionRange)) return false;
-        VersionRange other = (VersionRange) o;
+        if (!(o instanceof VersionRange other)) return false;
         return other.min == min && other.max == max;
     }
 

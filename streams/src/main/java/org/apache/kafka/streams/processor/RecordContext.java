@@ -21,7 +21,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 
 /**
  * The context associated with the current record being processed by
- * a {@link org.apache.kafka.streams.processor.Processor}
+ * a {@link org.apache.kafka.streams.processor.api.Processor}
  */
 public interface RecordContext {
 

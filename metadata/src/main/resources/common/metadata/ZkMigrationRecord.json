@@ -23,7 +23,9 @@
   // In 3.4, the defined values are: 0 (None), 1 (PreMigration), 2 (Migration), 3 (PostMigration).
   // In 3.5, the values for PreMigration and Migration were swapped: 0 (None), 2 (PreMigration), 1 (Migration), 3 (PostMigration).
   //   This was done to work around the fact that we never wrote Migration or PostMigration records in 3.4
-  //
+  // In 4.0, although migration is no longer supported and ZK has been removed from Kafka,
+  // users might migrate from ZK to KRaft in version 3.x and then perform a rolling upgrade to 4.0.
+  // Therefore, this generated code needs to be retained.
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [

@@ -70,6 +70,7 @@ public class StreamsProducer {
     private Producer<byte[], byte[]> producer;
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
+    private boolean closed = false;
     private double oldProducerTotalBlockedTime = 0;
     // we have a single `StreamsProducer` per thread, and thus a single `sendException` instance,
     // which we share across all tasks, ie, all `RecordCollectorImpl`
@@ -96,6 +97,10 @@ public class StreamsProducer {
 
     boolean transactionInFlight() {
         return transactionInFlight;
+    }
+
+    boolean isClosed() {
+        return closed;
     }
 
     /**
@@ -320,6 +325,7 @@ public class StreamsProducer {
 
     void close() {
         producer.close();
+        closed = true;
         transactionInFlight = false;
         transactionInitialized = false;
     }

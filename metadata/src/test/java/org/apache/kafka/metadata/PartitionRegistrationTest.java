@@ -20,9 +20,9 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.UnwritableMetadataException;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -116,7 +116,7 @@ public class PartitionRegistrationTest {
                     Uuid.fromString("bAAlGAz1TN2doZjtWlvhRQ")
                 }).
             setIsr(new int[]{2, 3, 4}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(234).setPartitionEpoch(567).build();
-        assertEquals(new LeaderAndIsrPartitionState().
+        assertEquals(new LeaderAndIsrRequest.PartitionState().
                 setTopicName("foo").
                 setPartitionIndex(1).
                 setControllerEpoch(-1).
@@ -129,7 +129,7 @@ public class PartitionRegistrationTest {
                 setRemovingReplicas(Collections.emptyList()).
                 setIsNew(true).toString(),
             a.toLeaderAndIsrPartitionState(new TopicPartition("foo", 1), true).toString());
-        assertEquals(new LeaderAndIsrPartitionState().
+        assertEquals(new LeaderAndIsrRequest.PartitionState().
                 setTopicName("bar").
                 setPartitionIndex(0).
                 setControllerEpoch(-1).

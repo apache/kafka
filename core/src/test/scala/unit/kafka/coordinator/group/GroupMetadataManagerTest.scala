@@ -43,9 +43,8 @@ import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.{GroupCoordinatorConfig, OffsetAndMetadata, OffsetConfig}
-import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitValue}
-import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
-import org.apache.kafka.server.common.MetadataVersion._
+import org.apache.kafka.coordinator.group.generated.{CoordinatorRecordType, GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
@@ -82,7 +81,7 @@ class GroupMetadataManagerTest {
   val noExpiration = OptionalLong.empty()
 
   private val offsetConfig = {
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0))
     new OffsetConfig(config.groupCoordinatorConfig.offsetMetadataMaxSize,
       config.groupCoordinatorConfig.offsetsLoadBufferSize,
       config.groupCoordinatorConfig.offsetsRetentionMs,
@@ -100,8 +99,7 @@ class GroupMetadataManagerTest {
     metrics = new kMetrics()
     time = new MockTime
     replicaManager = mock(classOf[ReplicaManager])
-    groupMetadataManager = new GroupMetadataManager(0, MetadataVersion.latestTesting, offsetConfig, replicaManager,
-      time, metrics)
+    groupMetadataManager = new GroupMetadataManager(0, offsetConfig, replicaManager, time, metrics)
     groupMetadataManager.startup(() => numOffsetsPartitions, enableMetadataExpiration = false)
     partition = mock(classOf[Partition])
   }
@@ -115,7 +113,7 @@ class GroupMetadataManagerTest {
   def testLogInfoFromCleanupGroupMetadata(): Unit = {
     var expiredOffsets: Int = 0
     var infoCount = 0
-    val gmm = new GroupMetadataManager(0, MetadataVersion.latestTesting, offsetConfig, replicaManager, time, metrics) {
+    val gmm = new GroupMetadataManager(0, offsetConfig, replicaManager, time, metrics) {
       override def cleanupGroupMetadata(groups: Iterable[GroupMetadata], requestLocal: RequestLocal,
                                         selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int = expiredOffsets
 
@@ -1059,22 +1057,20 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testCurrentStateTimestampForAllGroupMetadataVersions(): Unit = {
+  def testCurrentStateTimestampForAllVersions(): Unit = {
     val generation = 1
     val protocol = "range"
     val memberId = "memberId"
 
-    for (metadataVersion <- MetadataVersion.VERSIONS) {
-      val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, metadataVersion = metadataVersion)
-
+    for (version <- 0 to 3) {
+      val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId,
+        groupMetadataValueVersion = version.toShort)
       val deserializedGroupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecord.value(), time)
-      // GROUP_METADATA_VALUE_SCHEMA_V2 or higher should correctly set the currentStateTimestamp
-      if (metadataVersion.isAtLeast(IBP_2_1_IV0))
-        assertEquals(Some(time.milliseconds()), deserializedGroupMetadata.currentStateTimestamp,
-          s"the metadataVersion $metadataVersion doesn't set the currentStateTimestamp correctly.")
+
+      if (version >= 2)
+        assertEquals(Some(time.milliseconds()), deserializedGroupMetadata.currentStateTimestamp)
       else
-        assertTrue(deserializedGroupMetadata.currentStateTimestamp.isEmpty,
-          s"the metadataVersion $metadataVersion should not set the currentStateTimestamp.")
+        assertTrue(deserializedGroupMetadata.currentStateTimestamp.isEmpty)
     }
   }
 
@@ -1083,10 +1079,10 @@ class GroupMetadataManagerTest {
     val generation = 1
     val protocol = "range"
     val memberId = "memberId"
-    val oldMetadataVersions = Array(IBP_0_9_0, IBP_0_10_1_IV0, IBP_2_1_IV0)
 
-    for (metadataVersion <- oldMetadataVersions) {
-      val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, metadataVersion = metadataVersion)
+    for (version <- 0 to 2) {
+      val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId,
+        groupMetadataValueVersion = version.toShort)
 
       val deserializedGroupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecord.value(), time)
       assertEquals(groupId, deserializedGroupMetadata.groupId)
@@ -1189,7 +1185,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
@@ -1227,12 +1223,12 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
   def testStoreNonEmptyGroupWhenCoordinatorHasMoved(): Unit = {
-    when(replicaManager.getMagic(any())).thenReturn(None)
+    when(replicaManager.onlinePartition(any())).thenReturn(None)
     val memberId = "memberId"
     val clientId = "clientId"
     val clientHost = "localhost"
@@ -1253,7 +1249,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.storeGroup(group, Map(memberId -> Array[Byte]()), callback)
     assertEquals(Some(Errors.NOT_COORDINATOR), maybeError)
 
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
@@ -1326,7 +1322,7 @@ class GroupMetadataManagerTest {
     val offsets = immutable.Map(topicIdPartition -> offsetAndMetadata)
 
     val capturedResponseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
       commitErrors = Some(errors)
@@ -1348,7 +1344,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
@@ -1377,7 +1373,7 @@ class GroupMetadataManagerTest {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
     val offsets = immutable.Map(topicIdPartition -> new OffsetAndMetadata(offset, noLeader, "", time.milliseconds(), noExpiration))
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
@@ -1410,7 +1406,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
@@ -1429,7 +1425,7 @@ class GroupMetadataManagerTest {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
     val offsets = immutable.Map(topicIdPartition -> new OffsetAndMetadata(offset, noLeader, "", time.milliseconds(), noExpiration))
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
@@ -1462,12 +1458,12 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
   def testCommitOffsetWhenCoordinatorHasMoved(): Unit = {
-    when(replicaManager.getMagic(any())).thenReturn(None)
+    when(replicaManager.onlinePartition(any())).thenReturn(None)
     val memberId = ""
     val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val offset = 37
@@ -1491,7 +1487,7 @@ class GroupMetadataManagerTest {
     val maybeError = commitErrors.get.get(topicIdPartition)
     assertEquals(Some(Errors.NOT_COORDINATOR), maybeError)
 
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
   }
 
   @Test
@@ -1520,7 +1516,7 @@ class GroupMetadataManagerTest {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
     val offsets = immutable.Map(topicIdPartition -> new OffsetAndMetadata(offset, noLeader, "", time.milliseconds(), noExpiration))
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
@@ -1549,7 +1545,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topicIdPartition.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
     // Will not update sensor if failed
     assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
   }
@@ -1573,7 +1569,7 @@ class GroupMetadataManagerTest {
       topicIdPartitionFailed -> new OffsetAndMetadata(offset, noLeader, "s" * (offsetConfig.maxMetadataSize + 1) , time.milliseconds(), noExpiration)
     )
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
@@ -1617,7 +1613,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
   }
 
@@ -1740,7 +1736,7 @@ class GroupMetadataManagerTest {
 
     val capturedResponseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
 
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
@@ -1773,7 +1769,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
-    verify(replicaManager).getMagic(any())
+    verify(replicaManager).onlinePartition(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
@@ -1854,7 +1850,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager, times(2)).getMagic(any())
+    verify(replicaManager, times(2)).onlinePartition(any())
   }
 
   @Test
@@ -1871,7 +1867,7 @@ class GroupMetadataManagerTest {
     // expect the group metadata tombstone
     val recordsCapture: ArgumentCaptor[MemoryRecords] = ArgumentCaptor.forClass(classOf[MemoryRecords])
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
     mockGetPartition()
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
@@ -1914,7 +1910,7 @@ class GroupMetadataManagerTest {
     // expect the group metadata tombstone
     val recordsCapture: ArgumentCaptor[MemoryRecords] = ArgumentCaptor.forClass(classOf[MemoryRecords])
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
     mockGetPartition()
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
@@ -1984,7 +1980,7 @@ class GroupMetadataManagerTest {
 
     // expect the offset tombstone
     val recordsCapture: ArgumentCaptor[MemoryRecords] = ArgumentCaptor.forClass(classOf[MemoryRecords])
-
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(partition))
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any(), any())).thenReturn(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO)
@@ -2017,7 +2013,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topicIdPartition2.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
   }
 
   @Test
@@ -2088,7 +2084,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition2.topicPartition).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition3.topicPartition).map(_.offset))
 
-    verify(replicaManager).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
 
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Empty)
@@ -2114,7 +2110,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition2.topicPartition).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition3.topicPartition).map(_.offset))
 
-    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(3)).onlinePartition(groupTopicPartition)
 
     time.sleep(2)
 
@@ -2139,7 +2135,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicIdPartition2.topicPartition).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition3.topicPartition).map(_.offset))
 
-    verify(replicaManager, times(3)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(4)).onlinePartition(groupTopicPartition)
 
     // advance time to just before the offset of last partition is to be expired, no offset should expire
     time.sleep(group.currentStateTimestamp.get + defaultOffsetRetentionMs - time.milliseconds() - 1)
@@ -2170,7 +2166,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topicIdPartition3.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager, times(4)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(5)).onlinePartition(groupTopicPartition)
 
     // advance time enough for that last offset to expire
     time.sleep(2)
@@ -2205,7 +2201,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topicIdPartition3.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager, times(5)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(6)).onlinePartition(groupTopicPartition)
 
     assert(group.is(Dead))
   }
@@ -2261,7 +2257,7 @@ class GroupMetadataManagerTest {
     )
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition1.topicPartition).map(_.offset))
 
-    verify(replicaManager).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
 
     // advance time to enough for offsets to expire
     time.sleep(2)
@@ -2286,7 +2282,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topicIdPartition1.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(3)).onlinePartition(groupTopicPartition)
 
     assert(group.is(Dead))
   }
@@ -2401,7 +2397,7 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topic2IdPartition1.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
 
     group.transitionTo(PreparingRebalance)
 
@@ -2419,6 +2415,7 @@ class GroupMetadataManagerTest {
     group.initNextGeneration()
     group.transitionTo(Stable)
 
+    when(replicaManager.onlinePartition(any)).thenReturn(Some(partition))
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
@@ -2429,7 +2426,7 @@ class GroupMetadataManagerTest {
     verify(partition).appendRecordsToLeader(any[MemoryRecords],
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any(), any())
-    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
+    verify(replicaManager, times(3)).onlinePartition(groupTopicPartition)
 
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
     assert(group.is(Stable))
@@ -2476,10 +2473,11 @@ class GroupMetadataManagerTest {
       new TopicPartition("bar", 0) -> 8992L
     )
 
-    val metadataVersion = IBP_1_1_IV0
-    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets, metadataVersion = metadataVersion, retentionTimeOpt = Some(100))
+    val offsetCommitValueVersion = 1.toShort
+    val groupMetadataValueVersion = 1.toShort
+    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets, offsetCommitValueVersion = offsetCommitValueVersion, retentionTimeOpt = Some(100))
     val memberId = "98098230493"
-    val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, metadataVersion = metadataVersion)
+    val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, groupMetadataValueVersion = groupMetadataValueVersion)
     val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
@@ -2550,34 +2548,17 @@ class GroupMetadataManagerTest {
       time.milliseconds(),
       noExpiration)
 
-    def verifySerde(metadataVersion: MetadataVersion, expectedOffsetCommitValueVersion: Int): Unit = {
-      val bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, metadataVersion)
-      val buffer = ByteBuffer.wrap(bytes)
-
-      assertEquals(expectedOffsetCommitValueVersion, buffer.getShort(0).toInt)
-
-      val deserializedOffsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(buffer)
-      assertEquals(offsetAndMetadata.committedOffset, deserializedOffsetAndMetadata.committedOffset)
-      assertEquals(offsetAndMetadata.metadata, deserializedOffsetAndMetadata.metadata)
-      assertEquals(offsetAndMetadata.commitTimestampMs, deserializedOffsetAndMetadata.commitTimestampMs)
-
-      // Serialization drops the leader epoch silently if an older inter-broker protocol is in use
-      val expectedLeaderEpoch = if (expectedOffsetCommitValueVersion >= 3)
-        offsetAndMetadata.leaderEpoch
-      else
-        noLeader
-
-      assertEquals(expectedLeaderEpoch, deserializedOffsetAndMetadata.leaderEpoch)
-    }
-
-    for (version <- MetadataVersion.VERSIONS) {
-      val expectedSchemaVersion = version match {
-        case v if v.isLessThan(IBP_2_1_IV0) => 1
-        case v if v.isLessThan(IBP_2_1_IV1) => 2
-        case _ => 3
-      }
-      verifySerde(version, expectedSchemaVersion)
-    }
+    val bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
+    val buffer = ByteBuffer.wrap(bytes)
+    val expectedOffsetCommitValueVersion = 3
+    assertEquals(expectedOffsetCommitValueVersion, buffer.getShort(0).toInt)
+    val deserializedOffsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(buffer)
+    assertEquals(offsetAndMetadata.committedOffset, deserializedOffsetAndMetadata.committedOffset)
+    assertEquals(offsetAndMetadata.metadata, deserializedOffsetAndMetadata.metadata)
+    assertEquals(offsetAndMetadata.commitTimestampMs, deserializedOffsetAndMetadata.commitTimestampMs)
+    val expectedLeaderEpoch = offsetAndMetadata.leaderEpoch
+    assertEquals(expectedLeaderEpoch, deserializedOffsetAndMetadata.leaderEpoch)
+    assertEquals(offsetAndMetadata, deserializedOffsetAndMetadata)
   }
 
   @Test
@@ -2592,45 +2573,12 @@ class GroupMetadataManagerTest {
       time.milliseconds(),
       OptionalLong.of(time.milliseconds() + 1000))
 
-    def verifySerde(metadataVersion: MetadataVersion): Unit = {
-      val bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, metadataVersion)
-      val buffer = ByteBuffer.wrap(bytes)
-      assertEquals(1, buffer.getShort(0).toInt)
+    val bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
+    val buffer = ByteBuffer.wrap(bytes)
+    assertEquals(1, buffer.getShort(0).toInt)
 
-      val deserializedOffsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(buffer)
-      assertEquals(offsetAndMetadata, deserializedOffsetAndMetadata)
-    }
-
-    for (version <- MetadataVersion.VERSIONS)
-      verifySerde(version)
-  }
-
-  @Test
-  def testSerdeOffsetCommitValueWithNoneExpireTimestamp(): Unit = {
-    val offsetAndMetadata = new OffsetAndMetadata(
-      537L,
-      noLeader,
-      "metadata",
-      time.milliseconds(),
-      noExpiration)
-
-    def verifySerde(metadataVersion: MetadataVersion): Unit = {
-      val bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, metadataVersion)
-      val buffer = ByteBuffer.wrap(bytes)
-      val version = buffer.getShort(0).toInt
-      if (metadataVersion.isLessThan(IBP_2_1_IV0))
-        assertEquals(1, version)
-      else if (metadataVersion.isLessThan(IBP_2_1_IV1))
-        assertEquals(2, version)
-      else
-        assertEquals(3, version)
-
-      val deserializedOffsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(buffer)
-      assertEquals(offsetAndMetadata, deserializedOffsetAndMetadata)
-    }
-
-    for (version <- MetadataVersion.VERSIONS)
-      verifySerde(version)
+    val deserializedOffsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(buffer)
+    assertEquals(offsetAndMetadata, deserializedOffsetAndMetadata)
   }
 
   @Test
@@ -2932,7 +2880,7 @@ class GroupMetadataManagerTest {
           new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
         )
       )})
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.onlinePartition(any())).thenReturn(Some(mock(classOf[Partition])))
     capturedRecords
   }
 
@@ -2941,20 +2889,20 @@ class GroupMetadataManagerTest {
                                                protocol: String,
                                                memberId: String,
                                                assignmentBytes: Array[Byte] = Array.emptyByteArray,
-                                               metadataVersion: MetadataVersion = MetadataVersion.latestTesting): SimpleRecord = {
+                                               groupMetadataValueVersion: Short = 3): SimpleRecord = {
     val memberProtocols = List((protocol, Array.emptyByteArray))
     val member = new MemberMetadata(memberId, Some(groupInstanceId), "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
     val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId,
-      if (metadataVersion.isAtLeast(IBP_2_1_IV0)) Some(time.milliseconds()) else None, Seq(member), time)
+      if (groupMetadataValueVersion >= 2.toShort) Some(time.milliseconds()) else None, Seq(member), time)
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)
-    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map(memberId -> assignmentBytes), metadataVersion)
+    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map(memberId -> assignmentBytes), groupMetadataValueVersion)
     new SimpleRecord(groupMetadataKey, groupMetadataValue)
   }
 
   private def buildEmptyGroupRecord(generation: Int, protocolType: String): SimpleRecord = {
     val group = GroupMetadata.loadGroup(groupId, Empty, generation, protocolType, null, null, None, Seq.empty, time)
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)
-    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map.empty, MetadataVersion.latestTesting)
+    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map.empty)
     new SimpleRecord(groupMetadataKey, groupMetadataValue)
   }
 
@@ -2998,7 +2946,7 @@ class GroupMetadataManagerTest {
 
   private def createCommittedOffsetRecords(committedOffsets: Map[TopicPartition, Long],
                                            groupId: String = groupId,
-                                           metadataVersion: MetadataVersion = MetadataVersion.latestTesting,
+                                           offsetCommitValueVersion: Short = 3,
                                            retentionTimeOpt: Option[Long] = None): Seq[SimpleRecord] = {
     committedOffsets.map { case (topicPartition, offset) =>
       val commitTimestamp = time.milliseconds()
@@ -3010,7 +2958,7 @@ class GroupMetadataManagerTest {
           new OffsetAndMetadata(offset, noLeader, "", commitTimestamp, noExpiration)
       }
       val offsetCommitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition)
-      val offsetCommitValue = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, metadataVersion)
+      val offsetCommitValue = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, offsetCommitValueVersion)
       new SimpleRecord(offsetCommitKey, offsetCommitValue)
     }.toSeq
   }
@@ -3115,8 +3063,7 @@ class GroupMetadataManagerTest {
 
     // Should ignore unknown record
     val unknownKey = new org.apache.kafka.coordinator.group.generated.GroupMetadataKey()
-    val lowestUnsupportedVersion = (org.apache.kafka.coordinator.group.generated.GroupMetadataKey
-      .HIGHEST_SUPPORTED_VERSION + 1).toShort
+    val lowestUnsupportedVersion = (CoordinatorRecordType.GROUP_METADATA.id + 1).toShort
 
     val unknownMessage1 = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, unknownKey)
     val unknownMessage2 = MessageUtil.toVersionPrefixedBytes(lowestUnsupportedVersion, unknownKey)
@@ -3143,5 +3090,34 @@ class GroupMetadataManagerTest {
       assertEquals(Some(offset), group.offset(topicPartition).map(_.committedOffset))
       assertTrue(group.offset(topicPartition).map(_.expireTimestampMs).get.isEmpty)
     }
+  }
+
+  @Test
+  def testOffsetCommitKey(): Unit = {
+    val bytes = GroupMetadataManager.offsetCommitKey(
+      "foo",
+      new TopicPartition("__consumer_offsets", 0)
+    )
+    val buffer = ByteBuffer.wrap(bytes)
+    assertEquals(1.toShort, buffer.getShort)
+    assertEquals(
+      new OffsetCommitKey(new ByteBufferAccessor(buffer), 0.toShort),
+      new OffsetCommitKey()
+        .setGroup("foo")
+        .setTopic("__consumer_offsets")
+        .setPartition(0)
+    )
+  }
+
+  @Test
+  def testGroupMetadataKey(): Unit = {
+    val bytes = GroupMetadataManager.groupMetadataKey("foo")
+    val buffer = ByteBuffer.wrap(bytes)
+    assertEquals(2.toShort, buffer.getShort())
+    assertEquals(
+      new GroupMetadataKeyData(new ByteBufferAccessor(buffer), 0.toShort),
+      new GroupMetadataKeyData()
+        .setGroup("foo")
+    )
   }
 }

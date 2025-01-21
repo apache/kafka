@@ -490,6 +490,18 @@ public class MockLog implements ReplicatedLog {
             );
         }
 
+        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata.offset();
+        if (snapshotId.offset() != baseOffset) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Cannot create snapshot at offset (%s) because it is not batch aligned. " +
+                    "The batch containing the requested offset has a base offset of (%s)",
+                    snapshotId.offset(),
+                    baseOffset
+                )
+            );
+        }
+
         return createNewSnapshotUnchecked(snapshotId);
     }
 

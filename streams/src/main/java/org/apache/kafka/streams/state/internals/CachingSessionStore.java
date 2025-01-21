@@ -55,7 +55,7 @@ class CachingSessionStore
         "Note that the built-in numerical serdes do not follow this for negative numbers";
 
     private String cacheName;
-    private InternalProcessorContext<?, ?> context;
+    private InternalProcessorContext<?, ?> internalContext;
     private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
 
@@ -71,12 +71,11 @@ class CachingSessionStore
 
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
-        this.context = asInternalProcessorContext(stateStoreContext);
-
-        cacheName = context.taskId() + "-" + name();
-        context.registerCacheFlushListener(cacheName, entries -> {
+        internalContext = asInternalProcessorContext(stateStoreContext);
+        cacheName = internalContext.taskId() + "-" + name();
+        internalContext.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
-                putAndMaybeForward(entry, context);
+                putAndMaybeForward(entry, internalContext);
             }
         });
         super.init(stateStoreContext, root);
@@ -136,13 +135,13 @@ class CachingSessionStore
         final LRUCacheEntry entry =
             new LRUCacheEntry(
                 value,
-                context.headers(),
+                internalContext.headers(),
                 true,
-                context.offset(),
-                context.timestamp(),
-                context.partition(),
-                context.topic());
-        context.cache().put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
+                internalContext.offset(),
+                internalContext.timestamp(),
+                internalContext.partition(),
+                internalContext.topic());
+        internalContext.cache().put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
 
         maxObservedTimestamp = Math.max(keySchema.segmentTimestamp(binaryKey), maxObservedTimestamp);
     }
@@ -161,7 +160,7 @@ class CachingSessionStore
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime, true) :
-            context.cache().range(cacheName,
+            internalContext.cache().range(cacheName,
                         cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
                         cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
             );
@@ -187,7 +186,7 @@ class CachingSessionStore
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime, false) :
-            context.cache().reverseRange(
+            internalContext.cache().reverseRange(
                 cacheName,
                 cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
                 cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime)
@@ -225,7 +224,7 @@ class CachingSessionStore
 
         final Bytes cacheKeyFrom = keyFrom == null ? null : cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
         final Bytes cacheKeyTo = keyTo == null ? null : cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(
             keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
@@ -254,7 +253,7 @@ class CachingSessionStore
 
         final Bytes cacheKeyFrom = keyFrom == null ? null : cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
         final Bytes cacheKeyTo = keyTo == null ? null : cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
             wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
@@ -274,13 +273,13 @@ class CachingSessionStore
     public byte[] fetchSession(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        if (context.cache() == null) {
+        if (internalContext.cache() == null) {
             return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
         } else {
             final Bytes bytesKey = SessionKeySchema.toBinary(key, earliestSessionEndTime,
                 latestSessionStartTime);
             final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
-            final LRUCacheEntry entry = context.cache().get(cacheName, cacheKey);
+            final LRUCacheEntry entry = internalContext.cache().get(cacheName, cacheKey);
             if (entry == null) {
                 return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
             } else {
@@ -314,24 +313,24 @@ class CachingSessionStore
     }
 
     public void flush() {
-        context.cache().flush(cacheName);
+        internalContext.cache().flush(cacheName);
         wrapped().flush();
     }
 
     @Override
     public void flushCache() {
-        context.cache().flush(cacheName);
+        internalContext.cache().flush(cacheName);
     }
 
     @Override
     public void clearCache() {
-        context.cache().clear(cacheName);
+        internalContext.cache().clear(cacheName);
     }
 
     public void close() {
         final LinkedList<RuntimeException> suppressed = executeAll(
-            () -> context.cache().flush(cacheName),
-            () -> context.cache().close(cacheName),
+            () -> internalContext.cache().flush(cacheName),
+            () -> internalContext.cache().close(cacheName),
             wrapped()::close
         );
         if (!suppressed.isEmpty()) {
@@ -381,13 +380,13 @@ class CachingSessionStore
                 this.lastSegmentId = cacheFunction.segmentId(maxObservedTimestamp);
 
                 setCacheKeyRange(earliestSessionEndTime, currentSegmentLastTime());
-                this.current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+                this.current = internalContext.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
             } else {
                 this.lastSegmentId = cacheFunction.segmentId(earliestSessionEndTime);
                 this.currentSegmentId = cacheFunction.segmentId(maxObservedTimestamp);
 
                 setCacheKeyRange(currentSegmentBeginTime(), Math.min(latestSessionStartTime, maxObservedTimestamp));
-                this.current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
+                this.current = internalContext.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
             }
         }
 
@@ -461,7 +460,7 @@ class CachingSessionStore
 
                 current.close();
 
-                current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+                current = internalContext.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
             } else {
                 --currentSegmentId;
 
@@ -474,7 +473,7 @@ class CachingSessionStore
 
                 current.close();
 
-                current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
+                current = internalContext.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
             }
 
         }

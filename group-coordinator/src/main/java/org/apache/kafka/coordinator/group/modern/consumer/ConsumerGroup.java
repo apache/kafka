@@ -24,8 +24,10 @@ import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
@@ -1131,6 +1133,9 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param classicGroup      The converted classic group.
      * @param topicsImage       The TopicsImage for topic id and topic name conversion.
      * @return  The created ConsumerGroup.
+     *
+     * @throws SchemaException if any member's subscription or assignment cannot be deserialized.
+     * @throws UnsupportedVersionException if userData from a custom assignor would be lost.
      */
     public static ConsumerGroup fromClassicGroup(
         SnapshotRegistry snapshotRegistry,
@@ -1150,12 +1155,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             if (Arrays.equals(classicGroupMember.assignment(), EMPTY_ASSIGNMENT)) {
                 assignedPartitions = Collections.emptyMap();
             } else {
-                assignedPartitions = toTopicPartitionMap(
-                    ConsumerProtocol.deserializeConsumerProtocolAssignment(
-                        ByteBuffer.wrap(classicGroupMember.assignment())
-                    ),
-                    topicsImage
+                ConsumerProtocolAssignment assignment = ConsumerProtocol.deserializeConsumerProtocolAssignment(
+                    ByteBuffer.wrap(classicGroupMember.assignment())
                 );
+                if (assignment.userData() != null && assignment.userData().hasRemaining()) {
+                    throw new UnsupportedVersionException("userData from a custom assignor would be lost");
+                }
+                assignedPartitions = toTopicPartitionMap(assignment, topicsImage);
             }
 
             // Every member is guaranteed to have metadata set when it joins,
@@ -1249,12 +1255,27 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Checks whether all the members use the classic protocol except the given member.
      *
-     * @param memberId The member to remove.
+     * @param member The member to remove.
      * @return A boolean indicating whether all the members use the classic protocol.
      */
-    public boolean allMembersUseClassicProtocolExcept(String memberId) {
-        return numClassicProtocolMembers() == members().size() - 1 &&
-            !getOrMaybeCreateMember(memberId, false).useClassicProtocol();
+    public boolean allMembersUseClassicProtocolExcept(ConsumerGroupMember member) {
+        return numClassicProtocolMembers() == members().size() - 1 && !member.useClassicProtocol();
+    }
+
+    /**
+     * Checks whether all the members use the classic protocol except the given members.
+     *
+     * @param members The members to remove.
+     * @return A boolean indicating whether all the members use the classic protocol.
+     */
+    public boolean allMembersUseClassicProtocolExcept(Set<ConsumerGroupMember> members) {
+        int numExcludedClassicProtocolMembers = 0;
+        for (ConsumerGroupMember member : members) {
+            if (member.useClassicProtocol()) {
+                numExcludedClassicProtocolMembers++;
+            }
+        }
+        return numClassicProtocolMembers() - numExcludedClassicProtocolMembers == members().size() - members.size();
     }
 
     /**

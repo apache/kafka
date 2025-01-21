@@ -39,7 +39,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     // create static config including client login context with credentials for JaasTestUtils 'client2'
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism)))
     // set dynamic properties with credentials for JaasTestUtils 'client1' so that dynamic JAAS configuration is also
     // tested by this set of tests
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism)
@@ -59,7 +59,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     */
   @Timeout(15)
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_17696"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testTwoConsumersWithDifferentSaslCredentials(quorum: String, groupProtocol: String): Unit = {
     setAclsAndProduce(tp)
     consumerConfig.putIfAbsent(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)

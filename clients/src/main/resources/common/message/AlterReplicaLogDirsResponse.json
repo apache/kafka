@@ -17,9 +17,10 @@
   "apiKey": 34,
   "type": "response",
   "name": "AlterReplicaLogDirsResponse",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   // Starting in version 1, on quota violation brokers send out responses before throttling.
   // Version 2 enables flexible versions.
-  "validVersions": "0-2",
+  "validVersions": "1-2",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
