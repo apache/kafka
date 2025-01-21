@@ -80,6 +80,8 @@ public class NodeApiVersionsTest {
             bld.append(prefix);
             if (apiKey == ApiKeys.DELETE_TOPICS) {
                 bld.append("DeleteTopics(20): 10000 to 10001 [unusable: node too new]");
+            } else if (!apiKey.hasValidVersion()) {
+                bld.append(apiKey.name + "(" + apiKey.id + "): 0 to -1 [unusable: node too new]");
             } else {
                 bld.append(apiKey.name).append("(").
                         append(apiKey.id).append("): ");

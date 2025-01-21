@@ -14,12 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server
+package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.server.purgatory.DelayedOperationKey
+import org.junit.jupiter.api.Test;
 
-/* used by delayed-topic operations */
-case class TopicKey(topic: String) extends DelayedOperationKey {
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
-  override def keyLabel: String = topic
+public class ProtocolTest {
+
+    @Test
+    public void testToHtml() {
+        var html = Protocol.toHtml();
+        assertFalse(html.isBlank());
+        assertFalse(html.contains("LeaderAndIsr"), "Removed LeaderAndIsr should not show in HTML");
+    }
+
 }

@@ -38,15 +38,6 @@ import scala.jdk.OptionConverters._
 import scala.jdk.javaapi.OptionConverters
 
 /*
- * Implements an enumeration for the modes enabled here:
- * zk only, kafka only, both, custom KafkaServer.
- */
-sealed trait SaslSetupMode
-case object ZkSasl extends SaslSetupMode
-case object KafkaSasl extends SaslSetupMode
-case object Both extends SaslSetupMode
-
-/*
  * Trait used in SaslTestHarness and EndToEndAuthorizationTest to setup keytab and jaas files.
  */
 trait SaslSetup {
@@ -67,11 +58,6 @@ trait SaslSetup {
     }
 
     writeJaasConfigurationToFile(jaasSections)
-
-    val hasZk = jaasSections.exists(_.getModules.asScala.exists(_.name() == "org.apache.zookeeper.server.auth.DigestLoginModule"))
-
-    if (hasZk)
-      System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
   }
 
   protected def initializeKerberos(): Unit = {
@@ -93,11 +79,9 @@ trait SaslSetup {
   }
 
   def jaasSections(kafkaServerSaslMechanisms: Seq[String],
-                             kafkaClientSaslMechanism: Option[String],
-                             mode: SaslSetupMode = Both,
-                             kafkaServerEntryName: String = JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME): Seq[JaasSection] = {
-    val hasKerberos = mode != ZkSasl &&
-      (kafkaServerSaslMechanisms.contains("GSSAPI") || kafkaClientSaslMechanism.contains("GSSAPI"))
+                   kafkaClientSaslMechanism: Option[String],
+                   kafkaServerEntryName: String = JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME): Seq[JaasSection] = {
+    val hasKerberos = kafkaServerSaslMechanisms.contains("GSSAPI") || kafkaClientSaslMechanism.contains("GSSAPI")
     if (hasKerberos)
       maybeCreateEmptyKeytabFiles()
     Seq(JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms.asJava, serverKeytabFile.toJava),
@@ -117,7 +101,6 @@ trait SaslSetup {
     // Important if tests leak consumers, producers or brokers
     LoginManager.closeAll()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
-    System.clearProperty("zookeeper.authProvider.1")
     Configuration.setConfiguration(null)
   }
 
