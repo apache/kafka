@@ -916,8 +916,8 @@ public class StreamsMembershipManager implements RequestManager {
         final SortedSet<TopicPartition> topicPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         activeTasks.forEach((subtopologyId, partitionIds) ->
             Stream.concat(
-                streamsRebalanceData.subtopologies().get(subtopologyId).sourceTopics.stream(),
-                streamsRebalanceData.subtopologies().get(subtopologyId).repartitionSourceTopics.keySet().stream()
+                streamsRebalanceData.subtopologies().get(subtopologyId).sourceTopics().stream(),
+                streamsRebalanceData.subtopologies().get(subtopologyId).repartitionSourceTopics().keySet().stream()
             ).forEach(topic -> {
                 for (final int partitionId : partitionIds) {
                     topicPartitions.add(new TopicPartition(topic, partitionId));
@@ -931,8 +931,8 @@ public class StreamsMembershipManager implements RequestManager {
         final SortedSet<TopicPartition> topicPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         activeTasks.forEach(task ->
             Stream.concat(
-                streamsRebalanceData.subtopologies().get(task.subtopologyId()).sourceTopics.stream(),
-                streamsRebalanceData.subtopologies().get(task.subtopologyId()).repartitionSourceTopics.keySet().stream()
+                streamsRebalanceData.subtopologies().get(task.subtopologyId()).sourceTopics().stream(),
+                streamsRebalanceData.subtopologies().get(task.subtopologyId()).repartitionSourceTopics().keySet().stream()
             ).forEach(topic -> {
                 topicPartitions.add(new TopicPartition(topic, task.partitionId()));
             })
