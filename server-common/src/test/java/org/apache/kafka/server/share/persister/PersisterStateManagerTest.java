@@ -24,6 +24,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -31,6 +32,8 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateRequest;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
+import org.apache.kafka.common.requests.ReadShareGroupStateSummaryRequest;
+import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateRequest;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.Time;
@@ -2050,6 +2053,776 @@ class PersisterStateManagerTest {
         }
 
         ReadShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(0)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+        verify(handler, times(2)).onComplete(any());
+
+        // Verifying the coordinator node was populated correctly by the constructor
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testReadStateSummaryRequestCoordinatorFoundSuccessfully() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(List.of(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setNodeId(1)
+                            .setHost(HOST)
+                            .setPort(PORT)
+                            .setErrorCode(Errors.NONE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> {
+            ReadShareGroupStateSummaryRequest request = (ReadShareGroupStateSummaryRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new ReadShareGroupStateSummaryResponse(
+            new ReadShareGroupStateSummaryResponseData()
+                .setResults(List.of(
+                    new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                                .setStateEpoch(1)
+                                .setStartOffset(0)
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateSummaryHandler handler = spy(stateManager.new ReadStateSummaryHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> resultFuture = handler.result();
+
+        ReadShareGroupStateSummaryResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        ReadShareGroupStateSummaryResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(1)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+        assertEquals(1, partitionResult.stateEpoch());
+        assertEquals(0, partitionResult.startOffset());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testReadStateSummaryRequestIllegalStateCoordinatorFoundSuccessfully() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(List.of(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setNodeId(1)
+                            .setHost(HOST)
+                            .setPort(PORT)
+                            .setErrorCode(Errors.NONE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> {
+            ReadShareGroupStateSummaryRequest request = (ReadShareGroupStateSummaryRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new ReadShareGroupStateSummaryResponse(
+            new ReadShareGroupStateSummaryResponseData()
+                .setResults(List.of(
+                    new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                        .setTopicId(Uuid.randomUuid())
+                        .setPartitions(List.of(
+                            new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                                .setPartition(500)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                                .setStateEpoch(1)
+                                .setStartOffset(0)
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateSummaryHandler handler = spy(stateManager.new ReadStateSummaryHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> resultFuture = handler.result();
+
+        ReadShareGroupStateSummaryResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        ReadShareGroupStateSummaryResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(1)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testReadStateSummaryRequestRetryWithNotCoordinatorSuccessfulOnRetry() throws ExecutionException, InterruptedException {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(List.of(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setErrorCode(Errors.NOT_COORDINATOR.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(List.of(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setNodeId(1)
+                            .setHost(HOST)
+                            .setPort(PORT)
+                            .setErrorCode(Errors.NONE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> {
+            ReadShareGroupStateSummaryRequest request = (ReadShareGroupStateSummaryRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new ReadShareGroupStateSummaryResponse(
+            new ReadShareGroupStateSummaryResponseData()
+                .setResults(List.of(
+                    new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                                .setStateEpoch(1)
+                                .setStartOffset(0)
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateSummaryHandler handler = spy(stateManager.new ReadStateSummaryHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> resultFuture = handler.result();
+
+        TestUtils.waitForCondition(resultFuture::isDone, TestUtils.DEFAULT_MAX_WAIT_MS, 10L, () -> "Failed to get result from future");
+
+        ReadShareGroupStateSummaryResponse result = resultFuture.get();
+        ReadShareGroupStateSummaryResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(2)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testReadStateSummaryRequestCoordinatorFoundOnRetry() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(List.of(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setErrorCode(Errors.NOT_COORDINATOR.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(List.of(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setNodeId(1)
+                            .setHost(HOST)
+                            .setPort(PORT)
+                            .setErrorCode(Errors.NONE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> {
+            ReadShareGroupStateSummaryRequest request = (ReadShareGroupStateSummaryRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new ReadShareGroupStateSummaryResponse(
+            new ReadShareGroupStateSummaryResponseData()
+                .setResults(List.of(
+                    new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                                .setStateEpoch(1)
+                                .setStartOffset(0)
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateSummaryHandler handler = spy(stateManager.new ReadStateSummaryHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> resultFuture = handler.result();
+
+        ReadShareGroupStateSummaryResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        ReadShareGroupStateSummaryResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(2)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+        assertEquals(1, partitionResult.stateEpoch());
+        assertEquals(0, partitionResult.startOffset());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testReadStateSummaryRequestWithCoordinatorNodeLookup() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        client.prepareResponseFrom(body -> {
+            ReadShareGroupStateSummaryRequest request = (ReadShareGroupStateSummaryRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new ReadShareGroupStateSummaryResponse(
+            new ReadShareGroupStateSummaryResponseData()
+                .setResults(List.of(
+                    new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                                .setStateEpoch(1)
+                                .setStartOffset(0)
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateSummaryHandler handler = spy(stateManager.new ReadStateSummaryHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> resultFuture = handler.result();
+
+        ReadShareGroupStateSummaryResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        ReadShareGroupStateSummaryResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(0)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+        verify(handler, times(1)).onComplete(any());
+
+        // Verifying the coordinator node was populated correctly by the constructor
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+        assertEquals(1, partitionResult.stateEpoch());
+        assertEquals(0, partitionResult.startOffset());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testReadStateSummaryRequestRetryWithCoordinatorNodeLookup() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        client.prepareResponseFrom(body -> {
+            ReadShareGroupStateSummaryRequest request = (ReadShareGroupStateSummaryRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new ReadShareGroupStateSummaryResponse(
+            new ReadShareGroupStateSummaryResponseData()
+                .setResults(List.of(
+                    new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                                .setErrorMessage("")
+                                .setStateEpoch(1)
+                                .setStartOffset(0)
+                        ))
+                ))
+        ), coordinatorNode);
+
+        client.prepareResponseFrom(body -> {
+            ReadShareGroupStateSummaryRequest request = (ReadShareGroupStateSummaryRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new ReadShareGroupStateSummaryResponse(
+            new ReadShareGroupStateSummaryResponseData()
+                .setResults(List.of(
+                    new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                                .setStateEpoch(1)
+                                .setStartOffset(0)
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateSummaryHandler handler = spy(stateManager.new ReadStateSummaryHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> resultFuture = handler.result();
+
+        ReadShareGroupStateSummaryResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        ReadShareGroupStateSummaryResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(0)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+        verify(handler, times(2)).onComplete(any());
+
+        // Verifying the coordinator node was populated correctly by the constructor
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+        assertEquals(1, partitionResult.stateEpoch());
+        assertEquals(0, partitionResult.startOffset());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testReadStateSummaryRequestFailureMaxRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        client.prepareResponseFrom(body -> {
+            ReadShareGroupStateSummaryRequest request = (ReadShareGroupStateSummaryRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new ReadShareGroupStateSummaryResponse(
+            new ReadShareGroupStateSummaryResponseData()
+                .setResults(List.of(
+                    new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                                .setErrorMessage("")
+                                .setStateEpoch(1)
+                                .setStartOffset(0)
+                        ))
+                ))
+        ), coordinatorNode);
+
+        client.prepareResponseFrom(body -> {
+            ReadShareGroupStateSummaryRequest request = (ReadShareGroupStateSummaryRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new ReadShareGroupStateSummaryResponse(
+            new ReadShareGroupStateSummaryResponseData()
+                .setResults(List.of(
+                    new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                                .setErrorMessage("")
+                                .setStateEpoch(1)
+                                .setStartOffset(0)
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateSummaryHandler handler = spy(stateManager.new ReadStateSummaryHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> resultFuture = handler.result();
+
+        ReadShareGroupStateSummaryResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        ReadShareGroupStateSummaryResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
 
         verify(handler, times(0)).findShareCoordinatorBuilder();
         verify(handler, times(0)).requestBuilder();
