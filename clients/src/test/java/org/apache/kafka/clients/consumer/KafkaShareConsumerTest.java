@@ -122,7 +122,6 @@ public class KafkaShareConsumerTest {
             consumer.subscribe(Set.of(topic1));
             consumer.poll(Duration.ZERO);
 
-            time.sleep(heartbeatIntervalMs);
             Thread.sleep(heartbeatIntervalMs);
 
             assertEquals(2, heartbeatsReceived.get());
@@ -180,15 +179,9 @@ public class KafkaShareConsumerTest {
         try (KafkaShareConsumer<String, String> consumer = newShareConsumer(clientId1, metadata, client)) {
 
             consumer.subscribe(Set.of(topic1));
-            consumer.poll(Duration.ZERO);
-
-            time.sleep(heartbeatIntervalMs);
-            Thread.sleep(heartbeatIntervalMs);
 
             // This will be a SHARE_GROUP_HEARTBEAT to establish the membership and then a SHARE_FETCH [A]
             consumer.poll(Duration.ofMillis(heartbeatIntervalMs));
-
-            time.sleep(heartbeatIntervalMs);
 
             // This will be a SHARE_ACKNOWLEDGE [B]
             consumer.commitSync();
