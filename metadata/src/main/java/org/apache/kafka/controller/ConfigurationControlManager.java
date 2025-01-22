@@ -23,7 +23,6 @@ import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
@@ -631,7 +630,7 @@ public class ConfigurationControlManager {
                 new ConfigRecord().
                     setResourceType(BROKER.id()).
                     setResourceName("").
-                    setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
+                    setName(MIN_IN_SYNC_REPLICAS_CONFIG).
                     setValue(Integer.toString(minInsyncReplicas)),
                 CONFIG_RECORD.highestSupportedVersion()));
             bld.append("Generating cluster-level ").append(MIN_IN_SYNC_REPLICAS_CONFIG).
@@ -645,7 +644,7 @@ public class ConfigurationControlManager {
             if (configs.containsKey(MIN_IN_SYNC_REPLICAS_CONFIG)) {
                 outputRecords.add(new ApiMessageAndVersion(
                     new ConfigRecord().setResourceType(BROKER.id()).setResourceName(configResource.name()).
-                        setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue(null),
+                        setName(MIN_IN_SYNC_REPLICAS_CONFIG).setValue(null),
                     CONFIG_RECORD.highestSupportedVersion()));
                 bld.append(prefix).append(brokerId);
                 prefix = ", ";

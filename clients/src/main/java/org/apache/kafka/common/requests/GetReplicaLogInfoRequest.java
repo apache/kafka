@@ -20,14 +20,15 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.GetReplicaLogInfoRequestData;
 import org.apache.kafka.common.message.GetReplicaLogInfoResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
 public class GetReplicaLogInfoRequest extends AbstractRequest {
+    public static final int MAX_PARTITIONS_PER_REQUEST = 1000;
+
     public static class Builder extends AbstractRequest.Builder<GetReplicaLogInfoRequest> {
 
         private final GetReplicaLogInfoRequestData data;
@@ -58,11 +59,6 @@ public class GetReplicaLogInfoRequest extends AbstractRequest {
 
     private final GetReplicaLogInfoRequestData data;
 
-    public GetReplicaLogInfoRequest(GetReplicaLogInfoRequestData data) {
-        super(ApiKeys.GET_REPLICA_LOG_INFO, (short) 0);
-        this.data = data;
-    }
-
     public GetReplicaLogInfoRequest(GetReplicaLogInfoRequestData data, short version) {
         super(ApiKeys.GET_REPLICA_LOG_INFO, version);
         this.data = data;
@@ -92,8 +88,11 @@ public class GetReplicaLogInfoRequest extends AbstractRequest {
         return new GetReplicaLogInfoResponse(responseData);
     }
 
-    public static GetReplicaLogInfoRequest parse(ByteBuffer buffer, short version) {
-        return new GetReplicaLogInfoRequest(new GetReplicaLogInfoRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static GetReplicaLogInfoRequest parse(Readable readable, short version) {
+        return new GetReplicaLogInfoRequest(
+                new GetReplicaLogInfoRequestData(readable, version),
+                version
+        );
     }
 
 }

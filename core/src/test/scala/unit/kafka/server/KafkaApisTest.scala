@@ -214,7 +214,8 @@ class KafkaApisTest extends Logging {
       tokenManager = null,
       apiVersionManager = apiVersionManager,
       clientMetricsManager = clientMetricsManager,
-      groupConfigManager = groupConfigManager)
+      groupConfigManager = groupConfigManager,
+      brokerEpochSupplier = () => -1L)
   }
 
   private def setupFeatures(featureVersions: Seq[FeatureVersion]): Unit = {
@@ -12454,6 +12455,75 @@ class KafkaApisTest extends Logging {
       assertEquals(1, deleteResult.partitions.size)
       assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED.code(), deleteResult.partitions.get(0).errorCode())
     })
+  }
+
+  @Test
+  def testGetReplicaInfoRequestHappyTrail(): Unit = {
+    val topic1 = new GetReplicaLogInfoRequestData.TopicPartitions()
+      .setTopicId(Uuid.randomUuid())
+      .setPartitions(Collections.singletonList(1))
+    val topic2 = new GetReplicaLogInfoRequestData.TopicPartitions()
+      .setTopicId(Uuid.randomUuid())
+      .setPartitions(Collections.singletonList(2))
+    val infoRequest = new GetReplicaLogInfoRequest.Builder(List(topic1, topic2) asJava).build()
+    val request = buildRequest(infoRequest)
+
+    val topicNameMap = Map(topic1.topicId() -> "topic1", topic2.topicId() -> "topic2")
+    metadataCache = mock(classOf[MetadataCache])
+    when(metadataCache.topicIdsToNames()).thenReturn(topicNameMap asJava)
+
+    val log1 = mock(classOf[UnifiedLog])
+    when(log1.logEndOffset).thenReturn(100L)
+    when(log1.latestEpoch).thenReturn(Optional.of(10))
+    val partition1 = mock(classOf[Partition])
+    when(partition1.log).thenReturn(Some(log1))
+    when(partition1.getLeaderEpoch).thenReturn(1)
+    when(partition1.partitionId).thenReturn(1)
+
+    val log2 = mock(classOf[UnifiedLog])
+    when(log2.logEndOffset).thenReturn(200L)
+    when(log2.latestEpoch).thenReturn(Optional.of(20))
+    val partition2 = mock(classOf[Partition])
+    when(partition2.log).thenReturn(Some(log2))
+    when(partition2.getLeaderEpoch).thenReturn(2)
+    when(partition2.partitionId).thenReturn(2)
+
+    val tp1 = new TopicPartition("topic1", 1)
+    when(replicaManager.getPartitionOrError(tp1)).thenReturn(Right(partition1))
+    val tp2 = new TopicPartition("topic2", 2)
+    when(replicaManager.getPartitionOrError(tp2)).thenReturn(Right(partition2))
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+    val clusterActions = Collections.singletonList(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
+    val allowList = Collections.singletonList(AuthorizationResult.ALLOWED)
+    when(authorizer.authorize(request.context, clusterActions)).thenReturn(allowList)
+
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleGetReplicaLogInfo(request)
+
+    val response = verifyNoThrottling[GetReplicaLogInfoResponse](request)
+    val expected = new GetReplicaLogInfoResponseData()
+      .setTopicPartitionLogInfoList(List(
+        new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+          .setTopicId(topic1.topicId())
+          .setPartitionLogInfo(Collections.singletonList(
+            new GetReplicaLogInfoResponseData.PartitionLogInfo()
+              .setPartition(1)
+              .setLogEndOffset(100L)
+              .setLastWrittenLeaderEpoch(10)
+              .setCurrentLeaderEpoch(1))),
+        new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+          .setTopicId(topic2.topicId())
+          .setPartitionLogInfo(Collections.singletonList(
+            new GetReplicaLogInfoResponseData.PartitionLogInfo()
+              .setPartition(2)
+              .setLogEndOffset(200L)
+              .setLastWrittenLeaderEpoch(20)
+              .setCurrentLeaderEpoch(2)
+          ))) asJava)
+      .setBrokerEpoch(-1L)
+    assertEquals(expected, response.data())
   }
 
   def getShareGroupDescribeResponse(groupIds: util.List[String], configOverrides: Map[String, String] = Map.empty,

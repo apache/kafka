@@ -132,6 +132,7 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_MAX_COMPACTION_LAG_MS = Long.MAX_VALUE;
     public static final double DEFAULT_MIN_CLEANABLE_DIRTY_RATIO = 0.5;
     public static final boolean DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE = false;
+    public static final boolean DEFAULT_UNCLEAN_RECOVERY_MANAGER = false;
     public static final boolean DEFAULT_PREALLOCATE = false;
 
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;

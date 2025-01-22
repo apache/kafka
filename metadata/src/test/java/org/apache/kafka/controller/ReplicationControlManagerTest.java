@@ -199,6 +199,7 @@ public class ReplicationControlManagerTest {
                 return this;
             }
 
+
             ReplicationControlTestContext build() {
                 return new ReplicationControlTestContext(metadataVersion,
                     createTopicPolicy,
@@ -273,6 +274,7 @@ public class ReplicationControlManagerTest {
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
                 setFeatureControl(featureControl).
+                setRecoveryManagerBuilder(new MockRecoveryManagerContext().createBuilder().disable()).
                 build();
             clusterControl.activate();
         }

@@ -121,6 +121,14 @@ public class ReplicationConfigs {
             "thread to trigger election periodically (default is 5 minutes). Please run `kafka-leader-election.sh` with `unclean` option " +
             "to trigger the unclean leader election immediately if needed.</p>";
 
+    public static final String UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG = "unclean.recovery.manager.enabled";
+    public static final boolean UNCLEAN_RECOVERY_MANAGER_ENABLED_DEFAULT = false;
+    public static final String UNCLEAN_RECOVERY_MANAGER_ENABLED_DOC = "TODO";
+
+    public static final String UNCLEAN_RECOVERY_TIMEOUT_MS_CONFIG = "unclean.recovery.timeout.ms";
+    public static final long UNCLEAN_RECOVERY_TIMEOUT_MS_DEFAULT = TimeUnit.MINUTES.toMillis(4);
+    public static final String UNCLEAN_RECOVERY_TIMEOUT_MS_DOC = "TODO";
+
     public static final String INTER_BROKER_SECURITY_PROTOCOL_CONFIG = "security.inter.broker.protocol";
     public static final String INTER_BROKER_SECURITY_PROTOCOL_DEFAULT = SecurityProtocol.PLAINTEXT.toString();
     public static final String INTER_BROKER_LISTENER_NAME_CONFIG = "inter.broker.listener.name";
@@ -156,6 +164,9 @@ public class ReplicationConfigs {
             .define(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG, LONG, LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DEFAULT, atLeast(1), HIGH, LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DOC)
             .defineInternal(UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG, LONG, UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DOC)
             .define(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE, HIGH, UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
+            .define(UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG, BOOLEAN, UNCLEAN_RECOVERY_MANAGER_ENABLED_DEFAULT, null, HIGH, UNCLEAN_RECOVERY_MANAGER_ENABLED_DOC)
+            // TODO Add validator to ensure that this is less than UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DEFAULT
+            .define(UNCLEAN_RECOVERY_TIMEOUT_MS_CONFIG, LONG, UNCLEAN_RECOVERY_TIMEOUT_MS_DEFAULT, null, HIGH, UNCLEAN_RECOVERY_TIMEOUT_MS_DOC)
             .define(INTER_BROKER_SECURITY_PROTOCOL_CONFIG, STRING, INTER_BROKER_SECURITY_PROTOCOL_DEFAULT, ConfigDef.ValidString.in(Utils.enumOptions(SecurityProtocol.class)), MEDIUM, INTER_BROKER_SECURITY_PROTOCOL_DOC)
             .define(INTER_BROKER_LISTENER_NAME_CONFIG, STRING, null, MEDIUM, INTER_BROKER_LISTENER_NAME_DOC)
             .define(REPLICA_SELECTOR_CLASS_CONFIG, STRING, null, MEDIUM, REPLICA_SELECTOR_CLASS_DOC);

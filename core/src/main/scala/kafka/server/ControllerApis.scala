@@ -576,6 +576,15 @@ class ControllerApis(
     val electLeadersRequest = request.body[ElectLeadersRequest]
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       requestTimeoutMsToDeadlineNs(time, electLeadersRequest.data.timeoutMs))
+    // we have a choice
+    // we can either:
+    // 1. do as many elections as possible to meet the timeout
+    // 2. respond with what we have already elected but continue working on the election
+    // 3. IMO (2) is bad bc we have no way of cancelling an ongoing election process
+    // Cancellation is important; no "zombie" elections should be allowed.
+    // So this method should actually ask our "driver" what to do if we are doing an "unclean" election.
+    // There is a bunch of logic in ReplicationControlManager which needs to be reused.
+    // Could make sense to factor a lot of that out
     val future = controller.electLeaders(context, electLeadersRequest.data)
     future.handle[Unit] { (responseData, exception) =>
       if (exception != null) {

@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.IntPredicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -94,6 +95,7 @@ public class PartitionChangeBuilder {
     private List<Integer> targetElr;
     private List<Integer> targetLastKnownElr;
     private List<Integer> uncleanShutdownReplicas;
+    private Map<Integer, LogLengthInfoStore.EpochOffset> replicaLogLengthMap;
     private Election election = Election.ONLINE;
     private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean eligibleLeaderReplicasEnabled;
@@ -161,6 +163,11 @@ public class PartitionChangeBuilder {
         return this;
     }
 
+    public PartitionChangeBuilder setReplicaLogLengthMap(Map<Integer, LogLengthInfoStore.EpochOffset> replicaLogLengthMap) {
+        this.replicaLogLengthMap = replicaLogLengthMap;
+        return this;
+    }
+
     public PartitionChangeBuilder setTargetRemoving(List<Integer> targetRemoving) {
         this.targetRemoving = targetRemoving;
         return this;
@@ -221,6 +228,9 @@ public class PartitionChangeBuilder {
         if (election == Election.PREFERRED) {
             return electPreferredLeader();
         }
+        if (election == Election.UNCLEAN && replicaLogLengthMap != null) {
+            return electLeaderWithLongestLogLength();
+        }
 
         return electAnyLeader();
     }
@@ -254,6 +264,42 @@ public class PartitionChangeBuilder {
         return new ElectionResult(NO_LEADER, false);
     }
 
+    private ElectionResult electLeaderWithStrategy(Supplier<Optional<Integer>> strategy) {
+        if (isValidNewLeader(partition.leader)) {
+            // Don't consider a new leader since the current leader meets all the constraints
+            return new ElectionResult(partition.leader, false);
+        }
+
+        Optional<Integer> onlineLeader = targetReplicas.stream()
+                .filter(this::isValidNewLeader)
+                .findFirst();
+        if (onlineLeader.isPresent()) {
+            return new ElectionResult(onlineLeader.get(), false);
+        }
+        if (canElectLastKnownLeader()) {
+            return new ElectionResult(partition.lastKnownElr[0], true);
+        }
+
+        Optional<Integer> newLeader = strategy.get();
+        if (newLeader.isPresent()) {
+            return new ElectionResult(newLeader.get(), true);
+        }
+        return new ElectionResult(NO_LEADER, false);
+    }
+
+    /**
+     * Elects a leader with available information about the longest log and epoch length.
+     * If no such information exists, this is equivalent to electAnyLeader
+     */
+    private ElectionResult electLeaderWithLongestLogLength() {
+        return electLeaderWithStrategy(() -> targetReplicas.stream()
+                .filter(isAcceptableLeader::test)
+                .max((a, b) ->
+                        replicaLogLengthMap
+                                .getOrDefault(a, LogLengthInfoStore.EpochOffset.MIN)
+                                .compareTo(replicaLogLengthMap.getOrDefault(b, LogLengthInfoStore.EpochOffset.MIN))));
+    }
+
     /**
      * Assumes that the election type is either Election.ONLINE or Election.UNCLEAN
      */
@@ -264,12 +310,11 @@ public class PartitionChangeBuilder {
         }
 
         Optional<Integer> onlineLeader = targetReplicas.stream()
-            .filter(this::isValidNewLeader)
-            .findFirst();
+                .filter(this::isValidNewLeader)
+                .findFirst();
         if (onlineLeader.isPresent()) {
             return new ElectionResult(onlineLeader.get(), false);
         }
-
         if (canElectLastKnownLeader()) {
             return new ElectionResult(partition.lastKnownElr[0], true);
         }
@@ -277,8 +322,8 @@ public class PartitionChangeBuilder {
         if (election == Election.UNCLEAN) {
             // Attempt unclean leader election
             Optional<Integer> uncleanLeader = targetReplicas.stream()
-                .filter(isAcceptableLeader::test)
-                .findFirst();
+                    .filter(isAcceptableLeader::test)
+                    .findFirst();
             if (uncleanLeader.isPresent()) {
                 return new ElectionResult(uncleanLeader.get(), true);
             }

@@ -162,6 +162,7 @@ public class ReplicationControlManager {
         private ClusterControlManager clusterControl = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private FeatureControlManager featureControl = null;
+        private RecoveryManager.Builder recoveryManagerBuilder = null;
 
         Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
@@ -208,6 +209,11 @@ public class ReplicationControlManager {
             return this;
         }
 
+        public Builder setRecoveryManagerBuilder(RecoveryManager.Builder builder) {
+            this.recoveryManagerBuilder = builder;
+            return this;
+        }
+
         ReplicationControlManager build() {
             if (configurationControl == null) {
                 throw new IllegalStateException("Configuration control must be set before building");
@@ -227,7 +233,8 @@ public class ReplicationControlManager {
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
-                featureControl);
+                featureControl,
+                recoveryManagerBuilder);
         }
     }
 
@@ -268,6 +275,13 @@ public class ReplicationControlManager {
 
         public int numPartitions(long epoch) {
             return parts.size(epoch);
+        }
+    }
+
+    class ReplicationFacade implements RecoveryManager.ReplicationFacade {
+        @Override
+        public List<ApiError> electLeadersWithLogInfo(List<TopicIdPartition> readyPartitions, LogLengthInfoStore store, List<ApiMessageAndVersion> records) {
+            return electLeaders(readyPartitions, store, records);
         }
     }
 
@@ -378,6 +392,8 @@ public class ReplicationControlManager {
      */
     final KRaftClusterDescriber clusterDescriber = new KRaftClusterDescriber();
 
+    private final RecoveryManager recoveryManager;
+
     private ReplicationControlManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -387,7 +403,8 @@ public class ReplicationControlManager {
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
-        FeatureControlManager featureControl
+        FeatureControlManager featureControl,
+        RecoveryManager.Builder recoveryManagerBuilder
     ) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(ReplicationControlManager.class);
@@ -406,6 +423,7 @@ public class ReplicationControlManager {
         this.reassigningTopics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.imbalancedPartitions = new TimelineHashSet<>(snapshotRegistry, 0);
         this.directoriesToPartitions = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.recoveryManager = recoveryManagerBuilder.setReplicationControlManager(new ReplicationFacade()).build();
     }
 
     public void replay(TopicRecord record) {
@@ -1495,6 +1513,21 @@ public class ReplicationControlManager {
         }
     }
 
+    List<ApiError> electLeaders(List<TopicIdPartition> topicIdPartitions, LogLengthInfoStore store, List<ApiMessageAndVersion> records) {
+        List<ApiError> results = new ArrayList<>(topicIdPartitions.size());
+        for (TopicIdPartition topicIdPartition : topicIdPartitions) {
+            String topicName = getTopic(topicIdPartition.topicId()).name();
+            ApiError error = electLeader(topicName, topicIdPartition.partitionId(), ElectionType.UNCLEAN, records, store);
+            // TODO maybe these should be warn logs?
+            if (!error.isSuccess() && log.isDebugEnabled()) {
+                log.debug("Unclean recovery for TopicPartition failed: {} {}", topicIdPartition, error.error());
+            }
+            results.add(error);
+        }
+        return results;
+    }
+
+
     ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
         ElectionType electionType = electionType(request.electionType());
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -1551,8 +1584,19 @@ public class ReplicationControlManager {
         }
     }
 
-    ApiError electLeader(String topic, int partitionId, ElectionType electionType,
+    ApiError electLeader(String topic,
+                         int partitionId,
+                         ElectionType electionType,
                          List<ApiMessageAndVersion> records) {
+        return electLeader(topic, partitionId, electionType, records, null);
+    }
+
+    // TODO write a separate method for this... we're switching too and from uuid.. yuck.
+    ApiError electLeader(String topic,
+                         int partitionId,
+                         ElectionType electionType,
+                         List<ApiMessageAndVersion> records,
+                         LogLengthInfoStore store) {
         Uuid topicId = topicsByName.get(topic);
         if (topicId == null) {
             return new ApiError(UNKNOWN_TOPIC_OR_PARTITION,
@@ -1577,7 +1621,7 @@ public class ReplicationControlManager {
         if (electionType == ElectionType.UNCLEAN) {
             election = PartitionChangeBuilder.Election.UNCLEAN;
         }
-        Optional<ApiMessageAndVersion> record = new PartitionChangeBuilder(
+        var partitionChangeBuilder = new PartitionChangeBuilder(
             partition,
             topicId,
             partitionId,
@@ -1587,8 +1631,18 @@ public class ReplicationControlManager {
         )
             .setElection(election)
             .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
-            .setDefaultDirProvider(clusterDescriber)
-            .build();
+            .setDefaultDirProvider(clusterDescriber);
+
+        if (electionType == ElectionType.UNCLEAN && recoveryManager.isEnabled()) {
+            // TODO store should never be null at this point
+            // TODO consider adding to PartitionChangeBuilder
+            assert store != null;
+            partitionChangeBuilder.setReplicaLogLengthMap(store.get(
+                    new TopicIdPartition(topicId, partitionId)
+            ));
+        }
+
+        Optional<ApiMessageAndVersion> record = partitionChangeBuilder.build();
         if (record.isEmpty()) {
             if (electionType == ElectionType.PREFERRED) {
                 return new ApiError(Errors.PREFERRED_LEADER_NOT_AVAILABLE);
@@ -1768,6 +1822,34 @@ public class ReplicationControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         maybeTriggerUncleanLeaderElectionForLeaderlessPartitions(records, maxElectionsPerImbalance);
         return ControllerResult.of(records, records.size() >= maxElectionsPerImbalance);
+    }
+
+    /**
+     * Triggers elections for leaderless partitions using RecoveryManager to fetch longest logs before returning.
+     *
+     * The response() method in the return object if the controller has an ongoing recovery election. In this case controller should
+     * wait a bit before trying to start the recovery again.
+     *
+     * @return No records and true if controller should try again later.
+     */
+    ControllerResult<Boolean> maybeElectUncleanLeadersWithRecoveryManager() {
+        Iterator<TopicIdPartition> iterator = brokersToIsrs.partitionsWithNoLeader();
+        List<RecoveryManager.TopicPartitionReplicas> uncleanRecoveryPartitions = new ArrayList<>();
+        while (iterator.hasNext()) {
+            TopicIdPartition topicIdPartition = iterator.next();
+            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
+            if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
+                int[] replicas = topic.parts.get(topicIdPartition.partitionId()).replicas;
+                uncleanRecoveryPartitions.add(new RecoveryManager.TopicPartitionReplicas(topicIdPartition, replicas));
+            } else if (log.isDebugEnabled()) {
+                log.debug("Cannot trigger unclean leader election with recovery manager {}-{} " +
+                                "because unclean leader election is disabled for this topic.",
+                        topic.name, topicIdPartition.partitionId());
+            }
+        }
+        boolean immediateReschedule =
+                recoveryManager.startRecovery(uncleanRecoveryPartitions, clusterControl.brokerRegistrations(), maxElectionsPerImbalance);
+        return ControllerResult.of(new ArrayList<>(), immediateReschedule);
     }
 
     /**

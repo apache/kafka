@@ -214,6 +214,12 @@ class ControllerServer(
           null
         }
       }
+      val networkClient = NetworkUtils.buildNetworkClient(
+          "recovery-manager-client-",
+          config,
+          metrics,
+          time,
+          new LogContext(s"[UncleanRecoveryThread id=${config.nodeId}] "))
 
       val controllerBuilder = {
         val leaderImbalanceCheckIntervalNs = if (config.autoLeaderRebalanceEnable) {
@@ -254,7 +260,10 @@ class ControllerServer(
           setUncleanLeaderElectionCheckIntervalMs(config.uncleanLeaderElectionCheckIntervalMs).
           setInterBrokerListenerName(config.interBrokerListenerName.value()).
           setControllerPerformanceSamplePeriodMs(config.controllerPerformanceSamplePeriodMs).
-          setControllerPerformanceAlwaysLogThresholdMs(config.controllerPerformanceAlwaysLogThresholdMs)
+          setControllerPerformanceAlwaysLogThresholdMs(config.controllerPerformanceAlwaysLogThresholdMs).
+          setUncleanRecoveryManagerTimeoutMs(config.uncleanRecoveryTimeoutMs).
+          setUncleanRecoveryManagerEnabled(config.uncleanRecoveryManagerEnable).
+          setUncleanRecoveryClient(networkClient)
       }
       controller = controllerBuilder.build()
 

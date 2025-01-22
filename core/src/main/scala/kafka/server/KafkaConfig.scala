@@ -383,6 +383,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val leaderImbalanceCheckIntervalSeconds: Long = getLong(ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG)
   val uncleanLeaderElectionCheckIntervalMs: Long = getLong(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG)
   def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)
+  def uncleanRecoveryManagerEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG)
+  def uncleanRecoveryTimeoutMs: Long = getLong(ReplicationConfigs.UNCLEAN_RECOVERY_TIMEOUT_MS_CONFIG)
 
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.Uuid;
@@ -148,6 +149,7 @@ import java.util.function.Supplier;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.DOES_NOT_UPDATE_QUEUE_TIME;
 
 
@@ -183,6 +185,8 @@ public final class QuorumController implements Controller {
      * For now, this is set to the maximum records in a single batch.
      */
     static final int MAX_RECORDS_PER_USER_OP = DEFAULT_MAX_RECORDS_PER_BATCH;
+
+    static final long RECOVERY_MANAGER_POLL_INTERVAL_NS = SECONDS.toNanos(10);
 
     /**
      * A builder class which creates the QuorumController.
@@ -221,6 +225,9 @@ public final class QuorumController implements Controller {
         private long delegationTokenExpiryCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
         private long uncleanLeaderElectionCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
         private String interBrokerListenerName = "PLAINTEXT";
+        private long uncleanRecoveryManagerTimeoutMs;
+        private boolean uncleanRecoveryManagerEnabled;
+        private KafkaClient uncleanRecoveryClient;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -386,6 +393,21 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setUncleanRecoveryManagerTimeoutMs(long uncleanRecoveryManagerTimeoutMs) {
+            this.uncleanRecoveryManagerTimeoutMs = uncleanRecoveryManagerTimeoutMs;
+            return this;
+        }
+
+        public Builder setUncleanRecoveryManagerEnabled(boolean uncleanRecoveryManagerEnabled) {
+            this.uncleanRecoveryManagerEnabled = uncleanRecoveryManagerEnabled;
+            return this;
+        }
+
+        public Builder setUncleanRecoveryClient(KafkaClient uncleanRecoveryClient) {
+            this.uncleanRecoveryClient = uncleanRecoveryClient;
+            return this;
+        }
+
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new IllegalStateException("You must set a raft client.");
@@ -410,8 +432,15 @@ public final class QuorumController implements Controller {
             }
 
             KafkaEventQueue queue = null;
+            RecoveryRequestThread recoveryRequestThread = null;
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
+                String recoveryRequestThreadPrefix = String.format("unclean-recovery-request-thread-%d ", nodeId);
+                // TODO Maybe move this further up call chain - potentially to controller server...
+                if (uncleanRecoveryManagerEnabled) {
+                    recoveryRequestThread = new RecoveryRequestThread(recoveryRequestThreadPrefix, uncleanRecoveryClient, time);
+                    recoveryRequestThread.start();
+                }
                 return new QuorumController(
                     nonFatalFaultHandler,
                     fatalFaultHandler,
@@ -445,10 +474,16 @@ public final class QuorumController implements Controller {
                     uncleanLeaderElectionCheckIntervalMs,
                     interBrokerListenerName,
                     controllerPerformanceSamplePeriodMs,
-                    controllerPerformanceAlwaysLogThresholdMs
+                    controllerPerformanceAlwaysLogThresholdMs,
+                    uncleanRecoveryManagerTimeoutMs,
+                    uncleanRecoveryManagerEnabled,
+                    recoveryRequestThread
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
+                if (uncleanRecoveryManagerEnabled && recoveryRequestThread != null) {
+                    recoveryRequestThread.shutdown();
+                }
                 throw e;
             }
         }
@@ -505,6 +540,21 @@ public final class QuorumController implements Controller {
         @Override
         public Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
             return clusterControl.controllerSupportedFeatures();
+        }
+    }
+
+    class RecoveryManagerQueueAccessor implements RecoveryManager.QueueAccessor {
+        @Override
+        public void scheduleDeferred(String tag, long deadlineNs, Supplier<ControllerResult<Void>> op) {
+            EnumSet<ControllerOperationFlag> flags = EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME);
+            queue.scheduleDeferred(tag,
+                    new EarliestDeadlineFunction(deadlineNs),
+                    new ControllerWriteEvent<>(tag, op::get, flags));
+        }
+
+        @Override
+        public void enqueueWriteOp(String name, Supplier<ControllerResult<Void>> op) {
+            queue.append(new ControllerWriteEvent<>(name, op::get, EnumSet.noneOf(ControllerOperationFlag.class)));
         }
     }
 
@@ -1457,6 +1507,8 @@ public final class QuorumController implements Controller {
      */
     private final EventPerformanceMonitor performanceMonitor;
 
+    private final RecoveryRequestThread recoveryRequestThread;
+
     private QuorumController(
         FaultHandler nonFatalFaultHandler,
         FaultHandler fatalFaultHandler,
@@ -1490,7 +1542,10 @@ public final class QuorumController implements Controller {
         long uncleanLeaderElectionCheckIntervalMs,
         String interBrokerListenerName,
         long controllerPerformanceSamplePeriodMs,
-        long controllerPerformanceAlwaysLogThresholdMs
+        long controllerPerformanceAlwaysLogThresholdMs,
+        long uncleanRecoveryManagerTimeoutMs,
+        boolean uncleanRecoveryManagerEnabled,
+        RecoveryRequestThread recoveryRequestThread
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1547,6 +1602,15 @@ public final class QuorumController implements Controller {
             setSnapshotRegistry(snapshotRegistry).
             setClusterControlManager(clusterControl).
             build();
+        this.recoveryRequestThread = recoveryRequestThread;
+        RecoveryManager.Builder recoveryBuilder = new RecoveryManager.Builder().
+                setTime(time).
+                setNodeId(nodeId).
+                setRecoveryFetcherSender(this.recoveryRequestThread).
+                setEnabled(uncleanRecoveryManagerEnabled).
+                setInterbrokerListenerName(interBrokerListenerName).
+                setTimeout(uncleanRecoveryManagerTimeoutMs).
+                setQueueAccessor(new RecoveryManagerQueueAccessor());
         this.replicationControl = new ReplicationControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setLogContext(logContext).
@@ -1557,6 +1621,7 @@ public final class QuorumController implements Controller {
             setClusterControl(clusterControl).
             setCreateTopicPolicy(createTopicPolicy).
             setFeatureControl(featureControl).
+            setRecoveryManagerBuilder(recoveryBuilder).
             build();
         this.scramControlManager = new ScramControlManager.Builder().
             setLogContext(logContext).
@@ -1595,7 +1660,7 @@ public final class QuorumController implements Controller {
         if (leaderImbalanceCheckIntervalNs.isPresent()) {
             registerElectPreferred(leaderImbalanceCheckIntervalNs.getAsLong());
         }
-        registerElectUnclean(TimeUnit.MILLISECONDS.toNanos(uncleanLeaderElectionCheckIntervalMs));
+        registerElectUnclean(TimeUnit.MILLISECONDS.toNanos(uncleanLeaderElectionCheckIntervalMs), uncleanRecoveryManagerEnabled);
         registerExpireDelegationTokens(MILLISECONDS.toNanos(delegationTokenExpiryCheckIntervalMs));
         registerGeneratePeriodicPerformanceMessage();
         // OffsetControlManager must be initialized last, because its constructor will take the
@@ -1675,12 +1740,21 @@ public final class QuorumController implements Controller {
      * have a new leader elected uncleanly.
      *
      * @param checkIntervalNs       The check interval in nanoseconds.
+     * @param uncleanRecoveryEnabled Whether to use RecoveryManager to fetch logs before performing unclean elections
      */
-    private void registerElectUnclean(long checkIntervalNs) {
-        periodicControl.registerTask(new PeriodicTask("electUnclean",
-            replicationControl::maybeElectUncleanLeaders,
-            checkIntervalNs,
-            EnumSet.of(PeriodicTaskFlag.VERBOSE)));
+    private void registerElectUnclean(long checkIntervalNs, boolean uncleanRecoveryEnabled) {
+        if (uncleanRecoveryEnabled) {
+            periodicControl.registerTask(new PeriodicTask("electUnclean",
+                    replicationControl::maybeElectUncleanLeadersWithRecoveryManager,
+                    checkIntervalNs,
+                    EnumSet.of(PeriodicTaskFlag.VERBOSE),
+                    RECOVERY_MANAGER_POLL_INTERVAL_NS));
+        } else {
+            periodicControl.registerTask(new PeriodicTask("electUnclean",
+                    replicationControl::maybeElectUncleanLeaders,
+                    checkIntervalNs,
+                    EnumSet.of(PeriodicTaskFlag.VERBOSE)));
+        }
     }
 
     /**
@@ -2139,6 +2213,7 @@ public final class QuorumController implements Controller {
     @Override
     public void beginShutdown() {
         queue.beginShutdown("QuorumController#beginShutdown");
+        recoveryRequestThread.initiateShutdown();
     }
 
     public int nodeId() {
@@ -2158,6 +2233,7 @@ public final class QuorumController implements Controller {
     public void close() throws InterruptedException {
         queue.close();
         controllerMetrics.close();
+        recoveryRequestThread.shutdown();
     }
 
     // VisibleForTesting

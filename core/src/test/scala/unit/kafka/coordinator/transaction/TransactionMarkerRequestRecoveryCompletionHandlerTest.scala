@@ -31,7 +31,7 @@ import org.mockito.Mockito.{mock, verify, when}
 
 import scala.collection.mutable
 
-class TransactionMarkerRequestCompletionHandlerTest {
+class TransactionMarkerRequestRecoveryCompletionHandlerTest {
 
   private val brokerId = 0
   private val txnTopicPartition = 0
