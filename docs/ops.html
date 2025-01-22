@@ -2869,6 +2869,11 @@ All the following metrics have a recording level of <code>info</code>:
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>commit-ratio</td>
+        <td>The fraction of time the thread spent on committing all tasks</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>commit-rate</td>
         <td>The average number of commits per sec.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
@@ -2877,6 +2882,11 @@ All the following metrics have a recording level of <code>info</code>:
         <td>commit-total</td>
         <td>The total number of commit calls.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>poll-ratio</td>
+        <td>The fraction of time the thread spent on polling records from consumer</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>poll-rate</td>
@@ -2889,6 +2899,21 @@ All the following metrics have a recording level of <code>info</code>:
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>poll-records-avg</td>
+        <td>The average number of records polled from consumer within an iteration.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>poll-records-max</td>
+        <td>The maximum number of records polled from consumer within an iteration.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>process-ratio</td>
+        <td>The fraction of time the thread spent on processing active tasks</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>process-rate</td>
         <td>The average number of processed records per sec.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
@@ -2896,6 +2921,21 @@ All the following metrics have a recording level of <code>info</code>:
       <tr>
         <td>process-total</td>
         <td>The total number of processed records.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>process-records-avg</td>
+        <td>The average number of records processed within an iteration (total count of processed records over total number of iterations).</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>process-records-max</td>
+        <td>The maximum number of records processed within an iteration.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-ratio</td>
+        <td>"The fraction of time the thread spends performing punctuating actions on active tasks"</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
