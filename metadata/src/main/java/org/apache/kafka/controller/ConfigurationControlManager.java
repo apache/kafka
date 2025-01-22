@@ -216,6 +216,9 @@ public class ConfigurationControlManager {
     }
 
     List<ApiMessageAndVersion> createClearElrRecordsAsNeeded(List<ApiMessageAndVersion> input) {
+        if (!featureControl.isElrFeatureEnabled()) {
+            return Collections.emptyList();
+        }
         List<ApiMessageAndVersion> output = new ArrayList<>();
         for (ApiMessageAndVersion messageAndVersion : input) {
             if (messageAndVersion.message().apiKey() == CONFIG_RECORD.id()) {

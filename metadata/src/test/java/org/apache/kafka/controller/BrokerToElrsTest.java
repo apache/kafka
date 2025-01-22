@@ -29,7 +29,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BrokerToElrsTest {
     private static final Uuid[] UUIDS = new Uuid[] {
@@ -41,7 +40,7 @@ public class BrokerToElrsTest {
         return new HashSet<>(Arrays.asList(partitions));
     }
 
-    private static Set<TopicIdPartition> toSet(BrokersToElrs.PartitionsIterator iterator) {
+    private static Set<TopicIdPartition> toSet(BrokersToIsrs.PartitionsOnReplicaIterator iterator) {
         HashSet<TopicIdPartition> set = new HashSet<>();
         while (iterator.hasNext()) {
             set.add(iterator.next());
@@ -53,7 +52,7 @@ public class BrokerToElrsTest {
     public void testIterator() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         BrokersToElrs brokersToElrs = new BrokersToElrs(snapshotRegistry);
-        assertTrue(toSet(brokersToElrs.partitionsWithBrokerInElr(1)).isEmpty());
+        assertEquals(toSet(), toSet(brokersToElrs.partitionsWithBrokerInElr(1)));
         brokersToElrs.update(UUIDS[0], 0, null, new int[] {1, 2, 3});
         brokersToElrs.update(UUIDS[1], 1, null, new int[] {2, 3, 4});
         assertEquals(toSet(new TopicIdPartition(UUIDS[0], 0)),
@@ -63,58 +62,11 @@ public class BrokerToElrsTest {
             toSet(brokersToElrs.partitionsWithBrokerInElr(2)));
         assertEquals(toSet(new TopicIdPartition(UUIDS[1], 1)),
             toSet(brokersToElrs.partitionsWithBrokerInElr(4)));
-        assertTrue(toSet(brokersToElrs.partitionsWithBrokerInElr(5)).isEmpty());
+        assertEquals(toSet(), toSet(brokersToElrs.partitionsWithBrokerInElr(5)));
         brokersToElrs.update(UUIDS[1], 2, null, new int[] {3, 2, 1});
-        assertEquals(toSet(
-                new TopicIdPartition(UUIDS[0], 0),
+        assertEquals(toSet(new TopicIdPartition(UUIDS[0], 0),
                 new TopicIdPartition(UUIDS[1], 1),
-                new TopicIdPartition(UUIDS[1], 2)
-            ),
-            toSet(brokersToElrs.partitionsWithBrokerInElr(2))
-        );
-
-        assertEquals(toSet(
-                new TopicIdPartition(UUIDS[0], 0),
-                new TopicIdPartition(UUIDS[1], 1),
-                new TopicIdPartition(UUIDS[1], 2)
-            ),
-            toSet(brokersToElrs.partitionsWithElr())
-        );
-    }
-
-    @Test
-    public void testRemove() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        BrokersToElrs brokersToElrs = new BrokersToElrs(snapshotRegistry);
-        assertTrue(toSet(brokersToElrs.partitionsWithBrokerInElr(1)).isEmpty());
-        brokersToElrs.update(UUIDS[0], 0, null, new int[] {1, 2, 3});
-        brokersToElrs.update(UUIDS[1], 1, null, new int[] {2, 3, 4});
-        assertEquals(toSet(
-                new TopicIdPartition(UUIDS[0], 0),
-                new TopicIdPartition(UUIDS[1], 1)
-            ),
-            toSet(brokersToElrs.partitionsWithBrokerInElr(3))
-        );
-
-        brokersToElrs.update(UUIDS[1], 1, new int[] {2, 3, 4}, new int[] {3});
-        assertEquals(toSet(
-                new TopicIdPartition(UUIDS[0], 0),
-                new TopicIdPartition(UUIDS[1], 1)
-            ),
-            toSet(brokersToElrs.partitionsWithBrokerInElr(3))
-        );
-
-        assertEquals(toSet(
-                new TopicIdPartition(UUIDS[0], 0)
-            ),
-            toSet(brokersToElrs.partitionsWithBrokerInElr(2))
-        );
-
-        assertEquals(toSet(
-                new TopicIdPartition(UUIDS[0], 0),
-                new TopicIdPartition(UUIDS[1], 1)
-            ),
-            toSet(brokersToElrs.partitionsWithElr())
-        );
+                new TopicIdPartition(UUIDS[1], 2)),
+            toSet(brokersToElrs.partitionsWithBrokerInElr(2)));
     }
 }

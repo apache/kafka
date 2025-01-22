@@ -126,12 +126,6 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 nonFatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 controllerBuilderInitializer.accept(builder);
                 QuorumController controller = builder.build();
-                if (eligibleLeaderReplicasEnabled) {
-                    bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(
-                            EligibleLeaderReplicasVersion.FEATURE_NAME,
-                            EligibleLeaderReplicasVersion.ELRV_1.featureLevel()
-                    );
-                }
                 this.controllers.add(controller);
             }
         } catch (Exception e) {

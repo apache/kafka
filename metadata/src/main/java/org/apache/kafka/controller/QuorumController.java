@@ -1562,6 +1562,7 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             setKafkaConfigSchema(configSchema).
+            setFeatureControl(featureControl).
             setExistenceChecker(resourceExists).
             setAlterConfigPolicy(alterConfigPolicy).
             setValidator(configurationValidator).

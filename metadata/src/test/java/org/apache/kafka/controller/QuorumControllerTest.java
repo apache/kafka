@@ -704,8 +704,8 @@ public class QuorumControllerTest {
                     entry(new ConfigResource(TOPIC, "foo"), toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "1"))))),
                 true);
             assertEquals(2, result.records().size(), result.records().toString());
-            RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(1)));
-            RecordTestUtils.replayAll(active.replicationControl(), singletonList(result.records().get(0)));
+            RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(0)));
+            RecordTestUtils.replayAll(active.replicationControl(), singletonList(result.records().get(1)));
 
             partition = active.replicationControl().getPartition(topicIdFoo, 0);
             assertEquals(0, partition.elr.length, partition.toString());
@@ -720,8 +720,8 @@ public class QuorumControllerTest {
                     entry(new ConfigResource(BROKER, ""), toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "1"))))),
                 true);
             assertEquals(2, result.records().size(), result.records().toString());
-            RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(1)));
-            RecordTestUtils.replayAll(active.replicationControl(), singletonList(result.records().get(0)));
+            RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(0)));
+            RecordTestUtils.replayAll(active.replicationControl(), singletonList(result.records().get(1)));
 
             partition = active.replicationControl().getPartition(topicIdBar, 0);
             assertEquals(0, partition.elr.length, partition.toString());

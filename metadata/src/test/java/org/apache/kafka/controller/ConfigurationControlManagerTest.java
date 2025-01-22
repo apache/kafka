@@ -41,6 +41,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -48,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -403,6 +406,52 @@ public class ConfigurationControlManagerTest {
             toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))),
                 true));
+    }
+
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testMaybeGenerateElrSafetyRecords(boolean setStaticConfig) {
+        ConfigurationControlManager.Builder builder = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA);
+        if (setStaticConfig) {
+            builder.setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"));
+        }
+        ConfigurationControlManager manager = builder.build();
+        Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps =
+            toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "3")));
+        ConfigResource brokerConfigResource = new ConfigResource(ConfigResource.Type.BROKER, "1");
+        ControllerResult<ApiError> result = manager.incrementalAlterConfig(brokerConfigResource, keyToOps, true);
+        assertEquals(Collections.emptySet(), manager.brokersWithConfigs());
+
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+            new ConfigRecord().setResourceType(BROKER.id()).setResourceName("1").
+                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue("3"), (short) 0)),
+            ApiError.NONE), result);
+
+        RecordTestUtils.replayAll(manager, result.records());
+        assertEquals(Set.of(1), manager.brokersWithConfigs());
+
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        String effectiveMinInsync = setStaticConfig ? "2" : "1";
+        assertEquals("Generating cluster-level min.insync.replicas of " +
+            effectiveMinInsync + ". Removing broker-level min.insync.replicas " +
+            "for brokers: 1.", manager.maybeGenerateElrSafetyRecords(records));
+
+        assertEquals(Arrays.asList(new ApiMessageAndVersion(
+            new ConfigRecord().
+                setResourceType(BROKER.id()).
+                setResourceName("").
+                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
+                setValue(effectiveMinInsync), (short) 0),
+            new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(BROKER.id()).
+                setResourceName("1").
+                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
+                setValue(null), (short) 0)),
+            records);
+        RecordTestUtils.replayAll(manager, records);
+        assertEquals(Collections.emptySet(), manager.brokersWithConfigs());
     }
 
     @ParameterizedTest
