@@ -347,6 +347,7 @@ public class ShareFetchCollectorTest {
             return new ShareCompletedFetch(
                     logContext,
                     BufferSupplier.create(),
+                    0,
                     topicAPartition0,
                     partitionData,
                     shareFetchMetricsAggregator,
