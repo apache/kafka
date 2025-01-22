@@ -119,26 +119,4 @@ class ApiVersionManagerTest {
     val envelopeVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id)
     assertNull(envelopeVersion)
   }
-
-  @Test
-  def testEnvelopeEnabledWhenForwardingManagerPresent(): Unit = {
-    val forwardingManager = Mockito.mock(classOf[ForwardingManager])
-    Mockito.when(forwardingManager.controllerApiVersions).thenReturn(None)
-
-    val versionManager = new DefaultApiVersionManager(
-      listenerType = ListenerType.ZK_BROKER,
-      forwardingManager = forwardingManager,
-      brokerFeatures = brokerFeatures,
-      metadataCache = metadataCache,
-      enableUnstableLastVersion = true
-    )
-    assertTrue(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
-    assertTrue(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
-
-    val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0, false)
-    val envelopeVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id)
-    assertNotNull(envelopeVersion)
-    assertEquals(ApiKeys.ENVELOPE.oldestVersion, envelopeVersion.minVersion)
-    assertEquals(ApiKeys.ENVELOPE.latestVersion, envelopeVersion.maxVersion)
-  }
 }
