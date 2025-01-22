@@ -3012,6 +3012,26 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>punctuate-latency-avg</td>
+        <td>The average amount of time taken to execute periodic tasks per call to punctuate</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-latency-max</td>
+        <td>The maximum amount of time taken for any single call to punctuate to complete.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-total</td>
+        <td>The total number of times the punctuate method was called to trigger periodic actions during task processing.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-rate</td>
+        <td>The average number of calls to punctuate per second.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>record-lateness-avg</td>
         <td>The average observed lateness in ms of records (stream time - record timestamp).</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
@@ -3044,6 +3064,11 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
       <tr>
         <td>active-process-ratio</td>
         <td>The fraction of time the stream thread spent on processing this task among all assigned active tasks.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>active-buffer-count</td>
+        <td>The count of buffered records that are polled from consumer and not yet processed for this active task.</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
       <tr>
