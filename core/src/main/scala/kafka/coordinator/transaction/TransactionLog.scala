@@ -51,8 +51,7 @@ object TransactionLog {
     * @return key bytes
     */
   private[transaction] def keyToBytes(transactionalId: String): Array[Byte] = {
-    MessageUtil.toCoordinatorTypePrefixedBytes(CoordinatorRecordType.TRANSACTION_LOG.id,
-      new TransactionLogKey().setTransactionalId(transactionalId))
+    MessageUtil.toCoordinatorTypePrefixedBytes(new TransactionLogKey().setTransactionalId(transactionalId))
   }
 
   /**

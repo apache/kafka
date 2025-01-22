@@ -43,13 +43,11 @@ public class ControllerMetadataMetricsTest {
                     new HashSet<>(Arrays.asList(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
                         "kafka.controller:type=KafkaController,name=FencedBrokerCount",
-                        "kafka.controller:type=KafkaController,name=MigratingZkBrokerCount",
                         "kafka.controller:type=KafkaController,name=GlobalPartitionCount",
                         "kafka.controller:type=KafkaController,name=GlobalTopicCount",
                         "kafka.controller:type=KafkaController,name=MetadataErrorCount",
                         "kafka.controller:type=KafkaController,name=OfflinePartitionsCount",
                         "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
-                        "kafka.controller:type=KafkaController,name=ZkMigrationState",
                         "kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec"
                     )));
             }
