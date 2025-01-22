@@ -2047,13 +2047,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           assertEquals(consumerSet.size - 1, testGroupDescription.members().size())
 
           // Test delete one correct static member
-          val removeOptions = new RemoveMembersFromConsumerGroupOptions(Collections.singleton(new MemberToRemove(testInstanceId1)))
-          removeOptions.reason("test remove")
-          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, removeOptions)
+          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId,
+            new RemoveMembersFromConsumerGroupOptions(Collections.singleton(new MemberToRemove(testInstanceId1))))
 
           assertNull(removeMembersResult.all().get())
-          val validMemberFuture = removeMembersResult.memberResult(new MemberToRemove(testInstanceId1))
-          assertNull(validMemberFuture.get())
+          assertNull(removeMembersResult.memberResult(new MemberToRemove(testInstanceId1)).get())
 
           // Delete all active members remaining (a static member)
           removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
@@ -2447,13 +2445,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           assertEquals(consumerSet.size - 1, testGroupDescription.members().size())
 
           // Test delete one correct static member
-          val removeOptions = new RemoveMembersFromConsumerGroupOptions(Collections.singleton(new MemberToRemove(testInstanceId1)))
-          removeOptions.reason("test remove")
-          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, removeOptions)
+          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId,
+            new RemoveMembersFromConsumerGroupOptions(Collections.singleton(new MemberToRemove(testInstanceId1))))
 
           assertNull(removeMembersResult.all().get())
-          val validMemberFuture = removeMembersResult.memberResult(new MemberToRemove(testInstanceId1))
-          assertNull(validMemberFuture.get())
+          assertNull(removeMembersResult.memberResult(new MemberToRemove(testInstanceId1)).get())
 
           // Delete all active members remaining (a static member)
           removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
