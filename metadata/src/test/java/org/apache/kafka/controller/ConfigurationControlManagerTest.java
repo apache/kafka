@@ -408,7 +408,6 @@ public class ConfigurationControlManagerTest {
                 true));
     }
 
-
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testMaybeGenerateElrSafetyRecords(boolean setStaticConfig) {

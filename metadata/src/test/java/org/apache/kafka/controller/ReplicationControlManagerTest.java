@@ -220,7 +220,7 @@ public class ReplicationControlManagerTest {
         final FeatureControlManager featureControl;
         final ClusterControlManager clusterControl;
         final ConfigurationControlManager configurationControl;
-        ReplicationControlManager replicationControl;
+        final ReplicationControlManager replicationControl;
         final OffsetControlManager offsetControlManager;
 
         void replay(List<ApiMessageAndVersion> records) {
