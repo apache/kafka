@@ -1366,9 +1366,6 @@ project(':metadata') {
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
 
-    testImplementation project(':test-common:test-common-internal-api')
-    testRuntimeOnly project(':test-common:test-common-runtime')
-
     testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
@@ -1569,7 +1566,7 @@ project(':test-common:test-common-internal-api') {
 }
 
 project(':test-common:test-common-util') {
-  // Runtime-only JUnit extentions for entire project. Java 11 only
+  // Runtime-only JUnit extensions for entire project. Java 11 only
   base {
     archivesName = "kafka-test-common-util"
   }

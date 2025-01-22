@@ -33,10 +33,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.test.api.Defaults.DEFAULT_BROKER_LISTENER_NAME;
-import static org.apache.kafka.common.test.api.Defaults.DEFAULT_BROKER_SECURITY_PROTOCOL;
-import static org.apache.kafka.common.test.api.Defaults.DEFAULT_CONTROLLER_LISTENER_NAME;
-import static org.apache.kafka.common.test.api.Defaults.DEFAULT_CONTROLLER_SECURITY_PROTOCOL;
+import static org.apache.kafka.common.test.api.TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME;
+import static org.apache.kafka.common.test.api.TestKitDefaults.DEFAULT_BROKER_SECURITY_PROTOCOL;
+import static org.apache.kafka.common.test.api.TestKitDefaults.DEFAULT_CONTROLLER_LISTENER_NAME;
+import static org.apache.kafka.common.test.api.TestKitDefaults.DEFAULT_CONTROLLER_SECURITY_PROTOCOL;
 
 /**
  * Represents an immutable requested configuration of a Kafka cluster for integration testing.

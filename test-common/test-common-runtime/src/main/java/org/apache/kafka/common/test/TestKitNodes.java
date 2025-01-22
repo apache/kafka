@@ -20,7 +20,7 @@ package org.apache.kafka.common.test;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.test.api.Defaults;
+import org.apache.kafka.common.test.api.TestKitDefaults;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
@@ -63,10 +63,10 @@ public class TestKitNodes {
         }
         // The broker and controller listener name and SecurityProtocol configurations must
         // be kept in sync with the default values in ClusterTest.
-        private ListenerName brokerListenerName = ListenerName.normalised(Defaults.DEFAULT_BROKER_LISTENER_NAME);
-        private SecurityProtocol brokerSecurityProtocol = Defaults.DEFAULT_BROKER_SECURITY_PROTOCOL;
-        private ListenerName controllerListenerName = ListenerName.normalised(Defaults.DEFAULT_CONTROLLER_LISTENER_NAME);
-        private SecurityProtocol controllerSecurityProtocol = Defaults.DEFAULT_CONTROLLER_SECURITY_PROTOCOL;
+        private ListenerName brokerListenerName = ListenerName.normalised(TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME);
+        private SecurityProtocol brokerSecurityProtocol = TestKitDefaults.DEFAULT_BROKER_SECURITY_PROTOCOL;
+        private ListenerName controllerListenerName = ListenerName.normalised(TestKitDefaults.DEFAULT_CONTROLLER_LISTENER_NAME);
+        private SecurityProtocol controllerSecurityProtocol = TestKitDefaults.DEFAULT_CONTROLLER_SECURITY_PROTOCOL;
 
         public Builder setClusterId(String clusterId) {
             this.clusterId = clusterId;
@@ -163,11 +163,11 @@ public class TestKitNodes {
                 clusterId = Uuid.randomUuid().toString();
             }
 
-            int controllerId = combined ? Defaults.BROKER_ID_OFFSET : Defaults.BROKER_ID_OFFSET + Defaults.CONTROLLER_ID_OFFSET;
+            int controllerId = combined ? TestKitDefaults.BROKER_ID_OFFSET : TestKitDefaults.BROKER_ID_OFFSET + TestKitDefaults.CONTROLLER_ID_OFFSET;
             List<Integer> controllerNodeIds = IntStream.range(controllerId, controllerId + numControllerNodes)
                 .boxed()
                 .collect(Collectors.toList());
-            List<Integer> brokerNodeIds = IntStream.range(Defaults.BROKER_ID_OFFSET, Defaults.BROKER_ID_OFFSET + numBrokerNodes)
+            List<Integer> brokerNodeIds = IntStream.range(TestKitDefaults.BROKER_ID_OFFSET, TestKitDefaults.BROKER_ID_OFFSET + numBrokerNodes)
                 .boxed()
                 .collect(Collectors.toList());
 
