@@ -47,24 +47,27 @@ public class RequestConvertToJsonTest {
     public void testAllRequestTypesHandled() {
         List<String> unhandledKeys = new ArrayList<>();
         for (ApiKeys key : ApiKeys.values()) {
-            short version = key.latestVersion();
-            ApiMessage message;
-            if (key == ApiKeys.DESCRIBE_ACLS) {
-                message = ApiMessageType.fromApiKey(key.id).newRequest();
-                DescribeAclsRequestData requestData = (DescribeAclsRequestData) message;
-                requestData.setPatternTypeFilter((byte) 1);
-                requestData.setResourceTypeFilter((byte) 1);
-                requestData.setPermissionType((byte) 1);
-                requestData.setOperation((byte) 1);
-            } else {
-                message = ApiMessageType.fromApiKey(key.id).newRequest();
-            }
-            ByteBuffer bytes = MessageUtil.toByteBuffer(message, version);
-            AbstractRequest req = AbstractRequest.parseRequest(key, version, bytes).request;
-            try {
-                RequestConvertToJson.request(req);
-            } catch (IllegalStateException e) {
-                unhandledKeys.add(key.toString());
+            if (key.hasValidVersion()) {
+                short version = key.latestVersion();
+                ApiMessage message;
+                if (key == ApiKeys.DESCRIBE_ACLS) {
+                    message = ApiMessageType.fromApiKey(key.id).newRequest();
+                    DescribeAclsRequestData requestData = (DescribeAclsRequestData) message;
+                    requestData.setPatternTypeFilter((byte) 1);
+                    requestData.setResourceTypeFilter((byte) 1);
+                    requestData.setPermissionType((byte) 1);
+                    requestData.setOperation((byte) 1);
+                } else {
+                    message = ApiMessageType.fromApiKey(key.id).newRequest();
+                }
+                ByteBuffer bytes = MessageUtil.toByteBuffer(message, version);
+                AbstractRequest req = AbstractRequest.parseRequest(key, version, bytes).request;
+                try {
+                    RequestConvertToJson.request(req);
+                } catch (IllegalStateException e) {
+                    e.printStackTrace();
+                    unhandledKeys.add(key.toString());
+                }
             }
         }
         assertEquals(Collections.emptyList(), unhandledKeys, "Unhandled request keys");
@@ -101,14 +104,16 @@ public class RequestConvertToJsonTest {
     public void testAllResponseTypesHandled() {
         List<String> unhandledKeys = new ArrayList<>();
         for (ApiKeys key : ApiKeys.values()) {
-            short version = key.latestVersion();
-            ApiMessage message = ApiMessageType.fromApiKey(key.id).newResponse();
-            ByteBuffer bytes = MessageUtil.toByteBuffer(message, version);
-            AbstractResponse res = AbstractResponse.parseResponse(key, bytes, version);
-            try {
-                RequestConvertToJson.response(res, version);
-            } catch (IllegalStateException e) {
-                unhandledKeys.add(key.toString());
+            if (key.hasValidVersion()) {
+                short version = key.latestVersion();
+                ApiMessage message = ApiMessageType.fromApiKey(key.id).newResponse();
+                ByteBuffer bytes = MessageUtil.toByteBuffer(message, version);
+                AbstractResponse res = AbstractResponse.parseResponse(key, bytes, version);
+                try {
+                    RequestConvertToJson.response(res, version);
+                } catch (IllegalStateException e) {
+                    unhandledKeys.add(key.toString());
+                }
             }
         }
         assertEquals(Collections.emptyList(), unhandledKeys, "Unhandled response keys");

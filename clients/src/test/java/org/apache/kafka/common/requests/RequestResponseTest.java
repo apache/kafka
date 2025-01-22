@@ -77,10 +77,6 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.ControlledShutdownRequestData;
-import org.apache.kafka.common.message.ControlledShutdownResponseData;
-import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
-import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionCollection;
 import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.ControllerRegistrationResponseData;
 import org.apache.kafka.common.message.CreateAclsRequestData;
@@ -173,9 +169,6 @@ import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
-import org.apache.kafka.common.message.LeaderAndIsrResponseData;
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicErrorCollection;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListClientMetricsResourcesRequestData;
@@ -232,9 +225,6 @@ import org.apache.kafka.common.message.ShareGroupDescribeRequestData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
-import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
-import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeRequestData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
@@ -246,17 +236,12 @@ import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
-import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
 import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -302,14 +287,12 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
-import static org.apache.kafka.common.protocol.ApiKeys.CONTROLLED_SHUTDOWN;
 import static org.apache.kafka.common.protocol.ApiKeys.CREATE_PARTITIONS;
 import static org.apache.kafka.common.protocol.ApiKeys.CREATE_TOPICS;
 import static org.apache.kafka.common.protocol.ApiKeys.DELETE_ACLS;
@@ -327,9 +310,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.METADATA;
 import static org.apache.kafka.common.protocol.ApiKeys.OFFSET_FETCH;
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.apache.kafka.common.protocol.ApiKeys.SASL_AUTHENTICATE;
-import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
-import static org.apache.kafka.common.protocol.ApiKeys.UPDATE_METADATA;
 import static org.apache.kafka.common.protocol.ApiKeys.WRITE_TXN_MARKERS;
 import static org.apache.kafka.common.requests.EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
@@ -397,19 +378,9 @@ public class RequestResponseTest {
             new NotCoordinatorException("Not Coordinator"));
         checkErrorResponse(createOffsetFetchRequestWithMultipleGroups((short) 8, true),
             new NotCoordinatorException("Not Coordinator"));
-        // StopReplica
-        for (short version : STOP_REPLICA.allVersions()) {
-            checkRequest(createStopReplicaRequest(version, false));
-            checkErrorResponse(createStopReplicaRequest(version, false), unknownServerException);
-        }
         // CreatePartitions
         for (short version : CREATE_PARTITIONS.allVersions()) {
             checkRequest(createCreatePartitionsRequestWithAssignments(version));
-        }
-        // UpdateMetadata
-        for (short version : UPDATE_METADATA.allVersions()) {
-            checkRequest(createUpdateMetadataRequest(version, null));
-            checkErrorResponse(createUpdateMetadataRequest(version, null), unknownServerException);
         }
         // LeaderForEpoch
         checkRequest(createLeaderEpochRequestForConsumer());
@@ -935,7 +906,6 @@ public class RequestResponseTest {
         assertEquals(1, createApiVersionResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createBrokerHeartbeatResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createBrokerRegistrationResponse().errorCounts().get(Errors.NONE));
-        assertEquals(1, createControlledShutdownResponse().errorCounts().get(Errors.NONE));
         assertEquals(2, createCreateAclsResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createCreatePartitionsResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createCreateTokenResponse().errorCounts().get(Errors.NONE));
@@ -958,8 +928,6 @@ public class RequestResponseTest {
         assertEquals(1, createHeartBeatResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createIncrementalAlterConfigsResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createJoinGroupResponse(JOIN_GROUP.latestVersion()).errorCounts().get(Errors.NONE));
-        assertEquals(2, createLeaderAndIsrResponse((short) 4).errorCounts().get(Errors.NONE));
-        assertEquals(2, createLeaderAndIsrResponse((short) 5).errorCounts().get(Errors.NONE));
         assertEquals(3, createLeaderEpochResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createLeaveGroupResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createListGroupsResponse(LIST_GROUPS.latestVersion()).errorCounts().get(Errors.NONE));
@@ -973,10 +941,8 @@ public class RequestResponseTest {
         assertEquals(1, createRenewTokenResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createSaslAuthenticateResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createSaslHandshakeResponse().errorCounts().get(Errors.NONE));
-        assertEquals(2, createStopReplicaResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createSyncGroupResponse(SYNC_GROUP.latestVersion()).errorCounts().get(Errors.NONE));
         assertEquals(1, createTxnOffsetCommitResponse().errorCounts().get(Errors.NONE));
-        assertEquals(1, createUpdateMetadataResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createWriteTxnMarkersResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createShareGroupHeartbeatResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createShareGroupDescribeResponse().errorCounts().get(Errors.NONE));
@@ -990,10 +956,6 @@ public class RequestResponseTest {
             case FETCH: return createFetchRequest(version);
             case LIST_OFFSETS: return createListOffsetRequest(version);
             case METADATA: return createMetadataRequest(version, singletonList("topic1"));
-            case LEADER_AND_ISR: return createLeaderAndIsrRequest(version);
-            case STOP_REPLICA: return createStopReplicaRequest(version, true);
-            case UPDATE_METADATA: return createUpdateMetadataRequest(version, "rack1");
-            case CONTROLLED_SHUTDOWN: return createControlledShutdownRequest(version);
             case OFFSET_COMMIT: return createOffsetCommitRequest(version);
             case OFFSET_FETCH: return createOffsetFetchRequest(version, true);
             case FIND_COORDINATOR: return createFindCoordinatorRequest(version);
@@ -1087,10 +1049,6 @@ public class RequestResponseTest {
             case FETCH: return createFetchResponse(version);
             case LIST_OFFSETS: return createListOffsetResponse(version);
             case METADATA: return createMetadataResponse();
-            case LEADER_AND_ISR: return createLeaderAndIsrResponse(version);
-            case STOP_REPLICA: return createStopReplicaResponse();
-            case UPDATE_METADATA: return createUpdateMetadataResponse();
-            case CONTROLLED_SHUTDOWN: return createControlledShutdownResponse();
             case OFFSET_COMMIT: return createOffsetCommitResponse();
             case OFFSET_FETCH: return createOffsetFetchResponse(version);
             case FIND_COORDINATOR: return createFindCoordinatorResponse(version);
@@ -2531,224 +2489,6 @@ public class RequestResponseTest {
                 10000, RecordBatch.NO_TIMESTAMP, 100, singletonList(new ProduceResponse.RecordError(0, "error message")),
                 "global error message"));
         return new ProduceResponse(responseData, 0);
-    }
-
-    private StopReplicaRequest createStopReplicaRequest(short version, boolean deletePartitions) {
-        List<StopReplicaTopicState> topicStates = new ArrayList<>();
-        StopReplicaTopicState topic1 = new StopReplicaTopicState()
-            .setTopicName("topic1")
-            .setPartitionStates(singletonList(new StopReplicaPartitionState()
-                .setPartitionIndex(0)
-                .setLeaderEpoch(1)
-                .setDeletePartition(deletePartitions)));
-        topicStates.add(topic1);
-        StopReplicaTopicState topic2 = new StopReplicaTopicState()
-            .setTopicName("topic2")
-            .setPartitionStates(singletonList(new StopReplicaPartitionState()
-                .setPartitionIndex(1)
-                .setLeaderEpoch(2)
-                .setDeletePartition(deletePartitions)));
-        topicStates.add(topic2);
-
-        return new StopReplicaRequest.Builder(version, 0, 1, 0,
-            deletePartitions, topicStates).build(version);
-    }
-
-    private StopReplicaResponse createStopReplicaResponse() {
-        List<StopReplicaResponseData.StopReplicaPartitionError> partitions = new ArrayList<>();
-        partitions.add(new StopReplicaResponseData.StopReplicaPartitionError()
-            .setTopicName("test")
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code()));
-        return new StopReplicaResponse(new StopReplicaResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setPartitionErrors(partitions));
-    }
-
-    private ControlledShutdownRequest createControlledShutdownRequest(short version) {
-        ControlledShutdownRequestData data = new ControlledShutdownRequestData()
-                .setBrokerId(10)
-                .setBrokerEpoch(0L);
-        return new ControlledShutdownRequest.Builder(
-                data,
-                CONTROLLED_SHUTDOWN.latestVersion()).build(version);
-    }
-
-    private ControlledShutdownResponse createControlledShutdownResponse() {
-        RemainingPartition p1 = new RemainingPartition()
-                .setTopicName("test2")
-                .setPartitionIndex(5);
-        RemainingPartition p2 = new RemainingPartition()
-                .setTopicName("test1")
-                .setPartitionIndex(10);
-        RemainingPartitionCollection pSet = new RemainingPartitionCollection();
-        pSet.add(p1);
-        pSet.add(p2);
-        ControlledShutdownResponseData data = new ControlledShutdownResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setRemainingPartitions(pSet);
-        return new ControlledShutdownResponse(data);
-    }
-
-    private LeaderAndIsrRequest createLeaderAndIsrRequest(short version) {
-        List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
-        List<Integer> isr = asList(1, 2);
-        List<Integer> replicas = asList(1, 2, 3, 4);
-        partitionStates.add(new LeaderAndIsrPartitionState()
-            .setTopicName("topic5")
-            .setPartitionIndex(105)
-            .setControllerEpoch(0)
-            .setLeader(2)
-            .setLeaderEpoch(1)
-            .setIsr(isr)
-            .setPartitionEpoch(2)
-            .setReplicas(replicas)
-            .setIsNew(false));
-        partitionStates.add(new LeaderAndIsrPartitionState()
-            .setTopicName("topic5")
-            .setPartitionIndex(1)
-            .setControllerEpoch(1)
-            .setLeader(1)
-            .setLeaderEpoch(1)
-            .setIsr(isr)
-            .setPartitionEpoch(2)
-            .setReplicas(replicas)
-            .setIsNew(false));
-        partitionStates.add(new LeaderAndIsrPartitionState()
-            .setTopicName("topic20")
-            .setPartitionIndex(1)
-            .setControllerEpoch(1)
-            .setLeader(0)
-            .setLeaderEpoch(1)
-            .setIsr(isr)
-            .setPartitionEpoch(2)
-            .setReplicas(replicas)
-            .setIsNew(false));
-
-        Set<Node> leaders = Set.of(
-                new Node(0, "test0", 1223),
-                new Node(1, "test1", 1223)
-        );
-
-        Map<String, Uuid> topicIds = new HashMap<>();
-        topicIds.put("topic5", Uuid.randomUuid());
-        topicIds.put("topic20", Uuid.randomUuid());
-
-        return new LeaderAndIsrRequest.Builder(version, 1, 10, 0,
-                partitionStates, topicIds, leaders).build();
-    }
-
-    private LeaderAndIsrResponse createLeaderAndIsrResponse(short version) {
-        if (version < 5) {
-            List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> partitions = new ArrayList<>();
-            partitions.add(new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
-                    .setTopicName("test")
-                    .setPartitionIndex(0)
-                    .setErrorCode(Errors.NONE.code()));
-            return new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-                    .setErrorCode(Errors.NONE.code())
-                    .setPartitionErrors(partitions), version);
-        } else {
-            List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> partition = singletonList(
-                    new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
-                    .setPartitionIndex(0)
-                    .setErrorCode(Errors.NONE.code()));
-            LeaderAndIsrTopicErrorCollection topics = new LeaderAndIsrTopicErrorCollection();
-            topics.add(new LeaderAndIsrResponseData.LeaderAndIsrTopicError()
-                    .setTopicId(Uuid.randomUuid())
-                    .setPartitionErrors(partition));
-            return new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-                    .setTopics(topics), version);
-        }
-    }
-
-    private UpdateMetadataRequest createUpdateMetadataRequest(short version, String rack) {
-        List<UpdateMetadataPartitionState> partitionStates = new ArrayList<>();
-        List<Integer> isr = asList(1, 2);
-        List<Integer> replicas = asList(1, 2, 3, 4);
-        List<Integer> offlineReplicas = emptyList();
-        partitionStates.add(new UpdateMetadataPartitionState()
-            .setTopicName("topic5")
-            .setPartitionIndex(105)
-            .setControllerEpoch(0)
-            .setLeader(2)
-            .setLeaderEpoch(1)
-            .setIsr(isr)
-            .setZkVersion(2)
-            .setReplicas(replicas)
-            .setOfflineReplicas(offlineReplicas));
-        partitionStates.add(new UpdateMetadataPartitionState()
-                .setTopicName("topic5")
-                .setPartitionIndex(1)
-                .setControllerEpoch(1)
-                .setLeader(1)
-                .setLeaderEpoch(1)
-                .setIsr(isr)
-                .setZkVersion(2)
-                .setReplicas(replicas)
-                .setOfflineReplicas(offlineReplicas));
-        partitionStates.add(new UpdateMetadataPartitionState()
-                .setTopicName("topic20")
-                .setPartitionIndex(1)
-                .setControllerEpoch(1)
-                .setLeader(0)
-                .setLeaderEpoch(1)
-                .setIsr(isr)
-                .setZkVersion(2)
-                .setReplicas(replicas)
-                .setOfflineReplicas(offlineReplicas));
-
-        Map<String, Uuid> topicIds = new HashMap<>();
-        if (version > 6) {
-            topicIds.put("topic5", Uuid.randomUuid());
-            topicIds.put("topic20", Uuid.randomUuid());
-        }
-
-        SecurityProtocol plaintext = SecurityProtocol.PLAINTEXT;
-        List<UpdateMetadataEndpoint> endpoints1 = new ArrayList<>();
-        endpoints1.add(new UpdateMetadataEndpoint()
-            .setHost("host1")
-            .setPort(1223)
-            .setSecurityProtocol(plaintext.id)
-            .setListener(ListenerName.forSecurityProtocol(plaintext).value()));
-
-        List<UpdateMetadataEndpoint> endpoints2 = new ArrayList<>();
-        endpoints2.add(new UpdateMetadataEndpoint()
-            .setHost("host1")
-            .setPort(1244)
-            .setSecurityProtocol(plaintext.id)
-            .setListener(ListenerName.forSecurityProtocol(plaintext).value()));
-        if (version > 0) {
-            SecurityProtocol ssl = SecurityProtocol.SSL;
-            endpoints2.add(new UpdateMetadataEndpoint()
-                .setHost("host2")
-                .setPort(1234)
-                .setSecurityProtocol(ssl.id)
-                .setListener(ListenerName.forSecurityProtocol(ssl).value()));
-            endpoints2.add(new UpdateMetadataEndpoint()
-                .setHost("host2")
-                .setPort(1334)
-                .setSecurityProtocol(ssl.id));
-            if (version >= 3)
-                endpoints2.get(1).setListener("CLIENT");
-        }
-
-        List<UpdateMetadataBroker> liveBrokers = asList(
-            new UpdateMetadataBroker()
-                .setId(0)
-                .setEndpoints(endpoints1)
-                .setRack(rack),
-            new UpdateMetadataBroker()
-                .setId(1)
-                .setEndpoints(endpoints2)
-                .setRack(rack)
-        );
-        return new UpdateMetadataRequest.Builder(version, 1, 10, 0, partitionStates,
-            liveBrokers, topicIds).build();
-    }
-
-    private UpdateMetadataResponse createUpdateMetadataResponse() {
-        return new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.NONE.code()));
     }
 
     private SaslHandshakeRequest createSaslHandshakeRequest(short version) {

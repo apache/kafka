@@ -17,7 +17,7 @@
 
 package kafka.server.metadata
 
-import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache}
+import kafka.server.MetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common._
@@ -26,13 +26,12 @@ import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{Cursor, DescribeTopicPartitionsResponsePartition, DescribeTopicPartitionsResponseTopic}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.image.MetadataImage
-import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
+import org.apache.kafka.metadata.{BrokerRegistration, LeaderAndIsr, PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
@@ -49,7 +48,7 @@ import scala.util.control.Breaks._
 class KRaftMetadataCache(
   val brokerId: Int,
   val kraftVersionSupplier: Supplier[KRaftVersion]
-) extends MetadataCache with Logging with ConfigRepository {
+) extends MetadataCache with Logging {
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
 
   // This is the cache state. Every MetadataImage instance is immutable, and updates
@@ -383,19 +382,11 @@ class KRaftMetadataCache(
     _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).toScala).toSeq
   }
 
-  // Does NOT include offline replica metadata
-  override def getPartitionInfo(topicName: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
+  override def getLeaderAndIsr(topicName: String, partitionId: Int): Option[LeaderAndIsr] = {
     Option(_currentImage.topics().getTopic(topicName)).
       flatMap(topic => Option(topic.partitions().get(partitionId))).
-      flatMap(partition => Some(new UpdateMetadataPartitionState().
-        setTopicName(topicName).
-        setPartitionIndex(partitionId).
-        setControllerEpoch(-1). // Controller epoch is not stored in the cache.
-        setLeader(partition.leader).
-        setLeaderEpoch(partition.leaderEpoch).
-        setIsr(Replicas.toList(partition.isr)).
-        setZkVersion(partition.partitionEpoch).
-        setReplicas(Replicas.toList(partition.replicas))))
+      flatMap(partition => Some(new LeaderAndIsr(partition.leader, partition.leaderEpoch,
+        util.Arrays.asList(partition.isr.map(i => i: java.lang.Integer): _*), partition.leaderRecoveryState, partition.partitionEpoch)))
   }
 
   override def numPartitions(topicName: String): Option[Int] = {
@@ -433,7 +424,7 @@ class KRaftMetadataCache(
     val image = _currentImage
     val result = new mutable.HashMap[Int, Node]()
     Option(image.topics().getTopic(tp.topic())).foreach { topic =>
-      topic.partitions().values().forEach { partition =>
+      Option(topic.partitions().get(tp.partition())).foreach { partition =>
         partition.replicas.foreach { replicaId =>
           val broker = image.cluster().broker(replicaId)
           if (broker != null && !broker.fenced()) {
@@ -447,15 +438,6 @@ class KRaftMetadataCache(
     }
     result
   }
-
-  /**
-   * Choose a random broker node to report as the controller. We do this because we want
-   * the client to send requests destined for the controller to a random broker.
-   * Clients do not have direct access to the controller in the KRaft world, as explained
-   * in KIP-590.
-   */
-  override def getControllerId: Option[CachedControllerId] =
-    getRandomAliveBroker(_currentImage).map(KRaftCachedControllerId)
 
   override def getRandomAliveBrokerId: Option[Int] = {
     getRandomAliveBroker(_currentImage)
@@ -539,11 +521,11 @@ class KRaftMetadataCache(
   override def config(configResource: ConfigResource): Properties =
     _currentImage.configs().configProperties(configResource)
 
-  def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData = {
+  override def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData = {
     _currentImage.clientQuotas().describe(request)
   }
 
-  def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData = {
+  override def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData = {
     _currentImage.scram().describe(request)
   }
 
