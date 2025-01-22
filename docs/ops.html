@@ -3109,6 +3109,16 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>The total number of records produced by a sink processor node.</td>
         <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>Idempotent-update-skip-rate</td>
+        <td>The average number of skipped idempotent updates per second.</td>
+        <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Idempotent-update-skip-total</td>
+        <td>The total number of skipped updates.</td>
+        <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
       </tbody>
  </table>
 
