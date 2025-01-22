@@ -3081,6 +3081,26 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>The cache size in bytes accumulated by this task.</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>record-rate</td>
+        <td>The average number of records restored per second.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-total</td>
+        <td>The total number of records restored</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>update-rate</td>
+        <td>The average number of records updated per second.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>update-total</td>
+        <td>The total number of records updated</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
  </tbody>
 </table>
 
