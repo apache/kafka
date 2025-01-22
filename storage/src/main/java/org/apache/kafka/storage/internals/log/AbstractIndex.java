@@ -399,7 +399,7 @@ public abstract class AbstractIndex implements Closeable {
     /**
      * Forcefully free the buffer's mmap.
      */
-    // Made protected for the sake of visibility for testing.
+    // Visible for testing
     protected void forceUnmap() throws IOException {
         try {
             ByteBufferUnmapper.unmap(file.getAbsolutePath(), mmap);
