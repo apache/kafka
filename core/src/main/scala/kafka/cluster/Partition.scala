@@ -1050,7 +1050,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
-    // In KRaft mode, only a replica which meets all of the following requirements is allowed to join the ISR.
+    // A replica which meets all of the following requirements is allowed to join the ISR.
     // 1. It is not fenced.
     // 2. It is not in controlled shutdown.
     // 3. Its metadata cached broker epoch matches its Fetch request broker epoch. Or the Fetch
