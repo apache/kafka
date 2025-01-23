@@ -2198,7 +2198,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             group.groupId == testGroupId &&
               group.state.get == ConsumerGroupState.STABLE &&
               group.groupState.get == GroupState.STABLE)
-            matching.size == 1
+          matching.size == 1
         }, s"Expected to be able to list $testGroupId in group type $groupType and state Stable")
 
         TestUtils.waitUntilTrue(() => {
@@ -4113,5 +4113,4 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
   }
-
 }
