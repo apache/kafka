@@ -69,6 +69,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -288,6 +289,12 @@ public class SharePartition {
     private long endOffset;
 
     /**
+     * This maintains the set of gaps in the cachedState after initialization. Some of these gaps might correspond to batches
+     * which were fetched but not acknowledged yet. The gaps are used in determining the next fetch offset.
+     */
+    private final TreeSet<Long> gapsAfterInitialization;
+
+    /**
      * We maintain the latest fetch offset and its metadata to estimate the minBytes requirement more efficiently.
      */
     private final OffsetMetadata fetchOffsetMetadata;
@@ -359,6 +366,7 @@ public class SharePartition {
         this.groupConfigManager = groupConfigManager;
         this.fetchOffsetMetadata = new OffsetMetadata();
         this.listener = listener;
+        this.gapsAfterInitialization = new TreeSet<>();
     }
 
     /**
@@ -464,6 +472,15 @@ public class SharePartition {
                     endOffset = cachedState.lastEntry().getValue().lastOffset();
                     // In case the persister read state RPC result contains no AVAILABLE records, we can update cached state
                     // and start/end offsets.
+
+                    long initialOffset = startOffset;
+                    for (InFlightBatch currentStateBatch : cachedState.values()) {
+                        if (initialOffset != currentStateBatch.firstOffset()) {
+                            this.gapsAfterInitialization.add(initialOffset);
+                        }
+                        initialOffset = currentStateBatch.lastOffset() + 1;
+                    }
+
                     maybeUpdateCachedStateAndOffsets();
                 } else {
                     endOffset = startOffset;
@@ -545,6 +562,9 @@ public class SharePartition {
                 if (entry.getValue().offsetState() == null) {
                     if (entry.getValue().batchState() == RecordState.AVAILABLE) {
                         nextFetchOffset = entry.getValue().firstOffset();
+                        if (!gapsAfterInitialization.isEmpty() && gapsAfterInitialization.first() < nextFetchOffset) {
+                            nextFetchOffset = gapsAfterInitialization.first();
+                        }
                         break;
                     }
                 } else {
@@ -552,6 +572,9 @@ public class SharePartition {
                     for (Map.Entry<Long, InFlightState> offsetState : entry.getValue().offsetState().entrySet()) {
                         if (offsetState.getValue().state == RecordState.AVAILABLE) {
                             nextFetchOffset = offsetState.getKey();
+                            if (!gapsAfterInitialization.isEmpty() && gapsAfterInitialization.first() < nextFetchOffset) {
+                                nextFetchOffset = gapsAfterInitialization.first();
+                            }
                             break;
                         }
                     }
@@ -565,8 +588,12 @@ public class SharePartition {
             // If nextFetchOffset is -1, then no AVAILABLE records are found in the cachedState, so there is no need of
             // re-computing next fetch offset in future fetch requests
             if (nextFetchOffset == -1) {
-                findNextFetchOffset.set(false);
-                nextFetchOffset = endOffset + 1;
+                if (!gapsAfterInitialization.isEmpty()) {
+                    nextFetchOffset = gapsAfterInitialization.first();
+                } else {
+                    findNextFetchOffset.set(false);
+                    nextFetchOffset = endOffset + 1;
+                }
             }
             return nextFetchOffset;
         } finally {
@@ -633,11 +660,34 @@ public class SharePartition {
                     firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
             }
 
-            log.trace("Overlap exists with in-flight records. Acquire the records if available for"
-                + " the share partition: {}-{}", groupId, topicIdPartition);
-            List<AcquiredRecords> result = new ArrayList<>();
             // The acquired count is used to track the number of records acquired for the request.
             int acquiredCount = 0;
+            List<AcquiredRecords> result = new ArrayList<>();
+
+            if (baseOffset < subMap.firstKey()) {
+                log.trace("The request batch is part of an acquirable gap in cachedState, hence acquire the gap offsets in a separate batch"
+                        + " records for the share partition: {}-{}", groupId, topicIdPartition);
+                if (lastBatch.lastOffset() < (subMap.lastEntry().getValue().lastOffset() - 1)) {
+                    // The entire request batch is part of the gap
+                    gapsAfterInitialization.remove(firstBatch.baseOffset());
+                    gapsAfterInitialization.add(lastBatch.lastOffset() + 1);
+                    return acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                        firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
+                } else {
+                    acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                        firstBatch.baseOffset(), subMap.lastEntry().getValue().lastOffset() - 1, batchSize, maxFetchRecords);
+                    result.add(new AcquiredRecords()
+                        .setFirstOffset(firstBatch.baseOffset())
+                        .setLastOffset(subMap.lastEntry().getValue().lastOffset() - 1)
+                        .setDeliveryCount((short) 1));
+                    acquiredCount += (int) (subMap.lastEntry().getValue().lastOffset() - firstBatch.baseOffset());
+                    gapsAfterInitialization.remove(firstBatch.baseOffset());
+                }
+            }
+
+            log.trace("Overlap exists with in-flight records. Acquire the records if available for"
+                + " the share partition: {}-{}", groupId, topicIdPartition);
+
             // The fetched records are already part of the in-flight records. The records might
             // be available for re-delivery hence try acquiring same. The request batches could
             // be an exact match, subset or span over multiple already fetched batches.
@@ -1758,6 +1808,11 @@ public class SharePartition {
                 return;
             }
 
+            // if there is an acquirable gap initially, then we should not move the startOffset
+            if (!gapsAfterInitialization.isEmpty() && gapsAfterInitialization.first() == startOffset) {
+                return;
+            }
+
             // This will help to find the next position for the startOffset.
             // The new position of startOffset will be lastOffsetAcknowledged + 1
             long lastOffsetAcknowledged = findLastOffsetAcknowledged();
@@ -1770,11 +1825,21 @@ public class SharePartition {
             // The resulting action should be to empty the cachedState altogether
             long lastCachedOffset = cachedState.lastEntry().getValue().lastOffset();
             if (lastOffsetAcknowledged == lastCachedOffset) {
-                startOffset = lastCachedOffset + 1; // The next offset that will be fetched and acquired in the share partition
-                endOffset = lastCachedOffset + 1;
-                cachedState.clear();
-                // Nothing further to do.
-                return;
+                if (gapsAfterInitialization.isEmpty()) {
+                    startOffset = lastCachedOffset + 1; // The next offset that will be fetched and acquired in the share partition
+                    endOffset = lastCachedOffset + 1;
+                    cachedState.clear();
+                    // Nothing further to do.
+                    return;
+                } else {
+                    NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(gapsAfterInitialization.first());
+                    if (entry != null) {
+                        long firstKeyToRemove = cachedState.firstKey();
+                        cachedState.subMap(firstKeyToRemove, true, entry.getValue().lastOffset(), true).clear();
+                    }
+                    startOffset = gapsAfterInitialization.first();
+                    return;
+                }
             }
 
             /*
@@ -1790,6 +1855,16 @@ public class SharePartition {
             // Since only a subMap will be removed, we need to find the first and last keys of that subMap
             long firstKeyToRemove = cachedState.firstKey();
             long lastKeyToRemove;
+
+            if (!gapsAfterInitialization.isEmpty() && gapsAfterInitialization.first() < lastOffsetAcknowledged) {
+                NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(gapsAfterInitialization.first());
+                if (entry != null) {
+                    cachedState.subMap(firstKeyToRemove, true, entry.getValue().lastOffset(), true).clear();
+                }
+                startOffset = gapsAfterInitialization.first();
+                return;
+            }
+
             NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(lastOffsetAcknowledged);
             if (lastOffsetAcknowledged == entry.getValue().lastOffset()) {
                 startOffset = cachedState.higherKey(lastOffsetAcknowledged);
@@ -2173,6 +2248,11 @@ public class SharePartition {
     // Visible for testing. Should only be used for testing purposes.
     void findNextFetchOffset(boolean findNextOffset) {
         findNextFetchOffset.getAndSet(findNextOffset);
+    }
+
+    // Visible for testing.
+    TreeSet<Long> gapsAfterInitialization() {
+        return new TreeSet<>(gapsAfterInitialization);
     }
 
     // Visible for testing
