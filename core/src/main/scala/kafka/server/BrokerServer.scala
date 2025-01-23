@@ -534,7 +534,7 @@ class BrokerServer(
       })
       metadataPublishers.add(brokerMetadataPublisher)
       brokerRegistrationTracker = new BrokerRegistrationTracker(config.brokerId,
-        () => lifecycleManager.resendBrokerRegistrationUnlessZkMode())
+        () => lifecycleManager.resendBrokerRegistration())
       metadataPublishers.add(brokerRegistrationTracker)
 
 
