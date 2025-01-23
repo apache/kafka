@@ -1562,12 +1562,12 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             setKafkaConfigSchema(configSchema).
-            setFeatureControl(featureControl).
             setExistenceChecker(resourceExists).
             setAlterConfigPolicy(alterConfigPolicy).
             setValidator(configurationValidator).
             setStaticConfig(staticConfig).
             setNodeId(nodeId).
+            setFeatureControl(featureControl).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).
