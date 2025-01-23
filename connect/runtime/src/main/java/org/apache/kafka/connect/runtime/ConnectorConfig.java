@@ -359,40 +359,7 @@ public class ConnectorConfig extends AbstractConfig {
      * Returns the initialized list of {@link TransformationStage} which apply the
      * {@link Transformation transformations} and {@link Predicate predicates}
      * as they are specified in the {@link #TRANSFORMS_CONFIG} and {@link #PREDICATES_CONFIG}
-     *
-     * This is kept for tests and should be deprecated in the future. Use the following method instead.
      */
-    public <R extends ConnectRecord<R>> List<TransformationStage<R>> transformationStages() {
-        final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
-
-        final List<TransformationStage<R>> transformations = new ArrayList<>(transformAliases.size());
-        for (String alias : transformAliases) {
-            final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
-
-            try {
-                @SuppressWarnings("unchecked")
-                final Transformation<R> transformation = Utils.newInstance(getClass(prefix + "type"), Transformation.class);
-                Map<String, Object> configs = originalsWithPrefix(prefix);
-                Object predicateAlias = configs.remove(TransformationStage.PREDICATE_CONFIG);
-                Object negate = configs.remove(TransformationStage.NEGATE_CONFIG);
-                transformation.configure(configs);
-                if (predicateAlias != null) {
-                    String predicatePrefix = PREDICATES_PREFIX + predicateAlias + ".";
-                    @SuppressWarnings("unchecked")
-                    Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
-                    predicate.configure(originalsWithPrefix(predicatePrefix));
-                    transformations.add(new TransformationStage<>(predicate, negate != null && Boolean.parseBoolean(negate.toString()), transformation));
-                } else {
-                    transformations.add(new TransformationStage<>(transformation));
-                }
-            } catch (Exception e) {
-                throw new ConnectException(e);
-            }
-        }
-
-        return transformations;
-    }
-
     public <R extends ConnectRecord<R>> List<TransformationStage<R>> transformationStages(Plugins plugins) {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
 

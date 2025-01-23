@@ -159,7 +159,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages();
+        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages(MOCK_PLUGINS);
         assertEquals(1, transformationStages.size());
         final TransformationStage<SinkRecord> stage = transformationStages.get(0);
         assertEquals(SimpleTransformation.class, stage.transformClass());
@@ -188,7 +188,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.b.type", SimpleTransformation.class.getName());
         props.put("transforms.b.magic.number", "84");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages();
+        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages(MOCK_PLUGINS);
         assertEquals(2, transformationStages.size());
         assertEquals(42, transformationStages.get(0).apply(DUMMY_RECORD).kafkaPartition().intValue());
         assertEquals(84, transformationStages.get(1).apply(DUMMY_RECORD).kafkaPartition().intValue());
@@ -289,7 +289,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     private void assertTransformationStageWithPredicate(Map<String, String> props, boolean expectedNegated) {
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages();
+        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages(MOCK_PLUGINS);
         assertEquals(1, transformationStages.size());
         TransformationStage<SinkRecord> stage = transformationStages.get(0);
 
