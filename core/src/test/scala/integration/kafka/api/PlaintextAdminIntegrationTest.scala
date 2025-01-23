@@ -1838,258 +1838,203 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         Utils.closeQuietly(producer, "producer")
       }
 
-      val EMPTY_GROUP_INSTANCE_ID = ""
       val testGroupId = "test_group_id"
       val testClientId = "test_client_id"
       val testInstanceId1 = "test_instance_id_1"
       val testInstanceId2 = "test_instance_id_2"
       val fakeGroupId = "fake_group_id"
 
-      def createProperties(groupInstanceId: String): Properties = {
-        val newConsumerConfig = new Properties(consumerConfig)
-        // We need to disable the auto commit because after the members got removed from group, the offset commit
-        // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
-        newConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-        newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
-        newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-        if (groupInstanceId != EMPTY_GROUP_INSTANCE_ID) {
-          newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
-        }
-        newConsumerConfig
-      }
-
       // contains two static members and one dynamic member
-      val groupInstanceSet = Set(testInstanceId1, testInstanceId2, EMPTY_GROUP_INSTANCE_ID)
-      val consumerSet = groupInstanceSet.map { groupInstanceId => createConsumer(configOverrides = createProperties(groupInstanceId))}
+      val groupInstanceSet = Set(testInstanceId1, testInstanceId2, "")
       val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
-
-      val startLatch = new CountDownLatch(consumerSet.size)
-      val stopLatch = new CountDownLatch(consumerSet.size)
-      val consumerThreadRunning = new AtomicBoolean(true)
+      val backgroundConsumerThreadManager = new BackgroundConsumerThreadManager(testGroupId, testClientId, groupInstanceSet, topicSet)
 
       try {
-        def createConsumerThread[K,V](consumer: Consumer[K,V], topic: String): Thread = {
-          new Thread {
-            override def run : Unit = {
-              consumer.subscribe(Collections.singleton(topic))
-              try {
-                while (consumerThreadRunning.get()) {
-                  consumer.poll(JDuration.ofSeconds(5))
-                  if (!consumer.assignment.isEmpty && startLatch.getCount > 0L)
-                    startLatch.countDown()
-                  try {
-                    consumer.commitSync()
-                  } catch {
-                    case _: CommitFailedException => // Ignore and retry on next iteration.
-                  }
-                }
-              } catch {
-                case _: InterruptException => // Suppress the output to stderr
-              } finally {
-                consumer.close()
-                stopLatch.countDown()
-              }
-            }
-          }
-        }
-
-        // Start consumers in a thread that will subscribe to a new group.
-        val consumerThreads = consumerSet.zip(topicSet).map(zipped => createConsumerThread(zipped._1, zipped._2))
         val groupType = if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name)) GroupType.CONSUMER else GroupType.CLASSIC
+        // Start consumer polling threads in the background
+        backgroundConsumerThreadManager.startConsumerThreads()
 
-        try {
-          consumerThreads.foreach(_.start())
-          assertTrue(startLatch.await(30000, TimeUnit.MILLISECONDS))
-          // Test that we can list the new group.
-          TestUtils.waitUntilTrue(() => {
-            val matching = client.listConsumerGroups.all.get.asScala.filter(group =>
-                group.groupId == testGroupId &&
-                group.groupState.get == GroupState.STABLE)
-            matching.size == 1
-          }, s"Expected to be able to list $testGroupId")
-
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
-            val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
-                group.groupId == testGroupId &&
-                group.groupState.get == GroupState.STABLE)
-            matching.size == 1
-          }, s"Expected to be able to list $testGroupId in group type $groupType")
-
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
-              .inGroupStates(Set(GroupState.STABLE).asJava)
-            val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+        // Test that we can list the new group.
+        TestUtils.waitUntilTrue(() => {
+          val matching = client.listConsumerGroups.all.get.asScala.filter(group =>
               group.groupId == testGroupId &&
-                group.groupState.get == GroupState.STABLE)
-            matching.size == 1
-          }, s"Expected to be able to list $testGroupId in group type $groupType and state Stable")
+              group.groupState.get == GroupState.STABLE)
+          matching.size == 1
+        }, s"Expected to be able to list $testGroupId")
 
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().inGroupStates(Set(GroupState.STABLE).asJava)
-            val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
-                group.groupId == testGroupId &&
-                group.groupState.get == GroupState.STABLE)
-            matching.size == 1
-          }, s"Expected to be able to list $testGroupId in state Stable")
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
+          val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+            group.groupId == testGroupId &&
+              group.groupState.get == GroupState.STABLE)
+          matching.size == 1
+        }, s"Expected to be able to list $testGroupId in group type $groupType")
 
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().inGroupStates(Set(GroupState.EMPTY).asJava)
-            val matching = client.listConsumerGroups(options).all.get.asScala.filter(
-                _.groupId == testGroupId)
-            matching.isEmpty
-          }, s"Expected to find zero groups")
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
+            .inGroupStates(Set(GroupState.STABLE).asJava)
+          val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+            group.groupId == testGroupId &&
+              group.groupState.get == GroupState.STABLE)
+          matching.size == 1
+        }, s"Expected to be able to list $testGroupId in group type $groupType and state Stable")
 
-          val describeWithFakeGroupResult = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
-            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-          assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListConsumerGroupsOptions().inGroupStates(Set(GroupState.STABLE).asJava)
+          val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+              group.groupId == testGroupId &&
+              group.groupState.get == GroupState.STABLE)
+          matching.size == 1
+        }, s"Expected to be able to list $testGroupId in state Stable")
 
-          // Test that we can get information about the test consumer group.
-          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
-          var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
-          if (groupType == GroupType.CLASSIC) {
-            assertTrue(testGroupDescription.groupEpoch.isEmpty)
-            assertTrue(testGroupDescription.targetAssignmentEpoch.isEmpty)
-          } else {
-            assertEquals(Optional.of(3), testGroupDescription.groupEpoch)
-            assertEquals(Optional.of(3), testGroupDescription.targetAssignmentEpoch)
-          }
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListConsumerGroupsOptions().inGroupStates(Set(GroupState.EMPTY).asJava)
+          val matching = client.listConsumerGroups(options).all.get.asScala.filter(
+              _.groupId == testGroupId)
+          matching.isEmpty
+        }, s"Expected to find zero groups")
 
-          assertEquals(testGroupId, testGroupDescription.groupId())
-          assertFalse(testGroupDescription.isSimpleConsumerGroup)
-          assertEquals(groupInstanceSet.size, testGroupDescription.members().size())
-          val members = testGroupDescription.members()
-          members.asScala.foreach { member =>
-            assertEquals(testClientId, member.clientId)
-            assertEquals(if (groupType == GroupType.CLASSIC) Optional.empty else Optional.of(true), member.upgraded)
-          }
-          val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
-          topicSet.foreach { topic =>
-            val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
-            assertEquals(testNumPartitions, topicPartitions.size)
-          }
+        val describeWithFakeGroupResult = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
+          new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
+        assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
 
-          val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
-          assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
-
-          // Test that the fake group throws GroupIdNotFoundException
-          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
-          assertFutureThrows(describeWithFakeGroupResult.describedGroups().get(fakeGroupId), classOf[GroupIdNotFoundException],
-            s"Group $fakeGroupId not found.")
-
-          // Test that all() also throws GroupIdNotFoundException
-          assertFutureThrows(describeWithFakeGroupResult.all(), classOf[GroupIdNotFoundException],
-            s"Group $fakeGroupId not found.")
-
-          val testTopicPart0 = new TopicPartition(testTopicName, 0)
-
-          // Test listConsumerGroupOffsets
-          TestUtils.waitUntilTrue(() => {
-            val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
-            parts.containsKey(testTopicPart0) && (parts.get(testTopicPart0).offset() == 1)
-          }, s"Expected the offset for partition 0 to eventually become 1.")
-
-          // Test listConsumerGroupOffsets with requireStable true
-          val options = new ListConsumerGroupOffsetsOptions().requireStable(true)
-          var parts = client.listConsumerGroupOffsets(testGroupId, options)
-            .partitionsToOffsetAndMetadata().get()
-          assertTrue(parts.containsKey(testTopicPart0))
-          assertEquals(1, parts.get(testTopicPart0).offset())
-
-          // Test listConsumerGroupOffsets with listConsumerGroupOffsetsSpec
-          val groupSpecs = Collections.singletonMap(testGroupId,
-            new ListConsumerGroupOffsetsSpec().topicPartitions(Collections.singleton(new TopicPartition(testTopicName, 0))))
-          parts = client.listConsumerGroupOffsets(groupSpecs).partitionsToOffsetAndMetadata().get()
-          assertTrue(parts.containsKey(testTopicPart0))
-          assertEquals(1, parts.get(testTopicPart0).offset())
-
-          // Test listConsumerGroupOffsets with listConsumerGroupOffsetsSpec and requireStable option
-          parts = client.listConsumerGroupOffsets(groupSpecs, options).partitionsToOffsetAndMetadata().get()
-          assertTrue(parts.containsKey(testTopicPart0))
-          assertEquals(1, parts.get(testTopicPart0).offset())
-
-          // Test delete non-exist consumer instance
-          val invalidInstanceId = "invalid-instance-id"
-          var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-            Collections.singleton(new MemberToRemove(invalidInstanceId))
-          ))
-
-          assertFutureThrows(removeMembersResult.all, classOf[UnknownMemberIdException])
-          val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
-          assertFutureThrows(firstMemberFuture, classOf[UnknownMemberIdException])
-
-          // Test consumer group deletion
-          var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
-          assertEquals(2, deleteResult.deletedGroups().size())
-
-          // Deleting the fake group ID should get GroupIdNotFoundException.
-          assertTrue(deleteResult.deletedGroups().containsKey(fakeGroupId))
-          assertFutureThrows(deleteResult.deletedGroups().get(fakeGroupId),
-            classOf[GroupIdNotFoundException])
-
-          // Deleting the real group ID should get GroupNotEmptyException
-          assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
-          assertFutureThrows(deleteResult.deletedGroups().get(testGroupId),
-            classOf[GroupNotEmptyException])
-
-          // Stop the consumer threads and close consumers
-          // dynamic member will be removed, leaving two static members in the group
-          consumerThreadRunning.set(false)
-          assertTrue(stopLatch.await(30000, TimeUnit.MILLISECONDS), "Failed to stop consumer threads in time")
-
-          val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
-            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-          assertEquals(1, describeTestGroupResult.describedGroups().size())
-
-          testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
-          assertEquals(testGroupId, testGroupDescription.groupId)
-          assertFalse(testGroupDescription.isSimpleConsumerGroup)
-          assertEquals(consumerSet.size - 1, testGroupDescription.members().size())
-
-          // Test delete one correct static member
-          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId,
-            new RemoveMembersFromConsumerGroupOptions(Collections.singleton(new MemberToRemove(testInstanceId1))))
-
-          assertNull(removeMembersResult.all().get())
-          assertNull(removeMembersResult.memberResult(new MemberToRemove(testInstanceId1)).get())
-
-          // Delete all active members remaining (a static member)
-          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
-          assertNull(removeMembersResult.all().get())
-
-          // The group should contain no members now.
-          testGroupDescription = client.describeConsumerGroups(Seq(testGroupId).asJava,
-            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-              .describedGroups().get(testGroupId).get()
-          assertTrue(testGroupDescription.members().isEmpty)
-
-          // Consumer group deletion on empty group should succeed
-          deleteResult = client.deleteConsumerGroups(Seq(testGroupId).asJava)
-          assertEquals(1, deleteResult.deletedGroups().size())
-
-          assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
-          assertNull(deleteResult.deletedGroups().get(testGroupId).get())
-
-          // Test alterConsumerGroupOffsets
-          val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(testGroupId,
-            Collections.singletonMap(testTopicPart0, new OffsetAndMetadata(0L)))
-          assertNull(alterConsumerGroupOffsetsResult.all().get())
-          assertNull(alterConsumerGroupOffsetsResult.partitionResult(testTopicPart0).get())
-
-          // Verify alterConsumerGroupOffsets success
-          TestUtils.waitUntilTrue(() => {
-            val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
-            parts.containsKey(testTopicPart0) && (parts.get(testTopicPart0).offset() == 0)
-          }, s"Expected the offset for partition 0 to eventually become 0.")
-      } finally {
-        consumerThreads.foreach {
-          case consumerThread =>
-            consumerThread.interrupt()
-            consumerThread.join()
+        // Test that we can get information about the test consumer group.
+        assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
+        var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
+        if (groupType == GroupType.CLASSIC) {
+          assertTrue(testGroupDescription.groupEpoch.isEmpty)
+          assertTrue(testGroupDescription.targetAssignmentEpoch.isEmpty)
+        } else {
+          assertEquals(Optional.of(3), testGroupDescription.groupEpoch)
+          assertEquals(Optional.of(3), testGroupDescription.targetAssignmentEpoch)
         }
-      }
+
+        assertEquals(testGroupId, testGroupDescription.groupId())
+        assertFalse(testGroupDescription.isSimpleConsumerGroup)
+        assertEquals(groupInstanceSet.size, testGroupDescription.members().size())
+        val members = testGroupDescription.members()
+        members.asScala.foreach { member =>
+          assertEquals(testClientId, member.clientId)
+          assertEquals(if (groupType == GroupType.CLASSIC) Optional.empty else Optional.of(true), member.upgraded)
+        }
+        val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
+        topicSet.foreach { topic =>
+          val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
+          assertEquals(testNumPartitions, topicPartitions.size)
+        }
+
+        val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
+        assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
+
+        // Test that the fake group throws GroupIdNotFoundException
+        assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
+        assertFutureThrows(describeWithFakeGroupResult.describedGroups().get(fakeGroupId), classOf[GroupIdNotFoundException],
+          s"Group $fakeGroupId not found.")
+
+        // Test that all() also throws GroupIdNotFoundException
+        assertFutureThrows(describeWithFakeGroupResult.all(), classOf[GroupIdNotFoundException],
+          s"Group $fakeGroupId not found.")
+
+        val testTopicPart0 = new TopicPartition(testTopicName, 0)
+
+        // Test listConsumerGroupOffsets
+        TestUtils.waitUntilTrue(() => {
+          val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
+          parts.containsKey(testTopicPart0) && (parts.get(testTopicPart0).offset() == 1)
+        }, s"Expected the offset for partition 0 to eventually become 1.")
+
+        // Test listConsumerGroupOffsets with requireStable true
+        val options = new ListConsumerGroupOffsetsOptions().requireStable(true)
+        var parts = client.listConsumerGroupOffsets(testGroupId, options)
+          .partitionsToOffsetAndMetadata().get()
+        assertTrue(parts.containsKey(testTopicPart0))
+        assertEquals(1, parts.get(testTopicPart0).offset())
+
+        // Test listConsumerGroupOffsets with listConsumerGroupOffsetsSpec
+        val groupSpecs = Collections.singletonMap(testGroupId,
+          new ListConsumerGroupOffsetsSpec().topicPartitions(Collections.singleton(new TopicPartition(testTopicName, 0))))
+        parts = client.listConsumerGroupOffsets(groupSpecs).partitionsToOffsetAndMetadata().get()
+        assertTrue(parts.containsKey(testTopicPart0))
+        assertEquals(1, parts.get(testTopicPart0).offset())
+
+        // Test listConsumerGroupOffsets with listConsumerGroupOffsetsSpec and requireStable option
+        parts = client.listConsumerGroupOffsets(groupSpecs, options).partitionsToOffsetAndMetadata().get()
+        assertTrue(parts.containsKey(testTopicPart0))
+        assertEquals(1, parts.get(testTopicPart0).offset())
+
+        // Test delete non-exist consumer instance
+        val invalidInstanceId = "invalid-instance-id"
+        var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
+          Collections.singleton(new MemberToRemove(invalidInstanceId))
+        ))
+
+        assertFutureThrows(removeMembersResult.all, classOf[UnknownMemberIdException])
+        val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
+        assertFutureThrows(firstMemberFuture, classOf[UnknownMemberIdException])
+
+        // Test consumer group deletion
+        var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
+        assertEquals(2, deleteResult.deletedGroups().size())
+
+        // Deleting the fake group ID should get GroupIdNotFoundException.
+        assertTrue(deleteResult.deletedGroups().containsKey(fakeGroupId))
+        assertFutureThrows(deleteResult.deletedGroups().get(fakeGroupId),
+          classOf[GroupIdNotFoundException])
+
+        // Deleting the real group ID should get GroupNotEmptyException
+        assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
+        assertFutureThrows(deleteResult.deletedGroups().get(testGroupId),
+          classOf[GroupNotEmptyException])
+
+        // Stop the consumer threads and close consumers to prevent rejoining.
+        // dynamic member will be removed, leaving two static members in the group
+        backgroundConsumerThreadManager.stopConsumerThreads()
+
+        val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
+          new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
+        assertEquals(1, describeTestGroupResult.describedGroups().size())
+
+        testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
+        assertEquals(testGroupId, testGroupDescription.groupId)
+        assertFalse(testGroupDescription.isSimpleConsumerGroup)
+        assertEquals(groupInstanceSet.size - 1, testGroupDescription.members().size())
+
+        // Test delete one correct static member
+        removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId,
+          new RemoveMembersFromConsumerGroupOptions(Collections.singleton(new MemberToRemove(testInstanceId1))))
+
+        assertNull(removeMembersResult.all().get())
+        assertNull(removeMembersResult.memberResult(new MemberToRemove(testInstanceId1)).get())
+
+        // Delete all active members remaining (a static member)
+        removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
+        assertNull(removeMembersResult.all().get())
+
+        // The group should contain no members now.
+        testGroupDescription = client.describeConsumerGroups(Seq(testGroupId).asJava,
+            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true)).describedGroups().get(testGroupId).get()
+        assertTrue(testGroupDescription.members().isEmpty)
+
+        // Consumer group deletion on empty group should succeed
+        deleteResult = client.deleteConsumerGroups(Seq(testGroupId).asJava)
+        assertEquals(1, deleteResult.deletedGroups().size())
+
+        assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
+        assertNull(deleteResult.deletedGroups().get(testGroupId).get())
+
+        // Test alterConsumerGroupOffsets
+        val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(testGroupId,
+          Collections.singletonMap(testTopicPart0, new OffsetAndMetadata(0L)))
+        assertNull(alterConsumerGroupOffsetsResult.all().get())
+        assertNull(alterConsumerGroupOffsetsResult.partitionResult(testTopicPart0).get())
+
+        // Verify alterConsumerGroupOffsets success
+        TestUtils.waitUntilTrue(() => {
+          val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
+          parts.containsKey(testTopicPart0) && (parts.get(testTopicPart0).offset() == 0)
+        }, s"Expected the offset for partition 0 to eventually become 0.")
       } finally {
-        consumerSet.zip(groupInstanceSet).foreach(zipped => Utils.closeQuietly(zipped._1, zipped._2))
+        backgroundConsumerThreadManager.stopQuietly()
       }
     } finally {
       Utils.closeQuietly(client, "adminClient")
@@ -2212,282 +2157,223 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         Utils.closeQuietly(producer, "producer")
       }
 
-      val EMPTY_GROUP_INSTANCE_ID = ""
       val testGroupId = "test_group_id"
       val testClientId = "test_client_id"
       val testInstanceId1 = "test_instance_id_1"
       val testInstanceId2 = "test_instance_id_2"
       val fakeGroupId = "fake_group_id"
 
-      def createProperties(groupInstanceId: String): Properties = {
-        val newConsumerConfig = new Properties(consumerConfig)
-        // We need to disable the auto commit because after the members got removed from group, the offset commit
-        // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
-        newConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-        newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
-        newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-        if (groupInstanceId != EMPTY_GROUP_INSTANCE_ID) {
-          newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
-        }
-        newConsumerConfig
-      }
-
       // contains two static members and one dynamic member
-      val groupInstanceSet = Set(testInstanceId1, testInstanceId2, EMPTY_GROUP_INSTANCE_ID)
-      val consumerSet = groupInstanceSet.map { groupInstanceId => createConsumer(configOverrides = createProperties(groupInstanceId))}
+      val groupInstanceSet = Set(testInstanceId1, testInstanceId2, "")
       val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
-
-      val startLatch = new CountDownLatch(consumerSet.size)
-      val stopLatch = new CountDownLatch(consumerSet.size)
-      val consumerThreadRunning = new AtomicBoolean(true)
+      val backgroundConsumerThreadManager = new BackgroundConsumerThreadManager(testGroupId, testClientId, groupInstanceSet, topicSet)
 
       try {
-        def createConsumerThread[K,V](consumer: Consumer[K,V], topic: String): Thread = {
-          new Thread {
-            override def run : Unit = {
-              consumer.subscribe(Collections.singleton(topic))
-              try {
-                while (consumerThreadRunning.get()) {
-                  consumer.poll(JDuration.ofSeconds(5))
-                  if (!consumer.assignment.isEmpty && startLatch.getCount > 0L)
-                    startLatch.countDown()
-                  try {
-                    consumer.commitSync()
-                  } catch {
-                    case _: CommitFailedException => // Ignore and retry on next iteration.
-                  }
-                }
-              } catch {
-                case _: InterruptException => // Suppress the output to stderr
-              } finally {
-                consumer.close()
-                stopLatch.countDown()
-              }
-            }
-          }
+        val groupType = if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name)) GroupType.CONSUMER else GroupType.CLASSIC
+        // Start consumer polling threads in the background
+        backgroundConsumerThreadManager.startConsumerThreads()
+
+        // Test that we can list the new group.
+        TestUtils.waitUntilTrue(() => {
+          val matching = client.listConsumerGroups.all.get.asScala.filter(group =>
+            group.groupId == testGroupId &&
+              group.state.get == ConsumerGroupState.STABLE &&
+              group.groupState.get == GroupState.STABLE)
+          matching.size == 1
+        }, s"Expected to be able to list $testGroupId")
+
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
+          val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+            group.groupId == testGroupId &&
+              group.state.get == ConsumerGroupState.STABLE &&
+              group.groupState.get == GroupState.STABLE)
+          matching.size == 1
+        }, s"Expected to be able to list $testGroupId in group type $groupType")
+
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
+            .inStates(Set(ConsumerGroupState.STABLE).asJava)
+          val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+            group.groupId == testGroupId &&
+              group.state.get == ConsumerGroupState.STABLE &&
+              group.groupState.get == GroupState.STABLE)
+            matching.size == 1
+        }, s"Expected to be able to list $testGroupId in group type $groupType and state Stable")
+
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
+            .inGroupStates(Set(GroupState.STABLE).asJava)
+          val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+            group.groupId == testGroupId &&
+              group.state.get == ConsumerGroupState.STABLE &&
+              group.groupState.get == GroupState.STABLE)
+          matching.size == 1
+        }, s"Expected to be able to list $testGroupId in group type $groupType and state Stable")
+
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListConsumerGroupsOptions().inStates(Set(ConsumerGroupState.STABLE).asJava)
+          val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+            group.groupId == testGroupId &&
+              group.state.get == ConsumerGroupState.STABLE &&
+              group.groupState.get == GroupState.STABLE)
+          matching.size == 1
+        }, s"Expected to be able to list $testGroupId in state Stable")
+
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListConsumerGroupsOptions().inGroupStates(Set(GroupState.STABLE).asJava)
+          val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
+            group.groupId == testGroupId &&
+              group.state.get == ConsumerGroupState.STABLE &&
+              group.groupState.get == GroupState.STABLE)
+          matching.size == 1
+        }, s"Expected to be able to list $testGroupId in state Stable")
+
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListConsumerGroupsOptions().inStates(Set(ConsumerGroupState.EMPTY).asJava)
+          val matching = client.listConsumerGroups(options).all.get.asScala.filter(
+            _.groupId == testGroupId)
+          matching.isEmpty
+        }, s"Expected to find zero groups")
+
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListConsumerGroupsOptions().inGroupStates(Set(GroupState.EMPTY).asJava)
+          val matching = client.listConsumerGroups(options).all.get.asScala.filter(
+            _.groupId == testGroupId)
+          matching.isEmpty
+        }, s"Expected to find zero groups")
+
+        val describeWithFakeGroupResult = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
+          new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
+        assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
+
+        // Test that we can get information about the test consumer group.
+        assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
+        var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
+
+        assertEquals(testGroupId, testGroupDescription.groupId())
+        assertFalse(testGroupDescription.isSimpleConsumerGroup)
+        assertEquals(groupInstanceSet.size, testGroupDescription.members().size())
+        val members = testGroupDescription.members()
+        members.asScala.foreach(member => assertEquals(testClientId, member.clientId()))
+        val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
+        topicSet.foreach { topic =>
+          val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
+          assertEquals(testNumPartitions, topicPartitions.size)
         }
 
-        // Start consumers in a thread that will subscribe to a new group.
-        val consumerThreads = consumerSet.zip(topicSet).map(zipped => createConsumerThread(zipped._1, zipped._2))
-        val groupType = if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name)) GroupType.CONSUMER else GroupType.CLASSIC
+        val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
+        assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
-        try {
-          consumerThreads.foreach(_.start())
-          assertTrue(startLatch.await(30000, TimeUnit.MILLISECONDS))
-          // Test that we can list the new group.
-          TestUtils.waitUntilTrue(() => {
-            val matching = client.listConsumerGroups.all.get.asScala.filter(group =>
-              group.groupId == testGroupId &&
-                group.state.get == ConsumerGroupState.STABLE &&
-                group.groupState.get == GroupState.STABLE)
-            matching.size == 1
-          }, s"Expected to be able to list $testGroupId")
+        // Test that the fake group throws GroupIdNotFoundException
+        assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
+        assertFutureThrows(describeWithFakeGroupResult.describedGroups().get(fakeGroupId),
+          classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
 
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
-            val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
-              group.groupId == testGroupId &&
-                group.state.get == ConsumerGroupState.STABLE &&
-                group.groupState.get == GroupState.STABLE)
-            matching.size == 1
-          }, s"Expected to be able to list $testGroupId in group type $groupType")
+        // Test that all() also throws GroupIdNotFoundException
+        assertFutureThrows(describeWithFakeGroupResult.all(),
+          classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
 
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
-              .inStates(Set(ConsumerGroupState.STABLE).asJava)
-            val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
-              group.groupId == testGroupId &&
-                group.state.get == ConsumerGroupState.STABLE &&
-                group.groupState.get == GroupState.STABLE)
-            matching.size == 1
-          }, s"Expected to be able to list $testGroupId in group type $groupType and state Stable")
+        val testTopicPart0 = new TopicPartition(testTopicName, 0)
 
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().withTypes(Set(groupType).asJava)
-              .inGroupStates(Set(GroupState.STABLE).asJava)
-            val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
-              group.groupId == testGroupId &&
-                group.state.get == ConsumerGroupState.STABLE &&
-                group.groupState.get == GroupState.STABLE)
-            matching.size == 1
-          }, s"Expected to be able to list $testGroupId in group type $groupType and state Stable")
+        // Test listConsumerGroupOffsets
+        TestUtils.waitUntilTrue(() => {
+          val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
+          parts.containsKey(testTopicPart0) && (parts.get(testTopicPart0).offset() == 1)
+        }, s"Expected the offset for partition 0 to eventually become 1.")
 
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().inStates(Set(ConsumerGroupState.STABLE).asJava)
-            val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
-              group.groupId == testGroupId &&
-                group.state.get == ConsumerGroupState.STABLE &&
-                group.groupState.get == GroupState.STABLE)
-            matching.size == 1
-          }, s"Expected to be able to list $testGroupId in state Stable")
+        // Test listConsumerGroupOffsets with requireStable true
+        val options = new ListConsumerGroupOffsetsOptions().requireStable(true)
+        var parts = client.listConsumerGroupOffsets(testGroupId, options)
+          .partitionsToOffsetAndMetadata().get()
+        assertTrue(parts.containsKey(testTopicPart0))
+        assertEquals(1, parts.get(testTopicPart0).offset())
 
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().inGroupStates(Set(GroupState.STABLE).asJava)
-            val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
-              group.groupId == testGroupId &&
-                group.state.get == ConsumerGroupState.STABLE &&
-                group.groupState.get == GroupState.STABLE)
-            matching.size == 1
-          }, s"Expected to be able to list $testGroupId in state Stable")
+        // Test listConsumerGroupOffsets with listConsumerGroupOffsetsSpec
+        val groupSpecs = Collections.singletonMap(testGroupId,
+          new ListConsumerGroupOffsetsSpec().topicPartitions(Collections.singleton(new TopicPartition(testTopicName, 0))))
+        parts = client.listConsumerGroupOffsets(groupSpecs).partitionsToOffsetAndMetadata().get()
+        assertTrue(parts.containsKey(testTopicPart0))
+        assertEquals(1, parts.get(testTopicPart0).offset())
 
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().inStates(Set(ConsumerGroupState.EMPTY).asJava)
-            val matching = client.listConsumerGroups(options).all.get.asScala.filter(
-              _.groupId == testGroupId)
-            matching.isEmpty
-          }, s"Expected to find zero groups")
+        // Test listConsumerGroupOffsets with listConsumerGroupOffsetsSpec and requireStable option
+        parts = client.listConsumerGroupOffsets(groupSpecs, options).partitionsToOffsetAndMetadata().get()
+        assertTrue(parts.containsKey(testTopicPart0))
+        assertEquals(1, parts.get(testTopicPart0).offset())
 
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListConsumerGroupsOptions().inGroupStates(Set(GroupState.EMPTY).asJava)
-            val matching = client.listConsumerGroups(options).all.get.asScala.filter(
-              _.groupId == testGroupId)
-            matching.isEmpty
-          }, s"Expected to find zero groups")
+        // Test delete non-exist consumer instance
+        val invalidInstanceId = "invalid-instance-id"
+        var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
+          Collections.singleton(new MemberToRemove(invalidInstanceId))
+        ))
 
-          val describeWithFakeGroupResult = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
-            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-          assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
+        assertFutureThrows(removeMembersResult.all, classOf[UnknownMemberIdException])
+        val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
+        assertFutureThrows(firstMemberFuture, classOf[UnknownMemberIdException])
 
-          // Test that we can get information about the test consumer group.
-          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
-          var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
+        // Test consumer group deletion
+        var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
+        assertEquals(2, deleteResult.deletedGroups().size())
 
-          assertEquals(testGroupId, testGroupDescription.groupId())
-          assertFalse(testGroupDescription.isSimpleConsumerGroup)
-          assertEquals(groupInstanceSet.size, testGroupDescription.members().size())
-          val members = testGroupDescription.members()
-          members.asScala.foreach(member => assertEquals(testClientId, member.clientId()))
-          val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
-          topicSet.foreach { topic =>
-            val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
-            assertEquals(testNumPartitions, topicPartitions.size)
-          }
+        // Deleting the fake group ID should get GroupIdNotFoundException.
+        assertTrue(deleteResult.deletedGroups().containsKey(fakeGroupId))
+        assertFutureThrows(deleteResult.deletedGroups().get(fakeGroupId),
+          classOf[GroupIdNotFoundException])
 
-          val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
-          assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
-
-          // Test that the fake group throws GroupIdNotFoundException
-          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
-          assertFutureThrows(describeWithFakeGroupResult.describedGroups().get(fakeGroupId),
-            classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
-
-          // Test that all() also throws GroupIdNotFoundException
-          assertFutureThrows(describeWithFakeGroupResult.all(),
-            classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
-
-          val testTopicPart0 = new TopicPartition(testTopicName, 0)
-
-          // Test listConsumerGroupOffsets
-          TestUtils.waitUntilTrue(() => {
-            val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
-            parts.containsKey(testTopicPart0) && (parts.get(testTopicPart0).offset() == 1)
-          }, s"Expected the offset for partition 0 to eventually become 1.")
-
-          // Test listConsumerGroupOffsets with requireStable true
-          val options = new ListConsumerGroupOffsetsOptions().requireStable(true)
-          var parts = client.listConsumerGroupOffsets(testGroupId, options)
-            .partitionsToOffsetAndMetadata().get()
-          assertTrue(parts.containsKey(testTopicPart0))
-          assertEquals(1, parts.get(testTopicPart0).offset())
-
-          // Test listConsumerGroupOffsets with listConsumerGroupOffsetsSpec
-          val groupSpecs = Collections.singletonMap(testGroupId,
-            new ListConsumerGroupOffsetsSpec().topicPartitions(Collections.singleton(new TopicPartition(testTopicName, 0))))
-          parts = client.listConsumerGroupOffsets(groupSpecs).partitionsToOffsetAndMetadata().get()
-          assertTrue(parts.containsKey(testTopicPart0))
-          assertEquals(1, parts.get(testTopicPart0).offset())
-
-          // Test listConsumerGroupOffsets with listConsumerGroupOffsetsSpec and requireStable option
-          parts = client.listConsumerGroupOffsets(groupSpecs, options).partitionsToOffsetAndMetadata().get()
-          assertTrue(parts.containsKey(testTopicPart0))
-          assertEquals(1, parts.get(testTopicPart0).offset())
-
-          // Test delete non-exist consumer instance
-          val invalidInstanceId = "invalid-instance-id"
-          var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-            Collections.singleton(new MemberToRemove(invalidInstanceId))
-          ))
-
-          assertFutureThrows(removeMembersResult.all, classOf[UnknownMemberIdException])
-          val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
-          assertFutureThrows(firstMemberFuture, classOf[UnknownMemberIdException])
-
-          // Stop the consumer threads before removing the group members to prevent rejoining.
-          consumerThreadRunning.set(false)
-          assertTrue(stopLatch.await(30000, TimeUnit.MILLISECONDS))
-
-          // Test consumer group deletion
-          var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
-          assertEquals(2, deleteResult.deletedGroups().size())
-
-          // Deleting the fake group ID should get GroupIdNotFoundException.
-          assertTrue(deleteResult.deletedGroups().containsKey(fakeGroupId))
-          assertFutureThrows(deleteResult.deletedGroups().get(fakeGroupId),
-            classOf[GroupIdNotFoundException])
-
-          // Deleting the real group ID should get GroupNotEmptyException
-          assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
-          assertFutureThrows(deleteResult.deletedGroups().get(testGroupId),
+        // Deleting the real group ID should get GroupNotEmptyException
+        assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
+        assertFutureThrows(deleteResult.deletedGroups().get(testGroupId),
             classOf[GroupNotEmptyException])
 
-          // Stop the consumer threads and close consumers
-          // dynamic member will be removed, leaving two static members in the group
-          consumerThreadRunning.set(false)
-          assertTrue(stopLatch.await(30000, TimeUnit.MILLISECONDS), "Failed to stop consumer threads in time")
+        // Stop the consumer threads and close consumers to prevent rejoining.
+        // dynamic member will be removed, leaving two static members in the group
+        backgroundConsumerThreadManager.stopConsumerThreads()
 
-          val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
-            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-          assertEquals(1, describeTestGroupResult.describedGroups().size())
+        val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
+          new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
+        assertEquals(1, describeTestGroupResult.describedGroups().size())
 
-          testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
-          assertEquals(testGroupId, testGroupDescription.groupId)
-          assertFalse(testGroupDescription.isSimpleConsumerGroup)
-          assertEquals(consumerSet.size - 1, testGroupDescription.members().size())
+        testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
+        assertEquals(testGroupId, testGroupDescription.groupId)
+        assertFalse(testGroupDescription.isSimpleConsumerGroup)
+        assertEquals(groupInstanceSet.size - 1, testGroupDescription.members().size())
 
-          // Test delete one correct static member
-          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId,
-            new RemoveMembersFromConsumerGroupOptions(Collections.singleton(new MemberToRemove(testInstanceId1))))
+        // Test delete one correct static member
+        removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId,
+          new RemoveMembersFromConsumerGroupOptions(Collections.singleton(new MemberToRemove(testInstanceId1))))
 
-          assertNull(removeMembersResult.all().get())
-          assertNull(removeMembersResult.memberResult(new MemberToRemove(testInstanceId1)).get())
+        assertNull(removeMembersResult.all().get())
+        assertNull(removeMembersResult.memberResult(new MemberToRemove(testInstanceId1)).get())
 
-          // Delete all active members remaining (a static member)
-          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
-          assertNull(removeMembersResult.all().get())
+        // Delete all active members remaining (a static member)
+        removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
+        assertNull(removeMembersResult.all().get())
 
-          // The group should contain no members now.
-          testGroupDescription = client.describeConsumerGroups(Seq(testGroupId).asJava,
-              new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-            .describedGroups().get(testGroupId).get()
-          assertTrue(testGroupDescription.members().isEmpty)
+        // The group should contain no members now.
+        testGroupDescription = client.describeConsumerGroups(Seq(testGroupId).asJava,
+            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true)).describedGroups().get(testGroupId).get()
+        assertTrue(testGroupDescription.members().isEmpty)
 
-          // Consumer group deletion on empty group should succeed
-          deleteResult = client.deleteConsumerGroups(Seq(testGroupId).asJava)
-          assertEquals(1, deleteResult.deletedGroups().size())
+        // Consumer group deletion on empty group should succeed
+        deleteResult = client.deleteConsumerGroups(Seq(testGroupId).asJava)
+        assertEquals(1, deleteResult.deletedGroups().size())
 
-          assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
-          assertNull(deleteResult.deletedGroups().get(testGroupId).get())
+        assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
+        assertNull(deleteResult.deletedGroups().get(testGroupId).get())
 
-          // Test alterConsumerGroupOffsets
-          val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(testGroupId,
-            Collections.singletonMap(testTopicPart0, new OffsetAndMetadata(0L)))
-          assertNull(alterConsumerGroupOffsetsResult.all().get())
-          assertNull(alterConsumerGroupOffsetsResult.partitionResult(testTopicPart0).get())
+        // Test alterConsumerGroupOffsets
+        val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(testGroupId,
+          Collections.singletonMap(testTopicPart0, new OffsetAndMetadata(0L)))
+        assertNull(alterConsumerGroupOffsetsResult.all().get())
+        assertNull(alterConsumerGroupOffsetsResult.partitionResult(testTopicPart0).get())
 
-          // Verify alterConsumerGroupOffsets success
-          TestUtils.waitUntilTrue(() => {
-            val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
-            parts.containsKey(testTopicPart0) && (parts.get(testTopicPart0).offset() == 0)
-          }, s"Expected the offset for partition 0 to eventually become 0.")
-        } finally {
-          consumerThreads.foreach {
-            case consumerThread =>
-              consumerThread.interrupt()
-              consumerThread.join()
-          }
-        }
+        // Verify alterConsumerGroupOffsets success
+        TestUtils.waitUntilTrue(() => {
+          val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
+          parts.containsKey(testTopicPart0) && (parts.get(testTopicPart0).offset() == 0)
+        }, s"Expected the offset for partition 0 to eventually become 0.")
       } finally {
-        consumerSet.zip(groupInstanceSet).foreach(zipped => Utils.closeQuietly(zipped._1, zipped._2))
+        backgroundConsumerThreadManager.stopQuietly()
       }
     } finally {
       Utils.closeQuietly(client, "adminClient")
@@ -4023,6 +3909,79 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList(), null, null),
       topicConfigs.get(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG))
   }
+
+  class BackgroundConsumerThreadManager(testGroupId: String, testClientId: String, groupInstanceSet: Set[String], topicSet: Set[String]){
+    private val consumerSet: Set[Consumer[Array[Byte], Array[Byte]]] = groupInstanceSet.map { groupInstanceId =>
+      createConsumer(configOverrides = createProperties(groupInstanceId))
+    }
+    private val consumerThreads = consumerSet.zip(topicSet).map(zipped => createConsumerThread(zipped._1, zipped._2))
+    private val startLatch: CountDownLatch = new CountDownLatch(consumerSet.size)
+    private val stopLatch: CountDownLatch = new CountDownLatch(consumerSet.size)
+    private val consumerThreadRunning = new AtomicBoolean(true)
+
+    def startConsumerThreads(): Unit = {
+      consumerThreads.foreach(_.start())
+      assertTrue(startLatch.await(30000, TimeUnit.MILLISECONDS), "Failed to start consumer threads in time")
+    }
+
+    def stopConsumerThreads(): Unit = {
+      consumerThreadRunning.set(false)
+      assertTrue(stopLatch.await(30000, TimeUnit.MILLISECONDS), "Failed to stop consumer threads in time")
+    }
+
+    def stopQuietly(): Unit = {
+      try {
+        consumerThreads.foreach {
+          consumerThread =>
+            consumerThread.interrupt()
+            consumerThread.join()
+        }
+      }
+      finally{
+        consumerSet.zip(groupInstanceSet).foreach(zipped => Utils.closeQuietly(zipped._1, zipped._2))
+      }
+    }
+
+    private def createProperties(groupInstanceId: String): Properties = {
+      val newConsumerConfig = new Properties(consumerConfig)
+      // We need to disable the auto commit because after the members got removed from group, the offset commit
+      // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
+      newConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+      newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+      newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+
+      // static member
+      if (groupInstanceId != "") {
+        newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
+      }
+      newConsumerConfig
+    }
+
+    private def createConsumerThread[K,V](consumer: Consumer[K,V], topic: String): Thread = {
+      new Thread {
+        override def run : Unit = {
+          consumer.subscribe(Collections.singleton(topic))
+          try {
+            while (consumerThreadRunning.get()) {
+              consumer.poll(JDuration.ofSeconds(5))
+              if (!consumer.assignment.isEmpty && startLatch.getCount > 0L)
+                startLatch.countDown()
+              try {
+                consumer.commitSync()
+              } catch {
+                case _: CommitFailedException => // Ignore and retry on next iteration.
+              }
+            }
+          } catch {
+            case _: InterruptException => // Suppress the output to stderr
+          } finally {
+            consumer.close()
+            stopLatch.countDown()
+          }
+        }
+      }
+    }
+  }
 }
 
 object PlaintextAdminIntegrationTest {
@@ -4154,4 +4113,5 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
   }
+
 }
