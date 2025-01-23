@@ -69,7 +69,7 @@ object Server {
   ): KafkaMetricsContext = {
     val contextLabels = new java.util.HashMap[String, Object]
     contextLabels.put(ClusterIdLabel, clusterId)
-    contextLabels.put(BrokerIdLabel, config.brokerId.toString)
+    contextLabels.put(NodeIdLabel, config.nodeId.toString)
     contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
     new KafkaMetricsContext(MetricsPrefix, contextLabels)
   }
