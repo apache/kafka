@@ -553,17 +553,8 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldSendRecordHeadersToChangelogTopicWhenConsistencyEnabled() {
-        foreachSetUp();
-
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.registeredChangelogPartitionFor(REGISTERED_STORE_NAME)).thenReturn(CHANGELOG_PARTITION);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
 
         final Position position = Position.emptyPosition();
         final Headers headers = new RecordHeaders();
@@ -593,17 +584,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnLogChange() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -613,17 +593,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnGetStateStore() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -633,17 +602,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnForward() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -653,17 +611,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnForwardWithTo() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -673,17 +620,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnCommit() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -693,17 +629,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnSchedule() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -713,17 +638,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnTopic() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -733,17 +647,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnPartition() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -753,17 +656,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnOffset() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -773,17 +665,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnTimestamp() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -793,17 +674,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnCurrentNode() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -813,17 +683,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnSetRecordContext() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
@@ -833,17 +692,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnRecordContext() {
-        foreachSetUp();
-
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
-        context = buildProcessorContextImpl(streamsConfig, stateManager);
-
-        final StreamTask task = mock(StreamTask.class);
-        context.transitionToActive(task, null, null);
-
-        mockProcessorNodeWithLocalKeyValueStore();
-
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
