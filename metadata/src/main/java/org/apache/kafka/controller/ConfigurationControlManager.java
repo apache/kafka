@@ -716,11 +716,6 @@ public class ConfigurationControlManager {
         return (result == null) ? Collections.emptyMap() : result;
     }
 
-    @FunctionalInterface
-    interface ReplicationControlAccessor {
-        ReplicationControlManager get();
-    }
-
     // Visible to test
     TimelineHashSet<Integer> brokersWithConfigs() {
         return brokersWithConfigs;
