@@ -515,8 +515,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldNotSendRecordHeadersToChangelogTopic() {
-//        foreachSetUp();
-
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.registeredChangelogPartitionFor(REGISTERED_STORE_NAME)).thenReturn(CHANGELOG_PARTITION);
 
@@ -695,8 +693,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldMatchStreamTime() {
-//        foreachSetUp();
-
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
 
         context = buildProcessorContextImpl(streamsConfig, stateManager);
@@ -733,8 +729,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldSetAndGetProcessorMetaData() {
-//        foreachSetUp();
-
         context = buildProcessorContextImpl(streamsConfig, stateManager);
 
         mockProcessorNodeWithLocalKeyValueStore();
