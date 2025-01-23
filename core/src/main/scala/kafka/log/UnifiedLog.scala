@@ -600,6 +600,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def hasOngoingTransaction(producerId: Long, producerEpoch: Short): Boolean = lock synchronized {
     val entry = producerStateManager.activeProducers.get(producerId)
+    // With transactions V2, if we see a future epoch, we are likely in the process of completing the previous transaction.
+    // Return early with ConcurrentTransactionsException until the transaction completes.
+    if (entry != null && entry.currentTxnFirstOffset.isPresent && entry.producerEpoch() < producerEpoch)
+      throw new ConcurrentTransactionsException("The producer attempted to update a transaction " +
+        "while another concurrent operation on the same transaction was ongoing.")
     entry != null && entry.currentTxnFirstOffset.isPresent && entry.producerEpoch() == producerEpoch
   }
 
@@ -1030,7 +1035,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // transaction is completed or aborted. We can guarantee the transaction coordinator knows about the transaction given step 1 and that the transaction is still
           // ongoing. If the transaction is expected to be ongoing, we will not set a VerificationGuard. If the transaction is aborted, hasOngoingTransaction is false and
           // requestVerificationGuard is the sentinel, so we will throw an error. A subsequent produce request (retry) should create verification state and return to phase 1.
-          if (batch.isTransactional && !hasOngoingTransaction(batch.producerId, batch.producerEpoch()) && batchMissingRequiredVerification(batch, requestVerificationGuard))
+          if (batch.isTransactional && !batch.isControlBatch && !hasOngoingTransaction(batch.producerId, batch.producerEpoch()) && batchMissingRequiredVerification(batch, requestVerificationGuard))
             throw new InvalidTxnStateException("Record was not part of an ongoing transaction")
         }
 
@@ -1051,7 +1056,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: VerificationGuard): Boolean = {
-    producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() && !batch.isControlBatch &&
+    producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() &&
       !verificationGuard(batch.producerId).verify(requestVerificationGuard)
   }
 
