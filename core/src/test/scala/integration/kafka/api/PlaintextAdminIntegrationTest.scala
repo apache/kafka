@@ -1847,12 +1847,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // contains two static members and one dynamic member
       val groupInstanceSet = Set(testInstanceId1, testInstanceId2, "")
       val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
-      val backgroundConsumerThreadManager = new BackgroundConsumerThreadManager(testGroupId, testClientId, groupInstanceSet, topicSet)
+      val backgroundConsumerThreadsManager = new BackgroundConsumerThreadsManager(testGroupId, testClientId, groupInstanceSet, topicSet)
 
       try {
         val groupType = if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name)) GroupType.CONSUMER else GroupType.CLASSIC
         // Start consumer polling threads in the background
-        backgroundConsumerThreadManager.startConsumerThreads()
+        backgroundConsumerThreadsManager.startConsumerThreads()
 
         // Test that we can list the new group.
         TestUtils.waitUntilTrue(() => {
@@ -1988,7 +1988,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
         // Stop the consumer threads and close consumers to prevent rejoining.
         // dynamic member will be removed, leaving two static members in the group
-        backgroundConsumerThreadManager.stopConsumerThreads()
+        backgroundConsumerThreadsManager.stopConsumerThreads()
 
         val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
           new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
@@ -2034,7 +2034,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           parts.containsKey(testTopicPart0) && (parts.get(testTopicPart0).offset() == 0)
         }, s"Expected the offset for partition 0 to eventually become 0.")
       } finally {
-        backgroundConsumerThreadManager.stopQuietly()
+        backgroundConsumerThreadsManager.stopQuietly()
       }
     } finally {
       Utils.closeQuietly(client, "adminClient")
@@ -2166,12 +2166,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // contains two static members and one dynamic member
       val groupInstanceSet = Set(testInstanceId1, testInstanceId2, "")
       val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
-      val backgroundConsumerThreadManager = new BackgroundConsumerThreadManager(testGroupId, testClientId, groupInstanceSet, topicSet)
+      val backgroundConsumerThreadsManager = new BackgroundConsumerThreadsManager(testGroupId, testClientId, groupInstanceSet, topicSet)
 
       try {
         val groupType = if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name)) GroupType.CONSUMER else GroupType.CLASSIC
         // Start consumer polling threads in the background
-        backgroundConsumerThreadManager.startConsumerThreads()
+        backgroundConsumerThreadsManager.startConsumerThreads()
 
         // Test that we can list the new group.
         TestUtils.waitUntilTrue(() => {
@@ -2327,7 +2327,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
         // Stop the consumer threads and close consumers to prevent rejoining.
         // dynamic member will be removed, leaving two static members in the group
-        backgroundConsumerThreadManager.stopConsumerThreads()
+        backgroundConsumerThreadsManager.stopConsumerThreads()
 
         val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
           new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
@@ -2373,7 +2373,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           parts.containsKey(testTopicPart0) && (parts.get(testTopicPart0).offset() == 0)
         }, s"Expected the offset for partition 0 to eventually become 0.")
       } finally {
-        backgroundConsumerThreadManager.stopQuietly()
+        backgroundConsumerThreadsManager.stopQuietly()
       }
     } finally {
       Utils.closeQuietly(client, "adminClient")
@@ -3910,7 +3910,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       topicConfigs.get(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG))
   }
 
-  class BackgroundConsumerThreadManager(testGroupId: String, testClientId: String, groupInstanceSet: Set[String], topicSet: Set[String]){
+  class BackgroundConsumerThreadsManager(testGroupId: String, testClientId: String, groupInstanceSet: Set[String], topicSet: Set[String]){
     private val consumerSet: Set[Consumer[Array[Byte], Array[Byte]]] = groupInstanceSet.map { groupInstanceId =>
       createConsumer(configOverrides = createProperties(groupInstanceId))
     }
