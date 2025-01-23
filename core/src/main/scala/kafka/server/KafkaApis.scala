@@ -298,7 +298,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getPartitionInfo(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -364,7 +364,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         (x.leaderReplicaIdOpt.getOrElse(-1), x.getLeaderEpoch)
       case Left(x) =>
         debug(s"Unable to retrieve local leaderId and Epoch with error $x, falling back to metadata cache")
-        metadataCache.getPartitionInfo(tp.topic, tp.partition) match {
+        metadataCache.getLeaderAndIsr(tp.topic, tp.partition) match {
           case Some(pinfo) => (pinfo.leader(), pinfo.leaderEpoch())
           case None => (-1, -1)
         }
@@ -2004,7 +2004,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getPartitionInfo(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -2325,7 +2325,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new OffsetDeleteRequestData.OffsetDeleteRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getPartitionInfo(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)

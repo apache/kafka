@@ -24,15 +24,11 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
-import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
-import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
-import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.ClientQuotaFilter
 import org.apache.kafka.common.record._
@@ -41,7 +37,6 @@ import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResou
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.network.Session
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
@@ -70,7 +65,6 @@ class RequestQuotaTest extends BaseRequestTest {
   private val unthrottledClientId = "unthrottled-client"
   private val smallQuotaProducerClientId = "small-quota-producer-client"
   private val smallQuotaConsumerClientId = "small-quota-consumer-client"
-  private val brokerId: Integer = 0
   private var leaderNode: KafkaBroker = _
 
   // Run tests concurrently since a throttle could be up to 1 second because quota percentage allocated is very low
@@ -274,61 +268,6 @@ class RequestQuotaTest extends BaseRequestTest {
               .setCurrentLeaderEpoch(15)).asJava)
           ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
             .setTargetTimes(List(topic).asJava)
-
-        case ApiKeys.LEADER_AND_ISR =>
-          new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
-            Seq(new LeaderAndIsrPartitionState()
-              .setTopicName(tp.topic)
-              .setPartitionIndex(tp.partition)
-              .setControllerEpoch(Int.MaxValue)
-              .setLeader(brokerId)
-              .setLeaderEpoch(Int.MaxValue)
-              .setIsr(List(brokerId).asJava)
-              .setPartitionEpoch(2)
-              .setReplicas(Seq(brokerId).asJava)
-              .setIsNew(true)).asJava,
-            getTopicIds().asJava,
-            Set(new Node(brokerId, "localhost", 0)).asJava)
-
-        case ApiKeys.STOP_REPLICA =>
-          val topicStates = Seq(
-            new StopReplicaTopicState()
-              .setTopicName(tp.topic())
-              .setPartitionStates(Seq(new StopReplicaPartitionState()
-                .setPartitionIndex(tp.partition())
-                .setLeaderEpoch(LeaderAndIsr.INITIAL_LEADER_EPOCH + 2)
-                .setDeletePartition(true)).asJava)
-          ).asJava
-          new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId,
-            Int.MaxValue, Long.MaxValue, false, topicStates)
-
-        case ApiKeys.UPDATE_METADATA =>
-          val partitionState = Seq(new UpdateMetadataPartitionState()
-            .setTopicName(tp.topic)
-            .setPartitionIndex(tp.partition)
-            .setControllerEpoch(Int.MaxValue)
-            .setLeader(brokerId)
-            .setLeaderEpoch(Int.MaxValue)
-            .setIsr(List(brokerId).asJava)
-            .setZkVersion(2)
-            .setReplicas(Seq(brokerId).asJava)).asJava
-          val securityProtocol = SecurityProtocol.PLAINTEXT
-          val brokers = Seq(new UpdateMetadataBroker()
-            .setId(brokerId)
-            .setEndpoints(Seq(new UpdateMetadataEndpoint()
-              .setHost("localhost")
-              .setPort(0)
-              .setSecurityProtocol(securityProtocol.id)
-              .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
-          new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
-            partitionState, brokers, Collections.emptyMap())
-
-        case ApiKeys.CONTROLLED_SHUTDOWN =>
-          new ControlledShutdownRequest.Builder(
-              new ControlledShutdownRequestData()
-                .setBrokerId(brokerId)
-                .setBrokerEpoch(Long.MaxValue),
-              ApiKeys.CONTROLLED_SHUTDOWN.latestVersion)
 
         case ApiKeys.OFFSET_COMMIT =>
           new OffsetCommitRequest.Builder(

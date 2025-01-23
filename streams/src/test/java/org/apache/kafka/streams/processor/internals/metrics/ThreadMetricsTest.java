@@ -41,6 +41,7 @@ import static org.mockito.Mockito.when;
 
 public class ThreadMetricsTest {
 
+    private static final String PROCESS_ID = "process-id";
     private static final String THREAD_ID = "thread-id";
     private static final String THREAD_LEVEL_GROUP = "stream-thread-metrics";
 
@@ -418,6 +419,7 @@ public class ThreadMetricsTest {
     public void shouldAddThreadStateTelemetryMetric() {
         final Gauge<Integer> threadStateProvider = (streamsMetrics, startTime) -> StreamThread.State.RUNNING.ordinal();
         ThreadMetrics.addThreadStateTelemetryMetric(
+                PROCESS_ID,
                 THREAD_ID,
                 streamsMetrics,
                 threadStateProvider
@@ -426,6 +428,7 @@ public class ThreadMetricsTest {
                 "thread-state",
                 "The current state of the thread",
                 THREAD_ID,
+                Collections.singletonMap("process-id", PROCESS_ID),
                 threadStateProvider
         );
     }

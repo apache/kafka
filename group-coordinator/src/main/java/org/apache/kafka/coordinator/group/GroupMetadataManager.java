@@ -728,8 +728,7 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A ConsumerGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a consumer group.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false.
      * @throws IllegalStateException    if the group does not have the expected type.
      * Package private for testing.
      */
@@ -846,28 +845,28 @@ public class GroupMetadataManager {
 
         if (group == null) {
             return new ShareGroup(snapshotRegistry, groupId);
+        } else {
+            if (group.type() == SHARE) {
+                return (ShareGroup) group;
+            } else {
+                // We don't support upgrading/downgrading between protocols at the moment so
+                // we throw an exception if a group exists with the wrong type.
+                throw new GroupIdNotFoundException(String.format("Group %s is not a share group.", groupId));
+            }
         }
-
-        if (group.type() != SHARE) {
-            // We don't support upgrading/downgrading between protocols at the moment so
-            // we throw an exception if a group exists with the wrong type.
-            throw new GroupIdNotFoundException(String.format("Group %s is not a share group.",
-                groupId));
-        }
-
-        return (ShareGroup) group;
     }
 
     /**
-     * Gets or maybe creates a share group.
+     * The method should be called on the replay path.
+     * Gets or maybe creates a share group and updates the groups map if a new group is created.
      *
      * @param groupId           The group id.
      * @param createIfNotExists A boolean indicating whether the group should be
      *                          created if it does not exist.
      *
      * @return A ShareGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a consumer group.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false.
+     * @throws IllegalStateException    if the group does not have the expected type.
      *
      * Package private for testing.
      */
@@ -878,22 +877,22 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
-            throw new IllegalStateException(String.format("Share group %s not found.", groupId));
+            throw new GroupIdNotFoundException(String.format("Share group %s not found.", groupId));
         }
 
         if (group == null) {
             ShareGroup shareGroup = new ShareGroup(snapshotRegistry, groupId);
             groups.put(groupId, shareGroup);
             return shareGroup;
+        } else {
+            if (group.type() == SHARE) {
+                return (ShareGroup) group;
+            } else {
+                // We don't support upgrading/downgrading between protocols at the moment so
+                // we throw an exception if a group exists with the wrong type.
+                throw new IllegalStateException(String.format("Group %s is not a share group.", groupId));
+            }
         }
-
-        if (group.type() != SHARE) {
-            // We don't support upgrading/downgrading between protocols at the moment so
-            // we throw an exception if a group exists with the wrong type.
-            throw new GroupIdNotFoundException(String.format("Group %s is not a share group.", groupId));
-        }
-
-        return (ShareGroup) group;
     }
 
     /**
@@ -2032,11 +2031,10 @@ public class GroupMetadataManager {
 
         // Get or create the share group.
         boolean createIfNotExists = memberEpoch == 0;
-        final ShareGroup group = getOrMaybeCreatePersistedShareGroup(groupId, createIfNotExists);
+        final ShareGroup group = getOrMaybeCreateShareGroup(groupId, createIfNotExists);
         throwIfShareGroupIsFull(group, memberId);
 
         // Get or create the member.
-        if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
         ShareGroupMember member = getOrMaybeSubscribeShareGroupMember(
             group,
             memberId,
@@ -2143,9 +2141,12 @@ public class GroupMetadataManager {
             .setHeartbeatIntervalMs(shareGroupHeartbeatIntervalMs(groupId));
 
         // The assignment is only provided in the following cases:
-        // 1. The member just joined or rejoined to group (epoch equals to zero);
+        // 1. The member sent a full request. It does so when joining or rejoining the group with zero
+        //    as the member epoch; or on any errors (e.g. timeout). We use all the non-optional fields
+        //    (subscribedTopicNames) to detect a full request as those must be set in a full request.
         // 2. The member's assignment has been updated.
-        if (memberEpoch == 0 || hasAssignedPartitionsChanged(member, updatedMember)) {
+        boolean isFullRequest = subscribedTopicNames != null;
+        if (memberEpoch == 0 || isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(createShareGroupResponseAssignment(updatedMember));
         }
 

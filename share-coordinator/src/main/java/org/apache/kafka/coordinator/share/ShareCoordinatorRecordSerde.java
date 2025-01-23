@@ -34,11 +34,11 @@ public class ShareCoordinatorRecordSerde extends CoordinatorRecordSerde {
     }
 
     @Override
-    protected ApiMessage apiMessageValueFor(short recordVersion) {
+    protected ApiMessage apiMessageValueFor(short recordType) {
         try {
-            return CoordinatorRecordType.fromId(recordVersion).newRecordValue();
+            return CoordinatorRecordType.fromId(recordType).newRecordValue();
         } catch (UnsupportedVersionException ex) {
-            throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+            throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
         }
     }
 }
