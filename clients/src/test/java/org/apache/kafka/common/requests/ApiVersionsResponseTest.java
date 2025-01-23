@@ -37,6 +37,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -164,20 +165,26 @@ public class ApiVersionsResponseTest {
     @Test
     public void testBrokerApisAreEnabled() {
         ApiVersionsResponse response = new ApiVersionsResponse.Builder().
-                setThrottleTimeMs(AbstractResponse.DEFAULT_THROTTLE_TIME).
-                setApiVersions(ApiVersionsResponse.filterApis(
-                        ListenerType.BROKER,
-                        true,
-                        true)).
-                setSupportedFeatures(Features.emptySupportedFeatures()).
-                setFinalizedFeatures(Collections.emptyMap()).
-                setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
-                build();
+            setThrottleTimeMs(AbstractResponse.DEFAULT_THROTTLE_TIME).
+            setApiVersions(ApiVersionsResponse.filterApis(
+                ListenerType.BROKER,
+                true,
+                true)).
+            setSupportedFeatures(Features.emptySupportedFeatures()).
+            setFinalizedFeatures(Collections.emptyMap()).
+            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
+            build();
 
-        HashSet<ApiKeys> exposed = apiKeysInResponse(response);
+        Set<ApiKeys> exposed = apiKeysInResponse(response);
+
+
         Arrays.stream(ApiKeys.values())
-                .filter(key -> key.messageType.listeners().contains(ListenerType.BROKER))
-                .forEach(key -> assertTrue(exposed.contains(key)));
+            .filter(key -> key.messageType.listeners().contains(ListenerType.BROKER))
+            .forEach(key -> assertTrue(exposed.contains(key)));
+        Arrays.stream(ApiKeys.values())
+            .filter(key -> key.messageType.listeners()
+                .stream().noneMatch(listener -> listener == ListenerType.BROKER))
+            .forEach(key -> assertFalse(exposed.contains(key)));
     }
 
     @Test

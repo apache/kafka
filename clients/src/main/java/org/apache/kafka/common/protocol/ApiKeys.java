@@ -332,7 +332,7 @@ public enum ApiKeys {
         return hasBuffer.get();
     }
 
-    public static EnumSet<ApiKeys> kraftBrokerApis() {
+    public static EnumSet<ApiKeys> brokerApis() {
         return apisForListener(ApiMessageType.ListenerType.BROKER);
     }
 

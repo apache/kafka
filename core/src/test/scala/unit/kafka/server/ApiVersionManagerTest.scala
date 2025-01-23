@@ -115,9 +115,8 @@ class ApiVersionManagerTest {
     assertFalse(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
     assertFalse(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
 
-      val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0, false)
-      val envelopeVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id)
-      assertNull(envelopeVersion)
-    }
+    val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0, false)
+    val envelopeVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id)
+    assertNull(envelopeVersion)
   }
 }
