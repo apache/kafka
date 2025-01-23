@@ -157,8 +157,6 @@ From KafkaConfig.scala
   val InterBrokerSecurityProtocolProp = "security.inter.broker.protocol"
   val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
   /** ********* Controlled shutdown configuration ***********/
-  val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
-  val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
   val ControlledShutdownEnableProp = "controlled.shutdown.enable"
   /** ********* Consumer coordinator configuration ***********/
   val ConsumerMinSessionTimeoutMsProp = "consumer.min.session.timeout.ms"

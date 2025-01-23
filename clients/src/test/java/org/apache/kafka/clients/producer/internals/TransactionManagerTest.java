@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortableException;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -181,7 +182,6 @@ public class TransactionManagerTest {
                 .setName("transaction.version")
                 .setMaxVersion(transactionV2Enabled ? (short) 2 : (short) 1)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)
@@ -929,7 +929,6 @@ public class TransactionManagerTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 2)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel((short) 2)
@@ -1034,7 +1033,6 @@ public class TransactionManagerTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 1)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel((short) 1)
@@ -1529,8 +1527,8 @@ public class TransactionManagerTest {
         assertAbortableError(TopicAuthorizationException.class);
         sender.runOnce();
 
-        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
-        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
+        TestUtils.assertFutureThrows(firstPartitionAppend, TransactionAbortedException.class);
+        TestUtils.assertFutureThrows(secondPartitionAppend, TransactionAbortedException.class);
     }
 
     @Test
@@ -1577,8 +1575,8 @@ public class TransactionManagerTest {
         // the pending transaction commit.
         sender.runOnce();
         assertTrue(commitResult.isCompleted());
-        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
-        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
+        TestUtils.assertFutureThrows(firstPartitionAppend, TopicAuthorizationException.class);
+        TestUtils.assertFutureThrows(secondPartitionAppend, TopicAuthorizationException.class);
         assertInstanceOf(TopicAuthorizationException.class, commitResult.error());
     }
 
@@ -2375,7 +2373,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        TestUtils.assertFutureThrows(responseFuture, KafkaException.class);
+        TestUtils.assertFutureThrows(responseFuture, TransactionAbortedException.class);
     }
 
     @Test
@@ -2401,7 +2399,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        TestUtils.assertFutureThrows(responseFuture, KafkaException.class);
+        TestUtils.assertFutureThrows(responseFuture, TransactionAbortedException.class);
     }
 
     @Test
@@ -2971,7 +2969,6 @@ public class TransactionManagerTest {
                     .setMinVersion((short) 0)
                     .setMaxVersion((short) 7)),
                 Collections.emptyList(),
-                false,
                 Collections.emptyList(),
                 0));
 
@@ -3266,7 +3263,6 @@ public class TransactionManagerTest {
                         .setMinVersion((short) 0)
                         .setMaxVersion((short) 7)),
                 Collections.emptyList(),
-                false,
                 Collections.emptyList(),
                 0));
 
@@ -3327,7 +3323,6 @@ public class TransactionManagerTest {
                      .setMinVersion((short) 0)
                      .setMaxVersion((short) 4)),
                 Collections.emptyList(),
-                false,
                 Collections.emptyList(),
                 0));
 

@@ -950,6 +950,6 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[Exception])
+    assertFutureThrows(future, classOf[IllegalStateException])
   }
 }

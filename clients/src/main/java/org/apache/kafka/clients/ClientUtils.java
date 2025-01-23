@@ -118,7 +118,7 @@ public final class ClientUtils {
         SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
         return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
-                clientSaslMechanism, time, true, logContext);
+                clientSaslMechanism, time, logContext);
     }
 
     static List<InetAddress> resolve(String host, HostResolver hostResolver) throws UnknownHostException {

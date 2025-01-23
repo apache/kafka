@@ -25,6 +25,8 @@ import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -50,6 +52,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -74,7 +77,7 @@ class ShareCoordinatorServiceTest {
 
     @SuppressWarnings("unchecked")
     private CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> mockRuntime() {
-        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime =  mock(CoordinatorRuntime.class);
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mock(CoordinatorRuntime.class);
         when(runtime.activeTopicPartitions())
             .thenReturn(Collections.singletonList(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)));
         return runtime;
@@ -85,7 +88,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -108,7 +111,7 @@ class ShareCoordinatorServiceTest {
         when(time.hiResClockMs()).thenReturn(0L).thenReturn(100L).thenReturn(150L);
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             coordinatorMetrics,
             time,
@@ -218,7 +221,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -290,7 +293,7 @@ class ShareCoordinatorServiceTest {
                         .setDeliveryState((byte) 0)
                 )))
             );
-        
+
         when(runtime.scheduleWriteOperation(
             eq("read-update-leader-epoch-state"),
             eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
@@ -316,11 +319,95 @@ class ShareCoordinatorServiceTest {
     }
 
     @Test
-    public void testWriteStateValidationsError() throws ExecutionException, InterruptedException, TimeoutException {
+    public void testReadStateSummarySuccess() throws ExecutionException, InterruptedException, TimeoutException {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
             ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM,
+            mock(Timer.class),
+            mock(PartitionWriter.class)
+        );
+
+        service.startup(() -> 1);
+
+        String groupId = "group1";
+        Uuid topicId1 = Uuid.randomUuid();
+        int partition1 = 0;
+
+        Uuid topicId2 = Uuid.randomUuid();
+        int partition2 = 1;
+
+        ReadShareGroupStateSummaryRequestData request = new ReadShareGroupStateSummaryRequestData()
+            .setGroupId(groupId)
+            .setTopics(Arrays.asList(
+                    new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                        .setTopicId(topicId1)
+                        .setPartitions(Collections.singletonList(
+                            new ReadShareGroupStateSummaryRequestData.PartitionData()
+                                .setPartition(partition1)
+                                .setLeaderEpoch(1)
+                        )),
+                    new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                        .setTopicId(topicId2)
+                        .setPartitions(Collections.singletonList(
+                            new ReadShareGroupStateSummaryRequestData.PartitionData()
+                                .setPartition(partition2)
+                                .setLeaderEpoch(1)
+                        ))
+                )
+            );
+
+        ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult topicData1 = new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+            .setTopicId(topicId1)
+            .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                .setPartition(partition1)
+                .setErrorCode(Errors.NONE.code())
+                .setStateEpoch(1)
+                .setStartOffset(0)
+            ));
+
+        ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult topicData2 = new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+            .setTopicId(topicId2)
+            .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                .setPartition(partition2)
+                .setErrorCode(Errors.NONE.code())
+                .setStateEpoch(1)
+                .setStartOffset(0)
+            ));
+
+        when(runtime.scheduleWriteOperation(
+            eq("read-share-group-state-summary"),
+            eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
+            any(),
+            any()
+        ))
+            .thenReturn(CompletableFuture.completedFuture(new ReadShareGroupStateSummaryResponseData()
+                .setResults(Collections.singletonList(topicData1))))
+            .thenReturn(CompletableFuture.completedFuture(new ReadShareGroupStateSummaryResponseData()
+                .setResults(Collections.singletonList(topicData2))));
+
+        CompletableFuture<ReadShareGroupStateSummaryResponseData> future = service.readStateSummary(
+            requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
+            request
+        );
+
+        HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
+
+        HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> expectedResult = new HashSet<>(Arrays.asList(
+            topicData1,
+            topicData2));
+        assertEquals(expectedResult, result);
+    }
+
+    @Test
+    public void testWriteStateValidationsError() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -367,7 +454,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -410,11 +497,58 @@ class ShareCoordinatorServiceTest {
     }
 
     @Test
-    public void testWriteStateWhenNotStarted() throws ExecutionException, InterruptedException, TimeoutException {
+    public void testReadStateSummaryValidationsError() throws ExecutionException, InterruptedException, TimeoutException {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
             ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM,
+            mock(Timer.class),
+            mock(PartitionWriter.class)
+        );
+
+        service.startup(() -> 1);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+
+        // 1. Empty topicsData
+        assertEquals(new ReadShareGroupStateSummaryResponseData(),
+            service.readStateSummary(
+                requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
+                new ReadShareGroupStateSummaryRequestData().setGroupId(groupId)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // 2. Empty partitionsData
+        assertEquals(new ReadShareGroupStateSummaryResponseData(),
+            service.readStateSummary(
+                requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
+                new ReadShareGroupStateSummaryRequestData().setGroupId(groupId).setTopics(Collections.singletonList(
+                    new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData().setTopicId(topicId)))
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // 3. Invalid groupId
+        assertEquals(new ReadShareGroupStateSummaryResponseData(),
+            service.readStateSummary(
+                requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
+                new ReadShareGroupStateSummaryRequestData().setGroupId(null).setTopics(Collections.singletonList(
+                    new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData().setTopicId(topicId).setPartitions(Collections.singletonList(
+                        new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partition)))))
+            ).get(5, TimeUnit.SECONDS)
+        );
+    }
+
+    @Test
+    public void testWriteStateWhenNotStarted() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -493,7 +627,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -552,11 +686,74 @@ class ShareCoordinatorServiceTest {
     }
 
     @Test
-    public void testWriteFutureReturnsError() throws ExecutionException, InterruptedException, TimeoutException {
+    public void testReadStateSummaryWhenNotStarted() throws ExecutionException, InterruptedException, TimeoutException {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
             ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM,
+            mock(Timer.class),
+            mock(PartitionWriter.class)
+        );
+
+        String groupId = "group1";
+        Uuid topicId1 = Uuid.randomUuid();
+        int partition1 = 0;
+
+        Uuid topicId2 = Uuid.randomUuid();
+        int partition2 = 1;
+
+        ReadShareGroupStateSummaryRequestData request = new ReadShareGroupStateSummaryRequestData()
+            .setGroupId(groupId)
+            .setTopics(Arrays.asList(
+                    new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                        .setTopicId(topicId1)
+                        .setPartitions(Collections.singletonList(
+                            new ReadShareGroupStateSummaryRequestData.PartitionData()
+                                .setPartition(partition1)
+                                .setLeaderEpoch(1)
+                        )),
+                    new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                        .setTopicId(topicId2)
+                        .setPartitions(Collections.singletonList(
+                            new ReadShareGroupStateSummaryRequestData.PartitionData()
+                                .setPartition(partition2)
+                                .setLeaderEpoch(1)
+                        ))
+                )
+            );
+
+        CompletableFuture<ReadShareGroupStateSummaryResponseData> future = service.readStateSummary(
+            requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
+            request
+        );
+
+        HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
+
+        HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> expectedResult = new HashSet<>(Arrays.asList(
+            new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                .setTopicId(topicId2)
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                    .setPartition(partition2)
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                    .setErrorMessage("Share coordinator is not available."))),
+            new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                .setTopicId(topicId1)
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                    .setPartition(partition1)
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                    .setErrorMessage("Share coordinator is not available.")))));
+        assertEquals(expectedResult, result);
+    }
+
+    @Test
+    public void testWriteFutureReturnsError() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -606,7 +803,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -645,11 +842,54 @@ class ShareCoordinatorServiceTest {
     }
 
     @Test
-    public void testTopicPartitionFor() {
+    public void testReadSummaryFutureReturnsError() throws ExecutionException, InterruptedException, TimeoutException {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
             ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM,
+            mock(Timer.class),
+            mock(PartitionWriter.class)
+        );
+
+        service.startup(() -> 1);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+
+        when(runtime.scheduleWriteOperation(any(), any(), any(), any()))
+            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
+
+        assertEquals(new ReadShareGroupStateSummaryResponseData()
+                .setResults(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                    .setTopicId(topicId)
+                    .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                        .setPartition(partition)
+                        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+                        .setErrorMessage("Unable to read share group state summary: The server experienced an unexpected error when processing the request."))))),
+            service.readStateSummary(
+                requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
+                new ReadShareGroupStateSummaryRequestData().setGroupId(groupId)
+                    .setTopics(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                        .setTopicId(topicId)
+                        .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.PartitionData()
+                            .setPartition(partition)
+                            .setLeaderEpoch(1)
+                        ))
+                    ))
+            ).get(5, TimeUnit.SECONDS)
+        );
+    }
+
+    @Test
+    public void testTopicPartitionFor() {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -678,7 +918,7 @@ class ShareCoordinatorServiceTest {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         ShareCoordinatorService service = new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
@@ -732,11 +972,13 @@ class ShareCoordinatorServiceTest {
             CompletableFuture.completedFuture(Optional.of(11L))
         );
 
+        Metrics metrics = new Metrics();
+
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
-            new ShareCoordinatorMetrics(),
+            new ShareCoordinatorMetrics(metrics),
             time,
             timer,
             writer
@@ -768,6 +1010,10 @@ class ShareCoordinatorServiceTest {
 
         verify(writer, times(2))
             .deleteRecords(any(), anyLong());
+
+        checkMetrics(metrics);
+        checkPruneMetric(metrics, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0, true);
+
         service.shutdown();
     }
 
@@ -819,11 +1065,13 @@ class ShareCoordinatorServiceTest {
             CompletableFuture.completedFuture(Optional.of(21L))
         );
 
+        Metrics metrics = new Metrics();
+
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
-            new ShareCoordinatorMetrics(),
+            new ShareCoordinatorMetrics(metrics),
             time,
             timer,
             writer
@@ -855,6 +1103,11 @@ class ShareCoordinatorServiceTest {
 
         verify(writer, times(4))
             .deleteRecords(any(), anyLong());
+
+        checkMetrics(metrics);
+        checkPruneMetric(metrics, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0, true);
+        checkPruneMetric(metrics, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 1, false);
+
         service.shutdown();
     }
 
@@ -872,11 +1125,13 @@ class ShareCoordinatorServiceTest {
             any()
         )).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
+        Metrics metrics = new Metrics();
+
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
-            new ShareCoordinatorMetrics(),
+            new ShareCoordinatorMetrics(metrics),
             time,
             timer,
             writer
@@ -900,6 +1155,10 @@ class ShareCoordinatorServiceTest {
 
         verify(writer, times(0))
             .deleteRecords(any(), anyLong());
+
+        checkMetrics(metrics);
+        checkPruneMetric(metrics, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0, false);
+
         service.shutdown();
     }
 
@@ -917,11 +1176,13 @@ class ShareCoordinatorServiceTest {
             any()
         )).thenReturn(CompletableFuture.completedFuture(Optional.of(20L)));
 
+        Metrics metrics = new Metrics();
+
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
-            new ShareCoordinatorMetrics(),
+            new ShareCoordinatorMetrics(metrics),
             time,
             timer,
             writer
@@ -945,6 +1206,9 @@ class ShareCoordinatorServiceTest {
 
         verify(writer, times(1))
             .deleteRecords(any(), eq(20L));
+
+        checkMetrics(metrics);
+
         service.shutdown();
     }
 
@@ -962,11 +1226,12 @@ class ShareCoordinatorServiceTest {
             any()
         )).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
 
+        Metrics metrics = new Metrics();
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
-            new ShareCoordinatorMetrics(),
+            new ShareCoordinatorMetrics(metrics),
             time,
             timer,
             writer
@@ -990,6 +1255,10 @@ class ShareCoordinatorServiceTest {
 
         verify(writer, times(0))
             .deleteRecords(any(), anyLong());
+
+        checkMetrics(metrics);
+        checkPruneMetric(metrics, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0, false);
+
         service.shutdown();
     }
 
@@ -1018,11 +1287,12 @@ class ShareCoordinatorServiceTest {
             CompletableFuture.completedFuture(Optional.of(10L))
         );
 
+        Metrics metrics = new Metrics();
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
-            new ShareCoordinatorMetrics(),
+            new ShareCoordinatorMetrics(metrics),
             time,
             timer,
             writer
@@ -1054,6 +1324,10 @@ class ShareCoordinatorServiceTest {
 
         verify(writer, times(1))
             .deleteRecords(any(), anyLong());
+
+        checkMetrics(metrics);
+        checkPruneMetric(metrics, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0, true);
+
         service.shutdown();
     }
 
@@ -1086,11 +1360,13 @@ class ShareCoordinatorServiceTest {
             CompletableFuture.completedFuture(Optional.of(10L))
         );
 
+        Metrics metrics = new Metrics();
+
         ShareCoordinatorService service = spy(new ShareCoordinatorService(
             new LogContext(),
-            ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap()),
+            ShareCoordinatorTestConfig.testConfig(),
             runtime,
-            new ShareCoordinatorMetrics(),
+            new ShareCoordinatorMetrics(metrics),
             time,
             timer,
             writer
@@ -1122,6 +1398,36 @@ class ShareCoordinatorServiceTest {
 
         verify(writer, times(2))
             .deleteRecords(any(), anyLong());
+
+        checkMetrics(metrics);
+        checkPruneMetric(metrics, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0, true);
+
         service.shutdown();
+    }
+
+    private void checkMetrics(Metrics metrics) {
+        Set<MetricName> usualMetrics = new HashSet<>(Arrays.asList(
+            metrics.metricName("write-latency-avg", ShareCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("write-latency-max", ShareCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("write-rate", ShareCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("write-total", ShareCoordinatorMetrics.METRICS_GROUP)
+        ));
+
+        usualMetrics.forEach(metric -> assertTrue(metrics.metrics().containsKey(metric)));
+    }
+
+    private void checkPruneMetric(Metrics metrics, String topic, int partition, boolean checkPresence) {
+        boolean isPresent = metrics.metrics().containsKey(
+            metrics.metricName(
+                "last-pruned-offset",
+                ShareCoordinatorMetrics.METRICS_GROUP,
+                "The offset at which the share-group state topic was last pruned.",
+                Map.of(
+                    "topic", topic,
+                    "partition", Integer.toString(partition)
+                )
+            )
+        );
+        assertEquals(checkPresence, isPresent);
     }
 }

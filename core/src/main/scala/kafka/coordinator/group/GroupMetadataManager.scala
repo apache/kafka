@@ -43,8 +43,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.coordinator.group.{OffsetAndMetadata, OffsetConfig}
 import org.apache.kafka.coordinator.group.generated.{CoordinatorRecordType, GroupMetadataValue, LegacyOffsetCommitKey, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
-import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
-import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.KafkaScheduler
@@ -55,7 +54,6 @@ import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
 class GroupMetadataManager(brokerId: Int,
-                           interBrokerProtocolVersion: MetadataVersion,
                            config: OffsetConfig,
                            val replicaManager: ReplicaManager,
                            time: Time,
@@ -246,7 +244,7 @@ class GroupMetadataManager(brokerId: Int,
       val timestampType = TimestampType.CREATE_TIME
       val timestamp = time.milliseconds()
       val key = GroupMetadataManager.groupMetadataKey(group.groupId)
-      val value = GroupMetadataManager.groupMetadataValue(group, groupAssignment, interBrokerProtocolVersion)
+      val value = GroupMetadataManager.groupMetadataValue(group, groupAssignment)
 
       val records = {
         val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(RecordBatch.CURRENT_MAGIC_VALUE, compression.`type`(),
@@ -351,7 +349,7 @@ class GroupMetadataManager(brokerId: Int,
 
       val records = filteredOffsetMetadata.map { case (topicIdPartition, offsetAndMetadata) =>
         val key = GroupMetadataManager.offsetCommitKey(groupId, topicIdPartition.topicPartition)
-        val value = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, interBrokerProtocolVersion)
+        val value = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
         new SimpleRecord(timestamp, key, value)
       }
       val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compression.`type`(), records.asJava))
@@ -1062,11 +1060,10 @@ object GroupMetadataManager {
    * @return key for offset commit message
    */
   def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] = {
-    MessageUtil.toCoordinatorTypePrefixedBytes(CoordinatorRecordType.OFFSET_COMMIT.id(),
-      new OffsetCommitKey()
-        .setGroup(groupId)
-        .setTopic(topicPartition.topic)
-        .setPartition(topicPartition.partition))
+    MessageUtil.toCoordinatorTypePrefixedBytes(new OffsetCommitKey()
+      .setGroup(groupId)
+      .setTopic(topicPartition.topic)
+      .setPartition(topicPartition.partition))
   }
 
   /**
@@ -1076,26 +1073,23 @@ object GroupMetadataManager {
    * @return key bytes for group metadata message
    */
   def groupMetadataKey(groupId: String): Array[Byte] = {
-    MessageUtil.toCoordinatorTypePrefixedBytes(CoordinatorRecordType.GROUP_METADATA.id(),
-      new GroupMetadataKeyData()
-        .setGroup(groupId))
+    MessageUtil.toCoordinatorTypePrefixedBytes(new GroupMetadataKeyData()
+      .setGroup(groupId))
   }
 
   /**
    * Generates the payload for offset commit message from given offset and metadata
    *
    * @param offsetAndMetadata consumer's current offset and metadata
-   * @param metadataVersion the api version
+   * @param maxVersion the highest version allowed, we may use a lower version for compatibility reasons
+   *                   we serialize with the highest supported non-flexible version until a tagged field is introduced
+   *                   or the version is bumped.
    * @return payload for offset commit message
    */
-  def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata,
-                        metadataVersion: MetadataVersion): Array[Byte] = {
+  def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata, maxVersion: Short = 3): Array[Byte] = {
     val version =
-      if (metadataVersion.isLessThan(IBP_2_1_IV0) || offsetAndMetadata.expireTimestampMs.isPresent) 1.toShort
-      else if (metadataVersion.isLessThan(IBP_2_1_IV1)) 2.toShort
-      // Serialize with the highest supported non-flexible version
-      // until a tagged field is introduced or the version is bumped.
-      else 3.toShort
+      if (offsetAndMetadata.expireTimestampMs.isPresent) Math.min(1, maxVersion).toShort
+      else maxVersion
     MessageUtil.toVersionPrefixedBytes(version, new OffsetCommitValue()
       .setOffset(offsetAndMetadata.committedOffset)
       .setMetadata(offsetAndMetadata.metadata)
@@ -1112,21 +1106,14 @@ object GroupMetadataManager {
    *
    * @param groupMetadata current group metadata
    * @param assignment the assignment for the rebalancing generation
-   * @param metadataVersion the api version
+   * @param version the version to serialize it with, the default is `3`, the highest supported non-flexible version
+   *                until a tagged field is introduced or the version is bumped. The default should always be used
+   *                outside of tests
    * @return payload for offset commit message
    */
   def groupMetadataValue(groupMetadata: GroupMetadata,
                          assignment: Map[String, Array[Byte]],
-                         metadataVersion: MetadataVersion): Array[Byte] = {
-
-    val version =
-      if (metadataVersion.isLessThan(IBP_0_10_1_IV0)) 0.toShort
-      else if (metadataVersion.isLessThan(IBP_2_1_IV0)) 1.toShort
-      else if (metadataVersion.isLessThan(IBP_2_3_IV0)) 2.toShort
-      // Serialize with the highest supported non-flexible version
-      // until a tagged field is introduced or the version is bumped.
-      else 3.toShort
-
+                         version: Short = 3): Array[Byte] = {
     MessageUtil.toVersionPrefixedBytes(version, new GroupMetadataValue()
       .setProtocolType(groupMetadata.protocolType.getOrElse(""))
       .setGeneration(groupMetadata.generationId)

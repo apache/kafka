@@ -1104,8 +1104,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata.awaitUpdate(version, remainingWaitMs);
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                final String errorMessage = String.format("Topic %s not present in metadata after %d ms.",
-                        topic, maxWaitMs);
+                final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
                 if (metadata.getError(topic) != null) {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
@@ -1114,11 +1113,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;
             if (elapsed >= maxWaitMs) {
-                final String errorMessage = partitionsCount == null ?
-                        String.format("Topic %s not present in metadata after %d ms.",
-                                topic, maxWaitMs) :
-                        String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
-                                partition, topic, partitionsCount, maxWaitMs);
+                final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
                 if (metadata.getError(topic) != null && metadata.getError(topic).exception() instanceof RetriableException) {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
@@ -1134,6 +1129,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return new ClusterAndWaitTime(cluster, elapsed);
     }
 
+    private String getErrorMessage(Integer partitionsCount, String topic, Integer partition, long maxWaitMs) {
+        return partitionsCount == null ?
+            String.format("Topic %s not present in metadata after %d ms.",
+                topic, maxWaitMs) :
+            String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
+                partition, topic, partitionsCount, maxWaitMs);
+    }
     /**
      * Validate that the record size isn't too large
      */
@@ -1181,16 +1183,19 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * calls made since the previous {@link #beginTransaction()} are completed before the commit.
      * </p>
      * <p>
-     * <b>Important:</b> This method should not be used within the callback provided to
-     * {@link #send(ProducerRecord, Callback)}. Invoking <code>flush()</code> in this context will cause a deadlock.
+     * <b>Important:</b> This method must not be called from within the callback provided to
+     * {@link #send(ProducerRecord, Callback)}. Invoking <code>flush()</code> in this context will result in a
+     * {@link KafkaException} being thrown, as it will cause a deadlock.
      * </p>
      *
      * @throws InterruptException If the thread is interrupted while blocked
+     * @throws KafkaException If the method is invoked inside a {@link #send(ProducerRecord, Callback)} callback
      */
     @Override
     public void flush() {
         if (Thread.currentThread() == this.ioThread) {
-            log.error("KafkaProducer.flush() invocation inside a callback will cause a deadlock.");
+            log.error("KafkaProducer.flush() invocation inside a callback is not permitted because it may lead to deadlock.");
+            throw new KafkaException("KafkaProducer.flush() invocation inside a callback is not permitted because it may lead to deadlock.");
         }
 
         log.trace("Flushing accumulated records in producer.");

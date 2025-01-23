@@ -19,13 +19,17 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
+import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -38,6 +42,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilder;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
+import org.apache.kafka.coordinator.share.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
@@ -47,7 +52,6 @@ import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.config.ShareCoordinatorConfig;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
@@ -203,18 +207,22 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     @Override
     public void replay(long offset, long producerId, short producerEpoch, CoordinatorRecord record) throws RuntimeException {
-        ApiMessageAndVersion key = record.key();
+        ApiMessage key = record.key();
         ApiMessageAndVersion value = record.value();
 
-        switch (key.version()) {
-            case ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION: // ShareSnapshot
-                handleShareSnapshot((ShareSnapshotKey) key.message(), (ShareSnapshotValue) messageOrNull(value), offset);
-                break;
-            case ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION: // ShareUpdate
-                handleShareUpdate((ShareUpdateKey) key.message(), (ShareUpdateValue) messageOrNull(value));
-                break;
-            default:
-                // Noop
+        try {
+            switch (CoordinatorRecordType.fromId(key.apiKey())) {
+                case SHARE_SNAPSHOT:
+                    handleShareSnapshot((ShareSnapshotKey) key, (ShareSnapshotValue) messageOrNull(value), offset);
+                    break;
+                case SHARE_UPDATE:
+                    handleShareUpdate((ShareUpdateKey) key, (ShareUpdateValue) messageOrNull(value));
+                    break;
+                default:
+                    // Noop
+            }
+        } catch (UnsupportedVersionException ex) {
+            // Ignore
         }
     }
 
@@ -316,6 +324,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * It can happen that a read state call for a share partition has a higher leaderEpoch
      * value than seen so far.
      * In case an update is not required, empty record list will be generated along with a success response.
+     *
      * @param request - represents ReadShareGroupStateRequestData
      * @return CoordinatorResult object
      */
@@ -394,8 +403,69 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * This method finds the ShareSnapshotValue record corresponding to the requested topic partition from the
+     * in-memory state of coordinator shard, the shareStateMap.
+     * <p>
+     * This method as called by the ShareCoordinatorService will be provided with
+     * the request data which covers only key i.e. group1:topic1:partition1. The implementation
+     * below was done keeping this in mind.
+     *
+     * @param request - ReadShareGroupStateSummaryRequestData for a single key
+     * @return CoordinatorResult(records, response)
+     */
+
+    public CoordinatorResult<ReadShareGroupStateSummaryResponseData, CoordinatorRecord> readStateSummary(
+        ReadShareGroupStateSummaryRequestData request
+    ) {
+        // Only one key will be there in the request by design.
+        Optional<ReadShareGroupStateSummaryResponseData> error = maybeGetReadStateSummaryError(request);
+        if (error.isPresent()) {
+            return new CoordinatorResult<>(List.of(), error.get());
+        }
+
+        ReadShareGroupStateSummaryRequestData.ReadStateSummaryData topicData = request.topics().get(0);
+        ReadShareGroupStateSummaryRequestData.PartitionData partitionData = topicData.partitions().get(0);
+
+        Uuid topicId = topicData.topicId();
+        int partitionId = partitionData.partition();
+        SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicId, partitionId);
+
+        ReadShareGroupStateSummaryResponseData responseData = null;
+
+        if (!shareStateMap.containsKey(key)) {
+            responseData = ReadShareGroupStateSummaryResponse.toResponseData(
+                topicId,
+                partitionId,
+                PartitionFactory.UNINITIALIZED_START_OFFSET,
+                PartitionFactory.DEFAULT_STATE_EPOCH
+            );
+        } else {
+            ShareGroupOffset offsetValue = shareStateMap.get(key);
+            if (offsetValue == null) {
+                log.error("Data not found for topic {}, partition {} for group {}, in the in-memory state of share coordinator", topicId, partitionId, request.groupId());
+                responseData = ReadShareGroupStateSummaryResponse.toErrorResponseData(
+                    topicId,
+                    partitionId,
+                    Errors.UNKNOWN_SERVER_ERROR,
+                    "Data not found for the topics " + topicId + ", partition " + partitionId + " for group " + request.groupId() + ", in the in-memory state of share coordinator"
+                );
+            } else {
+                responseData = ReadShareGroupStateSummaryResponse.toResponseData(
+                    topicId,
+                    partitionId,
+                    offsetValue.startOffset(),
+                    offsetValue.stateEpoch()
+                );
+            }
+        }
+
+        return new CoordinatorResult<>(Collections.emptyList(), responseData);
+    }
+
+    /**
      * Method which returns the last known redundant offset from the partition
      * led by this shard.
+     *
      * @return CoordinatorResult containing empty record list and an Optional<Long> representing the offset.
      */
     public CoordinatorResult<Optional<Long>, CoordinatorRecord> lastRedundantOffset() {
@@ -413,7 +483,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * else create a new ShareUpdate record
      *
      * @param partitionData - Represents the data which should be written into the share state record.
-     * @param key - The {@link SharePartitionKey} object.
+     * @param key           - The {@link SharePartitionKey} object.
      * @return {@link CoordinatorRecord} representing ShareSnapshot or ShareUpdate
      */
     private CoordinatorRecord generateShareStateRecord(
@@ -562,6 +632,39 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             metadataImage.topics().getPartition(topicId, partitionId) == null) {
             log.error("Topic/TopicPartition not found in metadata image.");
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
+        }
+
+        return Optional.empty();
+    }
+
+    private Optional<ReadShareGroupStateSummaryResponseData> maybeGetReadStateSummaryError(ReadShareGroupStateSummaryRequestData request) {
+        ReadShareGroupStateSummaryRequestData.ReadStateSummaryData topicData = request.topics().get(0);
+        ReadShareGroupStateSummaryRequestData.PartitionData partitionData = topicData.partitions().get(0);
+
+        Uuid topicId = topicData.topicId();
+        int partitionId = partitionData.partition();
+
+        if (topicId == null) {
+            log.error("Request topic id is null.");
+            return Optional.of(ReadShareGroupStateSummaryResponse.toErrorResponseData(
+                null, partitionId, Errors.INVALID_REQUEST, NULL_TOPIC_ID.getMessage()));
+        }
+
+        if (partitionId < 0) {
+            log.error("Request partition id is negative.");
+            return Optional.of(ReadShareGroupStateSummaryResponse.toErrorResponseData(
+                topicId, partitionId, Errors.INVALID_REQUEST, NEGATIVE_PARTITION_ID.getMessage()));
+        }
+
+        if (metadataImage == null) {
+            log.error("Metadata image is null");
+            return Optional.of(ReadShareGroupStateSummaryResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
+        }
+
+        if (metadataImage.topics().getTopic(topicId) == null ||
+            metadataImage.topics().getPartition(topicId, partitionId) == null) {
+            log.error("Topic/TopicPartition not found in metadata image.");
+            return Optional.of(ReadShareGroupStateSummaryResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
         }
 
         return Optional.empty();

@@ -90,7 +90,7 @@ public final class KRaftControlRecordStateMachine {
         LogContext logContext
     ) {
         this.log = log;
-        this.voterSetHistory = new VoterSetHistory(staticVoterSet);
+        this.voterSetHistory = new VoterSetHistory(staticVoterSet, logContext);
         this.serde = serde;
         this.bufferSupplier = bufferSupplier;
         this.maxBatchSizeBytes = maxBatchSizeBytes;
