@@ -113,14 +113,14 @@ public enum MetadataVersion {
     // Bootstrap metadata version for version 1 of the GroupVersion feature (KIP-848).
     IBP_4_0_IV0(22, "4.0", "IV0", false),
 
+    // Add ELR related supports (KIP-966).
+    IBP_4_0_IV1(23, "4.0", "IV1", true),
+
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
     // If users attempt to use an unstable MetadataVersion, they will get an error.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
-
-    // Add ELR related supports (KIP-966).
-    IBP_4_0_IV1(23, "4.0", "IV1", true),
 
     // Bootstrap metadata version for transaction versions 1 and 2 (KIP-890)
     IBP_4_0_IV2(24, "4.0", "IV2", false),
