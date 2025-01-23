@@ -14,20 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Map;
-import java.util.Objects;
+public class StreamsOnAllTasksLostCallbackNeededEvent extends CompletableBackgroundEvent<Void> {
 
-/**
- * The task assignment for a streams group.
- *
- * @param members The member assignments keyed by member ID.
- */
-public record GroupAssignment(Map<String, MemberAssignment> members) {
-
-    public GroupAssignment {
-        Objects.requireNonNull(members);
+    public StreamsOnAllTasksLostCallbackNeededEvent() {
+        super(Type.STREAMS_ON_ALL_TASKS_LOST_CALLBACK_NEEDED, Long.MAX_VALUE);
     }
 
+    @Override
+    protected String toStringBase() {
+        return super.toStringBase();
+    }
 }
