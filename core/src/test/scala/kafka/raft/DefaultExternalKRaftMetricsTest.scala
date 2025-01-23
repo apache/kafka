@@ -38,17 +38,17 @@ final class DefaultExternalKRaftMetricsTest {
     assertFalse(brokerServerMetrics.ignoredStaticVoters())
     assertFalse(controllerMetadataMetrics.ignoredStaticVoters())
 
-    metrics.setIgnoredStaticVoters()
+    metrics.setIgnoredStaticVoters(true)
 
     assertTrue(brokerServerMetrics.ignoredStaticVoters())
     assertTrue(controllerMetadataMetrics.ignoredStaticVoters())
 
-    metrics.setIgnoredStaticVoters()
+    metrics.setIgnoredStaticVoters(false)
 
-    assertTrue(brokerServerMetrics.ignoredStaticVoters())
-    assertTrue(controllerMetadataMetrics.ignoredStaticVoters())
+    assertFalse(brokerServerMetrics.ignoredStaticVoters())
+    assertFalse(controllerMetadataMetrics.ignoredStaticVoters())
 
     metrics = new DefaultExternalKRaftMetrics(None, None)
-    metrics.setIgnoredStaticVoters()
+    metrics.setIgnoredStaticVoters(true)
   }
 }

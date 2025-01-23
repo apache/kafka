@@ -369,8 +369,7 @@ final class KRaftControlRecordStateMachineTest {
         partitionState.truncateNewEntries(0);
 
         assertEquals(staticVoterSet, partitionState.lastVoterSet());
-        // TODO: should this metric be reporting false?
-        assertTrue(externalMetrics.getIgnoredStaticVoters());
+        assertFalse(externalMetrics.getIgnoredStaticVoters());
         assertEquals(3, getNumberOfVoters(metrics).metricValue());
     }
 

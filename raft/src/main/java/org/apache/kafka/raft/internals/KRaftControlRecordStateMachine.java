@@ -130,6 +130,9 @@ public final class KRaftControlRecordStateMachine {
         }
 
         kafkaRaftMetrics.updateNumVoters(voterSetHistory.lastValue().size());
+        if (staticVoterSet.isPresent() && voterSetHistory.lastValue().equals(staticVoterSet.get())) {
+            externalKRaftMetrics.setIgnoredStaticVoters(false);
+        }
     }
 
     /**
@@ -296,7 +299,7 @@ public final class KRaftControlRecordStateMachine {
                     VoterSet voters = VoterSet.fromVotersRecord((VotersRecord) record.message());
                     kafkaRaftMetrics.updateNumVoters(voters.size());
                     if (staticVoterSet.isPresent()) {
-                        externalKRaftMetrics.setIgnoredStaticVoters();
+                        externalKRaftMetrics.setIgnoredStaticVoters(true);
                     }
                     logger.info("Latest set of voters is {} at offset {}", voters, currentOffset);
                     synchronized (voterSetHistory) {

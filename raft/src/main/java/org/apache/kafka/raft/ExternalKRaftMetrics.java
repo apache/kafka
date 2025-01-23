@@ -22,5 +22,5 @@ package org.apache.kafka.raft;
  * values are updated in the raft layer. They are not allowed to block.
  */
 public interface ExternalKRaftMetrics {
-    void setIgnoredStaticVoters();
+    void setIgnoredStaticVoters(boolean ignoredStaticVoters);
 }

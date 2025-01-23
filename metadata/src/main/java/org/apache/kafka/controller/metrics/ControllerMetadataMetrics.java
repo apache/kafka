@@ -213,8 +213,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         this.uncleanLeaderElectionMeter.ifPresent(m -> m.mark(count));
     }
 
-    public void setIgnoredStaticVoters() {
-        ignoredStaticVoters.set(true);
+    public void setIgnoredStaticVoters(boolean ignored) {
+        ignoredStaticVoters.set(ignored);
     }
 
     public boolean ignoredStaticVoters() {

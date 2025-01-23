@@ -173,8 +173,8 @@ public final class BrokerServerMetrics implements AutoCloseable {
         return lastAppliedImageProvenance.get().lastContainedLogTimeMs();
     }
 
-    public void setIgnoredStaticVoters() {
-        ignoredStaticVoters.set(true);
+    public void setIgnoredStaticVoters(boolean ignored) {
+        ignoredStaticVoters.set(ignored);
     }
 
     public boolean ignoredStaticVoters() {

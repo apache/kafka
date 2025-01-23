@@ -24,8 +24,8 @@ public class MockExternalKRaftMetrics implements ExternalKRaftMetrics {
     private boolean ignoredStaticVoters = false;
 
     @Override
-    public void setIgnoredStaticVoters() {
-        ignoredStaticVoters = true;
+    public void setIgnoredStaticVoters(boolean ignoredStaticVoters) {
+        this.ignoredStaticVoters = ignoredStaticVoters;
     }
 
     // visible for testing

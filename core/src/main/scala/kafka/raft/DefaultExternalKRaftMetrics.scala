@@ -26,8 +26,8 @@ class DefaultExternalKRaftMetrics(
   val controllerMetadataMetricsOpt: Option[ControllerMetadataMetrics]
 ) extends ExternalKRaftMetrics {
 
-  override def setIgnoredStaticVoters(): Unit = {
-    brokerServerMetricsOpt.foreach(metrics => metrics.setIgnoredStaticVoters())
-    controllerMetadataMetricsOpt.foreach(metrics => metrics.setIgnoredStaticVoters())
+  override def setIgnoredStaticVoters(ignoredStaticVoters: Boolean): Unit = {
+    brokerServerMetricsOpt.foreach(metrics => metrics.setIgnoredStaticVoters(ignoredStaticVoters))
+    controllerMetadataMetricsOpt.foreach(metrics => metrics.setIgnoredStaticVoters(ignoredStaticVoters))
   }
 }
