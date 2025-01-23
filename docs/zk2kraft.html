@@ -97,6 +97,15 @@
         </li>
         <li>
             <p>
+                Removed dynamic configurations which relies on ZooKeeper. In KRaft mode, to change these configurations,
+                you need to restart the broker/controller.
+            </p>
+            <ul>
+                <li><code>advertised.listeners</code></li>
+            </ul>
+        </li>
+        <li>
+            <p>
                 Removed Zookeeper related configurations.
             </p>
             <ul>
@@ -150,6 +159,30 @@
             </p>
             <ul>
                 <li><code>kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs</code></li>
+            </ul>
+            <p>
+                In Kraft mode, Zookeeper is not used, so the metrics is removed.
+            </p>
+        </li>
+        <li>
+            <p>
+                Remove the metrics which is monitoring the number of Zookeeper migrations.
+            </p>
+            <ul>
+                <li><code>kafka.controller:type=KafkaController,name=MigratingZkBrokerCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ZkMigrationState</code></li>
+            </ul>
+            <p>
+                Kafka remove all zookeeper dependencies, so the metrics is removed.
+            </p>
+        </li>
+        <li>
+            <p>
+                Remove the metrics which is monitoring requests waiting in the topic purgatory
+            </p>
+            <ul>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=topic</code></li>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,name=NumDelayedOperations,delayedOperation=topic</code></li>
             </ul>
             <p>
                 In Kraft mode, Zookeeper is not used, so the metrics is removed.

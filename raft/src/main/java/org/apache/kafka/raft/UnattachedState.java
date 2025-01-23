@@ -26,6 +26,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
+import static org.apache.kafka.raft.QuorumState.unattachedOrProspectiveCanGrantVote;
+
 /**
  * A replica is "unattached" when it doesn't know the leader or the leader's endpoint.
  *
@@ -71,10 +73,10 @@ public class UnattachedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        if (votedKey.isPresent()) {
-            return ElectionState.withVotedCandidate(epoch, votedKey().get(), voters);
-        } else if (leaderId.isPresent()) {
-            return ElectionState.withElectedLeader(epoch, leaderId.getAsInt(), voters);
+        if (leaderId.isPresent()) {
+            return ElectionState.withElectedLeader(epoch, leaderId.getAsInt(), votedKey, voters);
+        } else if (votedKey.isPresent()) {
+            return ElectionState.withVotedCandidate(epoch, votedKey.get(), voters);
         } else {
             return ElectionState.withUnknownLeader(epoch, voters);
         }
@@ -120,60 +122,29 @@ public class UnattachedState implements EpochState {
 
     @Override
     public boolean canGrantVote(ReplicaKey replicaKey, boolean isLogUpToDate, boolean isPreVote) {
-        if (isPreVote) {
-            return canGrantPreVote(replicaKey, isLogUpToDate);
-        } else if (votedKey.isPresent()) {
-            ReplicaKey votedReplicaKey = votedKey.get();
-            if (votedReplicaKey.id() == replicaKey.id()) {
-                return votedReplicaKey.directoryId().isEmpty() || votedReplicaKey.directoryId().equals(replicaKey.directoryId());
-            }
-            log.debug(
-                "Rejecting Vote request (preVote=false) from candidate ({}), already have voted for another " +
-                    "candidate ({}) in epoch {}",
-                replicaKey,
-                votedKey,
-                epoch
-            );
-            return false;
-        } else if (leaderId.isPresent()) {
-            // If the leader id is known it should behave similar to the follower state
-            log.debug(
-                "Rejecting Vote request (preVote=false) from candidate ({}) since we already have a leader {} in epoch {}",
-                replicaKey,
-                leaderId,
-                epoch
-            );
-            return false;
-        } else if (!isLogUpToDate) {
-            log.debug(
-                "Rejecting Vote request (preVote=false) from candidate ({}) since candidate epoch/offset is not up to date with us",
-                replicaKey
-            );
-        }
-
-        return isLogUpToDate;
-    }
-
-    private boolean canGrantPreVote(ReplicaKey replicaKey, boolean isLogUpToDate) {
-        if (!isLogUpToDate) {
-            log.debug(
-                "Rejecting Vote request (preVote=true) from replica ({}) since replica's log is not up to date with us",
-                replicaKey
-            );
-        }
-
-        return isLogUpToDate;
+        return unattachedOrProspectiveCanGrantVote(
+            leaderId,
+            votedKey,
+            epoch,
+            replicaKey,
+            isLogUpToDate,
+            isPreVote,
+            log
+        );
     }
 
     @Override
     public String toString() {
-        return "Unattached(" +
-            "epoch=" + epoch +
-            ", votedKey=" + votedKey.map(ReplicaKey::toString).orElse("null") +
-            ", voters=" + voters +
-            ", electionTimeoutMs=" + electionTimeoutMs +
-            ", highWatermark=" + highWatermark +
-            ')';
+        return String.format(
+            "UnattachedState(epoch=%d, leaderId=%s, votedKey=%s, voters=%s, " +
+            "electionTimeoutMs=%d, highWatermark=%s)",
+            epoch,
+            leaderId,
+            votedKey,
+            voters,
+            electionTimeoutMs,
+            highWatermark
+        );
     }
 
     @Override

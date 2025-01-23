@@ -73,7 +73,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism),
       JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     val superuserLoginContext = jaasAdminLoginModule(kafkaClientSaslMechanism)
     superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, superuserLoginContext)

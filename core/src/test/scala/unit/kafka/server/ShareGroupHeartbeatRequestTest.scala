@@ -894,7 +894,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       val allPartitionsMetadata = waitForAllPartitionsMetadata(brokersToValidate, topic, totalPartitionCount)
       (0 until totalPartitionCount - 1).foreach(i => {
         allPartitionsMetadata.get(new TopicPartition(topic, i)).foreach { partitionMetadata =>
-          assertEquals(totalPartitionCount, partitionMetadata.replicas.size)
+          assertEquals(totalPartitionCount, partitionMetadata.isr.size)
         }
       })
     }

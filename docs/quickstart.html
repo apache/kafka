@@ -52,10 +52,10 @@ $ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
         <pre><code class="language-bash">$ KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"</code></pre>
 
         <p>Format Log Directories</p>
-        <pre><code class="language-bash">$ bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties</code></pre>
+        <pre><code class="language-bash">$ bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/server.properties</code></pre>
 
         <p>Start the Kafka Server</p>
-        <pre><code class="language-bash">$ bin/kafka-server-start.sh config/kraft/reconfig-server.properties</code></pre>
+        <pre><code class="language-bash">$ bin/kafka-server-start.sh config/server.properties</code></pre>
 
         <p>Once the Kafka server has successfully launched, you will have a basic Kafka environment running and ready to use.</p>
 

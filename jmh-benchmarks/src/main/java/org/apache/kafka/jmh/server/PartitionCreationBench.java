@@ -31,8 +31,8 @@ import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -199,7 +199,7 @@ public class PartitionCreationBench {
             inSync.add(1);
             inSync.add(2);
 
-            LeaderAndIsrRequestData.LeaderAndIsrPartitionState partitionState = new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
+            LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
                     .setControllerEpoch(0)
                     .setLeader(0)
                     .setLeaderEpoch(0)
