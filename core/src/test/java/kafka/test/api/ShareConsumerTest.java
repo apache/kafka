@@ -38,6 +38,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -57,7 +58,9 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Tag;
@@ -1806,6 +1809,107 @@ public class ShareConsumerTest {
         }
     }
 
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
+            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+        }
+    )
+    public void testShareConsumerAfterCoordinatorMovement() throws Exception {
+        setup();
+        String topicName = "multipart";
+        String groupId = "multipartGrp";
+        createTopic(topicName, 3, 3);
+
+        try (Admin admin = createAdminClient()) {
+            TopicPartition tpMulti = new TopicPartition(topicName, 0);
+
+            // get topic id
+            Uuid topicId = admin.describeTopics(List.of(topicName)).topicNameValues().get(topicName).get().topicId();
+
+            // produce some messages
+            try (Producer<byte[], byte[]> producer = createProducer()) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+                    tpMulti.topic(),
+                    tpMulti.partition(),
+                    null,
+                    "key".getBytes(),
+                    "value".getBytes()
+                );
+                IntStream.range(0, 10).forEach(__ -> producer.send(record));
+                producer.flush();
+            }
+
+            // consume messages
+            try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
+                shareConsumer.subscribe(List.of(topicName));
+                alterShareAutoOffsetReset(groupId, "earliest");
+                ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+                assertEquals(10, records.count());
+            }
+
+            // get current share coordinator node
+            SharePartitionKey key = SharePartitionKey.getInstance(groupId, new TopicIdPartition(topicId, tpMulti));
+            int shareGroupStateTp = Utils.abs(key.asCoordinatorKey().hashCode()) % 3;
+            List<Integer> curShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).topicNameValues().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME).get()
+                .partitions().stream()
+                .filter(info -> info.partition() == shareGroupStateTp)
+                .map(info -> info.leader().id())
+                .toList();
+
+            assertEquals(1, curShareCoordNodeId.size());
+
+            // shutdown the coordinator
+            cluster.shutdownBroker(curShareCoordNodeId.get(0));
+
+            // give some breathing time
+            TimeUnit.SECONDS.sleep(2L);
+
+            List<Integer> newShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).topicNameValues().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME).get()
+                .partitions().stream()
+                .filter(info -> info.partition() == shareGroupStateTp)
+                .map(info -> info.leader().id())
+                .toList();
+
+            assertEquals(1, newShareCoordNodeId.size());
+            assertNotEquals(curShareCoordNodeId.get(0), newShareCoordNodeId.get(0));
+
+            // again produce to same topic partition
+            try (Producer<byte[], byte[]> producer = createProducer()) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+                    tpMulti.topic(),
+                    tpMulti.partition(),
+                    null,
+                    "key".getBytes(),
+                    "value".getBytes()
+                );
+                IntStream.range(0, 10).forEach(__ -> producer.send(record));
+                producer.flush();
+            }
+
+            // consume messages should only be possible if partition and share coord has moved
+            // from shutdown broker since we are only producing to partition 0 of topic.
+            try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
+                shareConsumer.subscribe(List.of(topicName));
+                alterShareAutoOffsetReset(groupId, "earliest");
+                ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+                assertEquals(20, records.count());
+            }
+        }
+    }
+
     private int produceMessages(int messageCount) {
         try (Producer<byte[], byte[]> producer = createProducer()) {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -1905,9 +2009,13 @@ public class ShareConsumerTest {
     }
 
     private void createTopic(String topicName) {
+        createTopic(topicName, 1, 1);
+    }
+
+    private void createTopic(String topicName, int numPartitions, int replicationFactor) {
         assertDoesNotThrow(() -> {
             try (Admin admin = createAdminClient()) {
-                admin.createTopics(Collections.singleton(new NewTopic(topicName, 1, (short) 1))).all().get();
+                admin.createTopics(Collections.singleton(new NewTopic(topicName, numPartitions, (short) replicationFactor))).all().get();
             }
         }, "Failed to create topic");
     }
