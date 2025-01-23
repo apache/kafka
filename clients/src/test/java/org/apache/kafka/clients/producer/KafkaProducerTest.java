@@ -522,7 +522,6 @@ public class KafkaProducerTest {
     @Test
     public void testNoSerializerProvided() {
 
-        // Test 1: No serializer provided in producerProps
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
 
@@ -532,10 +531,9 @@ public class KafkaProducerTest {
             }
         });
 
-        // Test 2: Invalid config (missing serializer)
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-
+        // Invalid value null for configuration key.serializer: must be non-null.
         assertThrows(ConfigException.class, () -> {
             try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs)) {
                 // KafkaProducer will be closed automatically after the block
