@@ -277,7 +277,7 @@ class SharedServer(
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
 
-        val externalKRaftMetrics = new DefaultExternalKRaftMetrics(brokerMetrics, controllerServerMetrics)
+        val externalKRaftMetrics = new DefaultExternalKRaftMetrics(Option(brokerMetrics), Option(controllerServerMetrics))
 
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           clusterId,
@@ -288,12 +288,12 @@ class SharedServer(
           KafkaRaftServer.MetadataTopicId,
           time,
           metrics,
+          externalKRaftMetrics,
           Some(s"kafka-${sharedServerConfig.nodeId}-raft"), // No dash expected at the end
           controllerQuorumVotersFuture,
           bootstrapServers,
           listenerEndpoints,
-          raftManagerFaultHandler,
-          externalKRaftMetrics
+          raftManagerFaultHandler
         )
         raftManager = _raftManager
         _raftManager.startup()

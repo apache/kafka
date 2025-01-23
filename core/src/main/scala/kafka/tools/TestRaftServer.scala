@@ -17,8 +17,6 @@
 
 package kafka.tools
 
-import com.yammer.metrics.core.MetricsRegistry
-
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
@@ -37,7 +35,6 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
-import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, LeaderAndEpoch, QuorumConfig, RaftClient}
 import org.apache.kafka.security.CredentialProvider
@@ -45,11 +42,9 @@ import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
-import org.apache.kafka.server.metrics.BrokerServerMetrics
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, ShutdownableThread}
 import org.apache.kafka.snapshot.SnapshotReader
 
-import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 /**
@@ -107,15 +102,12 @@ class TestRaftServer(
       topicId,
       time,
       metrics,
+      new DefaultExternalKRaftMetrics(None, None),
       Some(threadNamePrefix),
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
       QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
       endpoints,
-      new ProcessTerminatingFaultHandler.Builder().build(),
-      new DefaultExternalKRaftMetrics(
-        new BrokerServerMetrics(metrics),
-        new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()))
-      )
+      new ProcessTerminatingFaultHandler.Builder().build()
     )
 
     workloadGenerator = new RaftWorkloadGenerator(

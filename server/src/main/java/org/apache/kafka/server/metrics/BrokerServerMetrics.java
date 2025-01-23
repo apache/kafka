@@ -56,7 +56,6 @@ public final class BrokerServerMetrics implements AutoCloseable {
     private final AtomicReference<MetadataProvenance> lastAppliedImageProvenance = new AtomicReference<>(MetadataProvenance.EMPTY);
     private final AtomicLong metadataLoadErrorCount = new AtomicLong(0);
     private final AtomicLong metadataApplyErrorCount = new AtomicLong(0);
-
     private final AtomicBoolean ignoredStaticVoters = new AtomicBoolean(false);
 
     private final Metrics metrics;
@@ -65,7 +64,6 @@ public final class BrokerServerMetrics implements AutoCloseable {
     private final MetricName lastAppliedRecordLagMsName;
     private final MetricName metadataLoadErrorCountName;
     private final MetricName metadataApplyErrorCountName;
-
     private final MetricName ignoredStaticVotersName;
 
     public BrokerServerMetrics(Metrics metrics) {
@@ -98,7 +96,7 @@ public final class BrokerServerMetrics implements AutoCloseable {
         ignoredStaticVotersName = metrics.metricName(
             "ignored-static-voters",
             METRIC_GROUP_NAME,
-            "This value is 1 when the current voter set for the metadata topic partition is being read from the log and 0 when it is read from the static configuration."
+            "1 if controller.quorum.voters is set but was not used by the broker, 0 otherwise."
         );
 
         metrics.addMetric(lastAppliedRecordOffsetName, (config, now) -> lastAppliedImageProvenance.get().lastContainedOffset());

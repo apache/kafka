@@ -55,7 +55,6 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "MetadataErrorCount");
     private static final MetricName UNCLEAN_LEADER_ELECTIONS_PER_SEC = getMetricName(
         "ControllerStats", "UncleanLeaderElectionsPerSec");
-
     private static final MetricName IGNORED_STATIC_VOTERS = getMetricName(
         "KafkaController", "IgnoredStaticVoters");
 
@@ -68,9 +67,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private final AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger(0);
     private final AtomicInteger metadataErrorCount = new AtomicInteger(0);
     private Optional<Meter> uncleanLeaderElectionMeter = Optional.empty();
-
     private final AtomicBoolean ignoredStaticVoters = new AtomicBoolean(false);
-
 
     /**
      * Create a new ControllerMetadataMetrics object.
@@ -219,6 +216,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     public void setIgnoredStaticVoters() {
         ignoredStaticVoters.set(true);
     }
+
     public boolean ignoredStaticVoters() {
         return ignoredStaticVoters.get();
     }

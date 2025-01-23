@@ -16,27 +16,25 @@
  */
 package org.apache.kafka.raft.internals;
 
-import com.yammer.metrics.core.MetricsRegistry;
-
-import kafka.raft.DefaultExternalKRaftMetrics;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.KRaftVersionRecord;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.controller.metrics.ControllerMetadataMetrics;
+import org.apache.kafka.raft.MockExternalKRaftMetrics;
 import org.apache.kafka.raft.MockLog;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.VoterSetTest;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.server.metrics.BrokerServerMetrics;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -46,14 +44,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class KRaftControlRecordStateMachineTest {
+    private static Metrics metrics = new Metrics();
+    private static KafkaRaftMetrics kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft");
+    private static MockExternalKRaftMetrics externalMetrics = new MockExternalKRaftMetrics();
     private static final RecordSerde<String> STRING_SERDE = new StringSerde();
-    private static BrokerServerMetrics brokerServerMetrics = new BrokerServerMetrics(new Metrics());
-    private static ControllerMetadataMetrics controllerMetadataMetrics = new ControllerMetadataMetrics(
-        Optional.of(new MetricsRegistry())
-    );
 
     private static MockLog buildLog() {
         return new MockLog(new TopicPartition("partition", 0), Uuid.randomUuid(), new LogContext());
+    }
+
+    private static KafkaMetric getNumberOfVoters(final Metrics metrics) {
+        return metrics.metrics().get(metrics.metricName("number-of-voters", "raft-metrics"));
     }
 
     private static KRaftControlRecordStateMachine buildPartitionListener(MockLog log, VoterSet staticVoterSet) {
@@ -64,17 +65,20 @@ final class KRaftControlRecordStateMachineTest {
             BufferSupplier.NO_CACHING,
             1024,
             new LogContext(),
-            new KafkaRaftMetrics(new Metrics(), "raft"),
-            new DefaultExternalKRaftMetrics(
-                brokerServerMetrics,
-                controllerMetadataMetrics
-            )
+            kafkaRaftMetrics,
+            externalMetrics
         );
+    }
+
+    @BeforeEach
+    public void resetMetrics() {
+        metrics = new Metrics();
+        kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        externalMetrics = new MockExternalKRaftMetrics();
     }
 
     @Test
     void testEmptyPartition() {
-        resetExternalMetrics();
         MockLog log = buildLog();
         VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
 
@@ -84,8 +88,8 @@ final class KRaftControlRecordStateMachineTest {
         partitionState.updateState();
 
         assertEquals(voterSet, partitionState.lastVoterSet());
-        assertFalse(brokerServerMetrics.ignoredStaticVoters());
-        assertFalse(controllerMetadataMetrics.ignoredStaticVoters());
+        assertFalse(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
@@ -98,19 +102,21 @@ final class KRaftControlRecordStateMachineTest {
         partitionState.updateState();
 
         assertEquals(VoterSet.empty(), partitionState.lastVoterSet());
+        assertFalse(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(0, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
     void testUpdateWithoutSnapshot() {
-        resetExternalMetrics();
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
-        assertFalse(brokerServerMetrics.ignoredStaticVoters());
-        assertFalse(controllerMetadataMetrics.ignoredStaticVoters());
+
+        assertFalse(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Append the kraft.version control record
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -144,8 +150,8 @@ final class KRaftControlRecordStateMachineTest {
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
-        assertTrue(brokerServerMetrics.ignoredStaticVoters());
-        assertTrue(controllerMetadataMetrics.ignoredStaticVoters());
+        assertTrue(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
@@ -156,6 +162,9 @@ final class KRaftControlRecordStateMachineTest {
         int epoch = 1;
 
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+
+        assertFalse(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Create a snapshot that doesn't have any kraft.version or voter set control records
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
@@ -197,18 +206,20 @@ final class KRaftControlRecordStateMachineTest {
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
+        assertTrue(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
     void testUpdateWithSnapshot() {
-        resetExternalMetrics();
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         int epoch = 1;
 
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
-        assertFalse(brokerServerMetrics.ignoredStaticVoters());
-        assertFalse(controllerMetadataMetrics.ignoredStaticVoters());
+
+        assertFalse(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Create a snapshot that has kraft.version and voter set control records
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -229,21 +240,21 @@ final class KRaftControlRecordStateMachineTest {
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
-        assertTrue(brokerServerMetrics.ignoredStaticVoters());
-        assertTrue(controllerMetadataMetrics.ignoredStaticVoters());
+        assertTrue(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
     void testUpdateWithSnapshotAndLogOverride() {
-        resetExternalMetrics();
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
-        assertFalse(brokerServerMetrics.ignoredStaticVoters());
-        assertFalse(controllerMetadataMetrics.ignoredStaticVoters());
+
+        assertFalse(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Create a snapshot that has kraft.version and voter set control records
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -278,8 +289,8 @@ final class KRaftControlRecordStateMachineTest {
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
-        assertTrue(brokerServerMetrics.ignoredStaticVoters());
-        assertTrue(controllerMetadataMetrics.ignoredStaticVoters());
+        assertTrue(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(4, getNumberOfVoters(metrics).metricValue());
 
         // Check the voter set at the snapshot
         assertEquals(Optional.of(snapshotVoterSet), partitionState.voterSetAtOffset(snapshotId.offset() - 1));
@@ -293,6 +304,9 @@ final class KRaftControlRecordStateMachineTest {
         int epoch = 1;
 
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+
+        assertFalse(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Append the kraft.version control record
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -339,18 +353,25 @@ final class KRaftControlRecordStateMachineTest {
         partitionState.updateState();
 
         assertEquals(voterSet, partitionState.lastVoterSet());
+        assertTrue(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(4, getNumberOfVoters(metrics).metricValue());
 
         // Truncate log and listener
         log.truncateTo(voterSetOffset);
         partitionState.truncateNewEntries(voterSetOffset);
 
         assertEquals(firstVoterSet, partitionState.lastVoterSet());
+        assertTrue(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Truncate the entire log
         log.truncateTo(0);
         partitionState.truncateNewEntries(0);
 
         assertEquals(staticVoterSet, partitionState.lastVoterSet());
+        // TODO: should this metric be reporting false?
+        assertTrue(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
@@ -361,6 +382,9 @@ final class KRaftControlRecordStateMachineTest {
         int epoch = 1;
 
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+
+        assertFalse(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Append the kraft.version control record
         long kraftVersionOffset = log.endOffset().offset();
@@ -409,6 +433,8 @@ final class KRaftControlRecordStateMachineTest {
 
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(kraftVersionOffset));
+        assertTrue(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(4, getNumberOfVoters(metrics).metricValue());
 
         // Trim the prefix for the partition listener up to the kraft.version
         partitionState.truncateOldEntries(kraftVersionOffset);
@@ -424,10 +450,7 @@ final class KRaftControlRecordStateMachineTest {
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(kraftVersionOffset));
         assertEquals(Optional.empty(), partitionState.voterSetAtOffset(firstVoterSetOffset));
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(voterSetOffset));
-    }
-
-    void resetExternalMetrics() {
-        brokerServerMetrics = new BrokerServerMetrics(new Metrics());
-        controllerMetadataMetrics = new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()));
+        assertTrue(externalMetrics.getIgnoredStaticVoters());
+        assertEquals(4, getNumberOfVoters(metrics).metricValue());
     }
 }

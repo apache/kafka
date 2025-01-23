@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import kafka.raft.DefaultExternalKRaftMetrics;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -964,7 +963,7 @@ public class RaftEventSimulationTest {
                 voterAddresses,
                 store,
                 metrics,
-                new DefaultExternalKRaftMetrics(null, null)
+                new MockExternalKRaftMetrics()
             );
         }
 

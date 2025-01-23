@@ -14,20 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.raft;
 
-package kafka.raft
+/**
+ * This class is used to replicate the behavior of {@link kafka.raft.DefaultExternalKRaftMetrics}
+ * for testing within the raft layer.
+ */
+public class MockExternalKRaftMetrics implements ExternalKRaftMetrics {
+    private boolean ignoredStaticVoters = false;
 
-import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
-import org.apache.kafka.raft.ExternalKRaftMetrics
-import org.apache.kafka.server.metrics.BrokerServerMetrics
+    @Override
+    public void setIgnoredStaticVoters() {
+        ignoredStaticVoters = true;
+    }
 
-class DefaultExternalKRaftMetrics(
-  val brokerServerMetricsOpt: Option[BrokerServerMetrics],
-  val controllerMetadataMetricsOpt: Option[ControllerMetadataMetrics]
-) extends ExternalKRaftMetrics {
-
-  override def setIgnoredStaticVoters(): Unit = {
-    brokerServerMetricsOpt.foreach(metrics => metrics.setIgnoredStaticVoters())
-    controllerMetadataMetricsOpt.foreach(metrics => metrics.setIgnoredStaticVoters())
-  }
+    // visible for testing
+    public boolean getIgnoredStaticVoters() {
+        return ignoredStaticVoters;
+    }
 }

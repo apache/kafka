@@ -159,7 +159,7 @@ public final class VoterSet {
     }
 
     /**
-     * Returns size of the voter set.
+     * Returns the number of voters in the voter set.
      */
     public int size() {
         return voters.size();

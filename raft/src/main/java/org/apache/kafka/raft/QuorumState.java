@@ -22,8 +22,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
-
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
+
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -96,7 +96,6 @@ public class QuorumState {
     private final int electionTimeoutMs;
     private final int fetchTimeoutMs;
     private final LogContext logContext;
-
     private final KafkaRaftMetrics kafkaRaftMetrics;
 
     private volatile EpochState state;
@@ -731,6 +730,8 @@ public class QuorumState {
             logContext,
             kafkaRaftMetrics
         );
+        kafkaRaftMetrics.addLeaderMetrics();
+
         durableTransitionTo(state);
         return state;
     }

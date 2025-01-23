@@ -103,7 +103,7 @@ public final class KRaftControlRecordStateMachine {
         this.logger = logContext.logger(this.getClass());
         this.kafkaRaftMetrics = kafkaRaftMetrics;
         this.externalKRaftMetrics = externalKRaftMetrics;
-        this.staticVoterSet = Optional.ofNullable(staticVoterSet);
+        this.staticVoterSet = staticVoterSet.size() > 0 ? Optional.of(staticVoterSet) : Optional.empty();
 
         this.staticVoterSet.ifPresent(voters -> kafkaRaftMetrics.updateNumVoters(voters.size()));
     }
@@ -128,6 +128,8 @@ public final class KRaftControlRecordStateMachine {
         synchronized (kraftVersionHistory) {
             kraftVersionHistory.truncateNewEntries(endOffset);
         }
+
+        kafkaRaftMetrics.updateNumVoters(voterSetHistory.lastValue().size());
     }
 
     /**

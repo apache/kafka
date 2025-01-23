@@ -115,12 +115,12 @@ class KafkaRaftManager[T](
   topicId: Uuid,
   time: Time,
   metrics: Metrics,
+  externalKRaftMetrics: ExternalKRaftMetrics,
   threadNamePrefixOpt: Option[String],
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
   bootstrapServers: JCollection[InetSocketAddress],
   localListeners: Endpoints,
-  fatalFaultHandler: FaultHandler,
-  externalKRaftMetrics: ExternalKRaftMetrics
+  fatalFaultHandler: FaultHandler
 ) extends RaftManager[T] with Logging {
 
   val apiVersions = new ApiVersions()

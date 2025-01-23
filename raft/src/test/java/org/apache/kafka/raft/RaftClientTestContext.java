@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import com.yammer.metrics.core.MetricsRegistry;
-
-import kafka.raft.DefaultExternalKRaftMetrics;
-
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -67,13 +63,11 @@ import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.controller.metrics.ControllerMetadataMetrics;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.server.metrics.BrokerServerMetrics;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
@@ -136,8 +130,7 @@ public final class RaftClientTestContext {
     public final KRaftVersion kraftVersion;
     public final KafkaRaftClient<String> client;
     final Metrics metrics;
-    public final BrokerServerMetrics brokerServerMetrics;
-    public final ControllerMetadataMetrics controllerMetadataMetrics;
+    public final MockExternalKRaftMetrics externalKRaftMetrics;
     public final MockLog log;
     final MockNetworkChannel channel;
     final MockMessageQueue messageQueue;
@@ -376,6 +369,11 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder setStartingVotersStatic() {
+            isStartingVotersStatic = true;
+            return this;
+        }
+
         Builder withLocalListeners(Endpoints localListeners) {
             this.localListeners = localListeners;
             return this;
@@ -451,20 +449,14 @@ public final class RaftClientTestContext {
                 quorumConfig
             );
 
-            BrokerServerMetrics brokerServerMetrics = new BrokerServerMetrics(metrics);
-            ControllerMetadataMetrics controllerMetadataMetrics = new ControllerMetadataMetrics(
-                Optional.of(new MetricsRegistry())
-            );
+            MockExternalKRaftMetrics externalKRaftMetrics = new MockExternalKRaftMetrics();
 
             client.register(listener);
             client.initialize(
                 staticVoterAddressMap,
                 quorumStateStore,
                 metrics,
-                new DefaultExternalKRaftMetrics(
-                    brokerServerMetrics,
-                    controllerMetadataMetrics
-                )
+                externalKRaftMetrics
             );
 
             RaftClientTestContext context = new RaftClientTestContext(
@@ -487,8 +479,7 @@ public final class RaftClientTestContext {
                 raftProtocol,
                 alwaysFlush,
                 metrics,
-                brokerServerMetrics,
-                controllerMetadataMetrics,
+                externalKRaftMetrics,
                 listener
             );
 
@@ -517,8 +508,7 @@ public final class RaftClientTestContext {
         RaftProtocol raftProtocol,
         boolean alwaysFlush,
         Metrics metrics,
-        BrokerServerMetrics brokerServerMetrics,
-        ControllerMetadataMetrics controllerMetadataMetrics,
+        MockExternalKRaftMetrics externalKRaftMetrics,
         MockListener listener
     ) {
         this.clusterId = clusterId;
@@ -536,8 +526,7 @@ public final class RaftClientTestContext {
         this.raftProtocol = raftProtocol;
         this.alwaysFlush = alwaysFlush;
         this.metrics = metrics;
-        this.brokerServerMetrics = brokerServerMetrics;
-        this.controllerMetadataMetrics = controllerMetadataMetrics;
+        this.externalKRaftMetrics = externalKRaftMetrics;
         this.listener = listener;
     }
 

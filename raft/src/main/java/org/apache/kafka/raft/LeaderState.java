@@ -224,9 +224,7 @@ public class LeaderState<T> implements EpochState {
                 .complete(RaftUtil.addVoterResponse(error, message))
         );
         addVoterHandlerState = state;
-        kafkaRaftMetrics.updateUncommittedVoterChange(
-            addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent()
-        );
+        updateUncommittedVoterChangeMetric();
     }
 
     public Optional<RemoveVoterHandlerState> removeVoterHandlerState() {
@@ -244,6 +242,10 @@ public class LeaderState<T> implements EpochState {
                 .complete(RaftUtil.removeVoterResponse(error, message))
         );
         removeVoterHandlerState = state;
+        updateUncommittedVoterChangeMetric();
+    }
+
+    private void updateUncommittedVoterChangeMetric() {
         kafkaRaftMetrics.updateUncommittedVoterChange(
             addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent()
         );
@@ -689,7 +691,6 @@ public class LeaderState<T> implements EpochState {
             // Remove the voter from the previous data structures
             oldVoterStates.remove(voterNode.voterKey().id());
             observerStates.remove(voterNode.voterKey());
-            kafkaRaftMetrics.updateNumObservers(observerStates.size());
 
             // Make sure that the replica key in the replica state matches the voter's
             state.setReplicaKey(voterNode.voterKey());
@@ -704,8 +705,8 @@ public class LeaderState<T> implements EpochState {
         for (ReplicaState replicaStateEntry : oldVoterStates.values()) {
             replicaStateEntry.clearListeners();
             observerStates.putIfAbsent(replicaStateEntry.replicaKey, replicaStateEntry);
-            kafkaRaftMetrics.updateNumObservers(observerStates.size());
         }
+        kafkaRaftMetrics.updateNumObservers(observerStates.size());
     }
 
     public static class ReplicaState implements Comparable<ReplicaState> {
@@ -879,6 +880,7 @@ public class LeaderState<T> implements EpochState {
     public void close() {
         resetAddVoterHandlerState(Errors.NOT_LEADER_OR_FOLLOWER, null, Optional.empty());
         resetRemoveVoterHandlerState(Errors.NOT_LEADER_OR_FOLLOWER, null, Optional.empty());
+        kafkaRaftMetrics.removeLeaderMetrics();
 
         accumulator.close();
     }
