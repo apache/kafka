@@ -491,6 +491,56 @@ subprojects {
   // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
   def testsToExclude = ['**/*Suite.class']
 
+
+  // These two tasks will copy JUnit XML files out of the sub-project's build directory and into
+  // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
+  // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
+  def copyTestXml = tasks.register('copyTestXml') {
+    // Skip this is module has no sources
+    onlyIf("Project '${project.name}:test' has sources") { ! test.state.noSource }
+    onlyIf("Task '${project.name}:test' did not run") { test.state.didWork }
+
+    // Never cache this task
+    outputs.cacheIf { false }
+    outputs.upToDateWhen { false }
+
+    doLast {
+      if (test.ext.isGithubActions) {
+        def moduleDirPath = projectToJUnitXmlPath(project)
+        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/test").get().asFile
+        println "Copy JUnit XML for ${project.name} to $dest"
+        ant.copy(todir: "$dest") {
+          ant.fileset(dir: "${test.reports.junitXml.entryPoint}") {
+            ant.include(name: "**/*.xml")
+          }
+        }
+      }
+    }
+  }
+
+  def copyQuarantinedTestXml = tasks.register('copyQuarantinedTestXml') {
+    // Skip this is module has no sources
+    onlyIf("Project '${project.name}:quarantinedTest' has sources") { ! quarantinedTest.state.noSource }
+    onlyIf("Task '${project.name}:quarantinedTest' did not run") { quarantinedTest.state.didWork }
+
+    // Never cache this task
+    outputs.cacheIf { false }
+    outputs.upToDateWhen { false }
+
+    doLast {
+      if (quarantinedTest.ext.isGithubActions) {
+        def moduleDirPath = projectToJUnitXmlPath(project)
+        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/quarantinedTest").get().asFile
+        println "Copy JUnit XML for ${project.name} to $dest"
+        ant.copy(todir: "$dest") {
+          ant.fileset(dir: "${quarantinedTest.reports.junitXml.entryPoint}") {
+            ant.include(name: "**/*.xml")
+          }
+        }
+      }
+    }
+  }
+
   test {
     ext {
       isGithubActions = System.getenv('GITHUB_ACTIONS') != null
@@ -498,7 +548,7 @@ subprojects {
     }
 
     maxParallelForks = maxTestForks
-    ignoreFailures = userIgnoreFailures || ext.isGithubActions
+    ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -536,32 +586,21 @@ subprojects {
         ext.hadFailure = true
       }
     }
-
-    // This closure will copy JUnit XML files out of the sub-project's build directory and into
-    // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
-    // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
+   
+    // This is needed to prevent caching flaky test results.
     doLast {
-      if (ext.isGithubActions) {
-        def moduleDirPath = projectToJUnitXmlPath(project)
-        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/test").get().asFile
-        println "Copy JUnit XML for ${project.name} to $dest"
-        ant.copy(todir: "$dest") {
-          ant.fileset(dir: "${test.reports.junitXml.entryPoint}")
-        }
-
-        // If there were any test failures, we want to fail the task to prevent the failures
-        // from being cached.
-        if (ext.hadFailure) {
-          throw new GradleException("Failing this task since '${project.name}:${name}' had test failures.")
-        }
+      if (ext.hadFailure) {
+         throw new GradleException("Failing this task since '${project.name}:${name}' had test failures.")
       }
     }
+
+    // This is run even if the task has failed
+    finalizedBy("copyTestXml")
   }
 
   task quarantinedTest(type: Test, dependsOn: compileJava) {
     ext {
       isGithubActions = System.getenv('GITHUB_ACTIONS') != null
-      hadFailure = false  // Used to track if any tests failed, see afterSuite below
     }
 
     // Disable caching and up-to-date for this task. We always want quarantined tests
@@ -571,7 +610,7 @@ subprojects {
     outputs.cacheIf { false }
 
     maxParallelForks = maxTestForks
-    ignoreFailures = userIgnoreFailures || ext.isGithubActions
+    ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -600,33 +639,12 @@ subprojects {
       }
     }
 
-    // As we process results, check if there were any test failures.
-    afterSuite { desc, result ->
-      if (result.resultType == TestResult.ResultType.FAILURE) {
-        ext.hadFailure = true
-      }
-    }
+    // This task does not need to throw an exception when a test failed. This is because 
+    // we never allow the quarantined test results to be cached, therefor we do not need
+    // to explicitly fail the task to prevent caching.
 
-    // This closure will copy JUnit XML files out of the sub-project's build directory and into
-    // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
-    // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
-    doLast {
-      if (ext.isGithubActions) {
-        def moduleDirPath = projectToJUnitXmlPath(project)
-        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/quarantinedTest").get().asFile
-        println "Copy JUnit XML for ${project.name} to $dest"
-        ant.copy(todir: "$dest", failonerror: "false") {
-          ant.fileset(dir: "${quarantinedTest.reports.junitXml.entryPoint}") {
-            ant.include(name: "**/*.xml")
-          }
-        }
-        // If there were any test failures, we want to fail the task to prevent the failures
-        // from being cached.
-        if (ext.hadFailure) {
-          throw new GradleException("Failing this task since '${project.name}:${name}' had test failures.")
-        }
-      }
-    }
+    // This is run even if the task has failed
+    finalizedBy("copyQuarantinedTestXml")
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
