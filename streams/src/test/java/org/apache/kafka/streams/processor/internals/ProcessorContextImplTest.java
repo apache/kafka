@@ -141,8 +141,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void globalKeyValueStoreShouldBeReadOnly() {
-        foreachSetUp();
-
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.globalStore(anyString())).thenReturn(null);
 
@@ -299,8 +297,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void localKeyValueStoreShouldNotAllowInitOrClose() {
-        foreachSetUp();
-
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.globalStore(anyString())).thenReturn(null);
 
@@ -343,8 +339,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void localTimestampedKeyValueStoreShouldNotAllowInitOrClose() {
-        foreachSetUp();
-
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.globalStore(anyString())).thenReturn(null);
 
@@ -521,7 +515,7 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldNotSendRecordHeadersToChangelogTopic() {
-        foreachSetUp();
+//        foreachSetUp();
 
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.registeredChangelogPartitionFor(REGISTERED_STORE_NAME)).thenReturn(CHANGELOG_PARTITION);
@@ -701,7 +695,7 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldMatchStreamTime() {
-        foreachSetUp();
+//        foreachSetUp();
 
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
 
@@ -739,7 +733,7 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldSetAndGetProcessorMetaData() {
-        foreachSetUp();
+//        foreachSetUp();
 
         context = buildProcessorContextImpl(streamsConfig, stateManager);
 
