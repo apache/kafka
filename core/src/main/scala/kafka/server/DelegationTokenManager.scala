@@ -19,7 +19,6 @@ package kafka.server
 
 import java.nio.charset.StandardCharsets
 import java.security.InvalidKeyException
-
 import javax.crypto.spec.SecretKeySpec
 import javax.crypto.{Mac, SecretKey}
 import kafka.utils.Logging
@@ -30,6 +29,8 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.Time
 
+import java.util
+import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
@@ -136,7 +137,7 @@ class DelegationTokenManager(val config: KafkaConfig,
     tokenCache.removeCache(tokenId)
   }
 
-  def getTokens(filterToken: TokenInformation => Boolean): List[DelegationToken] = {
-    tokenCache.tokens.asScala.toList.filter(filterToken).map(token => getDelegationToken(token))
+  def getTokens(filterToken: TokenInformation => Boolean): util.List[DelegationToken] = {
+    tokenCache.tokens.stream().filter(token => filterToken(token)).map(getDelegationToken).collect(Collectors.toList[DelegationToken])
   }
 }
