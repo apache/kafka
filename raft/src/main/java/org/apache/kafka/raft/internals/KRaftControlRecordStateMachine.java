@@ -130,7 +130,7 @@ public final class KRaftControlRecordStateMachine {
         }
 
         kafkaRaftMetrics.updateNumVoters(voterSetHistory.lastValue().size());
-        if (staticVoterSet.isPresent() && voterSetHistory.lastValue().equals(staticVoterSet.get())) {
+        if (staticVoterSet.isPresent() && voterSetHistory.lastEntry().isEmpty()) {
             externalKRaftMetrics.setIgnoredStaticVoters(false);
         }
     }
