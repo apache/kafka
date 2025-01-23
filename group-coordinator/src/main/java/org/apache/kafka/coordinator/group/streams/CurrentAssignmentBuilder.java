@@ -47,7 +47,7 @@ public class CurrentAssignmentBuilder {
     /**
      * The target assignment.
      */
-    private TaskTuple targetAssignment;
+    private TasksTuple targetAssignment;
 
     /**
      * A function which returns the current process ID of an active task or null if the active task
@@ -70,7 +70,7 @@ public class CurrentAssignmentBuilder {
     /**
      * The tasks owned by the member. This may be provided by the member in the StreamsGroupHeartbeat request.
      */
-    private Optional<TaskTuple> ownedTasks = Optional.empty();
+    private Optional<TasksTuple> ownedTasks = Optional.empty();
 
     /**
      * Constructs the CurrentAssignmentBuilder based on the current state of the provided streams group member.
@@ -89,7 +89,7 @@ public class CurrentAssignmentBuilder {
      * @return This object.
      */
     public CurrentAssignmentBuilder withTargetAssignment(int targetAssignmentEpoch,
-                                                         TaskTuple targetAssignment) {
+                                                         TasksTuple targetAssignment) {
         this.targetAssignmentEpoch = targetAssignmentEpoch;
         this.targetAssignment = Objects.requireNonNull(targetAssignment);
         return this;
@@ -147,7 +147,7 @@ public class CurrentAssignmentBuilder {
      * @param ownedAssignment A collection of active, standby and warm-up tasks
      * @return This object.
      */
-    protected CurrentAssignmentBuilder withOwnedAssignment(TaskTuple ownedAssignment) {
+    protected CurrentAssignmentBuilder withOwnedAssignment(TasksTuple ownedAssignment) {
         this.ownedTasks = Optional.ofNullable(ownedAssignment);
         return this;
     }
@@ -314,7 +314,7 @@ public class CurrentAssignmentBuilder {
      * @return A new StreamsGroupMember.
      */
     private StreamsGroupMember computeNextAssignment(int memberEpoch,
-                                                     TaskTuple memberAssignedTasks) {
+                                                     TasksTuple memberAssignedTasks) {
         Map<String, Set<Integer>> newActiveAssignedTasks = new HashMap<>();
         Map<String, Set<Integer>> newActiveTasksPendingRevocation = new HashMap<>();
         Map<String, Set<Integer>> newActiveTasksPendingAssignment = new HashMap<>();
@@ -325,7 +325,7 @@ public class CurrentAssignmentBuilder {
         Map<String, Set<Integer>> newWarmupTasksPendingRevocation = new HashMap<>();
         Map<String, Set<Integer>> newWarmupTasksPendingAssignment = new HashMap<>();
 
-        boolean hasUnreleasedTasks = computeAssignmentDifference(
+        boolean hasUnreleasedActiveTasks = computeAssignmentDifference(
             memberAssignedTasks.activeTasks(),
             targetAssignment.activeTasks(),
             newActiveAssignedTasks,
@@ -339,7 +339,7 @@ public class CurrentAssignmentBuilder {
                         .contains(member.processId())
         );
 
-        hasUnreleasedTasks = computeAssignmentDifference(
+        boolean hasUnreleasedStandbyTasks = computeAssignmentDifference(
             memberAssignedTasks.standbyTasks(),
             targetAssignment.standbyTasks(),
             newStandbyAssignedTasks,
@@ -352,9 +352,9 @@ public class CurrentAssignmentBuilder {
                         .contains(member.processId()) ||
                     currentWarmupTaskProcessIds.apply(subtopologyId, partitionId)
                         .contains(member.processId())
-        ) || hasUnreleasedTasks;
+        );
 
-        hasUnreleasedTasks = computeAssignmentDifference(
+        boolean hasUnreleasedWarmupTasks = computeAssignmentDifference(
             memberAssignedTasks.warmupTasks(),
             targetAssignment.warmupTasks(),
             newWarmupAssignedTasks,
@@ -367,33 +367,33 @@ public class CurrentAssignmentBuilder {
                         .contains(member.processId()) ||
                     currentWarmupTaskProcessIds.apply(subtopologyId, partitionId)
                         .contains(member.processId())
-        ) || hasUnreleasedTasks;
+        );
 
         return buildNewMember(
             memberEpoch,
-            new TaskTuple(
+            new TasksTuple(
                 newActiveTasksPendingRevocation,
                 newStandbyTasksPendingRevocation,
                 newWarmupTasksPendingRevocation
             ),
-            new TaskTuple(
+            new TasksTuple(
                 newActiveAssignedTasks,
                 newStandbyAssignedTasks,
                 newWarmupAssignedTasks
             ),
-            new TaskTuple(
+            new TasksTuple(
                 newActiveTasksPendingAssignment,
                 newStandbyTasksPendingAssignment,
                 newWarmupTasksPendingAssignment
             ),
-            hasUnreleasedTasks
+            hasUnreleasedActiveTasks || hasUnreleasedStandbyTasks || hasUnreleasedWarmupTasks
         );
     }
 
     private StreamsGroupMember buildNewMember(final int memberEpoch,
-                                              final TaskTuple newTasksPendingRevocation,
-                                              final TaskTuple newAssignedTasks,
-                                              final TaskTuple newTasksPendingAssignment,
+                                              final TasksTuple newTasksPendingRevocation,
+                                              final TasksTuple newAssignedTasks,
+                                              final TasksTuple newTasksPendingAssignment,
                                               final boolean hasUnreleasedTasks) {
 
         final boolean hasTasksToBeRevoked =
@@ -425,7 +425,7 @@ public class CurrentAssignmentBuilder {
                 .setState(newState)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks.merge(newTasksPendingAssignment))
-                .setTasksPendingRevocation(TaskTuple.EMPTY)
+                .setTasksPendingRevocation(TasksTuple.EMPTY)
                 .build();
         } else if (hasUnreleasedTasks) {
             // If there are no tasks to be revoked nor to be assigned but some
@@ -435,7 +435,7 @@ public class CurrentAssignmentBuilder {
                 .setState(MemberState.UNRELEASED_TASKS)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks)
-                .setTasksPendingRevocation(TaskTuple.EMPTY)
+                .setTasksPendingRevocation(TasksTuple.EMPTY)
                 .build();
         } else {
             // Otherwise, the member transitions to the target epoch and to the
@@ -444,7 +444,7 @@ public class CurrentAssignmentBuilder {
                 .setState(MemberState.STABLE)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks)
-                .setTasksPendingRevocation(TaskTuple.EMPTY)
+                .setTasksPendingRevocation(TasksTuple.EMPTY)
                 .build();
         }
     }

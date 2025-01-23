@@ -36,11 +36,11 @@ import java.util.stream.Collectors;
  * @param warmupTasks           Warm-up tasks.
  *                              The key of the map is the subtopology ID and the value is the set of partition IDs.
  */
-public record TaskTuple(Map<String, Set<Integer>> activeTasks,
-                        Map<String, Set<Integer>> standbyTasks,
-                        Map<String, Set<Integer>> warmupTasks) {
+public record TasksTuple(Map<String, Set<Integer>> activeTasks,
+                         Map<String, Set<Integer>> standbyTasks,
+                         Map<String, Set<Integer>> warmupTasks) {
 
-    public TaskTuple {
+    public TasksTuple {
         activeTasks = Collections.unmodifiableMap(Objects.requireNonNull(activeTasks));
         standbyTasks = Collections.unmodifiableMap(Objects.requireNonNull(standbyTasks));
         warmupTasks = Collections.unmodifiableMap(Objects.requireNonNull(warmupTasks));
@@ -49,7 +49,7 @@ public record TaskTuple(Map<String, Set<Integer>> activeTasks,
     /**
      * An empty task tuple.
      */
-    public static final TaskTuple EMPTY = new TaskTuple(
+    public static final TasksTuple EMPTY = new TasksTuple(
         Collections.emptyMap(),
         Collections.emptyMap(),
         Collections.emptyMap()
@@ -68,11 +68,11 @@ public record TaskTuple(Map<String, Set<Integer>> activeTasks,
      * @param other The other task tuple.
      * @return A new task tuple, containing all active tasks, standby tasks and warm-up tasks from both tuples.
      */
-    public TaskTuple merge(TaskTuple other) {
+    public TasksTuple merge(TasksTuple other) {
         Map<String, Set<Integer>> mergedActiveTasks = merge(activeTasks, other.activeTasks);
         Map<String, Set<Integer>> mergedStandbyTasks = merge(standbyTasks, other.standbyTasks);
         Map<String, Set<Integer>> mergedWarmupTasks = merge(warmupTasks, other.warmupTasks);
-        return new TaskTuple(mergedActiveTasks, mergedStandbyTasks, mergedWarmupTasks);
+        return new TasksTuple(mergedActiveTasks, mergedStandbyTasks, mergedWarmupTasks);
     }
 
     private static Map<String, Set<Integer>> merge(final Map<String, Set<Integer>> tasks1, final Map<String, Set<Integer>> tasks2) {
@@ -91,7 +91,7 @@ public record TaskTuple(Map<String, Set<Integer>> activeTasks,
      * @param other The other task tuple.
      * @return true if there is at least one active, standby or warm-up task that is present in both tuples.
      */
-    public boolean containsAny(TaskTuple other) {
+    public boolean containsAny(TasksTuple other) {
         return activeTasks.entrySet().stream().anyMatch(
             entry -> other.activeTasks.containsKey(entry.getKey()) && !Collections.disjoint(entry.getValue(), other.activeTasks.get(entry.getKey()))
         ) || standbyTasks.entrySet().stream().anyMatch(
@@ -102,14 +102,14 @@ public record TaskTuple(Map<String, Set<Integer>> activeTasks,
     }
 
     /**
-     * Creates a {{@link TaskTuple}} from a
+     * Creates a {{@link TasksTuple}} from a
      * {{@link org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue}}.
      *
      * @param record The record.
-     * @return A {{@link TaskTuple}}.
+     * @return A {{@link TasksTuple}}.
      */
-    public static TaskTuple fromTargetAssignmentRecord(StreamsGroupTargetAssignmentMemberValue record) {
-        return new TaskTuple(
+    public static TasksTuple fromTargetAssignmentRecord(StreamsGroupTargetAssignmentMemberValue record) {
+        return new TasksTuple(
             record.activeTasks().stream()
                 .collect(Collectors.toMap(
                         StreamsGroupTargetAssignmentMemberValue.TaskIds::subtopologyId,

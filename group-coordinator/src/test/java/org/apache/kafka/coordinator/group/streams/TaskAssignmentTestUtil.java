@@ -32,11 +32,11 @@ public class TaskAssignmentTestUtil {
     }
 
     @SafeVarargs
-    public static TaskTuple mkTaskTuple(TaskRole taskRole, Map.Entry<String, Set<Integer>>... entries) {
+    public static TasksTuple mkTasksTuple(TaskRole taskRole, Map.Entry<String, Set<Integer>>... entries) {
         return switch (taskRole) {
-            case ACTIVE -> new TaskTuple(mkTasksPerSubtopology(entries), new HashMap<>(), new HashMap<>());
-            case STANDBY -> new TaskTuple(new HashMap<>(), mkTasksPerSubtopology(entries), new HashMap<>());
-            case WARMUP -> new TaskTuple(new HashMap<>(), new HashMap<>(), mkTasksPerSubtopology(entries));
+            case ACTIVE -> new TasksTuple(mkTasksPerSubtopology(entries), new HashMap<>(), new HashMap<>());
+            case STANDBY -> new TasksTuple(new HashMap<>(), mkTasksPerSubtopology(entries), new HashMap<>());
+            case WARMUP -> new TasksTuple(new HashMap<>(), new HashMap<>(), mkTasksPerSubtopology(entries));
         };
     }
 

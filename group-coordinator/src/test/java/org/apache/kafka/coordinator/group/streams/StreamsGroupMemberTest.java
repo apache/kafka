@@ -38,8 +38,10 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsGroupMemberTest {
 
@@ -68,14 +70,14 @@ public class StreamsGroupMemberTest {
     private static final List<Integer> TASKS4 = List.of(3, 2, 1);
     private static final List<Integer> TASKS5 = List.of(6, 5, 4);
     private static final List<Integer> TASKS6 = List.of(9, 7);
-    private static final TaskTuple ASSIGNED_TASKS =
-        new TaskTuple(
+    private static final TasksTuple ASSIGNED_TASKS =
+        new TasksTuple(
             mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS1.toArray(Integer[]::new))),
             mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS2.toArray(Integer[]::new))),
             mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS3.toArray(Integer[]::new)))
         );
-    private static final TaskTuple TASKS_PENDING_REVOCATION =
-        new TaskTuple(
+    private static final TasksTuple TASKS_PENDING_REVOCATION =
+        new TasksTuple(
             mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS4.toArray(Integer[]::new))),
             mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS5.toArray(Integer[]::new))),
             mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS6.toArray(Integer[]::new)))
@@ -300,7 +302,7 @@ public class StreamsGroupMemberTest {
         List<Integer> assignedTasks1 = Arrays.asList(10, 11, 12);
         List<Integer> assignedTasks2 = Arrays.asList(13, 14, 15);
         List<Integer> assignedTasks3 = Arrays.asList(16, 17, 18);
-        TaskTuple targetAssignment = new TaskTuple(
+        TasksTuple targetAssignment = new TasksTuple(
             mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(assignedTasks3))),
             mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(assignedTasks2))),
             mkMap(mkEntry(SUBTOPOLOGY3, new HashSet<>(assignedTasks1)))
@@ -369,6 +371,45 @@ public class StreamsGroupMemberTest {
         StreamsGroupDescribeResponseData.Member streamsGroupDescribeMember = member.asStreamsGroupDescribeMember(null);
 
         assertEquals(new StreamsGroupDescribeResponseData.Assignment(), streamsGroupDescribeMember.targetAssignment());
+    }
+
+    @Test
+    public void testHasAssignedTasksChanged() {
+        StreamsGroupMember member1 = new StreamsGroupMember.Builder(MEMBER_ID)
+            .setAssignedTasks(new TasksTuple(
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS1))),
+                mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(TASKS2))),
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS3)))
+            ))
+            .build();
+
+        StreamsGroupMember member2 = new StreamsGroupMember.Builder(MEMBER_ID)
+            .setAssignedTasks(new TasksTuple(
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS4))),
+                mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(TASKS5))),
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS6)))
+            ))
+            .build();
+
+        assertTrue(StreamsGroupMember.hasAssignedTasksChanged(member1, member2));
+
+        StreamsGroupMember member3 = new StreamsGroupMember.Builder(MEMBER_ID)
+            .setAssignedTasks(new TasksTuple(
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS1))),
+                mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(TASKS2))),
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS3)))
+            ))
+            .build();
+
+        StreamsGroupMember member4 = new StreamsGroupMember.Builder(MEMBER_ID)
+            .setAssignedTasks(new TasksTuple(
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS1))),
+                mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(TASKS2))),
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS3)))
+            ))
+            .build();
+
+        assertFalse(StreamsGroupMember.hasAssignedTasksChanged(member3, member4));
     }
 
     private StreamsGroupMember createStreamsGroupMember() {

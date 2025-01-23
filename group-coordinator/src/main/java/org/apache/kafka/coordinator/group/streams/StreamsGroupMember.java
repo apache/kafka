@@ -66,8 +66,8 @@ public record StreamsGroupMember(String memberId,
                                  String processId,
                                  Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint,
                                  Map<String, String> clientTags,
-                                 TaskTuple assignedTasks,
-                                 TaskTuple tasksPendingRevocation) {
+                                 TasksTuple assignedTasks,
+                                 TasksTuple tasksPendingRevocation) {
 
     public StreamsGroupMember {
         Objects.requireNonNull(memberId, "memberId cannot be null");
@@ -94,8 +94,8 @@ public record StreamsGroupMember(String memberId,
         private String processId = null;
         private Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint = null;
         private Map<String, String> clientTags = null;
-        private TaskTuple assignedTasks = null;
-        private TaskTuple tasksPendingRevocation = null;
+        private TasksTuple assignedTasks = null;
+        private TasksTuple tasksPendingRevocation = null;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId, "memberId cannot be null");
@@ -223,12 +223,12 @@ public record StreamsGroupMember(String memberId,
             return this;
         }
 
-        public Builder setAssignedTasks(TaskTuple assignedTasks) {
+        public Builder setAssignedTasks(TasksTuple assignedTasks) {
             this.assignedTasks = assignedTasks;
             return this;
         }
 
-        public Builder setTasksPendingRevocation(TaskTuple tasksPendingRevocation) {
+        public Builder setTasksPendingRevocation(TasksTuple tasksPendingRevocation) {
             this.tasksPendingRevocation = tasksPendingRevocation;
             return this;
         }
@@ -254,14 +254,14 @@ public record StreamsGroupMember(String memberId,
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
             setAssignedTasks(
-                new TaskTuple(
+                new TasksTuple(
                     assignmentFromTaskIds(record.activeTasks()),
                     assignmentFromTaskIds(record.standbyTasks()),
                     assignmentFromTaskIds(record.warmupTasks())
                 )
             );
             setTasksPendingRevocation(
-                new TaskTuple(
+                new TasksTuple(
                     assignmentFromTaskIds(record.activeTasksPendingRevocation()),
                     assignmentFromTaskIds(record.standbyTasksPendingRevocation()),
                     assignmentFromTaskIds(record.warmupTasksPendingRevocation())
@@ -313,7 +313,7 @@ public record StreamsGroupMember(String memberId,
      *
      * @return The StreamsGroupMember mapped as StreamsGroupDescribeResponseData.Member.
      */
-    public StreamsGroupDescribeResponseData.Member asStreamsGroupDescribeMember(TaskTuple targetAssignment) {
+    public StreamsGroupDescribeResponseData.Member asStreamsGroupDescribeMember(TasksTuple targetAssignment) {
         final StreamsGroupDescribeResponseData.Assignment describedTargetAssignment =
             new StreamsGroupDescribeResponseData.Assignment();
 
