@@ -79,6 +79,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -90,7 +91,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -1959,7 +1962,7 @@ public class ShareConsumerTest {
         });
 
         // init a complex share consumer
-        ComplexShareConsumer complexCons1 = new ComplexShareConsumer(
+        ComplexShareConsumer<byte[], byte[]> complexCons1 = new ComplexShareConsumer<>(
             cluster.bootstrapServers(),
             topicName,
             groupId,
@@ -2202,7 +2205,7 @@ public class ShareConsumerTest {
         }
     }
 
-    private static class ComplexShareConsumer implements Runnable {
+    private static class ComplexShareConsumer<K, V> implements Runnable {
         public static final int POLL_TIMEOUT_MS = 15000;
         public static final int MAX_DELIVERY_COUNT = 5;
 
@@ -2211,6 +2214,8 @@ public class ShareConsumerTest {
         private final AtomicBoolean isDone = new AtomicBoolean(false);
         private final AtomicBoolean shouldLoop = new AtomicBoolean(true);
         private final AtomicInteger readCount = new AtomicInteger(0);
+        private final Predicate<ConsumerRecords<K, V>> exitCriteria;
+        private final BiConsumer<ShareConsumer<K, V>, ConsumerRecord<K, V>> processFunc;
 
         ComplexShareConsumer(
             String bootstrapServers,
@@ -2218,12 +2223,45 @@ public class ShareConsumerTest {
             String groupId,
             Map<String, Object> additionalProperties
         ) {
+            this(
+                bootstrapServers,
+                topicName,
+                groupId,
+                additionalProperties,
+                records -> records.count() == 0,
+                (consumer, record) -> {
+                    short deliveryCountBeforeAccept = (short) ((record.offset() + record.offset() / (MAX_DELIVERY_COUNT + 2)) % (MAX_DELIVERY_COUNT + 2));
+                    if (deliveryCountBeforeAccept == 0) {
+                        consumer.acknowledge(record, AcknowledgeType.REJECT);
+                    } else if (record.deliveryCount().get() == deliveryCountBeforeAccept) {
+                        consumer.acknowledge(record, AcknowledgeType.ACCEPT);
+                    } else {
+                        consumer.acknowledge(record, AcknowledgeType.RELEASE);
+                    }
+                }
+            );
+        }
+
+        ComplexShareConsumer(
+            String bootstrapServers,
+            String topicName,
+            String groupId,
+            Map<String, Object> additionalProperties,
+            Predicate<ConsumerRecords<K, V>> exitCriteria,
+            BiConsumer<ShareConsumer<K, V>, ConsumerRecord<K, V>> processFunc
+        ) {
             this.topicName = topicName;
-            configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-            configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-            configs.putAll(additionalProperties);
-            configs.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-            configs.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+            this.configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+            this.configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+            this.configs.putAll(additionalProperties);
+            this.configs.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+            this.configs.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+
+            Objects.requireNonNull(exitCriteria);
+            Objects.requireNonNull(processFunc);
+
+            this.exitCriteria = exitCriteria;
+            this.processFunc = processFunc;
         }
 
         void stop() {
@@ -2232,24 +2270,15 @@ public class ShareConsumerTest {
 
         @Override
         public void run() {
-            try (KafkaShareConsumer<String, String> consumer = new KafkaShareConsumer<>(configs)) {
+            try (ShareConsumer<K, V> consumer = new KafkaShareConsumer<>(configs)) {
                 consumer.subscribe(Set.of(this.topicName));
                 while (shouldLoop.get()) {
-                    ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(POLL_TIMEOUT_MS));
+                    ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(POLL_TIMEOUT_MS));
                     readCount.addAndGet(records.count());
-                    if (records.isEmpty()) {
+                    if (exitCriteria.test(records)) {
                         break;
                     }
-                    for (ConsumerRecord<String, String> record : records) {
-                        short deliveryCountBeforeAccept = (short) ((record.offset() + record.offset() / (MAX_DELIVERY_COUNT + 2)) % (MAX_DELIVERY_COUNT + 2));
-                        if (deliveryCountBeforeAccept == 0) {
-                            consumer.acknowledge(record, AcknowledgeType.REJECT);
-                        } else if (record.deliveryCount().get() == deliveryCountBeforeAccept) {
-                            consumer.acknowledge(record, AcknowledgeType.ACCEPT);
-                        } else {
-                            consumer.acknowledge(record, AcknowledgeType.RELEASE);
-                        }
-                    }
+                    records.forEach(record -> processFunc.accept(consumer, record));
                 }
             }
             isDone.set(true);
