@@ -50,11 +50,10 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupConfig;
@@ -62,7 +61,6 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -100,7 +98,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(1200)
 @Tag("integration")
-@ExtendWith(ClusterTestExtensions.class)
 @ClusterTestDefaults(
     serverProperties = {
         @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
