@@ -369,11 +369,6 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder setStartingVotersStatic() {
-            isStartingVotersStatic = true;
-            return this;
-        }
-
         Builder withLocalListeners(Endpoints localListeners) {
             this.localListeners = localListeners;
             return this;

@@ -401,11 +401,11 @@ public class KafkaRaftClientReconfigTest {
         );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+        checkLeaderMetricValues(3, 0, false, false, context);
 
         // Expect reply for AddVoter request
         context.pollUntilResponse();
         context.assertSentAddVoterResponse(Errors.NONE);
-        checkLeaderMetricValues(3, 0, false, false, context);
     }
 
     @Test
@@ -1071,11 +1071,11 @@ public class KafkaRaftClientReconfigTest {
         );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+        checkLeaderMetricValues(2, 1, false, false, context);
 
         // Expect reply for RemoveVoter request
         context.pollUntilResponse();
         context.assertSentRemoveVoterResponse(Errors.NONE);
-        checkLeaderMetricValues(2, 1, false, false, context);
     }
 
     @Test
