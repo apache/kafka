@@ -171,8 +171,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void globalTimestampedKeyValueStoreShouldBeReadOnly() {
-        foreachSetUp();
-
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.globalStore(anyString())).thenReturn(null);
 
@@ -708,8 +706,6 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldAddAndGetProcessorKeyValue() {
-        foreachSetUp();
-
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
 
         context = buildProcessorContextImpl(streamsConfig, stateManager);
