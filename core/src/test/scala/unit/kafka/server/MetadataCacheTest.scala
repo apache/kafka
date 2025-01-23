@@ -24,7 +24,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiMessage, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.{DirectoryId, Uuid}
+import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.KRaftVersion
@@ -36,6 +36,7 @@ import org.junit.jupiter.params.provider.MethodSource
 import java.util
 import java.util.Arrays.asList
 import java.util.Collections
+import java.util.stream.Collectors
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -509,6 +510,101 @@ class MetadataCacheTest {
     // This should not change `aliveBrokersFromCache`
     updateCache((0 to 3))
     assertEquals(initialBrokerIds.toSet, aliveBrokersFromCache.map(_.id).toSet)
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def testGetPartitionReplicaEndpoints(cache: MetadataCache): Unit = {
+    val securityProtocol = SecurityProtocol.PLAINTEXT
+    val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
+
+    // Set up broker data for the metadata cache
+    val numBrokers = 10
+    val fencedBrokerId = numBrokers / 3
+    val brokerRecords = (0 until numBrokers).map { brokerId =>
+      new RegisterBrokerRecord()
+        .setBrokerId(brokerId)
+        .setFenced(brokerId == fencedBrokerId)
+        .setRack("rack" + (brokerId % 3))
+        .setEndPoints(new BrokerEndpointCollection(
+          Seq(new BrokerEndpoint()
+            .setHost("foo" + brokerId)
+            .setPort(9092)
+            .setSecurityProtocol(securityProtocol.id)
+            .setName(listenerName.value)
+          ).iterator.asJava))
+    }
+
+    // Set up a single topic (with many partitions) for the metadata cache
+    val topic = "many-partitions-topic"
+    val topicId = Uuid.randomUuid()
+    val topicRecords = Seq[ApiMessage](new TopicRecord().setName(topic).setTopicId(topicId))
+
+    // Set up a number of partitions such that each different combination of
+    // $replicationFactor brokers is made a replica set for exactly one partition
+    val replicationFactor = 3
+    val replicaSets = getAllReplicaSets(numBrokers, replicationFactor)
+    val numPartitions = replicaSets.length
+    val partitionRecords = (0 until numPartitions).map { partitionId =>
+      val replicas = replicaSets(partitionId)
+      val nonFencedReplicas = replicas.stream().filter(id => id != fencedBrokerId).collect(Collectors.toList())
+      new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(partitionId)
+        .setReplicas(replicas)
+        .setLeader(replicas.get(0))
+        .setIsr(nonFencedReplicas)
+        .setEligibleLeaderReplicas(nonFencedReplicas)
+    }
+
+    // Load the prepared data in the metadata cache
+    MetadataCacheTest.updateCache(cache, brokerRecords ++ topicRecords ++ partitionRecords)
+
+    (0 until numPartitions).foreach { partitionId =>
+      val tp = new TopicPartition(topic, partitionId)
+      val brokerIdToNodeMap = cache.getPartitionReplicaEndpoints(tp, listenerName)
+      val replicaSet = brokerIdToNodeMap.keySet
+      val expectedReplicaSet = partitionRecords(partitionId).replicas().asScala.toSet
+      // Verify that we have endpoints for exactly the non-fenced brokers of the replica set
+      if (expectedReplicaSet.contains(fencedBrokerId)) {
+        assertEquals(expectedReplicaSet,
+                     replicaSet + fencedBrokerId,
+                     s"Unexpected partial replica set for partition $partitionId")
+      } else {
+        assertEquals(expectedReplicaSet,
+                     replicaSet,
+                     s"Unexpected replica set for partition $partitionId")
+      }
+      // Verify that the endpoint data for each non-fenced replica is as expected
+      replicaSet.foreach { brokerId =>
+        val brokerNode =
+          brokerIdToNodeMap.getOrElse(
+            brokerId, fail(s"No brokerNode for broker $brokerId and partition $partitionId"))
+        val expectedBroker = brokerRecords(brokerId)
+        val expectedEndpoint = expectedBroker.endPoints().find(listenerName.value())
+        assertEquals(expectedEndpoint.host(),
+                     brokerNode.host(),
+                     s"Unexpected host for broker $brokerId and partition $partitionId")
+        assertEquals(expectedEndpoint.port(),
+                     brokerNode.port(),
+                     s"Unexpected port for broker $brokerId and partition $partitionId")
+        assertEquals(expectedBroker.rack(),
+                     brokerNode.rack(),
+                     s"Unexpected rack for broker $brokerId and partition $partitionId")
+      }
+    }
+
+    val tp = new TopicPartition(topic, numPartitions)
+    val brokerIdToNodeMap = cache.getPartitionReplicaEndpoints(tp, listenerName)
+    assertTrue(brokerIdToNodeMap.isEmpty)
+  }
+
+  private def getAllReplicaSets(numBrokers: Int,
+                                replicationFactor: Int): Array[util.List[Integer]] = {
+    (0 until numBrokers)
+      .combinations(replicationFactor)
+      .map(replicaSet => replicaSet.map(Integer.valueOf).toList.asJava)
+      .toArray
   }
 
   @Test
