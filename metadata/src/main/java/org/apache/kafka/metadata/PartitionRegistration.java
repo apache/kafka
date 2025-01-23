@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.slf4j.Logger;
 
 import java.util.Arrays;
@@ -387,7 +388,8 @@ public class PartitionRegistration {
             setLeaderRecoveryState(leaderRecoveryState.value()).
             setLeaderEpoch(leaderEpoch).
             setPartitionEpoch(partitionEpoch);
-        if (options.metadataVersion().isElrSupported()) {
+        if (options.finalizedFeatures().getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >=
+            EligibleLeaderReplicasVersion.ELRV_1.featureLevel()) {
             // The following are tagged fields, we should only set them when there are some contents, in order to save
             // spaces.
             if (elr.length > 0) record.setEligibleLeaderReplicas(Replicas.toList(elr));

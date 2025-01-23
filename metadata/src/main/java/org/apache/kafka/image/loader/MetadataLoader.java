@@ -295,6 +295,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         ImageReWriter writer = new ImageReWriter(delta);
         image.write(writer, new ImageWriterOptions.Builder().
                 setMetadataVersion(image.features().metadataVersion()).
+                setFinalizedFeatures(image.features().finalizedVersions()).
                 build());
         // ImageReWriter#close invokes finishSnapshot, so we don't need to invoke it here.
         SnapshotManifest manifest = new SnapshotManifest(

@@ -505,6 +505,7 @@ public class ClusterControlManagerTest {
 
         ImageWriterOptions options = new ImageWriterOptions.Builder().
                 setMetadataVersion(metadataVersion).
+                setFinalizedFeatures(Collections.emptyMap()).
                 setLossHandler(__ -> { }).
                 build();
         assertEquals(new ApiMessageAndVersion(new RegisterBrokerRecord().

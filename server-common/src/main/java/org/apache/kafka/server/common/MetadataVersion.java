@@ -152,7 +152,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV0;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV1;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 

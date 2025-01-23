@@ -20,6 +20,7 @@ package org.apache.kafka.image.writer;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.util.Map;
 import java.util.function.Consumer;
 
 
@@ -30,6 +31,7 @@ public final class ImageWriterOptions {
     public static class Builder {
         private MetadataVersion metadataVersion;
         private MetadataVersion requestedMetadataVersion;
+        private Map<String, Short> finalizedFeatures;
         private Consumer<UnwritableMetadataException> lossHandler = e -> {
             throw e;
         };
@@ -54,6 +56,11 @@ public final class ImageWriterOptions {
             return this;
         }
 
+        public Builder setFinalizedFeatures(Map<String, Short> features) {
+            finalizedFeatures = features;
+            return this;
+        }
+
         public MetadataVersion metadataVersion() {
             return metadataVersion;
         }
@@ -62,32 +69,42 @@ public final class ImageWriterOptions {
             return requestedMetadataVersion;
         }
 
+        public Map<String, Short> finalizedFeatures() {
+            return finalizedFeatures;
+        }
+
         public Builder setLossHandler(Consumer<UnwritableMetadataException> lossHandler) {
             this.lossHandler = lossHandler;
             return this;
         }
 
         public ImageWriterOptions build() {
-            return new ImageWriterOptions(metadataVersion, lossHandler, requestedMetadataVersion);
+            return new ImageWriterOptions(metadataVersion, lossHandler, requestedMetadataVersion, finalizedFeatures);
         }
     }
 
     private final MetadataVersion metadataVersion;
     private final MetadataVersion requestedMetadataVersion;
     private final Consumer<UnwritableMetadataException> lossHandler;
+    private final Map<String, Short> finalizedFeatures;
 
     private ImageWriterOptions(
         MetadataVersion metadataVersion,
         Consumer<UnwritableMetadataException> lossHandler,
-        MetadataVersion orgMetadataVersion
+        MetadataVersion orgMetadataVersion,
+        Map<String, Short> finalizedFeatures
     ) {
         this.metadataVersion = metadataVersion;
         this.lossHandler = lossHandler;
         this.requestedMetadataVersion = orgMetadataVersion;
+        this.finalizedFeatures = finalizedFeatures;
     }
 
     public MetadataVersion metadataVersion() {
         return metadataVersion;
+    }
+    public Map<String, Short> finalizedFeatures() {
+        return finalizedFeatures;
     }
 
     public void handleLoss(String loss) {
