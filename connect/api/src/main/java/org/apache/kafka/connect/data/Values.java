@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.data.Schema.Type;
+import org.apache.kafka.connect.errors.DataException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -35,12 +42,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
-
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.data.Schema.Type;
-import org.apache.kafka.connect.errors.DataException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Utility for converting from one Connect value to a different form. This is useful when the caller expects a value of a particular type
