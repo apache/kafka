@@ -2250,18 +2250,14 @@ public class ShareConsumerTest {
             Predicate<ConsumerRecords<K, V>> exitCriteria,
             BiConsumer<ShareConsumer<K, V>, ConsumerRecord<K, V>> processFunc
         ) {
+            this.exitCriteria = Objects.requireNonNull(exitCriteria);
+            this.processFunc = Objects.requireNonNull(processFunc);
             this.topicName = topicName;
             this.configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
             this.configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
             this.configs.putAll(additionalProperties);
             this.configs.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
             this.configs.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-
-            Objects.requireNonNull(exitCriteria);
-            Objects.requireNonNull(processFunc);
-
-            this.exitCriteria = exitCriteria;
-            this.processFunc = processFunc;
         }
 
         void stop() {
