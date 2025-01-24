@@ -450,6 +450,8 @@ public class SharePartition {
                 stateEpoch = partitionData.stateEpoch();
 
                 List<PersisterStateBatch> stateBatches = partitionData.stateBatches();
+                boolean isGapPresentInStateBatches = false;
+                long previousOffset = startOffset;
                 for (PersisterStateBatch stateBatch : stateBatches) {
                     if (stateBatch.firstOffset() < startOffset) {
                         log.error("Invalid state batch found for the share partition: {}-{}. The base offset: {}"
@@ -458,6 +460,10 @@ public class SharePartition {
                         throwable = new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
                         return;
                     }
+                    if (stateBatch.firstOffset() > previousOffset) {
+                        isGapPresentInStateBatches = true;
+                    }
+                    previousOffset = stateBatch.lastOffset() + 1;
                     InFlightBatch inFlightBatch = new InFlightBatch(EMPTY_MEMBER_ID, stateBatch.firstOffset(),
                         stateBatch.lastOffset(), RecordState.forId(stateBatch.deliveryState()), stateBatch.deliveryCount(), null);
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
@@ -469,7 +475,7 @@ public class SharePartition {
                     findNextFetchOffset.set(true);
                     endOffset = cachedState.lastEntry().getValue().lastOffset();
                     // initialReadGapOffset is not required, if there are no gaps in the read state response
-                    if (isGapPresentInCachedState()) {
+                    if (isGapPresentInStateBatches) {
                         initialReadGapOffset = new InitialReadGapOffset(endOffset, startOffset);
                     }
                     // In case the persister read state RPC result contains no AVAILABLE records, we can update cached state
@@ -1283,6 +1289,10 @@ public class SharePartition {
                 startOffset = firstAcquiredOffset;
             }
 
+            // If the new batch acquired is part of a gap in the cachedState, then endOffset should not be updated.
+            // Ex. if startOffset is 10, endOffset is 30, there is a gap from 10 to 20, and an inFlight batch from 21 to 30.
+            // In this case, the nextFetchOffset results in 10 and the records are fetched. A new batch is acquired from
+            // 10 to 20, but the endOffset remains at 30.
             if (lastAcquiredOffset > endOffset) {
                 endOffset = lastAcquiredOffset;
             }
@@ -1995,23 +2005,6 @@ public class SharePartition {
         return offset;
     }
 
-    /**
-     * Method to find if there are any gaps in the cachedState. Ex. if startOffset is 10 and there is an inflight batch (15, 20)
-     * then there is a gap (10-14)
-     *
-     * @return true is gas are present in the cachedState, false otherwise
-     */
-    private boolean isGapPresentInCachedState() {
-        long previousOffset = startOffset;
-        for (Map.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
-            if (entry.getKey() > previousOffset) {
-                return true;
-            }
-            previousOffset = entry.getValue().lastOffset() + 1;
-        }
-        return false;
-    }
-
     // Visible for testing
     CompletableFuture<Void> writeShareGroupState(List<PersisterStateBatch> stateBatches) {
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -2315,6 +2308,40 @@ public class SharePartition {
     // Visible for testing.
     Timer timer() {
         return timer;
+    }
+
+    // Visible for testing
+    Optional<InitialReadGapOffset> initialReadGapOffset() {
+        return Optional.ofNullable(initialReadGapOffset);
+    }
+
+    /**
+     * The InitialReadGapOffset class is used to record the gap start and end offset of the probable gaps
+     * of available records which are neither known to Persister nor to SharePartition. Share Partition
+     * will use this information to determine the next fetch offset and should try to fetch the records
+     * in the gap.
+     */
+    // Visible for Testing
+    static class InitialReadGapOffset {
+        private final long endOffset;
+        private long gapStartOffset;
+
+        InitialReadGapOffset(long endOffset, long gapStartOffset) {
+            this.endOffset = endOffset;
+            this.gapStartOffset = gapStartOffset;
+        }
+
+        long endOffset() {
+            return endOffset;
+        }
+
+        long gapStartOffset() {
+            return gapStartOffset;
+        }
+
+        void gapStartOffset(long gapStartOffset) {
+            this.gapStartOffset = gapStartOffset;
+        }
     }
 
     // Visible for testing
@@ -2650,34 +2677,6 @@ public class SharePartition {
         void updateOffsetMetadata(long offset, LogOffsetMetadata offsetMetadata) {
             this.offset = offset;
             this.offsetMetadata = offsetMetadata;
-        }
-    }
-
-    /**
-     * The InitialReadGapOffset class is used to record the gap start and end offset of the probable gaps
-     * of available records which are neither known to Persister nor to SharePartition. Share Partition
-     * will use this information to determine the next fetch offset and should try to fetch the records
-     * in the gap.
-     */
-    private static class InitialReadGapOffset {
-        private final long endOffset;
-        private long gapStartOffset;
-
-        InitialReadGapOffset(long endOffset, long gapStartOffset) {
-            this.endOffset = endOffset;
-            this.gapStartOffset = gapStartOffset;
-        }
-
-        long endOffset() {
-            return endOffset;
-        }
-
-        long gapStartOffset() {
-            return gapStartOffset;
-        }
-
-        void gapStartOffset(long gapStartOffset) {
-            this.gapStartOffset = gapStartOffset;
         }
     }
 }
