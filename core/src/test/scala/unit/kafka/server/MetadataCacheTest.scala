@@ -322,8 +322,7 @@ class MetadataCacheTest {
         .setReplicas(replicas))
     MetadataCacheTest.updateCache(cache, brokers ++ topicRecords ++ partitionStates)
 
-    // Validate errorUnavailableEndpoints = false
-    val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableEndpoints = false)
+    val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName)
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
@@ -337,22 +336,6 @@ class MetadataCacheTest {
     assertEquals(Errors.NONE.code, partitionMetadata.errorCode)
     assertEquals(Set(0, 1), partitionMetadata.replicaNodes.asScala.toSet)
     assertEquals(Set(0), partitionMetadata.isrNodes.asScala.toSet)
-
-    // Validate errorUnavailableEndpoints = true
-    val topicMetadatasWithError = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableEndpoints = true)
-    assertEquals(1, topicMetadatasWithError.size)
-
-    val topicMetadataWithError = topicMetadatasWithError.head
-    assertEquals(Errors.NONE.code, topicMetadataWithError.errorCode)
-
-    val partitionMetadatasWithError = topicMetadataWithError.partitions()
-    assertEquals(1, partitionMetadatasWithError.size)
-
-    val partitionMetadataWithError = partitionMetadatasWithError.get(0)
-    assertEquals(0, partitionMetadataWithError.partitionIndex)
-    assertEquals(Errors.REPLICA_NOT_AVAILABLE.code, partitionMetadataWithError.errorCode)
-    assertEquals(Set(0), partitionMetadataWithError.replicaNodes.asScala.toSet)
-    assertEquals(Set(0), partitionMetadataWithError.isrNodes.asScala.toSet)
   }
 
   @ParameterizedTest
@@ -396,8 +379,7 @@ class MetadataCacheTest {
       .setReplicas(replicas))
     MetadataCacheTest.updateCache(cache, brokers ++ topicRecords ++ partitionStates)
 
-    // Validate errorUnavailableEndpoints = false
-    val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableEndpoints = false)
+    val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName)
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
@@ -411,22 +393,6 @@ class MetadataCacheTest {
     assertEquals(Errors.NONE.code, partitionMetadata.errorCode)
     assertEquals(Set(0), partitionMetadata.replicaNodes.asScala.toSet)
     assertEquals(Set(0, 1), partitionMetadata.isrNodes.asScala.toSet)
-
-    // Validate errorUnavailableEndpoints = true
-    val topicMetadatasWithError = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableEndpoints = true)
-    assertEquals(1, topicMetadatasWithError.size)
-
-    val topicMetadataWithError = topicMetadatasWithError.head
-    assertEquals(Errors.NONE.code, topicMetadataWithError.errorCode)
-
-    val partitionMetadatasWithError = topicMetadataWithError.partitions
-    assertEquals(1, partitionMetadatasWithError.size)
-
-    val partitionMetadataWithError = partitionMetadatasWithError.get(0)
-    assertEquals(0, partitionMetadataWithError.partitionIndex)
-    assertEquals(Errors.REPLICA_NOT_AVAILABLE.code, partitionMetadataWithError.errorCode)
-    assertEquals(Set(0), partitionMetadataWithError.replicaNodes.asScala.toSet)
-    assertEquals(Set(0), partitionMetadataWithError.isrNodes.asScala.toSet)
   }
 
   @ParameterizedTest

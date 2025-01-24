@@ -36,8 +36,6 @@ trait MetadataCache extends ConfigRepository {
    *
    * @param topics                      The set of topics.
    * @param listenerName                The listener name.
-   * @param errorUnavailableEndpoints   If true, we return an error on unavailable brokers. This is used to support
-   *                                    MetadataResponse version 0.
    * @param errorUnavailableListeners   If true, return LEADER_NOT_AVAILABLE if the listener is not found on the leader.
    *                                    This is used for MetadataResponse versions 0-5.
    * @return                            A collection of topic metadata.
@@ -45,7 +43,6 @@ trait MetadataCache extends ConfigRepository {
   def getTopicMetadata(
     topics: collection.Set[String],
     listenerName: ListenerName,
-    errorUnavailableEndpoints: Boolean = false,
     errorUnavailableListeners: Boolean = false): collection.Seq[MetadataResponseData.MetadataResponseTopic]
 
   def getAllTopics(): collection.Set[String]

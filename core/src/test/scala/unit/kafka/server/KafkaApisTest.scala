@@ -3585,7 +3585,6 @@ class KafkaApisTest extends Logging {
     when(metadataCache.getTopicMetadata(
       ArgumentMatchers.eq(topicsReturnedFromMetadataCacheForAuthorization),
       any[ListenerName],
-      anyBoolean,
       anyBoolean
     )).thenReturn(Seq(
       new MetadataResponseTopic()

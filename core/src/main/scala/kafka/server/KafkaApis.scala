@@ -805,11 +805,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     allowAutoTopicCreation: Boolean,
     topics: Set[String],
     listenerName: ListenerName,
-    errorUnavailableEndpoints: Boolean,
     errorUnavailableListeners: Boolean
   ): Seq[MetadataResponseTopic] = {
-    val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
-      errorUnavailableEndpoints, errorUnavailableListeners)
+    val topicResponses = metadataCache.getTopicMetadata(topics, listenerName, errorUnavailableListeners)
 
     if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
       topicResponses
@@ -899,7 +897,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
     val unauthorizedForDescribeTopicMetadata =
       // In case of all topics, don't include topics unauthorized for Describe
-      if ((requestVersion == 0 && (metadataRequest.topics == null || metadataRequest.topics.isEmpty)) || metadataRequest.isAllTopics)
+      if (metadataRequest.isAllTopics)
         Set.empty[MetadataResponseTopic]
       else if (useTopicId) {
         // Topic IDs are not considered sensitive information, so returning TOPIC_AUTHORIZATION_FAILED is OK
@@ -911,16 +909,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, isInternal = false, util.Collections.emptyList()))
       }
 
-    // In version 0, we returned an error when brokers with replicas were unavailable,
-    // while in higher versions we simply don't include the broker in the returned broker list
-    val errorUnavailableEndpoints = requestVersion == 0
     // In versions 5 and below, we returned LEADER_NOT_AVAILABLE if a matching listener was not found on the leader.
     // From version 6 onwards, we return LISTENER_NOT_FOUND to enable diagnosis of configuration errors.
     val errorUnavailableListeners = requestVersion >= 6
 
     val allowAutoCreation = config.autoCreateTopicsEnable && metadataRequest.allowAutoTopicCreation && !metadataRequest.isAllTopics
     val topicMetadata = getTopicMetadata(request, metadataRequest.isAllTopics, allowAutoCreation, authorizedTopics,
-      request.context.listenerName, errorUnavailableEndpoints, errorUnavailableListeners)
+      request.context.listenerName, errorUnavailableListeners)
 
     var clusterAuthorizedOperations = Int.MinValue // Default value in the schema
     if (requestVersion >= 8) {

@@ -60,42 +60,25 @@ class KRaftMetadataCache(
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
   // we should be careful about adding additional logic here.
-  // filterUnavailableEndpoints exists to support v0 MetadataResponses
   private def maybeFilterAliveReplicas(image: MetadataImage,
                                        brokers: Array[Int],
-                                       listenerName: ListenerName,
-                                       filterUnavailableEndpoints: Boolean): java.util.List[Integer] = {
-    if (!filterUnavailableEndpoints) {
+                                       listenerName: ListenerName): java.util.List[Integer] = {
       Replicas.toList(brokers)
-    } else {
-      val res = new util.ArrayList[Integer](brokers.length)
-      for (brokerId <- brokers) {
-        Option(image.cluster().broker(brokerId)).foreach { b =>
-          if (!b.fenced() && b.listeners().containsKey(listenerName.value())) {
-            res.add(brokerId)
-          }
-        }
-      }
-      res
-    }
   }
 
   def currentImage(): MetadataImage = _currentImage
 
-  // errorUnavailableEndpoints exists to support v0 MetadataResponses
   // If errorUnavailableListeners=true, return LISTENER_NOT_FOUND if listener is missing on the broker.
   // Otherwise, return LEADER_NOT_AVAILABLE for broker unavailable and missing listener (Metadata response v5 and below).
-  private def getPartitionMetadata(image: MetadataImage, topicName: String, listenerName: ListenerName, errorUnavailableEndpoints: Boolean,
+  private def getPartitionMetadata(image: MetadataImage, topicName: String, listenerName: ListenerName,
                                    errorUnavailableListeners: Boolean): Option[Iterator[MetadataResponsePartition]] = {
     Option(image.topics().getTopic(topicName)) match {
       case None => None
       case Some(topic) => Some(topic.partitions().entrySet().asScala.map { entry =>
         val partitionId = entry.getKey
         val partition = entry.getValue
-        val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas,
-          listenerName, errorUnavailableEndpoints)
-        val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName,
-          errorUnavailableEndpoints)
+        val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas, listenerName)
+        val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName)
         val offlineReplicas = getOfflineReplicas(image, partition, listenerName)
         val maybeLeader = getAliveEndpoint(image, partition.leader, listenerName)
         maybeLeader match {
@@ -171,9 +154,8 @@ class KRaftMetadataCache(
         for (partitionId <- startIndex until upperIndex) {
           topic.partitions().get(partitionId) match {
             case partition : PartitionRegistration => {
-              val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas,
-                listenerName, filterUnavailableEndpoints = false)
-              val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, filterUnavailableEndpoints = false)
+              val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas, listenerName)
+              val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName)
               val offlineReplicas = getOfflineReplicas(image, partition, listenerName)
               val maybeLeader = getAliveEndpoint(image, partition.leader, listenerName)
               maybeLeader match {
@@ -238,14 +220,12 @@ class KRaftMetadataCache(
     Option(image.cluster().broker(id)).flatMap(_.node(listenerName.value()).toScala)
   }
 
-  // errorUnavailableEndpoints exists to support v0 MetadataResponses
   override def getTopicMetadata(topics: Set[String],
                                 listenerName: ListenerName,
-                                errorUnavailableEndpoints: Boolean = false,
                                 errorUnavailableListeners: Boolean = false): Seq[MetadataResponseTopic] = {
     val image = _currentImage
     topics.toSeq.flatMap { topic =>
-      getPartitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
+      getPartitionMetadata(image, topic, listenerName, errorUnavailableListeners).map { partitionMetadata =>
         new MetadataResponseTopic()
           .setErrorCode(Errors.NONE.code)
           .setName(topic)

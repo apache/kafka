@@ -71,7 +71,6 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
                 metadataCache.getTopicMetadata(
                     CollectionConverters.asScala(topicSet),
                     interBrokerListenerName,
-                    false,
                     false
                 )
             );
