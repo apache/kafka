@@ -16,14 +16,6 @@
  */
 package org.apache.kafka.connect.data;
 
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.data.Schema.Type;
-import org.apache.kafka.connect.data.Values.Parser;
-import org.apache.kafka.connect.errors.DataException;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -45,6 +37,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.data.Schema.Type;
+import org.apache.kafka.connect.data.Values.Parser;
+import org.apache.kafka.connect.errors.DataException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -53,6 +49,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 public class ValuesTest {
 
@@ -1182,12 +1180,15 @@ public class ValuesTest {
     }
     @Test
     public void avoidCpuAndMemoryIssuesConvertingExtremeBigDecimals() {
-        String PARSING_BIG = "1e+100000000"; // new BigDecimal().setScale(0, RoundingMode.FLOOR) takes around two minutes and uses 3GB;
-        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, PARSING_BIG), Values.parseString(PARSING_BIG));
+        String parsingBig = "1e+100000000"; // new BigDecimal().setScale(0, RoundingMode.FLOOR) takes around two minutes and uses 3GB;
+        BigDecimal valueBig = new BigDecimal(parsingBig);
+        assertEquals(new SchemaAndValue(Decimal.schema(-100000000), valueBig), Values.parseString(parsingBig), "parsing number that's too big");
 
-        String PARSING_SMALL = "1e-100000000";
-        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, PARSING_SMALL), Values.parseString(PARSING_SMALL));
+        String parsingSmall = "1e-100000000";
+        BigDecimal valueSmall = new BigDecimal(parsingSmall);
+        assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, (float) valueSmall.doubleValue()), Values.parseString(parsingSmall), "parsing number that's too big, strictly this should return a bigdecimal");
     }
+
     protected void assertParsed(String input) {
         assertParsed(input, input);
     }

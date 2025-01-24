@@ -16,17 +16,9 @@
  */
 package org.apache.kafka.connect.data;
 
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.data.Schema.Type;
-import org.apache.kafka.connect.errors.DataException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.text.CharacterIterator;
 import java.text.DateFormat;
@@ -43,6 +35,12 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
+
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.data.Schema.Type;
+import org.apache.kafka.connect.errors.DataException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Utility for converting from one Connect value to a different form. This is useful when the caller expects a value of a particular type
@@ -71,8 +69,6 @@ public class Values {
     static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
     static final String ISO_8601_TIME_FORMAT_PATTERN = "HH:mm:ss.SSS'Z'";
     static final String ISO_8601_TIMESTAMP_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_FORMAT_PATTERN;
-    private static BigDecimal TOO_BIG = new BigDecimal("1e1000000");
-    private static BigDecimal TOO_SMALL = new BigDecimal("1e-1000000");
 
     private static final Pattern TWO_BACKSLASHES = Pattern.compile("\\\\");
 
@@ -1014,6 +1010,10 @@ public class Values {
             return parseAsTemporal(token);
         }
 
+        private static boolean isWholeNumber(BigDecimal bd) {
+            return bd.signum() == 0 || bd.scale() <= 0 || bd.stripTrailingZeros().scale() <= 0;
+        }
+
         private static SchemaAndValue parseAsNumber(String token) {
             // Try to parse as a number ...
             BigDecimal decimal = new BigDecimal(token);
@@ -1034,16 +1034,16 @@ public class Values {
             }
         }
 
+        private static final BigDecimal BIGGER_THAN_LONG = new BigDecimal("1e19");
+
         private static SchemaAndValue parseAsExactDecimal(BigDecimal decimal) {
             BigDecimal abs = decimal.abs();
-            if (abs.compareTo(TOO_BIG) > 0 || (abs.compareTo(TOO_SMALL) < 0 && BigDecimal.ZERO.compareTo(abs) != 0)) {
-                throw new NumberFormatException("outside efficient parsing range");
+            if (abs.compareTo(BIGGER_THAN_LONG) > 0 || (abs.compareTo(BigDecimal.ONE) < 0 && abs.compareTo(BigDecimal.ZERO) != 0)) {
+                return null;
             }
-            BigDecimal ceil = decimal.setScale(0, RoundingMode.CEILING);
-            BigDecimal floor = decimal.setScale(0, RoundingMode.FLOOR);
-            if (ceil.equals(floor)) {
-                BigInteger num = ceil.toBigIntegerExact();
-                if (ceil.precision() >= 19 && (num.compareTo(LONG_MIN) < 0 || num.compareTo(LONG_MAX) > 0)) {
+            if (isWholeNumber(decimal)) {
+                BigInteger num = decimal.toBigIntegerExact();
+                if (num.compareTo(LONG_MIN) < 0 || num.compareTo(LONG_MAX) > 0) {
                     return null;
                 }
                 long integral = num.longValue();
