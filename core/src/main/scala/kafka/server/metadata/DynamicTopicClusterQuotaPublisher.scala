@@ -13,13 +13,18 @@
  **/
 package kafka.server.metadata
 
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.server.fault.FaultHandler
 
+/**
+ * Publishing dynamic topic or cluster changes to the client quota manager.
+ * Temporary solution since Cluster objects are immutable and costly to update for every metadata change.
+ * See KAFKA-18239 to trace the issue.
+ */
 class DynamicTopicClusterQuotaPublisher (
   clusterId: String,
   conf: KafkaConfig,
@@ -47,7 +52,7 @@ class DynamicTopicClusterQuotaPublisher (
     try {
       quotaManagers.clientQuotaCallback().ifPresent(clientQuotaCallback => {
         if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
-          val cluster = KRaftMetadataCache.toCluster(clusterId, newImage)
+          val cluster = MetadataCache.toCluster(clusterId, newImage)
           if (clientQuotaCallback.updateClusterMetadata(cluster)) {
             quotaManagers.fetch.updateQuotaMetricConfigs()
             quotaManagers.produce.updateQuotaMetricConfigs()

@@ -340,7 +340,7 @@ class ControllerServer(
         clusterId,
         config,
         sharedServer.metadataPublishingFaultHandler,
-        "broker",
+        "controller",
         quotaManagers,
       ))
 
