@@ -488,25 +488,25 @@ public class OffsetMetadataManagerTest {
         ) {
             snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
 
-            ApiMessageAndVersion key = record.key();
+            ApiMessage key = record.key();
             ApiMessageAndVersion value = record.value();
 
             if (key == null) {
                 throw new IllegalStateException("Received a null key in " + record);
             }
 
-            switch (CoordinatorRecordType.fromId(key.version())) {
+            switch (CoordinatorRecordType.fromId(record.key().apiKey())) {
                 case OFFSET_COMMIT:
                     offsetMetadataManager.replay(
                         lastWrittenOffset,
                         producerId,
-                        (OffsetCommitKey) key.message(),
+                        (OffsetCommitKey) key,
                         (OffsetCommitValue) messageOrNull(value)
                     );
                     break;
 
                 default:
-                    throw new IllegalStateException("Received an unknown record type " + key.version()
+                    throw new IllegalStateException("Received an unknown record type " + record.key().apiKey()
                         + " in " + record);
             }
 

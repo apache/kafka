@@ -51,13 +51,11 @@ public class ShareCoordinatorRecordHelpersTest {
                 .build()
         );
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareSnapshotKey()
-                    .setGroupId(groupId)
-                    .setTopicId(topicId)
-                    .setPartition(partitionId),
-                (short) 0),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId),
             new ApiMessageAndVersion(
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
@@ -94,13 +92,11 @@ public class ShareCoordinatorRecordHelpersTest {
                 .build()
         );
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareUpdateKey()
-                    .setGroupId(groupId)
-                    .setTopicId(topicId)
-                    .setPartition(partitionId),
-                (short) 1),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ShareUpdateKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId),
             new ApiMessageAndVersion(
                 new ShareUpdateValue()
                     .setSnapshotEpoch(0)

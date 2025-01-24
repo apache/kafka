@@ -49,18 +49,8 @@ import java.util.stream.Collectors;
  * @param userEndpoint                  The user endpoint exposed for Interactive Queries by the Streams client that
  *                                      contains the member.
  * @param clientTags                    Tags of the client of the member used for rack-aware assignment.
- * @param assignedActiveTasks           Active tasks assigned to the member.
- *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
- * @param assignedStandbyTasks          Standby tasks assigned to the member.
- *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
- * @param assignedWarmupTasks           Warm-up tasks assigned to the member.
- *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
- * @param activeTasksPendingRevocation  Active tasks assigned to the member pending revocation.
- *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
- * @param standbyTasksPendingRevocation Standby tasks assigned to the member pending revocation.
- *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
- * @param warmupTasksPendingRevocation  Warm-up tasks assigned to the member pending revocation.
- *                                      The key of the map is the subtopology ID and the value is the set of partition IDs.
+ * @param assignedTasks                 Tasks assigned to the member.
+ * @param tasksPendingRevocation        Tasks owned by the member pending revocation.
  */
 @SuppressWarnings("checkstyle:JavaNCSS")
 public record StreamsGroupMember(String memberId,
@@ -76,22 +66,12 @@ public record StreamsGroupMember(String memberId,
                                  String processId,
                                  Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint,
                                  Map<String, String> clientTags,
-                                 Map<String, Set<Integer>> assignedActiveTasks,
-                                 Map<String, Set<Integer>> assignedStandbyTasks,
-                                 Map<String, Set<Integer>> assignedWarmupTasks,
-                                 Map<String, Set<Integer>> activeTasksPendingRevocation,
-                                 Map<String, Set<Integer>> standbyTasksPendingRevocation,
-                                 Map<String, Set<Integer>> warmupTasksPendingRevocation) {
+                                 TasksTuple assignedTasks,
+                                 TasksTuple tasksPendingRevocation) {
 
     public StreamsGroupMember {
         Objects.requireNonNull(memberId, "memberId cannot be null");
         clientTags = clientTags != null ? Collections.unmodifiableMap(clientTags) : null;
-        assignedActiveTasks = assignedActiveTasks != null ? Collections.unmodifiableMap(assignedActiveTasks) : null;
-        assignedStandbyTasks = assignedStandbyTasks != null ? Collections.unmodifiableMap(assignedStandbyTasks) : null;
-        assignedWarmupTasks = assignedWarmupTasks != null ? Collections.unmodifiableMap(assignedWarmupTasks) : null;
-        activeTasksPendingRevocation = activeTasksPendingRevocation != null ? Collections.unmodifiableMap(activeTasksPendingRevocation) : null;
-        standbyTasksPendingRevocation = standbyTasksPendingRevocation != null ? Collections.unmodifiableMap(standbyTasksPendingRevocation) : null;
-        warmupTasksPendingRevocation = warmupTasksPendingRevocation != null ? Collections.unmodifiableMap(warmupTasksPendingRevocation) : null;
     }
 
     /**
@@ -114,12 +94,8 @@ public record StreamsGroupMember(String memberId,
         private String processId = null;
         private Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint = null;
         private Map<String, String> clientTags = null;
-        private Map<String, Set<Integer>> assignedActiveTasks = null;
-        private Map<String, Set<Integer>> assignedStandbyTasks = null;
-        private Map<String, Set<Integer>> assignedWarmupTasks = null;
-        private Map<String, Set<Integer>> activeTasksPendingRevocation = null;
-        private Map<String, Set<Integer>> standbyTasksPendingRevocation = null;
-        private Map<String, Set<Integer>> warmupTasksPendingRevocation = null;
+        private TasksTuple assignedTasks = null;
+        private TasksTuple tasksPendingRevocation = null;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId, "memberId cannot be null");
@@ -141,12 +117,8 @@ public record StreamsGroupMember(String memberId,
             this.userEndpoint = member.userEndpoint;
             this.clientTags = member.clientTags;
             this.state = member.state;
-            this.assignedActiveTasks = member.assignedActiveTasks;
-            this.assignedStandbyTasks = member.assignedStandbyTasks;
-            this.assignedWarmupTasks = member.assignedWarmupTasks;
-            this.activeTasksPendingRevocation = member.activeTasksPendingRevocation;
-            this.standbyTasksPendingRevocation = member.standbyTasksPendingRevocation;
-            this.warmupTasksPendingRevocation = member.warmupTasksPendingRevocation;
+            this.assignedTasks = member.assignedTasks;
+            this.tasksPendingRevocation = member.tasksPendingRevocation;
         }
 
         public Builder updateMemberEpoch(int memberEpoch) {
@@ -251,50 +223,13 @@ public record StreamsGroupMember(String memberId,
             return this;
         }
 
-        public Builder setAssignment(Assignment assignment) {
-            this.assignedActiveTasks = assignment.activeTasks();
-            this.assignedStandbyTasks = assignment.standbyTasks();
-            this.assignedWarmupTasks = assignment.warmupTasks();
+        public Builder setAssignedTasks(TasksTuple assignedTasks) {
+            this.assignedTasks = assignedTasks;
             return this;
         }
 
-        public Builder setAssignedActiveTasks(Map<String, Set<Integer>> assignedActiveTasks) {
-            this.assignedActiveTasks = assignedActiveTasks;
-            return this;
-        }
-
-        public Builder setAssignedStandbyTasks(Map<String, Set<Integer>> assignedStandbyTasks) {
-            this.assignedStandbyTasks = assignedStandbyTasks;
-            return this;
-        }
-
-        public Builder setAssignedWarmupTasks(Map<String, Set<Integer>> assignedWarmupTasks) {
-            this.assignedWarmupTasks = assignedWarmupTasks;
-            return this;
-        }
-
-        public Builder setAssignmentPendingRevocation(Assignment assignment) {
-            this.activeTasksPendingRevocation = assignment.activeTasks();
-            this.standbyTasksPendingRevocation = assignment.standbyTasks();
-            this.warmupTasksPendingRevocation = assignment.warmupTasks();
-            return this;
-        }
-
-        public Builder setActiveTasksPendingRevocation(
-            Map<String, Set<Integer>> activeTasksPendingRevocation) {
-            this.activeTasksPendingRevocation = activeTasksPendingRevocation;
-            return this;
-        }
-
-        public Builder setStandbyTasksPendingRevocation(
-            Map<String, Set<Integer>> standbyTasksPendingRevocation) {
-            this.standbyTasksPendingRevocation = standbyTasksPendingRevocation;
-            return this;
-        }
-
-        public Builder setWarmupTasksPendingRevocation(
-            Map<String, Set<Integer>> warmupTasksPendingRevocation) {
-            this.warmupTasksPendingRevocation = warmupTasksPendingRevocation;
+        public Builder setTasksPendingRevocation(TasksTuple tasksPendingRevocation) {
+            this.tasksPendingRevocation = tasksPendingRevocation;
             return this;
         }
 
@@ -318,15 +253,20 @@ public record StreamsGroupMember(String memberId,
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
-            setAssignedActiveTasks(assignmentFromTaskIds(record.activeTasks()));
-            setAssignedStandbyTasks(assignmentFromTaskIds(record.standbyTasks()));
-            setAssignedWarmupTasks(assignmentFromTaskIds(record.warmupTasks()));
-            setActiveTasksPendingRevocation(
-                assignmentFromTaskIds(record.activeTasksPendingRevocation()));
-            setStandbyTasksPendingRevocation(
-                assignmentFromTaskIds(record.standbyTasksPendingRevocation()));
-            setWarmupTasksPendingRevocation(
-                assignmentFromTaskIds(record.warmupTasksPendingRevocation()));
+            setAssignedTasks(
+                new TasksTuple(
+                    assignmentFromTaskIds(record.activeTasks()),
+                    assignmentFromTaskIds(record.standbyTasks()),
+                    assignmentFromTaskIds(record.warmupTasks())
+                )
+            );
+            setTasksPendingRevocation(
+                new TasksTuple(
+                    assignmentFromTaskIds(record.activeTasksPendingRevocation()),
+                    assignmentFromTaskIds(record.standbyTasksPendingRevocation()),
+                    assignmentFromTaskIds(record.warmupTasksPendingRevocation())
+                )
+            );
             return this;
         }
 
@@ -353,12 +293,8 @@ public record StreamsGroupMember(String memberId,
                 processId,
                 userEndpoint,
                 clientTags,
-                assignedActiveTasks,
-                assignedStandbyTasks,
-                assignedWarmupTasks,
-                activeTasksPendingRevocation,
-                standbyTasksPendingRevocation,
-                warmupTasksPendingRevocation
+                assignedTasks,
+                tasksPendingRevocation
             );
         }
     }
@@ -377,9 +313,7 @@ public record StreamsGroupMember(String memberId,
      *
      * @return The StreamsGroupMember mapped as StreamsGroupDescribeResponseData.Member.
      */
-    public StreamsGroupDescribeResponseData.Member asStreamsGroupDescribeMember(
-        Assignment targetAssignment
-    ) {
+    public StreamsGroupDescribeResponseData.Member asStreamsGroupDescribeMember(TasksTuple targetAssignment) {
         final StreamsGroupDescribeResponseData.Assignment describedTargetAssignment =
             new StreamsGroupDescribeResponseData.Assignment();
 
@@ -395,9 +329,9 @@ public record StreamsGroupMember(String memberId,
             .setMemberId(memberId)
             .setAssignment(
                 new StreamsGroupDescribeResponseData.Assignment()
-                    .setActiveTasks(taskIdsFromMap(assignedActiveTasks))
-                    .setStandbyTasks(taskIdsFromMap(assignedStandbyTasks))
-                    .setWarmupTasks(taskIdsFromMap(assignedWarmupTasks)))
+                    .setActiveTasks(taskIdsFromMap(assignedTasks.activeTasks()))
+                    .setStandbyTasks(taskIdsFromMap(assignedTasks.standbyTasks()))
+                    .setWarmupTasks(taskIdsFromMap(assignedTasks.warmupTasks())))
             .setTargetAssignment(describedTargetAssignment)
             .setClientHost(clientHost)
             .setClientId(clientId)
@@ -419,9 +353,7 @@ public record StreamsGroupMember(String memberId,
             );
     }
 
-    private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMap(
-        Map<String, Set<Integer>> tasks
-    ) {
+    private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMap(Map<String, Set<Integer>> tasks) {
         List<StreamsGroupDescribeResponseData.TaskIds> taskIds = new ArrayList<>();
         tasks.forEach((subtopologyId, partitionSet) -> {
             taskIds.add(new StreamsGroupDescribeResponseData.TaskIds()
@@ -432,32 +364,9 @@ public record StreamsGroupMember(String memberId,
     }
 
     /**
-     * @return True if the two provided members have different assigned active tasks.
+     * @return True if the two provided members have different assigned tasks.
      */
-    public static boolean hasAssignedActiveTasksChanged(
-        StreamsGroupMember member1,
-        StreamsGroupMember member2
-    ) {
-        return !member1.assignedActiveTasks().equals(member2.assignedActiveTasks());
-    }
-
-    /**
-     * @return True if the two provided members have different assigned active tasks.
-     */
-    public static boolean hasAssignedStandbyTasksChanged(
-        StreamsGroupMember member1,
-        StreamsGroupMember member2
-    ) {
-        return !member1.assignedStandbyTasks().equals(member2.assignedStandbyTasks());
-    }
-
-    /**
-     * @return True if the two provided members have different assigned active tasks.
-     */
-    public static boolean hasAssignedWarmupTasksChanged(
-        StreamsGroupMember member1,
-        StreamsGroupMember member2
-    ) {
-        return !member1.assignedWarmupTasks().equals(member2.assignedWarmupTasks());
+    public static boolean hasAssignedTasksChanged(StreamsGroupMember member1, StreamsGroupMember member2) {
+        return !member1.assignedTasks().equals(member2.assignedTasks());
     }
 }
