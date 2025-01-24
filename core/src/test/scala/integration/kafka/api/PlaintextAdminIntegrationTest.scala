@@ -1847,13 +1847,22 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // contains two static members and one dynamic member
       val groupInstanceSet = Set(testInstanceId1, testInstanceId2, "")
       val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
-      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, testClientId, new Properties(consumerConfig))
 
       // We need to disable the auto commit because after the members got removed from group, the offset commit
       // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
-      val configOverrides = new Properties()
-      configOverrides.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-      groupInstanceSet.zip(topicSet).foreach(zipped => backgroundConsumerSet.addConsumer(zipped._1, zipped._2, configOverrides))
+      val defaultConsumerConfig = new Properties(consumerConfig)
+      defaultConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+      defaultConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+
+      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, defaultConsumerConfig)
+      groupInstanceSet.zip(topicSet).foreach { case (groupInstanceId, topic) =>
+        val configOverrides = new Properties()
+        if(groupInstanceId != "") {
+          // static member
+          configOverrides.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
+        }
+        backgroundConsumerSet.addConsumer(topic, configOverrides)
+      }
 
       try {
         val groupType = if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name)) GroupType.CONSUMER else GroupType.CLASSIC
@@ -2172,13 +2181,22 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // contains two static members and one dynamic member
       val groupInstanceSet = Set(testInstanceId1, testInstanceId2, "")
       val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
-      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, testClientId, new Properties(consumerConfig))
 
       // We need to disable the auto commit because after the members got removed from group, the offset commit
       // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
-      val configOverrides = new Properties()
-      configOverrides.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-      groupInstanceSet.zip(topicSet).foreach(zipped => backgroundConsumerSet.addConsumer(zipped._1, zipped._2, configOverrides))
+      val defaultConsumerConfig = new Properties(consumerConfig)
+      defaultConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+      defaultConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+
+      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, defaultConsumerConfig)
+      groupInstanceSet.zip(topicSet).foreach { case (groupInstanceId, topic) =>
+        val configOverrides = new Properties()
+        if(groupInstanceId != "") {
+          // static member
+          configOverrides.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
+        }
+        backgroundConsumerSet.addConsumer(topic, configOverrides)
+      }
 
       try {
         val groupType = if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name)) GroupType.CONSUMER else GroupType.CLASSIC
@@ -3922,7 +3940,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       topicConfigs.get(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG))
   }
 
-  class BackgroundConsumerSet(testGroupId: String, testClientId: String, defaultConsumerConfig: Properties) {
+  class BackgroundConsumerSet(testGroupId: String, defaultConsumerConfig: Properties) {
     private val consumerSet: scala.collection.mutable.Set[Consumer[Array[Byte], Array[Byte]]] = scala.collection.mutable.Set.empty
     private val consumerThreads: scala.collection.mutable.Set[Thread] = scala.collection.mutable.Set.empty
     private var startLatch: CountDownLatch = new CountDownLatch(0)
@@ -3930,14 +3948,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     private var consumerThreadRunning = new AtomicBoolean(false)
 
     defaultConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
-    defaultConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
 
-    def addConsumer(groupInstanceId: String, topic: String, configOverrides: Properties = new Properties()): Unit = {
+    def addConsumer(topic: String, configOverrides: Properties = new Properties()): Unit = {
       val newConsumerConfig = defaultConsumerConfig.clone().asInstanceOf[Properties]
-      if (groupInstanceId != "") {
-        // static member
-        newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
-      }
       newConsumerConfig.putAll(configOverrides)
 
       val consumer = createConsumer(configOverrides = newConsumerConfig)
