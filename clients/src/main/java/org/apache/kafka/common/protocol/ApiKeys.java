@@ -332,11 +332,7 @@ public enum ApiKeys {
         return hasBuffer.get();
     }
 
-    public static EnumSet<ApiKeys> zkBrokerApis() {
-        return apisForListener(ApiMessageType.ListenerType.ZK_BROKER);
-    }
-
-    public static EnumSet<ApiKeys> kraftBrokerApis() {
+    public static EnumSet<ApiKeys> brokerApis() {
         return apisForListener(ApiMessageType.ListenerType.BROKER);
     }
 
@@ -346,7 +342,7 @@ public enum ApiKeys {
 
     public static EnumSet<ApiKeys> clientApis() {
         List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.inScope(ApiMessageType.ListenerType.ZK_BROKER) || apiKey.inScope(ApiMessageType.ListenerType.BROKER))
+            .filter(apiKey -> apiKey.inScope(ApiMessageType.ListenerType.BROKER))
             .collect(Collectors.toList());
         return EnumSet.copyOf(apis);
     }
