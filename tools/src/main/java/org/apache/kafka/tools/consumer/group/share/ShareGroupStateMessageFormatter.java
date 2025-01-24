@@ -30,13 +30,13 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKeyJsonConverter;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValueJsonConverter;
+import org.apache.kafka.tools.consumer.CoordinatorRecordMessageFormatter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import org.apache.kafka.tools.consumer.CoordinatorRecordMessageFormatter;
 
 import java.io.IOException;
 import java.io.PrintStream;

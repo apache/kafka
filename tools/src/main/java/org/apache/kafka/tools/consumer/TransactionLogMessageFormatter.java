@@ -19,10 +19,10 @@ package org.apache.kafka.tools.consumer;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
+import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters;
-import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
 
 import java.nio.ByteBuffer;
 
