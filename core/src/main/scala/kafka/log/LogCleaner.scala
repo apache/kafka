@@ -526,8 +526,8 @@ object LogCleaner {
   // Visible for test.
   private[log] val MaxBufferUtilizationPercentMetricName = "max-buffer-utilization-percent"
   private val CleanerRecopyPercentMetricName = "cleaner-recopy-percent"
-  private val MaxCleanTimeMetricName = "max-clean-time-secs"
-  private val MaxCompactionDelayMetricsName = "max-compaction-delay-secs"
+  private[log] val MaxCleanTimeMetricName = "max-clean-time-secs"
+  private[log] val MaxCompactionDelayMetricsName = "max-compaction-delay-secs"
   private val DeadThreadCountMetricName = "DeadThreadCount"
   // package private for testing
   private[log] val MetricNames = Set(
