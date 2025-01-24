@@ -17,8 +17,9 @@
 
 package kafka.log
 
+import kafka.common.LogCleaningAbortedException
 import kafka.log.LogCleaner.{MaxBufferUtilizationPercentMetricName, MaxCleanTimeMetricName, MaxCompactionDelayMetricsName}
-import kafka.server.KafkaConfig
+import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.utils.{CoreUtils, Logging, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
