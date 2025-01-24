@@ -1794,6 +1794,28 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
+     * List the share group offsets available in the cluster for the specified share groups.
+     *
+     * @param groupSpecs Map of share group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     * @param options The options to use when listing the share group offsets.
+     * @return The ListShareGroupOffsetsResult
+     */
+    ListShareGroupOffsetsResult listShareGroupOffsets(Map<String, ListShareGroupOffsetsSpec> groupSpecs, ListShareGroupOffsetsOptions options);
+
+    /**
+     * List the share group offsets available in the cluster for the specified share groups with the default options.
+     *
+     * <p>This is a convenience method for {@link #listShareGroupOffsets(Map, ListShareGroupOffsetsOptions)}
+     * to list offsets of all partitions for the specified share groups with default options.
+     *
+     * @param groupSpecs Map of share group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     * @return The ListShareGroupOffsetsResult
+     */
+    default ListShareGroupOffsetsResult listShareGroupOffsets(Map<String, ListShareGroupOffsetsSpec> groupSpecs) {
+        return listShareGroupOffsets(groupSpecs, new ListShareGroupOffsetsOptions());
+    }
+
+    /**
      * Describe some classic groups in the cluster.
      *
      * @param groupIds The IDs of the groups to describe.

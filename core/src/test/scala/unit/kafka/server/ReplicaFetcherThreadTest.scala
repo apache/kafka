@@ -21,22 +21,20 @@ import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.epoch.util.MockBlockingSender
-import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.common.message.{FetchResponseData, UpdateMetadataRequestData}
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.config.ReplicationConfigs
-import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -51,7 +49,7 @@ import org.mockito.Mockito.{mock, times, verify, when}
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.{Collections, Optional, OptionalInt}
-import scala.collection.{Map, mutable}
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 class ReplicaFetcherThreadTest {
@@ -68,26 +66,7 @@ class ReplicaFetcherThreadTest {
   private val brokerEndPoint = new BrokerEndPoint(0, "localhost", 1000)
   private val failedPartitions = new FailedPartitions
 
-  private val partitionStates = List(
-    new UpdateMetadataRequestData.UpdateMetadataPartitionState()
-      .setTopicName("topic1")
-      .setPartitionIndex(0)
-      .setControllerEpoch(0)
-      .setLeader(0)
-      .setLeaderEpoch(0),
-    new UpdateMetadataRequestData.UpdateMetadataPartitionState()
-      .setTopicName("topic2")
-      .setPartitionIndex(0)
-      .setControllerEpoch(0)
-      .setLeader(0)
-      .setLeaderEpoch(0),
-  ).asJava
-
-  private val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion(),
-    0, 0, 0, partitionStates, Collections.emptyList(), topicIds.asJava).build()
-  // TODO: support raft code?
-  private var metadataCache = new ZkMetadataCache(0, MetadataVersion.latestTesting(), BrokerFeatures.createEmpty())
-  metadataCache.updateMetadata(0, updateMetadataRequest)
+  private val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION)
 
   private def initialFetchState(topicId: Option[Uuid], fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
     InitialFetchState(topicId = topicId, leader = new BrokerEndPoint(0, "localhost", 9092),
@@ -204,9 +183,6 @@ class ReplicaFetcherThreadTest {
     val props = TestUtils.createBrokerConfig(1)
     props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, ibp.version)
     val config = KafkaConfig.fromProps(props)
-
-    metadataCache = new ZkMetadataCache(0, ibp, BrokerFeatures.createEmpty())
-    metadataCache.updateMetadata(0, updateMetadataRequest)
 
     //Setup all dependencies
     val logManager: LogManager = mock(classOf[LogManager])
@@ -487,7 +463,6 @@ class ReplicaFetcherThreadTest {
       0,
       OptionalInt.empty,
       RecordBatch.NO_TIMESTAMP,
-      -1L,
       RecordBatch.NO_TIMESTAMP,
       -1L,
       RecordValidationStats.EMPTY,
