@@ -240,11 +240,11 @@ public class ConfigurationUtils {
     // visible for testing
     // make sure the url is in the "org.apache.kafka.sasl.oauthbearer.allowed.urls" system property
     void throwIfURLIsNotAllowed(String value) {
-        Set<String> allowedUrlsList = Arrays.stream(
+        Set<String> allowedUrls = Arrays.stream(
                         System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT).split(","))
                 .map(String::trim)
                 .collect(Collectors.toSet());
-        if (!allowedUrlsList.contains(value)) {
+        if (!allowedUrls.contains(value)) {
             throw new ConfigException(value + " is not allowed. Update system property '"
                     + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
         }
