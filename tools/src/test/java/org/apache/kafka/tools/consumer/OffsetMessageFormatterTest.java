@@ -50,7 +50,7 @@ public class OffsetMessageFormatterTest {
             .setLeaderEpoch(10)
             .setMetadata("metadata")
             .setCommitTimestamp(1234L)
-            .setExpireTimestamp(-1L);
+            .setExpireTimestamp(5678L);
     private static final GroupMetadataKey GROUP_METADATA_KEY = new GroupMetadataKey().setGroup("group-id");
     private static final GroupMetadataValue GROUP_METADATA_VALUE = new GroupMetadataValue()
             .setProtocolType("consumer")
@@ -63,11 +63,6 @@ public class OffsetMessageFormatterTest {
     private static Stream<Arguments> parameters() {
         return Stream.of(
                 Arguments.of(
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 10, OFFSET_COMMIT_KEY).array(),
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 10, OFFSET_COMMIT_VALUE).array(),
-                        ""
-                ),
-                Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_VALUE).array(),
                         "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
@@ -75,53 +70,58 @@ public class OffsetMessageFormatterTest {
                             "\"commitTimestamp\":1234}}}"
                 ),
                 Arguments.of(
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
-                            "\"value\":{\"version\":1,\"data\":{\"offset\":100,\"metadata\":\"metadata\"," +
-                            "\"commitTimestamp\":1234,\"expireTimestamp\":-1}}}"
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_KEY).array(),
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_VALUE).array(),
+                        "{\"key\":{\"type\":1,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                            "\"value\":{\"version\":0,\"data\":{\"offset\":100,\"metadata\":\"metadata\"," +
+                            "\"commitTimestamp\":1234}}}"
                 ),
                 Arguments.of(
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_KEY).array(),
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_VALUE).array(),
+                        "{\"key\":{\"type\":1,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                            "\"value\":{\"version\":1,\"data\":{\"offset\":100,\"metadata\":\"metadata\"," +
+                            "\"commitTimestamp\":1234,\"expireTimestamp\":5678}}}"
+                ),
+                Arguments.of(
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                        "{\"key\":{\"type\":1,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
                             "\"value\":{\"version\":2,\"data\":{\"offset\":100,\"metadata\":\"metadata\"," +
                             "\"commitTimestamp\":1234}}}"
                 ),
                 Arguments.of(
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 3, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                        "{\"key\":{\"type\":1,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
                             "\"value\":{\"version\":3,\"data\":{\"offset\":100,\"leaderEpoch\":10," +
                             "\"metadata\":\"metadata\",\"commitTimestamp\":1234}}}"
                 ),
                 Arguments.of(
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 4, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                        "{\"key\":{\"type\":1,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
                             "\"value\":{\"version\":4,\"data\":{\"offset\":100,\"leaderEpoch\":10," +
                             "\"metadata\":\"metadata\",\"commitTimestamp\":1234}}}"
                 ),
                 Arguments.of(
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 5, OFFSET_COMMIT_KEY).array(),
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 4, OFFSET_COMMIT_VALUE).array(),
-                        ""
-                ),
-                Arguments.of(
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 5, OFFSET_COMMIT_VALUE).array(),
-                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
-                            "\"value\":{\"version\":5,\"data\":\"unknown\"}}"
+                        "{\"key\":{\"type\":1,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                            "\"value\":{\"version\":5,\"data\":{\"offset\":100,\"leaderEpoch\":10," +
+                            "\"metadata\":\"metadata\",\"commitTimestamp\":1234}}}"
                 ),
                 Arguments.of(
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_KEY).array(),
                         null,
-                        "{\"key\":{\"type\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
-                            "\"value\":null}"),
+                        "{\"key\":{\"type\":1,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
+                            "\"value\":null}"
+                ),
                 Arguments.of(
                         null,
                         MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_VALUE).array(),
-                        ""),
+                        ""
+                ),
                 Arguments.of(null, null, ""),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
@@ -133,7 +133,7 @@ public class OffsetMessageFormatterTest {
 
     @ParameterizedTest
     @MethodSource("parameters")
-    public void testTransactionLogMessageFormatter(byte[] keyBuffer, byte[] valueBuffer, String expectedOutput) {
+    public void testMessageFormatter(byte[] keyBuffer, byte[] valueBuffer, String expectedOutput) {
         ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
                 TOPIC, 0, 0,
                 0L, TimestampType.CREATE_TIME, 0,

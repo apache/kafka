@@ -74,11 +74,6 @@ public class GroupMetadataMessageFormatterTest {
     private static Stream<Arguments> parameters() {
         return Stream.of(
                 Arguments.of(
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 10, GROUP_METADATA_KEY).array(),
-                        MessageUtil.toVersionPrefixedByteBuffer((short) 10, GROUP_METADATA_VALUE).array(),
-                        ""
-                ),
-                Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, GROUP_METADATA_VALUE).array(),
                         "{\"key\":{\"type\":2,\"data\":{\"group\":\"group-id\"}},\"value\":{\"version\":0," +
@@ -126,11 +121,13 @@ public class GroupMetadataMessageFormatterTest {
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
                         null,
-                        "{\"key\":{\"type\":2,\"data\":{\"group\":\"group-id\"}},\"value\":null}"),
+                        "{\"key\":{\"type\":2,\"data\":{\"group\":\"group-id\"}},\"value\":null}"
+                ),
                 Arguments.of(
                         null,
                         MessageUtil.toVersionPrefixedByteBuffer((short) 4, GROUP_METADATA_VALUE).array(),
-                        ""),
+                        ""
+                ),
                 Arguments.of(null, null, ""),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
@@ -142,7 +139,7 @@ public class GroupMetadataMessageFormatterTest {
 
     @ParameterizedTest
     @MethodSource("parameters")
-    public void testTransactionLogMessageFormatter(byte[] keyBuffer, byte[] valueBuffer, String expectedOutput) {
+    public void testMessageFormatter(byte[] keyBuffer, byte[] valueBuffer, String expectedOutput) {
         ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
                 TOPIC, 0, 0,
                 0L, TimestampType.CREATE_TIME, 0,
