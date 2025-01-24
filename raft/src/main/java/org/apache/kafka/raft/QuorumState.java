@@ -730,7 +730,6 @@ public class QuorumState {
             logContext,
             kafkaRaftMetrics
         );
-        kafkaRaftMetrics.addLeaderMetrics();
 
         durableTransitionTo(state);
         return state;

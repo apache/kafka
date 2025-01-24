@@ -22,12 +22,12 @@ import org.apache.kafka.raft.ExternalKRaftMetrics
 import org.apache.kafka.server.metrics.BrokerServerMetrics
 
 class DefaultExternalKRaftMetrics(
-  val brokerServerMetricsOpt: Option[BrokerServerMetrics],
-  val controllerMetadataMetricsOpt: Option[ControllerMetadataMetrics]
+  val brokerServerMetrics: Option[BrokerServerMetrics],
+  val controllerMetadataMetrics: Option[ControllerMetadataMetrics]
 ) extends ExternalKRaftMetrics {
 
   override def setIgnoredStaticVoters(ignoredStaticVoters: Boolean): Unit = {
-    brokerServerMetricsOpt.foreach(metrics => metrics.setIgnoredStaticVoters(ignoredStaticVoters))
-    controllerMetadataMetricsOpt.foreach(metrics => metrics.setIgnoredStaticVoters(ignoredStaticVoters))
+    brokerServerMetrics.foreach(metrics => metrics.setIgnoredStaticVoters(ignoredStaticVoters))
+    controllerMetadataMetrics.foreach(metrics => metrics.setIgnoredStaticVoters(ignoredStaticVoters))
   }
 }

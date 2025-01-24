@@ -73,7 +73,7 @@ public final class KRaftControlRecordStateMachine {
     private volatile long nextOffset = STARTING_NEXT_OFFSET;
     private final KafkaRaftMetrics kafkaRaftMetrics;
     private final ExternalKRaftMetrics externalKRaftMetrics;
-    private final Optional<VoterSet> staticVoterSet;
+    private final VoterSet staticVoterSet;
 
     /**
      * Constructs an internal log listener
@@ -103,9 +103,11 @@ public final class KRaftControlRecordStateMachine {
         this.logger = logContext.logger(this.getClass());
         this.kafkaRaftMetrics = kafkaRaftMetrics;
         this.externalKRaftMetrics = externalKRaftMetrics;
-        this.staticVoterSet = staticVoterSet.size() > 0 ? Optional.of(staticVoterSet) : Optional.empty();
+        this.staticVoterSet = staticVoterSet;
 
-        this.staticVoterSet.ifPresent(voters -> kafkaRaftMetrics.updateNumVoters(voters.size()));
+        if (staticVoterSet.size() > 0) {
+            kafkaRaftMetrics.updateNumVoters(staticVoterSet.size());
+        }
     }
 
     /**
@@ -130,7 +132,7 @@ public final class KRaftControlRecordStateMachine {
         }
 
         kafkaRaftMetrics.updateNumVoters(voterSetHistory.lastValue().size());
-        if (staticVoterSet.isPresent() && voterSetHistory.lastEntry().isEmpty()) {
+        if (staticVoterSet.size() > 0 && voterSetHistory.lastEntry().isEmpty()) {
             externalKRaftMetrics.setIgnoredStaticVoters(false);
         }
     }
@@ -298,7 +300,7 @@ public final class KRaftControlRecordStateMachine {
                 case KRAFT_VOTERS:
                     VoterSet voters = VoterSet.fromVotersRecord((VotersRecord) record.message());
                     kafkaRaftMetrics.updateNumVoters(voters.size());
-                    if (staticVoterSet.isPresent()) {
+                    if (staticVoterSet.size() > 0) {
                         externalKRaftMetrics.setIgnoredStaticVoters(true);
                     }
                     logger.info("Latest set of voters is {} at offset {}", voters, currentOffset);

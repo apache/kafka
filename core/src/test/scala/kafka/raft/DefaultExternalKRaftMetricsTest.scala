@@ -30,7 +30,7 @@ final class DefaultExternalKRaftMetricsTest {
   def testDefaultExternalKRaftMetrics(): Unit = {
     val brokerServerMetrics = new BrokerServerMetrics(new Metrics())
     val controllerMetadataMetrics = new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()))
-    var metrics = new DefaultExternalKRaftMetrics(
+    val metrics = new DefaultExternalKRaftMetrics(
       Option(brokerServerMetrics),
       Option(controllerMetadataMetrics)
     )
@@ -47,8 +47,11 @@ final class DefaultExternalKRaftMetricsTest {
 
     assertFalse(brokerServerMetrics.ignoredStaticVoters())
     assertFalse(controllerMetadataMetrics.ignoredStaticVoters())
+  }
 
-    metrics = new DefaultExternalKRaftMetrics(None, None)
+  @Test
+  def testEmptyDefaultExternalKRaftMetrics(): Unit = {
+    val metrics = new DefaultExternalKRaftMetrics(None, None)
     metrics.setIgnoredStaticVoters(true)
   }
 }
