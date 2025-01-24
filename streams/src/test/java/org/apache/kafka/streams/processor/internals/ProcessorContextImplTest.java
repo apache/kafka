@@ -645,6 +645,8 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         context = getStandbyContext();
+        context.recordContext = mock(ProcessorRecordContext.class);
+
         assertThrows(
             UnsupportedOperationException.class,
             () -> context.forward("key", "value")
@@ -665,6 +667,8 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         context = getStandbyContext();
+        context.recordContext = mock(ProcessorRecordContext.class);
+
         assertThrows(
             UnsupportedOperationException.class,
             () -> context.forward("key", "value", To.child("child-name"))
@@ -787,7 +791,7 @@ public class ProcessorContextImplTest {
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
-            () -> context.recordContext.timestamp()
+            () -> context.timestamp()
         );
     }
 
