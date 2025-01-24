@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
@@ -60,17 +59,6 @@ public final class ProcessorContextUtils {
                 configs,
                 StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
                 applicationId
-            );
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <K, V> InternalProcessorContext<K, V> asInternalProcessorContext(final ProcessorContext context) {
-        if (context instanceof InternalProcessorContext) {
-            return (InternalProcessorContext<K, V>) context;
-        } else {
-            throw new IllegalArgumentException(
-                "This component requires internal features of Kafka Streams and must be disabled for unit tests."
             );
         }
     }
