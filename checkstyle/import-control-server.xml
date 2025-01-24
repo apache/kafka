@@ -92,6 +92,9 @@
       <allow pkg="org.apache.kafka.network" />
       <allow pkg="org.apache.kafka.storage.internals.log" />
     </subpackage>
+    <subpackage name="share">
+      <allow pkg="org.apache.kafka.storage.log.metrics" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="security">

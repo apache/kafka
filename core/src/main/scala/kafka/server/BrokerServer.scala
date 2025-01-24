@@ -440,7 +440,8 @@ class BrokerServer(
         config.shareGroupConfig.shareFetchMaxFetchRecords,
         persister,
         groupConfigManager,
-        metrics
+        metrics,
+        brokerTopicStats
       )
 
       dataPlaneRequestProcessor = new KafkaApis(
