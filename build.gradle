@@ -544,7 +544,6 @@ subprojects {
   test {
     ext {
       isGithubActions = System.getenv('GITHUB_ACTIONS') != null
-      hadFailure = false  // Used to track if any tests failed, see afterSuite below
     }
 
     maxParallelForks = maxTestForks
@@ -580,21 +579,6 @@ subprojects {
       }
     }
     
-    // As we process results, check if there were any test failures.
-    afterSuite { desc, result ->
-      if (result.resultType == TestResult.ResultType.FAILURE) {
-        ext.hadFailure = true
-      }
-    }
-   
-    // This is needed to prevent caching flaky test results.
-    doLast {
-      if (ext.hadFailure) {
-         throw new GradleException("Failing this task since '${project.name}:${name}' had test failures.")
-      }
-    }
-
-    // This is run even if the task has failed
     finalizedBy("copyTestXml")
   }
 
@@ -639,11 +623,6 @@ subprojects {
       }
     }
 
-    // This task does not need to throw an exception when a test failed. This is because 
-    // we never allow the quarantined test results to be cached, therefor we do not need
-    // to explicitly fail the task to prevent caching.
-
-    // This is run even if the task has failed
     finalizedBy("copyQuarantinedTestXml")
   }
 
