@@ -47,7 +47,8 @@ public final class BrokerServerMetricsTest {
                 new MetricName("last-applied-record-timestamp", expectedGroup, "", Collections.emptyMap()),
                 new MetricName("last-applied-record-lag-ms", expectedGroup, "", Collections.emptyMap()),
                 new MetricName("metadata-load-error-count", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("metadata-apply-error-count", expectedGroup, "", Collections.emptyMap())
+                new MetricName("metadata-apply-error-count", expectedGroup, "", Collections.emptyMap()),
+                new MetricName("ignored-static-voters", expectedGroup, "", Collections.emptyMap())
         ));
 
         try (BrokerServerMetrics ignored = new BrokerServerMetrics(metrics)) {
