@@ -37,7 +37,7 @@ class ProcessorTest {
     val requestHeader = RequestTestUtils.serializeRequestHeader(
       new RequestHeader(ApiKeys.INIT_PRODUCER_ID, 0, "clientid", 0))
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER, true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
+      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
     val e = assertThrows(classOf[InvalidRequestException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "INIT_PRODUCER_ID with listener type CONTROLLER should throw InvalidRequestException exception")
@@ -55,7 +55,7 @@ class ProcessorTest {
       .setCorrelationId(0);
     val requestHeader = RequestTestUtils.serializeRequestHeader(new RequestHeader(requestHeaderData, headerVersion))
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
+      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
     val e = assertThrows(classOf[InvalidRequestException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "LEADER_AND_ISR should throw InvalidRequestException exception")
@@ -67,7 +67,7 @@ class ProcessorTest {
     val requestHeader = RequestTestUtils.serializeRequestHeader(
       new RequestHeader(ApiKeys.PRODUCE, 0, "clientid", 0))
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
+      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
     val e = assertThrows(classOf[UnsupportedVersionException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "PRODUCE v0 should throw UnsupportedVersionException exception")

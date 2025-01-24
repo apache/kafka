@@ -179,7 +179,7 @@ class KafkaApisTest extends Logging {
       enabledApis,
       BrokerFeatures.defaultSupportedFeatures(true),
       true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
+      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
 
     when(groupCoordinator.isNewGroupCoordinator).thenReturn(config.isNewGroupCoordinatorEnabled)
     setupFeatures(featureVersions)
@@ -220,9 +220,7 @@ class KafkaApisTest extends Logging {
             featureVersions.map { featureVersion =>
               featureVersion.featureName -> featureVersion.featureLevel.asInstanceOf[java.lang.Short]
             }.toMap.asJava,
-            0,
-            true
-          )
+            0)
         }
 
       case _ => throw new IllegalStateException("Test must set an instance of KRaftMetadataCache")
@@ -3560,6 +3558,47 @@ class KafkaApisTest extends Logging {
     val (_, anotherListener) = updateMetadataCacheWithInconsistentListeners()
     val response = sendMetadataRequestWithInconsistentListeners(anotherListener)
     assertEquals(Set(0), response.brokers.asScala.map(_.id).toSet)
+  }
+
+
+  /**
+   * Metadata request to fetch all topics should not result in the followings:
+   * 1) Auto topic creation
+   * 2) UNKNOWN_TOPIC_OR_PARTITION
+   *
+   * This case is testing the case that a topic is being deleted from MetadataCache right after
+   * authorization but before checking in MetadataCache.
+   */
+  @Test
+  def testGetAllTopicMetadataShouldNotCreateTopicOrReturnUnknownTopicPartition(): Unit = {
+    // Setup: authorizer authorizes 2 topics, but one got deleted in metadata cache
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.getAliveBrokerNodes(any())).thenReturn(List(new Node(brokerId,"localhost", 0)))
+    when(metadataCache.getRandomAliveBrokerId).thenReturn(None)
+
+    // 2 topics returned for authorization in during handle
+    val topicsReturnedFromMetadataCacheForAuthorization = Set("remaining-topic", "later-deleted-topic")
+    when(metadataCache.getAllTopics()).thenReturn(topicsReturnedFromMetadataCacheForAuthorization)
+    // 1 topic is deleted from metadata right at the time between authorization and the next getTopicMetadata() call
+    when(metadataCache.getTopicMetadata(
+      ArgumentMatchers.eq(topicsReturnedFromMetadataCacheForAuthorization),
+      any[ListenerName],
+      anyBoolean,
+      anyBoolean
+    )).thenReturn(Seq(
+      new MetadataResponseTopic()
+        .setErrorCode(Errors.NONE.code)
+        .setName("remaining-topic")
+        .setIsInternal(false)
+    ))
+
+    val response = sendMetadataRequestWithInconsistentListeners(new ListenerName("PLAINTEXT"))
+    val responseTopics = response.topicMetadata().asScala.map { metadata => metadata.topic() }
+
+    // verify we don't create topic when getAllTopicMetadata
+    verify(autoTopicCreationManager, never).createTopics(any(), any(), any())
+    assertEquals(List("remaining-topic"), responseTopics)
+    assertTrue(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION).isEmpty)
   }
 
   @Test

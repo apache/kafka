@@ -742,7 +742,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             deferredEventQueue.failAll(Errors.NOT_COORDINATOR.exception());
             failCurrentBatch(Errors.NOT_COORDINATOR.exception());
             if (coordinator != null) {
-                coordinator.onUnloaded();
+                try {
+                    coordinator.onUnloaded();
+                } catch (Throwable ex) {
+                    log.error("Failed to unload coordinator for {} due to {}.", tp, ex.getMessage(), ex);
+                }
             }
             coordinator = null;
         }
@@ -2415,9 +2419,19 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 try {
                     if (partitionEpoch.isEmpty() || context.epoch < partitionEpoch.getAsInt()) {
                         log.info("Started unloading metadata for {} with epoch {}.", tp, partitionEpoch);
-                        context.transitionTo(CoordinatorState.CLOSED);
-                        coordinators.remove(tp, context);
-                        log.info("Finished unloading metadata for {} with epoch {}.", tp, partitionEpoch);
+                        try {
+                            context.transitionTo(CoordinatorState.CLOSED);
+                            log.info("Finished unloading metadata for {} with epoch {}.", tp, partitionEpoch);
+                        } catch (Throwable ex) {
+                            // It's very unlikely that we will ever see an exception here, since we
+                            // already make an effort to catch exceptions in the unload method.
+                            log.error("Failed to unload metadata for {} with epoch {} due to {}.",
+                                tp, partitionEpoch, ex.toString());
+                        } finally {
+                            // Always remove the coordinator context, otherwise the coordinator
+                            // shard could be permanently stuck.
+                            coordinators.remove(tp, context);
+                        }
                     } else {
                         log.info("Ignored unloading metadata for {} in epoch {} since current epoch is {}.",
                             tp, partitionEpoch, context.epoch);
@@ -2498,6 +2512,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             context.lock.lock();
             try {
                 context.transitionTo(CoordinatorState.CLOSED);
+            } catch (Throwable ex) {
+                log.warn("Failed to unload metadata for {} due to {}.", tp, ex.getMessage(), ex);
             } finally {
                 context.lock.unlock();
             }

@@ -1635,24 +1635,6 @@ class Partition(val topicPartition: TopicPartition,
     localLog.fetchOffsetSnapshot
   }
 
-  def legacyFetchOffsetsForTimestamp(timestamp: Long,
-                                     maxNumOffsets: Int,
-                                     isFromConsumer: Boolean,
-                                     fetchOnlyFromLeader: Boolean): Seq[Long] = inReadLock(leaderIsrUpdateLock) {
-    val localLog = localLogWithEpochOrThrow(Optional.empty(), fetchOnlyFromLeader)
-    val allOffsets = localLog.legacyFetchOffsetsBefore(timestamp, maxNumOffsets)
-
-    if (!isFromConsumer) {
-      allOffsets
-    } else {
-      val hw = localLog.highWatermark
-      if (allOffsets.exists(_ > hw))
-        hw +: allOffsets.dropWhile(_ > hw)
-      else
-        allOffsets
-    }
-  }
-
   def logStartOffset: Long = {
     inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal.map(_.logStartOffset).getOrElse(-1)
