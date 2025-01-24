@@ -17,10 +17,11 @@
 
 package org.apache.kafka.trogdor.rest;
 
+import org.apache.kafka.trogdor.task.TaskSpec;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.node.NullNode;
-import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
  * The state for a task which is still pending.

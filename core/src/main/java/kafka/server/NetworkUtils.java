@@ -18,6 +18,7 @@ package kafka.server;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ManualMetadataUpdater;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.metrics.Metrics;
@@ -46,7 +47,6 @@ public class NetworkUtils {
             config.interBrokerListenerName(),
             config.saslMechanismInterBrokerProtocol(),
             time,
-            config.saslInterBrokerHandshakeRequestEnable(),
             logContext
         );
 
@@ -82,9 +82,10 @@ public class NetworkUtils {
             config.connectionSetupTimeoutMs(),
             config.connectionSetupTimeoutMaxMs(),
             time,
-            false,
+            true,
             new ApiVersions(),
-            logContext
+            logContext,
+            MetadataRecoveryStrategy.NONE
         );
     }
 }

@@ -16,18 +16,19 @@
  */
 package org.apache.kafka.tiered.storage.actions;
 
-import org.apache.kafka.tiered.storage.TieredStorageTestAction;
-import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.storage.internals.log.EpochEntry;
+import org.apache.kafka.tiered.storage.TieredStorageTestAction;
+import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import java.io.PrintStream;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class ExpectListOffsetsAction implements TieredStorageTestAction {
@@ -55,6 +56,8 @@ public final class ExpectListOffsetsAction implements TieredStorageTestAction {
         if (expected.epoch != -1) {
             assertTrue(listOffsetsResult.leaderEpoch().isPresent());
             assertEquals(expected.epoch, listOffsetsResult.leaderEpoch().get());
+        } else {
+            assertFalse(listOffsetsResult.leaderEpoch().isPresent());
         }
     }
 

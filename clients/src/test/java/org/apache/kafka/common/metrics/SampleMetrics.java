@@ -28,4 +28,3 @@ public class SampleMetrics {
 
     public static final MetricNameTemplate METRIC_WITH_INHERITED_TAGS = new MetricNameTemplate("inherited.tags", "group", "inherited.tags in testMetricName", "parent-tag", "child-tag");
 }
-

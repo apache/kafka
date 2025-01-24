@@ -38,16 +38,15 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.function.ThrowingRunnable;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.Response;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -64,20 +63,21 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import jakarta.ws.rs.core.Response;
+
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
-import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests situations during which certain connector operations, such as start, validation,
  * configuration and others, take longer than expected.
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class BlockingConnectorTest {
 
     private static final Logger log = LoggerFactory.getLogger(BlockingConnectorTest.class);
@@ -93,25 +93,23 @@ public class BlockingConnectorTest {
 
     private static final String CONNECTOR_INITIALIZE = "Connector::initialize";
     private static final String CONNECTOR_INITIALIZE_WITH_TASK_CONFIGS = "Connector::initializeWithTaskConfigs";
-    private static final String CONNECTOR_START = "Connector::start";
+    static final String CONNECTOR_START = "Connector::start";
     private static final String CONNECTOR_RECONFIGURE = "Connector::reconfigure";
     private static final String CONNECTOR_TASK_CLASS = "Connector::taskClass";
-    private static final String CONNECTOR_TASK_CONFIGS = "Connector::taskConfigs";
+    static final String CONNECTOR_TASK_CONFIGS = "Connector::taskConfigs";
     private static final String CONNECTOR_STOP = "Connector::stop";
     private static final String CONNECTOR_VALIDATE = "Connector::validate";
     private static final String CONNECTOR_CONFIG = "Connector::config";
     private static final String CONNECTOR_VERSION = "Connector::version";
     private static final String TASK_START = "Task::start";
-    private static final String TASK_STOP = "Task::stop";
+    static final String TASK_STOP = "Task::stop";
     private static final String TASK_VERSION = "Task::version";
     private static final String SINK_TASK_INITIALIZE = "SinkTask::initialize";
     private static final String SINK_TASK_PUT = "SinkTask::put";
     private static final String SINK_TASK_FLUSH = "SinkTask::flush";
     private static final String SINK_TASK_PRE_COMMIT = "SinkTask::preCommit";
     private static final String SINK_TASK_OPEN = "SinkTask::open";
-    private static final String SINK_TASK_ON_PARTITIONS_ASSIGNED = "SinkTask::onPartitionsAssigned";
     private static final String SINK_TASK_CLOSE = "SinkTask::close";
-    private static final String SINK_TASK_ON_PARTITIONS_REVOKED = "SinkTask::onPartitionsRevoked";
     private static final String SOURCE_TASK_INITIALIZE = "SourceTask::initialize";
     private static final String SOURCE_TASK_POLL = "SourceTask::poll";
     private static final String SOURCE_TASK_COMMIT = "SourceTask::commit";
@@ -121,9 +119,9 @@ public class BlockingConnectorTest {
     private EmbeddedConnectCluster connect;
     private ConnectorHandle normalConnectorHandle;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -134,16 +132,11 @@ public class BlockingConnectorTest {
 
         // start the clusters
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(
-                NUM_WORKERS,
-                "Initial group of workers did not start in time"
-        );
     }
 
-    @After
+    @AfterEach
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
         // unblock everything so that we don't leak threads after each test run
         Block.reset();
@@ -359,30 +352,30 @@ public class BlockingConnectorTest {
         normalConnectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
     }
 
-    private void assertRequestTimesOut(String requestDescription, ThrowingRunnable request, String expectedTimeoutMessage) {
+    private void assertRequestTimesOut(String requestDescription, Executable request, String expectedTimeoutMessage) {
         // Artificially reduce the REST request timeout so that these don't take 90 seconds
         connect.requestTimeout(REDUCED_REST_REQUEST_TIMEOUT);
         ConnectRestException exception = assertThrows(
-                "Should have failed to " + requestDescription,
-                ConnectRestException.class, request
+                ConnectRestException.class, request,
+                "Should have failed to " + requestDescription
         );
         assertEquals(
-                "Should have gotten 500 error from trying to " + requestDescription,
-                Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), exception.statusCode()
+                Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), exception.statusCode(),
+                "Should have gotten 500 error from trying to " + requestDescription
         );
         assertTrue(
+                exception.getMessage().contains("Request timed out"),
                 "Should have gotten timeout message from trying to " + requestDescription
-                        + "; instead, message was: " + exception.getMessage(),
-                exception.getMessage().contains("Request timed out")
+                        + "; instead, message was: " + exception.getMessage()
         );
         if (expectedTimeoutMessage != null) {
             assertTrue(
-                    "Timeout error message '" + exception.getMessage() + "' does not match expected format",
-                    exception.getMessage().contains(expectedTimeoutMessage)
+                    exception.getMessage().contains(expectedTimeoutMessage),
+                    "Timeout error message '" + exception.getMessage() + "' does not match expected format"
             );
         }
         // Reset the REST request timeout so that other requests aren't impacted
-        connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
+        connect.resetRequestTimeout();
     }
 
     public static class Block {
@@ -515,8 +508,8 @@ public class BlockingConnectorTest {
                 CountDownLatch blockLatch;
                 synchronized (Block.class) {
                     assertNotNull(
-                            "Block was reset prematurely",
-                            awaitBlockLatch
+                            awaitBlockLatch,
+                            "Block was reset prematurely"
                     );
                     awaitBlockLatch.countDown();
                     blockLatch = newBlockLatch();
@@ -744,15 +737,12 @@ public class BlockingConnectorTest {
             }
 
             @Override
-            @SuppressWarnings("deprecation")
-            public void commitRecord(SourceRecord record) throws InterruptedException {
-                block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD);
-                super.commitRecord(record);
-            }
-
-            @Override
             public void commitRecord(SourceRecord record, RecordMetadata metadata) throws InterruptedException {
-                block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD_WITH_METADATA);
+                if (metadata == null) {
+                    block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD);
+                } else {
+                    block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD_WITH_METADATA);
+                }
                 super.commitRecord(record, metadata);
             }
         }
@@ -875,23 +865,9 @@ public class BlockingConnectorTest {
             }
 
             @Override
-            @SuppressWarnings("deprecation")
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                block.maybeBlockOn(SINK_TASK_ON_PARTITIONS_ASSIGNED);
-                super.onPartitionsAssigned(partitions);
-            }
-
-            @Override
             public void close(Collection<TopicPartition> partitions) {
                 block.maybeBlockOn(SINK_TASK_CLOSE);
                 super.close(partitions);
-            }
-
-            @Override
-            @SuppressWarnings("deprecation")
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                block.maybeBlockOn(SINK_TASK_ON_PARTITIONS_REVOKED);
-                super.onPartitionsRevoked(partitions);
             }
         }
     }

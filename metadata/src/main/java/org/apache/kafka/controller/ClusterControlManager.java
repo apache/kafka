@@ -53,6 +53,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+
 import org.slf4j.Logger;
 
 import java.util.AbstractMap;
@@ -69,7 +70,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
@@ -80,7 +80,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * brokers being fenced or unfenced, and broker feature versions.
  */
 public class ClusterControlManager {
-    final static long DEFAULT_SESSION_TIMEOUT_NS = NANOSECONDS.convert(9, TimeUnit.SECONDS);
+    static final long DEFAULT_SESSION_TIMEOUT_NS = NANOSECONDS.convert(9, TimeUnit.SECONDS);
 
     static class Builder {
         private LogContext logContext = null;
@@ -90,7 +90,8 @@ public class ClusterControlManager {
         private long sessionTimeoutNs = DEFAULT_SESSION_TIMEOUT_NS;
         private ReplicaPlacer replicaPlacer = null;
         private FeatureControlManager featureControl = null;
-        private boolean zkMigrationEnabled = false;
+        private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler = null;
+        private String interBrokerListenerName = "PLAINTEXT";
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -127,8 +128,13 @@ public class ClusterControlManager {
             return this;
         }
 
-        Builder setZkMigrationEnabled(boolean zkMigrationEnabled) {
-            this.zkMigrationEnabled = zkMigrationEnabled;
+        Builder setBrokerUncleanShutdownHandler(BrokerUncleanShutdownHandler brokerUncleanShutdownHandler) {
+            this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+            return this;
+        }
+
+        Builder setInterBrokerListenerName(String interBrokerListenerName) {
+            this.interBrokerListenerName = interBrokerListenerName;
             return this;
         }
 
@@ -148,6 +154,9 @@ public class ClusterControlManager {
             if (featureControl == null) {
                 throw new RuntimeException("You must specify FeatureControlManager");
             }
+            if (brokerUncleanShutdownHandler == null) {
+                throw new RuntimeException("You must specify BrokerUncleanShutdownHandler");
+            }
             return new ClusterControlManager(logContext,
                 clusterId,
                 time,
@@ -155,7 +164,8 @@ public class ClusterControlManager {
                 sessionTimeoutNs,
                 replicaPlacer,
                 featureControl,
-                zkMigrationEnabled
+                brokerUncleanShutdownHandler,
+                interBrokerListenerName
             );
         }
     }
@@ -229,7 +239,7 @@ public class ClusterControlManager {
     /**
      * The broker heartbeat manager, or null if this controller is on standby.
      */
-    private BrokerHeartbeatManager heartbeatManager;
+    private volatile BrokerHeartbeatManager heartbeatManager;
 
     /**
      * A future which is completed as soon as we have the given number of brokers
@@ -242,10 +252,12 @@ public class ClusterControlManager {
      */
     private final FeatureControlManager featureControl;
 
+    private final BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
+
     /**
-     * True if migration from ZK is enabled.
+     * The statically configured inter-broker listener name.
      */
-    private final boolean zkMigrationEnabled;
+    private final String interBrokerListenerName;
 
     /**
      * Maps controller IDs to controller registrations.
@@ -265,7 +277,8 @@ public class ClusterControlManager {
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
-        boolean zkMigrationEnabled
+        BrokerUncleanShutdownHandler brokerUncleanShutdownHandler,
+        String interBrokerListenerName
     ) {
         this.logContext = logContext;
         this.clusterId = clusterId;
@@ -278,9 +291,10 @@ public class ClusterControlManager {
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
         this.featureControl = featureControl;
-        this.zkMigrationEnabled = zkMigrationEnabled;
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+        this.interBrokerListenerName = interBrokerListenerName;
     }
 
     ReplicaPlacer replicaPlacer() {
@@ -292,9 +306,16 @@ public class ClusterControlManager {
      */
     public void activate() {
         heartbeatManager = new BrokerHeartbeatManager(logContext, time, sessionTimeoutNs);
+        long nowNs = time.nanoseconds();
         for (BrokerRegistration registration : brokerRegistrations.values()) {
             heartbeatManager.register(registration.id(), registration.fenced());
+            heartbeatManager.tracker().updateContactTime(
+                new BrokerIdAndEpoch(registration.id(), registration.epoch()), nowNs);
         }
+    }
+
+    String clusterId() { // Visible for testing
+        return clusterId;
     }
 
     /**
@@ -308,26 +329,14 @@ public class ClusterControlManager {
         return brokerRegistrations;
     }
 
-    Set<Integer> fencedBrokerIds() {
-        return brokerRegistrations.values()
-            .stream()
-            .filter(BrokerRegistration::fenced)
-            .map(BrokerRegistration::id)
-            .collect(Collectors.toSet());
-    }
-
-    boolean zkRegistrationAllowed() {
-        return zkMigrationEnabled && featureControl.metadataVersion().isMigrationSupported();
-    }
-
     /**
      * Process an incoming broker registration request.
      */
     public ControllerResult<BrokerRegistrationReply> registerBroker(
-            BrokerRegistrationRequestData request,
-            long brokerEpoch,
-            FinalizedControllerFeatures finalizedFeatures,
-            short version) {
+        BrokerRegistrationRequestData request,
+        long newBrokerEpoch,
+        FinalizedControllerFeatures finalizedFeatures
+    ) {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
@@ -336,32 +345,21 @@ public class ClusterControlManager {
                 ", but got cluster ID " + request.clusterId());
         }
         int brokerId = request.brokerId();
+        List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
-        if (version < 2 || existing == null || request.previousBrokerEpoch() != existing.epoch()) {
-            // TODO(KIP-966): Update the ELR if the broker has an unclean shutdown.
-            log.debug("Received an unclean shutdown request");
-        }
+        Uuid prevIncarnationId = null;
         if (existing != null) {
-            if (heartbeatManager.hasValidSession(brokerId)) {
-                if (!existing.incarnationId().equals(request.incarnationId())) {
+            prevIncarnationId = existing.incarnationId();
+            if (heartbeatManager.hasValidSession(brokerId, existing.epoch())) {
+                if (!request.incarnationId().equals(prevIncarnationId)) {
                     throw new DuplicateBrokerRegistrationException("Another broker is " +
                         "registered with that broker id.");
-                }
-            } else {
-                if (!existing.incarnationId().equals(request.incarnationId())) {
-                    // Remove any existing session for the old broker incarnation.
-                    heartbeatManager.remove(brokerId);
                 }
             }
         }
 
-        if (request.isMigratingZkBroker() && !zkRegistrationAllowed()) {
+        if (request.isMigratingZkBroker()) {
             throw new BrokerIdNotRegisteredException("Controller does not support registering ZK brokers.");
-        }
-
-        if (!request.isMigratingZkBroker() && featureControl.inPreMigrationMode()) {
-            throw new BrokerIdNotRegisteredException("Controller is in pre-migration mode and cannot register KRaft " +
-                "brokers until the metadata migration is complete.");
         }
 
         if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
@@ -389,31 +387,78 @@ public class ClusterControlManager {
             setBrokerId(brokerId).
             setIsMigratingZkBroker(request.isMigratingZkBroker()).
             setIncarnationId(request.incarnationId()).
-            setBrokerEpoch(brokerEpoch).
             setRack(request.rack()).
             setEndPoints(listenerInfo.toBrokerRegistrationRecord());
+
+        // Track which finalized features we have not yet verified are supported by the broker.
+        Map<String, Short> unverifiedFeatures = new HashMap<>(finalizedFeatures.featureMap());
+
+        // Check every broker feature version range includes the finalized version.
         for (BrokerRegistrationRequestData.Feature feature : request.features()) {
             record.features().add(processRegistrationFeature(brokerId, finalizedFeatures, feature));
+            unverifiedFeatures.remove(feature.name());
         }
+        // Brokers that don't send a supported metadata.version range are assumed to only
+        // support the original metadata.version.
         if (request.features().find(MetadataVersion.FEATURE_NAME) == null) {
-            // Brokers that don't send a supported metadata.version range are assumed to only
-            // support the original metadata.version.
             record.features().add(processRegistrationFeature(brokerId, finalizedFeatures,
-                    new BrokerRegistrationRequestData.Feature().
-                            setName(MetadataVersion.FEATURE_NAME).
-                            setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
-                            setMaxSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel())));
+                new BrokerRegistrationRequestData.Feature().
+                    setName(MetadataVersion.FEATURE_NAME).
+                    setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                    setMaxSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel())));
+            unverifiedFeatures.remove(MetadataVersion.FEATURE_NAME);
         }
+        // We also need to check every controller feature is supported by the broker.
+        unverifiedFeatures.forEach((featureName, finalizedVersion) -> {
+            if (finalizedVersion != 0 && request.features().findAll(featureName).isEmpty()) {
+                processRegistrationFeature(brokerId, finalizedFeatures,
+                    new BrokerRegistrationRequestData.Feature().
+                        setName(featureName).
+                        setMinSupportedVersion((short) 0).
+                        setMaxSupportedVersion((short) 0));
+            }
+        });
         if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
             record.setLogDirs(request.logDirs());
         }
 
-        heartbeatManager.register(brokerId, record.fenced());
-
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        if (!request.incarnationId().equals(prevIncarnationId)) {
+            int prevNumRecords = records.size();
+            brokerUncleanShutdownHandler.addRecordsForShutdown(request.brokerId(), records);
+            int numRecordsAdded = records.size() - prevNumRecords;
+            if (existing == null) {
+                log.info("No previous registration found for broker {}. New incarnation ID is " +
+                        "{}.  Generated {} record(s) to clean up previous incarnations. New broker " +
+                        "epoch is {}.", brokerId, request.incarnationId(), numRecordsAdded, newBrokerEpoch);
+            } else {
+                log.info("Registering a new incarnation of broker {}. Previous incarnation ID " +
+                        "was {}; new incarnation ID is {}. Generated {} record(s) to clean up " +
+                        "previous incarnations. Broker epoch will become {}.", brokerId,
+                        existing.incarnationId(), request.incarnationId(), numRecordsAdded,
+                        newBrokerEpoch);
+            }
+            record.setBrokerEpoch(newBrokerEpoch);
+        } else {
+            log.info("Amending registration of broker {}, incarnation ID {}. Broker epoch remains {}.",
+                    request.brokerId(), request.incarnationId(), existing.epoch());
+            record.setFenced(existing.fenced());
+            record.setInControlledShutdown(existing.inControlledShutdown());
+            record.setBrokerEpoch(existing.epoch());
+        }
         records.add(new ApiMessageAndVersion(record, featureControl.metadataVersion().
             registerBrokerRecordVersion()));
-        return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
+
+        if (!request.incarnationId().equals(prevIncarnationId)) {
+            // Remove any existing session for the old broker incarnation.
+            heartbeatManager.remove(brokerId);
+        }
+        heartbeatManager.register(brokerId, record.fenced());
+
+        // A broker registration that cleans up a previous incarnation's unclean shutdown may generate a large number of records.
+        // It is safe to return these records as a non-atomic batch as long as the registration record is added last.
+        // This ensures that in case of a controller failure, the broker will re-register and the new controller
+        // can retry the unclean shutdown cleanup.
+        return ControllerResult.of(records, new BrokerRegistrationReply(record.brokerEpoch()));
     }
 
     ControllerResult<Void> registerController(ControllerRegistrationRequestData request) {
@@ -423,17 +468,17 @@ public class ClusterControlManager {
         }
         ListenerInfo listenerInfo = ListenerInfo.fromControllerRegistrationRequest(request.listeners());
         ControllerFeatureCollection features = new ControllerFeatureCollection();
-        request.features().forEach(feature -> {
+        request.features().forEach(feature ->
             features.add(new RegisterControllerRecord.ControllerFeature().
                 setName(feature.name()).
                 setMaxSupportedVersion(feature.maxSupportedVersion()).
-                setMinSupportedVersion(feature.minSupportedVersion()));
-        });
+                setMinSupportedVersion(feature.minSupportedVersion()))
+        );
         List<ApiMessageAndVersion> records = new ArrayList<>();
         records.add(new ApiMessageAndVersion(new RegisterControllerRecord().
             setControllerId(request.controllerId()).
             setIncarnationId(request.incarnationId()).
-            setZkMigrationReady(request.zkMigrationReady()).
+            setZkMigrationReady(false).
             setEndPoints(listenerInfo.toControllerRegistrationRecord()).
             setFeatures(features),
                 (short) 0));
@@ -445,22 +490,39 @@ public class ClusterControlManager {
         FinalizedControllerFeatures finalizedFeatures,
         BrokerRegistrationRequestData.Feature feature
     ) {
-        Optional<Short> finalized = finalizedFeatures.get(feature.name());
-        if (finalized.isPresent()) {
-            if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized.get())) {
-                throw new UnsupportedVersionException("Unable to register because the broker " +
-                    "does not support version " + finalized.get() + " of " + feature.name() +
-                        ". It wants a version between " + feature.minSupportedVersion() + " and " +
-                        feature.maxSupportedVersion() + ", inclusive.");
-            }
-        } else {
-            log.warn("Broker {} registered with feature {} that is unknown to the controller",
-                    brokerId, feature.name());
+        int defaultVersion = feature.name().equals(MetadataVersion.FEATURE_NAME) ? 1 : 0; // The default value for MetadataVersion is 1 not 0.
+        short finalized = finalizedFeatures.versionOrDefault(feature.name(), (short) defaultVersion);
+        if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized)) {
+            throw new UnsupportedVersionException("Unable to register because the broker " +
+                "does not support finalized version " + finalized + " of " + feature.name() +
+                    ". The broker wants a version between " + feature.minSupportedVersion() + " and " +
+                    feature.maxSupportedVersion() + ", inclusive.");
         }
+        // A feature is not found in the finalizedFeature map if it is unknown to the controller or set to 0 (feature not enabled).
+        if (!finalizedFeatures.featureNames().contains(feature.name()))
+            log.debug("Broker {} registered with version range ({}, {}] of feature {} which controller does not know " +
+                    "or has finalized version of 0.",
+                    brokerId, feature.minSupportedVersion(), feature.maxSupportedVersion(), feature.name());
         return new BrokerFeature().
                 setName(feature.name()).
                 setMinSupportedVersion(feature.minSupportedVersion()).
                 setMaxSupportedVersion(feature.maxSupportedVersion());
+    }
+
+    /**
+     * Track an incoming broker heartbeat. Unlike most functions, this one is not called from the main
+     * controller thread, so it can only access local, volatile and atomic data.
+     *
+     * @param brokerId      The broker id to track.
+     * @param brokerEpoch   The broker epoch to track.
+     *
+     * @returns             True only if the ClusterControlManager is active.
+     */
+    boolean trackBrokerHeartbeat(int brokerId, long brokerEpoch) {
+        BrokerHeartbeatManager manager = heartbeatManager;
+        if (manager == null) return false;
+        manager.tracker().updateContactTime(new BrokerIdAndEpoch(brokerId, brokerEpoch));
+        return true;
     }
 
     public OptionalLong registerBrokerRecordOffset(int brokerId) {
@@ -667,6 +729,9 @@ public class ClusterControlManager {
     }
 
     BrokerHeartbeatManager heartbeatManager() {
+        // We throw RuntimeException here rather than NotControllerException because all the callers
+        // have already verified that we are active. For example, ControllerWriteEvent.run verifies
+        // that we are the current active controller before running any event-specific code.
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
@@ -779,5 +844,10 @@ public class ClusterControlManager {
                         registration.supportedFeatures());
             }
         };
+    }
+
+    @FunctionalInterface
+    interface BrokerUncleanShutdownHandler {
+        void addRecordsForShutdown(int brokerId, List<ApiMessageAndVersion> records);
     }
 }

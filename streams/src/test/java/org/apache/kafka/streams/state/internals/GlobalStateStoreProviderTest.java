@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -35,10 +34,13 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.NoOpReadOnlyStore;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -51,18 +53,19 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class GlobalStateStoreProviderTest {
     private final Map<String, StateStore> stores = new HashMap<>();
-    private final static Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, "appId"));
+    private static final Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, "appId"));
 
-    @Before
+    @BeforeEach
     public void before() {
         stores.put(
             "kv-store",
@@ -109,12 +112,12 @@ public class GlobalStateStoreProviderTest {
         when(mockContext.applicationId()).thenReturn("appId");
         when(mockContext.metrics())
             .thenReturn(
-                new StreamsMetricsImpl(new Metrics(), "threadName", StreamsConfig.METRICS_LATEST, new MockTime())
+                new StreamsMetricsImpl(new Metrics(), "threadName", "processId", new MockTime())
             );
         when(mockContext.taskId()).thenReturn(new TaskId(0, 0));
         when(mockContext.appConfigs()).thenReturn(CONFIGS);
         for (final StateStore store : stores.values()) {
-            store.init((StateStoreContext) mockContext, null);
+            store.init(mockContext, null);
         }
     }
 
@@ -124,7 +127,7 @@ public class GlobalStateStoreProviderTest {
             new GlobalStateStoreProvider(Collections.singletonMap("global", new NoOpReadOnlyStore<>()));
         final List<ReadOnlyKeyValueStore<Object, Object>> stores =
             provider.stores("global", QueryableStoreTypes.keyValueStore());
-        assertEquals(stores.size(), 1);
+        assertEquals(1, stores.size());
     }
 
     @Test

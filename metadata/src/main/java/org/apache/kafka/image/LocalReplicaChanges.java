@@ -22,8 +22,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 
-import java.util.Set;
 import java.util.Map;
+import java.util.Set;
 
 public final class LocalReplicaChanges {
     // partitions for which the broker is not a replica anymore
@@ -36,6 +36,7 @@ public final class LocalReplicaChanges {
     private final Map<TopicPartition, PartitionInfo> followers;
     // The topic name -> topic id map in leaders and followers changes
     private final Map<String, Uuid> topicIds;
+    // partitions for which directory id changes or newly added to the broker
     private final Map<TopicIdPartition, Uuid> directoryIds;
 
     LocalReplicaChanges(
@@ -74,19 +75,21 @@ public final class LocalReplicaChanges {
         return topicIds;
     }
 
+    public Map<TopicIdPartition, Uuid> directoryIds() {
+        return directoryIds;
+    }
+
     @Override
     public String toString() {
         return String.format(
-            "LocalReplicaChanges(deletes = %s, newly elected leaders = %s, leaders = %s, followers = %s)",
+            "LocalReplicaChanges(deletes = %s, newly elected leaders = %s, leaders = %s, followers = %s, topicIds = %s, directoryIds = %s)",
             deletes,
             electedLeaders,
             leaders,
-            followers
+            followers,
+            topicIds,
+            directoryIds
         );
-    }
-
-    public Map<TopicIdPartition, Uuid> directoryIds() {
-        return directoryIds;
     }
 
     public static final class PartitionInfo {
@@ -98,17 +101,17 @@ public final class LocalReplicaChanges {
             this.partition = partition;
         }
 
-        @Override
-        public String toString() {
-            return String.format("PartitionInfo(topicId = %s, partition = %s)", topicId, partition);
-        }
-
         public Uuid topicId() {
             return topicId;
         }
 
         public PartitionRegistration partition() {
             return partition;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("PartitionInfo(topicId = %s, partition = %s)", topicId, partition);
         }
     }
 }

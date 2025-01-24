@@ -21,9 +21,8 @@ import kafka.coordinator.transaction.TransactionMarkerChannelManager.{LogAppendR
 
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
-import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
-import kafka.utils.Implicits._
-import kafka.utils.{CoreUtils, Logging}
+import kafka.server.{KafkaConfig, MetadataCache}
+import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
@@ -33,7 +32,7 @@ import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersReque
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
-import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
@@ -63,7 +62,6 @@ object TransactionMarkerChannelManager {
       config.interBrokerListenerName,
       config.saslMechanismInterBrokerProtocol,
       time,
-      config.saslInterBrokerHandshakeRequestEnable,
       logContext
     )
     channelBuilder match {
@@ -96,7 +94,8 @@ object TransactionMarkerChannelManager {
       time,
       false,
       new ApiVersions,
-      logContext
+      logContext,
+      MetadataRecoveryStrategy.NONE
     )
 
     new TransactionMarkerChannelManager(config,
@@ -120,7 +119,7 @@ class TxnMarkerQueue(@volatile var destination: Node) extends Logging {
   }
 
   def addMarkers(txnTopicPartition: Int, pendingCompleteTxnAndMarker: PendingCompleteTxnAndMarkerEntry): Unit = {
-    val queue = CoreUtils.atomicGetOrUpdate(markersPerTxnTopicPartition, txnTopicPartition, {
+    val queue = markersPerTxnTopicPartition.getOrElseUpdate(txnTopicPartition, {
       // Note that this may get called more than once if threads have a close race while adding new queue.
       info(s"Creating new marker queue for txn partition $txnTopicPartition to destination broker ${destination.id}")
       new LinkedBlockingQueue[PendingCompleteTxnAndMarkerEntry]()
@@ -146,7 +145,7 @@ class TxnMarkerQueue(@volatile var destination: Node) extends Logging {
   }
 
   def forEachTxnTopicPartition[B](f:(Int, BlockingQueue[PendingCompleteTxnAndMarkerEntry]) => B): Unit =
-    markersPerTxnTopicPartition.forKeyValue { (partition, queue) =>
+    markersPerTxnTopicPartition.foreachEntry { (partition, queue) =>
       if (!queue.isEmpty) f(partition, queue)
     }
 
@@ -179,10 +178,6 @@ class TransactionMarkerChannelManager(
 
   private val transactionsWithPendingMarkers = new ConcurrentHashMap[String, PendingCompleteTxn]
 
-  private val writeTxnMarkersRequestVersion: Short =
-    if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 1
-    else 0
-
   metricsGroup.newGauge(UnknownDestinationQueueSizeMetricName, () => markersQueueForUnknownBroker.totalNumMarkers)
   metricsGroup.newGauge(LogAppendRetryQueueSizeMetricName, () => txnLogAppendRetryQueue.size)
 
@@ -212,7 +207,7 @@ class TransactionMarkerChannelManager(
 
     // we do not synchronize on the update of the broker node with the enqueuing,
     // since even if there is a race condition we will just retry
-    val brokerRequestQueue = CoreUtils.atomicGetOrUpdate(markersQueuePerBroker, brokerId, {
+    val brokerRequestQueue = markersQueuePerBroker.getOrElseUpdate(brokerId, {
       // Note that this may get called more than once if threads have a close race while adding new queue.
       info(s"Creating new marker queue map to destination broker $brokerId")
       new TxnMarkerQueue(broker)
@@ -260,7 +255,7 @@ class TransactionMarkerChannelManager(
     }.filter { case (_, entries) => !entries.isEmpty }.map { case (node, entries) =>
       val markersToSend = entries.asScala.map(_.txnMarkerEntry).asJava
       val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(node.id, txnStateManager, this, entries)
-      val request = new WriteTxnMarkersRequest.Builder(writeTxnMarkersRequestVersion, markersToSend)
+      val request = new WriteTxnMarkersRequest.Builder(markersToSend)
 
       new RequestAndCompletionHandler(
         currentTimeMs,
@@ -377,7 +372,7 @@ class TransactionMarkerChannelManager(
       }
 
     txnStateManager.appendTransactionToLog(txnLogAppend.transactionalId, txnLogAppend.coordinatorEpoch,
-      txnLogAppend.newMetadata, appendCallback, _ == Errors.COORDINATOR_NOT_AVAILABLE, RequestLocal.NoCaching)
+      txnLogAppend.newMetadata, appendCallback, _ == Errors.COORDINATOR_NOT_AVAILABLE, RequestLocal.noCaching)
   }
 
   def addTxnMarkersToBrokerQueue(producerId: Long,

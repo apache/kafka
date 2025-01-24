@@ -28,16 +28,20 @@ import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
+
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -53,15 +57,17 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.streams.processor.internals.RecordDeserializer.handleDeserializationFailure;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
 /**
  * This class is responsible for the initialization, restoration, closing, flushing etc
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
  */
 public class GlobalStateManagerImpl implements GlobalStateManager {
-    private final static long NO_DEADLINE = -1L;
+    private static final long NO_DEADLINE = -1L;
 
     private final Time time;
     private final Logger log;
@@ -77,8 +83,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Set<String> globalStoreNames = new HashSet<>();
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
-
-    private InternalProcessorContext globalProcessorContext;
+    private InternalProcessorContext<?, ?> globalProcessorContext;
+    private DeserializationExceptionHandler deserializationExceptionHandler;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final Time time,
@@ -116,10 +122,11 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             config.getLong(StreamsConfig.POLL_MS_CONFIG) + requestTimeoutMs
         );
         taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
+        deserializationExceptionHandler = config.deserializationExceptionHandler();
     }
 
     @Override
-    public void setGlobalProcessorContext(final InternalProcessorContext globalProcessorContext) {
+    public void setGlobalProcessorContext(final InternalProcessorContext<?, ?> globalProcessorContext) {
         this.globalProcessorContext = globalProcessorContext;
     }
 
@@ -135,7 +142,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         for (final StateStore stateStore : topology.globalStateStores()) {
             final String sourceTopic = storeToChangelogTopic.get(stateStore.name());
             changelogTopics.add(sourceTopic);
-            stateStore.init((StateStoreContext) globalProcessorContext, stateStore);
+            stateStore.init(globalProcessorContext, stateStore);
         }
 
         // make sure each topic-partition from checkpointFileCache is associated with a global state store
@@ -154,13 +161,13 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         return Collections.unmodifiableSet(globalStoreNames);
     }
 
-    public StateStore getGlobalStore(final String name) {
+    public StateStore globalStore(final String name) {
         return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
 
     @Override
-    public StateStore getStore(final String name) {
-        return getGlobalStore(name);
+    public StateStore store(final String name) {
+        return globalStore(name);
     }
 
     public File baseDir() {
@@ -203,13 +210,23 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         );
 
         try {
-            restoreState(
-                stateRestoreCallback,
-                topicPartitions,
-                highWatermarks,
-                store.name(),
-                converterForStore(store)
-            );
+            final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory = topology
+                .storeNameToReprocessOnRestore().getOrDefault(store.name(), Optional.empty());
+            if (reprocessFactory.isPresent()) {
+                reprocessState(
+                    topicPartitions,
+                    highWatermarks,
+                    reprocessFactory.get(),
+                    store.name());
+            } else {
+                restoreState(
+                    stateRestoreCallback,
+                    topicPartitions,
+                    highWatermarks,
+                    store.name(),
+                    converterForStore(store)
+                );
+            }
         } finally {
             globalConsumer.unsubscribe();
         }
@@ -235,6 +252,101 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             topicPartitions.add(new TopicPartition(partition.topic(), partition.partition()));
         }
         return topicPartitions;
+    }
+
+    //Visible for testing
+    public void setDeserializationExceptionHandler(final DeserializationExceptionHandler deserializationExceptionHandler) {
+        this.deserializationExceptionHandler = deserializationExceptionHandler;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked", "resource"})
+    private void reprocessState(final List<TopicPartition> topicPartitions,
+                                final Map<TopicPartition, Long> highWatermarks,
+                                final InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?> reprocessFactory,
+                                final String storeName) {
+        final Processor<?, ?, ?, ?> source = reprocessFactory.processorSupplier().get();
+        source.init((ProcessorContext) globalProcessorContext);
+
+        for (final TopicPartition topicPartition : topicPartitions) {
+            long currentDeadline = NO_DEADLINE;
+
+            globalConsumer.assign(Collections.singletonList(topicPartition));
+            long offset;
+            final Long checkpoint = checkpointFileCache.get(topicPartition);
+            if (checkpoint != null) {
+                globalConsumer.seek(topicPartition, checkpoint);
+                offset = checkpoint;
+            } else {
+                globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
+                offset = getGlobalConsumerOffset(topicPartition);
+            }
+            final Long highWatermark = highWatermarks.get(topicPartition);
+            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+
+            long restoreCount = 0L;
+
+            while (offset < highWatermark) {
+                // we add `request.timeout.ms` to `poll.ms` because `poll.ms` might be too short
+                // to give a fetch request a fair chance to actually complete and we don't want to
+                // start `task.timeout.ms` too early
+                //
+                // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
+                //      `poll(pollMS)` without adding the request timeout and do a more precise
+                //      timeout handling
+                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollMsPlusRequestTimeout);
+                if (records.isEmpty()) {
+                    currentDeadline = maybeUpdateDeadlineOrThrow(currentDeadline);
+                } else {
+                    currentDeadline = NO_DEADLINE;
+                }
+
+                for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
+                    final ProcessorRecordContext recordContext =
+                        new ProcessorRecordContext(
+                            record.timestamp(),
+                            record.offset(),
+                            record.partition(),
+                            record.topic(),
+                            record.headers());
+                    globalProcessorContext.setRecordContext(recordContext);
+
+                    try {
+                        if (record.key() != null) {
+                            source.process(new Record(
+                                reprocessFactory.keyDeserializer().deserialize(record.topic(), record.key()),
+                                reprocessFactory.valueDeserializer().deserialize(record.topic(), record.value()),
+                                record.timestamp(),
+                                record.headers()));
+                            restoreCount++;
+                        }
+                    } catch (final Exception deserializationException) {
+                        // while Java distinguishes checked vs unchecked exceptions, other languages
+                        // like Scala or Kotlin do not, and thus we need to catch `Exception`
+                        // (instead of `RuntimeException`) to work well with those languages
+                        handleDeserializationFailure(
+                            deserializationExceptionHandler,
+                            globalProcessorContext,
+                            deserializationException,
+                            record,
+                            log,
+                            droppedRecordsSensor(
+                                Thread.currentThread().getName(),
+                                globalProcessorContext.taskId().toString(),
+                                globalProcessorContext.metrics()
+                            ),
+                            null
+                        );
+                    }
+                }
+
+                offset = getGlobalConsumerOffset(topicPartition);
+
+                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreCount);
+            }
+            stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
+            checkpointFileCache.put(topicPartition, offset);
+
+        }
     }
 
     private void restoreState(final StateRestoreCallback stateRestoreCallback,

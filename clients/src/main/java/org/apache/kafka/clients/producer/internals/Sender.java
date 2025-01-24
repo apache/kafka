@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
-
-import java.util.Optional;
-import java.util.Set;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -59,6 +55,7 @@ import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -69,8 +66,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
@@ -270,13 +271,14 @@ public class Sender implements Runnable {
         while (!forceClose && transactionManager != null && transactionManager.hasOngoingTransaction()) {
             if (!transactionManager.isCompleting()) {
                 log.info("Aborting incomplete transaction due to shutdown");
-
                 try {
                     // It is possible for the transaction manager to throw errors when aborting. Catch these
                     // so as not to interfere with the rest of the shutdown logic.
                     transactionManager.beginAbort();
                 } catch (Exception e) {
-                    log.error("Error in kafka producer I/O thread while aborting transaction: ", e);
+                    log.error("Error in kafka producer I/O thread while aborting transaction when during closing: ", e);
+                    // Force close in case the transactionManager is in error states.
+                    forceClose = true;
                 }
             }
             try {
@@ -460,17 +462,10 @@ public class Sender implements Runnable {
             return true;
         }
 
-        if (transactionManager.hasAbortableError() || transactionManager.isAborting()) {
-            if (accumulator.hasIncomplete()) {
-                // Attempt to get the last error that caused this abort.
-                RuntimeException exception = transactionManager.lastError();
-                // If there was no error, but we are still aborting,
-                // then this is most likely a case where there was no fatal error.
-                if (exception == null) {
-                    exception = new TransactionAbortedException();
-                }
-                accumulator.abortUndrainedBatches(exception);
-            }
+        if (transactionManager.hasAbortableError()) {
+            accumulator.abortUndrainedBatches(transactionManager.lastError());
+        } else if (transactionManager.isAborting()) {
+            accumulator.abortUndrainedBatches(new TransactionAbortedException());
         }
 
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequest(accumulator.hasIncomplete());
@@ -483,7 +478,7 @@ public class Sender implements Runnable {
             FindCoordinatorRequest.CoordinatorType coordinatorType = nextRequestHandler.coordinatorType();
             targetNode = coordinatorType != null ?
                     transactionManager.coordinator(coordinatorType) :
-                    client.leastLoadedNode(time.milliseconds());
+                    client.leastLoadedNode(time.milliseconds()).node();
             if (targetNode != null) {
                 if (!awaitNodeReady(targetNode, coordinatorType)) {
                     log.trace("Target node {} not ready within request timeout, will retry when node is ready.", targetNode);
@@ -869,27 +864,10 @@ public class Sender implements Runnable {
             return;
 
         final Map<TopicPartition, ProducerBatch> recordsByPartition = new HashMap<>(batches.size());
-
-        // find the minimum magic version used when creating the record sets
-        byte minUsedMagic = apiVersions.maxUsableProduceMagic();
-        for (ProducerBatch batch : batches) {
-            if (batch.magic() < minUsedMagic)
-                minUsedMagic = batch.magic();
-        }
         ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
             MemoryRecords records = batch.records();
-
-            // down convert if necessary to the minimum magic used. In general, there can be a delay between the time
-            // that the producer starts building the batch and the time that we send the request, and we may have
-            // chosen the message format based on out-dated metadata. In the worst case, we optimistically chose to use
-            // the new message format, but found that the broker didn't support it, so we need to down-convert on the
-            // client before sending. This is intended to handle edge cases around cluster upgrades where brokers may
-            // not all support the same message format version. For example, if a partition migrates from a broker
-            // which is supporting the new magic version to one which doesn't, then we will need to convert.
-            if (!records.hasMatchingMagic(minUsedMagic))
-                records = batch.records().downConvert(minUsedMagic, 0, time).records();
             ProduceRequestData.TopicProduceData tpData = tpd.find(tp.topic());
             if (tpData == null) {
                 tpData = new ProduceRequestData.TopicProduceData().setName(tp.topic());
@@ -902,16 +880,20 @@ public class Sender implements Runnable {
         }
 
         String transactionalId = null;
+        boolean useTransactionV1Version = false;
         if (transactionManager != null && transactionManager.isTransactional()) {
             transactionalId = transactionManager.transactionalId();
+            useTransactionV1Version = !transactionManager.isTransactionV2Enabled();
         }
 
-        ProduceRequest.Builder requestBuilder = ProduceRequest.forMagic(minUsedMagic,
+        ProduceRequest.Builder requestBuilder = ProduceRequest.builder(
                 new ProduceRequestData()
                         .setAcks(acks)
                         .setTimeoutMs(timeout)
                         .setTransactionalId(transactionalId)
-                        .setTopicData(tpd));
+                        .setTopicData(tpd),
+                useTransactionV1Version
+        );
         RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, time.milliseconds());
 
         String nodeId = Integer.toString(destination);

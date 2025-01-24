@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import java.util.Set;
-
 import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Set;
 
 /**
  * The <code>b64token</code> value as defined in
@@ -78,7 +78,7 @@ public interface OAuthBearerToken {
      * epoch, as per <a href="https://tools.ietf.org/html/rfc6749#section-1.4">RFC
      * 6749 Section 1.4</a>
      * 
-     * @return the token'slifetime, expressed as the number of milliseconds since
+     * @return the token's lifetime, expressed as the number of milliseconds since
      *         the epoch, as per
      *         <a href="https://tools.ietf.org/html/rfc6749#section-1.4">RFC 6749
      *         Section 1.4</a>.

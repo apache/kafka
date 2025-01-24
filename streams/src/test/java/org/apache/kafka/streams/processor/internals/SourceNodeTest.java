@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -23,12 +24,18 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.SensorAccessor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -39,9 +46,25 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
-import static org.junit.Assert.assertTrue;
+import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 
 public class SourceNodeTest {
+    private MockedStatic<WrappingNullableUtils> utilsMock;
+
+    @BeforeEach
+    public void setup() {
+        utilsMock = Mockito.mockStatic(WrappingNullableUtils.class);
+    }
+
+    @AfterEach
+    public void cleanup() {
+        utilsMock.close();
+    }
+
+
     @Test
     public void shouldProvideTopicHeadersAndDataToKeyDeserializer() {
         final SourceNode<String, String> sourceNode = new MockSourceNode<>(new TheDeserializer(), new TheDeserializer());
@@ -74,7 +97,7 @@ public class SourceNodeTest {
     public void shouldExposeProcessMetrics() {
         final Metrics metrics = new Metrics();
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
+            new StreamsMetricsImpl(metrics, "test-client", "processId", new MockTime());
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(streamsMetrics);
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
@@ -105,5 +128,63 @@ public class SourceNodeTest {
             sensorAccessor.parents().stream().map(Sensor::name).collect(Collectors.toList()),
             contains(sensorNamePrefix + ".s.process")
         );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnUndefinedKeySerde() {
+        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>();
+
+        final SourceNode<String, String> node =
+            new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
+
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any(), any()))
+            .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
+
+        final Throwable exception = assertThrows(StreamsException.class, () -> node.init(context));
+
+        assertThat(
+            exception.getMessage(),
+            equalTo("Failed to initialize key serdes for source node TESTING_NODE")
+        );
+        assertThat(
+            exception.getCause().getMessage(),
+            equalTo("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG")
+        );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnUndefinedValueSerde() {
+        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>();
+
+        final SourceNode<String, String> node =
+            new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
+
+        utilsMock.when(() -> WrappingNullableUtils.prepareValueDeserializer(any(), any(), any()))
+            .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
+
+        final Throwable exception = assertThrows(StreamsException.class, () -> node.init(context));
+
+        assertThat(
+            exception.getMessage(),
+            equalTo("Failed to initialize value serdes for source node TESTING_NODE")
+        );
+        assertThat(
+            exception.getCause().getMessage(),
+            equalTo("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG")
+        );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionWithExplicitErrorMessage() {
+        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>();
+
+        final SourceNode<String, String> node =
+            new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
+
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any(), any())).thenThrow(new StreamsException(""));
+
+        final Throwable exception = assertThrows(StreamsException.class, () -> node.init(context));
+
+        assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for source node TESTING_NODE"));
     }
 }

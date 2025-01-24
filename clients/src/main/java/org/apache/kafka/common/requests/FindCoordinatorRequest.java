@@ -79,10 +79,6 @@ public class FindCoordinatorRequest extends AbstractRequest {
     public static class NoBatchedFindCoordinatorsException extends UnsupportedVersionException {
         private static final long serialVersionUID = 1L;
 
-        public NoBatchedFindCoordinatorsException(String message, Throwable cause) {
-            super(message, cause);
-        }
-
         public NoBatchedFindCoordinatorsException(String message) {
             super(message);
         }
@@ -120,7 +116,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
     }
 
     public enum CoordinatorType {
-        GROUP((byte) 0), TRANSACTION((byte) 1);
+        GROUP((byte) 0), TRANSACTION((byte) 1), SHARE((byte) 2);
 
         final byte id;
 
@@ -138,6 +134,8 @@ public class FindCoordinatorRequest extends AbstractRequest {
                     return GROUP;
                 case 1:
                     return TRANSACTION;
+                case 2:
+                    return SHARE;
                 default:
                     throw new InvalidRequestException("Unknown coordinator type received: " + id);
             }

@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.DslKeyValueParams;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -26,6 +25,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +43,7 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     }
 
     @Override
-    public StateStore build() {
+    public StoreBuilder<?> builder() {
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), true))
                 : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
@@ -76,7 +76,7 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
         }
 
 
-        return builder.build();
+        return builder;
     }
 
     @Override

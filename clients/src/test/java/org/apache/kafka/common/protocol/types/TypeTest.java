@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -50,7 +51,7 @@ public class TypeTest {
 
     @Test
     public void testRecordsSerde() {
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE,
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("foo".getBytes()),
             new SimpleRecord("bar".getBytes()));
         ByteBuffer buffer = ByteBuffer.allocate(Type.RECORDS.sizeOf(records));
@@ -81,7 +82,7 @@ public class TypeTest {
 
     @Test
     public void testCompactRecordsSerde() {
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE,
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("foo".getBytes()),
             new SimpleRecord("bar".getBytes()));
         ByteBuffer buffer = ByteBuffer.allocate(Type.COMPACT_RECORDS.sizeOf(records));

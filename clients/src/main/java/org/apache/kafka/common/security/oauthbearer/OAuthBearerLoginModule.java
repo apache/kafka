@@ -16,6 +16,17 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.Login;
+import org.apache.kafka.common.security.auth.SaslExtensions;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientProvider;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslServerProvider;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
@@ -28,16 +39,6 @@ import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.LoginException;
 import javax.security.auth.spi.LoginModule;
-
-import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.auth.Login;
-import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
-import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientProvider;
-import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslServerProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The {@code LoginModule} for the SASL/OAUTHBEARER mechanism. When a client

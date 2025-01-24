@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.connect.json;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -29,21 +24,27 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
-import org.apache.kafka.connect.data.SchemaBuilder;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.ConnectSchema;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.data.Timestamp;
-import org.apache.kafka.connect.data.Time;
-import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Date;
+import org.apache.kafka.connect.data.Decimal;
+import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StringConverterConfig;
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -54,8 +55,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-
-import static org.apache.kafka.common.utils.Utils.mkSet;
+import java.util.Set;
 
 /**
  * Implementation of {@link Converter} and {@link HeaderConverter} that uses JSON to store schemas and objects. By
@@ -149,10 +149,9 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
         LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public JsonNode toJson(final Schema schema, final Object value, final JsonConverterConfig config) {
-                if (!(value instanceof BigDecimal))
+                if (!(value instanceof BigDecimal decimal))
                     throw new DataException("Invalid type for Decimal, expected BigDecimal but was " + value.getClass());
 
-                final BigDecimal decimal = (BigDecimal) value;
                 switch (config.decimalFormat()) {
                     case NUMERIC:
                         return JSON_NODE_FACTORY.numberNode(decimal);
@@ -241,25 +240,25 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     /**
      * Creates a JsonConvert initializing serializer and deserializer.
      *
-     * @param enableModules permits to enable/disable the registration of additional Jackson modules.
+     * @param enableBlackbird permits to enable/disable the registration of Jackson Blackbird module.
      * <p>
      * NOTE: This is visible only for testing
      */
-    public JsonConverter(boolean enableModules) {
+    public JsonConverter(boolean enableBlackbird) {
         serializer = new JsonSerializer(
-            mkSet(),
+            Set.of(),
             JSON_NODE_FACTORY,
-            enableModules
+            enableBlackbird
         );
 
         deserializer = new JsonDeserializer(
-            mkSet(
+            Set.of(
                 // this ensures that the JsonDeserializer maintains full precision on
                 // floating point numbers that cannot fit into float64
                 DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
             ),
             JSON_NODE_FACTORY,
-            enableModules
+            enableBlackbird
         );
     }
 

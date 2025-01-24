@@ -18,13 +18,18 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.Configurable;
 
-import java.util.Map;
-import java.util.regex.Pattern;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Defines remote topics like "us-west.topic1". The separator is customizable and defaults to a period. */
+import java.util.Map;
+import java.util.regex.Pattern;
+
+/**
+ * Default implementation of {@link ReplicationPolicy} which prepends the source cluster alias to
+ * remote topic names.
+ * For example, if the source cluster alias is "us-west", topics created in the target cluster will be named
+ * us-west.&lt;TOPIC&gt;. The separator is customizable by setting {@link #SEPARATOR_CONFIG} and defaults to a period.
+ */
 public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable {
     
     private static final Logger log = LoggerFactory.getLogger(DefaultReplicationPolicy.class);
@@ -110,6 +115,6 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
 
     @Override
     public boolean isMM2InternalTopic(String topic) {
-        return  topic.endsWith(internalSuffix());
+        return  topic.startsWith("mm2") && topic.endsWith(internalSuffix()) || isCheckpointsTopic(topic);
     }
 }

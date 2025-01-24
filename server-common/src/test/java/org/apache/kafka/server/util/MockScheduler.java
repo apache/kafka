@@ -22,10 +22,8 @@ import java.util.Comparator;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.concurrent.Delayed;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 
@@ -105,12 +103,12 @@ public class MockScheduler implements Scheduler {
         }
 
         @Override
-        public Void get() throws InterruptedException, ExecutionException {
+        public Void get() {
             return null;
         }
 
         @Override
-        public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+        public Void get(long timeout, TimeUnit unit) {
             return null;
         }
 

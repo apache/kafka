@@ -29,8 +29,9 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Murmur3;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
-import org.junit.Test;
+import org.apache.kafka.test.MockInternalProcessorContext;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.List;
@@ -41,8 +42,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.collection.IsEmptyCollection.empty;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class ResponseJoinProcessorSupplierTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
@@ -95,7 +96,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -124,7 +125,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -153,7 +154,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -179,7 +180,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -205,7 +206,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -231,7 +232,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> context = new MockInternalProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -243,7 +244,7 @@ public class ResponseJoinProcessorSupplierTest {
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
     }
 
-    private Object getDroppedRecordsTotalMetric(final InternalProcessorContext<String, String> context) {
+    static Object getDroppedRecordsTotalMetric(final InternalProcessorContext<String, ?> context) {
         final MetricName dropTotalMetric = new MetricName(
             "dropped-records-total",
             "stream-task-metrics",
@@ -257,7 +258,7 @@ public class ResponseJoinProcessorSupplierTest {
         return context.metrics().metrics().get(dropTotalMetric).metricValue();
     }
 
-    private Object getDroppedRecordsRateMetric(final InternalProcessorContext<String, String> context) {
+    static Object getDroppedRecordsRateMetric(final InternalProcessorContext<String, ?> context) {
         final MetricName dropRateMetric = new MetricName(
             "dropped-records-rate",
             "stream-task-metrics",

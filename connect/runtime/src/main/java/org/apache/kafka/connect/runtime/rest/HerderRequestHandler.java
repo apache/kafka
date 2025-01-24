@@ -16,24 +16,26 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.StagedTimeoutException;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
-import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriBuilder;
 
 public class HerderRequestHandler {
 
@@ -61,18 +63,8 @@ public class HerderRequestHandler {
         } catch (ExecutionException e) {
             throw e.getCause();
         } catch (StagedTimeoutException e) {
-            String message;
             Stage stage = e.stage();
-            if (stage.completed() != null) {
-                message = "Request timed out. The last operation the worker completed was "
-                        + stage.description() + ", which began at "
-                        + Instant.ofEpochMilli(stage.started()) + " and completed at "
-                        + Instant.ofEpochMilli(stage.completed());
-            } else {
-                message = "Request timed out. The worker is currently "
-                        + stage.description() + ", which began at "
-                        + Instant.ofEpochMilli(stage.started());
-            }
+            String message = "Request timed out. " + stage.summarize();
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), message);
@@ -121,6 +113,7 @@ public class HerderRequestHandler {
                 }
                 String forwardUrl = uriBuilder.build().toString();
                 log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
+                // TODO, we may need to set the request timeout as Idle timeout on the HttpClient
                 return translator.translate(restClient.httpRequest(forwardUrl, method, headers, body, resultType));
             } else {
                 log.error("Request '{} {}' failed because it couldn't find the target Connect worker within two hops (between workers).",

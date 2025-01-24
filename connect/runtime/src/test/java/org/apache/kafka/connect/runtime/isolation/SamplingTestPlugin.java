@@ -63,7 +63,7 @@ public interface SamplingTestPlugin {
             for (Entry<String, SamplingTestPlugin> child : otherSamples.entrySet()) {
                 for (Entry<String, SamplingTestPlugin> flattened : child.getValue().flatten().entrySet()) {
                     String key = child.getKey();
-                    if (flattened.getKey().length() > 0) {
+                    if (!flattened.getKey().isEmpty()) {
                         key += "." + flattened.getKey();
                     }
                     out.put(key, flattened.getValue());

@@ -19,31 +19,35 @@ package org.apache.kafka.raft;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
+import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
 import org.apache.kafka.common.message.VoteRequestData;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
+import org.apache.kafka.common.requests.UpdateRaftVoterRequest;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -82,9 +86,17 @@ public class KafkaNetworkChannel implements NetworkChannel {
     private final SendThread requestThread;
 
     private final AtomicInteger correlationIdCounter = new AtomicInteger(0);
-    private final Map<Integer, Node> endpoints = new HashMap<>();
 
-    public KafkaNetworkChannel(Time time, KafkaClient client, int requestTimeoutMs, String threadNamePrefix) {
+    private final ListenerName listenerName;
+
+    public KafkaNetworkChannel(
+        Time time,
+        ListenerName listenerName,
+        KafkaClient client,
+        int requestTimeoutMs,
+        String threadNamePrefix
+    ) {
+        this.listenerName = listenerName;
         this.requestThread = new SendThread(
             threadNamePrefix + "-outbound-request-thread",
             client,
@@ -101,23 +113,23 @@ public class KafkaNetworkChannel implements NetworkChannel {
 
     @Override
     public void send(RaftRequest.Outbound request) {
-        Node node = endpoints.get(request.destinationId());
+        Node node = request.destination();
         if (node != null) {
             requestThread.sendRequest(new RequestAndCompletionHandler(
-                request.createdTimeMs,
+                request.createdTimeMs(),
                 node,
-                buildRequest(request.data),
+                buildRequest(request.data()),
                 response -> sendOnComplete(request, response)
             ));
         } else
-            sendCompleteFuture(request, errorResponse(request.data, Errors.BROKER_NOT_AVAILABLE));
+            sendCompleteFuture(request, errorResponse(request.data(), Errors.BROKER_NOT_AVAILABLE));
     }
 
     private void sendCompleteFuture(RaftRequest.Outbound request, ApiMessage message) {
         RaftResponse.Inbound response = new RaftResponse.Inbound(
-                request.correlationId,
+                request.correlationId(),
                 message,
-                request.destinationId()
+                request.destination()
         );
         request.completion.complete(response);
     }
@@ -126,16 +138,16 @@ public class KafkaNetworkChannel implements NetworkChannel {
         ApiMessage response;
         if (clientResponse.versionMismatch() != null) {
             log.error("Request {} failed due to unsupported version error", request, clientResponse.versionMismatch());
-            response = errorResponse(request.data, Errors.UNSUPPORTED_VERSION);
+            response = errorResponse(request.data(), Errors.UNSUPPORTED_VERSION);
         } else if (clientResponse.authenticationException() != null) {
             // For now we treat authentication errors as retriable. We use the
             // `NETWORK_EXCEPTION` error code for lack of a good alternative.
             // Note that `NodeToControllerChannelManager` will still log the
             // authentication errors so that users have a chance to fix the problem.
             log.error("Request {} failed due to authentication error", request, clientResponse.authenticationException());
-            response = errorResponse(request.data, Errors.NETWORK_EXCEPTION);
+            response = errorResponse(request.data(), Errors.NETWORK_EXCEPTION);
         } else if (clientResponse.wasDisconnected()) {
-            response = errorResponse(request.data, Errors.BROKER_NOT_AVAILABLE);
+            response = errorResponse(request.data(), Errors.BROKER_NOT_AVAILABLE);
         } else {
             response = clientResponse.responseBody().data();
         }
@@ -148,9 +160,8 @@ public class KafkaNetworkChannel implements NetworkChannel {
     }
 
     @Override
-    public void updateEndpoint(int id, RaftConfig.InetAddressSpec spec) {
-        Node node = new Node(id, spec.address.getHostString(), spec.address.getPort());
-        endpoints.put(id, node);
+    public ListenerName listenerName() {
+        return listenerName;
     }
 
     public void start() {
@@ -178,6 +189,12 @@ public class KafkaNetworkChannel implements NetworkChannel {
             return new FetchRequest.SimpleBuilder((FetchRequestData) requestData);
         if (requestData instanceof FetchSnapshotRequestData)
             return new FetchSnapshotRequest.Builder((FetchSnapshotRequestData) requestData);
+        if (requestData instanceof UpdateRaftVoterRequestData)
+            return new UpdateRaftVoterRequest.Builder((UpdateRaftVoterRequestData) requestData);
+        if (requestData instanceof ApiVersionsRequestData)
+            return new ApiVersionsRequest.Builder((ApiVersionsRequestData) requestData,
+                ApiKeys.API_VERSIONS.oldestVersion(),
+                ApiKeys.API_VERSIONS.latestVersion());
         throw new IllegalArgumentException("Unexpected type for requestData: " + requestData);
     }
 }

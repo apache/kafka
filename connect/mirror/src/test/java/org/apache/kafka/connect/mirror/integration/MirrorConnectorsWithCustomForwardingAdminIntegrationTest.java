@@ -25,6 +25,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -33,6 +34,10 @@ import org.apache.kafka.connect.mirror.MirrorMakerConfig;
 import org.apache.kafka.connect.mirror.clients.admin.FakeForwardingAdminWithLocalMetadata;
 import org.apache.kafka.connect.mirror.clients.admin.FakeLocalMetadataStore;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
+import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -61,23 +66,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("integration")
 public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
+
+    private static final int TOPIC_ACL_SYNC_DURATION_MS = 30_000;
     private static final int FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS = 60_000;
 
     /*
      * enable ACL on brokers.
      */
     protected static void enableAclAuthorizer(Properties brokerProps) {
-        brokerProps.put("authorizer.class.name", "kafka.security.authorizer.AclAuthorizer");
-        brokerProps.put("sasl.enabled.mechanisms", "PLAIN");
-        brokerProps.put("sasl.mechanism.inter.broker.protocol", "PLAIN");
-        brokerProps.put("security.inter.broker.protocol", "SASL_PLAINTEXT");
-        brokerProps.put("listeners", "SASL_PLAINTEXT://localhost:0");
-        brokerProps.put("listener.name.sasl_plaintext.plain.sasl.jaas.config",
-                "org.apache.kafka.common.security.plain.PlainLoginModule required "
-                        + "username=\"super\" "
-                        + "password=\"super_pwd\" "
-                        + "user_connector=\"connector_pwd\" "
-                        + "user_super=\"super_pwd\";");
+        brokerProps.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT");
+        brokerProps.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, "org.apache.kafka.metadata.authorizer.StandardAuthorizer");
+        brokerProps.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
+        brokerProps.put(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
+        brokerProps.put(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
+        String listenerSaslJaasConfig = "org.apache.kafka.common.security.plain.PlainLoginModule required "
+                + "username=\"super\" "
+                + "password=\"super_pwd\" "
+                + "user_connector=\"connector_pwd\" "
+                + "user_super=\"super_pwd\";";
+        brokerProps.put("listener.name.external.plain.sasl.jaas.config", listenerSaslJaasConfig);
+        brokerProps.put("listener.name.controller.plain.sasl.jaas.config", listenerSaslJaasConfig);
         brokerProps.put("super.users", "User:super");
     }
 
@@ -164,7 +172,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         startClusters(additionalConfig);
 
         try (Admin adminClient = primary.kafka().createAdminClient()) {
-            adminClient.createAcls(Arrays.asList(
+            adminClient.createAcls(Collections.singletonList(
                     new AclBinding(
                             new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
                             new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
@@ -172,7 +180,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
             )).all().get();
         }
         try (Admin adminClient = backup.kafka().createAdminClient()) {
-            adminClient.createAcls(Arrays.asList(
+            adminClient.createAcls(Collections.singletonList(
                     new AclBinding(
                             new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
                             new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
@@ -292,8 +300,9 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
     @Test
     public void testSyncTopicACLsUseProvidedForwardingAdmin() throws Exception {
         mm2Props.put("sync.topic.acls.enabled", "true");
+        mm2Props.put("sync.topic.acls.interval.seconds", "1");
         mm2Config = new MirrorMakerConfig(mm2Props);
-        List<AclBinding> aclBindings = Arrays.asList(
+        List<AclBinding> aclBindings = Collections.singletonList(
                 new AclBinding(
                         new ResourcePattern(ResourceType.TOPIC, "test-topic-1", PatternType.LITERAL),
                         new AccessControlEntry("User:dummy", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW)
@@ -323,25 +332,29 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
                 new AccessControlEntry("User:dummy", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW)
         );
 
-        assertTrue(getAclBindings(backup.kafka(), "primary.test-topic-1").contains(expectedACLOnBackupCluster), "topic ACLs was synced");
-        assertTrue(getAclBindings(primary.kafka(), "backup.test-topic-1").contains(expectedACLOnPrimaryCluster), "topic ACLs was synced");
+        // In some rare cases replica topics are created before ACLs are synced, so retry logic is necessary
+        waitForCondition(
+                () -> {
+                    assertTrue(getAclBindings(backup.kafka(), "primary.test-topic-1").contains(expectedACLOnBackupCluster), "topic ACLs are not synced on backup cluster");
+                    assertTrue(getAclBindings(primary.kafka(), "backup.test-topic-1").contains(expectedACLOnPrimaryCluster), "topic ACLs are not synced on primary cluster");
+                    return true;
+                },
+                TOPIC_ACL_SYNC_DURATION_MS,
+                "Topic ACLs were not synced in time"
+        );
 
         // expect to use FakeForwardingAdminWithLocalMetadata to update topic ACLs in FakeLocalMetadataStore.allAcls
         assertTrue(FakeLocalMetadataStore.aclBindings("dummy").containsAll(Arrays.asList(expectedACLOnBackupCluster, expectedACLOnPrimaryCluster)));
     }
 
     void waitForTopicToPersistInFakeLocalMetadataStore(String topicName) throws InterruptedException {
-        waitForCondition(() -> {
-                return FakeLocalMetadataStore.containsTopic(topicName);
-            }, FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
+        waitForCondition(() -> FakeLocalMetadataStore.containsTopic(topicName), FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
             "Topic: " + topicName + " didn't get created in the FakeLocalMetadataStore"
         );
     }
 
     void waitForTopicConfigPersistInFakeLocalMetaDataStore(String topicName, String configName, String expectedConfigValue) throws InterruptedException {
-        waitForCondition(() -> {
-            return FakeLocalMetadataStore.topicConfig(topicName).getOrDefault(configName, "").equals(expectedConfigValue);
-            }, FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
+        waitForCondition(() -> FakeLocalMetadataStore.topicConfig(topicName).getOrDefault(configName, "").equals(expectedConfigValue), FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
             "Topic: " + topicName + "'s configs don't have " + configName + ":" + expectedConfigValue
         );
     }

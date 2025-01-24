@@ -19,6 +19,7 @@ package org.apache.kafka.shell.command;
 
 import org.apache.kafka.image.node.MetadataNode;
 import org.apache.kafka.shell.state.MetadataShellState;
+
 import org.jline.reader.Candidate;
 
 import java.util.ArrayList;
@@ -73,9 +74,9 @@ public final class CommandUtils {
     public static List<String> splitPath(String path) {
         List<String> results = new ArrayList<>();
         String[] components = path.split("/");
-        for (int i = 0; i < components.length; i++) {
-            if (!components[i].isEmpty()) {
-                results.add(components[i]);
+        for (String component : components) {
+            if (!component.isEmpty()) {
+                results.add(component);
             }
         }
         return results;
@@ -85,7 +86,7 @@ public final class CommandUtils {
         List<String> output = new ArrayList<>();
         for (String string : input) {
             if (string.equals("..")) {
-                if (output.size() > 0) {
+                if (!output.isEmpty()) {
                     output.remove(output.size() - 1);
                 }
             } else if (!string.equals(".")) {
@@ -106,7 +107,7 @@ public final class CommandUtils {
         MetadataShellState state,
         String pathPrefix,
         List<Candidate> candidates
-    ) throws Exception {
+    ) {
         state.visit(data -> {
             String absolutePath = pathPrefix.startsWith("/") ?
                 pathPrefix : data.workingDirectory() + "/" + pathPrefix;

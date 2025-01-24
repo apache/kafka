@@ -16,39 +16,23 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.Stores;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashSet;
 
-import static java.time.Duration.ofMillis;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
 
-    private static final String STORE_NAME = "in-memory session store";
-
     @Override
-    <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
-                                                 final Serde<K> keySerde,
-                                                 final Serde<V> valueSerde) {
-        return Stores.sessionStoreBuilder(
-            Stores.inMemorySessionStore(
-                STORE_NAME,
-                ofMillis(retentionPeriod)),
-            keySerde,
-            valueSerde).build();
-    }
-
-    StoreType getStoreType() {
+    StoreType storeType() {
         return StoreType.InMemoryStore;
     }
 
@@ -68,7 +52,11 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
         assertFalse(iterator.hasNext());
 
         iterator.close();
-        assertFalse(sessionStore.findSessions("a", "b", 0L, 20L).hasNext());
+
+        try (final KeyValueIterator<Windowed<String>, Long> it =
+             sessionStore.findSessions("a", "b", 0L, 20L)) {
+            assertFalse(it.hasNext());
+        }
     }
 
 }

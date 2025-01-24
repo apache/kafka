@@ -18,15 +18,16 @@ package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.Arrays;
-import java.util.Set;
-import java.util.Map;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.config.provider.EnvVarConfigProvider.ALLOWLIST_PATTERN_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,7 +40,7 @@ class EnvVarConfigProviderTest {
 
     @BeforeEach
     public void setup() {
-        Map<String, String> testEnvVars = new HashMap<String, String>() {
+        Map<String, String> testEnvVars = new HashMap<>() {
             {
                 put("test_var1", "value1");
                 put("secret_var2", "value2");

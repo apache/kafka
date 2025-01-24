@@ -22,7 +22,7 @@ package org.apache.kafka.common.errors;
  */
 public class TransactionAbortedException extends ApiException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
     public TransactionAbortedException(String message, Throwable cause) {
         super(message, cause);

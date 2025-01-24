@@ -17,31 +17,36 @@
 
 package kafka.server
 
+import kafka.metrics.KafkaMetricsReporter
 import kafka.raft.KafkaRaftManager
 import kafka.server.Server.MetricsPrefix
-import kafka.server.metadata.BrokerServerMetrics
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.{CoreUtils, Logging, VerifiableProperties}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
 import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
-import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
+import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
+import org.apache.kafka.metadata.ListenerInfo
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
-import org.apache.kafka.raft.RaftConfig.AddressSpec
-import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.raft.Endpoints
+import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics}
 
-import java.util
+import java.net.InetSocketAddress
+import java.util.Arrays
 import java.util.Optional
-import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
-
+import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.{Collection => JCollection}
+import java.util.{Map => JMap}
+import scala.jdk.CollectionConverters._
 
 /**
  * Creates a fault handler.
@@ -92,31 +97,36 @@ class SharedServer(
   val metaPropsEnsemble: MetaPropertiesEnsemble,
   val time: Time,
   private val _metrics: Metrics,
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
-  val faultHandlerFactory: FaultHandlerFactory
+  val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
+  val bootstrapServers: JCollection[InetSocketAddress],
+  val faultHandlerFactory: FaultHandlerFactory,
+  val socketFactory: ServerSocketFactory
 ) extends Logging {
+  KafkaMetricsReporter.startReporters(VerifiableProperties(sharedServerConfig.originals))
+  KafkaYammerMetrics.INSTANCE.configure(sharedServerConfig.originals)
+
   private val logContext: LogContext = new LogContext(s"[SharedServer id=${sharedServerConfig.nodeId}] ")
   this.logIdent = logContext.logPrefix
   private var started = false
   private var usedByBroker: Boolean = false
   private var usedByController: Boolean = false
-  val brokerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
-  val controllerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
+  val brokerConfig = new KafkaConfig(sharedServerConfig.props, false)
+  val controllerConfig = new KafkaConfig(sharedServerConfig.props, false)
   @volatile var metrics: Metrics = _metrics
   @volatile var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
   @volatile var brokerMetrics: BrokerServerMetrics = _
   @volatile var controllerServerMetrics: ControllerMetadataMetrics = _
   @volatile var loader: MetadataLoader = _
-  val snapshotsDisabledReason = new AtomicReference[String](null)
+  private val snapshotsDisabledReason = new AtomicReference[String](null)
   @volatile var snapshotEmitter: SnapshotEmitter = _
-  @volatile var snapshotGenerator: SnapshotGenerator = _
-  @volatile var metadataLoaderMetrics: MetadataLoaderMetrics = _
+  @volatile private var snapshotGenerator: SnapshotGenerator = _
+  @volatile private var metadataLoaderMetrics: MetadataLoaderMetrics = _
 
   def clusterId: String = metaPropsEnsemble.clusterId().get()
 
-  def nodeId: Int = metaPropsEnsemble.nodeId().getAsInt()
+  def nodeId: Int = metaPropsEnsemble.nodeId().getAsInt
 
-  def isUsed(): Boolean = synchronized {
+  private def isUsed(): Boolean = synchronized {
     usedByController || usedByBroker
   }
 
@@ -125,7 +135,7 @@ class SharedServer(
    */
   def startForBroker(): Unit = synchronized {
     if (!isUsed()) {
-      start()
+      start(Endpoints.empty())
     }
     usedByBroker = true
   }
@@ -133,9 +143,22 @@ class SharedServer(
   /**
    * The start function called by the controller.
    */
-  def startForController(): Unit = synchronized {
+  def startForController(listenerInfo: ListenerInfo): Unit = synchronized {
     if (!isUsed()) {
-      start()
+      val endpoints = Endpoints.fromInetSocketAddresses(
+        listenerInfo
+          .listeners()
+          .asScala
+          .map { case (listenerName, endpoint) =>
+            (
+              ListenerName.normalised(listenerName),
+              InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+            )
+          }
+          .toMap
+          .asJava
+      )
+      start(endpoints)
     }
     usedByController = true
   }
@@ -160,7 +183,7 @@ class SharedServer(
     }
   }
 
-  def raftManagerFaultHandler: FaultHandler = faultHandlerFactory.build(
+  private def raftManagerFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "raft manager",
     fatal = true,
     action = () => {}
@@ -169,7 +192,7 @@ class SharedServer(
   /**
    * The fault handler to use when metadata loading fails.
    */
-  def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build(
+  private def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "metadata loading",
     fatal = sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole),
     action = () => SharedServer.this.synchronized {
@@ -234,7 +257,7 @@ class SharedServer(
       // Note: snapshot generation does not need to be disabled for a publishing fault.
     })
 
-  private def start(): Unit = synchronized {
+  private def start(listenerEndpoints: Endpoints): Unit = synchronized {
     if (started) {
       debug("SharedServer has already been started.")
     } else {
@@ -245,17 +268,19 @@ class SharedServer(
           // This is only done in tests.
           metrics = new Metrics()
         }
-        sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
+        sharedServerConfig.dynamicConfig.initialize(clientMetricsReceiverPluginOpt = None)
 
         if (sharedServerConfig.processRoles.contains(ProcessRole.BrokerRole)) {
-          brokerMetrics = BrokerServerMetrics(metrics)
+          brokerMetrics = new BrokerServerMetrics(metrics)
         }
         if (sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole)) {
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
+
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           clusterId,
           sharedServerConfig,
+          metaPropsEnsemble.logDirProps.get(metaPropsEnsemble.metadataLogDir.get).directoryId.get,
           new MetadataRecordSerde,
           KafkaRaftServer.MetadataPartition,
           KafkaRaftServer.MetadataTopicId,
@@ -263,6 +288,8 @@ class SharedServer(
           metrics,
           Some(s"kafka-${sharedServerConfig.nodeId}-raft"), // No dash expected at the end
           controllerQuorumVotersFuture,
+          bootstrapServers,
+          listenerEndpoints,
           raftManagerFaultHandler
         )
         raftManager = _raftManager
@@ -303,7 +330,7 @@ class SharedServer(
           setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           build()
         try {
-          loader.installPublishers(util.Arrays.asList(snapshotGenerator)).get()
+          loader.installPublishers(Arrays.asList(snapshotGenerator)).get()
         } catch {
           case t: Throwable => {
             error("Unable to install metadata publishers", t)
@@ -343,34 +370,22 @@ class SharedServer(
       if (snapshotGenerator != null) {
         CoreUtils.swallow(snapshotGenerator.beginShutdown(), this)
       }
-      if (loader != null) {
-        CoreUtils.swallow(loader.close(), this)
-        loader = null
-      }
-      if (metadataLoaderMetrics != null) {
-        CoreUtils.swallow(metadataLoaderMetrics.close(), this)
-        metadataLoaderMetrics = null
-      }
-      if (snapshotGenerator != null) {
-        CoreUtils.swallow(snapshotGenerator.close(), this)
-        snapshotGenerator = null
-      }
+      Utils.closeQuietly(loader, "loader")
+      loader = null
+      Utils.closeQuietly(metadataLoaderMetrics, "metadata loader metrics")
+      metadataLoaderMetrics = null
+      Utils.closeQuietly(snapshotGenerator, "snapshot generator")
+      snapshotGenerator = null
       if (raftManager != null) {
         CoreUtils.swallow(raftManager.shutdown(), this)
         raftManager = null
       }
-      if (controllerServerMetrics != null) {
-        CoreUtils.swallow(controllerServerMetrics.close(), this)
-        controllerServerMetrics = null
-      }
-      if (brokerMetrics != null) {
-        CoreUtils.swallow(brokerMetrics.close(), this)
-        brokerMetrics = null
-      }
-      if (metrics != null) {
-        CoreUtils.swallow(metrics.close(), this)
-        metrics = null
-      }
+      Utils.closeQuietly(controllerServerMetrics, "controller server metrics")
+      controllerServerMetrics = null
+      Utils.closeQuietly(brokerMetrics, "broker metrics")
+      brokerMetrics = null
+      Utils.closeQuietly(metrics, "metrics")
+      metrics = null
       CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, sharedServerConfig.nodeId.toString, metrics), this)
       started = false
     }

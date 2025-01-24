@@ -64,8 +64,9 @@ public class BootstrapDirectory {
     }
 
     public BootstrapMetadata read() throws Exception {
-        if (!Files.isDirectory(Paths.get(directoryPath))) {
-            if (Files.exists(Paths.get(directoryPath))) {
+        Path path = Paths.get(directoryPath);
+        if (!Files.isDirectory(path)) {
+            if (Files.exists(path)) {
                 throw new RuntimeException("Path " + directoryPath + " exists, but is not " +
                         "a directory.");
             } else {
@@ -81,7 +82,7 @@ public class BootstrapDirectory {
     }
 
     BootstrapMetadata readFromConfiguration() {
-        if (!ibp.isPresent()) {
+        if (ibp.isEmpty()) {
             return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
         }
         MetadataVersion version = MetadataVersion.fromVersionString(ibp.get());

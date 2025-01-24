@@ -17,7 +17,24 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Arrays;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.metadata.BrokerHeartbeatReply;
+import org.apache.kafka.metadata.BrokerRegistrationReply;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
+import org.apache.kafka.server.common.MetadataVersion;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -27,22 +44,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
-import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
-import org.apache.kafka.common.message.CreateTopicsResponseData;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.metadata.BrokerHeartbeatReply;
-import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -51,7 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Utility functions for use in QuorumController integration tests.
  */
 public class QuorumControllerIntegrationTestUtils {
-    private final static Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
+    private static final Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
 
     BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
         return brokerFeatures(MetadataVersion.MINIMUM_KRAFT_VERSION, MetadataVersion.latestTesting());
@@ -76,6 +77,32 @@ public class QuorumControllerIntegrationTestUtils {
     }
 
     /**
+     * Create a broker features collection for use in a registration request. MV and given features are included.
+     *
+     * @param minVersion            The minimum supported MV.
+     * @param maxVersion            The maximum supported MV.
+     * @param featureMaxVersions    The features and their max supported versions.
+     */
+    static BrokerRegistrationRequestData.FeatureCollection brokerFeaturesPlusFeatureVersions(
+            MetadataVersion minVersion,
+            MetadataVersion maxVersion,
+            Map<String, Short> featureMaxVersions
+    ) {
+        BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
+        features.add(new BrokerRegistrationRequestData.Feature()
+                .setName(MetadataVersion.FEATURE_NAME)
+                .setMinSupportedVersion(minVersion.featureLevel())
+                .setMaxSupportedVersion(maxVersion.featureLevel()));
+        featureMaxVersions.entrySet().forEach(entry -> {
+            features.add(new BrokerRegistrationRequestData.Feature()
+                .setName(entry.getKey())
+                .setMaxSupportedVersion(entry.getValue())
+                .setMinSupportedVersion((short) 0));
+        });
+        return features;
+    }
+
+    /**
      * Register the given number of brokers.
      *
      * @param controller    The active controller.
@@ -94,13 +121,14 @@ public class QuorumControllerIntegrationTestUtils {
                     .setBrokerId(brokerId)
                     .setRack(null)
                     .setClusterId(controller.clusterId())
-                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latestTesting()))
+                    .setFeatures(brokerFeaturesPlusFeatureVersions(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latestTesting(),
+                        Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_1.featureLevel())))
                     .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
                     .setLogDirs(Collections.singletonList(
                         Uuid.fromString("TESTBROKER" + Integer.toString(100000 + brokerId).substring(1) + "DIRAAAA")
                     ))
                     .setListeners(new ListenerCollection(
-                        Arrays.asList(
+                        Collections.singletonList(
                             new Listener()
                                 .setName("PLAINTEXT")
                                 .setHost("localhost")

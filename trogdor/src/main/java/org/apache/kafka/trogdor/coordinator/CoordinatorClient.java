@@ -17,13 +17,6 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
-import net.sourceforge.argparse4j.inf.Namespace;
-import net.sourceforge.argparse4j.inf.Subparser;
-import net.sourceforge.argparse4j.inf.Subparsers;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.StringFormatter;
@@ -33,24 +26,31 @@ import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
+import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.TaskDone;
 import org.apache.kafka.trogdor.rest.TaskPending;
 import org.apache.kafka.trogdor.rest.TaskRequest;
 import org.apache.kafka.trogdor.rest.TaskRunning;
+import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TaskStateType;
 import org.apache.kafka.trogdor.rest.TaskStopping;
 import org.apache.kafka.trogdor.rest.TasksRequest;
-import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksResponse;
-import org.apache.kafka.trogdor.task.TaskSpec;
-import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.UptimeResponse;
+import org.apache.kafka.trogdor.task.TaskSpec;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
+import net.sourceforge.argparse4j.inf.Namespace;
+import net.sourceforge.argparse4j.inf.Subparser;
+import net.sourceforge.argparse4j.inf.Subparsers;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.core.UriBuilder;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -62,6 +62,9 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.UriBuilder;
 
 import static net.sourceforge.argparse4j.impl.Arguments.append;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -137,7 +140,7 @@ public class CoordinatorClient {
 
     public CoordinatorStatusResponse status() throws Exception {
         HttpResponse<CoordinatorStatusResponse> resp =
-            JsonRestServer.<CoordinatorStatusResponse>httpRequest(url("/coordinator/status"), "GET",
+            JsonRestServer.httpRequest(url("/coordinator/status"), "GET",
                 null, new TypeReference<CoordinatorStatusResponse>() { }, maxTries);
         return resp.body();
     }
@@ -368,8 +371,7 @@ public class CoordinatorClient {
                     System.out.printf("Task %s of type %s is %s. %s%n", taskId,
                         taskState.spec().getClass().getCanonicalName(),
                         taskState.stateType(), prettyPrintTaskInfo(taskState, localOffset));
-                    if (taskState instanceof TaskDone) {
-                        TaskDone taskDone = (TaskDone) taskState;
+                    if (taskState instanceof TaskDone taskDone) {
                         if ((taskDone.error() != null) && (!taskDone.error().isEmpty())) {
                             System.out.printf("Error: %s%n", taskDone.error());
                         }
@@ -384,7 +386,7 @@ public class CoordinatorClient {
                 break;
             }
             case "showTasks": {
-                TaskStateType taskStateType = res.<TaskStateType>get("taskStateType");
+                TaskStateType taskStateType = res.get("taskStateType");
                 List<String> taskIds = new ArrayList<>();
                 Pattern taskIdPattern = null;
                 if (res.getList("taskIds") != null) {
@@ -488,16 +490,13 @@ public class CoordinatorClient {
     static String prettyPrintTaskInfo(TaskState taskState, ZoneOffset zoneOffset) {
         if (taskState instanceof TaskPending) {
             return "Will start at " + dateString(taskState.spec().startMs(), zoneOffset);
-        } else if (taskState instanceof TaskRunning) {
-            TaskRunning runState = (TaskRunning) taskState;
+        } else if (taskState instanceof TaskRunning runState) {
             return "Started " + dateString(runState.startedMs(), zoneOffset) +
                 "; will stop after " + durationString(taskState.spec().durationMs());
-        } else if (taskState instanceof TaskStopping) {
-            TaskStopping stoppingState = (TaskStopping) taskState;
+        } else if (taskState instanceof TaskStopping stoppingState) {
             return "Started " + dateString(stoppingState.startedMs(), zoneOffset);
-        } else if (taskState instanceof TaskDone) {
-            TaskDone doneState = (TaskDone) taskState;
-            String status = null;
+        } else if (taskState instanceof TaskDone doneState) {
+            String status;
             if (doneState.error() == null || doneState.error().isEmpty()) {
                 if (doneState.cancelled()) {
                     status = "CANCELLED";

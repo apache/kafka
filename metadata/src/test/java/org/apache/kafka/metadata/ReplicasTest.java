@@ -35,15 +35,15 @@ public class ReplicasTest {
     @Test
     public void testToList() {
         assertEquals(Arrays.asList(1, 2, 3, 4), Replicas.toList(new int[] {1, 2, 3, 4}));
-        assertEquals(Arrays.asList(), Replicas.toList(Replicas.NONE));
-        assertEquals(Arrays.asList(2), Replicas.toList(new int[] {2}));
+        assertEquals(Collections.emptyList(), Replicas.toList(Replicas.NONE));
+        assertEquals(Collections.singletonList(2), Replicas.toList(new int[] {2}));
     }
 
     @Test
     public void testToArray() {
         assertArrayEquals(new int[] {3, 2, 1}, Replicas.toArray(Arrays.asList(3, 2, 1)));
-        assertArrayEquals(new int[] {}, Replicas.toArray(Arrays.asList()));
-        assertArrayEquals(new int[] {2}, Replicas.toArray(Arrays.asList(2)));
+        assertArrayEquals(new int[] {}, Replicas.toArray(Collections.emptyList()));
+        assertArrayEquals(new int[] {2}, Replicas.toArray(Collections.singletonList(2)));
     }
 
     @Test

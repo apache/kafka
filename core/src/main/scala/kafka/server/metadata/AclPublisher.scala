@@ -70,11 +70,11 @@ class AclPublisher(
           try {
             // Because the changes map is a LinkedHashMap, the deltas will be returned in
             // the order they were performed.
-            aclsDelta.changes().entrySet().forEach(e =>
-              if (e.getValue.isPresent) {
-                authorizer.addAcl(e.getKey, e.getValue.get())
+            aclsDelta.changes().forEach((key, value) =>
+              if (value.isPresent) {
+                authorizer.addAcl(key, value.get())
               } else {
-                authorizer.removeAcl(e.getKey)
+                authorizer.removeAcl(key)
               })
           } catch {
             case t: Throwable => faultHandler.handleFault("Error loading " +

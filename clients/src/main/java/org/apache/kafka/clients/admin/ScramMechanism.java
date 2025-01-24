@@ -85,7 +85,7 @@ public enum ScramMechanism {
     private final byte type;
     private final String mechanismName;
 
-    private ScramMechanism(byte type) {
+    ScramMechanism(byte type) {
         this.type = type;
         this.mechanismName = toString().replace('_', '-');
     }

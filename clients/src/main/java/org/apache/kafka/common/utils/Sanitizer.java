@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -24,17 +23,12 @@ import java.util.regex.Pattern;
 
 import javax.management.ObjectName;
 
-import org.apache.kafka.common.KafkaException;
-
 /**
- * Utility class for sanitizing/desanitizing/quoting values used in JMX metric names
- * or as ZooKeeper node name.
+ * Utility class for sanitizing/desanitizing/quoting values used in JMX metric names.
  * <p>
- * User principals and client-ids are URL-encoded using ({@link #sanitize(String)}
- * for use as ZooKeeper node names. User principals are URL-encoded in all metric
- * names as well. All other metric tags including client-id are quoted if they
- * contain special characters using {@link #jmxSanitize(String)} when
- * registering in JMX.
+ * User principals are URL-encoded using ({@link #sanitize(String)} in all metric names.
+ * All other metric tags including client-id are quoted if they contain special characters 
+ * using {@link #jmxSanitize(String)} when registering in JMX.
  */
 public class Sanitizer {
 
@@ -46,39 +40,29 @@ public class Sanitizer {
     private static final Pattern MBEAN_PATTERN = Pattern.compile("[\\w-%\\. \t]*");
 
     /**
-     * Sanitize `name` for safe use as JMX metric name as well as ZooKeeper node name
-     * using URL-encoding.
+     * Sanitize `name` for safe use as JMX metric name.
      */
     public static String sanitize(String name) {
-        try {
-            String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8.name());
-            StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < encoded.length(); i++) {
-                char c = encoded.charAt(i);
-                if (c == '*') {         // Metric ObjectName treats * as pattern
-                    builder.append("%2A");
-                } else if (c == '+') {  // Space URL-encoded as +, replace with percent encoding
-                    builder.append("%20");
-                } else {
-                    builder.append(c);
-                }
+        String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8);
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < encoded.length(); i++) {
+            char c = encoded.charAt(i);
+            if (c == '*') {         // Metric ObjectName treats * as pattern
+                builder.append("%2A");
+            } else if (c == '+') {  // Space URL-encoded as +, replace with percent encoding
+                builder.append("%20");
+            } else {
+                builder.append(c);
             }
-            return builder.toString();
-        } catch (UnsupportedEncodingException e) {
-            throw new KafkaException(e);
         }
+        return builder.toString();
     }
 
     /**
-     * Desanitize name that was URL-encoded using {@link #sanitize(String)}. This
-     * is used to obtain the desanitized version of node names in ZooKeeper.
+     * Desanitize name that was URL-encoded using {@link #sanitize(String)}.
      */
     public static String desanitize(String name) {
-        try {
-            return URLDecoder.decode(name, StandardCharsets.UTF_8.name());
-        } catch (UnsupportedEncodingException e) {
-            throw new KafkaException(e);
-        }
+        return URLDecoder.decode(name, StandardCharsets.UTF_8);
     }
 
     /**

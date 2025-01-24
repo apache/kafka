@@ -25,7 +25,7 @@ public class InternalTopicProperties {
         this.numberOfPartitions = numberOfPartitions;
     }
 
-    public Optional<Integer> getNumberOfPartitions() {
+    public Optional<Integer> numberOfPartitions() {
         return Optional.ofNullable(numberOfPartitions);
     }
 

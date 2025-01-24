@@ -16,21 +16,15 @@
  */
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import java.util.Set;
-import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignTableJoinProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.state.StoreBuilder;
 
-public class ForeignTableJoinNode<K, V> extends StatefulProcessorNode<K, V> implements VersionedSemanticsGraphNode {
+public class ForeignTableJoinNode<K, V> extends ProcessorGraphNode<K, V> implements VersionedSemanticsGraphNode {
 
-    public ForeignTableJoinNode(final ProcessorParameters<K, V, ?, ?> processorParameters,
-                                final Set<StoreBuilder<?>> preRegisteredStores,
-                                final Set<KTableValueGetterSupplier<?, ?>> valueGetterSuppliers) {
-        super(processorParameters, preRegisteredStores, valueGetterSuppliers);
+    public ForeignTableJoinNode(final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        super(processorParameters.processorName(), processorParameters);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void enableVersionedSemantics(final boolean useVersionedSemantics, final String parentNodeName) {
         final ProcessorSupplier<?, ?, ?, ?> processorSupplier = processorParameters().processorSupplier();

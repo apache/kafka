@@ -37,7 +37,7 @@ class ReplicaFetcherThread(name: String,
                                 clientId = name,
                                 leader = leader,
                                 failedPartitions,
-                                fetchTierStateMachine = new ReplicaFetcherTierStateMachine(leader, replicaMgr),
+                                fetchTierStateMachine = new TierStateMachine(leader, replicaMgr, false),
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
                                 replicaMgr.brokerTopicStats) {
@@ -46,8 +46,6 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val partitionsWithNewHighWatermark = mutable.Buffer[TopicPartition]()
-
-  override protected val isOffsetForLeaderEpochSupported: Boolean = metadataVersionSupplier().isOffsetForLeaderEpochSupported
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
     replicaMgr.localLogOrException(topicPartition).latestEpoch
@@ -159,7 +157,7 @@ class ReplicaFetcherThread(name: String,
     }
   }
 
-  def maybeWarnIfOversizedRecords(records: MemoryRecords, topicPartition: TopicPartition): Unit = {
+  private def maybeWarnIfOversizedRecords(records: MemoryRecords, topicPartition: TopicPartition): Unit = {
     // oversized messages don't cause replication to fail from fetch request version 3 (KIP-74)
     if (metadataVersionSupplier().fetchRequestVersion <= 2 && records.sizeInBytes > 0 && records.validBytes <= 0)
       error(s"Replication is failing due to a message that is greater than replica.fetch.max.bytes for partition $topicPartition. " +

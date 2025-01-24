@@ -16,30 +16,29 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import java.util.Arrays;
-import java.util.Map.Entry;
-
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Importance;
-import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
-import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 
-import java.util.Map;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
-import java.util.HashSet;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
@@ -60,7 +59,7 @@ import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidStrin
  *      --->%---
  * </pre>
  */
-public class MirrorMakerConfig extends AbstractConfig {
+public final class MirrorMakerConfig extends AbstractConfig {
 
     public static final String CLUSTERS_CONFIG = "clusters";
     private static final String CLUSTERS_DOC = "List of cluster aliases.";
@@ -90,7 +89,6 @@ public class MirrorMakerConfig extends AbstractConfig {
 
     private final Map<String, String> rawProperties;
 
-    @SuppressWarnings("this-escape")
     public MirrorMakerConfig(Map<String, String> props) {
         super(config(), props, true);
         plugins = new Plugins(originalsStrings());
@@ -309,7 +307,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
 
     private Map<String, String> stringsWithPrefix(String prefix) {
-        return Utils.entriesWithPrefix(rawProperties, prefix, false);
+        return Utils.entriesWithPrefix(rawProperties, prefix, false, true);
     }
 
     static Map<String, String> clusterConfigsWithPrefix(String prefix, Map<String, String> props) {

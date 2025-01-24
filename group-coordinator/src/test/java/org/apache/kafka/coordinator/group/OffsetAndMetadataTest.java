@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.server.util.MockTime;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.OptionalInt;
@@ -86,8 +87,7 @@ public class OffsetAndMetadataTest {
                 .setPartitionIndex(0)
                 .setCommittedOffset(100L)
                 .setCommittedLeaderEpoch(-1)
-                .setCommittedMetadata(null)
-                .setCommitTimestamp(-1L);
+                .setCommittedMetadata(null);
 
         assertEquals(
             new OffsetAndMetadata(
@@ -105,15 +105,14 @@ public class OffsetAndMetadataTest {
 
         partition
             .setCommittedLeaderEpoch(10)
-            .setCommittedMetadata("hello")
-            .setCommitTimestamp(1234L);
+            .setCommittedMetadata("hello");
 
         assertEquals(
             new OffsetAndMetadata(
                 100L,
                 OptionalInt.of(10),
                 "hello",
-                1234L,
+                time.milliseconds(),
                 OptionalLong.empty()
             ), OffsetAndMetadata.fromRequest(
                 partition,
@@ -127,7 +126,7 @@ public class OffsetAndMetadataTest {
                 100L,
                 OptionalInt.of(10),
                 "hello",
-                1234L,
+                time.milliseconds(),
                 OptionalLong.of(5678L)
             ), OffsetAndMetadata.fromRequest(
                 partition,

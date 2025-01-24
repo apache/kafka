@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
@@ -194,7 +196,7 @@ public class FetchCollector<K, V> {
                     metricsManager.recordPartitionLead(tp, lead);
                 }
 
-                return Fetch.forPartition(tp, partRecords, positionAdvanced);
+                return Fetch.forPartition(tp, partRecords, positionAdvanced, new OffsetAndMetadata(nextInLineFetch.nextFetchOffset(), nextInLineFetch.lastEpoch(), ""));
             } else {
                 // these records aren't next in line based on the last consumed position, ignore them
                 // they must be from an obsolete request
@@ -345,7 +347,7 @@ public class FetchCollector<K, V> {
         } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
             Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);
 
-            if (!clearedReplicaId.isPresent()) {
+            if (clearedReplicaId.isEmpty()) {
                 // If there's no preferred replica to clear, we're fetching from the leader so handle this error normally
                 SubscriptionState.FetchPosition position = subscriptions.positionOrNull(tp);
 

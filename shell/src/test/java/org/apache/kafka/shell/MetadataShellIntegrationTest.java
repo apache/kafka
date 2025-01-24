@@ -17,16 +17,10 @@
 
 package org.apache.kafka.shell;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
-import java.util.Collections;
-import java.util.concurrent.ExecutionException;
-
-import kafka.utils.FileLock;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.fault.MockFaultHandler;
+import org.apache.kafka.server.util.FileLock;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -35,6 +29,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.util.Collections;
+import java.util.concurrent.ExecutionException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -42,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Timeout(120)
 @Tag("integration")
 public class MetadataShellIntegrationTest {
-    private final static Logger LOG = LoggerFactory.getLogger(MetadataShellIntegrationTest.class);
+    private static final Logger LOG = LoggerFactory.getLogger(MetadataShellIntegrationTest.class);
 
     static class IntegrationEnv implements AutoCloseable {
         File tempDir;

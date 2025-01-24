@@ -17,6 +17,7 @@
 package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigData;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,10 +25,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
@@ -36,10 +37,7 @@ import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.stream.StreamSupport;
 
-import static java.util.Arrays.asList;
-
 import static org.apache.kafka.common.config.provider.DirectoryConfigProvider.ALLOWED_PATHS_CONFIG;
-import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -89,7 +87,7 @@ public class DirectoryConfigProviderTest {
     @Test
     public void testGetAllKeysAtPath() {
         ConfigData configData = provider.get(dir);
-        assertEquals(toSet(asList(foo, bar)), configData.data().keySet());
+        assertEquals(Set.of(foo, bar), configData.data().keySet());
         assertEquals("FOO", configData.data().get(foo));
         assertEquals("BAR", configData.data().get(bar));
         assertNull(configData.ttl());
@@ -97,7 +95,7 @@ public class DirectoryConfigProviderTest {
 
     @Test
     public void testGetSetOfKeysAtPath() {
-        Set<String> keys = toSet(asList(foo, "baz"));
+        Set<String> keys = Set.of(foo, "baz");
         ConfigData configData = provider.get(dir, keys);
         assertEquals(Collections.singleton(foo), configData.data().keySet());
         assertEquals("FOO", configData.data().get(foo));
@@ -107,7 +105,7 @@ public class DirectoryConfigProviderTest {
     @Test
     public void testNoSubdirs() {
         // Only regular files directly in the path directory are allowed, not in subdirs
-        Set<String> keys = toSet(asList(subdir, String.join(File.separator, subdir, subdirFileName)));
+        Set<String> keys = Set.of(subdir, String.join(File.separator, subdir, subdirFileName));
         ConfigData configData = provider.get(dir, keys);
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
@@ -116,10 +114,10 @@ public class DirectoryConfigProviderTest {
     @Test
     public void testNoTraversal() {
         // Check we can't escape outside the path directory
-        Set<String> keys = toSet(asList(
+        Set<String> keys = Set.of(
                 String.join(File.separator, "..", siblingFileName),
                 String.join(File.separator, "..", siblingDir),
-                String.join(File.separator, "..", siblingDir, siblingDirFileName)));
+                String.join(File.separator, "..", siblingDir, siblingDirFileName));
         ConfigData configData = provider.get(dir, keys);
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
@@ -166,7 +164,7 @@ public class DirectoryConfigProviderTest {
         provider.configure(configs);
 
         ConfigData configData = provider.get(dir);
-        assertEquals(toSet(asList(foo, bar)), configData.data().keySet());
+        assertEquals(Set.of(foo, bar), configData.data().keySet());
         assertEquals("FOO", configData.data().get(foo));
         assertEquals("BAR", configData.data().get(bar));
         assertNull(configData.ttl());
@@ -179,12 +177,12 @@ public class DirectoryConfigProviderTest {
         provider.configure(configs);
 
         ConfigData configData = provider.get(subdir);
-        assertEquals(toSet(asList(subdirFileName)), configData.data().keySet());
+        assertEquals(Set.of(subdirFileName), configData.data().keySet());
         assertEquals("SUBDIRFILE", configData.data().get(subdirFileName));
         assertNull(configData.ttl());
 
         configData = provider.get(siblingDir);
-        assertEquals(toSet(asList(siblingDirFileName)), configData.data().keySet());
+        assertEquals(Set.of(siblingDirFileName), configData.data().keySet());
         assertEquals("SIBLINGDIRFILE", configData.data().get(siblingDirFileName));
         assertNull(configData.ttl());
     }
@@ -218,4 +216,3 @@ public class DirectoryConfigProviderTest {
         assertEquals("The provider has not been configured yet.", ise.getMessage());
     }
 }
-

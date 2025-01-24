@@ -197,7 +197,7 @@ class DockerSanityTest(unittest.TestCase):
         
         self.assertEqual(total_errors, [])
 
-class DockerSanityTestJVMCombinedMode(DockerSanityTest):
+class DockerSanityTestCombinedMode(DockerSanityTest):
     def setUp(self) -> None:
         self.start_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
     def tearDown(self) -> None:
@@ -205,7 +205,7 @@ class DockerSanityTestJVMCombinedMode(DockerSanityTest):
     def test_bed(self):
         self.execute()
 
-class DockerSanityTestJVMIsolatedMode(DockerSanityTest):
+class DockerSanityTestIsolatedMode(DockerSanityTest):
     def setUp(self) -> None:
         self.start_compose(f"{self.FIXTURES_DIR}/{constants.ISOLATED_MODE_COMPOSE}")
     def tearDown(self) -> None:
@@ -218,8 +218,8 @@ def run_tests(image, mode, fixtures_dir):
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
 
     test_classes_to_run = []
-    if mode == "jvm":
-        test_classes_to_run = [DockerSanityTestJVMCombinedMode, DockerSanityTestJVMIsolatedMode]
+    if mode == "jvm" or mode == "native":
+        test_classes_to_run = [DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode]
     
     loader = unittest.TestLoader()
     suites_list = []
@@ -231,7 +231,7 @@ def run_tests(image, mode, fixtures_dir):
     outfile = open(f"{cur_directory}/report_{mode}.html", "w")
     runner = HTMLTestRunner.HTMLTestRunner(
                 stream=outfile,
-                title='Test Report',
+                title=f'Test Report: Apache Kafka {mode.capitalize()} Docker Image',
                 description='This demonstrates the report output.'
                 )
     result = runner.run(combined_suite)

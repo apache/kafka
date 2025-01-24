@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.connect.json;
 
-import java.util.Locale;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.connect.storage.ConverterConfig;
 
+import java.util.Locale;
 import java.util.Map;
 
 /**
  * Configuration options for {@link JsonConverter} instances.
  */
-public class JsonConverterConfig extends ConverterConfig {
+public final class JsonConverterConfig extends ConverterConfig {
 
     public static final String SCHEMAS_ENABLE_CONFIG = "schemas.enable";
     public static final boolean SCHEMAS_ENABLE_DEFAULT = true;
@@ -51,7 +51,7 @@ public class JsonConverterConfig extends ConverterConfig {
     private static final String REPLACE_NULL_WITH_DEFAULT_DOC = "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.";
     private static final String REPLACE_NULL_WITH_DEFAULT_DISPLAY = "Replace null with default";
 
-    private final static ConfigDef CONFIG;
+    private static final ConfigDef CONFIG;
 
     static {
         String group = "Schemas";
@@ -87,7 +87,6 @@ public class JsonConverterConfig extends ConverterConfig {
     private final DecimalFormat decimalFormat;
     private final boolean replaceNullWithDefault;
 
-    @SuppressWarnings("this-escape")
     public JsonConverterConfig(Map<String, ?> props) {
         super(CONFIG, props);
         this.schemasEnabled = getBoolean(SCHEMAS_ENABLE_CONFIG);

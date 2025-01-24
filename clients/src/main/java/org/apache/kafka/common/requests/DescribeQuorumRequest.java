@@ -83,6 +83,7 @@ public class DescribeQuorumRequest extends AbstractRequest {
 
     public static DescribeQuorumResponseData getPartitionLevelErrorResponse(DescribeQuorumRequestData data, Errors error) {
         short errorCode = error.code();
+        String errorMessage = error.message();
 
         List<DescribeQuorumResponseData.TopicData> topicResponses = new ArrayList<>();
         for (DescribeQuorumRequestData.TopicData topic : data.topics()) {
@@ -93,6 +94,7 @@ public class DescribeQuorumRequest extends AbstractRequest {
                         requestPartition -> new DescribeQuorumResponseData.PartitionData()
                                                 .setPartitionIndex(requestPartition.partitionIndex())
                                                 .setErrorCode(errorCode)
+                                                .setErrorMessage(errorMessage)
                     ).collect(Collectors.toList())));
         }
 
@@ -100,6 +102,6 @@ public class DescribeQuorumRequest extends AbstractRequest {
     }
 
     public static DescribeQuorumResponseData getTopLevelErrorResponse(Errors topLevelError) {
-        return new DescribeQuorumResponseData().setErrorCode(topLevelError.code());
+        return new DescribeQuorumResponseData().setErrorCode(topLevelError.code()).setErrorMessage(topLevelError.message());
     }
 }

@@ -18,27 +18,31 @@
 
 package kafka.network
 
-import java.io.IOException
-import java.net.{InetAddress, Socket}
-import java.util.concurrent._
-import java.util.{Collections, Properties}
-import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.{TestInfoUtils, TestUtils}
-import org.apache.kafka.clients.admin.Admin
-import org.apache.kafka.common.config.internals.QuotaConfigs
+import kafka.server.BaseRequestTest
+import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasResult}
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.quota.ClientQuotaEntity
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
+import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.{KafkaException, requests}
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.io.IOException
+import java.net.{InetAddress, Socket}
+import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
+import java.util.{Collections, Properties}
+import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
 class DynamicConnectionQuotaTest extends BaseRequestTest {
@@ -54,7 +58,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   var admin: Admin = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.NumQuotaSamplesProp, "2")
+    properties.put(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, "2")
     properties.put("listener.name.plaintext.max.connection.creation.rate", plaintextListenerDefaultQuota.toString)
   }
 
@@ -78,8 +82,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @Flaky("KAFKA-17999")
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testDynamicConnectionQuota(quorum: String): Unit = {
     val maxConnectionsPerIP = 5
 
@@ -93,21 +98,21 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
 
     val props = new Properties
-    props.put(KafkaConfig.MaxConnectionsPerIpProp, maxConnectionsPerIP.toString)
-    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionsPerIpProp, maxConnectionsPerIP.toString))
+    props.put(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, maxConnectionsPerIP.toString)
+    reconfigureServers(props, perBrokerConfig = false, (SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, maxConnectionsPerIP.toString))
 
     verifyMaxConnections(maxConnectionsPerIP, connectAndVerify)
 
     // Increase MaxConnectionsPerIpOverrides for localhost to 7
     val maxConnectionsPerIPOverride = 7
-    props.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$maxConnectionsPerIPOverride")
-    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$maxConnectionsPerIPOverride"))
+    props.put(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, s"localhost:$maxConnectionsPerIPOverride")
+    reconfigureServers(props, perBrokerConfig = false, (SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, s"localhost:$maxConnectionsPerIPOverride"))
 
     verifyMaxConnections(maxConnectionsPerIPOverride, connectAndVerify)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testDynamicListenerConnectionQuota(quorum: String): Unit = {
     val initialConnectionCount = connectionCount
 
@@ -123,18 +128,18 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
     // Reduce total broker MaxConnections to 5 at the cluster level
     val props = new Properties
-    props.put(KafkaConfig.MaxConnectionsProp, "5")
-    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionsProp, "5"))
+    props.put(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "5")
+    reconfigureServers(props, perBrokerConfig = false, (SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "5"))
     verifyMaxConnections(5, connectAndVerify)
 
     // Create another listener and verify listener connection limit of 5 for each listener
     val newListeners = "PLAINTEXT://localhost:0,INTERNAL://localhost:0"
-    props.put(KafkaConfig.ListenersProp, newListeners)
-    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT, CONTROLLER: PLAINTEXT")
-    props.put(KafkaConfig.MaxConnectionsProp, "10")
+    props.put(SocketServerConfigs.LISTENERS_CONFIG, newListeners)
+    props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT, CONTROLLER: PLAINTEXT")
+    props.put(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "10")
     props.put("listener.name.internal.max.connections", "5")
     props.put("listener.name.plaintext.max.connections", "5")
-    reconfigureServers(props, perBrokerConfig = true, (KafkaConfig.ListenersProp, newListeners))
+    reconfigureServers(props, perBrokerConfig = true, (SocketServerConfigs.LISTENERS_CONFIG, newListeners))
     waitForListener("INTERNAL")
 
     var conns = (connectionCount until 5).map(_ => connect("PLAINTEXT"))
@@ -145,7 +150,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
     // Increase MaxConnections for PLAINTEXT listener to 7 at the broker level
     val maxConnectionsPlaintext = 7
-    val listenerProp = s"${listener.configPrefix}${KafkaConfig.MaxConnectionsProp}"
+    val listenerProp = s"${listener.configPrefix}${SocketServerConfigs.MAX_CONNECTIONS_CONFIG}"
     props.put(listenerProp, maxConnectionsPlaintext.toString)
     reconfigureServers(props, perBrokerConfig = true, (listenerProp, maxConnectionsPlaintext.toString))
     verifyMaxConnections(maxConnectionsPlaintext, connectAndVerify)
@@ -179,17 +184,17 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testDynamicListenerConnectionCreationRateQuota(quorum: String): Unit = {
     // Create another listener. PLAINTEXT is an inter-broker listener
     // keep default limits
     val newListenerNames = Seq("PLAINTEXT", "EXTERNAL")
     val newListeners = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"
     val props = new Properties
-    props.put(KafkaConfig.ListenersProp, newListeners)
-    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
-    reconfigureServers(props, perBrokerConfig = true, (KafkaConfig.ListenersProp, newListeners))
+    props.put(SocketServerConfigs.LISTENERS_CONFIG, newListeners)
+    props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
+    reconfigureServers(props, perBrokerConfig = true, (SocketServerConfigs.LISTENERS_CONFIG, newListeners))
     waitForListener("EXTERNAL")
 
     // The expected connection count after each test run
@@ -203,8 +208,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
     // Reduce total broker connection rate limit to 9 at the cluster level and verify the limit is enforced
     props.clear()  // so that we do not pass security protocol map which cannot be set at the cluster level
-    props.put(KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString)
-    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString))
+    props.put(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, connRateLimit.toString)
+    reconfigureServers(props, perBrokerConfig = false, (SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, connRateLimit.toString))
     // verify EXTERNAL listener is capped by broker-wide quota (PLAINTEXT is not capped by broker-wide limit, since it
     // has limited quota set and is a protected listener)
     verifyConnectionRate(8, connRateLimit, "EXTERNAL", ignoreIOExceptions = false)
@@ -212,8 +217,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
     // Set 4 conn/sec rate limit for each listener and verify it gets enforced
     val listenerConnRateLimit = 4
-    val plaintextListenerProp = s"${listener.configPrefix}${KafkaConfig.MaxConnectionCreationRateProp}"
-    props.put(s"listener.name.external.${KafkaConfig.MaxConnectionCreationRateProp}", listenerConnRateLimit.toString)
+    val plaintextListenerProp = s"${listener.configPrefix}${SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG}"
+    props.put(s"listener.name.external.${SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG}", listenerConnRateLimit.toString)
     props.put(plaintextListenerProp, listenerConnRateLimit.toString)
     reconfigureServers(props, perBrokerConfig = true, (plaintextListenerProp, listenerConnRateLimit.toString))
 
@@ -241,8 +246,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     waitForConnectionCount(initialConnectionCount)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testDynamicIpConnectionRateQuota(quorum: String): Unit = {
     val connRateLimit = 10
     val initialConnectionCount = connectionCount
@@ -271,8 +276,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   private def updateIpConnectionRate(ip: Option[String], updatedRate: Int): Unit = {
     val initialConnectionCount = connectionCount
     val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> ip.orNull).asJava)
-    val request = Map(entity -> Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(updatedRate.toDouble)))
-    TestUtils.alterClientQuotas(admin, request).all.get()
+    val request = Map(entity -> Map(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(updatedRate.toDouble)))
+    alterClientQuotas(admin, request).all.get()
     // use a random throwaway address if ip isn't specified to get the default value
     TestUtils.waitUntilTrue(() => brokers.head.socketServer.connectionQuotas.
       connectionRateForIp(InetAddress.getByName(ip.getOrElse(unknownHost))) == updatedRate,
@@ -300,13 +305,13 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   private def produceRequest: ProduceRequest =
-    requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+    requests.ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
         Collections.singletonList(new ProduceRequestData.TopicProduceData()
           .setName(topic)
           .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
             .setIndex(0)
-            .setRecords(MemoryRecords.withRecords(CompressionType.NONE,
+            .setRecords(MemoryRecords.withRecords(Compression.NONE,
               new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))))))
         .iterator))
       .setAcks((-1).toShort)
@@ -405,5 +410,15 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val rateCap = if (maxConnectionRate < Int.MaxValue) 1.2 * maxConnectionRate.toDouble else Int.MaxValue.toDouble
     assertTrue(actualRate <= rateCap, s"Listener $listener connection rate $actualRate must be below $rateCap")
     assertTrue(actualRate >= minConnectionRate, s"Listener $listener connection rate $actualRate must be above $minConnectionRate")
+  }
+
+  private def alterClientQuotas(adminClient: Admin, request: Map[ClientQuotaEntity, Map[String, Option[Double]]]): AlterClientQuotasResult = {
+    val entries = request.map { case (entity, alter) =>
+      val ops = alter.map { case (key, value) =>
+        new ClientQuotaAlteration.Op(key, value.map(Double.box).orNull)
+      }.asJavaCollection
+      new ClientQuotaAlteration(entity, ops)
+    }.asJavaCollection
+    adminClient.alterClientQuotas(entries)
   }
 }

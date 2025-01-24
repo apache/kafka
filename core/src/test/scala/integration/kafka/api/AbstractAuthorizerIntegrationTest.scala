@@ -12,9 +12,8 @@
  */
 package kafka.api
 
-import kafka.security.authorizer.AclAuthorizer
-import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.{BaseRequestTest, KafkaConfig}
+import kafka.server.BaseRequestTest
+import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
@@ -28,7 +27,10 @@ import org.apache.kafka.common.resource.{Resource, ResourcePattern}
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, TRANSACTIONAL_ID}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import java.util.Properties
@@ -91,30 +93,26 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    properties.put(ServerConfigs.BROKER_ID_CONFIG, brokerId.toString)
     addNodeProperties(properties)
   }
 
-  override def kraftControllerConfigs(): collection.Seq[Properties] = {
-    val controllerConfigs = super.kraftControllerConfigs()
+  override def kraftControllerConfigs(testInfo: TestInfo): collection.Seq[Properties] = {
+    val controllerConfigs = super.kraftControllerConfigs(testInfo)
     controllerConfigs.foreach(addNodeProperties)
     controllerConfigs
   }
 
   private def addNodeProperties(properties: Properties): Unit = {
-    if (isKRaftTest()) {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
-      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
-    } else {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
-    }
+    properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
+    properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
 
-    properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
-    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+    properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
+    properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+    properties.put(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, "1")
+    properties.put(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+    properties.put(TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, "1")
+    properties.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[PrincipalBuilder].getName)
   }
 
@@ -123,7 +121,7 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
     doSetup(testInfo, createOffsetsTopic = false)
 
     // Allow inter-broker communication
-    addAndVerifyAcls(Set(new AccessControlEntry(brokerPrincipal.toString, WildcardHost, CLUSTER_ACTION, ALLOW)), clusterResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(brokerPrincipal.toString, WILDCARD_HOST, CLUSTER_ACTION, ALLOW)), clusterResource)
 
     createOffsetsTopic(listenerName = interBrokerListenerName)
   }

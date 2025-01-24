@@ -17,15 +17,17 @@
 
 package org.apache.kafka.server.fault;
 
-import java.util.Objects;
 import org.apache.kafka.common.utils.Exit;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Objects;
 
 /**
  * This is a fault handler which terminates the JVM process.
  */
-final public class ProcessTerminatingFaultHandler implements FaultHandler {
+public final class ProcessTerminatingFaultHandler implements FaultHandler {
     private static final Logger log = LoggerFactory.getLogger(ProcessTerminatingFaultHandler.class);
 
     private final Runnable action;

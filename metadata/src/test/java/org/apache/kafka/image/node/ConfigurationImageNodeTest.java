@@ -23,6 +23,7 @@ import org.apache.kafka.image.ConfigurationImage;
 import org.apache.kafka.image.node.printer.MetadataNodeRedactionCriteria;
 import org.apache.kafka.image.node.printer.NodeStringifier;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

@@ -88,11 +88,11 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
         ) {
             final TxnOffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
 
-            partitions.forEach(partition -> {
+            partitions.forEach(partition ->
                 topicResponse.partitions().add(new TxnOffsetCommitResponsePartition()
                     .setPartitionIndex(partitionIndex.apply(partition))
-                    .setErrorCode(error.code()));
-            });
+                    .setErrorCode(error.code()))
+            );
 
             return this;
         }

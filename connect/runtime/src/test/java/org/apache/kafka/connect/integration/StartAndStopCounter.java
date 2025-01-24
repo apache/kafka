@@ -17,11 +17,11 @@
 
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.common.utils.Time;
+
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.kafka.common.utils.Time;
 
 public class StartAndStopCounter {
 
@@ -113,19 +113,6 @@ public class StartAndStopCounter {
      */
     public StartAndStopLatch expectedRestarts(int expectedRestarts) {
         return expectedRestarts(expectedRestarts, expectedRestarts);
-    }
-
-    /**
-     * Obtain a {@link StartAndStopLatch} that can be used to wait until the expected number of restarts
-     * has been completed.
-     *
-     * @param expectedRestarts the expected number of restarts
-     * @param dependents       any dependent latches that must also complete in order for the
-     *                         resulting latch to complete
-     * @return the latch; never null
-     */
-    public StartAndStopLatch expectedRestarts(int expectedRestarts, List<StartAndStopLatch> dependents) {
-        return expectedRestarts(expectedRestarts, expectedRestarts, dependents);
     }
 
     /**

@@ -19,7 +19,7 @@ package org.apache.kafka.server.log.remote.storage;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,20 +62,18 @@ import static java.nio.ByteBuffer.wrap;
 import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot.takeSnapshot;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.LEADER_EPOCH_CHECKPOINT;
-
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.LEADER_EPOCH;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.OFFSET;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.TIMESTAMP;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.TRANSACTION;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class LocalTieredStorageTest {
 
@@ -304,7 +303,7 @@ public final class LocalTieredStorageTest {
 
         final LocalTieredStorageSnapshot snapshot = takeSnapshot(tieredStorage);
 
-        assertEquals(asList(topicPartition), snapshot.getTopicPartitions());
+        assertEquals(Collections.singletonList(topicPartition), snapshot.getTopicPartitions());
         assertEquals(asList(wrap(record1), wrap(record2)), extractRecordsValue(snapshot, id));
     }
 
@@ -331,7 +330,7 @@ public final class LocalTieredStorageTest {
         actual.put(idA, extractRecordsValue(snapshot, idA));
         actual.put(idB, extractRecordsValue(snapshot, idB));
 
-        assertEquals(asList(topicPartition), snapshot.getTopicPartitions());
+        assertEquals(Collections.singletonList(topicPartition), snapshot.getTopicPartitions());
         assertEquals(expected, actual);
     }
 
@@ -387,7 +386,7 @@ public final class LocalTieredStorageTest {
                 getClass().getSimpleName(), testName, DATE_TIME_FORMATTER.format(LocalDateTime.now()));
     }
 
-    public final class Verifier {
+    public static final class Verifier {
         private final LocalTieredStorage remoteStorage;
         private final TopicIdPartition topicIdPartition;
 
@@ -623,7 +622,7 @@ public final class LocalTieredStorageTest {
                 final byte magic = RecordBatch.MAGIC_VALUE_V2;
 
                 MemoryRecordsBuilder builder = MemoryRecords.builder(
-                        buffer, magic, CompressionType.NONE, TimestampType.CREATE_TIME, baseOffset);
+                        buffer, magic, Compression.NONE, TimestampType.CREATE_TIME, baseOffset);
 
                 for (byte[] value : data) {
                     builder.append(System.currentTimeMillis(), null, value);

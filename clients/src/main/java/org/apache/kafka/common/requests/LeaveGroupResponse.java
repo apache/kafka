@@ -138,9 +138,9 @@ public class LeaveGroupResponse extends AbstractResponse {
         updateErrorCounts(combinedErrorCounts, Errors.forCode(data.errorCode()));
 
         // Member level error.
-        data.members().forEach(memberResponse -> {
-            updateErrorCounts(combinedErrorCounts, Errors.forCode(memberResponse.errorCode()));
-        });
+        data.members().forEach(memberResponse ->
+            updateErrorCounts(combinedErrorCounts, Errors.forCode(memberResponse.errorCode()))
+        );
         return combinedErrorCounts;
     }
 

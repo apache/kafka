@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ListTransactionsRequest;
 import org.apache.kafka.common.requests.ListTransactionsResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -123,7 +124,7 @@ public class ListTransactionsHandler extends AdminApiHandler.Batched<AllBrokersS
         }
 
         AllBrokersStrategy.BrokerKey key = keys.iterator().next();
-        if (!key.brokerId.isPresent() || key.brokerId.getAsInt() != brokerId) {
+        if (key.brokerId.isEmpty() || key.brokerId.getAsInt() != brokerId) {
             throw new IllegalArgumentException("Unexpected broker key: " + key);
         }
 

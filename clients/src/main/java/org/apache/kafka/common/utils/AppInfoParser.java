@@ -16,6 +16,14 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.util.Properties;
@@ -23,13 +31,6 @@ import java.util.Properties;
 import javax.management.JMException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
-
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class AppInfoParser {
     private static final Logger log = LoggerFactory.getLogger(AppInfoParser.class);

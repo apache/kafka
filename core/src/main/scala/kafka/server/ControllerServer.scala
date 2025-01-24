@@ -17,23 +17,19 @@
 
 package kafka.server
 
-import kafka.metrics.LinuxIoMetricsCollector
-import kafka.migration.MigrationPropagator
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
-import kafka.security.CredentialProvider
-import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
 import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging}
-import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.LogContext
+import org.apache.kafka.common.utils.{LogContext, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint, Uuid}
 import org.apache.kafka.controller.metrics.{ControllerMetadataMetricsPublisher, QuorumControllerMetrics}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
@@ -41,15 +37,14 @@ import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, Metad
 import org.apache.kafka.metadata.{KafkaConfigSchema, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.metadata.migration.{KRaftMigrationDriver, LegacyPropagator}
 import org.apache.kafka.metadata.publisher.FeaturesPublisher
-import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.security.PasswordEncoder
-import org.apache.kafka.server.NodeToControllerChannelManager
+import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.config.ServerLogConfigs.{ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, NodeToControllerChannelManager}
 import org.apache.kafka.server.config.ConfigType
-import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.util.{Deadline, FutureUtils}
@@ -58,27 +53,9 @@ import java.util
 import java.util.{Optional, OptionalLong}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
-
-case class ControllerMigrationSupport(
-  zkClient: KafkaZkClient,
-  migrationDriver: KRaftMigrationDriver,
-  brokersRpcClient: LegacyPropagator
-) {
-  def shutdown(logging: Logging): Unit = {
-    if (zkClient != null) {
-      CoreUtils.swallow(zkClient.close(), logging)
-    }
-    if (brokersRpcClient != null) {
-      CoreUtils.swallow(brokersRpcClient.shutdown(), logging)
-    }
-    if (migrationDriver != null) {
-      CoreUtils.swallow(migrationDriver.close(), logging)
-    }
-  }
-}
 
 /**
  * A Kafka controller that runs in KRaft (Kafka Raft) mode.
@@ -117,7 +94,6 @@ class ControllerServer(
   var clientQuotaMetadataManager: ClientQuotaMetadataManager = _
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
-  var migrationSupport: Option[ControllerMigrationSupport] = None
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
   val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
   @volatile var metadataCache : KRaftMetadataCache = _
@@ -148,14 +124,14 @@ class ControllerServer(
     try {
       this.logIdent = logContext.logPrefix()
       info("Starting controller")
-      config.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
+      config.dynamicConfig.initialize(clientMetricsReceiverPluginOpt = None)
 
       maybeChangeStatus(STARTING, STARTED)
 
       metricsGroup.newGauge("ClusterId", () => clusterId)
       metricsGroup.newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
-      linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time, logger.underlying)
+      linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time)
       if (linuxIoMetricsCollector.usable()) {
         metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
         metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
@@ -164,7 +140,7 @@ class ControllerServer(
       authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
 
-      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
+      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId, () => raftManager.client.kraftVersion())
 
       metadataCachePublisher = new KRaftMetadataCachePublisher(metadataCache)
 
@@ -177,9 +153,13 @@ class ControllerServer(
       val apiVersionManager = new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         config.unstableApiVersionsEnabled,
-        config.migrationEnabled,
         () => featuresPublisher.features()
       )
+
+      //  metrics will be set to null when closing a controller, so we should recreate it for testing
+      if (sharedServer.metrics == null){
+        sharedServer.metrics = new Metrics()
+      }
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
@@ -187,16 +167,18 @@ class ControllerServer(
         metrics,
         time,
         credentialProvider,
-        apiVersionManager)
+        apiVersionManager,
+        sharedServer.socketFactory)
 
-      val listenerInfo = ListenerInfo.create(config.controllerListeners.map(_.toJava).asJava).
-        withWildcardHostnamesResolved().
-        withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
+      val listenerInfo = ListenerInfo
+        .create(config.effectiveAdvertisedControllerListeners.map(_.toJava).asJava)
+        .withWildcardHostnamesResolved()
+        .withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
       socketServerFirstBoundPortFuture.complete(listenerInfo.firstListener().port())
 
       val endpointReadyFutures = {
         val builder = new EndpointReadyFutures.Builder()
-        builder.build(authorizer.asJava,
+        builder.build(authorizer.toJava,
           new KafkaAuthorizerServerInfo(
             new ClusterResource(clusterId),
             config.nodeId,
@@ -205,20 +187,20 @@ class ControllerServer(
             config.earlyStartListeners.map(_.value()).asJava))
       }
 
-      sharedServer.startForController()
+      sharedServer.startForController(listenerInfo)
 
       createTopicPolicy = Option(config.
-        getConfiguredInstance(CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
+        getConfiguredInstance(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[CreateTopicPolicy]))
       alterConfigPolicy = Option(config.
-        getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
+        getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[AlterConfigPolicy]))
 
       val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections)
+      val controllerNodes = QuorumConfig.voterConnectionsToNodes(voterConnections)
       val quorumFeatures = new QuorumFeatures(config.nodeId,
-        QuorumFeatures.defaultFeatureMap(config.unstableMetadataVersionsEnabled),
+        QuorumFeatures.defaultSupportedFeatureMap(config.unstableFeatureVersionsEnabled),
         controllerNodes.asScala.map(node => Integer.valueOf(node.id())).asJava)
 
       val delegationTokenKeyString = {
@@ -238,7 +220,7 @@ class ControllerServer(
 
         val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
 
-        quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.migrationEnabled)
+        quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time)
 
         new QuorumController.Builder(config.nodeId, sharedServer.clusterId).
           setTime(time).
@@ -248,26 +230,27 @@ class ControllerServer(
           setQuorumFeatures(quorumFeatures).
           setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
           setDefaultNumPartitions(config.numPartitions.intValue()).
-          setDefaultMinIsr(config.minInSyncReplicas.intValue()).
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
           setMaxIdleIntervalNs(maxIdleIntervalNs).
           setMetrics(quorumControllerMetrics).
-          setCreateTopicPolicy(createTopicPolicy.asJava).
-          setAlterConfigPolicy(alterConfigPolicy.asJava).
+          setCreateTopicPolicy(createTopicPolicy.toJava).
+          setAlterConfigPolicy(alterConfigPolicy.toJava).
           setConfigurationValidator(new ControllerConfigurationValidator(sharedServer.brokerConfig)).
           setStaticConfig(config.originals).
           setBootstrapMetadata(bootstrapMetadata).
           setFatalFaultHandler(sharedServer.fatalQuorumControllerFaultHandler).
           setNonFatalFaultHandler(sharedServer.nonFatalQuorumControllerFaultHandler).
-          setZkMigrationEnabled(config.migrationEnabled).
           setDelegationTokenCache(tokenCache).
           setDelegationTokenSecretKey(delegationTokenKeyString).
           setDelegationTokenMaxLifeMs(config.delegationTokenMaxLifeMs).
           setDelegationTokenExpiryTimeMs(config.delegationTokenExpiryTimeMs).
           setDelegationTokenExpiryCheckIntervalMs(config.delegationTokenExpiryCheckIntervalMs).
-          setEligibleLeaderReplicasEnabled(config.elrEnabled)
+          setUncleanLeaderElectionCheckIntervalMs(config.uncleanLeaderElectionCheckIntervalMs).
+          setInterBrokerListenerName(config.interBrokerListenerName.value()).
+          setControllerPerformanceSamplePeriodMs(config.controllerPerformanceSamplePeriodMs).
+          setControllerPerformanceAlwaysLogThresholdMs(config.controllerPerformanceAlwaysLogThresholdMs)
       }
       controller = controllerBuilder.build()
 
@@ -276,39 +259,6 @@ class ControllerServer(
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => a.setAclMutator(controller)
         case _ =>
-      }
-
-      if (config.migrationEnabled) {
-        val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
-        val zkConfigEncoder = config.passwordEncoderSecret match {
-          case Some(secret) => PasswordEncoder.encrypting(secret,
-            config.passwordEncoderKeyFactoryAlgorithm,
-            config.passwordEncoderCipherAlgorithm,
-            config.passwordEncoderKeyLength,
-            config.passwordEncoderIterations)
-          case None => PasswordEncoder.NOOP
-        }
-        val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
-        val propagator: LegacyPropagator = new MigrationPropagator(config.nodeId, config)
-        val migrationDriver = KRaftMigrationDriver.newBuilder()
-          .setNodeId(config.nodeId)
-          .setZkRecordConsumer(controller.asInstanceOf[QuorumController].zkRecordConsumer())
-          .setZkMigrationClient(migrationClient)
-          .setPropagator(propagator)
-          .setInitialZkLoadHandler(publisher => sharedServer.loader.installPublishers(java.util.Collections.singletonList(publisher)))
-          .setFaultHandler(sharedServer.faultHandlerFactory.build(
-            "zk migration",
-            fatal = false,
-            () => {}
-          ))
-          .setQuorumFeatures(quorumFeatures)
-          .setConfigSchema(configSchema)
-          .setControllerMetrics(quorumControllerMetrics)
-          .setMinMigrationBatchSize(config.migrationMetadataMinBatchSize)
-          .setTime(time)
-          .build()
-        migrationDriver.start()
-        migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, propagator))
       }
 
       quotaManagers = QuotaFactory.instantiate(config,
@@ -350,8 +300,7 @@ class ControllerServer(
         clusterId,
         time,
         s"controller-${config.nodeId}-",
-        QuorumFeatures.defaultFeatureMap(config.unstableMetadataVersionsEnabled),
-        config.migrationEnabled,
+        QuorumFeatures.defaultSupportedFeatureMap(config.unstableFeatureVersionsEnabled),
         incarnationId,
         listenerInfo)
 
@@ -437,7 +386,7 @@ class ControllerServer(
       /**
        * Start the KIP-919 controller registration manager.
        */
-      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes.asScala)
+      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
       registrationChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
         time,
@@ -475,10 +424,8 @@ class ControllerServer(
       // smoother transition.
       sharedServer.ensureNotRaftLeader()
       incarnationId = null
-      if (registrationManager != null) {
-        CoreUtils.swallow(registrationManager.close(), this)
-        registrationManager = null
-      }
+      Utils.closeQuietly(registrationManager, "registration manager")
+      registrationManager = null
       if (registrationChannelManager != null) {
         CoreUtils.swallow(registrationChannelManager.shutdown(), this)
         registrationChannelManager = null
@@ -488,21 +435,14 @@ class ControllerServer(
       if (metadataCache != null) {
         metadataCache = null
       }
-      if (metadataCachePublisher != null) {
-        metadataCachePublisher.close()
-        metadataCachePublisher = null
-      }
-      if (featuresPublisher != null) {
-        featuresPublisher.close()
-        featuresPublisher = null
-      }
-      if (registrationsPublisher != null) {
-        registrationsPublisher.close()
-        registrationsPublisher = null
-      }
+      Utils.closeQuietly(metadataCachePublisher, "metadata cache publisher")
+      metadataCachePublisher = null
+      Utils.closeQuietly(featuresPublisher, "features publisher")
+      featuresPublisher = null
+      Utils.closeQuietly(registrationsPublisher, "registrations publisher")
+      registrationsPublisher = null
       if (socketServer != null)
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
-      migrationSupport.foreach(_.shutdown(this))
       if (controller != null)
         controller.beginShutdown()
       if (socketServer != null)
@@ -513,13 +453,11 @@ class ControllerServer(
         CoreUtils.swallow(controllerApis.close(), this)
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
-      if (controller != null)
-        controller.close()
-      if (quorumControllerMetrics != null)
-        CoreUtils.swallow(quorumControllerMetrics.close(), this)
-      CoreUtils.swallow(authorizer.foreach(_.close()), this)
-      createTopicPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
-      alterConfigPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
+      Utils.closeQuietly(controller, "controller")
+      Utils.closeQuietly(quorumControllerMetrics, "quorum controller metrics")
+      authorizer.foreach(Utils.closeQuietly(_, "authorizer"))
+      createTopicPolicy.foreach(policy => Utils.closeQuietly(policy, "create topic policy"))
+      alterConfigPolicy.foreach(policy => Utils.closeQuietly(policy, "alter config policy"))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
       CoreUtils.swallow(config.dynamicConfig.clear(), this)
       sharedServer.stopForController()

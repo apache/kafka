@@ -24,12 +24,14 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,9 +47,9 @@ import java.util.concurrent.ExecutionException;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_PREFIX;
-import static org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode.ONLY_SCAN;
-import static org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode.HYBRID_WARN;
 import static org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode.HYBRID_FAIL;
+import static org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode.HYBRID_WARN;
+import static org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode.ONLY_SCAN;
 import static org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode.SERVICE_LOAD;
 
 /**
@@ -57,19 +59,18 @@ public class WorkerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(WorkerConfig.class);
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
-    public static final String BOOTSTRAP_SERVERS_DOC
-            = "A list of host/port pairs to use for establishing the initial connection to the Kafka "
-            + "cluster. The client will make use of all servers irrespective of which servers are "
-            + "specified here for bootstrapping&mdash;this list only impacts the initial hosts used "
-            + "to discover the full set of servers. This list should be in the form "
-            + "<code>host1:port1,host2:port2,...</code>. Since these servers are just used for the "
-            + "initial connection to discover the full cluster membership (which may change "
-            + "dynamically), this list need not contain the full set of servers (you may want more "
-            + "than one, though, in case a server is down).";
+    public static final String BOOTSTRAP_SERVERS_DOC = 
+                "A list of host/port pairs used to establish the initial connection to the Kafka cluster. "
+                        + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
+                        + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
+                        + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
+                        + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
     public static final String BOOTSTRAP_SERVERS_DEFAULT = "localhost:9092";
 
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
     public static final String CLIENT_DNS_LOOKUP_DOC = CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC;
+
+    public static final String PLUGIN_VERSION_SUFFIX = "plugin.version";
 
     public static final String KEY_CONVERTER_CLASS_CONFIG = "key.converter";
     public static final String KEY_CONVERTER_CLASS_DOC =
@@ -78,12 +79,20 @@ public class WorkerConfig extends AbstractConfig {
                     " independent of connectors it allows any connector to work with any serialization format." +
                     " Examples of common formats include JSON and Avro.";
 
+    public static final String KEY_CONVERTER_VERSION = "key.converter." + PLUGIN_VERSION_SUFFIX;
+    public static final String KEY_CONVERTER_VERSION_DEFAULT = null;
+    public static final String KEY_CONVERTER_VERSION_DOC = "Version of the key converter.";
+
     public static final String VALUE_CONVERTER_CLASS_CONFIG = "value.converter";
     public static final String VALUE_CONVERTER_CLASS_DOC =
             "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
                     " This controls the format of the values in messages written to or read from Kafka, and since this is" +
                     " independent of connectors it allows any connector to work with any serialization format." +
                     " Examples of common formats include JSON and Avro.";
+
+    public static final String VALUE_CONVERTER_VERSION = "value.converter." + PLUGIN_VERSION_SUFFIX;
+    public static final String VALUE_CONVERTER_VERSION_DEFAULT = null;
+    public static final String VALUE_CONVERTER_VERSION_DOC = "Version of the value converter.";
 
     public static final String HEADER_CONVERTER_CLASS_CONFIG = "header.converter";
     public static final String HEADER_CONVERTER_CLASS_DOC =
@@ -93,6 +102,10 @@ public class WorkerConfig extends AbstractConfig {
                     " Examples of common formats include JSON and Avro. By default, the SimpleHeaderConverter is used to serialize" +
                     " header values to strings and deserialize them by inferring the schemas.";
     public static final String HEADER_CONVERTER_CLASS_DEFAULT = SimpleHeaderConverter.class.getName();
+
+    public static final String HEADER_CONVERTER_VERSION = "header.converter." + PLUGIN_VERSION_SUFFIX;
+    public static final String HEADER_CONVERTER_VERSION_DEFAULT = null;
+    public static final String HEADER_CONVERTER_VERSION_DOC = "Version of the header converter.";
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
@@ -162,9 +175,6 @@ public class WorkerConfig extends AbstractConfig {
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
-    @Deprecated
-    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG;
-
     public static final String TOPIC_TRACKING_ENABLE_CONFIG = "topic.tracking.enable";
     protected static final String TOPIC_TRACKING_ENABLE_DOC = "Enable tracking the set of active "
             + "topics per connector during runtime.";
@@ -204,8 +214,12 @@ public class WorkerConfig extends AbstractConfig {
                         CLIENT_DNS_LOOKUP_DOC)
                 .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, KEY_CONVERTER_CLASS_DOC)
+                .define(KEY_CONVERTER_VERSION, Type.STRING,
+                        KEY_CONVERTER_VERSION_DEFAULT, Importance.LOW, KEY_CONVERTER_VERSION_DOC)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, VALUE_CONVERTER_CLASS_DOC)
+                .define(VALUE_CONVERTER_VERSION, Type.STRING,
+                        VALUE_CONVERTER_VERSION_DEFAULT, Importance.LOW, VALUE_CONVERTER_VERSION_DOC)
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DOC)
@@ -236,16 +250,13 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW,
                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                 .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST,
-                        "", Importance.LOW,
+                        JmxReporter.class.getName(), Importance.LOW,
                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
-                .define(AUTO_INCLUDE_JMX_REPORTER_CONFIG,
-                        Type.BOOLEAN,
-                        true,
-                        Importance.LOW,
-                        CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         HEADER_CONVERTER_CLASS_DEFAULT,
                         Importance.LOW, HEADER_CONVERTER_CLASS_DOC)
+                .define(HEADER_CONVERTER_VERSION, Type.STRING,
+                        HEADER_CONVERTER_VERSION_DEFAULT, Importance.LOW, HEADER_CONVERTER_VERSION_DOC)
                 .define(CONFIG_PROVIDERS_CONFIG, Type.LIST,
                         Collections.emptyList(),
                         Importance.LOW, CONFIG_PROVIDERS_DOC)
@@ -438,9 +449,15 @@ public class WorkerConfig extends AbstractConfig {
 
     @SuppressWarnings("this-escape")
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
-        super(definition, props);
+        super(definition, props, Utils.castToStringObjectMap(props), true);
         logInternalConverterRemovalWarnings(props);
         logPluginPathConfigProviderWarning(props);
     }
 
+    @Override
+    public Map<String, Object> originals() {
+        Map<String, Object> map = super.originals();
+        map.remove(AbstractConfig.CONFIG_PROVIDERS_CONFIG);
+        return map;
+    }
 }

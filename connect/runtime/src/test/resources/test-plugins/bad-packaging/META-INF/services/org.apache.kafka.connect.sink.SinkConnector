@@ -15,6 +15,7 @@
 
 test.plugins.DefaultConstructorPrivateConnector
 test.plugins.DefaultConstructorThrowsConnector
+test.plugins.InnocuousSinkConnector
 test.plugins.NoDefaultConstructorConnector
 test.plugins.StaticInitializerThrowsConnector
 test.plugins.OuterClass$InnerClass

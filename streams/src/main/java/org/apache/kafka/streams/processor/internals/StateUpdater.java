@@ -21,24 +21,25 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 public interface StateUpdater {
 
-    class ExceptionAndTasks {
-        private final Set<Task> tasks;
+    class ExceptionAndTask {
+        private final Task task;
         private final RuntimeException exception;
 
-        public ExceptionAndTasks(final Set<Task> tasks, final RuntimeException exception) {
-            this.tasks = Objects.requireNonNull(tasks);
+        public ExceptionAndTask(final RuntimeException exception, final Task task) {
             this.exception = Objects.requireNonNull(exception);
+            this.task = Objects.requireNonNull(task);
         }
 
-        public Set<Task> getTasks() {
-            return Collections.unmodifiableSet(tasks);
+        public Task task() {
+            return task;
         }
 
         public RuntimeException exception() {
@@ -48,14 +49,66 @@ public interface StateUpdater {
         @Override
         public boolean equals(final Object o) {
             if (this == o) return true;
-            if (!(o instanceof ExceptionAndTasks)) return false;
-            final ExceptionAndTasks that = (ExceptionAndTasks) o;
-            return tasks.equals(that.tasks) && exception.equals(that.exception);
+            if (!(o instanceof ExceptionAndTask)) return false;
+            final ExceptionAndTask that = (ExceptionAndTask) o;
+            return task.id().equals(that.task.id()) && exception.equals(that.exception);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(tasks, exception);
+            return Objects.hash(task, exception);
+        }
+
+        @Override
+        public String toString() {
+            return "ExceptionAndTask{" +
+                "task=" + task.id() +
+                ", exception=" + exception +
+                '}';
+        }
+    }
+
+    class RemovedTaskResult {
+
+        private final Task task;
+        private final Optional<RuntimeException> exception;
+
+        public RemovedTaskResult(final Task task) {
+            this(task, null);
+        }
+
+        public RemovedTaskResult(final Task task, final RuntimeException exception) {
+            this.task = Objects.requireNonNull(task);
+            this.exception = Optional.ofNullable(exception);
+        }
+
+        public Task task() {
+            return task;
+        }
+
+        public Optional<RuntimeException> exception() {
+            return exception;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (!(o instanceof RemovedTaskResult)) return false;
+            final RemovedTaskResult that = (RemovedTaskResult) o;
+            return Objects.equals(task.id(), that.task.id()) && Objects.equals(exception, that.exception);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(task, exception);
+        }
+
+        @Override
+        public String toString() {
+            return "RemovedTaskResult{" +
+                "task=" + task.id() +
+                ", exception=" + exception +
+                '}';
         }
     }
 
@@ -84,17 +137,15 @@ public interface StateUpdater {
     void add(final Task task);
 
     /**
-     * Removes a task (active or standby) from the state updater and adds the removed task to the removed tasks.
+     * Removes a task (active or standby) from the state updater.
      *
-     * This method does not block until the removed task is removed from the state updater.
-     *
-     * The task to be removed is not removed from the restored active tasks and the failed tasks.
-     * Stateless tasks will never be added to the removed tasks since they are immediately added to the
-     * restored active tasks.
+     * This method does not block until the removed task is removed from the state updater. But it returns a future on
+     * which processing can be blocked. The task to remove is removed from the updating tasks, paused tasks,
+     * restored tasks, or failed tasks.
      *
      * @param taskId ID of the task to remove
      */
-    void remove(final TaskId taskId);
+    CompletableFuture<RemovedTaskResult> remove(final TaskId taskId);
 
     /**
      * Wakes up the state updater if it is currently dormant, to check if a paused task should be resumed.
@@ -114,27 +165,6 @@ public interface StateUpdater {
      */
     Set<StreamTask> drainRestoredActiveTasks(final Duration timeout);
 
-
-    /**
-     * Drains the removed tasks (active and standbys) from the state updater.
-     *
-     * Removed tasks returned by this method are tasks extraordinarily removed from the state updater. These do not
-     * include restored or failed tasks.
-     *
-     * The returned removed tasks are removed from the state updater
-     *
-     * @return set of tasks removed from the state updater
-     */
-    Set<Task> drainRemovedTasks();
-
-    /**
-     * Checks if the state updater has any tasks that should be removed and returned to the StreamThread
-     * using `drainRemovedTasks`.
-     *
-     * @return true if a subsequent call to `drainRemovedTasks` would return a non-empty collection.
-     */
-    boolean hasRemovedTasks();
-
     /**
      * Drains the failed tasks and the corresponding exceptions.
      *
@@ -142,7 +172,7 @@ public interface StateUpdater {
      *
      * @return list of failed tasks and the corresponding exceptions
      */
-    List<ExceptionAndTasks> drainExceptionsAndFailedTasks();
+    List<ExceptionAndTask> drainExceptionsAndFailedTasks();
 
     /**
      * Checks if the state updater has any failed tasks that should be returned to the StreamThread
@@ -159,24 +189,24 @@ public interface StateUpdater {
      * not been removed from the state updater with one of the following methods:
      * <ul>
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
-     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     *   <li>{@link StateUpdater#remove(org.apache.kafka.streams.processor.TaskId)}</li>
      * </ul>
      *
      * @return set of all tasks managed by the state updater
      */
-    Set<Task> getTasks();
+    Set<Task> tasks();
 
     /**
      * Gets all tasks that are currently being restored inside the state updater.
      *
      * Tasks that have just being added into the state updater via {@link StateUpdater#add(Task)}
-     * or have restored completely or removed will not be returned; similarly tasks that have just being
-     * removed via {@link StateUpdater#remove(TaskId)} maybe returned still.
+     * or have restored completely or removed will not be returned; tasks that have just being
+     * removed via {@link StateUpdater#remove(TaskId)} may still be returned.
      *
      * @return set of all updating tasks inside the state updater
      */
-    Set<Task> getUpdatingTasks();
+    Set<Task> updatingTasks();
 
     /**
      * Returns if the state updater restores active tasks.
@@ -185,8 +215,8 @@ public interface StateUpdater {
      * and the task was not removed from the state updater with one of the following methods:
      * <ul>
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
-     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     *   <li>{@link StateUpdater#remove(org.apache.kafka.streams.processor.TaskId)}</li>
      * </ul>
      *
      * @return {@code true} if the state updater restores active tasks, {@code false} otherwise
@@ -203,13 +233,12 @@ public interface StateUpdater {
      * The state updater manages all standby tasks that were added with the {@link StateUpdater#add(Task)} and that have
      * not been removed from the state updater with one of the following methods:
      * <ul>
-     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
      * </ul>
      *
      * @return set of all tasks managed by the state updater
      */
-    Set<StandbyTask> getStandbyTasks();
+    Set<StandbyTask> standbyTasks();
 
     /**
      * Get the restore consumer instance id for telemetry, and complete the given future to return it.

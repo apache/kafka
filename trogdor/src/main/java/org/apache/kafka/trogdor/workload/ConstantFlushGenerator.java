@@ -16,10 +16,11 @@
  */
 
 package org.apache.kafka.trogdor.workload;
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.errors.InterruptException;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * This generator will flush the producer after a specific number of messages.  This is useful to simulate a specific

@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -63,17 +64,6 @@ public class MirrorSourceConfigTest {
                 "config.properties.exclude incorrectly excluded prop1");
         assertFalse(config.configPropertyFilter().shouldReplicateConfigProperty("prop2"),
                 "config.properties.exclude incorrectly included prop2");
-    }
-
-    @Test
-    public void testConfigBackwardsCompatibility() {
-        MirrorSourceConfig config = new MirrorSourceConfig(
-                makeProps("config.properties.blacklist", "prop1",
-                        "topics.blacklist", "topic-1"));
-        assertFalse(config.configPropertyFilter().shouldReplicateConfigProperty("prop1"));
-        assertTrue(config.configPropertyFilter().shouldReplicateConfigProperty("prop2"));
-        assertFalse(config.topicFilter().shouldReplicateTopic("topic-1"));
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic-2"));
     }
 
     @Test

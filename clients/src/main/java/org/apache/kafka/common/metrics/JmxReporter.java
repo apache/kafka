@@ -19,11 +19,20 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Sanitizer;
-import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.lang.management.ManagementFactory;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import javax.management.Attribute;
 import javax.management.AttributeList;
@@ -35,15 +44,6 @@ import javax.management.MBeanInfo;
 import javax.management.MBeanServer;
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
-import java.lang.management.ManagementFactory;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.function.Predicate;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 /**
  * Register metrics in JMX as dynamic mbeans based on the metric names
@@ -53,16 +53,12 @@ public class JmxReporter implements MetricsReporter {
     public static final String METRICS_CONFIG_PREFIX = "metrics.jmx.";
 
     public static final String EXCLUDE_CONFIG = METRICS_CONFIG_PREFIX + "exclude";
-    public static final String EXCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX + "blacklist";
 
     public static final String INCLUDE_CONFIG = METRICS_CONFIG_PREFIX + "include";
-    public static final String INCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX + "whitelist";
 
 
-    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(INCLUDE_CONFIG,
-                                                                         INCLUDE_CONFIG_ALIAS,
-                                                                         EXCLUDE_CONFIG,
-                                                                         EXCLUDE_CONFIG_ALIAS);
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(INCLUDE_CONFIG,
+                                                                         EXCLUDE_CONFIG);
 
     public static final String DEFAULT_INCLUDE = ".*";
     public static final String DEFAULT_EXCLUDE = "";
@@ -74,18 +70,7 @@ public class JmxReporter implements MetricsReporter {
     private Predicate<String> mbeanPredicate = s -> true;
 
     public JmxReporter() {
-        this("");
-    }
-
-    /**
-     * Create a JMX reporter that prefixes all metrics with the given string.
-     *  @deprecated Since 2.6.0. Use {@link JmxReporter#JmxReporter()}
-     *  Initialize JmxReporter with {@link JmxReporter#contextChange(MetricsContext)}
-     *  Populate prefix by adding _namespace/prefix key value pair to {@link MetricsContext}
-     */
-    @Deprecated
-    public JmxReporter(String prefix) {
-        this.prefix = prefix != null ? prefix : "";
+        this.prefix = "";
     }
 
     @Override
@@ -194,7 +179,7 @@ public class JmxReporter implements MetricsReporter {
         mBeanName.append(":type=");
         mBeanName.append(metricName.group());
         for (Map.Entry<String, String> entry : metricName.tags().entrySet()) {
-            if (entry.getKey().length() <= 0 || entry.getValue().length() <= 0)
+            if (entry.getKey().isEmpty() || entry.getValue().isEmpty())
                 continue;
             mBeanName.append(",");
             mBeanName.append(entry.getKey());
@@ -307,10 +292,7 @@ public class JmxReporter implements MetricsReporter {
 
     }
 
-    public static Predicate<String> compilePredicate(Map<String, ?> originalConfig) {
-        Map<String, ?> configs = ConfigUtils.translateDeprecatedConfigs(
-            originalConfig, new String[][]{{INCLUDE_CONFIG, INCLUDE_CONFIG_ALIAS},
-                                           {EXCLUDE_CONFIG, EXCLUDE_CONFIG_ALIAS}});
+    public static Predicate<String> compilePredicate(Map<String, ?> configs) {
         String include = (String) configs.get(INCLUDE_CONFIG);
         String exclude = (String) configs.get(EXCLUDE_CONFIG);
 

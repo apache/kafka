@@ -77,4 +77,3 @@ public class SaslHandshakeRequest extends AbstractRequest {
         return new SaslHandshakeRequest(new SaslHandshakeRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }
-

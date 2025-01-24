@@ -17,6 +17,7 @@
 package org.apache.kafka.server.util;
 
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -64,8 +65,7 @@ public class FutureUtils {
             timeout.setStackTrace(t.getStackTrace());
             throw timeout;
         } catch (Throwable t)  {
-            if (t instanceof ExecutionException) {
-                ExecutionException executionException = (ExecutionException) t;
+            if (t instanceof ExecutionException executionException) {
                 t = executionException.getCause();
             }
             log.error("{}Received a fatal error while waiting for {}", prefix, action, t);

@@ -40,4 +40,3 @@ public class RecordBatchTooLargeException extends ApiException {
     }
 
 }
-

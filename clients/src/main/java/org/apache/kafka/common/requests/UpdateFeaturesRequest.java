@@ -106,7 +106,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     public UpdateFeaturesResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return UpdateFeaturesResponse.createWithErrors(
             ApiError.fromThrowable(e),
-            Collections.emptyMap(),
+            Collections.emptySet(),
             throttleTimeMs
         );
     }

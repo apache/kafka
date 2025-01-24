@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
-import java.time.Duration;
-import java.util.concurrent.locks.Condition;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
@@ -29,14 +27,17 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
 import org.apache.kafka.streams.processor.internals.TasksRegistry;
+
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
@@ -50,7 +51,7 @@ import java.util.stream.Collectors;
  * 3. Neither 1 or 2, i.e. it stays idle. This is possible if we do not have enough executors or because those tasks
  *    are not processable (e.g. because no records fetched) yet.
  */
-public class DefaultTaskManager implements TaskManager {
+public final class DefaultTaskManager implements TaskManager {
 
     private final Time time;
     private final Logger log;
@@ -72,7 +73,6 @@ public class DefaultTaskManager implements TaskManager {
         }
     }
 
-    @SuppressWarnings("this-escape")
     public DefaultTaskManager(final Time time,
                               final String clientId,
                               final TasksRegistry tasks,
@@ -124,7 +124,7 @@ public class DefaultTaskManager implements TaskManager {
     }
 
     @Override
-    public void awaitProcessableTasks() throws InterruptedException {
+    public void awaitProcessableTasks(final Supplier<Boolean> isShuttingDown) throws InterruptedException {
         final boolean interrupted = returnWithTasksLocked(() -> {
             for (final Task task : tasks.activeTasks()) {
                 if (!assignedTasks.containsKey(task.id()) &&
@@ -137,8 +137,15 @@ public class DefaultTaskManager implements TaskManager {
                 }
             }
             try {
-                log.debug("Await blocking");
-                tasksCondition.await();
+                // We re-check the shutdownRequest atomic boolean to avoid a race condition. If this thread was
+                // previously interrupted while awaiting tasksCondition, it is possible to miss the signalAll that
+                // is called during shutdown. If this happens, we end up blocking in the await forever.
+                if (!isShuttingDown.get()) {
+                    log.debug("Await blocking");
+                    tasksCondition.await();
+                } else {
+                    log.debug("Not awaiting since shutdown was requested");
+                }
             } catch (final InterruptedException ignored) {
                 // we interrupt the thread for shut down and pause.
                 // we can ignore this exception.
@@ -377,4 +384,3 @@ public class DefaultTaskManager implements TaskManager {
         }
     }
 }
-

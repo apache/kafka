@@ -383,11 +383,33 @@ Map&lt;String, KStream&lt;String, Long&gt;&gt; branches =
 // KStream branches.get(&quot;Branch-A&quot;) contains all records whose keys start with &quot;A&quot;
 // KStream branches.get(&quot;Branch-B&quot;) contains all records whose keys start with &quot;B&quot;
 // KStream branches.get(&quot;Branch-C&quot;) contains all other records
-
-// Java 7 example: cf. `filter` for how to create `Predicate` instances</code></pre>
+</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>Filter</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>Broadcast/Multicast</strong></p>
+                        <ul class="last simple">
+                            <li>no operator</li>
+                        </ul>
+                    </td>
+                        <td><p class="first">Broadcasting a <code class="docutils literal"><span class="pre">KStream</span></code> into multiple downstream operators.</p>
+                            <p>A record is sent to more than one operator by applying multiple operators to the same <code class="docutils literal"><span class="pre">KStream</span></code> instance.</p>
+                            <pre class="line-numbers"><code class="language-java">KStream&lt;String, Long&gt; stream = ...;
+KStream&lt;...&gt; stream1 = stream.map(...);
+KStream&lt;...&gt; stream2 = stream.mapValue(...);
+KStream&lt;...&gt; stream3 = stream.flatMap(...);
+</code></pre>
+                            <p class="first">Multicasting a <code class="docutils literal"><span class="pre">KStream</span></code> into multiple downstream operators.</p>
+                            <p>In contrast to <strong>branching</strong>, which sends each record to at most one downstream branch,
+                               a multicast may send a record to any number of downstream <code class="docutils literal"><span class="pre">KStream</span></code> instances.</p>
+                            <p>A multicast is implemented as a broadcast plus filters.</p>
+                            <pre class="line-numbers"><code class="language-java">KStream&lt;String, Long&gt; stream = ...;
+KStream&lt;...&gt; stream1 = stream.filter((key, value) -&gt; key.startsWith(&quot;A&quot;)); // contains all records whose keys start with "A"
+KStream&lt;...&gt; stream2 = stream.filter((key, value) -&gt; key.startsWith(&quot;AB&quot;)); // contains all records whose keys start with "AB" (subset of stream1)
+KStream&lt;...&gt; stream3 = stream.filter((key, value) -&gt; key.contains(&quot;B&quot;)); // contains all records whose keys contains a "B" (superset of stream2)
+</code></pre>
+                        </td>
+                    </tr>
+                    <tr class="row-even"><td><p class="first"><strong>Filter</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                             <li>KTable &rarr; KTable</li>
@@ -399,20 +421,11 @@ Map&lt;String, KStream&lt;String, Long&gt;&gt; branches =
                             <pre class="line-numbers"><code class="language-java">KStream&lt;String, Long&gt; stream = ...;
 
 // A filter that selects (keeps) only positive numbers
-// Java 8+ example, using lambda expressions
 KStream&lt;String, Long&gt; onlyPositives = stream.filter((key, value) -&gt; value &gt; 0);
-
-// Java 7 example
-KStream&lt;String, Long&gt; onlyPositives = stream.filter(
-    new Predicate&lt;String, Long&gt;() {
-      @Override
-      public boolean test(String key, Long value) {
-        return value &gt; 0;
-      }
-    });</code></pre>
+</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>Inverse Filter</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>Inverse Filter</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                             <li>KTable &rarr; KTable</li>
@@ -424,20 +437,12 @@ KStream&lt;String, Long&gt; onlyPositives = stream.filter(
                             <pre class="line-numbers"><code class="language-java">KStream&lt;String, Long&gt; stream = ...;
 
 // An inverse filter that discards any negative numbers or zero
-// Java 8+ example, using lambda expressions
 KStream&lt;String, Long&gt; onlyPositives = stream.filterNot((key, value) -&gt; value &lt;= 0);
 
-// Java 7 example
-KStream&lt;String, Long&gt; onlyPositives = stream.filterNot(
-    new Predicate&lt;String, Long&gt;() {
-      @Override
-      public boolean test(String key, Long value) {
-        return value &lt;= 0;
-      }
-    });</code></pre>
+</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>FlatMap</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>FlatMap</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -460,11 +465,10 @@ KStream&lt;String, Integer&gt; transformed = stream.flatMap(
       return result;
     }
   );
-
-// Java 7 example: cf. `map` for how to create `KeyValueMapper` instances</code></pre>
+</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>FlatMapValues</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>FlatMapValues</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -477,11 +481,10 @@ KStream&lt;String, Integer&gt; transformed = stream.flatMap(
                             <pre class="line-numbers"><code class="language-java">// Split a sentence into words.
 KStream&lt;byte[], String&gt; sentences = ...;
 KStream&lt;byte[], String&gt; words = sentences.flatMapValues(value -&gt; Arrays.asList(value.split(&quot;\\s+&quot;)));
-
-// Java 7 example: cf. `mapValues` for how to create `ValueMapper` instances</code></pre>
+</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>Foreach</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>Foreach</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; void</li>
                             <li>KStream &rarr; void</li>
@@ -497,20 +500,11 @@ KStream&lt;byte[], String&gt; words = sentences.flatMapValues(value -&gt; Arrays
                             <pre class="line-numbers"><code class="language-java">KStream&lt;String, Long&gt; stream = ...;
 
 // Print the contents of the KStream to the local console.
-// Java 8+ example, using lambda expressions
 stream.foreach((key, value) -&gt; System.out.println(key + &quot; =&gt; &quot; + value));
-
-// Java 7 example
-stream.foreach(
-    new ForeachAction&lt;String, Long&gt;() {
-      @Override
-      public void apply(String key, Long value) {
-        System.out.println(key + &quot; =&gt; &quot; + value);
-      }
-    });</code></pre>
+</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>GroupByKey</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>GroupByKey</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KGroupedStream</li>
                         </ul>
@@ -550,7 +544,7 @@ KGroupedStream&lt;byte[], String&gt; groupedStream = stream.groupByKey(
   );</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>GroupBy</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>GroupBy</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KGroupedStream</li>
                             <li>KTable &rarr; KGroupedTable</li>
@@ -580,8 +574,6 @@ KGroupedStream&lt;byte[], String&gt; groupedStream = stream.groupByKey(
                             <pre class="line-numbers"><code class="language-java">KStream&lt;byte[], String&gt; stream = ...;
 KTable&lt;byte[], String&gt; table = ...;
 
-// Java 8+ examples, using lambda expressions
-
 // Group the stream by a new key and key type
 KGroupedStream&lt;String, String&gt; groupedStream = stream.groupBy(
     (key, value) -&gt; value,
@@ -598,37 +590,10 @@ KGroupedTable&lt;String, Integer&gt; groupedTable = table.groupBy(
       Serdes.Integer()) /* value (note: type was modified) */
   );
 
-
-// Java 7 examples
-
-// Group the stream by a new key and key type
-KGroupedStream&lt;String, String&gt; groupedStream = stream.groupBy(
-    new KeyValueMapper&lt;byte[], String, String&gt;&gt;() {
-      @Override
-      public String apply(byte[] key, String value) {
-        return value;
-      }
-    },
-    Grouped.with(
-      Serdes.String(), /* key (note: type was modified) */
-      Serdes.String())  /* value */
-  );
-
-// Group the table by a new key and key type, and also modify the value and value type.
-KGroupedTable&lt;String, Integer&gt; groupedTable = table.groupBy(
-    new KeyValueMapper&lt;byte[], String, KeyValue&lt;String, Integer&gt;&gt;() {
-      @Override
-      public KeyValue&lt;String, Integer&gt; apply(byte[] key, String value) {
-        return KeyValue.pair(value, value.length());
-      }
-    },
-    Grouped.with(
-      Serdes.String(), /* key (note: type was modified) */
-      Serdes.Integer()) /* value (note: type was modified) */
-  );</code></pre>
+</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>Cogroup</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>Cogroup</strong></p>
                         <ul class="last simple">
                             <li>KGroupedStream &rarr; CogroupedKStream</li>
                             <li>CogroupedKStream &rarr; CogroupedKStream</li>
@@ -654,7 +619,7 @@ KTable&lt;byte[], String&gt; table = cogroupedStream.aggregate(initializer);
 KTable&lt;byte[], String&gt; table2 = cogroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(500))).aggregate(initializer);</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>Map</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>Map</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -666,23 +631,14 @@ KTable&lt;byte[], String&gt; table2 = cogroupedStream.windowedBy(TimeWindows.ofS
                                 If possible use <code class="docutils literal"><span class="pre">mapValues</span></code> instead, which will not cause data re-partitioning.</p>
                             <pre class="line-numbers"><code class="language-java">KStream&lt;byte[], String&gt; stream = ...;
 
-// Java 8+ example, using lambda expressions
 // Note how we change the key and the key type (similar to `selectKey`)
 // as well as the value and the value type.
 KStream&lt;String, Integer&gt; transformed = stream.map(
     (key, value) -&gt; KeyValue.pair(value.toLowerCase(), value.length()));
-
-// Java 7 example
-KStream&lt;String, Integer&gt; transformed = stream.map(
-    new KeyValueMapper&lt;byte[], String, KeyValue&lt;String, Integer&gt;&gt;() {
-      @Override
-      public KeyValue&lt;String, Integer&gt; apply(byte[] key, String value) {
-        return new KeyValue&lt;&gt;(value.toLowerCase(), value.length());
-      }
-    });</code></pre>
+</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>Map (values only)</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>Map (values only)</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                             <li>KTable &rarr; KTable</li>
@@ -696,20 +652,11 @@ KStream&lt;String, Integer&gt; transformed = stream.map(
                                 allow you to modify the key or key type like <code class="docutils literal"><span class="pre">map</span></code> does.</p>
                             <pre class="line-numbers"><code class="language-java">KStream&lt;byte[], String&gt; stream = ...;
 
-// Java 8+ example, using lambda expressions
 KStream&lt;byte[], String&gt; uppercased = stream.mapValues(value -&gt; value.toUpperCase());
-
-// Java 7 example
-KStream&lt;byte[], String&gt; uppercased = stream.mapValues(
-    new ValueMapper&lt;String&gt;() {
-      @Override
-      public String apply(String s) {
-        return s.toUpperCase();
-      }
-    });</code></pre>
+</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>Merge</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>Merge</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -726,7 +673,7 @@ KStream&lt;byte[], String&gt; stream2 = ...;
 KStream&lt;byte[], String&gt; merged = stream1.merge(stream2);</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>Peek</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>Peek</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -741,21 +688,12 @@ KStream&lt;byte[], String&gt; merged = stream1.merge(stream2);</code></pre>
                                 trackable by Kafka, which means they will typically not benefit from Kafka&#8217;s processing guarantees.</p>
                             <pre class="line-numbers"><code class="language-java">KStream&lt;byte[], String&gt; stream = ...;
 
-// Java 8+ example, using lambda expressions
 KStream&lt;byte[], String&gt; unmodifiedStream = stream.peek(
     (key, value) -&gt; System.out.println(&quot;key=&quot; + key + &quot;, value=&quot; + value));
-
-// Java 7 example
-KStream&lt;byte[], String&gt; unmodifiedStream = stream.peek(
-    new ForeachAction&lt;byte[], String&gt;() {
-      @Override
-      public void apply(byte[] key, String value) {
-        System.out.println(&quot;key=&quot; + key + &quot;, value=&quot; + value);
-      }
-    });</code></pre>
+</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>Print</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>Print</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; void</li>
                         </ul>
@@ -773,7 +711,7 @@ stream.print();
 stream.print(Printed.toFile(&quot;streams.out&quot;).withLabel(&quot;streams&quot;));</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>SelectKey</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>SelectKey</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -786,20 +724,11 @@ stream.print(Printed.toFile(&quot;streams.out&quot;).withLabel(&quot;streams&quo
                             <pre class="line-numbers"><code class="language-java">KStream&lt;byte[], String&gt; stream = ...;
 
 // Derive a new record key from the record&#39;s value.  Note how the key type changes, too.
-// Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; rekeyed = stream.selectKey((key, value) -&gt; value.split(&quot; &quot;)[0])
-
-// Java 7 example
-KStream&lt;String, String&gt; rekeyed = stream.selectKey(
-    new KeyValueMapper&lt;byte[], String, String&gt;() {
-      @Override
-      public String apply(byte[] key, String value) {
-        return value.split(&quot; &quot;)[0];
-      }
-    });</code></pre>
+</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>Table to Stream</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>Table to Stream</strong></p>
                         <ul class="last simple">
                             <li>KTable &rarr; KStream</li>
                         </ul>
@@ -813,7 +742,7 @@ KStream&lt;String, String&gt; rekeyed = stream.selectKey(
 KStream&lt;byte[], String&gt; stream = table.toStream();</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>Stream to Table</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>Stream to Table</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KTable</li>
                         </ul>
@@ -825,7 +754,7 @@ KStream&lt;byte[], String&gt; stream = table.toStream();</code></pre>
 KTable&lt;byte[], String&gt; table = stream.toTable();</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-even">
+                    <tr class="row-odd">
                         <td><p class="first"><strong>Repartition</strong></p>
                             <ul class="last simple">
                                 <li>KStream &rarr; KStream</li>
@@ -876,7 +805,7 @@ KStream&lt;byte[], String&gt; repartitionedStream = stream.repartition(Repartiti
                     <p class="caption"><span class="caption-text">Stateful transformations in the DSL.</span></p>
                 </div>
                 <p>Here is an example of a stateful application: the WordCount algorithm.</p>
-                <p>WordCount example in Java 8+, using lambda expressions:</p>
+                <p>WordCount example:</p>
                 <pre class="line-numbers"><code class="language-java">// Assume the record values represent lines of text.  For the sake of this example, you can ignore
 // whatever may be stored in the record keys.
 KStream&lt;String, String&gt; textLines = ...;
@@ -895,25 +824,7 @@ KStream&lt;String, Long&gt; wordCounts = textLines
     .count()
     // Convert the `KTable&lt;String, Long&gt;` into a `KStream&lt;String, Long&gt;`.
     .toStream();</code></pre>
-                <p>WordCount example in Java 7:</p>
-                <pre class="line-numbers"><code class="language-java">// Code below is equivalent to the previous Java 8+ example above.
-KStream&lt;String, String&gt; textLines = ...;
 
-KStream&lt;String, Long&gt; wordCounts = textLines
-    .flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
-        @Override
-        public Iterable&lt;String&gt; apply(String value) {
-            return Arrays.asList(value.toLowerCase().split(&quot;\\W+&quot;));
-        }
-    })
-    .groupBy(new KeyValueMapper&lt;String, String, String&gt;&gt;() {
-        @Override
-        public String apply(String key, String word) {
-            return word;
-        }
-    })
-    .count()
-    .toStream();</code></pre>
                 <div class="section" id="aggregating">
                     <span id="streams-developer-guide-dsl-aggregating"></span><h4><a class="toc-backref" href="#id12">Aggregating</a><a class="headerlink" href="#aggregating" title="Permalink to this headline"></a></h4>
                     <p>After records are <a class="reference internal" href="#streams-developer-guide-dsl-transformations-stateless"><span class="std std-ref">grouped</span></a> by key via <code class="docutils literal"><span class="pre">groupByKey</span></code> or
@@ -953,8 +864,6 @@ KStream&lt;String, Long&gt; wordCounts = textLines
                                 <pre class="line-numbers"><code class="language-java">KGroupedStream&lt;byte[], String&gt; groupedStream = ...;
 KGroupedTable&lt;byte[], String&gt; groupedTable = ...;
 
-// Java 8+ examples, using lambda expressions
-
 // Aggregating a KGroupedStream (note how the value type changes from String to Long)
 KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
     () -&gt; 0L, /* initializer */
@@ -969,49 +878,7 @@ KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
     (aggKey, oldValue, aggValue) -&gt; aggValue - oldValue.length(), /* subtractor */
     Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as(&quot;aggregated-table-store&quot;) /* state store name */
 	.withValueSerde(Serdes.Long()) /* serde for aggregate value */
-
-
-// Java 7 examples
-
-// Aggregating a KGroupedStream (note how the value type changes from String to Long)
-KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
-    new Initializer&lt;Long&gt;() { /* initializer */
-      @Override
-      public Long apply() {
-        return 0L;
-      }
-    },
-    new Aggregator&lt;byte[], String, Long&gt;() { /* adder */
-      @Override
-      public Long apply(byte[] aggKey, String newValue, Long aggValue) {
-        return aggValue + newValue.length();
-      }
-    },
-    Materialized.as(&quot;aggregated-stream-store&quot;)
-        .withValueSerde(Serdes.Long());
-
-// Aggregating a KGroupedTable (note how the value type changes from String to Long)
-KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
-    new Initializer&lt;Long&gt;() { /* initializer */
-      @Override
-      public Long apply() {
-        return 0L;
-      }
-    },
-    new Aggregator&lt;byte[], String, Long&gt;() { /* adder */
-      @Override
-      public Long apply(byte[] aggKey, String newValue, Long aggValue) {
-        return aggValue + newValue.length();
-      }
-    },
-    new Aggregator&lt;byte[], String, Long&gt;() { /* subtractor */
-      @Override
-      public Long apply(byte[] aggKey, String oldValue, Long aggValue) {
-        return aggValue - oldValue.length();
-      }
-    },
-    Materialized.as(&quot;aggregated-stream-store&quot;)
-        .withValueSerde(Serdes.Long());</code></pre>
+</code></pre>
                                 <p>Detailed behavior of <code class="docutils literal"><span class="pre">KGroupedStream</span></code>:</p>
                                 <ul class="simple">
                                     <li>Input records with <code class="docutils literal"><span class="pre">null</span></code> keys are ignored.</li>
@@ -1058,8 +925,6 @@ KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
                                 <pre class="line-numbers"><code class="language-java">import java.time.Duration;
 KGroupedStream&lt;String, Long&gt; groupedStream = ...;
 
-// Java 8+ examples, using lambda expressions
-
 // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(Duration.ofMinutes(5))
     .aggregate(
@@ -1084,50 +949,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = grouped
         (aggKey, leftAggValue, rightAggValue) -&gt; leftAggValue + rightAggValue, /* session merger */
         Materialized.&lt;String, Long, SessionStore&lt;Bytes, byte[]&gt;&gt;as(&quot;sessionized-aggregated-stream-store&quot;) /* state store name */
         .withValueSerde(Serdes.Long())); /* serde for aggregate value */
-
-// Java 7 examples
-
-// Aggregating with time-based windowing (here: with 5-minute tumbling windows)
-KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(Duration.ofMinutes(5))
-    .aggregate(
-        new Initializer&lt;Long&gt;() { /* initializer */
-            @Override
-            public Long apply() {
-                return 0L;
-            }
-        },
-        new Aggregator&lt;String, Long, Long&gt;() { /* adder */
-            @Override
-            public Long apply(String aggKey, Long newValue, Long aggValue) {
-                return aggValue + newValue;
-            }
-        },
-        Materialized.&lt;String, Long, WindowStore&lt;Bytes, byte[]&gt;&gt;as(&quot;time-windowed-aggregated-stream-store&quot;)
-          .withValueSerde(Serdes.Long()));
-
-// Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)).
-    aggregate(
-        new Initializer&lt;Long&gt;() { /* initializer */
-            @Override
-            public Long apply() {
-                return 0L;
-            }
-        },
-        new Aggregator&lt;String, Long, Long&gt;() { /* adder */
-            @Override
-            public Long apply(String aggKey, Long newValue, Long aggValue) {
-                return aggValue + newValue;
-            }
-        },
-        new Merger&lt;String, Long&gt;() { /* session merger */
-            @Override
-            public Long apply(String aggKey, Long leftAggValue, Long rightAggValue) {
-                return rightAggValue + leftAggValue;
-            }
-        },
-        Materialized.&lt;String, Long, SessionStore&lt;Bytes, byte[]&gt;&gt;as(&quot;sessionized-aggregated-stream-store&quot;)
-          .withValueSerde(Serdes.Long()));</code></pre>
+</code></pre>
                                 <p>Detailed behavior:</p>
                                 <ul class="simple">
                                     <li>The windowed aggregate behaves similar to the rolling aggregate described above.  The additional twist is that
@@ -1223,8 +1045,6 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; aggregatedStream = groupedStream.wind
                                 <pre class="line-numbers"><code class="language-java">KGroupedStream&lt;String, Long&gt; groupedStream = ...;
 KGroupedTable&lt;String, Long&gt; groupedTable = ...;
 
-// Java 8+ examples, using lambda expressions
-
 // Reducing a KGroupedStream
 KTable&lt;String, Long&gt; aggregatedStream = groupedStream.reduce(
     (aggValue, newValue) -&gt; aggValue + newValue /* adder */);
@@ -1233,33 +1053,7 @@ KTable&lt;String, Long&gt; aggregatedStream = groupedStream.reduce(
 KTable&lt;String, Long&gt; aggregatedTable = groupedTable.reduce(
     (aggValue, newValue) -&gt; aggValue + newValue, /* adder */
     (aggValue, oldValue) -&gt; aggValue - oldValue /* subtractor */);
-
-
-// Java 7 examples
-
-// Reducing a KGroupedStream
-KTable&lt;String, Long&gt; aggregatedStream = groupedStream.reduce(
-    new Reducer&lt;Long&gt;() { /* adder */
-      @Override
-      public Long apply(Long aggValue, Long newValue) {
-        return aggValue + newValue;
-      }
-    });
-
-// Reducing a KGroupedTable
-KTable&lt;String, Long&gt; aggregatedTable = groupedTable.reduce(
-    new Reducer&lt;Long&gt;() { /* adder */
-      @Override
-      public Long apply(Long aggValue, Long newValue) {
-        return aggValue + newValue;
-      }
-    },
-    new Reducer&lt;Long&gt;() { /* subtractor */
-      @Override
-      public Long apply(Long aggValue, Long oldValue) {
-        return aggValue - oldValue;
-      }
-    });</code></pre>
+</code></pre>
                                 <p>Detailed behavior for <code class="docutils literal"><span class="pre">KGroupedStream</span></code>:</p>
                                 <ul class="simple">
                                     <li>Input records with <code class="docutils literal"><span class="pre">null</span></code> keys are ignored in general.</li>
@@ -1306,8 +1100,6 @@ KTable&lt;String, Long&gt; aggregatedTable = groupedTable.reduce(
                                 <pre class="line-numbers"><code class="language-java">import java.time.Duration;
 KGroupedStream&lt;String, Long&gt; groupedStream = ...;
 
-// Java 8+ examples, using lambda expressions
-
 // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(
   TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5)) /* time-based window */)
@@ -1328,31 +1120,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionzedAggregatedStream = groupedS
   .reduce(
     (aggValue, newValue) -&gt; aggValue + newValue /* adder */
   );
-
-
-// Java 7 examples
-
-// Aggregating with time-based windowing (here: with 5-minute tumbling windows)
-KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(
-  TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5)) /* time-based window */)
-  .reduce(
-    new Reducer&lt;Long&gt;() { /* adder */
-      @Override
-      public Long apply(Long aggValue, Long newValue) {
-        return aggValue + newValue;
-      }
-    });
-
-// Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(
-  SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5))) /* session window */
-  .reduce(
-    new Reducer&lt;Long&gt;() { /* adder */
-      @Override
-      public Long apply(Long aggValue, Long newValue) {
-        return aggValue + newValue;
-      }
-    });</code></pre>
+</code></pre>
                                 <p>Detailed behavior:</p>
                                 <ul class="simple">
                                     <li>The windowed reduce behaves similar to the rolling reduce described above.  The additional twist is that the
@@ -1803,7 +1571,6 @@ KeyValue&lt;K, JV&gt; joinOutputRecord = KeyValue.pair(
 KStream&lt;String, Long&gt; left = ...;
 KStream&lt;String, Double&gt; right = ...;
 
-// Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.join(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
     JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
@@ -1812,21 +1579,7 @@ KStream&lt;String, String&gt; joined = left.join(right,
       Serdes.Long(),   /* left value */
       Serdes.Double())  /* right value */
   );
-
-// Java 7 example
-KStream&lt;String, String&gt; joined = left.join(right,
-    new ValueJoiner&lt;Long, Double, String&gt;() {
-      @Override
-      public String apply(Long leftValue, Double rightValue) {
-        return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
-      }
-    },
-    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
-    Joined.with(
-      Serdes.String(), /* key */
-      Serdes.Long(),   /* left value */
-      Serdes.Double())  /* right value */
-  );</code></pre>
+</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul>
                                         <li><p class="first">The join is <em>key-based</em>, i.e. with the join predicate <code class="docutils literal"><span class="pre">leftRecord.key</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code>, and <em>window-based</em>, i.e. two input records are joined if and only if their
@@ -1860,7 +1613,6 @@ KStream&lt;String, String&gt; joined = left.join(right,
 KStream&lt;String, Long&gt; left = ...;
 KStream&lt;String, Double&gt; right = ...;
 
-// Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.leftJoin(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
     JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
@@ -1869,21 +1621,7 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
       Serdes.Long(),   /* left value */
       Serdes.Double())  /* right value */
   );
-
-// Java 7 example
-KStream&lt;String, String&gt; joined = left.leftJoin(right,
-    new ValueJoiner&lt;Long, Double, String&gt;() {
-      @Override
-      public String apply(Long leftValue, Double rightValue) {
-        return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
-      }
-    },
-    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
-    Joined.with(
-      Serdes.String(), /* key */
-      Serdes.Long(),   /* left value */
-      Serdes.Double())  /* right value */
-  );</code></pre>
+</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul>
                                         <li><p class="first">The join is <em>key-based</em>, i.e. with the join predicate <code class="docutils literal"><span class="pre">leftRecord.key</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code>, and <em>window-based</em>, i.e. two input records are joined if and only if their
@@ -1921,7 +1659,6 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
 KStream&lt;String, Long&gt; left = ...;
 KStream&lt;String, Double&gt; right = ...;
 
-// Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.outerJoin(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
     JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
@@ -1930,21 +1667,7 @@ KStream&lt;String, String&gt; joined = left.outerJoin(right,
       Serdes.Long(),   /* left value */
       Serdes.Double())  /* right value */
   );
-
-// Java 7 example
-KStream&lt;String, String&gt; joined = left.outerJoin(right,
-    new ValueJoiner&lt;Long, Double, String&gt;() {
-      @Override
-      public String apply(Long leftValue, Double rightValue) {
-        return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
-      }
-    },
-    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
-    Joined.with(
-      Serdes.String(), /* key */
-      Serdes.Long(),   /* left value */
-      Serdes.Double())  /* right value */
-  );</code></pre>
+</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul>
                                         <li><p class="first">The join is <em>key-based</em>, i.e. with the join predicate <code class="docutils literal"><span class="pre">leftRecord.key</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code>, and <em>window-based</em>, i.e. two input records are joined if and only if their
@@ -1972,7 +1695,7 @@ KStream&lt;String, String&gt; joined = left.outerJoin(right,
                         <p><strong>Semantics of stream-stream joins:</strong>
                             The semantics of the various stream-stream join variants are explained below.
                             To improve the readability of the table, assume that (1) all records have the same key (and thus the key in the table is omitted), and (2) all records are processed in timestamp order.
-                            We assume a join window size of 10 seconds with a grace period of 5 seconds.</p>
+                            We assume a join window size of 15 seconds with a grace period of 5 seconds.</p>
                         <p><b>Note:</b> If you use the old and now deprecated API to specify the grace period, i.e., <code class="docutils literal"><span class="pre">JoinWindows.of(...).grace(...)</span></code>,
                             left/outer join results are emitted eagerly, and the observed result might differ from the result shown below.</p>
                         <p>The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied
@@ -2193,19 +1916,10 @@ KeyValue&lt;K, JV&gt; joinOutputRecord = KeyValue.pair(
                                     <pre class="line-numbers"><code class="language-java">KTable&lt;String, Long&gt; left = ...;
 KTable&lt;String, Double&gt; right = ...;
 
-// Java 8+ example, using lambda expressions
 KTable&lt;String, String&gt; joined = left.join(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
   );
-
-// Java 7 example
-KTable&lt;String, String&gt; joined = left.join(right,
-    new ValueJoiner&lt;Long, Double, String&gt;() {
-      @Override
-      public String apply(Long leftValue, Double rightValue) {
-        return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
-      }
-    });</code></pre>
+</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul>
                                         <li><p class="first">The join is <em>key-based</em>, i.e. with the join predicate <code class="docutils literal"><span class="pre">leftRecord.key</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code>.</p>
@@ -2240,19 +1954,10 @@ KTable&lt;String, String&gt; joined = left.join(right,
                                     <pre class="line-numbers"><code class="language-java">KTable&lt;String, Long&gt; left = ...;
 KTable&lt;String, Double&gt; right = ...;
 
-// Java 8+ example, using lambda expressions
 KTable&lt;String, String&gt; joined = left.leftJoin(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
   );
-
-// Java 7 example
-KTable&lt;String, String&gt; joined = left.leftJoin(right,
-    new ValueJoiner&lt;Long, Double, String&gt;() {
-      @Override
-      public String apply(Long leftValue, Double rightValue) {
-        return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
-      }
-    });</code></pre>
+</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul>
                                         <li><p class="first">The join is <em>key-based</em>, i.e. with the join predicate <code class="docutils literal"><span class="pre">leftRecord.key</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code>.</p>
@@ -2290,19 +1995,10 @@ KTable&lt;String, String&gt; joined = left.leftJoin(right,
                                     <pre class="line-numbers"><code class="language-java">KTable&lt;String, Long&gt; left = ...;
 KTable&lt;String, Double&gt; right = ...;
 
-// Java 8+ example, using lambda expressions
 KTable&lt;String, String&gt; joined = left.outerJoin(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
   );
-
-// Java 7 example
-KTable&lt;String, String&gt; joined = left.outerJoin(right,
-    new ValueJoiner&lt;Long, Double, String&gt;() {
-      @Override
-      public String apply(Long leftValue, Double rightValue) {
-        return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
-      }
-    });</code></pre>
+</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul>
                                         <li><p class="first">The join is <em>key-based</em>, i.e. with the join predicate <code class="docutils literal"><span class="pre">leftRecord.key</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code>.</p>
@@ -2520,9 +2216,10 @@ KTable&lt;String, String&gt; joined = left.outerJoin(right,
                                 <pre class="line-numbers"><code class="language-java">KTable&lt;String, Long&gt; left = ...;
                 KTable&lt;Long, Double&gt; right = ...;
 //This foreignKeyExtractor simply uses the left-value to map to the right-key.
-Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
+Function&lt;Long, Long&gt; foreignKeyExtractor = (v) -&gt; v;
+//Alternative: with access to left table key
+BiFunction&lt;String, Long, Long&gt; foreignKeyExtractor = (k, v) -&gt; v;
 
-// Java 8+ example, using lambda expressions
                 KTable&lt;String, String&gt; joined = left.join(right, foreignKeyExtractor,
                     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
                   );</code></pre>
@@ -2542,6 +2239,10 @@ Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
                                   <blockquote>
                                     <div>
                                       <ul class="simple">
+                                        <li>
+                                            Records for which the <code class="docutils literal"><span class="pre">foreignKeyExtractor</span></code> produces <code class="docutils literal"><span class="pre">null</span></code> are ignored and do not trigger a join.
+                                            If you want to join with <code class="docutils literal"><span class="pre">null</span></code> foreign keys, use a suitable sentinel value to do so (i.e. <code class="docutils literal"><span class="pre">"NULL"</span></code> for a String field, or <code class="docutils literal"><span class="pre">-1</span></code> for an auto-incrementing integer field).
+                                        </li>
                                         <li>Input records with a <code class="docutils
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
@@ -2579,9 +2280,10 @@ Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
                                 <pre class="line-numbers"><code class="language-java">KTable&lt;String, Long&gt; left = ...;
                 KTable&lt;Long, Double&gt; right = ...;
 //This foreignKeyExtractor simply uses the left-value to map to the right-key.
-Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
+Function&lt;Long, Long&gt; foreignKeyExtractor = (v) -&gt; v;
+//Alternative: with access to left table key
+BiFunction&lt;String, Long, Long&gt; foreignKeyExtractor = (k, v) -&gt; v;
 
-// Java 8+ example, using lambda expressions
                 KTable&lt;String, String&gt; joined = left.leftJoin(right, foreignKeyExtractor,
                     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
                   );</code></pre>
@@ -2601,10 +2303,6 @@ Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
                                   <blockquote>
                                     <div>
                                       <ul class="simple">
-                                        <li>
-                                            Records for which the <code class="docutils literal"><span class="pre">foreignKeyExtractor</span></code> produces <code class="docutils literal"><span class="pre">null</span></code> are ignored and do not trigger a join.
-                                            If you want to join with <code class="docutils literal"><span class="pre">null</span></code> foreign keys, use a suitable sentinel value to do so (i.e. <code class="docutils literal"><span class="pre">"NULL"</span></code> for a String field, or <code class="docutils literal"><span class="pre">-1</span></code> for an auto-incrementing integer field).
-                                        </li>
                                         <li>Input records with a <code class="docutils
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
@@ -2809,26 +2507,13 @@ KeyValue&lt;K, JV&gt; joinOutputRecord = KeyValue.pair(
                                     <pre class="line-numbers"><code class="language-java">KStream&lt;String, Long&gt; left = ...;
 KTable&lt;String, Double&gt; right = ...;
 
-// Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.join(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
     Joined.keySerde(Serdes.String()) /* key */
       .withValueSerde(Serdes.Long()) /* left value */
       .withGracePeriod(Duration.ZERO) /* grace period */
   );
-
-// Java 7 example
-KStream&lt;String, String&gt; joined = left.join(right,
-    new ValueJoiner&lt;Long, Double, String&gt;() {
-      @Override
-      public String apply(Long leftValue, Double rightValue) {
-        return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
-      }
-    },
-    Joined.keySerde(Serdes.String()) /* key */
-      .withValueSerde(Serdes.Long()) /* left value */
-      .withGracePeriod(Duration.ZERO) /* grace period */
-  );</code></pre>
+</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul>
                                         <li><p class="first">The join is <em>key-based</em>, i.e. with the join predicate <code class="docutils literal"><span class="pre">leftRecord.key</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code>.</p>
@@ -2871,26 +2556,13 @@ KStream&lt;String, String&gt; joined = left.join(right,
                                     <pre class="line-numbers"><code class="language-java">KStream&lt;String, Long&gt; left = ...;
 KTable&lt;String, Double&gt; right = ...;
 
-// Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.leftJoin(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
     Joined.keySerde(Serdes.String()) /* key */
       .withValueSerde(Serdes.Long()) /* left value */
       .withGracePeriod(Duration.ZERO) /* grace period */
   );
-
-// Java 7 example
-KStream&lt;String, String&gt; joined = left.leftJoin(right,
-    new ValueJoiner&lt;Long, Double, String&gt;() {
-      @Override
-      public String apply(Long leftValue, Double rightValue) {
-        return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
-      }
-    },
-    Joined.keySerde(Serdes.String()) /* key */
-      .withValueSerde(Serdes.Long()) /* left value */
-      .withGracePeriod(Duration.ZERO) /* grace period */
-  );</code></pre>
+</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul>
                                         <li><p class="first">The join is <em>key-based</em>, i.e. with the join predicate <code class="docutils literal"><span class="pre">leftRecord.key</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code>.</p>
@@ -3096,26 +2768,11 @@ KeyValue&lt;K, JV&gt; joinOutputRecord = KeyValue.pair(
                                     <pre class="line-numbers"><code class="language-java">KStream&lt;String, Long&gt; left = ...;
 GlobalKTable&lt;Integer, Double&gt; right = ...;
 
-// Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.join(right,
     (leftKey, leftValue) -&gt; leftKey.length(), /* derive a (potentially) new key by which to lookup against the table */
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
   );
-
-// Java 7 example
-KStream&lt;String, String&gt; joined = left.join(right,
-    new KeyValueMapper&lt;String, Long, Integer&gt;() { /* derive a (potentially) new key by which to lookup against the table */
-      @Override
-      public Integer apply(String key, Long value) {
-        return key.length();
-      }
-    },
-    new ValueJoiner&lt;Long, Double, String&gt;() {
-      @Override
-      public String apply(Long leftValue, Double rightValue) {
-        return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
-      }
-    });</code></pre>
+</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul class="last">
                                         <li><p class="first">The join is indirectly <em>key-based</em>, i.e. with the join predicate <code class="docutils literal"><span class="pre">KeyValueMapper#apply(leftRecord.key,</span> <span class="pre">leftRecord.value)</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code>.</p>
@@ -3148,26 +2805,11 @@ KStream&lt;String, String&gt; joined = left.join(right,
                                     <pre class="line-numbers"><code class="language-java">KStream&lt;String, Long&gt; left = ...;
 GlobalKTable&lt;Integer, Double&gt; right = ...;
 
-// Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.leftJoin(right,
     (leftKey, leftValue) -&gt; leftKey.length(), /* derive a (potentially) new key by which to lookup against the table */
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
   );
-
-// Java 7 example
-KStream&lt;String, String&gt; joined = left.leftJoin(right,
-    new KeyValueMapper&lt;String, Long, Integer&gt;() { /* derive a (potentially) new key by which to lookup against the table */
-      @Override
-      public Integer apply(String key, Long value) {
-        return key.length();
-      }
-    },
-    new ValueJoiner&lt;Long, Double, String&gt;() {
-      @Override
-      public String apply(Long leftValue, Double rightValue) {
-        return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
-      }
-    });</code></pre>
+</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul class="last">
                                         <li><p class="first">The join is indirectly <em>key-based</em>, i.e. with the join predicate <code class="docutils literal"><span class="pre">KeyValueMapper#apply(leftRecord.key,</span> <span class="pre">leftRecord.value)</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code>.</p>

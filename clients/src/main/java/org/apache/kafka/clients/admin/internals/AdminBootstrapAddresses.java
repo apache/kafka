@@ -27,7 +27,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-final public class AdminBootstrapAddresses {
+public final class AdminBootstrapAddresses {
     private final boolean usingBootstrapControllers;
     private final List<InetSocketAddress> addresses;
 

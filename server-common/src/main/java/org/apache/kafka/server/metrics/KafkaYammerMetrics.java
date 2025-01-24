@@ -17,13 +17,14 @@
 
 package org.apache.kafka.server.metrics;
 
-import com.yammer.metrics.core.MetricName;
-import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Sanitizer;
+
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -106,7 +107,7 @@ public class KafkaYammerMetrics implements Reconfigurable {
         nameBuilder.append(":type=");
         nameBuilder.append(typeName);
 
-        if (name.length() > 0) {
+        if (!name.isEmpty()) {
             nameBuilder.append(",name=");
             nameBuilder.append(name);
         }

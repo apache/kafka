@@ -19,12 +19,11 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,11 +44,11 @@ public class CommonClientConfigs {
      */
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
-    public static final String BOOTSTRAP_SERVERS_DOC = "A list of host/port pairs to use for establishing the initial connection to the Kafka cluster. The client will make use of all servers irrespective of which servers are specified here for bootstrapping&mdash;this list only impacts the initial hosts used to discover the full set of servers. This list should be in the form "
-                                                       + "<code>host1:port1,host2:port2,...</code>. Since these servers are just used for the initial connection to "
-                                                       + "discover the full cluster membership (which may change dynamically), this list need not contain the full set of "
-                                                       + "servers (you may want more than one, though, in case a server is down).";
-
+    public static final String BOOTSTRAP_SERVERS_DOC = "A list of host/port pairs used to establish the initial connection to the Kafka cluster. "
+                                                        + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
+                                                        + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
+                                                        + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
+                                                        + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
     public static final String CLIENT_DNS_LOOKUP_CONFIG = "client.dns.lookup";
     public static final String CLIENT_DNS_LOOKUP_DOC = "Controls how the client uses DNS lookups. "
                                                        + "If set to <code>use_all_dns_ips</code>, connect to each returned IP "
@@ -118,20 +117,20 @@ public class CommonClientConfigs {
     public static final String METRICS_NUM_SAMPLES_DOC = "The number of samples maintained to compute metrics.";
 
     public static final String METRICS_RECORDING_LEVEL_CONFIG = "metrics.recording.level";
-    public static final String METRICS_RECORDING_LEVEL_DOC = "The highest recording level for metrics.";
-
+    public static final String METRICS_RECORDING_LEVEL_DOC = "The highest recording level for metrics. It has three levels for recording metrics - info, debug, and trace.\n" +
+            " \n" +
+            "INFO level records only essential metrics necessary for monitoring system performance and health. It collects vital data without gathering too much detail, making it suitable for production environments where minimal overhead is desired.\n" +
+            "\n" +
+            "DEBUG level records most metrics, providing more detailed information about the system's operation. It's useful for development and testing environments where you need deeper insights to debug and fine-tune the application.\n" +
+            "\n" +
+            "TRACE level records all possible metrics, capturing every detail about the system's performance and operation. It's best for controlled environments where in-depth analysis is required, though it can introduce significant overhead.";
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
-    public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
+    public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation.";
 
     public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
 
-    @Deprecated
-    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = "auto.include.jmx.reporter";
-    public static final String AUTO_INCLUDE_JMX_REPORTER_DOC = "Deprecated. Whether to automatically include JmxReporter even if it's not listed in <code>metric.reporters</code>. This configuration will be removed in Kafka 4.0, users should instead include <code>org.apache.kafka.common.metrics.JmxReporter</code> in <code>metric.reporters</code> in order to enable the JmxReporter.";
-
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
-    public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Valid values are: " +
-        Utils.join(SecurityProtocol.names(), ", ") + ".";
+    public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers.";
     public static final String DEFAULT_SECURITY_PROTOCOL = "PLAINTEXT";
 
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG = "socket.connection.setup.timeout.ms";
@@ -207,7 +206,8 @@ public class CommonClientConfigs {
                                                         + "to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, "
                                                         + "then the broker will remove this client from the group and initiate a rebalance. Note that the value "
                                                         + "must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> "
-                                                        + "and <code>group.max.session.timeout.ms</code>.";
+                                                        + "and <code>group.max.session.timeout.ms</code>. Note that this configuration is not supported when <code>group.protocol</code> "
+                                                        + "is set to \"consumer\".";
 
     public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
     public static final String HEARTBEAT_INTERVAL_MS_DOC = "The expected time between heartbeats to the consumer "
@@ -219,6 +219,26 @@ public class CommonClientConfigs {
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
     public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
             "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
+
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = "metadata.recovery.strategy";
+    public static final String METADATA_RECOVERY_STRATEGY_DOC = "Controls how the client recovers when none of the brokers known to it is available. " +
+            "If set to <code>none</code>, the client fails. If set to <code>rebootstrap</code>, " +
+            "the client repeats the bootstrap process using <code>bootstrap.servers</code>. " +
+            "Rebootstrapping is useful when a client communicates with brokers so infrequently " +
+            "that the set of brokers may change entirely before the client refreshes metadata. " +
+            "Metadata recovery is triggered when all last-known brokers appear unavailable simultaneously. " +
+            "Brokers appear unavailable when disconnected and no current retry attempt is in-progress. " +
+            "Consider increasing <code>reconnect.backoff.ms</code> and <code>reconnect.backoff.max.ms</code> and " +
+            "decreasing <code>socket.connection.setup.timeout.ms</code> and <code>socket.connection.setup.timeout.max.ms</code> " +
+            "for the client. Rebootstrap is also triggered if connection cannot be established to any of the brokers for " +
+            "<code>metadata.recovery.rebootstrap.trigger.ms</code> milliseconds or if server requests rebootstrap.";
+    public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = MetadataRecoveryStrategy.REBOOTSTRAP.name;
+
+    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG = "metadata.recovery.rebootstrap.trigger.ms";
+    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC = "If a client configured to rebootstrap using " +
+            "<code>metadata.recovery.strategy=rebootstrap</code> is unable to obtain metadata from any of the brokers in the last known " +
+            "metadata for this interval, client repeats the bootstrap process using <code>bootstrap.servers</code> configuration.";
+    public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = 300 * 1000;
 
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
@@ -287,15 +307,8 @@ public class CommonClientConfigs {
     }
 
     public static List<MetricsReporter> metricsReporters(Map<String, Object> clientIdOverride, AbstractConfig config) {
-        List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
+        return config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class, clientIdOverride);
-        if (config.getBoolean(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG) &&
-                reporters.stream().noneMatch(r -> JmxReporter.class.equals(r.getClass()))) {
-            JmxReporter jmxReporter = new JmxReporter();
-            jmxReporter.configure(config.originals(clientIdOverride));
-            reporters.add(jmxReporter);
-        }
-        return reporters;
     }
 
     public static Optional<ClientTelemetryReporter> telemetryReporter(String clientId, AbstractConfig config) {

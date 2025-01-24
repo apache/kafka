@@ -15,29 +15,31 @@
 package kafka.api
 
 import java.time.Duration
+import java.util
 import java.util.concurrent.TimeUnit
-import java.util.{Collections, HashMap, Properties}
+import java.util.{Collections, Properties}
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
-import kafka.server.{ClientQuotaManager, KafkaBroker, KafkaConfig, QuotaType}
+import kafka.server.{ClientQuotaManager, KafkaBroker}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.config.ClientQuotaManagerConfig
+import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
@@ -50,15 +52,16 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   protected def consumerClientId = "QuotasTestConsumer-1"
   protected def createQuotaTestClients(topic: String, leaderNode: KafkaBroker): QuotaTestClients
 
-  this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "2")
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100")
-  this.serverConfig.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, "60000")
-  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+  this.serverConfig.setProperty(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "2")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "60000")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "-1")
   this.producerConfig.setProperty(ProducerConfig.BUFFER_MEMORY_CONFIG, "300000")
   this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
+  this.producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, 0.toString)
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "QuotasTest")
   this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
@@ -87,9 +90,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients = createQuotaTestClients(topic1, leaderNode)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testThrottledProducerConsumer(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testThrottledProducerConsumer(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 1000
     val produced = quotaTestClients.produceUntilThrottled(numRecords)
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
@@ -99,13 +102,13 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testProducerConsumerOverrideUnthrottled(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testProducerConsumerOverrideUnthrottled(quorum: String, groupProtocol: String): Unit = {
     // Give effectively unlimited quota for producer and consumer
     val props = new Properties()
-    props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
-    props.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
+    props.put(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
+    props.put(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
 
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
@@ -119,9 +122,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testProducerConsumerOverrideLowerQuota(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testProducerConsumerOverrideLowerQuota(quorum: String, groupProtocol: String): Unit = {
     // consumer quota is set such that consumer quota * default quota window (10 seconds) is less than
     // MAX_PARTITION_FETCH_BYTES_CONFIG, so that we can test consumer ability to fetch in this case
     // In this case, 250 * 10 < 4096
@@ -137,9 +140,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testQuotaOverrideDelete(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testQuotaOverrideDelete(quorum: String, groupProtocol: String): Unit = {
     // Override producer and consumer quotas to unlimited
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
@@ -164,9 +167,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testThrottledRequest(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testThrottledRequest(quorum: String, groupProtocol: String): Unit = {
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, 0.1)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, 0.1)
 
@@ -177,13 +180,13 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     while ((!throttled || quotaTestClients.exemptRequestMetric == null || metricValue(quotaTestClients.exemptRequestMetric) <= 0)
       && System.currentTimeMillis < endTimeMs) {
       consumer.poll(Duration.ofMillis(100L))
-      val throttleMetric = quotaTestClients.throttleMetric(QuotaType.Request, consumerClientId)
+      val throttleMetric = quotaTestClients.throttleMetric(QuotaType.REQUEST, consumerClientId)
       throttled = throttleMetric != null && metricValue(throttleMetric) > 0
     }
 
     assertTrue(throttled, "Should have been throttled")
     quotaTestClients.verifyConsumerClientThrottleTimeMetric(expectThrottle = true,
-      Some(ClientQuotaManagerConfig.DEFAULT_QUOTA_WINDOW_SIZE_SECONDS * 1000.0))
+      Some(QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT * 1000.0))
 
     val exemptMetric = quotaTestClients.exemptRequestMetric
     assertNotNull(exemptMetric, "Exempt requests not recorded")
@@ -220,7 +223,7 @@ abstract class QuotaTestClients(topic: String,
         new ErrorLoggingCallback(topic, null, null, true))
       numProduced += 1
       do {
-        val metric = throttleMetric(QuotaType.Produce, producerClientId)
+        val metric = throttleMetric(QuotaType.PRODUCE, producerClientId)
         throttled = metric != null && metricValue(metric) > 0
       } while (!future.isDone && (!throttled || waitForRequestCompletion))
     } while (numProduced < maxRecords && !throttled)
@@ -236,7 +239,7 @@ abstract class QuotaTestClients(topic: String,
     val startMs = System.currentTimeMillis
     do {
       numConsumed += consumer.poll(Duration.ofMillis(100L)).count
-      val metric = throttleMetric(QuotaType.Fetch, consumerClientId)
+      val metric = throttleMetric(QuotaType.FETCH, consumerClientId)
       throttled = metric != null && metricValue(metric) > 0
     } while (numConsumed < maxRecords && !throttled && System.currentTimeMillis < startMs + timeoutMs)
 
@@ -265,7 +268,7 @@ abstract class QuotaTestClients(topic: String,
 
   def verifyProduceThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true,
                             verifyRequestChannelMetric: Boolean = true): Unit = {
-    verifyThrottleTimeMetric(QuotaType.Produce, producerClientId, expectThrottle)
+    verifyThrottleTimeMetric(QuotaType.PRODUCE, producerClientId, expectThrottle)
     if (verifyRequestChannelMetric)
       verifyThrottleTimeRequestChannelMetric(ApiKeys.PRODUCE, "", producerClientId, expectThrottle)
     if (verifyClientMetric)
@@ -274,7 +277,7 @@ abstract class QuotaTestClients(topic: String,
 
   def verifyConsumeThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true,
                             verifyRequestChannelMetric: Boolean = true): Unit = {
-    verifyThrottleTimeMetric(QuotaType.Fetch, consumerClientId, expectThrottle)
+    verifyThrottleTimeMetric(QuotaType.FETCH, consumerClientId, expectThrottle)
     if (verifyRequestChannelMetric)
       verifyThrottleTimeRequestChannelMetric(ApiKeys.FETCH, "Consumer", consumerClientId, expectThrottle)
     if (verifyClientMetric)
@@ -317,12 +320,12 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def exemptRequestMetric: KafkaMetric = {
-    val metricName = leaderNode.metrics.metricName("exempt-request-time", QuotaType.Request.toString, "")
+    val metricName = leaderNode.metrics.metricName("exempt-request-time", QuotaType.REQUEST.toString, "")
     leaderNode.metrics.metrics.get(metricName)
   }
 
   private def verifyProducerClientThrottleTimeMetric(expectThrottle: Boolean): Unit = {
-    val tags = new HashMap[String, String]
+    val tags = new util.HashMap[String, String]
     tags.put("client-id", producerClientId)
     val avgMetric = producer.metrics.get(new MetricName("produce-throttle-time-avg", "producer-metrics", "", tags))
     val maxMetric = producer.metrics.get(new MetricName("produce-throttle-time-max", "producer-metrics", "", tags))
@@ -335,7 +338,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def verifyConsumerClientThrottleTimeMetric(expectThrottle: Boolean, maxThrottleTime: Option[Double] = None): Unit = {
-    val tags = new HashMap[String, String]
+    val tags = new util.HashMap[String, String]
     tags.put("client-id", consumerClientId)
     val avgMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-avg", "consumer-fetch-manager-metrics", "", tags))
     val maxMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-max", "consumer-fetch-manager-metrics", "", tags))
@@ -365,9 +368,9 @@ abstract class QuotaTestClients(topic: String,
     def addOp(key: String, value: Option[Double]): Unit = {
       ops = ops ++ Seq(new ClientQuotaAlteration.Op(key, value.map(Double.box).orNull))
     }
-    addOp(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerQuota.map(_.toDouble))
-    addOp(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, consumerQuota.map(_.toDouble))
-    addOp(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, requestQuota)
+    addOp(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerQuota.map(_.toDouble))
+    addOp(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, consumerQuota.map(_.toDouble))
+    addOp(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, requestQuota)
     new ClientQuotaAlteration(quotaEntity, ops.asJava)
   }
 

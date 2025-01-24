@@ -16,43 +16,28 @@
  */
 package kafka.api
 
-import kafka.server.KafkaConfig
 import kafka.utils.TestInfoUtils
-import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.config.TopicConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
-import java.util.{Collections, Optional, Properties}
-import scala.annotation.nowarn
+import java.util.{Collections, Optional}
 import scala.jdk.CollectionConverters._
 
 class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTest {
 
-  override protected def brokerPropertyOverrides(properties: Properties): Unit = {
-    // legacy message formats are only supported with IBP < 3.0
-    // KRaft mode is not supported for inter.broker.protocol.version = 2.8, The minimum version required is 3.0-IV1"
-    if (!isKRaftTest())
-      properties.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
-  }
-
-  @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testOffsetsForTimes(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testOffsetsForTimes(quorum: String, groupProtocol: String): Unit = {
     val numParts = 2
     val topic1 = "part-test-topic-1"
     val topic2 = "part-test-topic-2"
     val topic3 = "part-test-topic-3"
-    val props = new Properties()
-    props.setProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")
-    createTopic(topic1, numParts, 1)
-    // Topic2 is in old message format.
-    createTopic(topic2, numParts, 1, props)
-    createTopic(topic3, numParts, 1)
+    createTopic(topic1, numParts)
+    createTopic(topic2, numParts)
+    createTopic(topic3, numParts)
 
     val consumer = createConsumer()
 
@@ -74,7 +59,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     }
     // The timestampToSearch map should contain:
     // (topic1Partition0 -> 0,
-    //  topic1Partitoin1 -> 20,
+    //  topic1Partition1 -> 20,
     //  topic2Partition0 -> 40,
     //  topic2Partition1 -> 60,
     //  topic3Partition0 -> 80,
@@ -91,22 +76,16 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     assertEquals(20, timestampTopic1P1.timestamp)
     assertEquals(Optional.of(0), timestampTopic1P1.leaderEpoch)
 
-    if (!isKRaftTest()) {
-      assertNull(timestampOffsets.get(new TopicPartition(topic2, 0)), "null should be returned when message format is 0.9.0")
-      assertNull(timestampOffsets.get(new TopicPartition(topic2, 1)), "null should be returned when message format is 0.9.0")
-    }
-    else {
-      // legacy message formats are supported for IBP version < 3.0 and KRaft runs on minimum version 3.0-IV1
-      val timestampTopic2P0 = timestampOffsets.get(new TopicPartition(topic2, 0))
-      assertEquals(40, timestampTopic2P0.offset)
-      assertEquals(40, timestampTopic2P0.timestamp)
-      assertEquals(Optional.of(0), timestampTopic2P0.leaderEpoch)
+    // legacy message formats are supported for IBP version < 3.0 and KRaft runs on minimum version 3.0-IV1
+    val timestampTopic2P0 = timestampOffsets.get(new TopicPartition(topic2, 0))
+    assertEquals(40, timestampTopic2P0.offset)
+    assertEquals(40, timestampTopic2P0.timestamp)
+    assertEquals(Optional.of(0), timestampTopic2P0.leaderEpoch)
 
-      val timestampTopic2P1 = timestampOffsets.get(new TopicPartition(topic2, 1))
-      assertEquals(60, timestampTopic2P1.offset)
-      assertEquals(60, timestampTopic2P1.timestamp)
-      assertEquals(Optional.of(0), timestampTopic2P1.leaderEpoch)
-    }
+    val timestampTopic2P1 = timestampOffsets.get(new TopicPartition(topic2, 1))
+    assertEquals(60, timestampTopic2P1.offset)
+    assertEquals(60, timestampTopic2P1.timestamp)
+    assertEquals(Optional.of(0), timestampTopic2P1.leaderEpoch)
 
     val timestampTopic3P0 = timestampOffsets.get(new TopicPartition(topic3, 0))
     assertEquals(80, timestampTopic3P0.offset)
@@ -116,20 +95,14 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     assertNull(timestampOffsets.get(new TopicPartition(topic3, 1)))
   }
 
-  @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testEarliestOrLatestOffsets(quorum: String): Unit = {
-    val topic0 = "topicWithNewMessageFormat"
-    val topic1 = "topicWithOldMessageFormat"
-    val prop = new Properties()
-    // idempotence producer doesn't support old version of messages
-    prop.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
-    val producer = createProducer(configOverrides = prop)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testEarliestOrLatestOffsets(quorum: String, groupProtocol: String): Unit = {
+    val topic0 = "topic0"
+    val topic1 = "topic1"
+    val producer = createProducer()
     createTopicAndSendRecords(producer, topicName = topic0, numPartitions = 2, recordsPerPartition = 100)
-    val props = new Properties()
-    props.setProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")
-    createTopic(topic1, numPartitions = 1, replicationFactor = 1, props)
+    createTopic(topic1)
     sendRecords(producer, numRecords = 100, new TopicPartition(topic1, 0))
 
     val t0p0 = new TopicPartition(topic0, 0)

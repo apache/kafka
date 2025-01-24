@@ -27,6 +27,7 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.HeaderConverter;
 
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
@@ -59,10 +60,10 @@ public class ByteArrayConverter implements Converter, HeaderConverter, Versioned
         if (schema != null && schema.type() != Schema.Type.BYTES)
             throw new DataException("Invalid schema type for ByteArrayConverter: " + schema.type().toString());
 
-        if (value != null && !(value instanceof byte[]))
+        if (value != null && !(value instanceof byte[]) && !(value instanceof ByteBuffer))
             throw new DataException("ByteArrayConverter is not compatible with objects of type " + value.getClass());
 
-        return (byte[]) value;
+        return value instanceof ByteBuffer ? getBytesFromByteBuffer((ByteBuffer) value) : (byte[]) value;
     }
 
     @Override
@@ -83,5 +84,16 @@ public class ByteArrayConverter implements Converter, HeaderConverter, Versioned
     @Override
     public void close() {
         // do nothing
+    }
+
+    private byte[] getBytesFromByteBuffer(ByteBuffer byteBuffer) {
+        if (byteBuffer == null) {
+            return null;
+        }
+
+        byteBuffer.rewind();
+        byte[] bytes = new byte[byteBuffer.remaining()];
+        byteBuffer.get(bytes);
+        return bytes;
     }
 }

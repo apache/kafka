@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.common.security.plain.internals;
 
+import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,10 +30,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import org.apache.kafka.common.errors.SaslAuthenticationException;
-import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 
 public class PlainSaslServerTest {
 

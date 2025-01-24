@@ -28,7 +28,7 @@ COPY jsa_launch /etc/kafka/docker/jsa_launch
 RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache wget gcompat gpg gpg-agent procps netcat-openbsd bash; \
+    apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
     mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
@@ -62,7 +62,7 @@ LABEL org.label-schema.name="kafka" \
 RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache wget gpg gpg-agent gcompat bash; \
+    apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
     mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
@@ -76,9 +76,9 @@ RUN set -eux ; \
     chown appuser:appuser -R /usr/logs /opt/kafka /mnt/shared/config; \
     chown appuser:root -R /var/lib/kafka /etc/kafka/secrets /etc/kafka; \
     chmod -R ug+w /etc/kafka /var/lib/kafka /etc/kafka/secrets; \
-    cp /opt/kafka/config/log4j.properties /etc/kafka/docker/log4j.properties; \
-    cp /opt/kafka/config/tools-log4j.properties /etc/kafka/docker/tools-log4j.properties; \
-    cp /opt/kafka/config/kraft/server.properties /etc/kafka/docker/server.properties; \
+    cp /opt/kafka/config/log4j2.yaml /etc/kafka/docker/log4j2.yaml; \
+    cp /opt/kafka/config/tools-log4j2.yaml /etc/kafka/docker/tools-log4j2.yaml; \
+    cp /opt/kafka/config/server.properties /etc/kafka/docker/server.properties; \
     rm kafka.tgz kafka.tgz.asc KEYS; \
     apk del wget gpg gpg-agent; \
     apk cache clean;

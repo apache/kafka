@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.utils.Timer;
-
 public class AllTopicsMetadataEvent extends AbstractTopicMetadataEvent {
 
-    public AllTopicsMetadataEvent(final Timer timer) {
-        super(Type.ALL_TOPICS_METADATA, timer);
+    public AllTopicsMetadataEvent(final long deadlineMs) {
+        super(Type.ALL_TOPICS_METADATA, deadlineMs);
     }
 }

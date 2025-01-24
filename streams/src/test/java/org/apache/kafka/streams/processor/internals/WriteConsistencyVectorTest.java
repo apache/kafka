@@ -30,11 +30,14 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -45,7 +48,8 @@ import static org.apache.kafka.streams.processor.internals.InternalProcessorCont
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WriteConsistencyVectorTest {
 
     @Mock
@@ -75,7 +79,7 @@ public class WriteConsistencyVectorTest {
     private static final Integer INPUT_PARTITION = 0;
     private static final Long INPUT_OFFSET = 100L;
 
-    @Before
+    @BeforeEach
     public void setup() {
         when(streamsConfig.originals()).thenReturn(Collections.singletonMap(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true));
         when(streamsConfig.values()).thenReturn(Collections.emptyMap());

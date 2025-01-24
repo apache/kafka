@@ -17,8 +17,7 @@
 
 package kafka.coordinator.group
 
-import kafka.server.DelayedOperation
-
+import org.apache.kafka.server.purgatory.DelayedOperation
 import java.util.concurrent.locks.Lock
 
 /**
@@ -30,5 +29,5 @@ private[group] abstract class DelayedRebalance(
   groupLock: Lock
 ) extends DelayedOperation(
   rebalanceTimeoutMs,
-  Some(groupLock)
+  groupLock
 )

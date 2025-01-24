@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -28,8 +24,14 @@ import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializati
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
+
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
+
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * A RocksDB backed time-ordered segmented bytes store for window key schema.
@@ -90,7 +92,7 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDB
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long timestamp = WindowKeySchema.extractStoreTimestamp(record.key());
             final long segmentId = segments.segmentId(timestamp);
-            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
             if (segment != null) {
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                     record,

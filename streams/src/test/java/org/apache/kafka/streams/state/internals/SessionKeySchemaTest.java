@@ -17,9 +17,6 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.function.Function;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -34,25 +31,25 @@ import org.apache.kafka.streams.state.internals.PrefixedSessionKeySchemas.KeyFir
 import org.apache.kafka.streams.state.internals.PrefixedSessionKeySchemas.TimeFirstSessionKeySchema;
 import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
 import org.apache.kafka.test.KeyValueIteratorStub;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import java.util.Map;
+import java.util.function.Function;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
-@RunWith(Parameterized.class)
 public class SessionKeySchemaTest {
     private static final Map<SchemaType, KeySchema> SCHEMA_TYPE_MAP = mkMap(
         mkEntry(SchemaType.SessionKeySchema, new SessionKeySchema()),
@@ -123,17 +120,17 @@ public class SessionKeySchemaTest {
     private final Windowed<String> windowedKey = new Windowed<>(key, window);
     private final Serde<Windowed<String>> keySerde = new WindowedSerdes.SessionWindowedSerde<>(serde);
 
-    private final KeySchema keySchema;
+    private KeySchema keySchema;
     private DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator;
-    private final SchemaType schemaType;
-    private final Function<Windowed<Bytes>, Bytes> toBinary;
-    private final TriFunction<Windowed<String>, Serializer<String>, String, byte[]> serdeToBinary;
-    private final TriFunction<byte[], Deserializer<String>, String, Windowed<String>> serdeFromBytes;
-    private final Function<Bytes, Windowed<Bytes>> fromBytes;
-    private final Function<byte[], Long> extractStartTS;
-    private final Function<byte[], Long> extractEndTS;
-    private final Function<byte[], byte[]> extractKeyBytes;
-    private final Function<byte[], Window> extractWindow;
+    private SchemaType schemaType;
+    private Function<Windowed<Bytes>, Bytes> toBinary;
+    private TriFunction<Windowed<String>, Serializer<String>, String, byte[]> serdeToBinary;
+    private TriFunction<byte[], Deserializer<String>, String, Windowed<String>> serdeFromBytes;
+    private Function<Bytes, Windowed<Bytes>> fromBytes;
+    private Function<byte[], Long> extractStartTS;
+    private Function<byte[], Long> extractEndTS;
+    private Function<byte[], byte[]> extractKeyBytes;
+    private Function<byte[], Window> extractWindow;
 
     private enum SchemaType {
         SessionKeySchema,
@@ -141,16 +138,7 @@ public class SessionKeySchemaTest {
         PrefixedKeyFirstSchema
     }
 
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return asList(new Object[][] {
-            {SchemaType.SessionKeySchema},
-            {SchemaType.PrefixedTimeFirstSchema},
-            {SchemaType.PrefixedKeyFirstSchema}
-        });
-    }
-
-    public SessionKeySchemaTest(final SchemaType type) {
+    private void setUp(final SchemaType type) {
         schemaType = type;
         keySchema = SCHEMA_TYPE_MAP.get(type);
         toBinary = WINDOW_TO_STORE_BINARY_MAP.get(schemaType);
@@ -161,50 +149,54 @@ public class SessionKeySchemaTest {
         extractEndTS = EXTRACT_END_TS_MAP.get(schemaType);
         extractKeyBytes = EXTRACT_KEY_BYTES.get(schemaType);
         extractWindow = EXTRACT_WINDOW.get(schemaType);
+        final List<KeyValue<Bytes, Integer>> keys = asList(KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(0, 0))), 1),
+                KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(0, 0))), 2),
+                KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(0, 0))), 3),
+                KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(10, 20))), 4),
+                KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(10, 20))), 5),
+                KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(10, 20))), 6));
+        iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()));
     }
 
-    @After
+    @AfterEach
     public void after() {
         if (iterator != null) {
             iterator.close();
         }
     }
 
-    @Before
-    public void before() {
-        final List<KeyValue<Bytes, Integer>> keys = asList(KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(0, 0))), 1),
-                                                                  KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(0, 0))), 2),
-                                                                  KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(0, 0))), 3),
-                                                                  KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(10, 20))), 4),
-                                                                  KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(10, 20))), 5),
-                                                                  KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(10, 20))), 6));
-        iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()));
-    }
-
-    @Test
-    public void shouldFetchExactKeysSkippingLongerKeys() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldFetchExactKeysSkippingLongerKeys(final SchemaType type) {
+        setUp(type);
         final Bytes key = Bytes.wrap(new byte[]{0});
         final List<Integer> result = getValues(keySchema.hasNextCondition(key, key, 0, Long.MAX_VALUE, true));
         assertThat(result, equalTo(asList(2, 4)));
     }
 
-    @Test
-    public void shouldFetchExactKeySkippingShorterKeys() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldFetchExactKeySkippingShorterKeys(final SchemaType type) {
+        setUp(type);
         final Bytes key = Bytes.wrap(new byte[]{0, 0});
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, 0, Long.MAX_VALUE, true);
         final List<Integer> results = getValues(hasNextCondition);
         assertThat(results, equalTo(asList(1, 5)));
     }
 
-    @Test
-    public void shouldFetchAllKeysUsingNullKeys() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldFetchAllKeysUsingNullKeys(final SchemaType type) {
+        setUp(type);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, true);
         final List<Integer> results = getValues(hasNextCondition);
         assertThat(results, equalTo(asList(1, 2, 3, 4, 5, 6)));
     }
     
-    @Test
-    public void testUpperBoundWithLargeTimestamps() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void testUpperBoundWithLargeTimestamps(final SchemaType type) {
+        setUp(type);
         final Bytes upper = keySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
 
         assertThat(
@@ -239,8 +231,10 @@ public class SessionKeySchemaTest {
         }
     }
 
-    @Test
-    public void testUpperBoundWithKeyBytesLargerThanFirstTimestampByte() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void testUpperBoundWithKeyBytesLargerThanFirstTimestampByte(final SchemaType type) {
+        setUp(type);
         final Bytes upper = keySchema.upperRange(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), Long.MAX_VALUE);
 
         assertThat(
@@ -258,8 +252,10 @@ public class SessionKeySchemaTest {
         );
     }
 
-    @Test
-    public void testUpperBoundWithZeroTimestamp() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void testUpperBoundWithZeroTimestamp(final SchemaType type) {
+        setUp(type);
         final Bytes upper = keySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
         final Function<Windowed<Bytes>, Bytes> toBinary = WINDOW_TO_STORE_BINARY_MAP.get(schemaType);
 
@@ -274,14 +270,18 @@ public class SessionKeySchemaTest {
         }
     }
 
-    @Test
-    public void testLowerBoundWithZeroTimestamp() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void testLowerBoundWithZeroTimestamp(final SchemaType type) {
+        setUp(type);
         final Bytes lower = keySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
         assertThat(lower, equalTo(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0)))));
     }
 
-    @Test
-    public void testLowerBoundMatchesTrailingZeros() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void testLowerBoundMatchesTrailingZeros(final SchemaType type) {
+        setUp(type);
         final Bytes lower = keySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
 
         assertThat(
@@ -302,67 +302,89 @@ public class SessionKeySchemaTest {
         }
     }
 
-    @Test
-    public void shouldSerializeDeserialize() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldSerializeDeserialize(final SchemaType type) {
+        setUp(type);
         final byte[] bytes = keySerde.serializer().serialize(topic, windowedKey);
         final Windowed<String> result = keySerde.deserializer().deserialize(topic, bytes);
         assertEquals(windowedKey, result);
     }
 
-    @Test
-    public void shouldSerializeNullToNull() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldSerializeNullToNull(final SchemaType type) {
+        setUp(type);
         assertNull(keySerde.serializer().serialize(topic, null));
     }
 
-    @Test
-    public void shouldDeSerializeEmptyByteArrayToNull() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldDeSerializeEmptyByteArrayToNull(final SchemaType type) {
+        setUp(type);
         assertNull(keySerde.deserializer().deserialize(topic, new byte[0]));
     }
 
-    @Test
-    public void shouldDeSerializeNullToNull() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldDeSerializeNullToNull(final SchemaType type) {
+        setUp(type);
         assertNull(keySerde.deserializer().deserialize(topic, null));
     }
 
-    @Test
-    public void shouldConvertToBinaryAndBack() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldConvertToBinaryAndBack(final SchemaType type) {
+        setUp(type);
         final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
         final Windowed<String> result = serdeFromBytes.apply(serialized, Serdes.String().deserializer(), "dummy");
         assertEquals(windowedKey, result);
     }
 
-    @Test
-    public void shouldExtractEndTimeFromBinary() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldExtractEndTimeFromBinary(final SchemaType type) {
+        setUp(type);
         final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
         assertEquals(endTime, (long) extractEndTS.apply(serialized));
     }
 
-    @Test
-    public void shouldExtractStartTimeFromBinary() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldExtractStartTimeFromBinary(final SchemaType type) {
+        setUp(type);
         final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
         assertEquals(startTime, (long) extractStartTS.apply(serialized));
     }
 
-    @Test
-    public void shouldExtractWindowFromBindary() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldExtractWindowFromBindary(final SchemaType type) {
+        setUp(type);
         final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
         assertEquals(window, extractWindow.apply(serialized));
     }
 
-    @Test
-    public void shouldExtractKeyBytesFromBinary() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldExtractKeyBytesFromBinary(final SchemaType type) {
+        setUp(type);
         final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
         assertArrayEquals(key.getBytes(), extractKeyBytes.apply(serialized));
     }
 
-    @Test
-    public void shouldExtractKeyFromBinary() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldExtractKeyFromBinary(final SchemaType type) {
+        setUp(type);
         final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
         assertEquals(windowedKey, serdeFromBytes.apply(serialized, serde.deserializer(), "dummy"));
     }
 
-    @Test
-    public void shouldExtractBytesKeyFromBinary() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldExtractBytesKeyFromBinary(final SchemaType type) {
+        setUp(type);
         final Bytes bytesKey = Bytes.wrap(key.getBytes());
         final Windowed<Bytes> windowedBytesKey = new Windowed<>(bytesKey, window);
         final Bytes serialized = toBinary.apply(windowedBytesKey);

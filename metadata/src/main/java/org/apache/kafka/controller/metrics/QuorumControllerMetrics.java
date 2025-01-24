@@ -17,12 +17,13 @@
 
 package org.apache.kafka.controller.metrics;
 
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -35,36 +36,30 @@ import java.util.function.Consumer;
  * controller queue.
  *
  * IMPORTANT: Metrics which relate to the metadata itself (like number of topics, etc.) should go in
- * @link{org.apache.kafka.controller.metrics.ControllerMetadataMetrics}, not here.
+ * {@link org.apache.kafka.controller.metrics.ControllerMetadataMetrics}, not here.
  */
 public class QuorumControllerMetrics implements AutoCloseable {
-    private final static MetricName ACTIVE_CONTROLLER_COUNT = getMetricName(
+    private static final MetricName ACTIVE_CONTROLLER_COUNT = getMetricName(
         "KafkaController", "ActiveControllerCount");
-    private final static MetricName EVENT_QUEUE_TIME_MS = getMetricName(
+    private static final MetricName EVENT_QUEUE_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueTimeMs");
-    private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
+    private static final MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueProcessingTimeMs");
-    private final static MetricName ZK_WRITE_BEHIND_LAG = getMetricName(
-        "KafkaController", "ZkWriteBehindLag");
-    private final static MetricName ZK_WRITE_SNAPSHOT_TIME_MS = getMetricName(
-        "KafkaController", "ZkWriteSnapshotTimeMs");
-    private final static MetricName ZK_WRITE_DELTA_TIME_MS = getMetricName(
-        "KafkaController", "ZkWriteDeltaTimeMs");
-    private final static MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
+    private static final MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastAppliedRecordOffset");
-    private final static MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
+    private static final MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastCommittedRecordOffset");
-    private final static MetricName LAST_APPLIED_RECORD_TIMESTAMP = getMetricName(
+    private static final MetricName LAST_APPLIED_RECORD_TIMESTAMP = getMetricName(
         "KafkaController", "LastAppliedRecordTimestamp");
-    private final static MetricName LAST_APPLIED_RECORD_LAG_MS = getMetricName(
+    private static final MetricName LAST_APPLIED_RECORD_LAG_MS = getMetricName(
         "KafkaController", "LastAppliedRecordLagMs");
-    private final static MetricName TIMED_OUT_BROKER_HEARTBEAT_COUNT = getMetricName(
+    private static final MetricName TIMED_OUT_BROKER_HEARTBEAT_COUNT = getMetricName(
         "KafkaController", "TimedOutBrokerHeartbeatCount");
-    private final static MetricName EVENT_QUEUE_OPERATIONS_STARTED_COUNT = getMetricName(
+    private static final MetricName EVENT_QUEUE_OPERATIONS_STARTED_COUNT = getMetricName(
         "KafkaController", "EventQueueOperationsStartedCount");
-    private final static MetricName EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT = getMetricName(
+    private static final MetricName EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT = getMetricName(
         "KafkaController", "EventQueueOperationsTimedOutCount");
-    private final static MetricName NEW_ACTIVE_CONTROLLERS_COUNT = getMetricName(
+    private static final MetricName NEW_ACTIVE_CONTROLLERS_COUNT = getMetricName(
         "KafkaController", "NewActiveControllersCount");
 
     private final Optional<MetricsRegistry> registry;
@@ -72,11 +67,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong lastAppliedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastCommittedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
-    private final AtomicLong dualWriteOffset = new AtomicLong(0);
     private final Consumer<Long> eventQueueTimeUpdater;
     private final Consumer<Long> eventQueueProcessingTimeUpdater;
-    private final Consumer<Long> zkWriteSnapshotTimeHandler;
-    private final Consumer<Long> zkWriteDeltaTimeHandler;
 
     private final AtomicLong timedOutHeartbeats = new AtomicLong(0);
     private final AtomicLong operationsStarted = new AtomicLong(0);
@@ -86,7 +78,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private Consumer<Long> newHistogram(MetricName name, boolean biased) {
         if (registry.isPresent()) {
             Histogram histogram = registry.get().newHistogram(name, biased);
-            return e -> histogram.update(e);
+            return histogram::update;
         } else {
             return __ -> { };
         }
@@ -94,8 +86,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     public QuorumControllerMetrics(
         Optional<MetricsRegistry> registry,
-        Time time,
-        boolean zkMigrationEnabled
+        Time time
     ) {
         this.registry = registry;
         this.active = false;
@@ -155,23 +146,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
                 return newActiveControllers();
             }
         }));
-
-        if (zkMigrationEnabled) {
-            registry.ifPresent(r -> r.newGauge(ZK_WRITE_BEHIND_LAG, new Gauge<Long>() {
-                @Override
-                public Long value() {
-                    // not in dual-write mode or not an active controller: set metric value to 0
-                    if (dualWriteOffset() == 0 || !active()) return 0L;
-                    // in dual write mode
-                    else return lastCommittedRecordOffset() - dualWriteOffset();
-                }
-            }));
-            this.zkWriteSnapshotTimeHandler = newHistogram(ZK_WRITE_SNAPSHOT_TIME_MS, true);
-            this.zkWriteDeltaTimeHandler = newHistogram(ZK_WRITE_DELTA_TIME_MS, true);
-        } else {
-            this.zkWriteSnapshotTimeHandler = __ -> { };
-            this.zkWriteDeltaTimeHandler = __ -> { };
-        }
     }
 
     public void setActive(boolean active) {
@@ -188,14 +162,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     public void updateEventQueueProcessingTime(long durationMs) {
         eventQueueProcessingTimeUpdater.accept(durationMs);
-    }
-
-    public void updateZkWriteSnapshotTimeMs(long durationMs) {
-        zkWriteSnapshotTimeHandler.accept(durationMs);
-    }
-
-    public void updateZkWriteDeltaTimeMs(long durationMs) {
-        zkWriteDeltaTimeHandler.accept(durationMs);
     }
 
     public void setLastAppliedRecordOffset(long offset) {
@@ -220,14 +186,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     public long lastAppliedRecordTimestamp() {
         return lastAppliedRecordTimestamp.get();
-    }
-
-    public void updateDualWriteOffset(long offset) {
-        dualWriteOffset.set(offset);
-    }
-
-    public long dualWriteOffset() {
-        return dualWriteOffset.get();
     }
 
     public void incrementTimedOutHeartbeats() {
@@ -275,10 +233,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
             TIMED_OUT_BROKER_HEARTBEAT_COUNT,
             EVENT_QUEUE_OPERATIONS_STARTED_COUNT,
             EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT,
-            NEW_ACTIVE_CONTROLLERS_COUNT,
-            ZK_WRITE_BEHIND_LAG,
-            ZK_WRITE_SNAPSHOT_TIME_MS,
-            ZK_WRITE_DELTA_TIME_MS
+            NEW_ACTIVE_CONTROLLERS_COUNT
         ).forEach(r::removeMetric));
     }
 

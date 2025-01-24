@@ -25,10 +25,12 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -217,5 +219,29 @@ public final class ConnectUtils {
      */
     public static String className(Object o) {
         return o != null ? o.getClass().getName() : "null";
+    }
+
+    /**
+     * Apply a patch on a connector config.
+     *
+     * <p>In the output, the values from the patch will override the values from the config.
+     * {@code null} values will cause the corresponding key to be removed completely.
+     * @param config the config to be patched.
+     * @param patch the patch.
+     * @return the output config map.
+     */
+    public static Map<String, String> patchConfig(
+            Map<String, String> config,
+            Map<String, String> patch
+    ) {
+        Map<String, String> result = new HashMap<>(config);
+        patch.forEach((k, v) -> {
+            if (v != null) {
+                result.put(k, v);
+            } else {
+                result.remove(k);
+            }
+        });
+        return result;
     }
 }

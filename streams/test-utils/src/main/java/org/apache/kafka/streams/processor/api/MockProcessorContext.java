@@ -25,8 +25,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -56,8 +54,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 
 /**
- * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link Processor},
- * {@link Transformer}, and {@link ValueTransformer} implementations.
+ * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link Processor}
+ * implementations.
  * <p>
  * The tests for this class (org.apache.kafka.streams.MockProcessorContextTest) include several behavioral
  * tests that serve as example usage.
@@ -257,7 +255,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
         metrics = new StreamsMetricsImpl(
             new Metrics(metricConfig),
             threadId,
-            streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
+            "processId",
             Time.SYSTEM
         );
         TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), metrics);
@@ -421,7 +419,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
     public List<CapturedForward<? extends KForward, ? extends VForward>> forwarded(final String childName) {
         final LinkedList<CapturedForward<? extends KForward, ? extends VForward>> result = new LinkedList<>();
         for (final CapturedForward<? extends KForward, ? extends VForward> capture : capturedForwards) {
-            if (!capture.childName().isPresent() || capture.childName().equals(Optional.of(childName))) {
+            if (capture.childName().isEmpty() || capture.childName().equals(Optional.of(childName))) {
                 result.add(capture);
             }
         }

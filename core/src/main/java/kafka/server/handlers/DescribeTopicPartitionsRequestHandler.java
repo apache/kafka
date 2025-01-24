@@ -21,6 +21,7 @@ import kafka.network.RequestChannel;
 import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
 import kafka.server.metadata.KRaftMetadataCache;
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
@@ -30,13 +31,14 @@ import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.Descr
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeTopicPartitionsRequest;
 import org.apache.kafka.common.resource.Resource;
-import scala.collection.JavaConverters;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
+
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
@@ -63,7 +65,7 @@ public class DescribeTopicPartitionsRequestHandler {
         DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
         String cursorTopicName = cursor != null ? cursor.topicName() : "";
         if (fetchAllTopics) {
-            JavaConverters.asJavaCollection(metadataCache.getAllTopics()).forEach(topicName -> {
+            CollectionConverters.asJavaCollection(metadataCache.getAllTopics()).forEach(topicName -> {
                 if (topicName.compareTo(cursorTopicName) >= 0) {
                     topics.add(topicName);
                 }
@@ -82,6 +84,11 @@ public class DescribeTopicPartitionsRequestHandler {
             }
         }
 
+        if (cursor != null && cursor.partitionIndex() < 0) {
+            // The partition id in cursor must be valid.
+            throw new InvalidRequestException("DescribeTopicPartitionsRequest cursor partition must be valid: " + cursor);
+        }
+
         // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
         Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata = new HashSet<>();
 
@@ -98,10 +105,10 @@ public class DescribeTopicPartitionsRequestHandler {
         });
 
         DescribeTopicPartitionsResponseData response = metadataCache.getTopicMetadataForDescribeTopicResponse(
-            JavaConverters.asScalaIterator(authorizedTopicsStream.iterator()),
+            CollectionConverters.asScala(authorizedTopicsStream.iterator()),
             abstractRequest.context().listenerName,
             (String topicName) -> topicName.equals(cursorTopicName) ? cursor.partitionIndex() : 0,
-            Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()),
+            Math.max(Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()), 1),
             fetchAllTopics
         );
 

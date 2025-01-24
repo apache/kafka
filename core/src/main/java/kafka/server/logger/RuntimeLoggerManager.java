@@ -18,6 +18,7 @@
 package kafka.server.logger;
 
 import kafka.utils.Log4jController;
+
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.config.LogLevelConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -26,6 +27,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;

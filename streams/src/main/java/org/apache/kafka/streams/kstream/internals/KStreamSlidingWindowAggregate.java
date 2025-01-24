@@ -21,19 +21,25 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -41,9 +47,10 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupplier<KIn, VIn, Windowed<KIn>, VAgg> {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(KStreamSlidingWindowAggregate.class);
 
     private final String storeName;
+    private final StoreFactory storeFactory;
     private final SlidingWindows windows;
     private final Initializer<VAgg> initializer;
     private final Aggregator<? super KIn, ? super VIn, VAgg> aggregator;
@@ -52,15 +59,21 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
     private boolean sendOldValues = false;
 
     public KStreamSlidingWindowAggregate(final SlidingWindows windows,
-                                         final String storeName,
+                                         final StoreFactory storeFactory,
                                          final EmitStrategy emitStrategy,
                                          final Initializer<VAgg> initializer,
                                          final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.windows = windows;
-        this.storeName = storeName;
+        this.storeName = storeFactory.storeName();
+        this.storeFactory = storeFactory;
         this.initializer = initializer;
         this.aggregator = aggregator;
         this.emitStrategy = emitStrategy;
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
     }
 
     @Override

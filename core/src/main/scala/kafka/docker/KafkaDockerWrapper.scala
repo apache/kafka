@@ -16,16 +16,18 @@
  */
 package kafka.docker
 
+import kafka.Kafka
 import kafka.tools.StorageTool
-import kafka.utils.Exit
+import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store
 import net.sourceforge.argparse4j.inf.Namespace
+import org.apache.kafka.common.utils.Exit
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
 
-object KafkaDockerWrapper {
+object KafkaDockerWrapper extends Logging {
   def main(args: Array[String]): Unit = {
     val namespace = parseArguments(args)
     val command = namespace.getString("command")
@@ -40,11 +42,15 @@ object KafkaDockerWrapper {
           case e: Throwable =>
             val errMsg = s"error while preparing configs: ${e.getMessage}"
             System.err.println(errMsg)
-            Exit.exit(1, Some(errMsg))
+            Exit.exit(1, errMsg)
         }
 
         val formatCmd = formatStorageCmd(finalConfigsPath, envVars)
         StorageTool.main(formatCmd)
+      case "start" =>
+        val configFile = namespace.getString("config")
+        info("Starting Kafka server in the native mode.")
+        Kafka.main(Array(configFile))
       case _ =>
         throw new RuntimeException(s"Unknown operation $command. " +
           s"Please provide a valid operation: 'setup'.")
@@ -60,7 +66,13 @@ object KafkaDockerWrapper {
 
     val subparsers = parser.addSubparsers().dest("command")
 
-    val setupParser = subparsers.addParser("setup")
+    val kafkaStartParser = subparsers.addParser("start").help("Start kafka server.")
+    kafkaStartParser.addArgument("--config", "-C")
+      .action(store())
+      .required(true)
+      .help("The kafka server configuration file")
+
+    val setupParser = subparsers.addParser("setup").help("Setup property files and format storage.")
 
     setupParser.addArgument("--default-configs-dir", "-D").
       action(store()).
@@ -87,8 +99,12 @@ object KafkaDockerWrapper {
     parser.parseArgsOrFail(args)
   }
 
-  private def formatStorageCmd(configsPath: Path, env: Map[String, String]): Array[String] = {
-    Array("format", "--cluster-id=" + env.get("CLUSTER_ID"), "-c", s"${configsPath.toString}/server.properties")
+  private[docker] def formatStorageCmd(configsPath: Path, env: Map[String, String]): Array[String] = {
+    val clusterId = env.get("CLUSTER_ID") match {
+      case Some(str) => str
+      case None => throw new RuntimeException("CLUSTER_ID environment variable is not set.")
+    }
+    Array("format", "--cluster-id=" + clusterId, "-c", s"${configsPath.toString}/server.properties")
   }
 
   private def prepareConfigs(defaultConfigsPath: Path, mountedConfigsPath: Path, finalConfigsPath: Path): Unit = {
@@ -157,7 +173,7 @@ object KafkaDockerWrapper {
     env.map {
         case (key, value) =>
           if (key.startsWith("KAFKA_") && !ExcludeServerPropsEnv.contains(key)) {
-            val final_key = key.replace("KAFKA_", "").toLowerCase()
+            val final_key = key.replaceFirst("KAFKA_", "").toLowerCase()
               .replace("_", ".")
               .replace("...", "-")
               .replace("..", "_")
@@ -229,7 +245,7 @@ private object Constants {
   val KafkaToolsLog4jLoglevelEnv = "KAFKA_TOOLS_LOG4J_LOGLEVEL"
   val ExcludeServerPropsEnv: Set[String] = Set(
     "KAFKA_VERSION",
-    "KAFKA_HEAP_OPT",
+    "KAFKA_HEAP_OPTS",
     "KAFKA_LOG4J_OPTS",
     "KAFKA_OPTS",
     "KAFKA_JMX_OPTS",

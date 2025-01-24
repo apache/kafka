@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.memory.MemoryPool;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,13 +93,13 @@ public class NetworkReceive implements Receive {
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + ")");
                 if (maxSize != UNLIMITED && receiveSize > maxSize)
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + " larger than " + maxSize + ")");
-                requestedBufferSize = receiveSize; //may be 0 for some payloads (SASL)
+                requestedBufferSize = receiveSize; // may be 0 for some payloads (SASL)
                 if (receiveSize == 0) {
                     buffer = EMPTY_BUFFER;
                 }
             }
         }
-        if (buffer == null && requestedBufferSize != -1) { //we know the size we want but havent been able to allocate it yet
+        if (buffer == null && requestedBufferSize != -1) { // we know the size we want but haven't been able to allocate it yet
             buffer = memoryPool.tryAllocate(requestedBufferSize);
             if (buffer == null)
                 log.trace("Broker low on memory - could not allocate buffer of size {} for source {}", requestedBufferSize, source);

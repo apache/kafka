@@ -19,26 +19,29 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.hamcrest.Matcher;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 import java.util.Map;
@@ -52,7 +55,8 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.core.Is.is;
 import static org.mockito.Mockito.mock;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KTableSuppressProcessorMetricsTest {
     private static final long ARBITRARY_LONG = 5L;
     private static final TaskId TASK_ID = new TaskId(0, 0);
@@ -141,18 +145,18 @@ public class KTableSuppressProcessorMetricsTest {
         final Processor<String, Change<Long>, String, Change<Long>> processor =
             new KTableSuppressProcessorSupplier<>(
                 (SuppressedInternal<String>) Suppressed.<String>untilTimeLimit(Duration.ofDays(100), maxRecords(1)),
-                storeName,
+                mockBuilderWithName(storeName),
                 mock
             ).get();
 
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
-        final MockInternalNewProcessorContext<String, Change<Long>> context =
-            new MockInternalNewProcessorContext<>(streamsConfig, TASK_ID, TestUtils.tempDirectory());
-        final Time time = new SystemTime();
-        context.setCurrentNode(new ProcessorNode("testNode"));
+        final MockInternalProcessorContext<String, Change<Long>> context =
+            new MockInternalProcessorContext<>(streamsConfig, TASK_ID, TestUtils.tempDirectory());
+        final Time time = Time.SYSTEM;
+        context.setCurrentNode(new ProcessorNode<>("testNode"));
         context.setSystemTimeMs(time.milliseconds());
 
-        buffer.init((StateStoreContext) context, buffer);
+        buffer.init(context, buffer);
         processor.init(context);
 
         final long timestamp = 100L;
@@ -202,5 +206,11 @@ public class KTableSuppressProcessorMetricsTest {
                                          final Matcher<T> matcher) {
         assertThat(metrics.get(metricName).metricName().description(), is(metricName.description()));
         assertThat((T) metrics.get(metricName).metricValue(), matcher);
+    }
+
+    private StoreBuilder<?> mockBuilderWithName(final String name) {
+        final StoreBuilder<?> builder = Mockito.mock(StoreBuilder.class);
+        Mockito.when(builder.name()).thenReturn(name);
+        return builder;
     }
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -32,15 +33,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class MetadataImageTest {
-    public final static MetadataImage IMAGE1;
+    public static final MetadataImage IMAGE1;
 
-    public final static MetadataDelta DELTA1;
+    public static final MetadataDelta DELTA1;
 
-    public final static MetadataImage IMAGE2;
+    public static final MetadataImage IMAGE2;
 
     static {
         IMAGE1 = new MetadataImage(
-            new MetadataProvenance(100, 4, 2000),
+            new MetadataProvenance(100, 4, 2000, true),
             FeaturesImageTest.IMAGE1,
             ClusterImageTest.IMAGE1,
             TopicsImageTest.IMAGE1,
@@ -65,7 +66,7 @@ public class MetadataImageTest {
         RecordTestUtils.replayAll(DELTA1, DelegationTokenImageTest.DELTA1_RECORDS);
 
         IMAGE2 = new MetadataImage(
-            new MetadataProvenance(200, 5, 4000),
+            new MetadataProvenance(200, 5, 4000, true),
             FeaturesImageTest.IMAGE2,
             ClusterImageTest.IMAGE2,
             TopicsImageTest.IMAGE2,
@@ -124,7 +125,7 @@ public class MetadataImageTest {
 
     private static void testToImage(MetadataImage image, List<ApiMessageAndVersion> fromRecords) {
         // test from empty image stopping each of the various intermediate images along the way
-        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<MetadataDelta, MetadataImage>(
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
             () -> MetadataImage.EMPTY,
             MetadataDelta::new
         ) {

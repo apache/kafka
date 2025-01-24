@@ -16,16 +16,10 @@
  */
 package org.apache.kafka.tiered.storage;
 
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
-import org.apache.kafka.tiered.storage.specs.TopicSpec;
-import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 import kafka.log.UnifiedLog;
 import kafka.utils.TestUtils;
+
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
@@ -33,6 +27,7 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -40,15 +35,21 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageHistory;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot;
-import scala.Function0;
-import scala.Function1;
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
+import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
+import org.apache.kafka.tiered.storage.specs.TopicSpec;
+import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -64,8 +65,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import scala.Function0;
+import scala.Function1;
 import scala.Option;
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
 
@@ -90,7 +93,6 @@ public final class TieredStorageTestContext implements AutoCloseable {
         initContext();
     }
 
-    @SuppressWarnings("deprecation")
     private void initClients() {
         // rediscover the new bootstrap-server port incase of broker restarts
         ListenerName listenerName = harness.listenerName();
@@ -105,7 +107,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
         producer = harness.createProducer(ser, ser, producerOverrideProps);
         consumer = harness.createConsumer(de, de, commonOverrideProps,
-                JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toList());
+                CollectionConverters.asScala(Collections.<String>emptyList()).toList());
         admin = harness.createAdminClient(listenerName, commonOverrideProps);
     }
 
@@ -207,6 +209,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
         consumer.seek(topicPartition, fetchOffset);
 
         long timeoutMs = 60_000L;
+        long pollTimeoutMs = 100L;
         String sep = System.lineSeparator();
         List<ConsumerRecord<String, String>> records = new ArrayList<>();
         Function1<ConsumerRecords<String, String>, Object> pollAction = polledRecords -> {
@@ -216,8 +219,8 @@ public final class TieredStorageTestContext implements AutoCloseable {
         Function0<String> messageSupplier = () ->
                 String.format("Could not consume %d records of %s from offset %d in %d ms. %d message(s) consumed:%s%s",
                         expectedTotalCount, topicPartition, fetchOffset, timeoutMs, records.size(), sep,
-                        Utils.join(records, sep));
-        TestUtils.pollRecordsUntilTrue(consumer, pollAction, messageSupplier, timeoutMs);
+                        records.stream().map(Object::toString).collect(Collectors.joining(sep)));
+        TestUtils.pollRecordsUntilTrue(consumer, pollAction, messageSupplier, timeoutMs, pollTimeoutMs);
         return records;
     }
 
@@ -259,8 +262,20 @@ public final class TieredStorageTestContext implements AutoCloseable {
         initContext();
     }
 
-    public void eraseBrokerStorage(int brokerId) throws IOException {
-        localStorages.get(brokerId).eraseStorage();
+    public void eraseBrokerStorage(int brokerId,
+                                   FilenameFilter filter,
+                                   boolean isStopped) throws IOException {
+        BrokerLocalStorage brokerLocalStorage;
+        if (isStopped) {
+            brokerLocalStorage = TieredStorageTestHarness.localStorages(harness.brokers())
+                    .stream()
+                    .filter(bls -> bls.getBrokerId() == brokerId)
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("No local storage found for broker " + brokerId));
+        } else {
+            brokerLocalStorage = localStorages.get(brokerId);
+        }
+        brokerLocalStorage.eraseStorage(filter);
     }
 
     public TopicSpec topicSpec(String topicName) {
@@ -283,6 +298,11 @@ public final class TieredStorageTestContext implements AutoCloseable {
                 .filter(rsm -> rsm.brokerId() == brokerId)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("No remote storage manager found for broker " + brokerId));
+    }
+
+    // unused now, but it can be reused later as this is an utility method.
+    public Optional<LeaderEpochFileCache> leaderEpochFileCache(int brokerId, TopicPartition partition) {
+        return log(brokerId, partition).map(log -> log.leaderEpochCache());
     }
 
     public List<LocalTieredStorage> remoteStorageManagers() {

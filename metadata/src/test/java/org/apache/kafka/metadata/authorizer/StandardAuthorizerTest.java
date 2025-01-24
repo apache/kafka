@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -55,8 +56,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -254,7 +255,7 @@ public class StandardAuthorizerTest {
         return authorizer;
     }
 
-    private final static AtomicLong NEXT_ID = new AtomicLong(0);
+    private static final AtomicLong NEXT_ID = new AtomicLong(0);
 
     static StandardAcl newFooAcl(AclOperation op, AclPermissionType permission) {
         return new StandardAcl(
@@ -356,7 +357,7 @@ public class StandardAuthorizerTest {
     }
 
     @Test
-    public void testListAcls() throws Exception {
+    public void testListAcls() {
         StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
         List<StandardAclWithId> fooAcls = asList(
             withId(newFooAcl(READ, ALLOW)),
@@ -641,7 +642,7 @@ public class StandardAuthorizerTest {
      * listeners.
      */
     @Test
-    public void testStartWithEarlyStartListeners() throws Exception {
+    public void testStartWithEarlyStartListeners() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
         authorizer.configure(Collections.singletonMap(SUPER_USERS_CONFIG, "User:superman"));
         Map<Endpoint, ? extends CompletionStage<Void>> futures2 = authorizer.
@@ -674,7 +675,7 @@ public class StandardAuthorizerTest {
     }
 
     @Test
-    public void testCompleteInitialLoad() throws Exception {
+    public void testCompleteInitialLoad() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
         authorizer.configure(Collections.singletonMap(SUPER_USERS_CONFIG, "User:superman"));
         Map<Endpoint, ? extends CompletionStage<Void>> futures = authorizer.
@@ -687,7 +688,7 @@ public class StandardAuthorizerTest {
     }
 
     @Test
-    public void testCompleteInitialLoadWithException() throws Exception {
+    public void testCompleteInitialLoadWithException() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
         authorizer.configure(Collections.singletonMap(SUPER_USERS_CONFIG, "User:superman"));
         Map<Endpoint, ? extends CompletionStage<Void>> futures = authorizer.

@@ -17,9 +17,6 @@
 
 package org.apache.kafka.shell.command;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import org.apache.kafka.shell.command.LsCommandHandler.ColumnSchema;
 import org.apache.kafka.shell.command.LsCommandHandler.TargetDirectory;
 
@@ -34,7 +31,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.OptionalInt;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+@Timeout(value = 120)
 public class LsCommandHandlerTest {
     @Test
     public void testCalculateColumnSchema() {
@@ -96,4 +95,3 @@ public class LsCommandHandlerTest {
         }
     }
 }
-

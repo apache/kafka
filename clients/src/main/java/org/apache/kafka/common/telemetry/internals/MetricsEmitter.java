@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.common.telemetry.internals;
 
+import java.io.Closeable;
 import java.util.Collections;
 import java.util.List;
-
-import java.io.Closeable;
 
 /**
  * An {@code MetricsEmitter} emits the values held by the {@link SinglePointMetric}, likely first converting them

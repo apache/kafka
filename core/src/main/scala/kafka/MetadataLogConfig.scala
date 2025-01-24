@@ -16,9 +16,8 @@
  */
 package kafka.raft
 
+import org.apache.kafka.server.config.ServerLogConfigs
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.config.AbstractConfig
-import org.apache.kafka.storage.internals.log.LogConfig
 
 final case class MetadataLogConfig(
   logSegmentBytes: Int,
@@ -33,17 +32,17 @@ final case class MetadataLogConfig(
 )
 
 object MetadataLogConfig {
-  def apply(config: AbstractConfig, maxBatchSizeInBytes: Int, maxFetchSizeInBytes: Int): MetadataLogConfig = {
+  def apply(config: KafkaConfig, maxBatchSizeInBytes: Int, maxFetchSizeInBytes: Int): MetadataLogConfig = {
     new MetadataLogConfig(
-      config.getInt(KafkaConfig.MetadataLogSegmentBytesProp),
-      config.getInt(KafkaConfig.MetadataLogSegmentMinBytesProp),
-      config.getLong(KafkaConfig.MetadataLogSegmentMillisProp),
-      config.getLong(KafkaConfig.MetadataMaxRetentionBytesProp),
-      config.getLong(KafkaConfig.MetadataMaxRetentionMillisProp),
+      config.metadataLogSegmentBytes,
+      config.metadataLogSegmentMinBytes,
+      config.metadataLogSegmentMillis,
+      config.metadataRetentionBytes,
+      config.metadataRetentionMillis,
       maxBatchSizeInBytes,
       maxFetchSizeInBytes,
-      LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
-      config.getInt(KafkaConfig.NodeIdProp)
+      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
+      config.metadataNodeIDConfig
     )
   }
 }

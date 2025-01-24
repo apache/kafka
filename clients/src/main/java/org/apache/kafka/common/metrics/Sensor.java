@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.metrics;
 
-import java.util.function.Supplier;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.metrics.stats.TokenBucket;
@@ -31,6 +30,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.unmodifiableList;
@@ -367,7 +367,7 @@ public final class Sensor {
     }
 
     synchronized List<KafkaMetric> metrics() {
-        return unmodifiableList(new ArrayList<>(this.metrics.values()));
+        return List.copyOf(this.metrics.values());
     }
 
     /**

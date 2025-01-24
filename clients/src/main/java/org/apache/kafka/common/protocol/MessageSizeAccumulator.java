@@ -40,17 +40,6 @@ public class MessageSizeAccumulator {
         return totalSize - zeroCopySize;
     }
 
-    /**
-     * Get the total "zero-copy" size of the message. This is the summed
-     * total of all fields which have either have a type of 'bytes' with
-     * 'zeroCopy' enabled, or a type of 'records'
-     *
-     * @return total size of zero-copy data in the message
-     */
-    public int zeroCopySize() {
-        return zeroCopySize;
-    }
-
     public void addZeroCopyBytes(int size) {
         zeroCopySize += size;
         totalSize += size;

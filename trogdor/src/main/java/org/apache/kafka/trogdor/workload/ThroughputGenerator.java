@@ -33,9 +33,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  * Please see the implementation classes for more details.
  */
 
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "type")
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes(value = {
     @JsonSubTypes.Type(value = ConstantThroughputGenerator.class, name = "constant"),
     @JsonSubTypes.Type(value = GaussianThroughputGenerator.class, name = "gaussian")

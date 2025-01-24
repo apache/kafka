@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.RemovalCause;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Time;
@@ -29,6 +26,11 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
 import org.apache.kafka.server.util.ShutdownableThread;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.RemovalCause;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -449,7 +451,7 @@ public class RemoteIndexCache implements Closeable {
         }
     }
 
-    public int lookupTimestamp(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long timestamp, long startingOffset) throws IOException {
+    public int lookupTimestamp(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long timestamp, long startingOffset) {
         lock.readLock().lock();
         try {
             return getIndexEntry(remoteLogSegmentMetadata).lookupTimestamp(timestamp, startingOffset).position;
@@ -561,7 +563,7 @@ public class RemoteIndexCache implements Closeable {
             }
         }
 
-        public OffsetPosition lookupTimestamp(long timestamp, long startingOffset) throws IOException {
+        public OffsetPosition lookupTimestamp(long timestamp, long startingOffset) {
             entryLock.readLock().lock();
             try {
                 if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup");

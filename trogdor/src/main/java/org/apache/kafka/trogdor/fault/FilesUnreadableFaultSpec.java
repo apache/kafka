@@ -17,12 +17,13 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.fault.Kibosh.KiboshFilesUnreadableFaultSpec;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -44,7 +45,7 @@ public class FilesUnreadableFaultSpec extends TaskSpec {
                                     @JsonProperty("prefix") String prefix,
                                     @JsonProperty("errorCode") int errorCode) {
         super(startMs, durationMs);
-        this.nodeNames = nodeNames == null ? new HashSet<String>() : nodeNames;
+        this.nodeNames = nodeNames == null ? new HashSet<>() : nodeNames;
         this.mountPath = mountPath == null ? "" : mountPath;
         this.prefix = prefix == null ? "" : prefix;
         this.errorCode = errorCode;

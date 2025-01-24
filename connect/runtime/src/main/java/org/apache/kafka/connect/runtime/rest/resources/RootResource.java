@@ -16,30 +16,84 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import io.swagger.v3.oas.annotations.Operation;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
+import org.apache.kafka.connect.runtime.rest.entities.WorkerStatus;
+import org.apache.kafka.connect.util.FutureCallback;
+import org.apache.kafka.connect.util.StagedTimeoutException;
 
-import javax.inject.Inject;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import io.swagger.v3.oas.annotations.Operation;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
 @Path("/")
 @Produces(MediaType.APPLICATION_JSON)
 public class RootResource {
 
     private final Herder herder;
+    private final RestRequestTimeout requestTimeout;
+    private final Time time;
 
     @Inject
-    public RootResource(Herder herder) {
+    public RootResource(Herder herder, RestRequestTimeout requestTimeout) {
+        this(herder, requestTimeout, Time.SYSTEM);
+    }
+
+    // For testing only
+    RootResource(Herder herder, RestRequestTimeout requestTimeout, Time time) {
         this.herder = herder;
+        this.requestTimeout = requestTimeout;
+        this.time = time;
     }
 
     @GET
-    @Operation(summary = "Get details about this Connect worker and the id of the Kafka cluster it is connected to")
+    @Operation(summary = "Get details about this Connect worker and the ID of the Kafka cluster it is connected to")
     public ServerInfo serverInfo() {
         return new ServerInfo(herder.kafkaClusterId());
     }
+
+    @GET
+    @Path("/health")
+    @Operation(summary = "Health check endpoint to verify worker readiness and liveness")
+    public Response healthCheck() throws Throwable {
+        WorkerStatus workerStatus;
+        int statusCode;
+        try {
+            FutureCallback<Void> cb = new FutureCallback<>();
+            herder.healthCheck(cb);
+
+            long timeoutNs = TimeUnit.MILLISECONDS.toNanos(requestTimeout.healthCheckTimeoutMs());
+            long deadlineNs = timeoutNs + time.nanoseconds();
+            time.waitForFuture(cb, deadlineNs);
+
+            statusCode = Response.Status.OK.getStatusCode();
+            workerStatus = WorkerStatus.healthy();
+        } catch (TimeoutException e) {
+            String statusDetails = e instanceof StagedTimeoutException
+                    ? ((StagedTimeoutException) e).stage().summarize()
+                    : null;
+            if (!herder.isReady()) {
+                statusCode = Response.Status.SERVICE_UNAVAILABLE.getStatusCode();
+                workerStatus = WorkerStatus.starting(statusDetails);
+            } else {
+                statusCode = Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
+                workerStatus = WorkerStatus.unhealthy(statusDetails);
+            }
+        } catch (ExecutionException e) {
+            throw e.getCause();
+        }
+
+        return Response.status(statusCode).entity(workerStatus).build();
+    }
+
 }

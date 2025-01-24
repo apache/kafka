@@ -39,6 +39,7 @@ import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,28 +68,28 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
     public static final String SPEC_CONFIG = "spec";
+    public static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(SPEC_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.Validator() {
-                    @SuppressWarnings("unchecked")
-                    @Override
-                    public void ensureValid(String name, Object valueObject) {
+            .define(SPEC_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.LambdaValidator.with(
+                    (name, valueObject) -> {
+                        @SuppressWarnings("unchecked")
                         List<String> value = (List<String>) valueObject;
                         if (value == null || value.isEmpty()) {
                             throw new ConfigException("Must specify at least one field to cast.");
                         }
                         parseFieldTypes(value);
-                    }
-
-                    @Override
-                    public String toString() {
-                        return "list of colon-delimited pairs, e.g. <code>foo:bar,abc:xyz</code>";
-                    }
-            },
+                    },
+                    () -> "list of colon-delimited pairs, e.g. <code>foo:bar,abc:xyz</code>"),
             ConfigDef.Importance.HIGH,
             "List of fields and the type to cast them to of the form field1:type,field2:type to cast fields of "
                     + "Maps or Structs. A single type to cast the entire value. Valid types are int8, int16, int32, "
-                    + "int64, float32, float64, boolean, and string. Note that binary fields can only be cast to string.");
+                    + "int64, float32, float64, boolean, and string. Note that binary fields can only be cast to string.")
+            .define(REPLACE_NULL_WITH_DEFAULT_CONFIG,
+                    ConfigDef.Type.BOOLEAN,
+                    true,
+                    ConfigDef.Importance.MEDIUM,
+                    "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
     private static final String PURPOSE = "cast types";
 
@@ -111,6 +112,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     private Map<String, Schema.Type> casts;
     private Schema.Type wholeValueCastType;
     private Cache<Schema, Schema> schemaUpdateCache;
+    private boolean replaceNullWithDefault;
 
     @Override
     public String version() {
@@ -123,6 +125,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         casts = parseFieldTypes(config.getList(SPEC_CONFIG));
         wholeValueCastType = casts.get(WHOLE_VALUE_CAST);
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
+        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
     }
 
     @Override
@@ -175,13 +178,20 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
 
         final Struct updatedValue = new Struct(updatedSchema);
         for (Field field : value.schema().fields()) {
-            final Object origFieldValue = value.get(field);
+            final Object origFieldValue = getFieldValue(value, field);
             final Schema.Type targetType = casts.get(field.name());
             final Object newFieldValue = targetType != null ? castValueToType(field.schema(), origFieldValue, targetType) : origFieldValue;
             log.trace("Cast field '{}' from '{}' to '{}'", field.name(), origFieldValue, newFieldValue);
             updatedValue.put(updatedSchema.field(field.name()), newFieldValue);
         }
         return newRecord(record, updatedSchema, updatedValue);
+    }
+
+    private Object getFieldValue(Struct value, Field field) {
+        if (replaceNullWithDefault) {
+            return value.get(field);
+        }
+        return value.getWithoutDefault(field.name());
     }
 
     private Schema getOrBuildSchema(Schema valueSchema) {
@@ -376,14 +386,11 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     }
 
     private static String castToString(Object value) {
-        if (value instanceof java.util.Date) {
-            java.util.Date dateValue = (java.util.Date) value;
+        if (value instanceof java.util.Date dateValue) {
             return Values.dateFormatFor(dateValue).format(dateValue);
-        } else if (value instanceof ByteBuffer) {
-            ByteBuffer byteBuffer = (ByteBuffer) value;
+        } else if (value instanceof ByteBuffer byteBuffer) {
             return Base64.getEncoder().encodeToString(Utils.readBytes(byteBuffer));
-        } else if (value instanceof byte[]) {
-            byte[] rawBytes = (byte[]) value;
+        } else if (value instanceof byte[] rawBytes) {
             return Base64.getEncoder().encodeToString(rawBytes);
         } else {
             return value.toString();
@@ -402,7 +409,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         for (String mapping : mappings) {
             final String[] parts = mapping.split(":");
             if (parts.length > 2) {
-                throw new ConfigException(ReplaceField.ConfigName.RENAME, mappings, "Invalid rename mapping: " + mapping);
+                throw new ConfigException(ReplaceField.ConfigName.RENAMES, mappings, "Invalid rename mapping: " + mapping);
             }
             if (parts.length == 1) {
                 Schema.Type targetType;

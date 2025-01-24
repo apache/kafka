@@ -37,10 +37,10 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -56,6 +56,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -90,14 +92,24 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private volatile RemoteLogMetadataTopicPartitioner rlmTopicPartitioner;
     private final Set<TopicIdPartition> pendingAssignPartitions = Collections.synchronizedSet(new HashSet<>());
     private volatile boolean initializationFailed;
+    private final Supplier<RemotePartitionMetadataStore> remoteLogMetadataManagerSupplier;
+    private final Function<Integer, RemoteLogMetadataTopicPartitioner> remoteLogMetadataTopicPartitionerFunction;
 
+    /**
+     * The default constructor delegates to the internal one, starting the consumer thread and
+     * supplying an instance of RemoteLogMetadataTopicPartitioner and RemotePartitionMetadataStore by default.
+     */
     public TopicBasedRemoteLogMetadataManager() {
-        this(true);
+        this(true, RemoteLogMetadataTopicPartitioner::new, RemotePartitionMetadataStore::new);
     }
 
-    // Visible for testing.
-    public TopicBasedRemoteLogMetadataManager(boolean startConsumerThread) {
+    /**
+     * Used in tests to dynamically configure the instance.
+     */
+    TopicBasedRemoteLogMetadataManager(boolean startConsumerThread, Function<Integer, RemoteLogMetadataTopicPartitioner> remoteLogMetadataTopicPartitionerFunction, Supplier<RemotePartitionMetadataStore> remoteLogMetadataManagerSupplier) {
         this.startConsumerThread = startConsumerThread;
+        this.remoteLogMetadataManagerSupplier = remoteLogMetadataManagerSupplier;
+        this.remoteLogMetadataTopicPartitionerFunction = remoteLogMetadataTopicPartitionerFunction;
     }
 
     @Override
@@ -345,6 +357,17 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     }
 
     @Override
+    public Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition, int epoch, long offset) throws RemoteStorageException {
+        lock.readLock().lock();
+        try {
+            ensureInitializedAndNotClosed();
+            return remotePartitionMetadataStore.nextSegmentWithTxnIndex(topicIdPartition, epoch, offset);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    @Override
     public void configure(Map<String, ?> configs) {
         Objects.requireNonNull(configs, "configs can not be null.");
 
@@ -358,8 +381,8 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             log.info("Started configuring topic-based RLMM with configs: {}", configs);
 
             rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(configs);
-            rlmTopicPartitioner = new RemoteLogMetadataTopicPartitioner(rlmmConfig.metadataTopicPartitionsCount());
-            remotePartitionMetadataStore = new RemotePartitionMetadataStore(new File(rlmmConfig.logDir()).toPath());
+            rlmTopicPartitioner = remoteLogMetadataTopicPartitionerFunction.apply(rlmmConfig.metadataTopicPartitionsCount());
+            remotePartitionMetadataStore = remoteLogMetadataManagerSupplier.get();
             configured = true;
             log.info("Successfully configured topic-based RLMM with config: {}", rlmmConfig);
 
@@ -371,6 +394,11 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    @Override
+    public boolean isReady(TopicIdPartition topicIdPartition) {
+        return remotePartitionMetadataStore.isInitialized(topicIdPartition);
     }
 
     private void initializeResources() {
@@ -436,6 +464,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     log.info("Initialized topic-based RLMM resources successfully");
                 } catch (Exception e) {
                     log.error("Encountered error while initializing producer/consumer", e);
+                    initializationFailed = true;
                     return;
                 } finally {
                     lock.writeLock().unlock();
@@ -551,33 +580,23 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         return rlmmConfig;
     }
 
-    // Visible for testing.
-    void setRlmTopicPartitioner(RemoteLogMetadataTopicPartitioner rlmTopicPartitioner) {
-        this.rlmTopicPartitioner = Objects.requireNonNull(rlmTopicPartitioner);
-    }
-
     @Override
     public void close() throws IOException {
         // Close all the resources.
         log.info("Closing topic-based RLMM resources");
         if (closing.compareAndSet(false, true)) {
-            lock.writeLock().lock();
-            try {
-                if (initializationThread != null) {
-                    try {
-                        initializationThread.join();
-                    } catch (InterruptedException e) {
-                        log.error("Initialization thread was interrupted while waiting to join on close.", e);
-                    }
+            if (initializationThread != null) {
+                try {
+                    initializationThread.join();
+                } catch (InterruptedException e) {
+                    log.error("Initialization thread was interrupted while waiting to join on close.", e);
                 }
-
-                Utils.closeQuietly(producerManager, "ProducerTask");
-                Utils.closeQuietly(consumerManager, "RLMMConsumerManager");
-                Utils.closeQuietly(remotePartitionMetadataStore, "RemotePartitionMetadataStore");
-            } finally {
-                lock.writeLock().unlock();
-                log.info("Closed topic-based RLMM resources");
             }
+
+            Utils.closeQuietly(producerManager, "ProducerTask");
+            Utils.closeQuietly(consumerManager, "RLMMConsumerManager");
+            Utils.closeQuietly(remotePartitionMetadataStore, "RemotePartitionMetadataStore");
+            log.info("Closed topic-based RLMM resources");
         }
     }
 }

@@ -30,8 +30,8 @@ import java.nio.channels.FileChannel;
 import java.util.Iterator;
 import java.util.Objects;
 
-import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 import static org.apache.kafka.common.record.Records.HEADER_SIZE_UP_TO_MAGIC;
+import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 import static org.apache.kafka.common.record.Records.MAGIC_OFFSET;
 import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
 import static org.apache.kafka.common.record.Records.SIZE_OFFSET;

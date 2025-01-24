@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.snapshot;
 
-import java.nio.file.Path;
 import org.apache.kafka.raft.OffsetAndEpoch;
+
+import java.nio.file.Path;
 
 public final class SnapshotPath {
     public final Path path;

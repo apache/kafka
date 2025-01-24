@@ -16,11 +16,11 @@
  */
 package kafka.docker
 
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
 class KafkaDockerWrapperTest {
   @Test
@@ -28,8 +28,9 @@ class KafkaDockerWrapperTest {
     val envVars = Map("KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "TRACE",
       "KAFKA_VALID_PROPERTY" -> "Value",
       "SOME_VARIABLE" -> "Some Value",
-      "KAFKA_VALID___PROPERTY__ALL_CASES" -> "All Cases Value")
-    val expected = List("valid.property=Value", "valid-property_all.cases=All Cases Value")
+      "KAFKA_VALID___PROPERTY__ALL_CASES" -> "All Cases Value",
+      "KAFKA_KAFKA_VALID_PROPERTY" -> "Value")
+    val expected = List("valid.property=Value", "valid-property_all.cases=All Cases Value", "kafka.valid.property=Value")
     val actual = KafkaDockerWrapper.getServerConfigsFromEnv(envVars)
     assertEquals(expected, actual)
   }
@@ -125,6 +126,21 @@ class KafkaDockerWrapperTest {
     val expected = "default.config=default value"
 
     assertEquals(expected, actual)
+  }
+
+  @Test
+  def testFormatStorageCmd(): Unit = {
+    val configsPath = Paths.get("/path/to/configs")
+    val envVars = Map("CLUSTER_ID" -> "MYwKGPhXQZidgd0qMv8Mkw")
+
+    val expected = Array("format", "--cluster-id=MYwKGPhXQZidgd0qMv8Mkw", "-c", "/path/to/configs/server.properties")
+    val actual = KafkaDockerWrapper.formatStorageCmd(configsPath, envVars)
+
+    assertArrayEquals(expected.toArray[Object], actual.toArray[Object])
+
+    assertThrows(classOf[RuntimeException], () => {
+      KafkaDockerWrapper.formatStorageCmd(configsPath, Map())
+    })
   }
 
   @Test

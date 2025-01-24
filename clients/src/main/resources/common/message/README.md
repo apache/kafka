@@ -69,7 +69,7 @@ Field Types
 -----------
 There are several primitive field types available.
 
-* "boolean": either true or false.
+* "bool": either true or false.
 
 * "int8": an 8-bit integer.
 
@@ -138,6 +138,12 @@ have been used for something, they can't be used for anything else, without
 breaking compatibility.
 
 Note that tagged fields can only be added to "flexible" message versions.
+
+#### Default Value Handling for Tagged Fields
+
+In Kafka's serialization mechanism, a tagged field may be omitted from the serialized message 
+if all its associated fields are equal to their default values, whether those defaults are explicit 
+or implicit. This behavior optimizes message size by avoiding the transmission of redundant data.
 
 Flexible Versions
 -----------------

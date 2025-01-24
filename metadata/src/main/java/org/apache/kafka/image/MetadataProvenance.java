@@ -27,20 +27,23 @@ import java.util.Objects;
  * Information about the source of a metadata image.
  */
 public final class MetadataProvenance {
-    public static final MetadataProvenance EMPTY = new MetadataProvenance(-1L, -1, -1L);
+    public static final MetadataProvenance EMPTY = new MetadataProvenance(-1L, -1, -1L, false);
 
     private final long lastContainedOffset;
     private final int lastContainedEpoch;
     private final long lastContainedLogTimeMs;
+    private final boolean isOffsetBatchAligned;
 
     public MetadataProvenance(
         long lastContainedOffset,
         int lastContainedEpoch,
-        long lastContainedLogTimeMs
+        long lastContainedLogTimeMs,
+        boolean isOffsetBatchAligned
     ) {
         this.lastContainedOffset = lastContainedOffset;
         this.lastContainedEpoch = lastContainedEpoch;
         this.lastContainedLogTimeMs = lastContainedLogTimeMs;
+        this.isOffsetBatchAligned = isOffsetBatchAligned;
     }
 
     public OffsetAndEpoch snapshotId() {
@@ -60,6 +63,13 @@ public final class MetadataProvenance {
     }
 
     /**
+     * Returns whether lastContainedOffset is the last offset in a record batch
+     */
+    public boolean isOffsetBatchAligned() {
+        return isOffsetBatchAligned;
+    }
+
+    /**
      * Returns the name that a snapshot with this provenance would have.
      */
     public String snapshotName() {
@@ -72,14 +82,16 @@ public final class MetadataProvenance {
         MetadataProvenance other = (MetadataProvenance) o;
         return lastContainedOffset == other.lastContainedOffset &&
             lastContainedEpoch == other.lastContainedEpoch &&
-            lastContainedLogTimeMs == other.lastContainedLogTimeMs;
+            lastContainedLogTimeMs == other.lastContainedLogTimeMs &&
+            isOffsetBatchAligned == other.isOffsetBatchAligned;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(lastContainedOffset,
             lastContainedEpoch,
-            lastContainedLogTimeMs);
+            lastContainedLogTimeMs,
+            isOffsetBatchAligned);
     }
 
     @Override
@@ -88,6 +100,7 @@ public final class MetadataProvenance {
             "lastContainedOffset=" + lastContainedOffset +
             ", lastContainedEpoch=" + lastContainedEpoch +
             ", lastContainedLogTimeMs=" + lastContainedLogTimeMs +
+            ", isOffsetBatchAligned=" + isOffsetBatchAligned +
             ")";
     }
 }

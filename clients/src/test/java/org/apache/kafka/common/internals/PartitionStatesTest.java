@@ -17,6 +17,7 @@
 package org.apache.kafka.common.internals;
 
 import org.apache.kafka.common.TopicPartition;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

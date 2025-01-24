@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.DataOutputStreamWritable;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -48,12 +48,11 @@ import java.util.OptionalInt;
  */
 public class BatchBuilder<T> {
     private final ByteBuffer initialBuffer;
-    private final CompressionType compressionType;
+    private final Compression compression;
     private final ByteBufferOutputStream batchOutput;
     private final DataOutputStreamWritable recordOutput;
     private final long baseOffset;
     private final long appendTime;
-    private final boolean isControlBatch;
     private final int leaderEpoch;
     private final int initialPosition;
     private final int maxBytes;
@@ -67,21 +66,19 @@ public class BatchBuilder<T> {
     public BatchBuilder(
         ByteBuffer buffer,
         RecordSerde<T> serde,
-        CompressionType compressionType,
+        Compression compression,
         long baseOffset,
         long appendTime,
-        boolean isControlBatch,
         int leaderEpoch,
         int maxBytes
     ) {
         this.initialBuffer = buffer;
         this.batchOutput = new ByteBufferOutputStream(buffer);
         this.serde = serde;
-        this.compressionType = compressionType;
+        this.compression = compression;
         this.baseOffset = baseOffset;
         this.nextOffset = baseOffset;
         this.appendTime = appendTime;
-        this.isControlBatch = isControlBatch;
         this.initialPosition = batchOutput.position();
         this.leaderEpoch = leaderEpoch;
         this.maxBytes = maxBytes;
@@ -92,7 +89,7 @@ public class BatchBuilder<T> {
         batchOutput.position(initialPosition + batchHeaderSizeInBytes);
 
         this.recordOutput = new DataOutputStreamWritable(new DataOutputStream(
-            compressionType.wrapForOutput(this.batchOutput, RecordBatch.MAGIC_VALUE_V2)));
+            compression.wrapForOutput(this.batchOutput, RecordBatch.MAGIC_VALUE_V2)));
     }
 
     /**
@@ -247,7 +244,7 @@ public class BatchBuilder<T> {
             lastOffsetDelta,
             size,
             RecordBatch.MAGIC_VALUE_V2,
-            compressionType,
+            compression.type(),
             TimestampType.CREATE_TIME,
             appendTime,
             appendTime,
@@ -255,7 +252,7 @@ public class BatchBuilder<T> {
             RecordBatch.NO_PRODUCER_EPOCH,
             RecordBatch.NO_SEQUENCE,
             false,
-            isControlBatch,
+            false,
             false,
             leaderEpoch,
             numRecords()
@@ -314,7 +311,7 @@ public class BatchBuilder<T> {
     private int batchHeaderSizeInBytes() {
         return AbstractRecords.recordBatchHeaderSizeInBytes(
             RecordBatch.MAGIC_VALUE_V2,
-            compressionType
+            compression.type()
         );
     }
 

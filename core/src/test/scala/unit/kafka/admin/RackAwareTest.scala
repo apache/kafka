@@ -81,7 +81,7 @@ trait RackAwareTest {
 
   def toBrokerMetadata(rackMap: Map[Int, String], brokersWithoutRack: Seq[Int] = Seq.empty): util.Collection[BrokerMetadata] = {
     val res = rackMap.toSeq.map { case (brokerId, rack) =>
-      new BrokerMetadata(brokerId, Optional.of(rack))
+      new BrokerMetadata(brokerId, Optional.ofNullable(rack))
     } ++ brokersWithoutRack.map { brokerId =>
       new BrokerMetadata(brokerId, Optional.empty())
     }.sortBy(_.id)

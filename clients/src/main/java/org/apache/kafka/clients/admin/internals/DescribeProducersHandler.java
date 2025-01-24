@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -65,10 +66,11 @@ public class DescribeProducersHandler extends AdminApiHandler.Batched<TopicParti
         }
     }
 
-    public static AdminApiFuture.SimpleAdminApiFuture<TopicPartition, PartitionProducerState> newFuture(
-        Collection<TopicPartition> topicPartitions
+    public static PartitionLeaderStrategy.PartitionLeaderFuture<PartitionProducerState> newFuture(
+        Collection<TopicPartition> topicPartitions,
+        Map<TopicPartition, Integer> partitionLeaderCache
     ) {
-        return AdminApiFuture.forKeys(new HashSet<>(topicPartitions));
+        return new PartitionLeaderStrategy.PartitionLeaderFuture<>(new HashSet<>(topicPartitions), partitionLeaderCache);
     }
 
     @Override

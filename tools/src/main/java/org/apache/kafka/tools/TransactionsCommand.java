@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentGroup;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
-import net.sourceforge.argparse4j.inf.Subparser;
-import net.sourceforge.argparse4j.inf.Subparsers;
 import org.apache.kafka.clients.admin.AbortTransactionSpec;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -41,6 +34,15 @@ import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentGroup;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.Namespace;
+import net.sourceforge.argparse4j.inf.Subparser;
+import net.sourceforge.argparse4j.inf.Subparsers;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -173,7 +175,7 @@ public abstract class TransactionsCommand {
                 })
                 .findFirst();
 
-            if (!foundProducerState.isPresent()) {
+            if (foundProducerState.isEmpty()) {
                 printErrorAndExit("Could not find any open transactions starting at offset " +
                     startOffset + " on partition " + topicPartition);
                 return null;
@@ -410,7 +412,7 @@ public abstract class TransactionsCommand {
                 String.valueOf(result.transactionTimeoutMs()),
                 transactionStartTimeMsColumnValue,
                 transactionDurationMsColumnValue,
-                Utils.join(result.topicPartitions(), ",")
+                result.topicPartitions().stream().map(TopicPartition::toString).collect(Collectors.joining(","))
             );
 
             ToolsUtils.prettyPrintTable(HEADERS, singletonList(row), out);
@@ -541,14 +543,14 @@ public abstract class TransactionsCommand {
             Optional<Integer> brokerId = Optional.ofNullable(ns.getInt("broker_id"));
             Optional<String> topic = Optional.ofNullable(ns.getString("topic"));
 
-            if (!topic.isPresent() && !brokerId.isPresent()) {
+            if (topic.isEmpty() && brokerId.isEmpty()) {
                 printErrorAndExit("The `find-hanging` command requires either --topic " +
                     "or --broker-id to limit the scope of the search");
                 return;
             }
 
             Optional<Integer> partition = Optional.ofNullable(ns.getInt("partition"));
-            if (partition.isPresent() && !topic.isPresent()) {
+            if (partition.isPresent() && topic.isEmpty()) {
                 printErrorAndExit("The --partition argument requires --topic to be provided");
                 return;
             }
@@ -765,7 +767,7 @@ public abstract class TransactionsCommand {
                 Map<String, TopicDescription> topicDescriptions = admin.describeTopics(topics).allTopicNames().get();
                 topicDescriptions.forEach((topic, description) -> {
                     description.partitions().forEach(partitionInfo -> {
-                        if (!brokerId.isPresent() || hasReplica(brokerId.get(), partitionInfo)) {
+                        if (brokerId.isEmpty() || hasReplica(brokerId.get(), partitionInfo)) {
                             topicPartitions.add(new TopicPartition(topic, partitionInfo.partition()));
                         }
                     });
@@ -1015,7 +1017,7 @@ public abstract class TransactionsCommand {
             .filter(cmd -> cmd.name().equals(commandName))
             .findFirst();
 
-        if (!commandOpt.isPresent()) {
+        if (commandOpt.isEmpty()) {
             printErrorAndExit("Unexpected command " + commandName);
         }
 

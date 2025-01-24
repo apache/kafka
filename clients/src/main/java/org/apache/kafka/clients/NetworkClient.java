@@ -26,8 +26,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
-import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
+import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -48,6 +48,7 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -114,6 +115,11 @@ public class NetworkClient implements KafkaClient {
     /* time in ms to wait before retrying to create connection to a server */
     private final long reconnectBackoffMs;
 
+    /* Timeout starting from an attempt to fetch metadata after which client rebootstraps */
+    private final long rebootstrapTriggerMs;
+
+    private final MetadataRecoveryStrategy metadataRecoveryStrategy;
+
     private final Time time;
 
     /**
@@ -147,7 +153,8 @@ public class NetworkClient implements KafkaClient {
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
-                         LogContext logContext) {
+                         LogContext logContext,
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
         this(selector,
              metadata,
              clientId,
@@ -162,8 +169,49 @@ public class NetworkClient implements KafkaClient {
              time,
              discoverBrokerVersions,
              apiVersions,
-             null,
-             logContext);
+             logContext,
+             Long.MAX_VALUE,
+             metadataRecoveryStrategy);
+    }
+
+    public NetworkClient(Selectable selector,
+                         Metadata metadata,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         long reconnectBackoffMax,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer,
+                         int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
+                         Time time,
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions,
+                         LogContext logContext,
+                         long rebootstrapTriggerMs,
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+        this(null,
+                metadata,
+                selector,
+                clientId,
+                maxInFlightRequestsPerConnection,
+                reconnectBackoffMs,
+                reconnectBackoffMax,
+                socketSendBuffer,
+                socketReceiveBuffer,
+                defaultRequestTimeoutMs,
+                connectionSetupTimeoutMs,
+                connectionSetupTimeoutMaxMs,
+                time,
+                discoverBrokerVersions,
+                apiVersions,
+                null,
+                logContext,
+                new DefaultHostResolver(),
+                null,
+                rebootstrapTriggerMs,
+                metadataRecoveryStrategy);
     }
 
     public NetworkClient(Selectable selector,
@@ -181,7 +229,8 @@ public class NetworkClient implements KafkaClient {
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
                          Sensor throttleTimeSensor,
-                         LogContext logContext) {
+                         LogContext logContext,
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
         this(null,
              metadata,
              selector,
@@ -200,7 +249,9 @@ public class NetworkClient implements KafkaClient {
              throttleTimeSensor,
              logContext,
              new DefaultHostResolver(),
-             null);
+             null,
+             Long.MAX_VALUE,
+             metadataRecoveryStrategy);
     }
 
     public NetworkClient(Selectable selector,
@@ -217,7 +268,8 @@ public class NetworkClient implements KafkaClient {
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
-                         LogContext logContext) {
+                         LogContext logContext,
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
         this(metadataUpdater,
              null,
              selector,
@@ -236,7 +288,9 @@ public class NetworkClient implements KafkaClient {
              null,
              logContext,
              new DefaultHostResolver(),
-             null);
+             null,
+             Long.MAX_VALUE,
+             metadataRecoveryStrategy);
     }
 
     public NetworkClient(MetadataUpdater metadataUpdater,
@@ -257,7 +311,9 @@ public class NetworkClient implements KafkaClient {
                          Sensor throttleTimeSensor,
                          LogContext logContext,
                          HostResolver hostResolver,
-                         ClientTelemetrySender clientTelemetrySender) {
+                         ClientTelemetrySender clientTelemetrySender,
+                         long rebootstrapTriggerMs,
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -288,6 +344,8 @@ public class NetworkClient implements KafkaClient {
         this.log = logContext.logger(NetworkClient.class);
         this.state = new AtomicReference<>(State.ACTIVE);
         this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
+        this.rebootstrapTriggerMs = rebootstrapTriggerMs;
+        this.metadataRecoveryStrategy = metadataRecoveryStrategy;
     }
 
     /**
@@ -390,6 +448,8 @@ public class NetworkClient implements KafkaClient {
         long now = time.milliseconds();
         cancelInFlightRequests(nodeId, now, null, false);
         connectionStates.remove(nodeId);
+        apiVersions.remove(nodeId);
+        nodesNeedingApiVersionsFetch.remove(nodeId);
     }
 
     /**
@@ -597,6 +657,7 @@ public class NetworkClient implements KafkaClient {
         handleInitiateApiVersionRequests(updatedNow);
         handleTimedOutConnections(responses, updatedNow);
         handleTimedOutRequests(responses, updatedNow);
+        handleRebootstrap(responses, updatedNow);
         completeResponses(responses);
 
         return responses;
@@ -695,7 +756,7 @@ public class NetworkClient implements KafkaClient {
      * @return The node with the fewest in-flight requests.
      */
     @Override
-    public Node leastLoadedNode(long now) {
+    public LeastLoadedNode leastLoadedNode(long now) {
         List<Node> nodes = this.metadataUpdater.fetchNodes();
         if (nodes.isEmpty())
             throw new IllegalStateException("There are no nodes in the Kafka cluster");
@@ -705,16 +766,25 @@ public class NetworkClient implements KafkaClient {
         Node foundCanConnect = null;
         Node foundReady = null;
 
+        boolean atLeastOneConnectionReady = false;
+
         int offset = this.randOffset.nextInt(nodes.size());
         for (int i = 0; i < nodes.size(); i++) {
             int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);
+
+            if (!atLeastOneConnectionReady
+                    && connectionStates.isReady(node.idString(), now)
+                    && selector.isChannelReady(node.idString())) {
+                atLeastOneConnectionReady = true;
+            }
+
             if (canSendRequest(node.idString(), now)) {
                 int currInflight = this.inFlightRequests.count(node.idString());
                 if (currInflight == 0) {
                     // if we find an established connection with no in-flight requests we can stop right away
                     log.trace("Found least loaded node {} connected with no in-flight requests", node);
-                    return node;
+                    return new LeastLoadedNode(node, true);
                 } else if (currInflight < inflight) {
                     // otherwise if this is the best we have found so far, record that
                     inflight = currInflight;
@@ -738,16 +808,16 @@ public class NetworkClient implements KafkaClient {
         // which are being established before connecting to new nodes.
         if (foundReady != null) {
             log.trace("Found least loaded node {} with {} inflight requests", foundReady, inflight);
-            return foundReady;
+            return new LeastLoadedNode(foundReady, atLeastOneConnectionReady);
         } else if (foundConnecting != null) {
             log.trace("Found least loaded connecting node {}", foundConnecting);
-            return foundConnecting;
+            return new LeastLoadedNode(foundConnecting, atLeastOneConnectionReady);
         } else if (foundCanConnect != null) {
             log.trace("Found least loaded node {} with no active connection", foundCanConnect);
-            return foundCanConnect;
+            return new LeastLoadedNode(foundCanConnect, atLeastOneConnectionReady);
         } else {
             log.trace("Least loaded node selection failed to find an available node");
-            return null;
+            return new LeastLoadedNode(null, atLeastOneConnectionReady);
         }
     }
 
@@ -821,9 +891,8 @@ public class NetworkClient implements KafkaClient {
                 break;
             case AUTHENTICATE:
                 log.warn("Connection to node {} ({}) terminated during authentication. This may happen " +
-                    "due to any of the following reasons: (1) Authentication failed due to invalid " +
-                    "credentials with brokers older than 1.0.0, (2) Firewall blocking Kafka TLS " +
-                    "traffic (eg it may only allow HTTPS traffic), (3) Transient network issue.",
+                    "due to any of the following reasons: (1) Firewall blocking Kafka TLS " +
+                    "traffic (eg it may only allow HTTPS traffic), (2) Transient network issue.",
                     nodeId, disconnectState.remoteAddress());
                 break;
             case NOT_CONNECTED:
@@ -978,7 +1047,8 @@ public class NetworkClient implements KafkaClient {
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(
             apiVersionsResponse.data().apiKeys(),
             apiVersionsResponse.data().supportedFeatures(),
-            apiVersionsResponse.data().zkMigrationReady());
+            apiVersionsResponse.data().finalizedFeatures(),
+            apiVersionsResponse.data().finalizedFeaturesEpoch());
         apiVersions.update(node, nodeVersionInfo);
         this.connectionStates.ready(node);
         log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, ZK migration ready: {}, API versions: {}.",
@@ -995,8 +1065,13 @@ public class NetworkClient implements KafkaClient {
     private void handleDisconnections(List<ClientResponse> responses, long now) {
         for (Map.Entry<String, ChannelState> entry : this.selector.disconnected().entrySet()) {
             String node = entry.getKey();
-            log.info("Node {} disconnected.", node);
-            processDisconnection(responses, node, now, entry.getValue());
+            ChannelState channelState = entry.getValue();
+            if (channelState == ChannelState.EXPIRED) {
+                log.debug("Idle connection to node {} disconnected.", node);
+            } else {
+                log.info("Node {} disconnected.", node);
+            }
+            processDisconnection(responses, node, now, channelState);
         }
     }
 
@@ -1036,6 +1111,20 @@ public class NetworkClient implements KafkaClient {
                 doSend(clientRequest, true, now);
                 iter.remove();
             }
+        }
+    }
+
+    private void handleRebootstrap(List<ClientResponse> responses, long now) {
+        if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && metadataUpdater.needsRebootstrap(now, rebootstrapTriggerMs)) {
+            this.metadataUpdater.fetchNodes().forEach(node -> {
+                String nodeId = node.idString();
+                this.selector.close(nodeId);
+                if (connectionStates.isConnecting(nodeId) || connectionStates.isConnected(nodeId)) {
+                    log.info("Disconnecting from node {} due to client rebootstrap.", nodeId);
+                    processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
+                }
+            });
+            metadataUpdater.rebootstrap(now);
         }
     }
 
@@ -1090,6 +1179,15 @@ public class NetworkClient implements KafkaClient {
         // Defined if there is a request in progress, null otherwise
         private InProgressData inProgress;
 
+        /*
+         * The time in wall-clock milliseconds when we started attempts to fetch metadata. If empty,
+         * metadata has not been requested. This is the start time based on which rebootstrap is
+         * triggered if metadata is not obtained for the configured rebootstrap trigger interval.
+         * Set to Optional.of(0L) to force rebootstrap immediately.
+         */
+        private Optional<Long> metadataAttemptStartMs = Optional.empty();
+
+
         DefaultMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
             this.inProgress = null;
@@ -1120,15 +1218,27 @@ public class NetworkClient implements KafkaClient {
                 return metadataTimeout;
             }
 
+            if (metadataAttemptStartMs.isEmpty())
+                metadataAttemptStartMs = Optional.of(now);
+
             // Beware that the behavior of this method and the computation of timeouts for poll() are
             // highly dependent on the behavior of leastLoadedNode.
-            Node node = leastLoadedNode(now);
-            if (node == null) {
+            LeastLoadedNode leastLoadedNode = leastLoadedNode(now);
+
+            // Rebootstrap if needed and configured.
+            if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP
+                    && !leastLoadedNode.hasNodeAvailableOrConnectionReady()) {
+                rebootstrap(now);
+
+                leastLoadedNode = leastLoadedNode(now);
+            }
+
+            if (leastLoadedNode.node() == null) {
                 log.debug("Give up sending metadata request since no node is available");
                 return reconnectBackoffMs;
             }
 
-            return maybeUpdate(now, node);
+            return maybeUpdate(now, leastLoadedNode.node());
         }
 
         @Override
@@ -1182,23 +1292,42 @@ public class NetworkClient implements KafkaClient {
             // Check if any topic's metadata failed to get updated
             Map<String, Errors> errors = response.errors();
             if (!errors.isEmpty())
-                log.warn("Error while fetching metadata with correlation id {} : {}", requestHeader.correlationId(), errors);
+                log.warn("The metadata response from the cluster reported a recoverable issue with correlation id {} : {}", requestHeader.correlationId(), errors);
 
-            // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
-            // we should retry later.
-            if (response.brokers().isEmpty()) {
+            if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && response.topLevelError() == Errors.REBOOTSTRAP_REQUIRED) {
+                log.info("Rebootstrap requested by server.");
+                initiateRebootstrap();
+            } else if (response.brokers().isEmpty()) {
+                // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
+                // we should retry later.
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now);
             } else {
                 this.metadata.update(inProgress.requestVersion, response, inProgress.isPartialUpdate, now);
+                metadataAttemptStartMs = Optional.empty();
             }
 
             inProgress = null;
         }
 
         @Override
+        public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
+            return metadataAttemptStartMs.filter(startMs -> now - startMs > rebootstrapTriggerMs).isPresent();
+        }
+
+        @Override
+        public void rebootstrap(long now) {
+            metadata.rebootstrap();
+            metadataAttemptStartMs = Optional.of(now);
+        }
+
+        @Override
         public void close() {
             this.metadata.close();
+        }
+
+        private void initiateRebootstrap() {
+            metadataAttemptStartMs = Optional.of(0L); // to force rebootstrap
         }
 
         /**
@@ -1266,7 +1395,7 @@ public class NetworkClient implements KafkaClient {
 
             // Per KIP-714, let's continue to re-use the same broker for as long as possible.
             if (stickyNode == null) {
-                stickyNode = leastLoadedNode(now);
+                stickyNode = leastLoadedNode(now).node();
                 if (stickyNode == null) {
                     log.debug("Give up sending telemetry request since no node is available");
                     return reconnectBackoffMs;
@@ -1282,7 +1411,7 @@ public class NetworkClient implements KafkaClient {
             if (canSendRequest(nodeConnectionId, now)) {
                 Optional<AbstractRequest.Builder<?>> requestOpt = clientTelemetrySender.createRequest();
 
-                if (!requestOpt.isPresent())
+                if (requestOpt.isEmpty())
                     return Long.MAX_VALUE;
 
                 AbstractRequest.Builder<?> request = requestOpt.get();

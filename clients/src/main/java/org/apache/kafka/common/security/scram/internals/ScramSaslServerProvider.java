@@ -16,18 +16,17 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
+import org.apache.kafka.common.security.scram.internals.ScramSaslServer.ScramSaslServerFactory;
+
 import java.security.Provider;
 import java.security.Security;
 
-import org.apache.kafka.common.security.scram.internals.ScramSaslServer.ScramSaslServerFactory;
-
-public class ScramSaslServerProvider extends Provider {
+public final class ScramSaslServerProvider extends Provider {
 
     private static final long serialVersionUID = 1L;
 
-    @SuppressWarnings({"deprecation", "this-escape"})
-    protected ScramSaslServerProvider() {
-        super("SASL/SCRAM Server Provider", 1.0, "SASL/SCRAM Server Provider for Kafka");
+    private ScramSaslServerProvider() {
+        super("SASL/SCRAM Server Provider", "1.0", "SASL/SCRAM Server Provider for Kafka");
         for (ScramMechanism mechanism : ScramMechanism.values())
             put("SaslServerFactory." + mechanism.mechanismName(), ScramSaslServerFactory.class.getName());
     }

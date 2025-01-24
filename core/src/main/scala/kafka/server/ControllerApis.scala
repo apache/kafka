@@ -47,7 +47,7 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC, USER}
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, USER}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
@@ -57,7 +57,7 @@ import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
 
 import scala.jdk.CollectionConverters._
 
@@ -129,6 +129,9 @@ class ControllerApis(
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.CONTROLLER_REGISTRATION => handleControllerRegistration(request)
         case ApiKeys.ASSIGN_REPLICAS_TO_DIRS => handleAssignReplicasToDirs(request)
+        case ApiKeys.ADD_RAFT_VOTER => handleAddRaftVoter(request)
+        case ApiKeys.REMOVE_RAFT_VOTER => handleRemoveRaftVoter(request)
+        case ApiKeys.UPDATE_RAFT_VOTER => handleUpdateRaftVoter(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
 
@@ -401,12 +404,6 @@ class ControllerApis(
       }
     }
 
-    /* The cluster metadata topic is an internal topic with a different implementation. The user should not be
-     * allowed to create it as a regular topic.
-     */
-    if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {
-      info(s"Rejecting creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME}")
-    }
     val allowedTopicNames = topicNames.asScala.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
 
     val authorizedTopicNames = if (hasClusterAuth) {
@@ -432,7 +429,12 @@ class ControllerApis(
           setErrorMessage("Duplicate topic name."))
       }
       topicNames.forEach { name =>
-        if (!authorizedTopicNames.contains(name)) {
+        if (name == Topic.CLUSTER_METADATA_TOPIC_NAME) {
+          response.topics().add(new CreatableTopicResult().
+            setName(name).
+            setErrorCode(INVALID_REQUEST.code).
+            setErrorMessage(s"Creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME} is prohibited."))
+        } else if (!authorizedTopicNames.contains(name)) {
           response.topics().add(new CreatableTopicResult().
             setName(name).
             setErrorCode(TOPIC_AUTHORIZATION_FAILED.code).
@@ -459,7 +461,7 @@ class ControllerApis(
         requestThrottleMs => apiVersionRequest.getErrorResponse(requestThrottleMs, INVALID_REQUEST.exception))
     } else {
       requestHelper.sendResponseMaybeThrottle(request,
-        requestThrottleMs => apiVersionManager.apiVersionResponse(requestThrottleMs))
+        requestThrottleMs => apiVersionManager.apiVersionResponse(requestThrottleMs, request.header.apiVersion() < 4))
     }
     CompletableFuture.completedFuture[Unit](())
   }
@@ -478,6 +480,12 @@ class ControllerApis(
           new ApiError(NONE)
         } else {
           new ApiError(TOPIC_AUTHORIZATION_FAILED)
+        }
+      case ConfigResource.Type.GROUP =>
+        if (authHelper.authorize(requestContext, ALTER_CONFIGS, GROUP, resource.name)) {
+          new ApiError(NONE)
+        } else {
+          new ApiError(GROUP_AUTHORIZATION_FAILED)
         }
       case rt => new ApiError(INVALID_REQUEST, s"Unexpected resource type $rt.")
     }
@@ -530,12 +538,12 @@ class ControllerApis(
         if (exception != null) {
           requestHelper.handleError(request, exception)
         } else {
-          controllerResults.entrySet().forEach(entry => response.responses().add(
+          controllerResults.forEach((key, value) => response.responses().add(
             new OldAlterConfigsResourceResponse().
-              setErrorCode(entry.getValue.error().code()).
-              setErrorMessage(entry.getValue.message()).
-              setResourceName(entry.getKey.name()).
-              setResourceType(entry.getKey.`type`().id())))
+              setErrorCode(value.error().code()).
+              setErrorMessage(value.message()).
+              setResourceName(key.name()).
+              setResourceType(key.`type`().id())))
           requestHelper.sendResponseMaybeThrottle(request, throttleMs =>
             new AlterConfigsResponse(response.setThrottleTimeMs(throttleMs)))
         }
@@ -676,7 +684,7 @@ class ControllerApis(
   private def handleRaftRequest(request: RequestChannel.Request,
                                 buildResponse: ApiMessage => AbstractResponse): CompletableFuture[Unit] = {
     val requestBody = request.body[AbstractRequest]
-    val future = raftManager.handleRequest(request.header, requestBody.data, time.milliseconds())
+    val future = raftManager.handleRequest(request.context, request.header, requestBody.data, time.milliseconds())
     future.handle[Unit] { (responseData, exception) =>
       val response = if (exception != null) {
         requestBody.getErrorResponse(exception)
@@ -771,12 +779,12 @@ class ControllerApis(
         if (exception != null) {
           requestHelper.handleError(request, exception)
         } else {
-          controllerResults.entrySet().forEach(entry => response.responses().add(
+          controllerResults.forEach((key, value) => response.responses().add(
             new AlterConfigsResourceResponse().
-              setErrorCode(entry.getValue.error().code()).
-              setErrorMessage(entry.getValue.message()).
-              setResourceName(entry.getKey.name()).
-              setResourceType(entry.getKey.`type`().id())))
+              setErrorCode(value.error().code()).
+              setErrorMessage(value.message()).
+              setResourceName(key.name()).
+              setResourceType(key.`type`().id())))
           brokerLoggerResponses.forEach(r => response.responses().add(r))
           requestHelper.sendResponseMaybeThrottle(request, throttleMs =>
             new IncrementalAlterConfigsResponse(response.setThrottleTimeMs(throttleMs)))
@@ -923,7 +931,7 @@ class ControllerApis(
         CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
           Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, owner, requester))
       CompletableFuture.completedFuture[Unit](())
-    } else if (!owner.equals(requester) && 
+    } else if (!owner.equals(requester) &&
       !authHelper.authorize(request.context, CREATE_TOKENS, USER, owner.toString)) {
       // Requester is always allowed to create token for self
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -1079,5 +1087,20 @@ class ControllerApis(
       requestHelper.sendResponseMaybeThrottle(request,
         requestThrottleMs => new AssignReplicasToDirsResponse(reply.setThrottleTimeMs(requestThrottleMs)))
     }
+  }
+
+  def handleAddRaftVoter(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    authHelper.authorizeClusterOperation(request, ALTER)
+    handleRaftRequest(request, response => new AddRaftVoterResponse(response.asInstanceOf[AddRaftVoterResponseData]))
+  }
+
+  def handleRemoveRaftVoter(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    authHelper.authorizeClusterOperation(request, ALTER)
+    handleRaftRequest(request, response => new RemoveRaftVoterResponse(response.asInstanceOf[RemoveRaftVoterResponseData]))
+  }
+
+  def handleUpdateRaftVoter(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    handleRaftRequest(request, response => new UpdateRaftVoterResponse(response.asInstanceOf[UpdateRaftVoterResponseData]))
   }
 }

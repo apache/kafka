@@ -72,6 +72,15 @@ public class Timer {
     }
 
     /**
+     * Get the time in milliseconds that the timer has been expired. Like {@link #remainingMs()},
+     * this depends on the current cached time in milliseconds, which is only updated through one
+     * of the {@link #update()} methods or with {@link #sleep(long)}.
+     */
+    public long isExpiredBy() {
+        return Math.max(0, currentTimeMs - deadlineMs);
+    }
+
+    /**
      * Check whether the timer has not yet expired.
      * @return true if there is still time remaining before expiration
      */

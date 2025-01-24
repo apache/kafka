@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
+import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Map;
 import java.util.Objects;

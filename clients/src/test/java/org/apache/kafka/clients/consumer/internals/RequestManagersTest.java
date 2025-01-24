@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -63,8 +64,8 @@ public class RequestManagersTest {
             mock(OffsetCommitCallbackInvoker.class),
             listener
         ).get();
-        requestManagers.membershipManager.ifPresent(
-            membershipManager -> assertTrue(((MembershipManagerImpl) membershipManager).stateListeners().contains(listener))
+        requestManagers.consumerMembershipManager.ifPresent(
+            membershipManager -> assertTrue(membershipManager.stateListeners().contains(listener))
         );
     }
 }

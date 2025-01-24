@@ -35,11 +35,13 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.junit.Test;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
+
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -51,9 +53,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@SuppressWarnings("deprecation")
 public class StreamsGraphTest {
 
     private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
@@ -62,6 +63,7 @@ public class StreamsGraphTest {
 
     // Test builds topology in successive manner but only graph node not yet processed written to topology
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldBeAbleToBuildTopologyIncrementally() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -105,7 +107,7 @@ public class StreamsGraphTest {
 
         // second repartition
         changedKeyStream.groupByKey(Grouped.as("windowed-repartition"))
-            .windowedBy(TimeWindows.of(Duration.ofSeconds(5)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofSeconds(5)))
             .count(Materialized.as("windowed-count-store"))
             .toStream()
             .map((k, v) -> KeyValue.pair(k.key(), v)).to("windowed-count", Produced.with(Serdes.String(), Serdes.Long()));
@@ -124,25 +126,23 @@ public class StreamsGraphTest {
         final StreamsBuilder builder = new StreamsBuilder();
         initializer = () -> "";
         aggregator = (aggKey, value, aggregate) -> aggregate + value.length();
-        final TransformerSupplier<String, String, KeyValue<String, String>> transformSupplier = () -> new Transformer<String, String, KeyValue<String, String>>() {
-            @Override
-            public void init(final ProcessorContext context) {
+        final ProcessorSupplier<String, String, String, String> processorSupplier =
+            () -> new Processor<String, String, String, String>() {
+                private ProcessorContext<String, String> context;
 
-            }
+                @Override
+                public void init(final ProcessorContext<String, String> context) {
+                    this.context = context;
+                }
 
-            @Override
-            public KeyValue<String, String> transform(final String key, final String value) {
-                return KeyValue.pair(key, value);
-            }
-
-            @Override
-            public void close() {
-
-            }
-        };
+                @Override
+                public void process(final Record<String, String> record) {
+                    context.forward(record);
+                }
+            };
 
         final KStream<String, String> retryStream = builder.stream("retryTopic", Consumed.with(Serdes.String(), Serdes.String()))
-                .transform(transformSupplier)
+                .process(processorSupplier)
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                 .aggregate(initializer,
                         aggregator,
@@ -195,19 +195,6 @@ public class StreamsGraphTest {
         assertEquals(2, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
     }
 
-    // no need to optimize as user has already performed the repartitioning manually
-    @Deprecated
-    @Test
-    public void shouldNotOptimizeWhenAThroughOperationIsDone() {
-        final Topology attemptedOptimize = getTopologyWithThroughOperation(StreamsConfig.OPTIMIZE);
-        final Topology noOptimization = getTopologyWithThroughOperation(StreamsConfig.NO_OPTIMIZATION);
-
-        assertEquals(attemptedOptimize.describe().toString(), noOptimization.describe().toString());
-        assertEquals(0, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
-        assertEquals(0, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
-
-    }
-
     @Test
     public void shouldOptimizeSeveralMergeNodesWithCommonKeyChangingParent() {
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
@@ -250,24 +237,7 @@ public class StreamsGraphTest {
         final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v);
 
         mappedKeyStream.mapValues(v -> v.toUpperCase(Locale.getDefault())).groupByKey().count().toStream().to("output");
-        mappedKeyStream.flatMapValues(v -> Arrays.asList(v.split("\\s"))).groupByKey().windowedBy(TimeWindows.of(ofMillis(5000))).count().toStream().to("windowed-output");
-
-        return builder.build(properties);
-
-    }
-
-    @Deprecated // specifically testing the deprecated variant
-    private Topology getTopologyWithThroughOperation(final String optimizeConfig) {
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        final Properties properties = new Properties();
-        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizeConfig);
-
-        final KStream<String, String> inputStream = builder.stream("input");
-        final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v).through("through-topic");
-
-        mappedKeyStream.groupByKey().count().toStream().to("output");
-        mappedKeyStream.groupByKey().windowedBy(TimeWindows.of(ofMillis(5000))).count().toStream().to("windowed-output");
+        mappedKeyStream.flatMapValues(v -> Arrays.asList(v.split("\\s"))).groupByKey().windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(5000))).count().toStream().to("windowed-output");
 
         return builder.build(properties);
 
@@ -290,7 +260,7 @@ public class StreamsGraphTest {
         inputStream
             .repartition()
             .groupByKey()
-            .windowedBy(TimeWindows.of(ofMillis(5000)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(5000)))
             .count()
             .toStream()
             .to("windowed-output");
@@ -414,22 +384,22 @@ public class StreamsGraphTest {
     private final String expectedComplexMergeOptimizeTopology = "Topologies:\n" +
             "   Sub-topology: 0\n" +
             "    Source: KSTREAM-SOURCE-0000000000 (topics: [retryTopic])\n" +
-            "      --> KSTREAM-TRANSFORM-0000000001\n" +
-            "    Processor: KSTREAM-TRANSFORM-0000000001 (stores: [])\n" +
-            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter\n" +
+            "      --> KSTREAM-PROCESSOR-0000000001\n" +
+            "    Processor: KSTREAM-PROCESSOR-0000000001 (stores: [])\n" +
+            "      --> KSTREAM-FILTER-0000000005\n" +
             "      <-- KSTREAM-SOURCE-0000000000\n" +
-            "    Processor: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter (stores: [])\n" +
-            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-sink\n" +
-            "      <-- KSTREAM-TRANSFORM-0000000001\n" +
-            "    Sink: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-sink (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition)\n" +
-            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter\n" +
+            "    Processor: KSTREAM-FILTER-0000000005 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000004\n" +
+            "      <-- KSTREAM-PROCESSOR-0000000001\n" +
+            "    Sink: KSTREAM-SINK-0000000004 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition)\n" +
+            "      <-- KSTREAM-FILTER-0000000005\n" +
             "\n" +
             "  Sub-topology: 1\n" +
-            "    Source: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-source (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition])\n" +
+            "    Source: KSTREAM-SOURCE-0000000006 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition])\n" +
             "      --> KSTREAM-AGGREGATE-0000000003\n" +
             "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
             "      --> KTABLE-SUPPRESS-0000000007\n" +
-            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-source\n" +
+            "      <-- KSTREAM-SOURCE-0000000006\n" +
             "    Source: KSTREAM-SOURCE-0000000019 (topics: [internal-topic-command])\n" +
             "      --> KSTREAM-PEEK-0000000020\n" +
             "    Processor: KTABLE-SUPPRESS-0000000007 (stores: [KTABLE-SUPPRESS-STATE-STORE-0000000008])\n" +

@@ -18,9 +18,10 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
+
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
@@ -218,21 +219,21 @@ public class TestSslUtils {
         return sslConfigs;
     }
 
-    public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore, Mode mode, File trustStoreFile, String certAlias)
+    public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore, ConnectionMode connectionMode, File trustStoreFile, String certAlias)
         throws IOException, GeneralSecurityException {
-        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, "localhost");
+        return createSslConfig(useClientCert, trustStore, connectionMode, trustStoreFile, certAlias, "localhost");
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
-            Mode mode, File trustStoreFile, String certAlias, String cn)
+            ConnectionMode connectionMode, File trustStoreFile, String certAlias, String cn)
         throws IOException, GeneralSecurityException {
-        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder());
+        return createSslConfig(useClientCert, trustStore, connectionMode, trustStoreFile, certAlias, cn, new CertificateBuilder());
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean createTrustStore,
-            Mode mode, File trustStoreFile, String certAlias, String cn, CertificateBuilder certBuilder)
+            ConnectionMode connectionMode, File trustStoreFile, String certAlias, String cn, CertificateBuilder certBuilder)
             throws IOException, GeneralSecurityException {
-        SslConfigsBuilder builder = new SslConfigsBuilder(mode)
+        SslConfigsBuilder builder = new SslConfigsBuilder(connectionMode)
                 .useClientCert(useClientCert)
                 .certAlias(certAlias)
                 .cn(cn)
@@ -564,7 +565,7 @@ public class TestSslUtils {
     }
 
     public static class SslConfigsBuilder {
-        final Mode mode;
+        final ConnectionMode connectionMode;
         String tlsProtocol;
         boolean useClientCert;
         boolean createTrustStore;
@@ -578,15 +579,15 @@ public class TestSslUtils {
         CertificateBuilder certBuilder;
         boolean usePem;
 
-        public SslConfigsBuilder(Mode mode) {
-            this.mode = mode;
+        public SslConfigsBuilder(ConnectionMode connectionMode) {
+            this.connectionMode = connectionMode;
             this.tlsProtocol = DEFAULT_TLS_PROTOCOL_FOR_TESTS;
             trustStorePassword = new Password(TRUST_STORE_PASSWORD);
-            keyStorePassword = mode == Mode.SERVER ? new Password("ServerPassword") : new Password("ClientPassword");
+            keyStorePassword = connectionMode == ConnectionMode.SERVER ? new Password("ServerPassword") : new Password("ClientPassword");
             keyPassword = keyStorePassword;
             this.certBuilder = new CertificateBuilder();
             this.cn = "localhost";
-            this.certAlias = mode.name().toLowerCase(Locale.ROOT);
+            this.certAlias = connectionMode.name().toLowerCase(Locale.ROOT);
             this.algorithm = "RSA";
             this.createTrustStore = true;
         }
@@ -649,13 +650,13 @@ public class TestSslUtils {
             Map<String, X509Certificate> certs = new HashMap<>();
             File keyStoreFile = null;
 
-            if (mode == Mode.CLIENT && useClientCert) {
+            if (connectionMode == ConnectionMode.CLIENT && useClientCert) {
                 keyStoreFile = TestUtils.tempFile("clientKS", ".jks");
                 KeyPair cKP = generateKeyPair(algorithm);
                 X509Certificate cCert = certBuilder.generate("CN=" + cn + ", O=A client", cKP);
                 createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyPassword, "client", cKP.getPrivate(), cCert);
                 certs.put(certAlias, cCert);
-            } else if (mode == Mode.SERVER) {
+            } else if (connectionMode == ConnectionMode.SERVER) {
                 keyStoreFile = TestUtils.tempFile("serverKS", ".jks");
                 KeyPair sKP = generateKeyPair(algorithm);
                 X509Certificate sCert = certBuilder.generate("CN=" + cn + ", O=A server", sKP);
@@ -673,7 +674,7 @@ public class TestSslUtils {
 
             sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol); // protocol to create SSLContext
 
-            if (mode == Mode.SERVER || (mode == Mode.CLIENT && keyStoreFile != null)) {
+            if (connectionMode == ConnectionMode.SERVER || (connectionMode == ConnectionMode.CLIENT && keyStoreFile != null)) {
                 sslConfigs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
                 sslConfigs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
                 sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
@@ -702,9 +703,9 @@ public class TestSslUtils {
             sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
             sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
 
-            if (mode != Mode.CLIENT || useClientCert) {
+            if (connectionMode != ConnectionMode.CLIENT || useClientCert) {
                 KeyPair keyPair = generateKeyPair(algorithm);
-                X509Certificate cert = certBuilder.generate("CN=" + cn + ", O=A " + mode.name().toLowerCase(Locale.ROOT), keyPair);
+                X509Certificate cert = certBuilder.generate("CN=" + cn + ", O=A " + connectionMode.name().toLowerCase(Locale.ROOT), keyPair);
 
                 Password privateKeyPem = new Password(pem(keyPair.getPrivate(), keyPassword));
                 Password certPem = new Password(pem(cert));

@@ -21,42 +21,73 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.transforms.field.FieldSyntaxVersion;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class ExtractFieldTest {
-    private final ExtractField<SinkRecord> xform = new ExtractField.Key<>();
+    private final ExtractField<SinkRecord> xformKey = new ExtractField.Key<>();
+    private final ExtractField<SinkRecord> xformValue = new ExtractField.Value<>();
+
+    public static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(false, null),
+                Arguments.of(true, 42)
+        );
+    }
 
     @AfterEach
     public void teardown() {
-        xform.close();
+        xformKey.close();
+        xformValue.close();
     }
 
     @Test
     public void schemaless() {
-        xform.configure(Collections.singletonMap("field", "magic"));
+        xformKey.configure(Collections.singletonMap("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, null, Collections.singletonMap("magic", 42), null, null, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final SinkRecord transformedRecord = xformKey.apply(record);
 
         assertNull(transformedRecord.keySchema());
         assertEquals(42, transformedRecord.key());
     }
 
     @Test
-    public void testNullSchemaless() {
-        xform.configure(Collections.singletonMap("field", "magic"));
+    public void schemalessAndNestedPath() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        configs.put("field", "magic.foo");
+        xformKey.configure(configs);
+
+        final Map<String, Object> key = Collections.singletonMap("magic", Collections.singletonMap("foo", 42));
+        final SinkRecord record = new SinkRecord("test", 0, null, key, null, null, 0);
+        final SinkRecord transformedRecord = xformKey.apply(record);
+
+        assertNull(transformedRecord.keySchema());
+        assertEquals(42, transformedRecord.key());
+    }
+
+    @Test
+    public void nullSchemaless() {
+        xformKey.configure(Collections.singletonMap("field", "magic"));
 
         final Map<String, Object> key = null;
         final SinkRecord record = new SinkRecord("test", 0, null, key, null, null, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final SinkRecord transformedRecord = xformKey.apply(record);
 
         assertNull(transformedRecord.keySchema());
         assertNull(transformedRecord.key());
@@ -64,12 +95,29 @@ public class ExtractFieldTest {
 
     @Test
     public void withSchema() {
-        xform.configure(Collections.singletonMap("field", "magic"));
+        xformKey.configure(Collections.singletonMap("field", "magic"));
 
         final Schema keySchema = SchemaBuilder.struct().field("magic", Schema.INT32_SCHEMA).build();
         final Struct key = new Struct(keySchema).put("magic", 42);
         final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final SinkRecord transformedRecord = xformKey.apply(record);
+
+        assertEquals(Schema.INT32_SCHEMA, transformedRecord.keySchema());
+        assertEquals(42, transformedRecord.key());
+    }
+
+    @Test
+    public void withSchemaAndNestedPath() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        configs.put("field", "magic.foo");
+        xformKey.configure(configs);
+
+        final Schema fooSchema = SchemaBuilder.struct().field("foo", Schema.INT32_SCHEMA).build();
+        final Schema keySchema = SchemaBuilder.struct().field("magic", fooSchema).build();
+        final Struct key = new Struct(keySchema).put("magic", new Struct(fooSchema).put("foo", 42));
+        final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
+        final SinkRecord transformedRecord = xformKey.apply(record);
 
         assertEquals(Schema.INT32_SCHEMA, transformedRecord.keySchema());
         assertEquals(42, transformedRecord.key());
@@ -77,12 +125,12 @@ public class ExtractFieldTest {
 
     @Test
     public void testNullWithSchema() {
-        xform.configure(Collections.singletonMap("field", "magic"));
+        xformKey.configure(Collections.singletonMap("field", "magic"));
 
         final Schema keySchema = SchemaBuilder.struct().field("magic", Schema.INT32_SCHEMA).optional().build();
         final Struct key = null;
         final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final SinkRecord transformedRecord = xformKey.apply(record);
 
         assertEquals(Schema.INT32_SCHEMA, transformedRecord.keySchema());
         assertNull(transformedRecord.key());
@@ -90,10 +138,25 @@ public class ExtractFieldTest {
 
     @Test
     public void nonExistentFieldSchemalessShouldReturnNull() {
-        xform.configure(Collections.singletonMap("field", "nonexistent"));
+        xformKey.configure(Collections.singletonMap("field", "nonexistent"));
 
         final SinkRecord record = new SinkRecord("test", 0, null, Collections.singletonMap("magic", 42), null, null, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final SinkRecord transformedRecord = xformKey.apply(record);
+
+        assertNull(transformedRecord.keySchema());
+        assertNull(transformedRecord.key());
+    }
+
+    @Test
+    public void nonExistentNestedFieldSchemalessShouldReturnNull() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        configs.put("field", "magic.nonexistent");
+        xformKey.configure(configs);
+
+        final Map<String, Object> key = Collections.singletonMap("magic", Collections.singletonMap("foo", 42));
+        final SinkRecord record = new SinkRecord("test", 0, null, key, null, null, 0);
+        final SinkRecord transformedRecord = xformKey.apply(record);
 
         assertNull(transformedRecord.keySchema());
         assertNull(transformedRecord.key());
@@ -101,14 +164,14 @@ public class ExtractFieldTest {
 
     @Test
     public void nonExistentFieldWithSchemaShouldFail() {
-        xform.configure(Collections.singletonMap("field", "nonexistent"));
+        xformKey.configure(Collections.singletonMap("field", "nonexistent"));
 
         final Schema keySchema = SchemaBuilder.struct().field("magic", Schema.INT32_SCHEMA).build();
         final Struct key = new Struct(keySchema).put("magic", 42);
         final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
 
         try {
-            xform.apply(record);
+            xformKey.apply(record);
             fail("Expected exception wasn't raised");
         } catch (IllegalArgumentException iae) {
             assertEquals("Unknown field: nonexistent", iae.getMessage());
@@ -116,8 +179,74 @@ public class ExtractFieldTest {
     }
 
     @Test
+    public void nonExistentNestedFieldWithSchemaShouldFail() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        configs.put("field", "magic.nonexistent");
+        xformKey.configure(configs);
+
+        final Schema fooSchema = SchemaBuilder.struct().field("foo", Schema.INT32_SCHEMA).build();
+        final Schema keySchema = SchemaBuilder.struct().field("magic", fooSchema).build();
+        final Struct key = new Struct(keySchema).put("magic", new Struct(fooSchema).put("foo", 42));
+        final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
+
+        try {
+            xformKey.apply(record);
+            fail("Expected exception wasn't raised");
+        } catch (IllegalArgumentException iae) {
+            assertEquals("Unknown field: magic.nonexistent", iae.getMessage());
+        }
+    }
+
+    @Test
     public void testExtractFieldVersionRetrievedFromAppInfoParser() {
-        assertEquals(AppInfoParser.getVersion(), xform.version());
+        assertEquals(AppInfoParser.getVersion(), xformKey.version());
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testUnsetOptionalKey(boolean replaceNullWithDefault, Object expectedValue) {
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("field", "optional_with_default");
+        config.put("replace.null.with.default", replaceNullWithDefault);
+
+        xformKey.configure(config);
+
+        final Schema keySchema = SchemaBuilder.struct()
+                .field("optional_with_default", SchemaBuilder.int32().optional().defaultValue(42).build())
+                .build();
+        final Struct key = new Struct(keySchema).put("optional_with_default", null);
+
+        final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
+
+        final SinkRecord transformedRecord = xformKey.apply(record);
+        Integer extractedValue = (Integer) transformedRecord.key();
+
+        assertEquals(expectedValue, extractedValue);
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testUnsetOptionalField(boolean replaceNullWithDefault, Object expectedValue) {
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("field", "optional_with_default");
+        config.put("replace.null.with.default", replaceNullWithDefault);
+
+        xformValue.configure(config);
+
+        final Schema valueSchema = SchemaBuilder.struct()
+                .field("optional_with_default", SchemaBuilder.int32().optional().defaultValue(42).build())
+                .build();
+        final Struct value = new Struct(valueSchema).put("optional_with_default", null);
+
+        final SinkRecord record = new SinkRecord("test", 0, null, null, valueSchema, value, 0);
+
+        final SinkRecord transformedRecord = xformValue.apply(record);
+        Integer extractedValue = (Integer) transformedRecord.value();
+
+        assertEquals(expectedValue, extractedValue);
     }
 
 }

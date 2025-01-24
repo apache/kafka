@@ -99,7 +99,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
                 return true;
             }
 
-            switch (UpgradeFromValues.getValueFromString((String) upgradeFrom)) {
+            switch (UpgradeFromValues.fromString((String) upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                 case UPGRADE_FROM_0101:
                 case UPGRADE_FROM_0102:

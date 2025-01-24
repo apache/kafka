@@ -19,19 +19,19 @@ package org.apache.kafka.common.security;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.security.auth.login.AppConfigurationEntry;
-import javax.security.auth.login.Configuration;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.auth.login.Configuration;
 
 import static org.apache.kafka.common.security.JaasUtils.DISALLOWED_LOGIN_MODULES_CONFIG;
 import static org.apache.kafka.common.security.JaasUtils.DISALLOWED_LOGIN_MODULES_DEFAULT;
@@ -77,7 +77,7 @@ public class JaasContext {
     /**
      * Returns an instance of this class.
      *
-     * If JAAS configuration property @link SaslConfigs#SASL_JAAS_CONFIG} is specified,
+     * If JAAS configuration property {@link SaslConfigs#SASL_JAAS_CONFIG} is specified,
      * the configuration object is created by parsing the property value. Otherwise, the default Configuration
      * is returned. The context name is always `KafkaClient`.
      *
@@ -175,7 +175,7 @@ public class JaasContext {
         AppConfigurationEntry[] entries = configuration.getAppConfigurationEntry(name);
         if (entries == null)
             throw new IllegalArgumentException("Could not find a '" + name + "' entry in this JAAS configuration.");
-        this.configurationEntries = Collections.unmodifiableList(new ArrayList<>(Arrays.asList(entries)));
+        this.configurationEntries = List.of(entries);
         this.dynamicJaasConfig = dynamicJaasConfig;
     }
 

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
@@ -26,7 +25,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -40,6 +38,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
+
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
@@ -79,12 +78,13 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
-import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.getMetricsImpl;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.metricsImpl;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -154,40 +154,27 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         this.autoManagedIterators = autoManagedIterators;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        if (context instanceof StateStoreContext) {
-            init((StateStoreContext) context, root);
-        } else {
-            throw new UnsupportedOperationException(
-                "Use RocksDBStore#init(StateStoreContext, StateStore) instead."
-            );
-        }
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
+    public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
         // open the DB dir
-        metricsRecorder.init(getMetricsImpl(context), context.taskId());
-        openDB(context.appConfigs(), context.stateDir());
+        metricsRecorder.init(metricsImpl(stateStoreContext), stateStoreContext.taskId());
+        openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
 
-        final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
+        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        this.context = context;
-        context.register(
+        this.context = stateStoreContext;
+        stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreBatch,
             () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-            context.appConfigs(),
+            stateStoreContext.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
             false);
     }
@@ -378,7 +365,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
     }
 
-    public Snapshot getSnapshot() {
+    public Snapshot snapshot() {
         return db.getSnapshot();
     }
 

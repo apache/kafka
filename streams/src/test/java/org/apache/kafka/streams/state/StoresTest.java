@@ -28,7 +28,8 @@ import org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytes
 import org.apache.kafka.streams.state.internals.RocksDBTimestampedStore;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
@@ -38,8 +39,8 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.core.IsNot.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class StoresTest {
 

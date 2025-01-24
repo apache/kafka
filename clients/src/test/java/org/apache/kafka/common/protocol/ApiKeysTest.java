@@ -18,6 +18,7 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -26,6 +27,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -78,7 +80,7 @@ public class ApiKeysTest {
     public void testApiScope() {
         Set<ApiKeys> apisMissingScope = new HashSet<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
-            if (apiKey.messageType.listeners().isEmpty()) {
+            if (apiKey.messageType.listeners().isEmpty() && apiKey.hasValidVersion()) {
                 apisMissingScope.add(apiKey);
             }
         }
@@ -86,4 +88,27 @@ public class ApiKeysTest {
             "Found some APIs missing scope definition");
     }
 
+    @Test
+    public void testHasValidVersions() {
+        var apiKeysWithNoValidVersions = Set.of(ApiKeys.LEADER_AND_ISR, ApiKeys.STOP_REPLICA, ApiKeys.UPDATE_METADATA,
+            ApiKeys.CONTROLLED_SHUTDOWN);
+        for (ApiKeys apiKey : ApiKeys.values()) {
+            if (apiKeysWithNoValidVersions.contains(apiKey))
+                assertFalse(apiKey.hasValidVersion());
+            else
+                assertTrue(apiKey.hasValidVersion());
+        }
+    }
+
+    @Test
+    public void testHtmlOnlyHaveStableApi() {
+        String html = ApiKeys.toHtml();
+        for (ApiKeys apiKeys : ApiKeys.clientApis()) {
+            if (apiKeys.toApiVersion(false).isPresent()) {
+                assertTrue(html.contains("The_Messages_" + apiKeys.name), "Html should contain stable api: " + apiKeys.name);
+            } else {
+                assertFalse(html.contains("The_Messages_" + apiKeys.name), "Html should not contain unstable api: " + apiKeys.name);
+            }
+        }
+    }
 }

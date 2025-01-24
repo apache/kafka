@@ -19,9 +19,10 @@ import os
 from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
-from kafkatest.services.kafka import TopicPartition
+from kafkatest.services.kafka import TopicPartition, consumer_group
+from kafkatest.services.kafka.util import get_log4j_config_param, get_log4j_config_for_tools
 from kafkatest.services.verifiable_client import VerifiableClientMixin
-from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_0_10_0_0
+from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_4_0_0
 
 
 class ConsumerState:
@@ -31,27 +32,39 @@ class ConsumerState:
     Joined = 4
 
 
+def _create_partition_from_dict(d):
+    topic = d["topic"]
+    partition = d["partition"]
+    return TopicPartition(topic, partition)
+
+
 class ConsumerEventHandler(object):
 
-    def __init__(self, node, verify_offsets, idx):
+    def __init__(self, node, verify_offsets, idx, state=ConsumerState.Dead,
+                 revoked_count=0, assigned_count=0, assignment=None,
+                 position=None, committed=None, total_consumed=0):
         self.node = node
-        self.idx = idx
-        self.state = ConsumerState.Dead
-        self.revoked_count = 0
-        self.assigned_count = 0
-        self.assignment = []
-        self.position = {}
-        self.committed = {}
-        self.total_consumed = 0
         self.verify_offsets = verify_offsets
+        self.idx = idx
+        self.state = state
+        self.revoked_count = revoked_count
+        self.assigned_count = assigned_count
+        self.assignment = assignment if assignment is not None else []
+        self.position = position if position is not None else {}
+        self.committed = committed if committed is not None else {}
+        self.total_consumed = total_consumed
 
-    def handle_shutdown_complete(self):
+    def handle_shutdown_complete(self, node=None, logger=None):
         self.state = ConsumerState.Dead
         self.assignment = []
         self.position = {}
 
-    def handle_startup_complete(self):
+        if node is not None and logger is not None:
+            logger.debug("Shut down %s" % node.account.hostname)
+
+    def handle_startup_complete(self, node, logger):
         self.state = ConsumerState.Started
+        logger.debug("Started %s" % node.account.hostname)
 
     def handle_offsets_committed(self, event, node, logger):
         if event["success"]:
@@ -60,9 +73,7 @@ class ConsumerEventHandler(object):
                     logger.debug("%s: Offset commit failed for: %s" % (str(node.account), offset_commit))
                     continue
 
-                topic = offset_commit["topic"]
-                partition = offset_commit["partition"]
-                tp = TopicPartition(topic, partition)
+                tp = _create_partition_from_dict(offset_commit)
                 offset = offset_commit["offset"]
                 assert tp in self.assignment, \
                     "Committed offsets for partition %s not assigned (current assignment: %s)" % \
@@ -73,13 +84,14 @@ class ConsumerEventHandler(object):
                     (offset, self.position[tp], str(tp))
                 self.committed[tp] = offset
 
+        logger.debug("Offsets committed for %s" % node.account.hostname)
+
     def handle_records_consumed(self, event, logger):
         assert self.state == ConsumerState.Joined, \
             "Consumed records should only be received when joined (current state: %s)" % str(self.state)
 
         for record_batch in event["partitions"]:
-            tp = TopicPartition(topic=record_batch["topic"],
-                                partition=record_batch["partition"])
+            tp = _create_partition_from_dict(record_batch)
             min_offset = record_batch["minOffset"]
             max_offset = record_batch["maxOffset"]
 
@@ -99,19 +111,20 @@ class ConsumerEventHandler(object):
                     logger.warn(msg)
         self.total_consumed += event["count"]
 
-    def handle_partitions_revoked(self, event):
+    def handle_partitions_revoked(self, event, node, logger):
         self.revoked_count += 1
         self.state = ConsumerState.Rebalancing
         self.position = {}
+        logger.debug("All partitions revoked from %s" % node.account.hostname)
 
-    def handle_partitions_assigned(self, event):
+    def handle_partitions_assigned(self, event, node, logger):
         self.assigned_count += 1
         self.state = ConsumerState.Joined
         assignment = []
         for topic_partition in event["partitions"]:
-            topic = topic_partition["topic"]
-            partition = topic_partition["partition"]
-            assignment.append(TopicPartition(topic, partition))
+            tp = _create_partition_from_dict(topic_partition)
+            assignment.append(tp)
+        logger.debug("Partitions %s assigned to %s" % (assignment, node.account.hostname))
         self.assignment = assignment
 
     def handle_kill_process(self, clean_shutdown):
@@ -135,6 +148,59 @@ class ConsumerEventHandler(object):
         else:
             return None
 
+# This needs to be used for cooperative protocol.
+class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
+    def __init__(self, node, verify_offsets, idx, **kwargs):
+        super().__init__(node, verify_offsets, idx, **kwargs)
+        
+    def handle_partitions_revoked(self, event, node, logger):
+        self.revoked_count += 1
+        self.state = ConsumerState.Rebalancing
+        self.position = {}
+        revoked = []
+
+        for topic_partition in event["partitions"]:
+            tp = _create_partition_from_dict(topic_partition)
+            assert tp in self.assignment, \
+                "Topic partition %s cannot be revoked from %s as it was not previously assigned to that consumer" % \
+                (tp, node.account.hostname)
+            self.assignment.remove(tp)
+            revoked.append(tp)
+
+        logger.debug("Partitions %s revoked from %s" % (revoked, node.account.hostname))
+
+    def handle_partitions_assigned(self, event, node, logger):
+        self.assigned_count += 1
+        self.state = ConsumerState.Joined
+        assignment = []
+        for topic_partition in event["partitions"]:
+            tp = _create_partition_from_dict(topic_partition)
+            assignment.append(tp)
+        logger.debug("Partitions %s assigned to %s" % (assignment, node.account.hostname))
+        self.assignment.extend(assignment)
+
+# This needs to be used for consumer protocol.
+class ConsumerProtocolConsumerEventHandler(IncrementalAssignmentConsumerEventHandler):
+    def __init__(self, node, verify_offsets, idx, **kwargs):
+        super().__init__(node, verify_offsets, idx, **kwargs)
+
+    def handle_partitions_revoked(self, event, node, logger):
+        # The handler state is not transitioned to Rebalancing as the records can only be
+        # consumed in Joined state (see ConsumerEventHandler.handle_records_consumed).
+        # The consumer with consumer protocol should still be able to consume messages during rebalance.
+        self.revoked_count += 1
+        self.position = {}
+        revoked = []
+
+        for topic_partition in event["partitions"]:
+            tp = _create_partition_from_dict(topic_partition)
+            # tp existing in self.assignment is not guaranteed in the new consumer
+            # if it shuts down when revoking partitions for reconciliation.
+            if tp in self.assignment:
+                self.assignment.remove(tp)
+            revoked.append(tp)
+
+        logger.debug("Partitions %s revoked from %s" % (revoked, node.account.hostname))
 
 class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     """This service wraps org.apache.kafka.tools.VerifiableConsumer for use in
@@ -150,7 +216,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "verifiable_consumer.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.properties")
 
     logs = {
@@ -166,10 +231,10 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         }
 
     def __init__(self, context, num_nodes, kafka, topic, group_id,
-                 static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
+                 static_membership=False, max_messages=-1, session_timeout_sec=0, enable_autocommit=False,
                  assignment_strategy=None, group_protocol=None, group_remote_assignor=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
-                 on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
+                 on_record_consumed=None, reset_policy="earliest", verify_offsets=True, prop_file=""):
         """
         :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
         """
@@ -186,9 +251,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.session_timeout_sec = session_timeout_sec
         self.enable_autocommit = enable_autocommit
         self.assignment_strategy = assignment_strategy
-        self.group_protocol = group_protocol
-        self.group_remote_assignor = group_remote_assignor
-        self.prop_file = ""
+        self.prop_file = prop_file
         self.stop_timeout_sec = stop_timeout_sec
         self.on_record_consumed = on_record_consumed
         self.verify_offsets = verify_offsets
@@ -204,17 +267,37 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def java_class_name(self):
         return "VerifiableConsumer"
 
+    def create_event_handler(self, idx, node):
+        def create_handler_helper(handler_class, node, idx, existing_handler=None):
+            if existing_handler is not None:
+                return handler_class(node, self.verify_offsets, idx,
+                                     state=existing_handler.state,
+                                     revoked_count=existing_handler.revoked_count,
+                                     assigned_count=existing_handler.assigned_count,
+                                     assignment=existing_handler.assignment,
+                                     position=existing_handler.position,
+                                     committed=existing_handler.committed,
+                                     total_consumed=existing_handler.total_consumed)
+            else:
+                return handler_class(node, self.verify_offsets, idx)
+        existing_handler = self.event_handlers[node] if node in self.event_handlers else None
+        if self.is_consumer_group_protocol_enabled():
+            return create_handler_helper(ConsumerProtocolConsumerEventHandler, node, idx, existing_handler)
+        elif self.is_eager():
+            return create_handler_helper(ConsumerEventHandler, node, idx, existing_handler)
+        else:
+            return create_handler_helper(IncrementalAssignmentConsumerEventHandler, node, idx, existing_handler)
+
     def _worker(self, idx, node):
         with self.lock:
-            if node not in self.event_handlers:
-                self.event_handlers[node] = ConsumerEventHandler(node, self.verify_offsets, idx)
+            self.event_handlers[node] = self.create_event_handler(idx, node)
             handler = self.event_handlers[node]
 
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
-        log_config = self.render('tools_log4j.properties', log_file=VerifiableConsumer.LOG_FILE)
-        node.account.create_file(VerifiableConsumer.LOG4J_CONFIG, log_config)
+        log_config = self.render(get_log4j_config_for_tools(node), log_file=VerifiableConsumer.LOG_FILE)
+        node.account.create_file(get_log4j_config_for_tools(node), log_config)
 
         # Create and upload config file
         self.security_config = self.kafka.security_config.client_config(self.prop_file, node,
@@ -232,10 +315,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                 "Version %s does not support static membership (must be 2.3 or higher)" % str(node.version)
             node.group_instance_id = self.group_id + "-instance-" + str(idx)
 
-        if self.assignment_strategy:
-            assert node.version >= V_0_10_0_0, \
-                "Version %s does not setting an assignment strategy (must be 0.10.0 or higher)" % str(node.version)
-
         cmd = self.start_cmd(node)
         self.logger.debug("VerifiableConsumer %d command: %s" % (idx, cmd))
 
@@ -245,9 +324,9 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                 with self.lock:
                     name = event["name"]
                     if name == "shutdown_complete":
-                        handler.handle_shutdown_complete()
+                        handler.handle_shutdown_complete(node, self.logger)
                     elif name == "startup_complete":
-                        handler.handle_startup_complete()
+                        handler.handle_startup_complete(node, self.logger)
                     elif name == "offsets_committed":
                         handler.handle_offsets_committed(event, node, self.logger)
                         self._update_global_committed(event)
@@ -257,15 +336,18 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                     elif name == "record_data" and self.on_record_consumed:
                         self.on_record_consumed(event, node)
                     elif name == "partitions_revoked":
-                        handler.handle_partitions_revoked(event)
+                        handler.handle_partitions_revoked(event, node, self.logger)
                     elif name == "partitions_assigned":
-                        handler.handle_partitions_assigned(event)
+                        handler.handle_partitions_assigned(event, node, self.logger)
                     else:
                         self.logger.debug("%s: ignoring unknown event: %s" % (str(node.account), event))
 
+    def is_eager(self):
+        return self.group_protocol == consumer_group.classic_group_protocol and self.assignment_strategy != "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
+    
     def _update_global_position(self, consumed_event, node):
         for consumed_partition in consumed_event["partitions"]:
-            tp = TopicPartition(consumed_partition["topic"], consumed_partition["partition"])
+            tp = _create_partition_from_dict(consumed_partition)
             if tp in self.global_committed:
                 # verify that the position never gets behind the current commit.
                 if self.global_committed[tp] > consumed_partition["minOffset"]:
@@ -287,7 +369,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def _update_global_committed(self, commit_event):
         if commit_event["success"]:
             for offset_commit in commit_event["offsets"]:
-                tp = TopicPartition(offset_commit["topic"], offset_commit["partition"])
+                tp = _create_partition_from_dict(offset_commit)
                 offset = offset_commit["offset"]
                 assert self.global_position[tp] >= offset, \
                     "Committed offset %d for partition %s is ahead of the current position %d" % \
@@ -298,7 +380,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         cmd = ""
         cmd += "export LOG_DIR=%s;" % VerifiableConsumer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
-        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableConsumer.LOG4J_CONFIG
+        cmd += " export KAFKA_LOG4J_OPTS=\"%s%s\"; " % (get_log4j_config_param(node), get_log4j_config_for_tools(node))
         cmd += self.impl.exec_cmd(node)
         if self.on_record_consumed:
             cmd += " --verbose"
@@ -328,11 +410,17 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         if self.enable_autocommit:
             cmd += " --enable-autocommit "
 
-        cmd += " --reset-policy %s --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
-               (self.reset_policy, self.group_id, self.topic,
-                self.kafka.bootstrap_servers(self.security_config.security_protocol),
-                self.session_timeout_sec*1000)
-               
+        if node.version < V_4_0_0:
+            cmd += " --broker-list %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
+        else:
+            cmd += " --bootstrap-server %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
+
+        cmd += " --reset-policy %s --group-id %s --topic %s" % \
+                (self.reset_policy, self.group_id, self.topic)
+
+        if self.session_timeout_sec > 0:
+            cmd += " --session-timeout %s" % self.session_timeout_sec*1000
+
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
 
@@ -434,4 +522,4 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                     if handler.state != ConsumerState.Dead]
 
     def is_consumer_group_protocol_enabled(self):
-        return self.group_protocol and self.group_protocol.upper() == "CONSUMER"
+        return self.group_protocol and self.group_protocol.lower() == consumer_group.consumer_group_protocol

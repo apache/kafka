@@ -17,12 +17,12 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.storage.internals.log.StorageAction;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
+import org.apache.kafka.storage.internals.log.StorageAction;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -104,6 +104,16 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     @Override
     public long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) throws RemoteStorageException {
         return withClassLoader(() -> delegate.remoteLogSize(topicIdPartition, leaderEpoch));
+    }
+
+    @Override
+    public Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition, int epoch, long offset) throws RemoteStorageException {
+        return withClassLoader(() -> delegate.nextSegmentWithTxnIndex(topicIdPartition, epoch, offset));
+    }
+
+    @Override
+    public boolean isReady(TopicIdPartition topicIdPartition) {
+        return withClassLoader(() -> delegate.isReady(topicIdPartition));
     }
 
     @Override

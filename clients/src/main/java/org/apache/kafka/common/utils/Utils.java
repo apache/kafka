@@ -17,8 +17,10 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -92,19 +94,19 @@ public final class Utils {
 
     private Utils() {}
 
-    // This matches URIs of formats: host:port and protocol:\\host:port
+    // This matches URIs of formats: host:port and protocol://host:port
     // IPv6 is supported with [ip] pattern
-    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:([0-9]+)");
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile("^(?:[0-9a-zA-Z\\-%._]*://)?\\[?([0-9a-zA-Z\\-%._:]*)]?:([0-9]+)");
 
     private static final Pattern VALID_HOST_CHARACTERS = Pattern.compile("([0-9a-zA-Z\\-%._:]*)");
 
-    // Prints up to 2 decimal digits. Used for human readable printing
+    // Prints up to 2 decimal digits. Used for human-readable printing
     private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##",
         DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
     private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
-    public static final String NL = System.getProperty("line.separator");
+    public static final String NL = System.lineSeparator();
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
@@ -344,7 +346,7 @@ public final class Utils {
      * Compares two character arrays for equality using a constant-time algorithm, which is needed
      * for comparing passwords. Two arrays are equal if they have the same length and all
      * characters at corresponding positions are equal.
-     *
+     * <p>
      * All characters in the first array are examined to determine equality.
      * The calculation time depends only on the length of this first character array; it does not
      * depend on the length of the second character array or the contents of either array.
@@ -423,7 +425,14 @@ public final class Utils {
      * @return the new class
      */
     public static <T> Class<? extends T> loadClass(String klass, Class<T> base) throws ClassNotFoundException {
-        return Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base);
+        ClassLoader contextOrKafkaClassLoader = Utils.getContextOrKafkaClassLoader();
+        // Use loadClass here instead of Class.forName because the name we use here may be an alias
+        // and not match the name of the class that gets loaded. If that happens, Class.forName can
+        // throw an exception.
+        Class<?> loadedClass = contextOrKafkaClassLoader.loadClass(klass);
+        // Invoke forName here with the true name of the requested class to cause class
+        // initialization to take place.
+        return Class.forName(loadedClass.getName(), true, contextOrKafkaClassLoader).asSubclass(base);
     }
 
     /**
@@ -452,7 +461,7 @@ public final class Utils {
         Class<?>[] argTypes = new Class<?>[params.length / 2];
         Object[] args = new Object[params.length / 2];
         try {
-            Class<?> c = Class.forName(className, true, Utils.getContextOrKafkaClassLoader());
+            Class<?> c = Utils.loadClass(className, Object.class);
             for (int i = 0; i < params.length / 2; i++) {
                 argTypes[i] = (Class<?>) params[2 * i];
                 args[i] = params[(2 * i) + 1];
@@ -462,7 +471,7 @@ public final class Utils {
             return constructor.newInstance(args);
         } catch (NoSuchMethodException e) {
             throw new ClassNotFoundException(String.format("Failed to find " +
-                "constructor with %s for %s", Utils.join(argTypes, ", "), className), e);
+                "constructor with %s for %s", Arrays.stream(argTypes).map(Object::toString).collect(Collectors.joining(", ")), className), e);
         } catch (InstantiationException e) {
             throw new ClassNotFoundException(String.format("Failed to instantiate " +
                 "%s", className), e);
@@ -563,9 +572,12 @@ public final class Utils {
     }
 
     /**
-     * Formats a byte number as a human readable String ("3.2 MB")
-     * @param bytes some size in bytes
-     * @return
+     * Formats a byte value into a human-readable string with an appropriate unit
+     * (e.g., "3.2 KB", "1.5 MB", "2.1 GB"). The format includes two decimal places.
+     *
+     * @param bytes the size in bytes
+     * @return a string representing the size with the appropriate unit (e.g., "3.2 KB", "1.5 MB").
+     *         If the value is negative or too large, the input is returned as a string (e.g., "-500", "999999999999999").
      */
     public static String formatBytes(long bytes) {
         if (bytes < 0) {
@@ -582,46 +594,6 @@ public final class Utils {
             //huge number?
             return String.valueOf(asDouble);
         }
-    }
-
-    /**
-     * Create a string representation of an array joined by the given separator
-     * @param strs The array of items
-     * @param separator The separator
-     * @return The string representation.
-     */
-    public static <T> String join(T[] strs, String separator) {
-        return join(Arrays.asList(strs), separator);
-    }
-
-    /**
-     * Create a string representation of a collection joined by the given separator
-     * @param collection The list of items
-     * @param separator The separator
-     * @return The string representation.
-     */
-    public static <T> String join(Collection<T> collection, String separator) {
-        Objects.requireNonNull(collection);
-        return mkString(collection.stream(), "", "", separator);
-    }
-
-    /**
-     * Create a string representation of a stream surrounded by `begin` and `end` and joined by `separator`.
-     *
-     * @return The string representation.
-     */
-    public static <T> String mkString(Stream<T> stream, String begin, String end, String separator) {
-        Objects.requireNonNull(stream);
-        StringBuilder sb = new StringBuilder();
-        sb.append(begin);
-        Iterator<T> iter = stream.iterator();
-        while (iter.hasNext()) {
-            sb.append(iter.next());
-            if (iter.hasNext())
-                sb.append(separator);
-        }
-        sb.append(end);
-        return sb.toString();
     }
 
     /**
@@ -646,7 +618,7 @@ public final class Utils {
 
     /**
      *  Converts an extensions string into a {@code Map<String, String>}.
-     *
+     * <p>
      *  Example:
      *      {@code parseMap("key=hey,keyTwo=hi,keyThree=hello", "=", ",") => { key: "hey", keyTwo: "hi", keyThree: "hello" }}
      *
@@ -805,20 +777,6 @@ public final class Utils {
     }
 
     /**
-     * Creates a set
-     * @param elems the elements
-     * @param <T> the type of element
-     * @return Set
-     */
-    @SafeVarargs
-    public static <T> Set<T> mkSet(T... elems) {
-        Set<T> result = new HashSet<>((int) (elems.length / 0.75) + 1);
-        for (T elem : elems)
-            result.add(elem);
-        return result;
-    }
-
-    /**
      * Creates a sorted set
      * @param elems the elements
      * @param <T> the type of element, must be comparable
@@ -901,15 +859,21 @@ public final class Utils {
         Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
-                // If the root path did not exist, ignore the error; otherwise throw it.
-                if (exc instanceof NoSuchFileException && path.toFile().equals(rootFile))
-                    return FileVisitResult.TERMINATE;
+                if (exc instanceof NoSuchFileException) {
+                    if (path.toFile().equals(rootFile)) {
+                        // If the root path did not exist, ignore the error and terminate;
+                        return FileVisitResult.TERMINATE;
+                    } else {
+                        // Otherwise, just continue walking as the file might already be deleted by other threads.
+                        return FileVisitResult.CONTINUE;
+                    }
+                }
                 throw exc;
             }
 
             @Override
             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                Files.delete(path);
+                Files.deleteIfExists(path);
                 return FileVisitResult.CONTINUE;
             }
 
@@ -920,16 +884,19 @@ public final class Utils {
                     throw exc;
                 }
 
-                Files.delete(path);
+                Files.deleteIfExists(path);
                 return FileVisitResult.CONTINUE;
             }
         });
     }
 
     /**
-     * Returns an empty collection if this list is null
-     * @param other
-     * @return
+     * Returns an empty list if the provided list is null, otherwise returns the list itself.
+     * <p>
+     * This method is useful for avoiding {@code NullPointerException} when working with potentially null lists.
+     *
+     * @param other the list to check for null
+     * @return an empty list if the provided list is null, otherwise the original list
      */
     public static <T> List<T> safe(List<T> other) {
         return other == null ? Collections.emptyList() : other;
@@ -945,7 +912,7 @@ public final class Utils {
     /**
      * Get the Context ClassLoader on this thread or, if not present, the ClassLoader that
      * loaded Kafka.
-     *
+     * <p>
      * This should be used whenever passing a ClassLoader to Class.forName
      */
     public static ClassLoader getContextOrKafkaClassLoader() {
@@ -996,7 +963,7 @@ public final class Utils {
 
     /**
      * Flushes dirty directories to guarantee crash consistency.
-     *
+     * <p>
      * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
      *
      * @throws IOException if flushing the directory fails.
@@ -1099,7 +1066,7 @@ public final class Utils {
 
     /**
      * An {@link AutoCloseable} interface without a throws clause in the signature
-     *
+     * <p>
      * This is used with lambda expressions in try-with-resources clauses
      * to avoid casting un-checked exceptions to checked exceptions unnecessarily.
      */
@@ -1188,7 +1155,7 @@ public final class Utils {
 
     /**
      * Invokes every function in `all` even if one or more functions throws an exception.
-     *
+     * <p>
      * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
      * added as suppressed exceptions.
      */
@@ -1196,7 +1163,7 @@ public final class Utils {
     // changing the signature to `public <R> List<R> tryAll(all: List[Callable<R>])`
     public static void tryAll(List<Callable<Void>> all) throws Throwable {
         Throwable exception = null;
-        for (Callable call : all) {
+        for (Callable<Void> call : all) {
             try {
                 call.call();
             } catch (Throwable t) {
@@ -1215,7 +1182,7 @@ public final class Utils {
      * positive, the original value is returned. When the input number is negative, the returned
      * positive value is the original value bit AND against 0x7fffffff which is not its absolute
      * value.
-     *
+     * <p>
      * Note: changing this method in the future will possibly cause partition selection not to be
      * compatible with the existing messages already placed on a partition since it is used
      * in producer's partition selection logic {@link org.apache.kafka.clients.producer.KafkaProducer}
@@ -1502,13 +1469,23 @@ public final class Utils {
      * @return a map including all elements in properties
      */
     public static Map<String, Object> propsToMap(Properties properties) {
-        Map<String, Object> map = new HashMap<>(properties.size());
-        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
+        return castToStringObjectMap(properties);
+    }
+
+    /**
+     * Cast a map with arbitrary type keys to be keyed on String.
+     * @param inputMap A map with unknown type keys
+     * @return A map with the same contents as the input map, but with String keys
+     * @throws ConfigException if any key is not a String
+     */
+    public static Map<String, Object> castToStringObjectMap(Map<?, ?> inputMap) {
+        Map<String, Object> map = new HashMap<>(inputMap.size());
+        for (Map.Entry<?, ?> entry : inputMap.entrySet()) {
             if (entry.getKey() instanceof String) {
                 String k = (String) entry.getKey();
-                map.put(k, properties.get(k));
+                map.put(k, entry.getValue());
             } else {
-                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
+                throw new ConfigException(String.valueOf(entry.getKey()), entry.getValue(), "Key must be a string.");
             }
         }
         return map;
@@ -1553,11 +1530,6 @@ public final class Utils {
             final Date date = simpleDateFormat.parse(timestamp);
             return date.getTime();
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <S> Iterator<S> covariantCast(Iterator<? extends S> iterator) {
-        return (Iterator<S>) iterator;
     }
 
     /**
@@ -1663,9 +1635,24 @@ public final class Utils {
      * @param <V> the type of values stored in the map
      */
     public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix, boolean strip) {
+        return entriesWithPrefix(map, prefix, strip, false);
+    }
+
+    /**
+     * Find all key/value pairs whose keys begin with the given prefix, optionally removing that prefix
+     * from all resulting keys.
+     * @param map the map to filter key/value pairs from
+     * @param prefix the prefix to search keys for
+     * @param strip whether the keys of the returned map should not include the prefix
+     * @param allowMatchingLength whether to include keys that are exactly the same length as the prefix
+     * @return a {@link Map} containing a key/value pair for every key/value pair in the {@code map}
+     * parameter whose key begins with the given {@code prefix}; may be empty, but never null
+     * @param <V> the type of values stored in the map
+     */
+    public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix, boolean strip, boolean allowMatchingLength) {
         Map<String, V> result = new HashMap<>();
         for (Map.Entry<String, V> entry : map.entrySet()) {
-            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
+            if (entry.getKey().startsWith(prefix) && (allowMatchingLength || entry.getKey().length() > prefix.length())) {
                 if (strip)
                     result.put(entry.getKey().substring(prefix.length()), entry.getValue());
                 else
@@ -1675,6 +1662,34 @@ public final class Utils {
         return result;
     }
 
+    /**
+     * Checks requirement. Throw {@link IllegalArgumentException} if {@code requirement} failed.
+     * @param requirement Requirement to check.
+     */
+    public static void require(boolean requirement) {
+        if (!requirement)
+            throw new IllegalArgumentException("requirement failed");
+    }
+
+    /**
+     * Checks requirement. Throw {@link IllegalArgumentException} if {@code requirement} failed.
+     * @param requirement Requirement to check.
+     * @param errorMessage String to include in the failure message
+     */
+    public static void require(boolean requirement, String errorMessage) {
+        if (!requirement)
+            throw new IllegalArgumentException(errorMessage);
+    }
+
+    /**
+     * Merge multiple {@link ConfigDef} into one
+     * @param configDefs List of {@link ConfigDef}
+     */
+    public static ConfigDef mergeConfigs(List<ConfigDef> configDefs) {
+        ConfigDef all = new ConfigDef();
+        configDefs.forEach(configDef -> configDef.configKeys().values().forEach(all::define));
+        return all;
+    }
     /**
      * A runnable that can throw checked exception.
      */

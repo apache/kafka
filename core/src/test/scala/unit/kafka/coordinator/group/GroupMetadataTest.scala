@@ -17,15 +17,16 @@
 
 package kafka.coordinator.group
 
-import kafka.common.OffsetAndMetadata
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.{MockTime, Time}
+import org.apache.kafka.coordinator.group.OffsetAndMetadata
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
+import java.util.{OptionalInt, OptionalLong}
 import scala.jdk.CollectionConverters._
 
 /**
@@ -859,7 +860,7 @@ class GroupMetadataTest {
   }
 
   private def offsetAndMetadata(offset: Long, timestamp: Long = Time.SYSTEM.milliseconds()): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, "", timestamp)
+    new OffsetAndMetadata(offset, OptionalInt.empty(), "", timestamp, OptionalLong.empty())
   }
 
 }

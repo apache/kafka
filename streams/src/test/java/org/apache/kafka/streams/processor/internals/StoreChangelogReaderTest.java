@@ -27,11 +27,12 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
@@ -40,17 +41,18 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.apache.logging.log4j.Level;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
@@ -64,26 +66,25 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.ACTIVE_RESTORING;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.STANDBY_UPDATING;
 import static org.apache.kafka.streams.processor.internals.Task.TaskType.ACTIVE;
 import static org.apache.kafka.streams.processor.internals.Task.TaskType.STANDBY;
+import static org.apache.kafka.test.MockStandbyUpdateListener.UPDATE_BATCH;
+import static org.apache.kafka.test.MockStandbyUpdateListener.UPDATE_START;
+import static org.apache.kafka.test.MockStandbyUpdateListener.UPDATE_SUSPENDED;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
-import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_SUSPENDED;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
-import static org.apache.kafka.test.MockStandbyUpdateListener.UPDATE_SUSPENDED;
-import static org.apache.kafka.test.MockStandbyUpdateListener.UPDATE_START;
-import static org.apache.kafka.test.MockStandbyUpdateListener.UPDATE_BATCH;
+import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_SUSPENDED;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -91,36 +92,24 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-@RunWith(Parameterized.class)
-@SuppressWarnings("this-escape")
 public class StoreChangelogReaderTest {
 
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
-
-    @org.mockito.Mock
+    @Mock
     private ProcessorStateManager stateManager;
-    @org.mockito.Mock
+    @Mock
     private ProcessorStateManager activeStateManager;
-    @org.mockito.Mock
+    @Mock
     private ProcessorStateManager standbyStateManager;
-    @org.mockito.Mock
+    @Mock
     private StateStoreMetadata storeMetadata;
-    @org.mockito.Mock
+    @Mock
     private StateStoreMetadata storeMetadataOne;
-    @org.mockito.Mock
+    @Mock
     private StateStoreMetadata storeMetadataTwo;
-    @org.mockito.Mock
+    @Mock
     private StateStore store;
-
-    @Parameterized.Parameters
-    public static Object[] data() {
-        return new Object[] {STANDBY, ACTIVE};
-    }
-
-    @Parameterized.Parameter
-    public Task.TaskType type;
 
     private final String storeName = "store";
     private final String topicName = "topic";
@@ -151,12 +140,12 @@ public class StoreChangelogReaderTest {
         }
     };
 
-    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
     private final MockAdminClient adminClient = new MockAdminClient();
     private final StoreChangelogReader changelogReader =
         new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
 
-    private void setupStateManagerMock() {
+    private void setupStateManagerMock(final Task.TaskType type) {
         when(stateManager.storeMetadata(tp)).thenReturn(storeMetadata);
         when(stateManager.taskType()).thenReturn(type);
     }
@@ -180,9 +169,10 @@ public class StoreChangelogReaderTest {
         when(store.name()).thenReturn(storeName);
     }
 
-    @Test
-    public void shouldNotRegisterSameStoreMultipleTimes() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldNotRegisterSameStoreMultipleTimes(final Task.TaskType type) {
+        setupStateManagerMock(type);
 
         changelogReader.register(tp, stateManager);
 
@@ -199,9 +189,10 @@ public class StoreChangelogReaderTest {
             () -> changelogReader.register(new TopicPartition("ChangelogWithoutStoreMetadata", 0), stateManager));
     }
 
-    @Test
-    public void shouldSupportUnregisterChangelogBeforeInitialization() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldSupportUnregisterChangelogBeforeInitialization(final Task.TaskType type) {
+        setupStateManagerMock(type);
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
 
@@ -228,9 +219,10 @@ public class StoreChangelogReaderTest {
         assertNull(standbyListener.capturedStore(UPDATE_BATCH));
     }
 
-    @Test
-    public void shouldSupportUnregisterChangelogBeforeCompletion() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldSupportUnregisterChangelogBeforeCompletion(final Task.TaskType type) {
+        setupStateManagerMock(type);
         setupStoreMetadata();
         setupStore();
         @SuppressWarnings("unchecked")
@@ -280,9 +272,10 @@ public class StoreChangelogReaderTest {
         assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
     }
 
-    @Test
-    public void shouldSupportUnregisterChangelogAfterCompletion() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldSupportUnregisterChangelogAfterCompletion(final Task.TaskType type) {
+        setupStateManagerMock(type);
         setupStoreMetadata();
         setupStore();
         @SuppressWarnings("unchecked")
@@ -338,9 +331,10 @@ public class StoreChangelogReaderTest {
         }
     }
 
-    @Test
-    public void shouldInitializeChangelogAndCheckForCompletion() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldInitializeChangelogAndCheckForCompletion(final Task.TaskType type) {
+        setupStateManagerMock(type);
         setupStoreMetadata();
         setupStore();
         @SuppressWarnings("unchecked")
@@ -380,11 +374,12 @@ public class StoreChangelogReaderTest {
         }
     }
 
-    @Test
-    public void shouldTriggerRestoreListenerWithOffsetZeroIfPositionThrowsTimeoutException() {
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldTriggerRestoreListenerWithOffsetZeroIfPositionThrowsTimeoutException(final Task.TaskType type) {
         // restore listener is only triggered for active tasks
         if (type == ACTIVE) {
-            setupStateManagerMock();
+            setupStateManagerMock(type);
             setupStoreMetadata();
             @SuppressWarnings("unchecked")
             final Map<TaskId, Task> mockTasks = mock(Map.class);
@@ -394,7 +389,7 @@ public class StoreChangelogReaderTest {
 
             adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
-            final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
                 @Override
                 public long position(final TopicPartition partition) {
                     throw new TimeoutException("KABOOM!");
@@ -412,38 +407,41 @@ public class StoreChangelogReaderTest {
         }
     }
 
-    @Test
-    public void shouldPollWithRightTimeoutWithStateUpdater() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldPollWithRightTimeoutWithStateUpdater(final Task.TaskType type) {
+        setupStateManagerMock(type);
         setupStoreMetadata();
         setupStore();
-        shouldPollWithRightTimeout(true);
+        shouldPollWithRightTimeout(true, type);
     }
 
-    @Test
-    public void shouldPollWithRightTimeoutWithoutStateUpdater() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldPollWithRightTimeoutWithoutStateUpdater(final Task.TaskType type) {
+        setupStateManagerMock(type);
         setupStoreMetadata();
         setupStore();
-        shouldPollWithRightTimeout(false);
+        shouldPollWithRightTimeout(false, type);
     }
 
-    private void shouldPollWithRightTimeout(final boolean stateUpdaterEnabled) {
+    private void shouldPollWithRightTimeout(final boolean stateUpdaterEnabled, final Task.TaskType type) {
         final Properties properties = new Properties();
         properties.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
-        shouldPollWithRightTimeout(properties);
+        shouldPollWithRightTimeout(properties, type);
     }
 
-    @Test
-    public void shouldPollWithRightTimeoutWithStateUpdaterDefault() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldPollWithRightTimeoutWithStateUpdaterDefault(final Task.TaskType type) {
+        setupStateManagerMock(type);
         setupStoreMetadata();
         setupStore();
         final Properties properties = new Properties();
-        shouldPollWithRightTimeout(properties);
+        shouldPollWithRightTimeout(properties, type);
     }
 
-    private void shouldPollWithRightTimeout(final Properties properties) {
+    private void shouldPollWithRightTimeout(final Properties properties, final Task.TaskType type) {
         final TaskId taskId = new TaskId(0, 0);
 
         when(storeMetadata.offset()).thenReturn(null).thenReturn(9L);
@@ -468,17 +466,18 @@ public class StoreChangelogReaderTest {
             assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
         } else {
             if (!properties.containsKey(InternalConfig.STATE_UPDATER_ENABLED)
-                    || !((boolean) properties.get(InternalConfig.STATE_UPDATER_ENABLED))) {
-                assertEquals(Duration.ZERO, consumer.lastPollTimeout());
-            } else {
+                    || (boolean) properties.get(InternalConfig.STATE_UPDATER_ENABLED)) {
                 assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
+            } else {
+                assertEquals(Duration.ZERO, consumer.lastPollTimeout());
             }
         }
     }
 
-    @Test
-    public void shouldRestoreFromPositionAndCheckForCompletion() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldRestoreFromPositionAndCheckForCompletion(final Task.TaskType type) {
+        setupStateManagerMock(type);
         setupStoreMetadata();
         setupStore();
         final TaskId taskId = new TaskId(0, 0);
@@ -549,9 +548,10 @@ public class StoreChangelogReaderTest {
         }
     }
 
-    @Test
-    public void shouldRestoreFromBeginningAndCheckCompletion() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldRestoreFromBeginningAndCheckCompletion(final Task.TaskType type) {
+        setupStateManagerMock(type);
         setupStoreMetadata();
         setupStore();
         final TaskId taskId = new TaskId(0, 0);
@@ -674,7 +674,7 @@ public class StoreChangelogReaderTest {
         when(activeStateManager.taskId()).thenReturn(taskId);
 
         final AtomicBoolean clearException = new AtomicBoolean(false);
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public long position(final TopicPartition partition) {
                 if (clearException.get()) {
@@ -720,7 +720,7 @@ public class StoreChangelogReaderTest {
         when(activeStateManager.taskId()).thenReturn(taskId);
         when(storeMetadata.offset()).thenReturn(10L);
 
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public long position(final TopicPartition partition) {
                 throw kaboom;
@@ -770,7 +770,7 @@ public class StoreChangelogReaderTest {
         };
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 throw new AssertionError("Should not trigger this function");
@@ -828,9 +828,10 @@ public class StoreChangelogReaderTest {
         assertEquals(kaboom, thrown.getCause());
     }
 
-    @Test
-    public void shouldRequestCommittedOffsetsAndHandleTimeoutException() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldRequestCommittedOffsetsAndHandleTimeoutException(final Task.TaskType type) {
+        setupStateManagerMock(type);
         setupStoreMetadata();
         setupStore();
 
@@ -894,9 +895,10 @@ public class StoreChangelogReaderTest {
         }
     }
 
-    @Test
-    public void shouldThrowIfCommittedOffsetsFail() {
-        setupStateManagerMock();
+    @ParameterizedTest
+    @EnumSource(Task.TaskType.class)
+    public void shouldThrowIfCommittedOffsetsFail(final Task.TaskType type) {
+        setupStateManagerMock(type);
         when(storeMetadata.changelogPartition()).thenReturn(tp);
 
         final TaskId taskId = new TaskId(0, 0);
@@ -926,7 +928,7 @@ public class StoreChangelogReaderTest {
 
     @Test
     public void shouldThrowIfUnsubscribeFail() {
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public void unsubscribe() {
                 throw kaboom;
@@ -1252,8 +1254,8 @@ public class StoreChangelogReaderTest {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
-        assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
-        assertEquals(mkSet(tp1, tp2), consumer.paused());
+        assertEquals(Set.of(tp, tp1, tp2), consumer.assignment());
+        assertEquals(Set.of(tp1, tp2), consumer.paused());
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
 
         // transition to restore active is idempotent
@@ -1266,7 +1268,7 @@ public class StoreChangelogReaderTest {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
-        assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
+        assertEquals(Set.of(tp, tp1, tp2), consumer.assignment());
         assertEquals(Collections.emptySet(), consumer.paused());
 
         // transition to update standby is NOT idempotent
@@ -1284,14 +1286,14 @@ public class StoreChangelogReaderTest {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
-        assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
+        assertEquals(Set.of(tp, tp1, tp2), consumer.assignment());
         assertEquals(Collections.emptySet(), consumer.paused());
         assertEquals(STANDBY_UPDATING, changelogReader.state());
 
         changelogReader.enforceRestoreActive();
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
-        assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
-        assertEquals(mkSet(tp1, tp2), consumer.paused());
+        assertEquals(Set.of(tp, tp1, tp2), consumer.assignment());
+        assertEquals(Set.of(tp1, tp2), consumer.paused());
     }
 
     @Test
@@ -1302,7 +1304,7 @@ public class StoreChangelogReaderTest {
         changelogReader.register(tp1, standbyStateManager);
         changelogReader.transitToUpdateStandby();
 
-        changelogReader.unregister(mkSet(tp1));
+        changelogReader.unregister(Set.of(tp1));
         assertTrue(changelogReader.isEmpty());
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
     }
@@ -1351,7 +1353,7 @@ public class StoreChangelogReaderTest {
     @Test
     public void shouldNotThrowOnUnknownRevokedPartition() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StoreChangelogReader.class)) {
-            appender.setClassLoggerToDebug(StoreChangelogReader.class);
+            appender.setClassLogger(StoreChangelogReader.class, Level.DEBUG);
             changelogReader.unregister(Collections.singletonList(new TopicPartition("unknown", 0)));
 
             assertThat(

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.utils.Exit;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
@@ -26,12 +26,12 @@ import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.ListClientMetricsResourcesResult;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.Exit;
+
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -42,8 +42,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class ClientMetricsCommandTest {
-    private String bootstrapServer = "localhost:9092";
-    private String clientMetricsName = "cm";
+    private final String bootstrapServer = "localhost:9092";
+    private final String clientMetricsName = "cm";
 
     @Test
     public void testOptionsNoActionFails() {
@@ -237,13 +237,12 @@ public class ClientMetricsCommandTest {
 
         String capturedOutput = ToolsTestUtils.captureStandardOut(() -> {
             try {
-                service.listClientMetrics(new ClientMetricsCommand.ClientMetricsCommandOptions(
-                        new String[]{"--bootstrap-server", bootstrapServer, "--list"}));
+                service.listClientMetrics();
             } catch (Throwable t) {
                 fail(t);
             }
         });
-        assertEquals("one,two", Arrays.stream(capturedOutput.split("\n")).collect(Collectors.joining(",")));
+        assertEquals("one,two", String.join(",", capturedOutput.split("\n")));
     }
 
     @Test
@@ -254,9 +253,7 @@ public class ClientMetricsCommandTest {
         ListClientMetricsResourcesResult result = AdminClientTestUtils.listClientMetricsResourcesResult(Errors.UNSUPPORTED_VERSION.exception());
         when(adminClient.listClientMetricsResources()).thenReturn(result);
 
-        assertThrows(ExecutionException.class,
-                () -> service.listClientMetrics(new ClientMetricsCommand.ClientMetricsCommandOptions(
-                            new String[] {"--bootstrap-server", bootstrapServer, "--list"})));
+        assertThrows(ExecutionException.class, () -> service.listClientMetrics());
     }
 
     private void assertInitializeInvalidOptionsExitCode(int expected, String[] options) {

@@ -17,12 +17,14 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -191,6 +193,36 @@ public class ConsumerConfigTest {
         assertEquals(remoteAssignorName, consumerConfig.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
     }
 
+    @Test
+    public void testRemoteAssignorWithClassicGroupProtocol() {
+        String remoteAssignorName = "SomeAssignor";
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, remoteAssignorName);
+        ConfigException exception = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(exception.getMessage().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG + " cannot be set when " + ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CLASSIC.name()));
+    }
+
+    @Test
+    public void testDefaultMetadataRecoveryStrategy() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
+        assertEquals(MetadataRecoveryStrategy.REBOOTSTRAP.name, consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
+    }
+
+    @Test
+    public void testInvalidMetadataRecoveryStrategy() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "abc");
+        ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(ce.getMessage().contains(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
+    }
+
     @ParameterizedTest
     @CsvSource({"consumer, true", "classic, true", "Consumer, true", "Classic, true", "invalid, false"})
     public void testProtocolConfigValidation(String protocol, boolean isValid) {
@@ -204,5 +236,24 @@ public class ConsumerConfigTest {
         } else {
             assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         }
+    }
+
+    @Test
+    public void testUnsupportedConfigsWithConsumerGroupProtocol() {
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "RoundRobinAssignor");
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 1000);
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
+    }
+
+    private void testUnsupportedConfigsWithConsumerGroupProtocol(String configName, Object value) {
+        final Map<String, Object> configs = Map.of(
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass,
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name(),
+                configName, value
+        );
+        ConfigException exception = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertEquals(configName + " cannot be set when " + 
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name(), exception.getMessage());
     }
 }

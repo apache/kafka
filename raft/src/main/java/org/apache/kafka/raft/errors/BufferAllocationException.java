@@ -21,7 +21,7 @@ package org.apache.kafka.raft.errors;
  */
 public class BufferAllocationException extends RaftException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
     public BufferAllocationException(String s) {
         super(s);

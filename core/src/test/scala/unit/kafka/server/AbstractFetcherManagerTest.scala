@@ -17,9 +17,7 @@
 package kafka.server
 
 import com.yammer.metrics.core.Gauge
-import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
-import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -28,12 +26,13 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.storage.internals.log.LogAppendInfo
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.Mockito.{mock, verify, when}
 
-import java.util.Optional
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -255,7 +254,7 @@ class AbstractFetcherManagerTest {
       fetcherManager.resizeThreadPool(newFetcherSize)
 
       val ownedPartitions = mutable.Set.empty[TopicPartition]
-      fetcherManager.fetcherThreadMap.forKeyValue { (brokerIdAndFetcherId, fetcherThread) =>
+      fetcherManager.fetcherThreadMap.foreachEntry { (brokerIdAndFetcherId, fetcherThread) =>
         val fetcherId = brokerIdAndFetcherId.fetcherId
         val brokerId = brokerIdAndFetcherId.brokerId
 
@@ -313,12 +312,10 @@ class AbstractFetcherManagerTest {
     override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(1L, 0)
   }
 
-  private class MockResizeFetcherTierStateMachine extends TierStateMachine {
+  private class MockResizeFetcherTierStateMachine extends TierStateMachine(null, null, false) {
     override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: PartitionData): PartitionFetchState = {
       throw new UnsupportedOperationException("Materializing tier state is not supported in this test.")
     }
-
-    override def maybeAdvanceState(tp: TopicPartition, currentFetchState: PartitionFetchState): Optional[PartitionFetchState] = Optional.empty[PartitionFetchState]
   }
 
   private class TestResizeFetcherThread(sourceBroker: BrokerEndPoint, failedPartitions: FailedPartitions, fetchTierStateMachine: TierStateMachine)
@@ -346,8 +343,6 @@ class AbstractFetcherManagerTest {
     override protected def logEndOffset(topicPartition: TopicPartition): Long = 1
 
     override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = Some(new OffsetAndEpoch(1, 0))
-
-    override protected val isOffsetForLeaderEpochSupported: Boolean = false
   }
 
 }

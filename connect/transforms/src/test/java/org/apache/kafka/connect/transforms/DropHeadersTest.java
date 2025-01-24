@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -119,4 +120,3 @@ public class DropHeadersTest {
                 keySchema, key, valueSchema, value, timestamp, headers);
     }
 }
-

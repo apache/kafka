@@ -16,39 +16,31 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.server.DynamicConfig;
-import kafka.utils.TestInfoUtils;
-import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.server.config.QuotaConfig;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 public class ToolsTestUtils {
-    /** @see TestInfoUtils#TestWithParameterizedQuorumName()  */
-    public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.{argumentsWithNames}";
-    /** @see TestInfoUtils#TestWithParameterizedQuorumAndGroupProtocolNames()  */
-    public static final String TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES = "{displayName}.quorum={0}.groupProtocol={1}";
-
-    private static int randomPort = 0;
 
     public static String captureStandardOut(Runnable runnable) {
         return captureStandardStream(false, runnable);
@@ -68,7 +60,7 @@ public class ToolsTestUtils {
             System.setOut(tempStream);
         try {
             runnable.run();
-            return new String(outputStream.toByteArray()).trim();
+            return outputStream.toString().trim();
         } finally {
             if (isErr)
                 System.setErr(currentStream);
@@ -77,38 +69,6 @@ public class ToolsTestUtils {
 
             tempStream.close();
         }
-    }
-
-    public static List<Properties> createBrokerProperties(int numConfigs, String zkConnect,
-                                                          Map<Integer, String> rackInfo,
-                                                          int numPartitions,
-                                                          short defaultReplicationFactor) {
-
-        return createBrokerProperties(numConfigs, zkConnect, rackInfo, 1, false, numPartitions,
-            defaultReplicationFactor, 0);
-    }
-
-    /**
-     * Create a test config for the provided parameters.
-     *
-     * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
-     */
-    public static List<Properties> createBrokerProperties(int numConfigs, String zkConnect,
-                                                          Map<Integer, String> rackInfo, int logDirCount,
-                                                          boolean enableToken, int numPartitions, short defaultReplicationFactor,
-                                                          int startingIdNumber) {
-        List<Properties> result = new ArrayList<>();
-        int endingIdNumber = startingIdNumber + numConfigs - 1;
-        for (int node = startingIdNumber; node <= endingIdNumber; node++) {
-            result.add(TestUtils.createBrokerConfig(node, zkConnect, true, true, randomPort,
-                scala.Option.empty(),
-                scala.Option.empty(),
-                scala.Option.empty(),
-                true, false, randomPort, false, randomPort, false, randomPort,
-                scala.Option.apply(rackInfo.get(node)),
-                logDirCount, enableToken, numPartitions, defaultReplicationFactor, false));
-        }
-        return result;
     }
 
     /**
@@ -132,9 +92,9 @@ public class ToolsTestUtils {
      */
     public static void throttleAllBrokersReplication(Admin adminClient, List<Integer> brokerIds, int throttleBytes) throws ExecutionException, InterruptedException {
         List<AlterConfigOp> throttleConfigs = new ArrayList<>();
-        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker$.MODULE$.LeaderReplicationThrottledRateProp(),
+        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
             Integer.toString(throttleBytes)), AlterConfigOp.OpType.SET));
-        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker$.MODULE$.FollowerReplicationThrottledRateProp(),
+        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
             Integer.toString(throttleBytes)), AlterConfigOp.OpType.SET));
 
         Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
@@ -155,7 +115,7 @@ public class ToolsTestUtils {
     }
 
     public static void assignThrottledPartitionReplicas(Admin adminClient, Map<TopicPartition, List<Integer>> allReplicasByPartition) throws InterruptedException, ExecutionException {
-        Map<ConfigResource, List<Map.Entry<TopicPartition, List<Integer>>>> configResourceToPartitionReplicas =
+        Map<ConfigResource, List<Entry<TopicPartition, List<Integer>>>> configResourceToPartitionReplicas =
             allReplicasByPartition.entrySet().stream()
             .collect(Collectors.groupingBy(
                 topicPartitionListEntry -> new ConfigResource(ConfigResource.Type.TOPIC, topicPartitionListEntry.getKey().topic()))
@@ -163,15 +123,15 @@ public class ToolsTestUtils {
 
         Map<ConfigResource, List<AlterConfigOp>> throttles = configResourceToPartitionReplicas.entrySet().stream()
             .collect(
-                Collectors.toMap(Map.Entry::getKey, entry -> {
+                Collectors.toMap(Entry::getKey, entry -> {
                     List<AlterConfigOp> alterConfigOps = new ArrayList<>();
                     Map<TopicPartition, List<Integer>> replicaThrottle =
-                        entry.getValue().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                        entry.getValue().stream().collect(Collectors.toMap(Entry::getKey, Entry::getValue));
                     alterConfigOps.add(new AlterConfigOp(
-                        new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
+                        new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
                         AlterConfigOp.OpType.SET));
                     alterConfigOps.add(new AlterConfigOp(
-                        new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
+                        new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
                         AlterConfigOp.OpType.SET));
                     return alterConfigOps;
                 }
@@ -187,9 +147,9 @@ public class ToolsTestUtils {
         Map<ConfigResource, Collection<AlterConfigOp>> throttles = partitions.stream().collect(Collectors.toMap(
             tp -> new ConfigResource(ConfigResource.Type.TOPIC, tp.topic()),
             tp -> Arrays.asList(
-                    new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
+                    new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
                         AlterConfigOp.OpType.DELETE),
-                    new AlterConfigOp(new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
+                    new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
                         AlterConfigOp.OpType.DELETE))
             ));
 
@@ -204,7 +164,7 @@ public class ToolsTestUtils {
 
     public static File tempPropertiesFile(Map<String, String> properties) throws IOException {
         StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> entry : properties.entrySet()) {
+        for (Entry<String, String> entry : properties.entrySet()) {
             sb.append(entry.getKey() + "=" + entry.getValue() + System.lineSeparator());
         }
         return org.apache.kafka.test.TestUtils.tempFile(sb.toString());
@@ -249,7 +209,7 @@ public class ToolsTestUtils {
     /**
      * Capture both the console output and console error during the execution of the provided function.
      */
-    public static Tuple2<String, String> grabConsoleOutputAndError(Runnable f) {
+    public static Entry<String, String> grabConsoleOutputAndError(Runnable f) {
         ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
         ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
         PrintStream out = new PrintStream(outBuf);
@@ -267,7 +227,7 @@ public class ToolsTestUtils {
         }
         out.flush();
         err.flush();
-        return new Tuple2<>(outBuf.toString(), errBuf.toString());
+        return new SimpleImmutableEntry<>(outBuf.toString(), errBuf.toString());
     }
 
     public static class MockExitProcedure implements Exit.Procedure {

@@ -30,6 +30,7 @@ import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,8 +81,7 @@ public class ConnectMetrics {
                 .timeWindow(sampleWindowMs, TimeUnit.MILLISECONDS).recordLevel(
                         Sensor.RecordingLevel.forName(metricsRecordingLevel));
 
-        Map<String, Object> contextLabels = new HashMap<>();
-        contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+        Map<String, Object> contextLabels = new HashMap<>(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         contextLabels.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, clusterId);
         Object groupId = config.originals().get(DistributedConfig.GROUP_ID_CONFIG);
         if (groupId != null) {
@@ -222,8 +222,7 @@ public class ConnectMetrics {
         public boolean equals(Object obj) {
             if (obj == this)
                 return true;
-            if (obj instanceof MetricGroupId) {
-                MetricGroupId that = (MetricGroupId) obj;
+            if (obj instanceof MetricGroupId that) {
                 return this.groupName.equals(that.groupName) && this.tags.equals(that.tags);
             }
             return false;
@@ -390,8 +389,7 @@ public class ConnectMetrics {
         public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
             // We need to make sure that all sensor names are unique across all groups, so use the sensor prefix
             Sensor result = metrics.sensor(sensorPrefix + name, config, Long.MAX_VALUE, recordingLevel, parents);
-            if (result != null)
-                sensorNames.add(result.name());
+            sensorNames.add(result.name());
             return result;
         }
 

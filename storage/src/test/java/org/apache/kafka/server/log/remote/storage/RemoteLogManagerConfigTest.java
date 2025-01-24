@@ -17,87 +17,114 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.config.AbstractConfig;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.apache.kafka.common.config.ConfigException;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RemoteLogManagerConfigTest {
-
-    private static class TestConfig extends AbstractConfig {
-        public TestConfig(Map<?, ?> originals) {
-            super(RemoteLogManagerConfig.CONFIG_DEF, originals, true);
-        }
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testValidConfigs(boolean useDefaultRemoteLogMetadataManagerClass) {
+    @Test
+    public void testValidConfigs() {
         String rsmPrefix = "__custom.rsm.";
         String rlmmPrefix = "__custom.rlmm.";
         Map<String, Object> rsmProps = Collections.singletonMap("rsm.prop", "val");
         Map<String, Object> rlmmProps = Collections.singletonMap("rlmm.prop", "val");
-        String remoteLogMetadataManagerClass = useDefaultRemoteLogMetadataManagerClass ? DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME : "dummy.remote.log.metadata.class";
-        RemoteLogManagerConfig expectedRemoteLogManagerConfig
-                = new RemoteLogManagerConfig(true, "dummy.remote.storage.class", "dummy.remote.storage.class.path",
-                                             remoteLogMetadataManagerClass, "dummy.remote.log.metadata.class.path",
-                                             "listener.name", 1024 * 1024L, 1, 60000L, 100L, 60000L, 0.3, 10, 100, 100,
-                                             rsmPrefix, rsmProps, rlmmPrefix, rlmmProps);
 
-        Map<String, Object> props = extractProps(expectedRemoteLogManagerConfig);
+        Map<String, Object> props = getRLMProps(rsmPrefix, rlmmPrefix);
         rsmProps.forEach((k, v) -> props.put(rsmPrefix + k, v));
         rlmmProps.forEach((k, v) -> props.put(rlmmPrefix + k, v));
-        // Removing remote.log.metadata.manager.class.name so that the default value gets picked up.
-        if (useDefaultRemoteLogMetadataManagerClass) {
-            props.remove(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
-        }
-        TestConfig config = new TestConfig(props);
-        RemoteLogManagerConfig remoteLogManagerConfig = new RemoteLogManagerConfig(config);
-        Assertions.assertEquals(expectedRemoteLogManagerConfig, remoteLogManagerConfig);
+        RLMTestConfig config = new RLMTestConfig(props);
+
+        RemoteLogManagerConfig rlmConfig = config.remoteLogManagerConfig();
+        assertEquals(rsmProps, rlmConfig.remoteStorageManagerProps());
+        assertEquals(rlmmProps, rlmConfig.remoteLogMetadataManagerProps());
     }
 
-    private Map<String, Object> extractProps(RemoteLogManagerConfig remoteLogManagerConfig) {
+    @Test
+    public void testDefaultConfigs() {
+        // Even with empty properties, RemoteLogManagerConfig has default values
+        Map<String, Object> emptyProps = new HashMap<>();
+        RemoteLogManagerConfig remoteLogManagerConfigEmptyConfig = new RLMTestConfig(emptyProps).remoteLogManagerConfig();
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerThreadPoolSize());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM, remoteLogManagerConfigEmptyConfig.remoteLogManagerCopyNumQuotaSamples());
+    }
+
+    @Test
+    public void testThreadPoolDefaults() {
+        // Even with empty properties, RemoteLogManagerConfig has default values
+        Map<String, Object> emptyProps = new HashMap<>();
+        RemoteLogManagerConfig remoteLogManagerConfigEmptyConfig = new RLMTestConfig(emptyProps).remoteLogManagerConfig();
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerThreadPoolSize());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerCopierThreadPoolSize());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerExpirationThreadPoolSize());
+    }
+
+    @Test
+    public void testValidateEmptyStringConfig() {
+        // Test with a empty string props should throw ConfigException
+        Map<String, Object> emptyStringProps = Collections.singletonMap(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
+        assertThrows(ConfigException.class, () ->
+                new RLMTestConfig(emptyStringProps).remoteLogManagerConfig());
+    }
+
+    private Map<String, Object> getRLMProps(String rsmPrefix, String rlmmPrefix) {
         Map<String, Object> props = new HashMap<>();
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP,
-                  remoteLogManagerConfig.enableRemoteStorageSystem());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
-                  remoteLogManagerConfig.remoteStorageManagerClassName());
+                "dummy.remote.storage.class");
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP,
-                  remoteLogManagerConfig.remoteStorageManagerClassPath());
+                "dummy.remote.storage.class.path");
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-                  remoteLogManagerConfig.remoteLogMetadataManagerClassName());
+                RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP,
-                  remoteLogManagerConfig.remoteLogMetadataManagerClassPath());
+                "dummy.remote.log.metadata.class.path");
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
-                  remoteLogManagerConfig.remoteLogMetadataManagerListenerName());
+                "listener.name");
         props.put(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
-                  remoteLogManagerConfig.remoteLogIndexFileCacheTotalSizeBytes());
+                1024 * 1024L);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP,
-                  remoteLogManagerConfig.remoteLogManagerThreadPoolSize());
+                1);
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
+                1);
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
+                1);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP,
-                  remoteLogManagerConfig.remoteLogManagerTaskIntervalMs());
+                60000L);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP,
-                  remoteLogManagerConfig.remoteLogManagerTaskRetryBackoffMs());
+                100L);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP,
-                  remoteLogManagerConfig.remoteLogManagerTaskRetryBackoffMaxMs());
+                60000L);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP,
-                  remoteLogManagerConfig.remoteLogManagerTaskRetryJitter());
+                0.3);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP,
-                  remoteLogManagerConfig.remoteLogReaderThreads());
+                2);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP,
-                  remoteLogManagerConfig.remoteLogReaderMaxPendingTasks());
+                100);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP,
-                  remoteLogManagerConfig.remoteLogMetadataCustomMetadataMaxBytes());
+                100);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP,
-                  remoteLogManagerConfig.remoteStorageManagerPrefix());
+                rsmPrefix);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP,
-                  remoteLogManagerConfig.remoteLogMetadataManagerPrefix());
+                rlmmPrefix);
         return props;
+    }
+
+    private static class RLMTestConfig extends AbstractConfig {
+        private final RemoteLogManagerConfig rlmConfig;
+
+        public RLMTestConfig(Map<?, ?> originals) {
+            super(RemoteLogManagerConfig.configDef(), originals, true);
+            rlmConfig = new RemoteLogManagerConfig(this);
+        }
+
+        public RemoteLogManagerConfig remoteLogManagerConfig() {
+            return rlmConfig;
+        }
     }
 }

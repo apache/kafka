@@ -17,15 +17,17 @@
 
 package kafka.log
 
-import kafka.server.BrokerTopicStats
 import kafka.utils._
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
@@ -50,10 +52,10 @@ class BrokerCompressionTest {
    */
   @ParameterizedTest
   @MethodSource(Array("parameters"))
-  def testBrokerSideCompression(messageCompression: String, brokerCompression: String): Unit = {
-    val messageCompressionType = CompressionType.forName(messageCompression)
+  def testBrokerSideCompression(messageCompressionType: CompressionType, brokerCompressionType: BrokerCompressionType): Unit = {
+    val messageCompression = Compression.of(messageCompressionType).build()
     val logProps = new Properties()
-    logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, brokerCompression)
+    logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, brokerCompressionType.name)
     /*configure broker-side compression  */
     val log = UnifiedLog(
       dir = logDir,
@@ -64,15 +66,14 @@ class BrokerCompressionTest {
       time = time,
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, false),
-      producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
+      producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+      producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true
+      topicId = None
     )
 
     /* append two messages */
-    log.appendAsLeader(MemoryRecords.withRecords(messageCompressionType, 0,
+    log.appendAsLeader(MemoryRecords.withRecords(messageCompression, 0,
           new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), leaderEpoch = 0)
 
     def readBatch(offset: Int): RecordBatch = {
@@ -83,9 +84,9 @@ class BrokerCompressionTest {
       fetchInfo.records.batches.iterator.next()
     }
 
-    if (!brokerCompression.equals("producer")) {
-      val brokerCompressionType = BrokerCompressionType.forName(brokerCompression).targetCompressionType(null);
-      assertEquals(brokerCompressionType, readBatch(0).compressionType, "Compression at offset 0 should produce " + brokerCompressionType)
+    if (brokerCompressionType != BrokerCompressionType.PRODUCER) {
+      val targetCompression = BrokerCompressionType.targetCompression(log.config.compression, null)
+      assertEquals(targetCompression.`type`(), readBatch(0).compressionType, "Compression at offset 0 should produce " + brokerCompressionType)
     }
     else
       assertEquals(messageCompressionType, readBatch(0).compressionType, "Compression at offset 0 should produce " + messageCompressionType)
@@ -98,7 +99,7 @@ object BrokerCompressionTest {
     java.util.Arrays.stream(
       for (brokerCompression <- BrokerCompressionType.values;
            messageCompression <- CompressionType.values
-      ) yield Arguments.of(messageCompression.name, brokerCompression.name)
+      ) yield Arguments.of(messageCompression, brokerCompression)
     )
   }
 }

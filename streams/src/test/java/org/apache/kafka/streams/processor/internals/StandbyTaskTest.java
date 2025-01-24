@@ -31,25 +31,28 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.io.IOException;
@@ -73,10 +76,10 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -85,7 +88,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StandbyTaskTest {
 
     private final String threadName = "threadName";
@@ -109,7 +113,7 @@ public class StandbyTaskTest {
 
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG), time);
-    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName, StreamsConfig.METRICS_LATEST, time);
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName, "processId", time);
 
     private File baseDir;
     private StreamsConfig config;
@@ -135,7 +139,7 @@ public class StandbyTaskTest {
     @Mock
     private ProcessorStateManager stateManager;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.STANDBY);
@@ -157,7 +161,7 @@ public class StandbyTaskTest {
         stateDirectory = new StateDirectory(config, new MockTime(), true, true);
     }
 
-    @After
+    @AfterEach
     public void cleanup() throws IOException {
         if (task != null) {
             try {
@@ -436,32 +440,6 @@ public class StandbyTaskTest {
         assertEquals(Task.State.CLOSED, task.state());
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDeleteStateDirOnTaskCreatedAndEosAlphaUncleanClose() {
-        doNothing().when(stateManager).close();
-
-        when(stateManager.baseDir()).thenReturn(baseDir);
-
-        final MetricName metricName = setupCloseTaskMetric();
-
-        config = new StreamsConfig(mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE)
-        )));
-
-        task = createStandbyTask();
-        task.suspend();
-
-        task.closeDirty();
-
-        final double expectedCloseTaskMetric = 1.0;
-        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
-
-        assertEquals(Task.State.CLOSED, task.state());
-    }
-
     @Test
     public void shouldDeleteStateDirOnTaskCreatedAndEosV2UncleanClose() {
         doNothing().when(stateManager).close();
@@ -592,7 +570,7 @@ public class StandbyTaskTest {
             streamsMetrics
         );
 
-        final InternalProcessorContext context = new ProcessorContextImpl(
+        final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
             taskId,
             config,
             stateManager,

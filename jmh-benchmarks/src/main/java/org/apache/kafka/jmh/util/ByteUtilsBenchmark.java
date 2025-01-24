@@ -17,12 +17,8 @@
 
 package org.apache.kafka.jmh.util;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.security.SecureRandom;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.common.utils.ByteUtils;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jmh.annotations.Fork;
@@ -40,10 +36,10 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-@OutputTimeUnit(TimeUnit.SECONDS)
-@Fork(3)
-@Warmup(iterations = 3, time = 1)
-@Measurement(iterations = 5, time = 1)
+import java.nio.ByteBuffer;
+import java.security.SecureRandom;
+import java.util.concurrent.TimeUnit;
+
 /**
  * This benchmark calculates the empirical evidence of different implementation for encoding/decoding a protobuf
  * <a href="https://protobuf.dev/programming-guides/encoding/#varints">VarInt</a> and VarLong.
@@ -51,6 +47,10 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
  * The benchmark uses JMH and calculates results for different sizes of variable length integer. We expect most of the
  * usage in Kafka code base to be 1 or 2 byte integers.
  */
+@OutputTimeUnit(TimeUnit.SECONDS)
+@Fork(3)
+@Warmup(iterations = 3, time = 1)
+@Measurement(iterations = 5, time = 1)
 public class ByteUtilsBenchmark {
     private static final int DATA_SET_SAMPLE_SIZE = 16384;
 
@@ -195,7 +195,7 @@ public class ByteUtilsBenchmark {
 
     @Benchmark
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-    public void testUnsignedReadVarlongUnrolled(IterationStateForLong state, Blackhole bk) throws IOException {
+    public void testUnsignedReadVarlongUnrolled(IterationStateForLong state, Blackhole bk) {
         for (long randomValue : state.getRandomValues()) {
             ByteUtils.writeUnsignedVarlong(randomValue, state.getTestBuffer());
             // prepare for reading

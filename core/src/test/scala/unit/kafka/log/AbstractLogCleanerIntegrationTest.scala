@@ -19,16 +19,17 @@ package kafka.log
 import java.io.File
 import java.nio.file.Files
 import java.util.Properties
-import kafka.server.BrokerTopicStats
 import kafka.utils.{Pool, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordVersion}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.{AfterEach, Tag}
 
 import scala.collection.Seq
@@ -113,11 +114,10 @@ abstract class AbstractLogCleanerIntegrationTest {
         time = time,
         brokerTopicStats = new BrokerTopicStats,
         maxTransactionTimeoutMs = 5 * 60 * 1000,
-        producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, false),
-        producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
+        producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+        producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
         logDirFailureChannel = new LogDirFailureChannel(10),
-        topicId = None,
-        keepPartitionMetadataFile = true)
+        topicId = None)
       logMap.put(partition, log)
       this.logs += log
     }
@@ -142,12 +142,12 @@ abstract class AbstractLogCleanerIntegrationTest {
   def counter: Int = ctr
   def incCounter(): Unit = ctr += 1
 
-  def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType,
+  def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: Compression,
                 startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
     for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
-      val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.getBytes, codec = codec,
-        key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
+      val appendInfo = log.appendAsLeaderWithRecordVersion(TestUtils.singletonRecords(value = value.getBytes, codec = codec,
+        key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0, recordVersion = RecordVersion.lookup(magicValue))
       // move LSO forward to increase compaction bound
       log.updateHighWatermark(log.logEndOffset)
       incCounter()
@@ -155,7 +155,7 @@ abstract class AbstractLogCleanerIntegrationTest {
     }
   }
 
-  def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte, codec: CompressionType): (String, MemoryRecords) = {
+  def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte, codec: Compression): (String, MemoryRecords) = {
     def messageValue(length: Int): String = {
       val random = new Random(0)
       new String(random.alphanumeric.take(length).toArray)

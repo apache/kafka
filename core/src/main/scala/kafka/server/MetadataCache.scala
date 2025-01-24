@@ -17,28 +17,19 @@
 
 package kafka.server
 
-import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import org.apache.kafka.admin.BrokerMetadata
-import org.apache.kafka.common.message.{MetadataResponseData, UpdateMetadataRequestData}
+import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData, DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData, MetadataResponseData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.metadata.LeaderAndIsr
+import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
+import java.util.function.Supplier
 import scala.collection._
 
-/**
- * Used to represent the controller id cached in the metadata cache of the broker. This trait is
- * extended to represent if the controller is KRaft controller or Zk controller.
- */
-sealed trait CachedControllerId {
-  val id: Int
-}
-
-case class ZkCachedControllerId(id: Int) extends CachedControllerId
-case class KRaftCachedControllerId(id: Int) extends CachedControllerId
-
-trait MetadataCache {
+trait MetadataCache extends ConfigRepository {
   /**
    * Return topic metadata for a given set of topics and listener. See KafkaApis#handleTopicMetadataRequest for details
    * on the use of the two boolean flags.
@@ -73,7 +64,9 @@ trait MetadataCache {
 
   def getAliveBrokerNodes(listenerName: ListenerName): Iterable[Node]
 
-  def getPartitionInfo(topic: String, partitionId: Int): Option[UpdateMetadataRequestData.UpdateMetadataPartitionState]
+  def getBrokerNodes(listenerName: ListenerName): Iterable[Node]
+
+  def getLeaderAndIsr(topic: String, partitionId: Int): Option[LeaderAndIsr]
 
   /**
    * Return the number of partitions in the given topic, or None if the given topic does not exist.
@@ -97,8 +90,6 @@ trait MetadataCache {
 
   def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): Map[Int, Node]
 
-  def getControllerId: Option[CachedControllerId]
-
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster
 
   def contains(topic: String): Boolean
@@ -109,20 +100,18 @@ trait MetadataCache {
 
   def getRandomAliveBrokerId: Option[Int]
 
-  def features(): Features
+  def features(): FinalizedFeatures
+
+  def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData
+
+  def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData
 }
 
 object MetadataCache {
-  def zkMetadataCache(brokerId: Int,
-                      metadataVersion: MetadataVersion,
-                      brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty(),
-                      kraftControllerNodes: collection.Seq[Node] = collection.Seq.empty[Node],
-                      zkMigrationEnabled: Boolean = false)
-  : ZkMetadataCache = {
-    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures, kraftControllerNodes, zkMigrationEnabled)
-  }
-
-  def kRaftMetadataCache(brokerId: Int): KRaftMetadataCache = {
-    new KRaftMetadataCache(brokerId)
+  def kRaftMetadataCache(
+    brokerId: Int,
+    kraftVersionSupplier: Supplier[KRaftVersion]
+  ): KRaftMetadataCache = {
+    new KRaftMetadataCache(brokerId, kraftVersionSupplier)
   }
 }

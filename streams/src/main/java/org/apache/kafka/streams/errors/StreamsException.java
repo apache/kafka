@@ -29,7 +29,7 @@ import java.util.Optional;
  */
 public class StreamsException extends KafkaException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
     private TaskId taskId;
 
@@ -61,9 +61,9 @@ public class StreamsException extends KafkaException {
     }
 
     /**
-     * @return  the {@link TaskId} that this exception originated from, or {@link Optional#empty()} if the exception
-     *          cannot be traced back to a particular task. Note that the {@code TaskId} being empty does not
-     *          guarantee that the exception wasn't directly related to a specific task.
+     * @return The {@link TaskId} that this exception originated from, or {@link Optional#empty()} if the exception
+     *         cannot be traced back to a particular task. Note that the {@code TaskId} being empty does not
+     *         guarantee that the exception wasn't directly related to a specific task.
      */
     public Optional<TaskId> taskId() {
         return Optional.ofNullable(taskId);

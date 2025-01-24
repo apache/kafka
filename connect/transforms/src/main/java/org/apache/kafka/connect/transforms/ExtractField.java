@@ -23,6 +23,8 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.transforms.field.FieldSyntaxVersion;
+import org.apache.kafka.connect.transforms.field.SingleFieldPath;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Map;
@@ -39,13 +41,28 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
     private static final String FIELD_CONFIG = "field";
+    private static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
-    public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(FIELD_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM, "Field name to extract.");
+    public static final ConfigDef CONFIG_DEF = FieldSyntaxVersion.appendConfigTo(
+            new ConfigDef()
+                    .define(
+                            FIELD_CONFIG,
+                            ConfigDef.Type.STRING,
+                            ConfigDef.NO_DEFAULT_VALUE,
+                            ConfigDef.Importance.MEDIUM,
+                            "Field name to extract."
+                    )
+                    .define(REPLACE_NULL_WITH_DEFAULT_CONFIG,
+                            ConfigDef.Type.BOOLEAN,
+                            true,
+                            ConfigDef.Importance.MEDIUM,
+                            "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used."));
 
     private static final String PURPOSE = "field extraction";
 
-    private String fieldName;
+    private SingleFieldPath fieldPath;
+    private String originalPath;
+    private boolean replaceNullWithDefault;
 
     @Override
     public String version() {
@@ -55,7 +72,9 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        fieldName = config.getString(FIELD_CONFIG);
+        originalPath = config.getString(FIELD_CONFIG);
+        fieldPath = new SingleFieldPath(originalPath, FieldSyntaxVersion.fromConfig(config));
+        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
     }
 
     @Override
@@ -63,16 +82,16 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
         final Schema schema = operatingSchema(record);
         if (schema == null) {
             final Map<String, Object> value = requireMapOrNull(operatingValue(record), PURPOSE);
-            return newRecord(record, null, value == null ? null : value.get(fieldName));
+            return newRecord(record, null, value == null ? null : fieldPath.valueFrom(value));
         } else {
             final Struct value = requireStructOrNull(operatingValue(record), PURPOSE);
-            Field field = schema.field(fieldName);
+            Field field = fieldPath.fieldFrom(schema);
 
             if (field == null) {
-                throw new IllegalArgumentException("Unknown field: " + fieldName);
+                throw new IllegalArgumentException("Unknown field: " + originalPath);
             }
 
-            return newRecord(record, field.schema(), value == null ? null : value.get(fieldName));
+            return newRecord(record, field.schema(), value == null ? null : fieldPath.valueFrom(value, replaceNullWithDefault));
         }
     }
 

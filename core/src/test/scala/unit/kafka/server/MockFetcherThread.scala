@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.storage.internals.log.LogAppendInfo
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 
 import java.util.OptionalInt
@@ -83,7 +84,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     // Now check message's crc
     val batches = FetchResponse.recordsOrFail(partitionData).batches.asScala
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
-    var offsetOfMaxTimestamp = -1L
+    var shallowOffsetOfMaxTimestamp = -1L
     var lastOffset = state.logEndOffset
     var lastEpoch: OptionalInt = OptionalInt.empty()
 
@@ -91,7 +92,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       batch.ensureValid()
       if (batch.maxTimestamp > maxTimestamp) {
         maxTimestamp = batch.maxTimestamp
-        offsetOfMaxTimestamp = batch.baseOffset
+        shallowOffsetOfMaxTimestamp = batch.baseOffset
       }
       state.log.append(batch)
       state.logEndOffset = batch.nextOffset
@@ -106,7 +107,6 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       lastOffset,
       lastEpoch,
       maxTimestamp,
-      offsetOfMaxTimestamp,
       Time.SYSTEM.milliseconds(),
       state.logStartOffset,
       RecordValidationStats.EMPTY,
@@ -162,6 +162,4 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       assertEquals(expectedEpoch, fetchState(partition).flatMap(_.lastFetchedEpoch))
     }
   }
-
-  override protected val isOffsetForLeaderEpochSupported: Boolean = true
 }

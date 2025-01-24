@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -82,6 +83,8 @@ public class Metadata implements Closeable {
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
+    /** Addresses with which the metadata was originally bootstrapped. */
+    private List<InetSocketAddress> bootstrapAddresses;
 
     /**
      * Create a new Metadata instance
@@ -270,7 +273,7 @@ public class Metadata implements Closeable {
     /**
      * Return the cached partition info if it exists and a newer leader epoch isn't known about.
      */
-    synchronized Optional<MetadataResponse.PartitionMetadata> partitionMetadataIfCurrent(TopicPartition topicPartition) {
+    public synchronized Optional<MetadataResponse.PartitionMetadata> partitionMetadataIfCurrent(TopicPartition topicPartition) {
         Integer epoch = lastSeenLeaderEpochs.get(topicPartition);
         Optional<MetadataResponse.PartitionMetadata> partitionMetadata = metadataSnapshot.partitionMetadata(topicPartition);
         if (epoch == null) {
@@ -291,7 +294,7 @@ public class Metadata implements Closeable {
 
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
         Optional<MetadataResponse.PartitionMetadata> maybeMetadata = partitionMetadataIfCurrent(topicPartition);
-        if (!maybeMetadata.isPresent())
+        if (maybeMetadata.isEmpty())
             return new LeaderAndEpoch(Optional.empty(), Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition)));
 
         MetadataResponse.PartitionMetadata partitionMetadata = maybeMetadata.get();
@@ -304,6 +307,12 @@ public class Metadata implements Closeable {
         this.needFullUpdate = true;
         this.updateVersion += 1;
         this.metadataSnapshot = MetadataSnapshot.bootstrap(addresses);
+        this.bootstrapAddresses = addresses;
+    }
+
+    public synchronized void rebootstrap() {
+        log.info("Rebootstrapping with {}", this.bootstrapAddresses);
+        this.bootstrap(this.bootstrapAddresses);
     }
 
     /**
@@ -383,7 +392,7 @@ public class Metadata implements Closeable {
             TopicPartition partition = partitionLeader.getKey();
             Metadata.LeaderAndEpoch currentLeader = currentLeader(partition);
             Metadata.LeaderIdAndEpoch newLeader = partitionLeader.getValue();
-            if (!newLeader.epoch.isPresent() || !newLeader.leaderId.isPresent()) {
+            if (newLeader.epoch.isEmpty() || newLeader.leaderId.isEmpty()) {
                 log.debug("For {}, incoming leader information is incomplete {}", partition, newLeader);
                 continue;
             }
@@ -395,7 +404,7 @@ public class Metadata implements Closeable {
                 log.debug("For {}, incoming leader({}), the corresponding node information for node-id {} is missing, so ignoring.", partition, newLeader, newLeader.leaderId.get());
                 continue;
             }
-            if (!this.metadataSnapshot.partitionMetadata(partition).isPresent()) {
+            if (this.metadataSnapshot.partitionMetadata(partition).isEmpty()) {
                 log.debug("For {}, incoming leader({}), partition metadata is no longer cached, ignoring.", partition, newLeader);
                 continue;
             }
@@ -425,8 +434,8 @@ public class Metadata implements Closeable {
         // Get topic-ids for updated topics from existing topic-ids.
         Map<String, Uuid> existingTopicIds = this.metadataSnapshot.topicIds();
         Map<String, Uuid> topicIdsForUpdatedTopics = updatedTopics.stream()
-            .filter(e -> existingTopicIds.containsKey(e))
-            .collect(Collectors.toMap(e -> e, e -> existingTopicIds.get(e)));
+            .filter(existingTopicIds::containsKey)
+            .collect(Collectors.toMap(e -> e, existingTopicIds::get));
 
         if (log.isDebugEnabled()) {
             updatePartitionMetadata.forEach(

@@ -17,18 +17,14 @@
 
 package org.apache.kafka.common.requests;
 
-import io.opentelemetry.proto.metrics.v1.Metric;
-import io.opentelemetry.proto.metrics.v1.MetricsData;
-import io.opentelemetry.proto.metrics.v1.ResourceMetrics;
-import io.opentelemetry.proto.metrics.v1.ScopeMetrics;
-import io.opentelemetry.proto.resource.v1.Resource;
-
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.telemetry.internals.MetricKey;
 import org.apache.kafka.common.telemetry.internals.SinglePointMetric;
+import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -39,6 +35,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import io.opentelemetry.proto.metrics.v1.Metric;
+import io.opentelemetry.proto.metrics.v1.MetricsData;
+import io.opentelemetry.proto.metrics.v1.ResourceMetrics;
+import io.opentelemetry.proto.metrics.v1.ScopeMetrics;
+import io.opentelemetry.proto.resource.v1.Resource;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,12 +71,12 @@ public class PushTelemetryRequestTest {
     }
 
     private PushTelemetryRequest getPushTelemetryRequest(MetricsData metricsData, CompressionType compressionType) throws IOException {
+        ByteBuffer compressedData = ClientTelemetryUtils.compress(metricsData, compressionType);
         byte[] data = metricsData.toByteArray();
-        byte[] compressedData = ClientTelemetryUtils.compress(data, compressionType);
         if (compressionType != CompressionType.NONE) {
-            assertTrue(compressedData.length < data.length);
+            assertTrue(compressedData.limit() < data.length);
         } else {
-            assertArrayEquals(compressedData, data);
+            assertArrayEquals(Utils.toArray(compressedData), data);
         }
 
         return new PushTelemetryRequest.Builder(

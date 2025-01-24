@@ -16,8 +16,8 @@
   */
 package kafka.server
 
-import kafka.api.{KafkaSasl, SaslSetup}
-import kafka.utils.{JaasTestUtils, TestUtils, TestInfoUtils}
+import kafka.api.SaslSetup
+import kafka.security.JaasTestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.DelegationTokenDisabledException
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -28,6 +28,7 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
 import scala.concurrent.ExecutionException
+import scala.jdk.javaapi.OptionConverters
 
 class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
@@ -41,7 +42,7 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KafkaServerContextName))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
   }
 
@@ -49,13 +50,13 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val securityProps: util.Map[Object, Object] =
-      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+      JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
     securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
     config
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)
 

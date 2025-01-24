@@ -22,19 +22,21 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CopartitionedTopicsEnforcerTest {
 
@@ -42,7 +44,7 @@ public class CopartitionedTopicsEnforcerTest {
     private final Map<TopicPartition, PartitionInfo> partitions = new HashMap<>();
     private final Cluster cluster = Cluster.empty();
 
-    @Before
+    @BeforeEach
     public void before() {
         partitions.put(
             new TopicPartition("first", 0),
@@ -67,7 +69,7 @@ public class CopartitionedTopicsEnforcerTest {
     @Test
     public void shouldThrowTopologyBuilderExceptionIfPartitionCountsForCoPartitionedTopicsDontMatch() {
         partitions.remove(new TopicPartition("second", 0));
-        assertThrows(TopologyException.class, () -> validator.enforce(Utils.mkSet("first", "second"),
+        assertThrows(TopologyException.class, () -> validator.enforce(Set.of("first", "second"),
                           Collections.emptyMap(),
                           cluster.withPartitions(partitions)));
     }
@@ -77,7 +79,7 @@ public class CopartitionedTopicsEnforcerTest {
     public void shouldEnforceCopartitioningOnRepartitionTopics() {
         final InternalTopicConfig config = createTopicConfig("repartitioned", 10);
 
-        validator.enforce(Utils.mkSet("first", "second", config.name()),
+        validator.enforce(Set.of("first", "second", config.name()),
                           Collections.singletonMap(config.name(), config),
                           cluster.withPartitions(partitions));
 
@@ -96,7 +98,7 @@ public class CopartitionedTopicsEnforcerTest {
         repartitionTopicConfig.put(two.name(), two);
         repartitionTopicConfig.put(three.name(), three);
 
-        validator.enforce(Utils.mkSet(one.name(),
+        validator.enforce(Set.of(one.name(),
                                       two.name(),
                                       three.name()),
                           repartitionTopicConfig,
@@ -115,7 +117,7 @@ public class CopartitionedTopicsEnforcerTest {
 
         final TopologyException ex = assertThrows(
             TopologyException.class,
-            () -> validator.enforce(Utils.mkSet(topic1.name(), topic2.name()),
+            () -> validator.enforce(Set.of(topic1.name(), topic2.name()),
                                     Utils.mkMap(Utils.mkEntry(topic1.name(), topic1),
                                                 Utils.mkEntry(topic2.name(), topic2)),
                                     cluster.withPartitions(partitions))
@@ -136,7 +138,7 @@ public class CopartitionedTopicsEnforcerTest {
         final InternalTopicConfig topic1 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 10);
         final InternalTopicConfig topic2 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-2", 10);
 
-        validator.enforce(Utils.mkSet(topic1.name(), topic2.name()),
+        validator.enforce(Set.of(topic1.name(), topic2.name()),
                           Utils.mkMap(Utils.mkEntry(topic1.name(), topic1),
                                       Utils.mkEntry(topic2.name(), topic2)),
                           cluster.withPartitions(partitions));
@@ -151,7 +153,7 @@ public class CopartitionedTopicsEnforcerTest {
 
         final TopologyException ex = assertThrows(
             TopologyException.class,
-            () -> validator.enforce(Utils.mkSet(topic1.name(), "second"),
+            () -> validator.enforce(Set.of(topic1.name(), "second"),
                                     Utils.mkMap(Utils.mkEntry(topic1.name(), topic1)),
                                     cluster.withPartitions(partitions))
         );
@@ -166,7 +168,7 @@ public class CopartitionedTopicsEnforcerTest {
     public void shouldNotThrowAnExceptionWhenNumberOfPartitionsOfNonRepartitionTopicAndRepartitionTopicWithEnforcedNumOfPartitionsMatch() {
         final InternalTopicConfig topic1 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 2);
 
-        validator.enforce(Utils.mkSet(topic1.name(), "second"),
+        validator.enforce(Set.of(topic1.name(), "second"),
                           Utils.mkMap(Utils.mkEntry(topic1.name(), topic1)),
                           cluster.withPartitions(partitions));
 
@@ -179,7 +181,7 @@ public class CopartitionedTopicsEnforcerTest {
         final InternalTopicConfig topic2 = createTopicConfig("repartitioned-2", 5);
         final InternalTopicConfig topic3 = createRepartitionTopicConfigWithEnforcedNumberOfPartitions("repartitioned-3", 2);
 
-        validator.enforce(Utils.mkSet(topic1.name(), topic2.name()),
+        validator.enforce(Set.of(topic1.name(), topic2.name()),
                           Utils.mkMap(Utils.mkEntry(topic1.name(), topic1),
                                       Utils.mkEntry(topic2.name(), topic2),
                                       Utils.mkEntry(topic3.name(), topic3)),

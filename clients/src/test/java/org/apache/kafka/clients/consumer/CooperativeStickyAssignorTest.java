@@ -24,6 +24,10 @@ import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,17 +37,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
+import static java.util.Collections.emptyList;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_RACK_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static java.util.Collections.emptyList;
 
 public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
@@ -205,6 +205,23 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
+    }
+
+    @Test
+    public void testUniformSubscriptionTransferOwnershipListIsRight() {
+        this.replicationFactor = 1;
+        this.numBrokerRacks = 2;
+        this.hasConsumerRack = true;
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, partitionInfos(topic1, 4));
+
+        subscriptions.put("c0", buildSubscriptionV2Above(topics(topic1), partitions(tp(topic1, 0), tp(topic1, 1)),
+                generationId, 0));
+        subscriptions.put("c1", buildSubscriptionV2Above(topics(topic1), partitions(tp(topic1, 2), tp(topic1, 3)),
+                generationId, 1));
+
+        assignor.assignPartitions(partitionsPerTopic, subscriptions);
+        assertEquals(2, assignor.partitionsTransferringOwnership().size());
     }
 
     /**

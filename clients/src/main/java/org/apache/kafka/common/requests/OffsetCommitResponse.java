@@ -160,13 +160,11 @@ public class OffsetCommitResponse extends AbstractResponse {
             Errors error
         ) {
             final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
-
-            partitions.forEach(partition -> {
+            partitions.forEach(partition ->
                 topicResponse.partitions().add(new OffsetCommitResponsePartition()
                     .setPartitionIndex(partitionIndex.apply(partition))
-                    .setErrorCode(error.code()));
-            });
-
+                    .setErrorCode(error.code()))
+            );
             return this;
         }
 

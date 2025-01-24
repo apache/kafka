@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -33,35 +34,34 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.DslWindowParams;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.LeftOrRightValue;
+import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
+import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
-import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
-import org.apache.kafka.streams.state.internals.LeftOrRightValue;
-import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.apache.kafka.test.GenericInMemoryKeyValueStore;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.time.Duration;
@@ -72,26 +72,26 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Optional;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMillis;
-
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KStreamKStreamJoinTest {
     private final String topic1 = "topic1";
@@ -219,7 +219,7 @@ public class KStreamKStreamJoinTest {
         assertThat(internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.size(), equalTo(2));
         for (final InternalTopicConfig config : internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.values()) {
             assertThat(
-                config.getProperties(Collections.emptyMap(), 0).get("test"),
+                config.properties(Collections.emptyMap(), 0).get("test"),
                 equalTo("property")
             );
         }
@@ -452,44 +452,46 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void shouldThrottleEmitNonJoinedOuterRecordsEvenWhenClockDrift() {
-        /**
+        /*
          * This test is testing something internal to [[KStreamKStreamJoin]], so we had to setup low-level api manually.
          */
         final KStreamImplJoin.TimeTrackerSupplier tracker = new KStreamImplJoin.TimeTrackerSupplier();
-        final KStreamKStreamJoin<String, String, String, String> join = new KStreamKStreamJoin<>(
-                false,
+        final WindowStoreBuilder<String, String> otherStoreBuilder = new WindowStoreBuilder<>(
+            new InMemoryWindowBytesStoreSupplier(
                 "other",
-                new JoinWindowsInternal(JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(1000))),
-                (key, v1, v2) -> v1 + v2,
-                true,
-                Optional.of("outer"),
-                tracker);
-        final Processor<String, String, String, String> joinProcessor = join.get();
-        final MockInternalNewProcessorContext<String, String> procCtx = new MockInternalNewProcessorContext<>();
-        final WindowStore<String, String> otherStore = new WindowStoreBuilder<>(
-                new InMemoryWindowBytesStoreSupplier(
-                        "other",
-                        1000L,
-                        100,
-                        false),
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()).build();
+                1000L,
+                100,
+                false),
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime());
+        final KeyValueStoreBuilder<TimestampedKeyAndJoinSide<String>, LeftOrRightValue<String, String>> outerStoreBuilder = new KeyValueStoreBuilder<>(
+            new InMemoryKeyValueBytesStoreSupplier("outer"),
+            new TimestampedKeyAndJoinSideSerde<>(Serdes.String()),
+            new LeftOrRightValueSerde<>(Serdes.String(), Serdes.String()),
+            new MockTime()
+        );
+        final KStreamKStreamJoinRightSide<String, String, String, String> join = new KStreamKStreamJoinRightSide<>(
+            new JoinWindowsInternal(JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(1000))),
+            (key, v1, v2) -> v1 + v2,
+            true,
+            tracker,
+            StoreBuilderWrapper.wrapStoreBuilder(otherStoreBuilder),
+            Optional.of(StoreBuilderWrapper.wrapStoreBuilder(outerStoreBuilder)));
 
-        final KeyValueStore<TimestampedKeyAndJoinSide<String>, LeftOrRightValue<String, String>> outerStore = Mockito.spy(
-                new KeyValueStoreBuilder<>(
-                    new InMemoryKeyValueBytesStoreSupplier("outer"),
-                    new TimestampedKeyAndJoinSideSerde<>(Serdes.String()),
-                    new LeftOrRightValueSerde<>(Serdes.String(), Serdes.String()),
-                    new MockTime()
-                ).build());
+        final Processor<String, String, String, String> joinProcessor = join.get();
+        final MockInternalProcessorContext<String, String> procCtx = new MockInternalProcessorContext<>();
+        final WindowStore<String, String> otherStore = otherStoreBuilder.build();
+
+        final KeyValueStore<TimestampedKeyAndJoinSide<String>, LeftOrRightValue<String, String>> outerStore =
+            Mockito.spy(outerStoreBuilder.build());
 
         final GenericInMemoryKeyValueStore<String, String> rootStore = new GenericInMemoryKeyValueStore<>("root");
 
-        otherStore.init((StateStoreContext) procCtx, rootStore);
+        otherStore.init(procCtx, rootStore);
         procCtx.addStateStore(otherStore);
 
-        outerStore.init((StateStoreContext) procCtx, rootStore);
+        outerStore.init(procCtx, rootStore);
         procCtx.addStateStore(outerStore);
 
         joinProcessor.init(procCtx);

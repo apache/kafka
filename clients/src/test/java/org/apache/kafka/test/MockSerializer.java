@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.ClusterResource;
+import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.concurrent.atomic.AtomicInteger;

@@ -28,6 +28,7 @@ import org.apache.kafka.image.writer.RaftSnapshotWriter;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.SnapshotWriter;
+
 import org.slf4j.Logger;
 
 import java.util.Optional;
@@ -42,7 +43,7 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
      * However, it's more convenient to limit the batch size here in terms of number of records.
      * So we chose a low number that will not cause problems.
      */
-    private final static int DEFAULT_BATCH_SIZE = 1024;
+    private static final int DEFAULT_BATCH_SIZE = 1024;
 
     public static class Builder {
         private Time time = Time.SYSTEM;
@@ -139,7 +140,7 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
             provenance.snapshotId(),
             provenance.lastContainedLogTimeMs()
         );
-        if (!snapshotWriter.isPresent()) {
+        if (snapshotWriter.isEmpty()) {
             log.error("Not generating {} because it already exists.", provenance.snapshotName());
             return;
         }

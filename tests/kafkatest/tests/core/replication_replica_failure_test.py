@@ -20,7 +20,7 @@ from ducktape.mark import matrix
 from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 
-from kafkatest.services.kafka import quorum
+from kafkatest.services.kafka import quorum, consumer_group
 from kafkatest.tests.end_to_end import EndToEndTest
 from kafkatest.services.kafka import config_property
 from kafkatest.services.trogdor.network_partition_fault_spec import NetworkPartitionFaultSpec
@@ -38,20 +38,21 @@ class ReplicationReplicaFailureTest(EndToEndTest):
 
     @cluster(num_nodes=7)
     @matrix(
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_replication_with_replica_failure(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_replication_with_replica_failure(self, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         This test verifies that replication shrinks the ISR when a replica is not fetching anymore.
         It also verifies that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption.
 
-        Setup: 1 zk/KRaft controller, 3 kafka nodes, 1 topic with partitions=1, replication-factor=3, and min.insync.replicas=2
+        Setup: 1 KRaft controller, 3 kafka nodes, 1 topic with partitions=1, replication-factor=3, and min.insync.replicas=2
           - Produce messages in the background
           - Consume messages in the background
           - Partition a follower
@@ -59,10 +60,6 @@ class ReplicationReplicaFailureTest(EndToEndTest):
           - Stop producing and finish consuming
           - Validate that every acked message was consumed
         """
-        self.create_zookeeper_if_necessary()
-        if self.zk:
-            self.zk.start()
-
         self.create_kafka(num_nodes=3,
                           server_prop_overrides=[["replica.lag.time.max.ms", "10000"]],
                           controller_num_nodes_override=1)
@@ -72,13 +69,7 @@ class ReplicationReplicaFailureTest(EndToEndTest):
                                       client_services=[self.kafka])
         self.trogdor.start()
 
-        # If ZK is used, the partition leader is put on the controller node
-        # to avoid partitioning the controller later on in the test.
-        if self.zk:
-            controller = self.kafka.controller()
-            assignment = [self.kafka.idx(controller)] + [self.kafka.idx(node) for node in self.kafka.nodes if node != controller]
-        else:
-            assignment = [self.kafka.idx(node) for node in self.kafka.nodes]
+        assignment = [self.kafka.idx(node) for node in self.kafka.nodes]
 
         self.topic = "test_topic"
         self.kafka.create_topic({"topic": self.topic,
@@ -90,7 +81,7 @@ class ReplicationReplicaFailureTest(EndToEndTest):
         self.create_producer()
         self.producer.start()
 
-        self.create_consumer()
+        self.create_consumer(group_protocol=group_protocol)
         self.consumer.start()
 
         self.await_startup()

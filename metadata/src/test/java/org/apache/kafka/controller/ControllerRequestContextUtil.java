@@ -17,13 +17,13 @@
 
 package org.apache.kafka.controller;
 
-import java.util.OptionalLong;
-import java.util.function.Consumer;
-
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+
+import java.util.OptionalLong;
+import java.util.function.Consumer;
 
 public class ControllerRequestContextUtil {
     public static final ControllerRequestContext ANONYMOUS_CONTEXT =

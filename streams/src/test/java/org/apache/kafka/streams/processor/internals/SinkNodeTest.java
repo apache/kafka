@@ -16,18 +16,28 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
-import org.junit.Before;
-import org.junit.Test;
 
-import static org.junit.Assert.fail;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
 
 public class SinkNodeTest {
     private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
@@ -40,14 +50,21 @@ public class SinkNodeTest {
     // Used to verify that the correct exceptions are thrown if the compiler checks are bypassed
     @SuppressWarnings({"unchecked", "rawtypes"})
     private final SinkNode<Object, Object> illTypedSink = (SinkNode) sink;
+    private MockedStatic<WrappingNullableUtils> utilsMock;
 
-    @Before
-    public void before() {
-        sink.init(context);
+    @BeforeEach
+    public void setup() {
+        utilsMock = Mockito.mockStatic(WrappingNullableUtils.class);
+    }
+
+    @AfterEach
+    public void cleanup() {
+        utilsMock.close();
     }
 
     @Test
     public void shouldThrowStreamsExceptionOnInputRecordWithInvalidTimestamp() {
+        sink.init(context);
         // When/Then
         context.setTime(-1); // ensures a negative timestamp is set for the record we send next
         try {
@@ -58,4 +75,46 @@ public class SinkNodeTest {
         }
     }
 
+    @Test
+    public void shouldThrowStreamsExceptionOnUndefinedKeySerde() {
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeySerializer(any(), any(), any()))
+            .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
+
+        final Throwable exception = assertThrows(StreamsException.class, () -> sink.init(context));
+
+        assertThat(
+            exception.getMessage(),
+            equalTo("Failed to initialize key serdes for sink node anyNodeName")
+        );
+        assertThat(
+            exception.getCause().getMessage(),
+            equalTo("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG")
+        );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnUndefinedValueSerde() {
+        utilsMock.when(() -> WrappingNullableUtils.prepareValueSerializer(any(), any(), any()))
+            .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
+
+        final Throwable exception = assertThrows(StreamsException.class, () -> sink.init(context));
+
+        assertThat(
+            exception.getMessage(),
+            equalTo("Failed to initialize value serdes for sink node anyNodeName")
+        );
+        assertThat(
+            exception.getCause().getMessage(),
+            equalTo("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG")
+        );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionWithExplicitErrorMessage() {
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeySerializer(any(), any(), any())).thenThrow(new StreamsException(""));
+
+        final Throwable exception = assertThrows(StreamsException.class, () -> sink.init(context));
+
+        assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for sink node anyNodeName"));
+    }
 }

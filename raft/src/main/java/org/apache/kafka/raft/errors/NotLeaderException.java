@@ -22,7 +22,7 @@ package org.apache.kafka.raft.errors;
  */
 public class NotLeaderException extends RaftException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
     public NotLeaderException(String s) {
         super(s);

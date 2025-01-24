@@ -25,9 +25,10 @@ import java.util.stream.Collectors;
 public enum GroupType {
     UNKNOWN("Unknown"),
     CONSUMER("Consumer"),
-    CLASSIC("Classic");
+    CLASSIC("Classic"),
+    SHARE("Share");
 
-    private final static Map<String, GroupType> NAME_TO_ENUM = Arrays.stream(values())
+    private static final Map<String, GroupType> NAME_TO_ENUM = Arrays.stream(values())
         .collect(Collectors.toMap(type -> type.name.toLowerCase(Locale.ROOT), Function.identity()));
 
     private final String name;

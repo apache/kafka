@@ -17,13 +17,15 @@
 
 package org.apache.kafka.shell.command;
 
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.image.node.MetadataNode;
 import org.apache.kafka.shell.InteractiveShell;
 import org.apache.kafka.shell.glob.GlobVisitor;
 import org.apache.kafka.shell.glob.GlobVisitor.MetadataNodeInfo;
 import org.apache.kafka.shell.state.MetadataShellState;
+
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.jline.reader.Candidate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,7 +44,7 @@ import java.util.OptionalInt;
 public final class LsCommandHandler implements Commands.Handler {
     private static final Logger log = LoggerFactory.getLogger(LsCommandHandler.class);
 
-    public final static Commands.Type TYPE = new LsCommandType();
+    public static final Commands.Type TYPE = new LsCommandType();
 
     public static class LsCommandType implements Commands.Type {
         private LsCommandType() {
@@ -115,8 +117,7 @@ public final class LsCommandHandler implements Commands.Handler {
                     MetadataNodeInfo info = entryOption.get();
                     MetadataNode node = info.node();
                     if (node.isDirectory()) {
-                        List<String> children = new ArrayList<>();
-                        children.addAll(node.childNames());
+                        List<String> children = new ArrayList<>(node.childNames());
                         children.sort(String::compareTo);
                         targetDirectories.add(
                             new TargetDirectory(info.lastPathComponent(), children));
@@ -128,8 +129,7 @@ public final class LsCommandHandler implements Commands.Handler {
                 }
             }));
         }
-        OptionalInt screenWidth = shell.isPresent() ?
-            OptionalInt.of(shell.get().screenWidth()) : OptionalInt.empty();
+        OptionalInt screenWidth = shell.map(interactiveShell -> OptionalInt.of(interactiveShell.screenWidth())).orElseGet(OptionalInt::empty);
         log.trace("LS : targetFiles = {}, targetDirectories = {}, screenWidth = {}",
             targetFiles, targetDirectories, screenWidth);
         printTargets(writer, screenWidth, targetFiles, targetDirectories);
@@ -140,7 +140,7 @@ public final class LsCommandHandler implements Commands.Handler {
                              List<String> targetFiles,
                              List<TargetDirectory> targetDirectories) {
         printEntries(writer, "", screenWidth, targetFiles);
-        boolean needIntro = targetFiles.size() > 0 || targetDirectories.size() > 1;
+        boolean needIntro = !targetFiles.isEmpty() || targetDirectories.size() > 1;
         boolean firstIntro = targetFiles.isEmpty();
         for (TargetDirectory targetDirectory : targetDirectories) {
             String intro = "";
@@ -191,7 +191,7 @@ public final class LsCommandHandler implements Commands.Handler {
 
     static ColumnSchema calculateColumnSchema(OptionalInt screenWidth,
                                               List<String> entries) {
-        if (!screenWidth.isPresent()) {
+        if (screenWidth.isEmpty()) {
             return new ColumnSchema(1, entries.size());
         }
         int maxColumns = screenWidth.getAsInt() / 4;
@@ -205,8 +205,7 @@ public final class LsCommandHandler implements Commands.Handler {
         }
         for (int i = 0; i < entries.size(); i++) {
             String entry = entries.get(i);
-            for (int s = 0; s < schemas.length; s++) {
-                ColumnSchema schema = schemas[s];
+            for (ColumnSchema schema : schemas) {
                 schema.process(i, entry);
             }
         }
@@ -244,8 +243,8 @@ public final class LsCommandHandler implements Commands.Handler {
 
         int totalWidth() {
             int total = 0;
-            for (int i = 0; i < columnWidths.length; i++) {
-                total += columnWidths[i];
+            for (int columnWidth : columnWidths) {
+                total += columnWidth;
             }
             return total;
         }
@@ -264,25 +263,23 @@ public final class LsCommandHandler implements Commands.Handler {
 
         @Override
         public int hashCode() {
-            return Objects.hash(columnWidths, entriesPerColumn);
+            return Objects.hash(Arrays.hashCode(columnWidths), entriesPerColumn);
         }
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof ColumnSchema)) return false;
-            ColumnSchema other = (ColumnSchema) o;
+            if (!(o instanceof ColumnSchema other)) return false;
             if (entriesPerColumn != other.entriesPerColumn) return false;
-            if (!Arrays.equals(columnWidths, other.columnWidths)) return false;
-            return true;
+            return Arrays.equals(columnWidths, other.columnWidths);
         }
 
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder("ColumnSchema(columnWidths=[");
             String prefix = "";
-            for (int i = 0; i < columnWidths.length; i++) {
+            for (int columnWidth : columnWidths) {
                 bld.append(prefix);
-                bld.append(columnWidths[i]);
+                bld.append(columnWidth);
                 prefix = ", ";
             }
             bld.append("], entriesPerColumn=").append(entriesPerColumn).append(")");
@@ -297,9 +294,7 @@ public final class LsCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof LsCommandHandler)) return false;
-        LsCommandHandler o = (LsCommandHandler) other;
-        if (!Objects.equals(o.targets, targets)) return false;
-        return true;
+        if (!(other instanceof LsCommandHandler o)) return false;
+        return Objects.equals(o.targets, targets);
     }
 }

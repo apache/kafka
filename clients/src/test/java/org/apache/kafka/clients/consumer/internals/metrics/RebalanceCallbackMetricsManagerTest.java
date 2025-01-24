@@ -19,14 +19,15 @@ package org.apache.kafka.clients.consumer.internals.metrics;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class RebalanceCallbackMetricsManagerTest {
-    private Time time = new MockTime();
-    private Metrics metrics = new Metrics(time);
+    private final Time time = new MockTime();
+    private final Metrics metrics = new Metrics(time);
 
     @Test
     public void testRebalanceCallbackMetrics() {

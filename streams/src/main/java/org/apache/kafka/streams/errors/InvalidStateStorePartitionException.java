@@ -21,7 +21,8 @@ import org.apache.kafka.streams.KafkaStreams;
 /**
  * Indicates that the specific state store being queried via
  * {@link org.apache.kafka.streams.StoreQueryParameters} used a partitioning that is not assigned to this instance.
- * You can use {@link KafkaStreams#metadataForAllStreamsClients()} to discover the correct instance that hosts the requested partition.
+ * You can use {@link KafkaStreams#metadataForAllStreamsClients()} to discover the correct instance
+ * that hosts the requested partition.
  */
 public class InvalidStateStorePartitionException extends InvalidStateStoreException {
 
@@ -31,6 +32,7 @@ public class InvalidStateStorePartitionException extends InvalidStateStoreExcept
         super(message);
     }
 
+    @SuppressWarnings("unused")
     public InvalidStateStorePartitionException(final String message, final Throwable throwable) {
         super(message, throwable);
     }

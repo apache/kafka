@@ -41,7 +41,7 @@ import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -180,7 +180,7 @@ public class TransactionsCommandTest {
         List<String> expectedHeaders = TransactionsCommand.DescribeProducersCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
 
-        Set<List<String>> expectedRows = Utils.mkSet(
+        Set<List<String>> expectedRows = Set.of(
             asList("12345", "15", "20", "1300", "1599509565", "990"),
             asList("98765", "30", "-1", "2300", "1599509599", "None")
         );
@@ -231,7 +231,7 @@ public class TransactionsCommandTest {
         List<String> expectedHeaders = TransactionsCommand.ListTransactionsCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
 
-        Set<List<String>> expectedRows = Utils.mkSet(
+        Set<List<String>> expectedRows = Set.of(
             asList("foo", "0", "12345", "Ongoing"),
             asList("bar", "0", "98765", "PrepareAbort"),
             asList("baz", "1", "13579", "CompleteCommit")
@@ -443,13 +443,7 @@ public class TransactionsCommandTest {
         AbortTransactionResult abortTransactionResult = Mockito.mock(AbortTransactionResult.class);
         KafkaFuture<Void> abortFuture = completedFuture(null);
 
-        final int expectedCoordinatorEpoch;
-        if (coordinatorEpoch < 0) {
-            expectedCoordinatorEpoch = 0;
-        } else {
-            expectedCoordinatorEpoch = coordinatorEpoch;
-        }
-
+        int expectedCoordinatorEpoch = Math.max(coordinatorEpoch, 0);
         AbortTransactionSpec expectedAbortSpec = new AbortTransactionSpec(
             topicPartition, producerId, producerEpoch, expectedCoordinatorEpoch);
 

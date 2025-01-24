@@ -18,7 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -33,18 +33,21 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
-import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
 import java.time.Duration;
@@ -53,6 +56,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
@@ -61,26 +65,26 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class GlobalStreamThreadTest {
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
-    private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.NONE);
+    private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name());
     private final MockTime time = new MockTime();
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private GlobalStreamThread globalStreamThread;
     private StreamsConfig config;
     private String baseDirectoryName;
 
-    private final static String GLOBAL_STORE_TOPIC_NAME = "foo";
-    private final static String GLOBAL_STORE_NAME = "bar";
+    private static final String GLOBAL_STORE_TOPIC_NAME = "foo";
+    private static final String GLOBAL_STORE_NAME = "bar";
     private final TopicPartition topicPartition = new TopicPartition(GLOBAL_STORE_TOPIC_NAME, 0);
 
-    @Before
+    @BeforeEach
     public void before() {
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.with(null, null),
@@ -105,15 +109,19 @@ public class GlobalStreamThreadTest {
                 }
             };
 
+        final StoreFactory storeFactory =
+                new KeyValueStoreMaterializer<>(materialized).withLoggingDisabled();
+        final StoreBuilder<?> storeBuilder = new StoreFactory.FactoryWrappingStoreBuilder<>(storeFactory);
         builder.addGlobalStore(
-            new KeyValueStoreMaterializer<>(materialized).withLoggingDisabled(),
             "sourceName",
             null,
             null,
             null,
             GLOBAL_STORE_TOPIC_NAME,
             "processorName",
-            processorSupplier);
+            new StoreDelegatingProcessorSupplier<>(processorSupplier, Set.of(storeBuilder)),
+            false
+        );
 
         baseDirectoryName = TestUtils.tempDirectory().getAbsolutePath();
         final HashMap<String, Object> properties = new HashMap<>();
@@ -129,7 +137,7 @@ public class GlobalStreamThreadTest {
             mockConsumer,
             new StateDirectory(config, time, true, false),
             0,
-            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, time),
+            new StreamsMetricsImpl(new Metrics(), "test-client", "processId", time),
             time,
             "clientId",
             stateRestoreListener,
@@ -155,7 +163,7 @@ public class GlobalStreamThreadTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() throws Exception {
-        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
                 throw new RuntimeException("KABOOM!");
@@ -168,7 +176,7 @@ public class GlobalStreamThreadTest {
             mockConsumer,
             new StateDirectory(config, time, true, false),
             0,
-            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, time),
+            new StreamsMetricsImpl(new Metrics(), "test-client", "processId", time),
             time,
             "clientId",
             stateRestoreListener,
@@ -197,7 +205,8 @@ public class GlobalStreamThreadTest {
         globalStreamThread.join();
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(value = 30000, unit = TimeUnit.MILLISECONDS)
     public void shouldStopRunningWhenClosedByUser() throws Exception {
         initializeConsumer();
         startAndSwallowError();

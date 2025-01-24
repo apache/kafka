@@ -44,9 +44,7 @@ public class DescribeConsumerGroupsResult {
      * Return a map from group id to futures which yield group descriptions.
      */
     public Map<String, KafkaFuture<ConsumerGroupDescription>> describedGroups() {
-        Map<String, KafkaFuture<ConsumerGroupDescription>> describedGroups = new HashMap<>();
-        futures.forEach((key, future) -> describedGroups.put(key, future));
-        return describedGroups;
+        return new HashMap<>(futures);
     }
 
     /**

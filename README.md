@@ -1,19 +1,26 @@
-Apache Kafka
-=================
-See our [web site](https://kafka.apache.org) for details on the project.
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/kafka-logo-readme-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/kafka-logo-readme-dark.svg">
+  <img src="docs/images/kafka-logo-readme-light.svg" alt="Kafka Logo" width="50%"> 
+</picture>
+</p>
+
+[![CI](https://github.com/apache/kafka/actions/workflows/ci.yml/badge.svg?branch=trunk&event=push)](https://github.com/apache/kafka/actions/workflows/ci.yml?query=event%3Apush+branch%3Atrunk)
+[![Flaky Test Report](https://github.com/apache/kafka/actions/workflows/generate-reports.yml/badge.svg?branch=trunk&event=schedule)](https://github.com/apache/kafka/actions/workflows/generate-reports.yml?query=event%3Aschedule+branch%3Atrunk)
+
+[**Apache Kafka**](https://kafka.apache.org) is an open-source distributed event streaming platform used by thousands of
+
+companies for high-performance data pipelines, streaming analytics, data integration, and mission-critical applications.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with Java 8, 11, 17 and 21. We set the `release` parameter in javac and scalac
-to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
-used for compilation). Java 8 support project-wide has been deprecated since Apache Kafka 3.0, Java 11 support for
-the broker and tools has been deprecated since Apache Kafka 3.7 and removal of both is planned for Apache Kafka 4.0 (
-see [KIP-750](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223) and
-[KIP-1013](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510) for more details).
+We build and test Apache Kafka with 17 and 23. The `release` parameter in javac is set to `11` for the clients 
+and streams modules, and `17` for the rest, ensuring compatibility with their respective
+minimum Java versions. Similarly, the `release` parameter in scalac is set to `11` for the streams modules and `17`
+for the rest.
 
-Scala 2.12 and 2.13 are supported and 2.13 is used by default. Scala 2.12 support has been deprecated since
-Apache Kafka 3.0 and will be removed in Apache Kafka 4.0 (see [KIP-751](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218)
-for more details). See below for how to use a specific Scala version or all of the supported Scala versions.
+Scala 2.13 is the only supported version in Apache Kafka.
 
 ### Build a jar and run it ###
     ./gradlew jar
@@ -34,36 +41,49 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
 
 ### Run unit/integration tests ###
-    ./gradlew test # runs both unit and integration tests
+    ./gradlew test  # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
+    ./gradlew quarantinedTest  # runs the quarantined tests
+
     
 ### Force re-running tests without code change ###
-    ./gradlew test --rerun
-    ./gradlew unitTest --rerun
-    ./gradlew integrationTest --rerun
+    ./gradlew test --rerun-tasks
+    ./gradlew unitTest --rerun-tasks
+    ./gradlew integrationTest --rerun-tasks
 
 ### Running a particular unit/integration test ###
     ./gradlew clients:test --tests RequestResponseTest
 
-### Repeatedly running a particular unit/integration test ###
-    I=0; while ./gradlew clients:test --tests RequestResponseTest --rerun --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
+### Repeatedly running a particular unit/integration test with specific times by setting N ###
+    N=500; I=0; while [ $I -lt $N ] && ./gradlew clients:test --tests RequestResponseTest --rerun --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
 
 ### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
 
 ### Running a particular unit/integration test with log4j output ###
-Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
+By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j2.yaml` file in the module's `src/test/resources` directory.
 
-    ./gradlew clients:test --tests RequestResponseTest
+For example, if you want to see more logs for clients project tests, you can modify [the line](https://github.com/apache/kafka/blob/trunk/clients/src/test/resources/log4j2.yaml#L35) in `clients/src/test/resources/log4j2.yaml` 
+to `level: INFO` and then run:
+    
+    ./gradlew cleanTest clients:test --tests NetworkClientTest   
+
+And you should see `INFO` level logs in the file under the `clients/build/test-results/test` directory.
 
 ### Specifying test retries ###
-By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
+Retries are disabled by default, but you can set maxTestRetryFailures and maxTestRetries to enable retries.
 
-    ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=5
-    
-See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for more details.
+The following example declares -PmaxTestRetries=1 and -PmaxTestRetryFailures=3 to enable a failed test to be retried once, with a total retry limit of 3.
+
+    ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
+
+The quarantinedTest task also has no retries by default, but you can set maxQuarantineTestRetries and maxQuarantineTestRetryFailures to enable retries, similar to the test task.
+
+    ./gradlew quarantinedTest -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=20
+
+See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
 
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
@@ -85,36 +105,20 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
-### Running a Kafka broker in KRaft mode
+### Running a Kafka broker
+
+Using compiled files:
 
     KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
-    ./bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties
-    ./bin/kafka-server-start.sh config/kraft/server.properties
-
-### Running a Kafka broker in ZooKeeper mode
-
-    ./bin/zookeeper-server-start.sh config/zookeeper.properties
+    ./bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/server.properties
     ./bin/kafka-server-start.sh config/server.properties
+
+Using docker image:
+
+    docker run -p 9092:9092 apache/kafka:3.7.0
 
 ### Cleaning the build ###
     ./gradlew clean
-
-### Running a task with one of the Scala versions available (2.12.x or 2.13.x) ###
-*Note that if building the jars with a version other than 2.13.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
-
-You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
-
-    ./gradlew -PscalaVersion=2.12 jar
-    ./gradlew -PscalaVersion=2.12 test
-    ./gradlew -PscalaVersion=2.12 releaseTarGz
-
-### Running a task with all the scala versions enabled by default ###
-
-Invoke the `gradlewAll` script followed by the task(s):
-
-    ./gradlewAll test
-    ./gradlewAll jar
-    ./gradlewAll releaseTarGz
 
 ### Running a task for a specific project ###
 This is for `core`, `examples` and `clients`
@@ -130,32 +134,18 @@ Streams has multiple sub-projects, but you can run all the tests:
     ./gradlew tasks
 
 ### Building IDE project ####
-*Note that this is not strictly necessary (IntelliJ IDEA has good built-in support for Gradle projects, for example).*
+*Note Please ensure that JDK17 is used when developing Kafka.*
+
+IntelliJ supports Gradle natively and it will automatically check Java syntax and compatibility for each module, even if
+the Java version shown in the `Structure > Project Settings > Modules` may not be the correct one.
+
+When it comes to Eclipse, run:
 
     ./gradlew eclipse
-    ./gradlew idea
 
 The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
 build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
 to avoid known issues with this configuration.
-
-### Publishing the jar for all versions of Scala and for all projects to maven ###
-The recommended command is:
-
-    ./gradlewAll publish
-
-For backwards compatibility, the following also works:
-
-    ./gradlewAll uploadArchives
-
-Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
-
-    mavenUrl=
-    mavenUsername=
-    mavenPassword=
-    signing.keyId=
-    signing.password=
-    signing.secretKeyRingFile=
 
 ### Publishing the streams quickstart archetype artifact to maven ###
 For the Streams archetype project, one cannot use gradle to upload to maven; instead the `mvn deploy` command needs to be called at the quickstart folder:
@@ -186,22 +176,14 @@ Please note for this to work you should create/update user maven settings (typic
      </servers>
      ...
 
+### Installing all projects to the local Maven repository ###
 
-### Installing ALL the jars to the local Maven repository ###
-The recommended command to build for both Scala 2.12 and 2.13 is:
-
-    ./gradlewAll publishToMavenLocal
-
-For backwards compatibility, the following also works:
-
-    ./gradlewAll install
+    ./gradlew -PskipSigning=true publishToMavenLocal
 
 ### Installing specific projects to the local Maven repository ###
 
     ./gradlew -PskipSigning=true :streams:publishToMavenLocal
     
-If needed, you can specify the Scala version with `-PscalaVersion=2.13`.
-
 ### Building the test jar ###
     ./gradlew testJar
 
@@ -212,10 +194,16 @@ There are two code quality analysis tools that we regularly run, spotbugs and ch
 Checkstyle enforces a consistent coding style in Kafka.
 You can run checkstyle using:
 
-    ./gradlew checkstyleMain checkstyleTest
+    ./gradlew checkstyleMain checkstyleTest spotlessCheck
 
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
+For experiments (or regression testing purposes) add `-PcheckstyleVersion=X.y.z` switch (to override project-defined checkstyle version).
+
+#### Spotless ####
+The import order is a part of static check. please call `spotlessApply` to optimize the imports of Java codes before filing pull request.
+
+    ./gradlew spotlessApply
 
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.

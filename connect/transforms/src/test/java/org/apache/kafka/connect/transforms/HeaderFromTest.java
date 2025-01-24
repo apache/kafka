@@ -25,6 +25,7 @@ import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -148,7 +149,7 @@ public class HeaderFromTest {
                         .withField("field1", STRING_SCHEMA, "field1-value")
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("header1", STRING_SCHEMA, "existing-value"),
-                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.COPY,
+                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.COPY, true,
                     new RecordBuilder()
                         .withField("field1", STRING_SCHEMA, "field1-value")
                         .withField("field2", STRING_SCHEMA, "field2-value")
@@ -163,7 +164,7 @@ public class HeaderFromTest {
                         .withField("field1", STRING_SCHEMA, "field1-value")
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("header1", STRING_SCHEMA, "existing-value"),
-                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.MOVE,
+                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.MOVE, true,
                     new RecordBuilder()
                         // field1 got moved
                         .withField("field2", STRING_SCHEMA, "field2-value")
@@ -178,7 +179,7 @@ public class HeaderFromTest {
                         .withField("field1", STRING_SCHEMA, "field1-value")
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("inserted1", STRING_SCHEMA, "existing-value"),
-                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.COPY,
+                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.COPY, true,
                     new RecordBuilder()
                         .withField("field1", STRING_SCHEMA, "field1-value")
                         .withField("field2", STRING_SCHEMA, "field2-value")
@@ -193,7 +194,7 @@ public class HeaderFromTest {
                         .withField("field1", STRING_SCHEMA, "field1-value")
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("inserted1", STRING_SCHEMA, "existing-value"),
-                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.MOVE,
+                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.MOVE, true,
                     new RecordBuilder()
                         // field1 got moved
                         .withField("field2", STRING_SCHEMA, "field2-value")
@@ -210,7 +211,7 @@ public class HeaderFromTest {
                         .withField("field1", schema, struct)
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("header1", STRING_SCHEMA, "existing-value"),
-                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.COPY,
+                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.COPY, true,
                     new RecordBuilder()
                         .withField("field1", schema, struct)
                         .withField("field2", STRING_SCHEMA, "field2-value")
@@ -225,7 +226,7 @@ public class HeaderFromTest {
                         .withField("field1", schema, struct)
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("header1", STRING_SCHEMA, "existing-value"),
-                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.MOVE,
+                    singletonList("field1"), singletonList("inserted1"), HeaderFrom.Operation.MOVE, true,
                     new RecordBuilder()
                         // field1 got moved
                         .withField("field2", STRING_SCHEMA, "field2-value")
@@ -241,7 +242,7 @@ public class HeaderFromTest {
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("header1", STRING_SCHEMA, "existing-value"),
                     // two headers from the same field
-                    asList("field1", "field1"), asList("inserted1", "inserted2"), HeaderFrom.Operation.MOVE,
+                    asList("field1", "field1"), asList("inserted1", "inserted2"), HeaderFrom.Operation.MOVE, true,
                     new RecordBuilder()
                         // field1 got moved
                         .withField("field2", STRING_SCHEMA, "field2-value")
@@ -258,22 +259,53 @@ public class HeaderFromTest {
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("header1", STRING_SCHEMA, "existing-value"),
                     // two headers from the same field
-                    asList("field1", "field2"), asList("inserted1", "inserted1"), HeaderFrom.Operation.MOVE,
+                    asList("field1", "field2"), asList("inserted1", "inserted1"), HeaderFrom.Operation.MOVE, true,
                     new RecordBuilder()
                         // field1 and field2 got moved
                         .addHeader("header1", STRING_SCHEMA, "existing-value")
                         .addHeader("inserted1", STRING_SCHEMA, "field1-value")
                         .addHeader("inserted1", STRING_SCHEMA, "field2-value")
                 ));
+            result.add(
+                    Arguments.of(
+                            "Copy null field without default",
+                            testKeyTransform,
+                            new RecordBuilder()
+                                    .withField("field1", SchemaBuilder.string().defaultValue("default").optional().build(), "field1-value")
+                                    .withField("field2", SchemaBuilder.string().defaultValue("default").optional().build(), null)
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value"),
+                            asList("field1", "field2"), asList("inserted1", "inserted2"), HeaderFrom.Operation.COPY, false,
+                            new RecordBuilder()
+                                    .withField("field1", SchemaBuilder.string().defaultValue("default").optional().build(), "field1-value")
+                                    .withField("field2", SchemaBuilder.string().defaultValue("default").optional().build(), null)
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value")
+                                    .addHeader("inserted1", SchemaBuilder.string().defaultValue("default").optional().build(), "field1-value")
+                                    .addHeader("inserted2", SchemaBuilder.string().defaultValue("default").optional().build(), null)
+                    ));
+            result.add(
+                    Arguments.of(
+                            "Move null field without default",
+                            testKeyTransform,
+                            new RecordBuilder()
+                                    .withField("field1", SchemaBuilder.string().defaultValue("default").optional().build(), "field1-value")
+                                    .withField("field2", SchemaBuilder.string().defaultValue("default").optional().build(), null)
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value"),
+                            asList("field1", "field2"), asList("inserted1", "inserted2"), HeaderFrom.Operation.MOVE, false,
+                            new RecordBuilder()
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value")
+                                    .addHeader("inserted1", SchemaBuilder.string().defaultValue("default").optional().build(), "field1-value")
+                                    .addHeader("inserted2", SchemaBuilder.string().defaultValue("default").optional().build(), null)
+                    ));
         }
         return result;
     }
 
-    private Map<String, Object> config(List<String> headers, List<String> transformFields, HeaderFrom.Operation operation) {
+    private Map<String, Object> config(List<String> headers, List<String> transformFields, HeaderFrom.Operation operation, boolean useFieldDefault) {
         Map<String, Object> result = new HashMap<>();
         result.put(HeaderFrom.HEADERS_FIELD, headers);
         result.put(HeaderFrom.FIELDS_FIELD, transformFields);
         result.put(HeaderFrom.OPERATION_FIELD, operation.toString());
+        result.put(HeaderFrom.REPLACE_NULL_WITH_DEFAULT_FIELD, useFieldDefault);
         return result;
     }
 
@@ -282,11 +314,11 @@ public class HeaderFromTest {
     public void schemaless(String description,
                            boolean keyTransform,
                            RecordBuilder originalBuilder,
-                           List<String> transformFields, List<String> headers1, HeaderFrom.Operation operation,
+                           List<String> transformFields, List<String> headers1, HeaderFrom.Operation operation, boolean replaceNullWithDefault,
                            RecordBuilder expectedBuilder) {
         HeaderFrom<SourceRecord> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
 
-        xform.configure(config(headers1, transformFields, operation));
+        xform.configure(config(headers1, transformFields, operation, replaceNullWithDefault));
         ConnectHeaders headers = new ConnectHeaders();
         headers.addString("existing", "existing-value");
 
@@ -301,10 +333,10 @@ public class HeaderFromTest {
     public void withSchema(String description,
                            boolean keyTransform,
                            RecordBuilder originalBuilder,
-                           List<String> transformFields, List<String> headers1, HeaderFrom.Operation operation,
+                           List<String> transformFields, List<String> headers1, HeaderFrom.Operation operation, boolean replaceNullWithDefault,
                            RecordBuilder expectedBuilder) {
         HeaderFrom<SourceRecord> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
-        xform.configure(config(headers1, transformFields, operation));
+        xform.configure(config(headers1, transformFields, operation, replaceNullWithDefault));
         ConnectHeaders headers = new ConnectHeaders();
         headers.addString("existing", "existing-value");
         Headers expect = headers.duplicate();
@@ -321,7 +353,7 @@ public class HeaderFromTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void invalidConfigExtraHeaderConfig(boolean keyTransform) {
-        Map<String, Object> config = config(singletonList("foo"), asList("foo", "bar"), HeaderFrom.Operation.COPY);
+        Map<String, Object> config = config(singletonList("foo"), asList("foo", "bar"), HeaderFrom.Operation.COPY, true);
         HeaderFrom<?> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
         assertThrows(ConfigException.class, () -> xform.configure(config));
     }
@@ -329,7 +361,7 @@ public class HeaderFromTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void invalidConfigExtraFieldConfig(boolean keyTransform) {
-        Map<String, Object> config = config(asList("foo", "bar"), singletonList("foo"), HeaderFrom.Operation.COPY);
+        Map<String, Object> config = config(asList("foo", "bar"), singletonList("foo"), HeaderFrom.Operation.COPY, true);
         HeaderFrom<?> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
         assertThrows(ConfigException.class, () -> xform.configure(config));
     }
@@ -337,7 +369,7 @@ public class HeaderFromTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void invalidConfigEmptyHeadersAndFieldsConfig(boolean keyTransform) {
-        Map<String, Object> config = config(emptyList(), emptyList(), HeaderFrom.Operation.COPY);
+        Map<String, Object> config = config(emptyList(), emptyList(), HeaderFrom.Operation.COPY, true);
         HeaderFrom<?> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
         assertThrows(ConfigException.class, () -> xform.configure(config));
     }
@@ -356,4 +388,3 @@ public class HeaderFromTest {
     }
 
 }
-

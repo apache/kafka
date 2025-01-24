@@ -14,14 +14,15 @@
 
 package kafka.server
 
-import kafka.utils.{TestInfoUtils, TestUtils}
-import org.apache.kafka.common.config.internals.QuotaConfigs
+import kafka.utils.TestUtils
 import org.apache.kafka.common.message.ListGroupsRequestData
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ListGroupsRequest, ListGroupsResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.server.config.QuotaConfig
+import org.apache.kafka.server.metrics.MetricConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -40,7 +41,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
   override def brokerCount: Int = 1
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.MetricReporterClassesProp, classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[KafkaMetricReporterExceptionHandlingTest.GoodReporter].getName)
+    properties.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[KafkaMetricReporterExceptionHandlingTest.GoodReporter].getName)
   }
 
   @BeforeEach
@@ -49,7 +50,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
 
     // need a quota prop to register a "throttle-time" metrics after server startup
     val quotaProps = new Properties()
-    quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "0.1")
+    quotaProps.put(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "0.1")
 
     changeClientIdConfig("<default>", quotaProps)
   }
@@ -62,8 +63,8 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testBothReportersAreInvoked(quorum: String): Unit = {
     val port = anySocketServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     val socket = new Socket("localhost", port)

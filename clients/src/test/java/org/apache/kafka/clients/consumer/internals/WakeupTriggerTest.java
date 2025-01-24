@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.errors.WakeupException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -39,7 +41,7 @@ import static org.mockito.Mockito.verify;
 
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WakeupTriggerTest {
-    private final static long DEFAULT_TIMEOUT_MS = 1000;
+    private static final long DEFAULT_TIMEOUT_MS = 1000;
     private WakeupTrigger wakeupTrigger;
 
     @BeforeEach
@@ -99,6 +101,19 @@ public class WakeupTriggerTest {
     public void testWakeupFromFetchAction() {
         try (final FetchBuffer fetchBuffer = mock(FetchBuffer.class)) {
             wakeupTrigger.setFetchAction(fetchBuffer);
+
+            wakeupTrigger.wakeup();
+
+            verify(fetchBuffer).wakeup();
+            final WakeupTrigger.Wakeupable wakeupable = wakeupTrigger.getPendingTask();
+            assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupable);
+        }
+    }
+
+    @Test
+    public void testWakeupFromShareFetchAction() {
+        try (final ShareFetchBuffer fetchBuffer = mock(ShareFetchBuffer.class)) {
+            wakeupTrigger.setShareFetchAction(fetchBuffer);
 
             wakeupTrigger.wakeup();
 
@@ -169,6 +184,39 @@ public class WakeupTriggerTest {
         wakeupTrigger.clearTask();
         wakeupTrigger.wakeup();
         assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testExceptionTriggeredWhenTaskAsynchronouslyCompleted() {
+        final CompletableFuture<Void> task = new CompletableFuture<>();
+        wakeupTrigger.setActiveTask(task);
+        task.complete(null);
+        wakeupTrigger.wakeup();
+        assertNotNull(wakeupTrigger.getPendingTask());
+        assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupTrigger.getPendingTask());
+        assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testExceptionTriggeredWhenTaskAsynchronouslyFailed() {
+        final CompletableFuture<Void> task = new CompletableFuture<>();
+        wakeupTrigger.setActiveTask(task);
+        task.completeExceptionally(new RuntimeException("Simulated error"));
+        wakeupTrigger.wakeup();
+        assertNotNull(wakeupTrigger.getPendingTask());
+        assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupTrigger.getPendingTask());
+        assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testExceptionTriggeredWhenTaskAsynchronouslyCancelled() {
+        final CompletableFuture<Void> task = new CompletableFuture<>();
+        wakeupTrigger.setActiveTask(task);
+        task.cancel(true);
+        wakeupTrigger.wakeup();
+        assertNotNull(wakeupTrigger.getPendingTask());
+        assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupTrigger.getPendingTask());
+        assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
     }
 
     private void assertWakeupExceptionIsThrown(final CompletableFuture<?> future) {

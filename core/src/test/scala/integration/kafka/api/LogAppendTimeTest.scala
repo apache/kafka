@@ -18,14 +18,15 @@ package kafka.api
 
 import java.util.Collections
 import java.util.concurrent.TimeUnit
-import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 
 /**
   * Tests where the broker is configured to use LogAppendTime. For tests where LogAppendTime is configured via topic
@@ -37,8 +38,8 @@ class LogAppendTimeTest extends IntegrationTestHarness {
   val brokerCount: Int = 2
 
   // This will be used for the offsets topic as well
-  serverConfig.put(KafkaConfig.LogMessageTimestampTypeProp, TimestampType.LOG_APPEND_TIME.name)
-  serverConfig.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "2")
+  serverConfig.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.LOG_APPEND_TIME.name)
+  serverConfig.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "2")
 
   private val topic = "topic"
 
@@ -48,9 +49,9 @@ class LogAppendTimeTest extends IntegrationTestHarness {
     createTopic(topic)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testProduceConsume(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testProduceConsume(quorum: String, groupProtocol: String): Unit = {
     val producer = createProducer()
     val now = System.currentTimeMillis()
     val createTime = now - TimeUnit.DAYS.toMillis(1)
@@ -76,5 +77,4 @@ class LogAppendTimeTest extends IntegrationTestHarness {
       assertEquals(TimestampType.LOG_APPEND_TIME, consumerRecord.timestampType)
     }
   }
-
 }

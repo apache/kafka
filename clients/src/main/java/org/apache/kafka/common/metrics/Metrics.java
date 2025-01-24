@@ -21,6 +21,7 @@ import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,7 +67,7 @@ import static java.util.Collections.emptyList;
  * sensor.record(messageSize);
  * </pre>
  */
-public class Metrics implements Closeable {
+public final class Metrics implements Closeable {
 
     private final MetricConfig config;
     private final ConcurrentMap<MetricName, KafkaMetric> metrics;
@@ -154,7 +155,6 @@ public class Metrics implements Closeable {
      * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
      * @param metricsContext The metricsContext to initialize metrics reporter with
      */
-    @SuppressWarnings("this-escape")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration,
                    MetricsContext metricsContext) {
         this.config = defaultConfig;
@@ -392,7 +392,7 @@ public class Metrics implements Closeable {
      * receive every value recorded with this sensor.
      * @param name The name of the sensor
      * @param config A default configuration to use for this sensor for metrics that don't have their own config
-     * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
+     * @param inactiveSensorExpirationTimeSeconds If no value is recorded on the Sensor for this duration of time,
      *                                        it is eligible for removal
      * @param parents The parent sensors
      * @param recordingLevel The recording level.
@@ -419,7 +419,7 @@ public class Metrics implements Closeable {
      * receive every value recorded with this sensor. This uses a default recording level of INFO.
      * @param name The name of the sensor
      * @param config A default configuration to use for this sensor for metrics that don't have their own config
-     * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
+     * @param inactiveSensorExpirationTimeSeconds If no value is recorded on the Sensor for this duration of time,
      *                                        it is eligible for removal
      * @param parents The parent sensors
      * @return The sensor that is created

@@ -19,9 +19,13 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.lang.management.ManagementFactory;
+import java.util.List;
 
 import javax.management.Attribute;
 import javax.management.AttributeList;
@@ -29,8 +33,6 @@ import javax.management.AttributeNotFoundException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.management.RuntimeMBeanException;
-import java.lang.management.ManagementFactory;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;

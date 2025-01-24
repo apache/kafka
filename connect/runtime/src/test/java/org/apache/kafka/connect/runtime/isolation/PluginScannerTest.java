@@ -17,161 +17,145 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.apache.kafka.connect.storage.Converter;
 
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Parameterized.class)
+
 public class PluginScannerTest {
 
-    private enum ScannerType { Reflection, ServiceLoader };
+    @TempDir
+    File pluginDir;
 
-    @Rule
-    public TemporaryFolder pluginDir = new TemporaryFolder();
-
-    private final PluginScanner scanner;
-
-    @Parameterized.Parameters
-    public static Collection<Object[]> parameters() {
-        List<Object[]> values = new ArrayList<>();
-        for (ScannerType type : ScannerType.values()) {
-            values.add(new Object[]{type});
-        }
-        return values;
+    static Stream<PluginScanner> parameters() {
+        return Stream.of(new ReflectionScanner(), new ServiceLoaderScanner());
     }
 
-    public PluginScannerTest(ScannerType scannerType) {
-        switch (scannerType) {
-            case Reflection:
-                this.scanner = new ReflectionScanner();
-                break;
-            case ServiceLoader:
-                this.scanner = new ServiceLoaderScanner();
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown type " + scannerType);
-        }
-    }
-
-    @BeforeClass
-    public static void setUp() {
-        // Work around a circular-dependency in TestPlugins.
-        TestPlugins.pluginPath();
-    }
-
-    @Test
-    public void testScanningEmptyPluginPath() {
-        PluginScanResult result = scan(
-                Collections.emptySet()
-        );
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testScanningEmptyPluginPath(PluginScanner scanner) {
+        PluginScanResult result = scan(scanner, Collections.emptySet());
         assertTrue(result.isEmpty());
     }
 
-    @Test
-    public void testScanningPluginClasses() {
-        PluginScanResult result = scan(
-                TestPlugins.pluginPath()
-        );
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testScanningPluginClasses(PluginScanner scanner) {
+        PluginScanResult result = scan(scanner, TestPlugins.pluginPath());
         Set<String> classes = new HashSet<>();
         result.forEach(pluginDesc -> classes.add(pluginDesc.className()));
         Set<String> expectedClasses = new HashSet<>(TestPlugins.pluginClasses());
         assertEquals(expectedClasses, classes);
     }
 
-    @Test
-    public void testScanningInvalidUberJar() throws Exception {
-        pluginDir.newFile("invalid.jar");
-
-        PluginScanResult result = scan(
-                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
-        );
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testScanningInvalidUberJar(PluginScanner scanner) throws Exception {
+        File newFile = new File(pluginDir, "invalid.jar");
+        newFile.createNewFile();
+        PluginScanResult result = scan(scanner, Collections.singleton(pluginDir.toPath()));
         assertTrue(result.isEmpty());
     }
 
-    @Test
-    public void testScanningPluginDirContainsInvalidJarsOnly() throws Exception {
-        pluginDir.newFolder("my-plugin");
-        pluginDir.newFile("my-plugin/invalid.jar");
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testScanningPluginDirContainsInvalidJarsOnly(PluginScanner scanner) throws Exception {
+        File newFile = new File(pluginDir, "my-plugin");
+        newFile.mkdir();
+        newFile = new File(newFile, "invalid.jar");
+        newFile.createNewFile();
 
-        PluginScanResult result = scan(
-                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
-        );
+        PluginScanResult result = scan(scanner, Collections.singleton(pluginDir.toPath()));
         assertTrue(result.isEmpty());
     }
 
-    @Test
-    public void testScanningNoPlugins() {
-        PluginScanResult result = scan(
-                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
-        );
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testScanningNoPlugins(PluginScanner scanner) {
+        PluginScanResult result = scan(scanner, Collections.singleton(pluginDir.toPath()));
         assertTrue(result.isEmpty());
     }
 
-    @Test
-    public void testScanningPluginDirEmpty() throws Exception {
-        pluginDir.newFolder("my-plugin");
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testScanningPluginDirEmpty(PluginScanner scanner) {
+        File newFile = new File(pluginDir, "my-plugin");
+        newFile.mkdir();
 
-        PluginScanResult result = scan(
-                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
-        );
+        PluginScanResult result = scan(scanner, Collections.singleton(pluginDir.toPath()));
         assertTrue(result.isEmpty());
     }
 
-    @Test
-    public void testScanningMixOfValidAndInvalidPlugins() throws Exception {
-        pluginDir.newFile("invalid.jar");
-        pluginDir.newFolder("my-plugin");
-        pluginDir.newFile("my-plugin/invalid.jar");
-        Path pluginPath = this.pluginDir.getRoot().toPath();
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testScanningMixOfValidAndInvalidPlugins(PluginScanner scanner) throws Exception {
+        new File(pluginDir, "invalid.jar").createNewFile();
+        File newFile = new File(pluginDir, "my-plugin");
+        newFile.mkdir();
+        newFile = new File(newFile, "invalid.jar");
+        newFile.createNewFile();
+        Path pluginPath = this.pluginDir.toPath();
 
         for (Path source : TestPlugins.pluginPath()) {
             Files.copy(source, pluginPath.resolve(source.getFileName()));
         }
 
-        PluginScanResult result = scan(
-                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
-        );
+        PluginScanResult result = scan(scanner, Collections.singleton(pluginDir.toPath()));
         Set<String> classes = new HashSet<>();
         result.forEach(pluginDesc -> classes.add(pluginDesc.className()));
         Set<String> expectedClasses = new HashSet<>(TestPlugins.pluginClasses());
         assertEquals(expectedClasses, classes);
     }
 
-    @Test
-    public void testNonVersionedPluginHasUndefinedVersion() {
-        PluginScanResult unversionedPluginsResult = scan(TestPlugins.pluginPath(TestPlugins.TestPlugin.SAMPLING_HEADER_CONVERTER));
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testNonVersionedPluginHasUndefinedVersion(PluginScanner scanner) {
+        PluginScanResult unversionedPluginsResult = scan(scanner,
+                TestPlugins.pluginPath(TestPlugins.TestPlugin.SAMPLING_HEADER_CONVERTER));
         assertFalse(unversionedPluginsResult.isEmpty());
         unversionedPluginsResult.forEach(pluginDesc -> assertEquals(PluginDesc.UNDEFINED_VERSION, pluginDesc.version()));
     }
 
-    @Test
-    public void testVersionedPluginsHasVersion() {
-        PluginScanResult versionedPluginResult = scan(TestPlugins.pluginPath(TestPlugins.TestPlugin.READ_VERSION_FROM_RESOURCE_V1));
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testVersionedPluginsHasVersion(PluginScanner scanner) {
+        PluginScanResult versionedPluginResult = scan(scanner,
+                TestPlugins.pluginPath(TestPlugins.TestPlugin.READ_VERSION_FROM_RESOURCE_V1));
         assertFalse(versionedPluginResult.isEmpty());
         versionedPluginResult.forEach(pluginDesc -> assertEquals("1.0.0", pluginDesc.version()));
-
     }
 
-    private PluginScanResult scan(Set<Path> pluginLocations) {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testClasspathPluginIsAlsoLoadedInIsolation(PluginScanner scanner) {
+        Set<Path> isolatedClassPathPlugin = TestPlugins.pluginPath(TestPlugins.TestPlugin.CLASSPATH_CONVERTER);
+        PluginScanResult result = scan(scanner, isolatedClassPathPlugin);
+        Optional<PluginDesc<Converter>> pluginDesc = result.converters().stream()
+            .filter(desc -> desc.className().equals(TestPlugins.TestPlugin.CLASSPATH_CONVERTER.className()))
+            .findFirst();
+        assertTrue(pluginDesc.isPresent());
+        assertInstanceOf(PluginClassLoader.class, pluginDesc.get().loader());
+    }
+
+    private PluginScanResult scan(PluginScanner scanner, Set<Path> pluginLocations) {
         ClassLoaderFactory factory = new ClassLoaderFactory();
         Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, PluginScannerTest.class.getClassLoader(), factory);
         return scanner.discoverPlugins(pluginSources);
     }
-
 }

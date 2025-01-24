@@ -39,7 +39,9 @@
     <module name="EqualsHashCode"/>
     <module name="SimplifyBooleanExpression"/>
     <module name="OneStatementPerLine"/>
-    <module name="UnnecessaryParentheses" />
+    <module name="UnnecessaryParentheses">
+      <property name="tokens" value="IDENT, NUM_DOUBLE, LAMBDA, TEXT_BLOCK_LITERAL_BEGIN, UNARY_MINUS, UNARY_PLUS, INC, DEC, POST_INC, POST_DEC" />
+    </module>
     <module name="SimplifyBooleanReturn"/>
 
     <!-- style -->
@@ -81,6 +83,8 @@
     <module name="ImportControl">
       <property name="file" value="${config_loc}/${importControlFile}"/>
     </module>
+
+    <!--   don't define any import order here! Import order check/format is addressed by spotless.-->
 
     <!-- whitespace -->
     <module name="GenericWhitespace"/>
@@ -148,6 +152,9 @@
 
     <!-- Allows the use of the @SuppressWarnings annotation in the code -->
     <module name="SuppressWarningsHolder"/>
+
+    <module name="ModifierOrder"/>
+    
   </module>
 
   <module name="SuppressionFilter">

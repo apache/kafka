@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror.integration;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.mirror.MirrorSourceConnector;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;

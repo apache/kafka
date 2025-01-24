@@ -101,7 +101,7 @@ import java.util.Map;
  * }</pre>
  *
  * <h3>Dynamic branching</h3>
- * There is also a case when we might need to create branches dynamically, e. g. one per enum value:
+ * There is also a case when we might need to create branches dynamically, e.g. one per enum value:
  *
  * <pre> {@code
  * BranchedKStream branched = stream.split();

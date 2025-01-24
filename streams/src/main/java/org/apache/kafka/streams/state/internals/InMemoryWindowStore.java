@@ -23,13 +23,12 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
@@ -40,6 +39,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,7 +72,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap = new ConcurrentSkipListMap<>();
     private final Set<InMemoryWindowStoreIteratorWrapper> openIterators = ConcurrentHashMap.newKeySet();
 
-    private ProcessorContext context;
+    private InternalProcessorContext internalProcessorContext;
     private Sensor expiredRecordSensor;
     private int seqnum = 0;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
@@ -80,7 +80,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private volatile boolean open = false;
 
     private final Position position;
-    private StateStoreContext stateStoreContext;
 
     public InMemoryWindowStore(final String name,
                                final long retentionPeriod,
@@ -100,14 +99,14 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         return name;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        this.context = context;
+    public void init(final StateStoreContext stateStoreContext,
+                     final StateStore root) {
+        this.internalProcessorContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
 
-        final StreamsMetricsImpl metrics = ProcessorContextUtils.getMetricsImpl(context);
+        final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
         final String threadId = Thread.currentThread().getName();
-        final String taskName = context.taskId().toString();
+        final String taskName = stateStoreContext.taskId().toString();
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
             threadId,
             taskName,
@@ -116,11 +115,11 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                context.appConfigs(),
+                stateStoreContext.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false
             );
-            context.register(
+            stateStoreContext.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
                     synchronized (position) {
@@ -144,13 +143,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     @Override
-    public void init(final StateStoreContext context,
-                     final StateStore root) {
-        this.stateStoreContext = context;
-        init(StoreToProcessorContextAdapter.adapt(context), root);
-    }
-
-    @Override
     public Position getPosition() {
         return position;
     }
@@ -162,7 +154,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         synchronized (position) {
             if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
-                expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+                expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
                 LOG.warn("Skipping record for expired segment.");
             } else {
                 if (value != null) {
@@ -182,7 +174,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                 }
             }
 
-            StoreQueryUtils.updatePosition(position, stateStoreContext);
+            StoreQueryUtils.updatePosition(position, internalProcessorContext);
         }
     }
 
@@ -391,7 +383,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             config,
             this,
             position,
-            stateStoreContext
+            internalProcessorContext
         );
     }
 
@@ -479,7 +471,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         void deregisterIterator(final InMemoryWindowStoreIteratorWrapper iterator);
     }
 
-    private static abstract class InMemoryWindowStoreIteratorWrapper {
+    private abstract static class InMemoryWindowStoreIteratorWrapper {
 
         private Iterator<Map.Entry<Bytes, byte[]>> recordIterator;
         private KeyValue<Bytes, byte[]> next;

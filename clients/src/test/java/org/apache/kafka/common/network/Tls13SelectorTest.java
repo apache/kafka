@@ -17,32 +17,32 @@
 
 package org.apache.kafka.common.network;
 
-import static java.util.Arrays.asList;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.test.TestSslUtils;
+import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.test.TestSslUtils;
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledForJreRange;
-import org.junit.jupiter.api.condition.JRE;
 
-@EnabledForJreRange(min = JRE.JAVA_11) // TLS 1.3 is only supported with Java 11 and newer
+import static java.util.Arrays.asList;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 public class Tls13SelectorTest extends SslSelectorTest {
 
     @Override
     protected Map<String, Object> createSslClientConfigs(File trustStoreFile) throws GeneralSecurityException, IOException {
-        Map<String, Object> configs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT,
+        Map<String, Object> configs = TestSslUtils.createSslConfig(false, false, ConnectionMode.CLIENT,
             trustStoreFile, "client");
-        configs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, asList("TLSv1.3"));
+        configs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.3"));
         return configs;
     }
 

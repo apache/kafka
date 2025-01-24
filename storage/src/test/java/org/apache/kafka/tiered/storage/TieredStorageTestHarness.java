@@ -19,23 +19,23 @@ package org.apache.kafka.tiered.storage;
 import kafka.api.IntegrationTestHarness;
 import kafka.log.remote.RemoteLogManager;
 import kafka.server.KafkaBroker;
-import kafka.server.KafkaConfig;
+
 import org.apache.kafka.common.replica.ReplicaSelector;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,9 +45,11 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import scala.collection.Seq;
+import scala.jdk.javaapi.CollectionConverters;
+
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createPropsForRemoteStorage;
-
 /**
  * Base class for integration tests exercising the tiered storage functionality in Apache Kafka.
  * This uses a {@link LocalTieredStorage} instance as the second-tier storage system and
@@ -60,18 +62,16 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     private String testClassName = "";
     private String storageDirPath = "";
 
-    @SuppressWarnings("deprecation")
     @Override
     public void modifyConfigs(Seq<Properties> props) {
-        for (Properties p : JavaConverters.seqAsJavaList(props)) {
+        for (Properties p : CollectionConverters.asJava(props)) {
             p.putAll(overridingProps());
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Override
-    public Seq<Properties> kraftControllerConfigs() {
-        return JavaConverters.asScalaBuffer(Collections.singletonList(overridingProps())).toSeq();
+    public Seq<Properties> kraftControllerConfigs(TestInfo testInfo) {
+        return CollectionConverters.asScala(Collections.singletonList(overridingProps())).toSeq();
     }
 
     protected int numRemoteLogMetadataPartitions() {
@@ -82,7 +82,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         Properties overridingProps = createPropsForRemoteStorage(testClassName, storageDirPath, brokerCount(),
                 numRemoteLogMetadataPartitions(), new Properties());
         readReplicaSelectorClass()
-                .ifPresent(c -> overridingProps.put(KafkaConfig.ReplicaSelectorClassProp(), c.getName()));
+                .ifPresent(c -> overridingProps.put(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG, c.getName()));
         return overridingProps;
     }
 
@@ -92,19 +92,23 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     protected abstract void writeTestSpecifications(TieredStorageTestBuilder builder);
 
+    protected void overrideConsumerConfig(Properties consumerConfig) {
+    }
+
     @BeforeEach
     @Override
     public void setUp(TestInfo testInfo) {
         testClassName = testInfo.getTestClass().get().getSimpleName().toLowerCase(Locale.getDefault());
         storageDirPath = TestUtils.tempDirectory("kafka-remote-tier-" + testClassName).getAbsolutePath();
         super.setUp(testInfo);
+        overrideConsumerConfig(consumerConfig());
         context = new TieredStorageTestContext(this);
     }
 
     // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"zk", "kraft"})
-    public void executeTieredStorageTest(String quorum) {
+    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void executeTieredStorageTest(String quorum, String groupProtocol) {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
         writeTestSpecifications(builder);
         try {
@@ -128,16 +132,13 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         }
     }
 
-    @SuppressWarnings("deprecation")
     public static List<LocalTieredStorage> remoteStorageManagers(Seq<KafkaBroker> brokers) {
         List<LocalTieredStorage> storages = new ArrayList<>();
-        JavaConverters.seqAsJavaList(brokers).forEach(broker -> {
+        CollectionConverters.asJava(brokers).forEach(broker -> {
             if (broker.remoteLogManagerOpt().isDefined()) {
                 RemoteLogManager remoteLogManager = broker.remoteLogManagerOpt().get();
                 RemoteStorageManager storageManager = remoteLogManager.storageManager();
-                if (storageManager instanceof ClassLoaderAwareRemoteStorageManager) {
-                    ClassLoaderAwareRemoteStorageManager loaderAwareRSM =
-                            (ClassLoaderAwareRemoteStorageManager) storageManager;
+                if (storageManager instanceof ClassLoaderAwareRemoteStorageManager loaderAwareRSM) {
                     if (loaderAwareRSM.delegate() instanceof LocalTieredStorage) {
                         storages.add((LocalTieredStorage) loaderAwareRSM.delegate());
                     }
@@ -152,10 +153,9 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         return storages;
     }
 
-    @SuppressWarnings("deprecation")
     public static List<BrokerLocalStorage> localStorages(Seq<KafkaBroker> brokers) {
-        return JavaConverters.seqAsJavaList(brokers).stream()
-                .map(b -> new BrokerLocalStorage(b.config().brokerId(), b.config().logDirs().head(),
+        return CollectionConverters.asJava(brokers).stream()
+                .map(b -> new BrokerLocalStorage(b.config().brokerId(), CollectionConverters.asJava(b.config().logDirs().toSet()),
                         STORAGE_WAIT_TIMEOUT_SEC))
                 .collect(Collectors.toList());
     }

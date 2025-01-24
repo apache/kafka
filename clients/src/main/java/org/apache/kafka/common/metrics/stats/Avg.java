@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import java.util.List;
-
 import org.apache.kafka.common.metrics.MetricConfig;
+
+import java.util.List;
 
 /**
  * A {@link SampledStat} that maintains a simple average over its samples.
@@ -46,4 +46,3 @@ public class Avg extends SampledStat {
     }
 
 }
-

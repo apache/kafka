@@ -26,6 +26,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
+
 import org.hamcrest.Description;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
 
@@ -111,13 +112,10 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
                     .appendValue(actual.getClass().getSimpleName());
             return false;
         }
-        if (!compare(expectedRecord.key(), actualRecord.key(), keySerde.deserializer(), "Record key",
-                mismatchDescription) ||
-                !compare(expectedRecord.value(), actualRecord.value(), valueSerde.deserializer(), "Record value",
-                        mismatchDescription)) {
-            return false;
-        }
-        return true;
+        return compare(expectedRecord.key(), actualRecord.key(), keySerde.deserializer(), "Record key",
+                mismatchDescription) &&
+                compare(expectedRecord.value(), actualRecord.value(), valueSerde.deserializer(), "Record value",
+                        mismatchDescription);
     }
 
     private boolean compare(ByteBuffer lhs,
@@ -138,8 +136,7 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
 
     @SuppressWarnings("unchecked")
     private SimpleRecord convert(Object recordCandidate) {
-        if (recordCandidate instanceof ProducerRecord) {
-            ProducerRecord<?, ?> record = (ProducerRecord<?, ?>) recordCandidate;
+        if (recordCandidate instanceof ProducerRecord<?, ?> record) {
             long timestamp = record.timestamp() != null ? record.timestamp() : RecordBatch.NO_TIMESTAMP;
             ByteBuffer keyBytes =
                     Utils.wrapNullable(keySerde.serializer().serialize(topicPartition.topic(), (K) record.key()));
@@ -147,16 +144,14 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
                     Utils.wrapNullable(valueSerde.serializer().serialize(topicPartition.topic(), (V) record.value()));
             Header[] headers = record.headers() != null ? record.headers().toArray() : Record.EMPTY_HEADERS;
             return new SimpleRecord(timestamp, keyBytes, valueBytes, headers);
-        } else if (recordCandidate instanceof ConsumerRecord) {
-            ConsumerRecord<?, ?> record = (ConsumerRecord<?, ?>) recordCandidate;
+        } else if (recordCandidate instanceof ConsumerRecord<?, ?> record) {
             ByteBuffer keyBytes =
                     Utils.wrapNullable(keySerde.serializer().serialize(topicPartition.topic(), (K) record.key()));
             ByteBuffer valueBytes =
                     Utils.wrapNullable(valueSerde.serializer().serialize(topicPartition.topic(), (V) record.value()));
             Header[] headers = record.headers() != null ? record.headers().toArray() : Record.EMPTY_HEADERS;
             return new SimpleRecord(record.timestamp(), keyBytes, valueBytes, headers);
-        } else if (recordCandidate instanceof Record) {
-            Record record = (Record) recordCandidate;
+        } else if (recordCandidate instanceof Record record) {
             return new SimpleRecord(record.timestamp(), record.key(), record.value(), record.headers());
         } else {
             return null;

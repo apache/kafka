@@ -16,23 +16,22 @@
  */
 package org.apache.kafka.common.network;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
-
-import java.io.File;
-import java.net.InetAddress;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 import org.apache.kafka.test.TestSslUtils.SslConfigsBuilder;
 import org.apache.kafka.test.TestUtils;
 
+import java.io.File;
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 public class CertStores {
 
-    public static final Set<String> KEYSTORE_PROPS = Utils.mkSet(
+    public static final Set<String> KEYSTORE_PROPS = Set.of(
             SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
             SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
             SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
@@ -40,7 +39,7 @@ public class CertStores {
             SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
             SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG);
 
-    public static final Set<String> TRUSTSTORE_PROPS = Utils.mkSet(
+    public static final Set<String> TRUSTSTORE_PROPS = Set.of(
             SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
             SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
             SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
@@ -56,19 +55,15 @@ public class CertStores {
         this(server, commonName, new TestSslUtils.CertificateBuilder().sanDnsNames(sanHostName));
     }
 
-    public CertStores(boolean server, String commonName, InetAddress hostAddress) throws Exception {
-        this(server, commonName, new TestSslUtils.CertificateBuilder().sanIpAddress(hostAddress));
-    }
-
     private CertStores(boolean server, String commonName, TestSslUtils.CertificateBuilder certBuilder) throws Exception {
         this(server, commonName, "RSA", certBuilder, false);
     }
 
     private CertStores(boolean server, String commonName, String keyAlgorithm, TestSslUtils.CertificateBuilder certBuilder, boolean usePem) throws Exception {
         String name = server ? "server" : "client";
-        Mode mode = server ? Mode.SERVER : Mode.CLIENT;
+        ConnectionMode connectionMode = server ? ConnectionMode.SERVER : ConnectionMode.CLIENT;
         File truststoreFile = usePem ? null : TestUtils.tempFile(name + "TS", ".jks");
-        sslConfig = new SslConfigsBuilder(mode)
+        sslConfig = new SslConfigsBuilder(connectionMode)
                 .useClientCert(!server)
                 .certAlias(name)
                 .cn(commonName)
@@ -110,8 +105,8 @@ public class CertStores {
 
     public static class Builder {
         private final boolean isServer;
+        private final List<String> sanDns;
         private String cn;
-        private List<String> sanDns;
         private InetAddress sanIp;
         private String keyAlgorithm;
         private boolean usePem;

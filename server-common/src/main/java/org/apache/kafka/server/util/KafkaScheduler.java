@@ -17,6 +17,7 @@
 package org.apache.kafka.server.util;
 
 import org.apache.kafka.common.utils.KafkaThread;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

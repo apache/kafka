@@ -26,6 +26,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -68,7 +69,7 @@ public class RemoteLogMetadataCacheTest {
         }
     }
 
-    @ParameterizedTest(name = "isInitialized={0}")
+    @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testCacheUpdateMetadataOnInvalidArgs(boolean isInitialized) {
         if (isInitialized) {

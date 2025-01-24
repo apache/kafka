@@ -17,13 +17,12 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.DslKeyValueParams;
 import org.apache.kafka.streams.state.DslSessionParams;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
@@ -33,26 +32,29 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.util.Optional;
 import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class MaterializedInternalTest {
 
-    @Mock
-    private InternalNameProvider nameProvider;
-    @Mock
-    private KeyValueBytesStoreSupplier supplier;
+    private InternalNameProvider nameProvider = mock(InternalNameProvider.class);
+    private KeyValueBytesStoreSupplier supplier = mock(KeyValueBytesStoreSupplier.class);
     private final String prefix = "prefix";
 
     @Test

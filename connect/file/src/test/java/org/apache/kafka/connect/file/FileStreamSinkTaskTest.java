@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -32,8 +33,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class FileStreamSinkTaskTest {
@@ -56,11 +59,11 @@ public class FileStreamSinkTaskTest {
     @Test
     public void testPutFlush() {
         HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        final String newLine = System.getProperty("line.separator"); 
+        final String newLine = System.lineSeparator();
 
         // We do not call task.start() since it would override the output stream
 
-        task.put(Arrays.asList(
+        task.put(Collections.singletonList(
                 new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line1", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(1L));
@@ -85,7 +88,7 @@ public class FileStreamSinkTaskTest {
         task.start(props);
 
         HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        task.put(Arrays.asList(
+        task.put(Collections.singletonList(
                 new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line0", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(1L));

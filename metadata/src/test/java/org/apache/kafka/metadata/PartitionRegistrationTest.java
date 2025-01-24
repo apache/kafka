@@ -17,21 +17,23 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.DirectoryId;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.PartitionChangeRecord;
+import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
+import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.image.writer.UnwritableMetadataException;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
+
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.Arbitrary;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import net.jqwik.api.Provide;
-import org.apache.kafka.common.DirectoryId;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
-import org.apache.kafka.common.metadata.PartitionChangeRecord;
-import org.apache.kafka.common.metadata.PartitionRecord;
-import org.apache.kafka.image.writer.ImageWriterOptions;
-import org.apache.kafka.image.writer.UnwritableMetadataException;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -48,8 +50,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(40)
@@ -74,7 +76,7 @@ public class PartitionRegistrationTest {
             setReplicas(new int[]{1, 2, 3}).setDirectories(DirectoryId.unassignedArray(3)).
             setIsr(new int[]{1}).setLastKnownElr(new int[]{3}).setElr(new int[]{2}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(1).build();
         assertEquals(b, a.merge(new PartitionChangeRecord().
-            setLeader(3).setIsr(Arrays.asList(3))));
+            setLeader(3).setIsr(Collections.singletonList(3))));
         assertEquals("isr: [1, 2] -> [3], leader: 1 -> 3, leaderEpoch: 0 -> 1, partitionEpoch: 0 -> 1",
             b.diff(a));
         assertEquals("isr: [1, 2] -> [1], elr: [] -> [2], lastKnownElr: [] -> [3], partitionEpoch: 0 -> 1",
@@ -114,7 +116,7 @@ public class PartitionRegistrationTest {
                     Uuid.fromString("bAAlGAz1TN2doZjtWlvhRQ")
                 }).
             setIsr(new int[]{2, 3, 4}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(234).setPartitionEpoch(567).build();
-        assertEquals(new LeaderAndIsrPartitionState().
+        assertEquals(new LeaderAndIsrRequest.PartitionState().
                 setTopicName("foo").
                 setPartitionIndex(1).
                 setControllerEpoch(-1).
@@ -127,7 +129,7 @@ public class PartitionRegistrationTest {
                 setRemovingReplicas(Collections.emptyList()).
                 setIsNew(true).toString(),
             a.toLeaderAndIsrPartitionState(new TopicPartition("foo", 1), true).toString());
-        assertEquals(new LeaderAndIsrPartitionState().
+        assertEquals(new LeaderAndIsrRequest.PartitionState().
                 setTopicName("bar").
                 setPartitionIndex(0).
                 setControllerEpoch(-1).
@@ -153,7 +155,8 @@ public class PartitionRegistrationTest {
         PartitionRegistration partition1 = partition0.merge(new PartitionChangeRecord().
             setRemovingReplicas(Collections.singletonList(3)).
             setAddingReplicas(Collections.singletonList(4)).
-            setReplicas(Arrays.asList(1, 2, 3, 4)));
+            setReplicas(Arrays.asList(1, 2, 3, 4)).
+            setDirectories(Arrays.asList(dir1, dir2, dir3, DirectoryId.UNASSIGNED)));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).
             setDirectories(new Uuid[]{dir1, dir2, dir3, DirectoryId.UNASSIGNED}).
             setIsr(new int[] {1, 2, 3}).setRemovingReplicas(new int[] {3}).setAddingReplicas(new int[] {4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(201).build(), partition1);
@@ -161,7 +164,8 @@ public class PartitionRegistrationTest {
             setIsr(Arrays.asList(1, 2, 4)).
             setRemovingReplicas(Collections.emptyList()).
             setAddingReplicas(Collections.emptyList()).
-            setReplicas(Arrays.asList(1, 2, 4)));
+            setReplicas(Arrays.asList(1, 2, 4)).
+            setDirectories(Arrays.asList(dir1, dir2, DirectoryId.UNASSIGNED)));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 4}).
             setDirectories(new Uuid[]{dir1, dir2, DirectoryId.UNASSIGNED}).
             setIsr(new int[] {1, 2, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(202).build(), partition2);
@@ -170,7 +174,7 @@ public class PartitionRegistrationTest {
     @Test
     public void testBuilderThrowsIllegalStateExceptionWhenMissingReplicas() {
         PartitionRegistration.Builder builder = new PartitionRegistration.Builder();
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set replicas.", exception.getMessage());
     }
 
@@ -178,7 +182,7 @@ public class PartitionRegistrationTest {
     public void testBuilderThrowsIllegalStateExceptionWhenMissingIsr() {
         PartitionRegistration.Builder builder = new PartitionRegistration.Builder().
             setReplicas(new int[]{0}).setDirectories(new Uuid[]{DirectoryId.UNASSIGNED});
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set isr.", exception.getMessage());
     }
 
@@ -191,7 +195,7 @@ public class PartitionRegistrationTest {
             setRemovingReplicas(new int[]{0}).
             setAddingReplicas(new int[]{0});
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set leader.", exception.getMessage());
     }
 
@@ -204,7 +208,7 @@ public class PartitionRegistrationTest {
             setRemovingReplicas(new int[]{0}).
             setAddingReplicas(new int[]{0}).
             setLeader(0);
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set leader recovery state.", exception.getMessage());
     }
 
@@ -218,7 +222,7 @@ public class PartitionRegistrationTest {
             setAddingReplicas(new int[]{0}).
             setLeader(0).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED);
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set leader epoch.", exception.getMessage());
     }
 
@@ -233,7 +237,7 @@ public class PartitionRegistrationTest {
             setLeader(0).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
             setLeaderEpoch(0);
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set partition epoch.", exception.getMessage());
     }
 
@@ -280,11 +284,11 @@ public class PartitionRegistrationTest {
     }
 
     private static Stream<Arguments> metadataVersionsForTestPartitionRegistration() {
-        return Arrays.asList(
+        return Stream.of(
             MetadataVersion.IBP_3_7_IV1,
             MetadataVersion.IBP_3_7_IV2,
-            MetadataVersion.IBP_3_8_IV0
-        ).stream().map(mv -> Arguments.of(mv));
+            MetadataVersion.IBP_4_0_IV1
+        ).map(Arguments::of);
     }
 
     @ParameterizedTest
@@ -320,7 +324,7 @@ public class PartitionRegistrationTest {
         if (metadataVersion.isElrSupported()) {
             expectRecord.
                 setEligibleLeaderReplicas(Arrays.asList(2, 3)).
-                setLastKnownElr(Arrays.asList(4));
+                setLastKnownElr(Collections.singletonList(4));
         }
         if (metadataVersion.isDirectoryAssignmentSupported()) {
             expectRecord.setDirectories(Arrays.asList(
@@ -369,7 +373,7 @@ public class PartitionRegistrationTest {
             setPartitionEpoch(0);
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
         ImageWriterOptions options = new ImageWriterOptions.Builder().
-            setMetadataVersion(MetadataVersion.IBP_3_8_IV0).
+            setMetadataVersion(MetadataVersion.IBP_4_0_IV1).
             setLossHandler(exceptions::add).
             build();
         assertEquals(new ApiMessageAndVersion(expectRecord, (short) 2), partitionRegistration.toRecord(topicID, 0, options));

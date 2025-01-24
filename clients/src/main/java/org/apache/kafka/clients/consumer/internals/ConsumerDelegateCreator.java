@@ -42,7 +42,7 @@ import java.util.Locale;
  * it is using the new consumer group protocol (KIP-848) or if it should fall back to the existing, legacy group
  * protocol. This is based on the presence and value of the {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG group.protocol}
  * configuration. If the value is present and equal to &quot;{@code consumer}&quot;, the {@link AsyncKafkaConsumer}
- * will be returned. Otherwise, the {@link LegacyKafkaConsumer} will be returned.
+ * will be returned. Otherwise, the {@link ClassicKafkaConsumer} will be returned.
  *
  *
  * <p/>
@@ -62,7 +62,7 @@ public class ConsumerDelegateCreator {
             if (groupProtocol == GroupProtocol.CONSUMER)
                 return new AsyncKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
             else
-                return new LegacyKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
+                return new ClassicKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
         } catch (KafkaException e) {
             throw e;
         } catch (Throwable t) {
@@ -91,11 +91,10 @@ public class ConsumerDelegateCreator {
                     valueDeserializer,
                     client,
                     subscriptions,
-                    metadata,
-                    assignors
+                    metadata
                 );
             else
-                return new LegacyKafkaConsumer<>(
+                return new ClassicKafkaConsumer<>(
                     logContext,
                     time,
                     config,

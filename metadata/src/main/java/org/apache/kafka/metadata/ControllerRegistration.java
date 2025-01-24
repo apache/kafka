@@ -41,11 +41,11 @@ import java.util.stream.Collectors;
  */
 public class ControllerRegistration {
     public static class Builder {
-        private int id = 0;
-        private Uuid incarnationId = null;
-        private boolean zkMigrationReady = false;
-        private Map<String, Endpoint> listeners = null;
-        private Map<String, VersionRange> supportedFeatures = null;
+        private int id;
+        private Uuid incarnationId;
+        private boolean zkMigrationReady;
+        private Map<String, Endpoint> listeners;
+        private Map<String, VersionRange> supportedFeatures;
 
         public Builder() {
             this.id = 0;
@@ -73,10 +73,10 @@ public class ControllerRegistration {
             });
             this.listeners = Collections.unmodifiableMap(newListeners);
             Map<String, VersionRange> newSupportedFeatures = new HashMap<>();
-            record.features().forEach(feature -> {
+            record.features().forEach(feature ->
                 newSupportedFeatures.put(feature.name(), VersionRange.of(
-                        feature.minSupportedVersion(), feature.maxSupportedVersion()));
-            });
+                        feature.minSupportedVersion(), feature.maxSupportedVersion()))
+            );
             this.supportedFeatures = Collections.unmodifiableMap(newSupportedFeatures);
         }
 
@@ -203,8 +203,7 @@ public class ControllerRegistration {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ControllerRegistration)) return false;
-        ControllerRegistration other = (ControllerRegistration) o;
+        if (!(o instanceof ControllerRegistration other)) return false;
         return other.id == id &&
             other.incarnationId.equals(incarnationId) &&
             other.zkMigrationReady == zkMigrationReady &&
@@ -214,20 +213,18 @@ public class ControllerRegistration {
 
     @Override
     public String toString() {
-        StringBuilder bld = new StringBuilder();
-        bld.append("ControllerRegistration(id=").append(id);
-        bld.append(", incarnationId=").append(incarnationId);
-        bld.append(", zkMigrationReady=").append(zkMigrationReady);
-        bld.append(", listeners=[").append(
-            listeners.keySet().stream().sorted().
-                map(n -> listeners.get(n).toString()).
-                collect(Collectors.joining(", ")));
-        bld.append("], supportedFeatures={").append(
-            supportedFeatures.keySet().stream().sorted().
-                map(k -> k + ": " + supportedFeatures.get(k)).
-                collect(Collectors.joining(", ")));
-        bld.append("}");
-        bld.append(")");
-        return bld.toString();
+        return "ControllerRegistration(id=" + id +
+                ", incarnationId=" + incarnationId +
+                ", zkMigrationReady=" + zkMigrationReady +
+                ", listeners=[" +
+                listeners.keySet().stream().sorted().
+                        map(n -> listeners.get(n).toString()).
+                        collect(Collectors.joining(", ")) +
+                "], supportedFeatures={" +
+                supportedFeatures.keySet().stream().sorted().
+                        map(k -> k + ": " + supportedFeatures.get(k)).
+                        collect(Collectors.joining(", ")) +
+                "}" +
+                ")";
     }
 }

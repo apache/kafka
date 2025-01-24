@@ -72,7 +72,7 @@ public class CheckpointFile<T> {
         tempPath = Paths.get(absolutePath + ".tmp");
     }
 
-    public void write(Collection<T> entries, boolean sync) throws IOException {
+    public void write(Collection<T> entries) throws IOException {
         synchronized (lock) {
             // write to temp file and then swap with the existing file
             try (FileOutputStream fileOutputStream = new FileOutputStream(tempPath.toFile());
@@ -80,12 +80,10 @@ public class CheckpointFile<T> {
                 CheckpointWriteBuffer<T> checkpointWriteBuffer = new CheckpointWriteBuffer<>(writer, version, formatter);
                 checkpointWriteBuffer.write(entries);
                 writer.flush();
-                if (sync) {
-                    fileOutputStream.getFD().sync();
-                }
+                fileOutputStream.getFD().sync();
             }
 
-            Utils.atomicMoveWithFallback(tempPath, absolutePath, sync);
+            Utils.atomicMoveWithFallback(tempPath, absolutePath);
         }
     }
 
@@ -165,7 +163,7 @@ public class CheckpointFile<T> {
             line = reader.readLine();
             while (line != null) {
                 Optional<T> maybeEntry = formatter.fromString(line);
-                if (!maybeEntry.isPresent()) {
+                if (maybeEntry.isEmpty()) {
                     throw buildMalformedLineException(line);
                 }
                 entries.add(maybeEntry.get());

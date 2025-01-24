@@ -21,13 +21,14 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -37,8 +38,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Header;
@@ -89,6 +91,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -116,6 +119,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -130,9 +134,10 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
-import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -142,6 +147,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -150,46 +156,46 @@ public class FetchRequestManagerTest {
 
     private static final double EPSILON = 0.0001;
 
-    private String topicName = "test";
-    private String groupId = "test-group";
-    private Uuid topicId = Uuid.randomUuid();
-    private Map<String, Uuid> topicIds = new HashMap<String, Uuid>() {
+    private final String topicName = "test";
+    private final String groupId = "test-group";
+    private final Uuid topicId = Uuid.randomUuid();
+    private final Map<String, Uuid> topicIds = new HashMap<>() {
         {
             put(topicName, topicId);
         }
     };
-    private Map<Uuid, String> topicNames = singletonMap(topicId, topicName);
+    private final Map<Uuid, String> topicNames = singletonMap(topicId, topicName);
     private final String metricGroup = "consumer" + groupId + "-fetch-manager-metrics";
-    private TopicPartition tp0 = new TopicPartition(topicName, 0);
-    private TopicPartition tp1 = new TopicPartition(topicName, 1);
-    private TopicPartition tp2 = new TopicPartition(topicName, 2);
-    private TopicPartition tp3 = new TopicPartition(topicName, 3);
-    private TopicIdPartition tidp0 = new TopicIdPartition(topicId, tp0);
-    private TopicIdPartition tidp1 = new TopicIdPartition(topicId, tp1);
-    private TopicIdPartition tidp2 = new TopicIdPartition(topicId, tp2);
-    private TopicIdPartition tidp3 = new TopicIdPartition(topicId, tp3);
-    private int validLeaderEpoch = 0;
-    private MetadataResponse initialUpdateResponse =
+    private final TopicPartition tp0 = new TopicPartition(topicName, 0);
+    private final TopicPartition tp1 = new TopicPartition(topicName, 1);
+    private final TopicPartition tp2 = new TopicPartition(topicName, 2);
+    private final TopicPartition tp3 = new TopicPartition(topicName, 3);
+    private final TopicIdPartition tidp0 = new TopicIdPartition(topicId, tp0);
+    private final TopicIdPartition tidp1 = new TopicIdPartition(topicId, tp1);
+    private final TopicIdPartition tidp2 = new TopicIdPartition(topicId, tp2);
+    private final TopicIdPartition tidp3 = new TopicIdPartition(topicId, tp3);
+    private final int validLeaderEpoch = 0;
+    private final MetadataResponse initialUpdateResponse =
             RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 4), topicIds);
 
-    private int minBytes = 1;
-    private int maxBytes = Integer.MAX_VALUE;
-    private int maxWaitMs = 0;
-    private int fetchSize = 1000;
-    private long retryBackoffMs = 100;
-    private long requestTimeoutMs = 30000;
+    private final int minBytes = 1;
+    private final int maxBytes = Integer.MAX_VALUE;
+    private final int maxWaitMs = 0;
+    private final int fetchSize = 1000;
+    private final long retryBackoffMs = 100;
+    private final int requestTimeoutMs = 30000;
+    private final ApiVersions apiVersions = new ApiVersions();
     private MockTime time = new MockTime(1);
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
+    private BackgroundEventHandler backgroundEventHandler;
     private FetchMetricsRegistry metricsRegistry;
     private FetchMetricsManager metricsManager;
     private MockClient client;
     private Metrics metrics;
-    private ApiVersions apiVersions = new ApiVersions();
     private TestableFetchRequestManager<?, ?> fetcher;
     private TestableNetworkClientDelegate networkClientDelegate;
     private OffsetFetcher offsetFetcher;
-
     private MemoryRecords records;
     private MemoryRecords nextRecords;
     private MemoryRecords emptyRecords;
@@ -233,8 +239,12 @@ public class FetchRequestManagerTest {
     }
 
     private int sendFetches() {
+        return sendFetches(true);
+    }
+
+    private int sendFetches(boolean requestFetch) {
         offsetFetcher.validatePositionsOnMetadataChange();
-        return fetcher.sendFetches();
+        return fetcher.sendFetches(requestFetch);
     }
 
     @Test
@@ -365,11 +375,10 @@ public class FetchRequestManagerTest {
 
         final ArgumentCaptor<NetworkClientDelegate.UnsentRequest> argument = ArgumentCaptor.forClass(NetworkClientDelegate.UnsentRequest.class);
 
-        Timer timer = time.timer(Duration.ofSeconds(10));
         // NOTE: by design the FetchRequestManager doesn't perform network I/O internally. That means that calling
         // the close() method with a Timer will NOT send out the close session requests on close. The network
         // I/O logic is handled inside ConsumerNetworkThread.runAtClose, so we need to run that logic here.
-        ConsumerNetworkThread.runAtClose(singletonList(Optional.of(fetcher)), networkClientDelegate, timer);
+        ConsumerNetworkThread.runAtClose(singletonList(Optional.of(fetcher)), networkClientDelegate, time.milliseconds());
         // the network is polled during the last state of clean up.
         networkClientDelegate.poll(time.timer(1));
         // validate that closing the fetcher has sent a request with final epoch. 2 requests are sent, one for the
@@ -732,7 +741,7 @@ public class FetchRequestManagerTest {
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0,
-                CompressionType.NONE, TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(),
+                Compression.NONE, TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(),
                 RecordBatch.NO_PARTITION_LEADER_EPOCH);
         builder.append(0L, "key".getBytes(), "1".getBytes());
         builder.append(0L, "key".getBytes(), "2".getBytes());
@@ -761,29 +770,29 @@ public class FetchRequestManagerTest {
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
-        Integer partitionLeaderEpoch = 1;
+        int partitionLeaderEpoch = 1;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE, TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(),
+                Compression.NONE, TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(),
                 partitionLeaderEpoch);
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
         builder.close();
 
         partitionLeaderEpoch += 7;
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
                 TimestampType.CREATE_TIME, 2L, System.currentTimeMillis(), partitionLeaderEpoch);
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
         builder.close();
 
         partitionLeaderEpoch += 5;
-        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
                 TimestampType.CREATE_TIME, 3L, System.currentTimeMillis(), partitionLeaderEpoch);
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
         builder.close();
 
         buffer.flip();
@@ -859,7 +868,7 @@ public class FetchRequestManagerTest {
         int partitionLeaderEpoch = 0;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.idempotentBuilder(buffer, CompressionType.NONE, 0L, producerId,
+        MemoryRecordsBuilder builder = MemoryRecords.idempotentBuilder(buffer, Compression.NONE, 0L, producerId,
                 producerEpoch, baseSequence);
         builder.append(0L, "key".getBytes(), null);
         builder.close();
@@ -1047,7 +1056,7 @@ public class FetchRequestManagerTest {
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(out,
                 DefaultRecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE,
+                Compression.NONE,
                 TimestampType.CREATE_TIME,
                 0L, 10L, 0L, (short) 0, 0, false, false, 0, 1024);
         builder.append(10L, "key".getBytes(), "value".getBytes());
@@ -1078,7 +1087,7 @@ public class FetchRequestManagerTest {
     public void testParseInvalidRecordBatch() {
         buildFetcher();
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                CompressionType.NONE, TimestampType.CREATE_TIME,
+                Compression.NONE, TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -1104,7 +1113,7 @@ public class FetchRequestManagerTest {
     public void testHeaders() {
         buildFetcher();
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE, TimestampType.CREATE_TIME, 1L);
         builder.append(0L, "key".getBytes(), "value-1".getBytes());
 
         Header[] headersArray = new Header[1];
@@ -1227,7 +1236,7 @@ public class FetchRequestManagerTest {
         // this test verifies the fetcher updates the current fetched/consumed positions correctly for this case
         buildFetcher();
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE,
                 TimestampType.CREATE_TIME, 0L);
         builder.appendWithOffset(15L, 0L, "key".getBytes(), "value-1".getBytes());
         builder.appendWithOffset(20L, 0L, "key".getBytes(), "value-2".getBytes());
@@ -1250,25 +1259,6 @@ public class FetchRequestManagerTest {
         assertEquals(15L, consumerRecords.get(0).offset());
         assertEquals(20L, consumerRecords.get(1).offset());
         assertEquals(30L, consumerRecords.get(2).offset());
-    }
-
-    /**
-     * Test the case where the client makes a pre-v3 FetchRequest, but the server replies with only a partial
-     * request. This happens when a single message is larger than the per-partition limit.
-     */
-    @Test
-    public void testFetchRequestWhenRecordTooLarge() {
-        try {
-            buildFetcher();
-
-            client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.FETCH.id, (short) 2, (short) 2));
-            makeFetchRequestWithIncompleteRecord();
-            assertThrows(RecordTooLargeException.class, this::collectFetch);
-            // the position should not advance since no data has been returned
-            assertEquals(0, subscriptions.position(tp0).offset);
-        } finally {
-            client.setNodeApiVersions(NodeApiVersions.create());
-        }
     }
 
     /**
@@ -1439,7 +1429,7 @@ public class FetchRequestManagerTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
 
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
 
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
@@ -1471,7 +1461,7 @@ public class FetchRequestManagerTest {
     public void testFetchOnCompletedFetchesForAllPausedPartitions() {
         buildFetcher();
 
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
 
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
@@ -1505,7 +1495,7 @@ public class FetchRequestManagerTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
 
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
 
         subscriptions.seek(tp0, 1);
         assertEquals(1, sendFetches());
@@ -1679,7 +1669,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testFetchedRecordsAfterSeek() {
-        buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), 2, IsolationLevel.READ_UNCOMMITTED);
 
         assignFromUser(singleton(tp0));
@@ -1700,7 +1690,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testFetchOffsetOutOfRangeException() {
-        buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), 2, IsolationLevel.READ_UNCOMMITTED);
 
         assignFromUser(singleton(tp0));
@@ -1712,8 +1702,7 @@ public class FetchRequestManagerTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         for (int i = 0; i < 2; i++) {
-            OffsetOutOfRangeException e = assertThrows(OffsetOutOfRangeException.class, () ->
-                    collectFetch());
+            OffsetOutOfRangeException e = assertThrows(OffsetOutOfRangeException.class, this::collectFetch);
             assertEquals(singleton(tp0), e.offsetOutOfRangePartitions().keySet());
             assertEquals(0L, e.offsetOutOfRangePartitions().get(tp0).longValue());
         }
@@ -1723,9 +1712,9 @@ public class FetchRequestManagerTest {
     public void testFetchPositionAfterException() {
         // verify the advancement in the next fetch offset equals to the number of fetched records when
         // some fetched partitions cause Exception. This ensures that consumer won't lose record upon exception
-        buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
         subscriptions.seek(tp0, 1);
         subscriptions.seek(tp1, 1);
 
@@ -1769,9 +1758,9 @@ public class FetchRequestManagerTest {
     @Test
     public void testCompletedFetchRemoval() {
         // Ensure the removal of completed fetches that cause an Exception if and only if they contain empty records.
-        buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
-        assignFromUser(mkSet(tp0, tp1, tp2, tp3));
+        assignFromUser(Set.of(tp0, tp1, tp2, tp3));
 
         subscriptions.seek(tp0, 1);
         subscriptions.seek(tp1, 1);
@@ -1845,10 +1834,10 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testSeekBeforeException() {
-        buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), 2, IsolationLevel.READ_UNCOMMITTED);
 
-        assignFromUser(mkSet(tp0));
+        assignFromUser(Set.of(tp0));
         subscriptions.seek(tp0, 1);
         assertEquals(1, sendFetches());
         Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
@@ -1861,7 +1850,7 @@ public class FetchRequestManagerTest {
 
         assertEquals(2, fetchRecords().get(tp0).size());
 
-        subscriptions.assignFromUser(mkSet(tp0, tp1));
+        subscriptions.assignFromUser(Set.of(tp0, tp1));
         subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
         assertEquals(1, sendFetches());
@@ -1909,7 +1898,8 @@ public class FetchRequestManagerTest {
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
-                time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext());
+                time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext(),
+                MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
                 400, ApiMessageType.ListenerType.ZK_BROKER);
@@ -1976,7 +1966,7 @@ public class FetchRequestManagerTest {
         assertEquals(100, (Double) partitionLag.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be hw - offset of the last message after receiving a non-empty FetchResponse
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE,
                 TimestampType.CREATE_TIME, 0L);
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
@@ -2017,7 +2007,7 @@ public class FetchRequestManagerTest {
         assertEquals(0L, (Double) partitionLead.metricValue(), EPSILON);
 
         // recordsFetchLeadMin should be position - logStartOffset after receiving a non-empty FetchResponse
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE,
                 TimestampType.CREATE_TIME, 0L);
         for (int v = 0; v < 3; v++) {
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
@@ -2034,7 +2024,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testReadCommittedLagMetric() {
-        buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
 
         assignFromUser(singleton(tp0));
@@ -2061,7 +2051,7 @@ public class FetchRequestManagerTest {
         assertEquals(50, (Double) partitionLag.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be lso - offset of the last message after receiving a non-empty FetchResponse
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE,
                 TimestampType.CREATE_TIME, 0L);
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
@@ -2084,7 +2074,7 @@ public class FetchRequestManagerTest {
         TopicPartition tp1 = new TopicPartition(topic1, 0);
         TopicPartition tp2 = new TopicPartition(topic2, 0);
 
-        subscriptions.assignFromUser(mkSet(tp1, tp2));
+        subscriptions.assignFromUser(Set.of(tp1, tp2));
 
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(topic1, 1);
@@ -2098,10 +2088,10 @@ public class FetchRequestManagerTest {
         int expectedBytes = 0;
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> fetchPartitionData = new LinkedHashMap<>();
 
-        for (TopicIdPartition tp : mkSet(tidp1, tidp2)) {
+        for (TopicIdPartition tp : Set.of(tidp1, tidp2)) {
             subscriptions.seek(tp.topicPartition(), 0);
 
-            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE,
                     TimestampType.CREATE_TIME, 0L);
             for (int v = 0; v < 3; v++)
                 builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
@@ -2142,7 +2132,7 @@ public class FetchRequestManagerTest {
         KafkaMetric fetchSizeAverage = allMetrics.get(metrics.metricInstance(metricsRegistry.fetchSizeAvg));
         KafkaMetric recordsCountAverage = allMetrics.get(metrics.metricInstance(metricsRegistry.recordsPerRequestAvg));
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE,
                 TimestampType.CREATE_TIME, 0L);
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
@@ -2162,7 +2152,7 @@ public class FetchRequestManagerTest {
     @Test
     public void testFetchResponseMetricsWithOnePartitionError() {
         buildFetcher();
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
         subscriptions.seek(tp0, 0);
         subscriptions.seek(tp1, 0);
 
@@ -2170,7 +2160,7 @@ public class FetchRequestManagerTest {
         KafkaMetric fetchSizeAverage = allMetrics.get(metrics.metricInstance(metricsRegistry.fetchSizeAvg));
         KafkaMetric recordsCountAverage = allMetrics.get(metrics.metricInstance(metricsRegistry.recordsPerRequestAvg));
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE,
                 TimestampType.CREATE_TIME, 0L);
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
@@ -2205,7 +2195,7 @@ public class FetchRequestManagerTest {
     public void testFetchResponseMetricsWithOnePartitionAtTheWrongOffset() {
         buildFetcher();
 
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
         subscriptions.seek(tp0, 0);
         subscriptions.seek(tp1, 0);
 
@@ -2217,7 +2207,7 @@ public class FetchRequestManagerTest {
         assertEquals(1, sendFetches());
         subscriptions.seek(tp1, 5);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE,
                 TimestampType.CREATE_TIME, 0L);
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
@@ -2233,7 +2223,7 @@ public class FetchRequestManagerTest {
                 .setPartitionIndex(tp1.partition())
                 .setHighWatermark(100)
                 .setLogStartOffset(0)
-                .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("val".getBytes()))));
+                .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("val".getBytes()))));
 
         client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
         networkClientDelegate.poll(time.timer(0));
@@ -2251,7 +2241,7 @@ public class FetchRequestManagerTest {
     @Test
     public void testFetcherMetricsTemplates() {
         Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
-        buildFetcher(new MetricConfig().tags(clientTags), OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
+        buildFetcher(new MetricConfig().tags(clientTags), AutoOffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
 
         // Fetch from topic to generate topic metrics
@@ -2297,7 +2287,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testSkippingAbortedTransactions() {
-        buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         int currentOffset = 0;
@@ -2332,7 +2322,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testReturnCommittedTransactions() {
-        buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         int currentOffset = 0;
@@ -2368,7 +2358,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testReadCommittedWithCommittedAndAbortedTransactions() {
-        buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
@@ -2439,12 +2429,12 @@ public class FetchRequestManagerTest {
         for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
             fetchedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
         }
-        assertEquals(mkSet("commit1-1", "commit1-2", "commit2-1"), fetchedKeys);
+        assertEquals(Set.of("commit1-1", "commit1-2", "commit2-1"), fetchedKeys);
     }
 
     @Test
     public void testMultipleAbortMarkers() {
-        buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         int currentOffset = 0;
@@ -2493,7 +2483,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testReadCommittedAbortMarkerWithNoData() {
-        buildFetcher(OffsetResetStrategy.EARLIEST, new StringDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, new StringDeserializer(),
                 new StringDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
@@ -2535,14 +2525,14 @@ public class FetchRequestManagerTest {
     public void testUpdatePositionWithLastRecordMissingFromBatch() {
         buildFetcher();
 
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE,
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
                 new SimpleRecord("0".getBytes(), "v".getBytes()),
                 new SimpleRecord("1".getBytes(), "v".getBytes()),
                 new SimpleRecord("2".getBytes(), "v".getBytes()),
                 new SimpleRecord(null, "value".getBytes()));
 
         // Remove the last record to simulate compaction
-        MemoryRecords.FilterResult result = records.filterTo(tp0, new MemoryRecords.RecordFilter(0, 0) {
+        MemoryRecords.FilterResult result = records.filterTo(new MemoryRecords.RecordFilter(0, 0) {
             @Override
             protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new BatchRetentionResult(BatchRetention.DELETE_EMPTY, false);
@@ -2552,7 +2542,7 @@ public class FetchRequestManagerTest {
             protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return record.key() != null;
             }
-        }, ByteBuffer.allocate(1024), Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        }, ByteBuffer.allocate(1024), BufferSupplier.NO_CACHING);
         result.outputBuffer().flip();
         MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.outputBuffer());
 
@@ -2610,7 +2600,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testReadCommittedWithCompactedTopic() {
-        buildFetcher(OffsetResetStrategy.EARLIEST, new StringDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, new StringDeserializer(),
                 new StringDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
@@ -2673,7 +2663,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testReturnAbortedTransactionsInUncommittedMode() {
-        buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         int currentOffset = 0;
@@ -2707,7 +2697,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testConsumerPositionUpdatedWhenSkippingAbortedTransactions() {
-        buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         long currentOffset = 0;
@@ -2821,7 +2811,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testEmptyControlBatch() {
-        buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         int currentOffset = 1;
@@ -2862,14 +2852,14 @@ public class FetchRequestManagerTest {
     }
 
     private MemoryRecords buildRecords(long baseOffset, int count, long firstMessageId) {
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, baseOffset);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE, TimestampType.CREATE_TIME, baseOffset);
         for (int i = 0; i < count; i++)
             builder.append(0L, "key".getBytes(), ("value-" + (firstMessageId + i)).getBytes());
         return builder.build();
     }
 
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, int baseSequence, SimpleRecord... records) {
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
                 TimestampType.CREATE_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseSequence, true,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH);
 
@@ -2905,7 +2895,7 @@ public class FetchRequestManagerTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(
                 ByteBuffer.allocate(1024),
                 RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE,
+                Compression.NONE,
                 TimestampType.CREATE_TIME,
                 0L,
                 RecordBatch.NO_TIMESTAMP,
@@ -2949,7 +2939,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testPreferredReadReplica() {
-        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
+        buildFetcher(new MetricConfig(), AutoOffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
                 Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED, Duration.ofMinutes(5).toMillis());
 
         subscriptions.assignFromUser(singleton(tp0));
@@ -2992,7 +2982,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testFetchDisconnectedShouldClearPreferredReadReplica() {
-        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
+        buildFetcher(new MetricConfig(), AutoOffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
                 Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED, Duration.ofMinutes(5).toMillis());
 
         subscriptions.assignFromUser(singleton(tp0));
@@ -3025,7 +3015,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testFetchDisconnectedShouldNotClearPreferredReadReplicaIfUnassigned() {
-        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
+        buildFetcher(new MetricConfig(), AutoOffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
                 Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED, Duration.ofMinutes(5).toMillis());
 
         subscriptions.assignFromUser(singleton(tp0));
@@ -3060,7 +3050,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testFetchErrorShouldClearPreferredReadReplica() {
-        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
+        buildFetcher(new MetricConfig(), AutoOffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
                 Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED, Duration.ofMinutes(5).toMillis());
 
         subscriptions.assignFromUser(singleton(tp0));
@@ -3095,7 +3085,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testPreferredReadReplicaOffsetError() {
-        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
+        buildFetcher(new MetricConfig(), AutoOffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
                 Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED, Duration.ofMinutes(5).toMillis());
 
         subscriptions.assignFromUser(singleton(tp0));
@@ -3193,7 +3183,7 @@ public class FetchRequestManagerTest {
     public void testWhenFetchResponseReturnsALeaderShipChangeErrorButNoNewLeaderInformation(Errors error) {
         // The test runs with 2 partitions where 1 partition is fetched without errors, and
         // 2nd partition faces errors due to leadership changes.
-        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(),
+        buildFetcher(new MetricConfig(), AutoOffsetResetStrategy.EARLIEST, new BytesDeserializer(),
             new BytesDeserializer(),
             Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED,
             Duration.ofMinutes(5).toMillis());
@@ -3286,7 +3276,7 @@ public class FetchRequestManagerTest {
     public void testWhenFetchResponseReturnsALeaderShipChangeErrorAndNewLeaderInformation(Errors error) {
         // The test runs with 2 partitions where 1 partition is fetched without errors, and
         // 2nd partition faces errors due to leadership changes.
-        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(),
+        buildFetcher(new MetricConfig(), AutoOffsetResetStrategy.EARLIEST, new BytesDeserializer(),
             new BytesDeserializer(),
             Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED,
             Duration.ofMinutes(5).toMillis());
@@ -3380,6 +3370,71 @@ public class FetchRequestManagerTest {
 
         // Validate subscription is still valid & fetch-able for tp1.
         assertTrue(subscriptions.isFetchable(tp1));
+    }
+
+    @Test
+    public void testPollWithoutCreateFetchRequests() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(0, sendFetches(false));
+    }
+
+    @Test
+    public void testPollWithCreateFetchRequests() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        CompletableFuture<Void> future = fetcher.createFetchRequests();
+        assertNotNull(future);
+        assertFalse(future.isDone());
+
+        assertEquals(1, sendFetches(false));
+        assertTrue(future.isDone());
+
+        assertEquals(0, sendFetches(false));
+    }
+
+    @Test
+    public void testPollWithCreateFetchRequestsError() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        fetcher.setAuthenticationException(new AuthenticationException("Intentional error"));
+        CompletableFuture<Void> future = fetcher.createFetchRequests();
+        assertNotNull(future);
+        assertFalse(future.isDone());
+
+        assertDoesNotThrow(() -> sendFetches(false));
+        assertFutureThrows(future, AuthenticationException.class);
+    }
+
+    @Test
+    public void testPollWithRedundantCreateFetchRequests() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+
+        for (int i = 0; i < 10; i++) {
+            CompletableFuture<Void> future = fetcher.createFetchRequests();
+            assertNotNull(future);
+            futures.add(future);
+        }
+
+        assertEquals(0, futures.stream().filter(CompletableFuture::isDone).count());
+
+        assertEquals(1, sendFetches(false));
+        assertEquals(futures.size(), futures.stream().filter(CompletableFuture::isDone).count());
+
     }
 
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(
@@ -3504,7 +3559,7 @@ public class FetchRequestManagerTest {
     }
 
     private void buildFetcher(int maxPollRecords) {
-        buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(), new ByteArrayDeserializer(),
                 maxPollRecords, IsolationLevel.READ_UNCOMMITTED);
     }
 
@@ -3514,11 +3569,11 @@ public class FetchRequestManagerTest {
 
     private void buildFetcher(Deserializer<?> keyDeserializer,
                               Deserializer<?> valueDeserializer) {
-        buildFetcher(OffsetResetStrategy.EARLIEST, keyDeserializer, valueDeserializer,
+        buildFetcher(AutoOffsetResetStrategy.EARLIEST, keyDeserializer, valueDeserializer,
                 Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
     }
 
-    private <K, V> void buildFetcher(OffsetResetStrategy offsetResetStrategy,
+    private <K, V> void buildFetcher(AutoOffsetResetStrategy offsetResetStrategy,
                                      Deserializer<K> keyDeserializer,
                                      Deserializer<V> valueDeserializer,
                                      int maxPollRecords,
@@ -3528,7 +3583,7 @@ public class FetchRequestManagerTest {
     }
 
     private <K, V> void buildFetcher(MetricConfig metricConfig,
-                                     OffsetResetStrategy offsetResetStrategy,
+                                     AutoOffsetResetStrategy offsetResetStrategy,
                                      Deserializer<K> keyDeserializer,
                                      Deserializer<V> valueDeserializer,
                                      int maxPollRecords,
@@ -3537,7 +3592,7 @@ public class FetchRequestManagerTest {
     }
 
     private <K, V> void buildFetcher(MetricConfig metricConfig,
-                                     OffsetResetStrategy offsetResetStrategy,
+                                     AutoOffsetResetStrategy offsetResetStrategy,
                                      Deserializer<K> keyDeserializer,
                                      Deserializer<V> valueDeserializer,
                                      int maxPollRecords,
@@ -3592,7 +3647,7 @@ public class FetchRequestManagerTest {
                 metadata,
                 time,
                 retryBackoffMs,
-                (int) requestTimeoutMs,
+                requestTimeoutMs,
                 Integer.MAX_VALUE);
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerNetworkClient,
@@ -3617,6 +3672,7 @@ public class FetchRequestManagerTest {
         metrics = new Metrics(metricConfig, time);
         metricsRegistry = new FetchMetricsRegistry(metricConfig.tags().keySet(), "consumer" + groupId);
         metricsManager = new FetchMetricsManager(metrics, metricsRegistry);
+        backgroundEventHandler = mock(BackgroundEventHandler.class);
 
         Properties properties = new Properties();
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -3624,7 +3680,7 @@ public class FetchRequestManagerTest {
         properties.setProperty(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs));
         properties.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs));
         ConsumerConfig config = new ConsumerConfig(properties);
-        networkClientDelegate = spy(new TestableNetworkClientDelegate(time, config, logContext, client));
+        networkClientDelegate = spy(new TestableNetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, true));
     }
 
     private <T> List<Long> collectRecordOffsets(List<ConsumerRecord<T, T>> records) {
@@ -3634,6 +3690,7 @@ public class FetchRequestManagerTest {
     private class TestableFetchRequestManager<K, V> extends FetchRequestManager {
 
         private final FetchCollector<K, V> fetchCollector;
+        private AuthenticationException authenticationException;
 
         public TestableFetchRequestManager(LogContext logContext,
                                            Time time,
@@ -3649,11 +3706,37 @@ public class FetchRequestManagerTest {
             this.fetchCollector = fetchCollector;
         }
 
+        public void setAuthenticationException(AuthenticationException authenticationException) {
+            this.authenticationException = authenticationException;
+        }
+
+        @Override
+        protected boolean isUnavailable(Node node) {
+            if (authenticationException != null)
+                return true;
+
+            return super.isUnavailable(node);
+        }
+
+        @Override
+        protected void maybeThrowAuthFailure(Node node) {
+            if (authenticationException != null) {
+                AuthenticationException e = authenticationException;
+                authenticationException = null;
+                throw e;
+            }
+
+            super.maybeThrowAuthFailure(node);
+        }
+
         private Fetch<K, V> collectFetch() {
             return fetchCollector.collectFetch(fetchBuffer);
         }
 
-        private int sendFetches() {
+        private int sendFetches(boolean requestFetch) {
+            if (requestFetch)
+                createFetchRequests();
+
             NetworkClientDelegate.PollResult pollResult = poll(time.milliseconds());
             networkClientDelegate.addAll(pollResult.unsentRequests);
             return pollResult.unsentRequests.size();
@@ -3672,8 +3755,11 @@ public class FetchRequestManagerTest {
         public TestableNetworkClientDelegate(Time time,
                                              ConsumerConfig config,
                                              LogContext logContext,
-                                             KafkaClient client) {
-            super(time, config, logContext, client);
+                                             KafkaClient client,
+                                             Metadata metadata,
+                                             BackgroundEventHandler backgroundEventHandler,
+                                             boolean notifyMetadataErrorsViaErrorQueue) {
+            super(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class));
         }
 
         @Override

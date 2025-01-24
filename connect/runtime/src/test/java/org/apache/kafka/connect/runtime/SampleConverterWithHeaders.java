@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.io.UnsupportedEncodingException;
-import java.util.Map;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -26,6 +24,9 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
+
+import java.io.UnsupportedEncodingException;
+import java.util.Map;
 
 /**
  * This is a simple Converter implementation that uses "encoding" header to encode/decode strings via provided charset name

@@ -45,7 +45,15 @@ public class BrokerRegistrationRequest extends AbstractRequest {
 
         @Override
         public BrokerRegistrationRequest build(short version) {
-            return new BrokerRegistrationRequest(data, version);
+            if (version < 4) {
+                // Workaround for KAFKA-17492: for BrokerRegistrationRequest versions older than 4,
+                // remove features with minSupportedVersion = 0.
+                BrokerRegistrationRequestData newData = data.duplicate();
+                newData.features().removeIf(feature -> feature.minSupportedVersion() == 0);
+                return new BrokerRegistrationRequest(newData, version);
+            } else {
+                return new BrokerRegistrationRequest(data, version);
+            }
         }
 
         @Override

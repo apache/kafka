@@ -46,7 +46,7 @@ public class ScramLoginModule implements LoginModule {
         if (password != null)
             subject.getPrivateCredentials().add(password);
 
-        Boolean useTokenAuthentication = "true".equalsIgnoreCase((String) options.get(TOKEN_AUTH_CONFIG));
+        boolean useTokenAuthentication = "true".equalsIgnoreCase((String) options.get(TOKEN_AUTH_CONFIG));
         if (useTokenAuthentication) {
             Map<String, String> scramExtensions = Collections.singletonMap(TOKEN_AUTH_CONFIG, "true");
             subject.getPublicCredentials().add(scramExtensions);

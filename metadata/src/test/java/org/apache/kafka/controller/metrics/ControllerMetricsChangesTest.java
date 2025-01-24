@@ -17,10 +17,6 @@
 
 package org.apache.kafka.controller.metrics;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -30,10 +26,15 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 
-import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NORMAL;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NON_PREFERRED_LEADER;
+import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NORMAL;
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.OFFLINE;
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.fakePartitionRegistration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -57,18 +58,6 @@ public class ControllerMetricsChangesTest {
             setIncarnationId(Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ")).
             setFenced(fenced).
             setInControlledShutdown(false).build();
-    }
-
-    private static BrokerRegistration zkBrokerRegistration(
-        int brokerId
-    ) {
-        return new BrokerRegistration.Builder().
-            setId(brokerId).
-            setEpoch(100L).
-            setIncarnationId(Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ")).
-            setFenced(false).
-            setInControlledShutdown(false).
-            setIsMigratingZkBroker(true).build();
     }
 
     @Test
@@ -112,20 +101,6 @@ public class ControllerMetricsChangesTest {
         changes.handleBrokerChange(brokerRegistration(1, true), brokerRegistration(1, false));
         assertEquals(-1, changes.fencedBrokersChange());
         assertEquals(1, changes.activeBrokersChange());
-    }
-
-    @Test
-    public void testHandleZkBroker() {
-        ControllerMetricsChanges changes = new ControllerMetricsChanges();
-        changes.handleBrokerChange(null, zkBrokerRegistration(1));
-        assertEquals(1, changes.migratingZkBrokersChange());
-        changes.handleBrokerChange(null, zkBrokerRegistration(2));
-        changes.handleBrokerChange(null, zkBrokerRegistration(3));
-        assertEquals(3, changes.migratingZkBrokersChange());
-
-        changes.handleBrokerChange(zkBrokerRegistration(3), brokerRegistration(3, true));
-        changes.handleBrokerChange(brokerRegistration(3, true), brokerRegistration(3, false));
-        assertEquals(2, changes.migratingZkBrokersChange());
     }
 
     @Test

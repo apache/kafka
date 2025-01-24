@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.connect;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.json.JsonConverter;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -50,7 +51,7 @@ public class JsonConverterBenchmark {
     private JsonConverter converter;
 
     @Param({"true", "false"})
-    private boolean afterBurnModule;
+    private boolean blackbirdModule;
 
     @State(Scope.Benchmark)
     public static class Data {
@@ -424,7 +425,7 @@ public class JsonConverterBenchmark {
     @Setup(Level.Trial)
     public void setup(BenchmarkParams params)  {
 
-        converter = new JsonConverter(Boolean.parseBoolean(params.getParam("afterBurnModule")));
+        converter = new JsonConverter(Boolean.parseBoolean(params.getParam("blackbirdModule")));
         converter.configure(Collections.emptyMap(), false);
     }
 

@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Objects;
-import java.util.stream.Collectors;
-
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * An immutable restart plan per connector.

@@ -28,7 +28,6 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -105,6 +104,10 @@ public class MetadataResponse extends AbstractResponse {
         return errors;
     }
 
+    public Errors topLevelError() {
+        return Errors.forCode(data.errorCode());
+    }
+
     /**
      * Get a map of the topicIds which had metadata errors
      * @return the map
@@ -112,7 +115,7 @@ public class MetadataResponse extends AbstractResponse {
     public Map<Uuid, Errors> errorsByTopicId() {
         Map<Uuid, Errors> errors = new HashMap<>();
         for (MetadataResponseTopic metadata : data.topics()) {
-            if (metadata.topicId() == Uuid.ZERO_UUID) {
+            if (metadata.topicId().equals(Uuid.ZERO_UUID)) {
                 throw new IllegalStateException("Use errors() when managing topic using topic name");
             }
             if (metadata.errorCode() != Errors.NONE.code())
@@ -178,12 +181,17 @@ public class MetadataResponse extends AbstractResponse {
     }
 
     private static Node[] convertToNodeArray(List<Integer> replicaIds, Map<Integer, Node> nodesById) {
-        return replicaIds.stream().map(replicaId -> {
+        // Since this is on hot path for partition info, use indexed iteration to avoid allocation overhead of Streams.
+        int size = replicaIds.size();
+        Node[] nodes = new Node[size];
+        for (int i = 0; i < size; i++) {
+            Integer replicaId = replicaIds.get(i);
             Node node = nodesById.get(replicaId);
             if (node == null)
-                return new Node(replicaId, "", -1);
-            return node;
-        }).toArray(Node[]::new);
+                node = new Node(replicaId, "", -1);
+            nodes[i] = node;
+        }
+        return nodes;
     }
 
     /**
@@ -416,9 +424,9 @@ public class MetadataResponse extends AbstractResponse {
                     ", partition=" + topicPartition +
                     ", leader=" + leaderId +
                     ", leaderEpoch=" + leaderEpoch +
-                    ", replicas=" + Utils.join(replicaIds, ",") +
-                    ", isr=" + Utils.join(inSyncReplicaIds, ",") +
-                    ", offlineReplicas=" + Utils.join(offlineReplicaIds, ",") + ')';
+                    ", replicas=" + replicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) +
+                    ", isr=" + inSyncReplicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) +
+                    ", offlineReplicas=" + offlineReplicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) + ')';
         }
     }
 

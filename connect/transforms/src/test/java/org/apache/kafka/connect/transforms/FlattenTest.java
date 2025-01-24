@@ -23,6 +23,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -51,21 +52,21 @@ public class FlattenTest {
 
     @Test
     public void topLevelStructRequired() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
         assertThrows(DataException.class, () -> xformValue.apply(new SourceRecord(null, null,
                 "topic", 0, Schema.INT32_SCHEMA, 42)));
     }
 
     @Test
     public void topLevelMapRequired() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
         assertThrows(DataException.class, () -> xformValue.apply(new SourceRecord(null, null,
                 "topic", 0, null, 42)));
     }
 
     @Test
     public void testNestedStruct() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("int8", Schema.INT8_SCHEMA);
@@ -162,7 +163,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalFieldStruct() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
@@ -189,7 +190,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalStruct() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct().optional();
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
@@ -205,7 +206,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalNestedStruct() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct().optional();
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
@@ -229,7 +230,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalFieldMap() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         Map<String, Object> supportedTypes = new HashMap<>();
         supportedTypes.put("opt_int32", null);
@@ -250,7 +251,7 @@ public class FlattenTest {
 
     @Test
     public void testKey() {
-        xformKey.configure(Collections.<String, String>emptyMap());
+        xformKey.configure(Collections.emptyMap());
 
         Map<String, Map<String, Integer>> key = Collections.singletonMap("A", Collections.singletonMap("B", 12));
         SourceRecord src = new SourceRecord(null, null, "topic", null, key, null, null);
@@ -295,7 +296,7 @@ public class FlattenTest {
         // children should also be optional. Similarly, if the parent Struct has a default value, the default value for
         // the flattened field
 
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct().optional();
         builder.field("req_field", Schema.STRING_SCHEMA);
@@ -324,7 +325,7 @@ public class FlattenTest {
 
     @Test
     public void tombstoneEventWithoutSchemaShouldPassThrough() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
                 null, null);
@@ -336,7 +337,7 @@ public class FlattenTest {
 
     @Test
     public void tombstoneEventWithSchemaShouldPassThrough() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
         final SourceRecord record = new SourceRecord(null, null, "test", 0,

@@ -17,18 +17,18 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Optional;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A new topic to be created via {@link Admin#createTopics(Collection)}.
@@ -66,6 +66,7 @@ public class NewTopic {
      * @param name the topic name.
      * @param replicasAssignments a map from partition id to replica ids (i.e. broker ids). Although not enforced, it is
      *                            generally a good idea for all partitions to have the same number of replicas.
+     *                            The first replica will be treated as the preferred leader.
      */
     public NewTopic(String name, Map<Integer, List<Integer>> replicasAssignments) {
         this.name = name;
@@ -137,7 +138,7 @@ public class NewTopic {
         if (configs != null) {
             for (Entry<String, String> entry : configs.entrySet()) {
                 creatableTopic.configs().add(
-                    new CreateableTopicConfig().
+                    new CreatableTopicConfig().
                         setName(entry.getKey()).
                         setValue(entry.getValue()));
             }
@@ -147,14 +148,12 @@ public class NewTopic {
 
     @Override
     public String toString() {
-        StringBuilder bld = new StringBuilder();
-        bld.append("(name=").append(name).
-                append(", numPartitions=").append(numPartitions.map(String::valueOf).orElse("default")).
-                append(", replicationFactor=").append(replicationFactor.map(String::valueOf).orElse("default")).
-                append(", replicasAssignments=").append(replicasAssignments).
-                append(", configs=").append(configs).
-                append(")");
-        return bld.toString();
+        return "(name=" + name +
+                ", numPartitions=" + numPartitions.map(String::valueOf).orElse("default") +
+                ", replicationFactor=" + replicationFactor.map(String::valueOf).orElse("default") +
+                ", replicasAssignments=" + replicasAssignments +
+                ", configs=" + configs +
+                ")";
     }
 
     @Override

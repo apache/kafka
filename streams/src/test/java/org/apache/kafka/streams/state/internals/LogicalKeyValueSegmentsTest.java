@@ -16,16 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-
-import java.io.File;
-import java.util.List;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -38,9 +28,21 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.File;
+import java.util.List;
+
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LogicalKeyValueSegmentsTest {
 
@@ -54,7 +56,7 @@ public class LogicalKeyValueSegmentsTest {
 
     private LogicalKeyValueSegments segments;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
@@ -74,7 +76,7 @@ public class LogicalKeyValueSegmentsTest {
         segments.openExisting(context, 0L);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         segments.close();
     }
@@ -165,10 +167,10 @@ public class LogicalKeyValueSegmentsTest {
         final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, 0L);
         final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
 
-        assertEquals(segment1, segments.getSegmentForTimestamp(0L));
-        assertEquals(segment1, segments.getSegmentForTimestamp(SEGMENT_INTERVAL - 1));
-        assertEquals(segment2, segments.getSegmentForTimestamp(SEGMENT_INTERVAL));
-        assertEquals(segment2, segments.getSegmentForTimestamp(2 * SEGMENT_INTERVAL - 1));
+        assertEquals(segment1, segments.segmentForTimestamp(0L));
+        assertEquals(segment1, segments.segmentForTimestamp(SEGMENT_INTERVAL - 1));
+        assertEquals(segment2, segments.segmentForTimestamp(SEGMENT_INTERVAL));
+        assertEquals(segment2, segments.segmentForTimestamp(2 * SEGMENT_INTERVAL - 1));
     }
 
     @Test
@@ -224,7 +226,7 @@ public class LogicalKeyValueSegmentsTest {
 
         segments.close();
 
-        assertThat(segments.getSegmentForTimestamp(0), is(nullValue()));
+        assertThat(segments.segmentForTimestamp(0), is(nullValue()));
         assertThat(segments.getReservedSegment(-1), is(nullValue()));
         // verify iterators closed as well
         assertThrows(InvalidStateStoreException.class, all1::hasNext);

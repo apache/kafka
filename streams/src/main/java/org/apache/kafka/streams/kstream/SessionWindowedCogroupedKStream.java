@@ -39,7 +39,7 @@ import java.time.Duration;
  * materialized view) that can be queried using the name provided in the {@link Materialized} instance.
  * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
  * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
- * New events are added to sessions until their grace period ends (see {@link SessionWindows#grace(Duration)}).
+ * New events are added to sessions until their grace period ends (see {@link SessionWindows#ofInactivityGapAndGrace(Duration, Duration)}).
  * <p>
  * A {@code SessionWindowedCogroupedKStream} must be obtained from a {@link CogroupedKStream} via
  * {@link CogroupedKStream#windowedBy(SessionWindows)}.

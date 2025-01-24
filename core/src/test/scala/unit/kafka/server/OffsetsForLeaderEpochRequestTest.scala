@@ -17,12 +17,12 @@
 package kafka.server
 
 import java.util.Optional
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 import org.junit.jupiter.api.Assertions._
@@ -33,21 +33,20 @@ import scala.jdk.CollectionConverters._
 
 class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testOffsetsForLeaderEpochErrorCodes(quorum: String): Unit = {
     val topic = "topic"
     val partition = new TopicPartition(topic, 0)
     val epochs = offsetForLeaderTopicCollectionFor(partition, 0, RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
-    val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
-      ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, epochs, 1).build()
+    val request = OffsetsForLeaderEpochRequest.Builder.forFollower(epochs, 1).build()
 
     // Unknown topic
     val randomBrokerId = brokers.head.config.brokerId
     assertResponseError(Errors.UNKNOWN_TOPIC_OR_PARTITION, randomBrokerId, request)
 
-    val partitionToLeader = createTopic(topic, numPartitions = 1, replicationFactor = 2)
+    val partitionToLeader = createTopic(topic, replicationFactor = 2)
     val topicDescription = createAdminClient().describeTopics(Seq(partition.topic()).asJava).allTopicNames().get()
     val replicas = topicDescription.get(partition.topic()).partitions().get(partition.partition()).replicas().asScala.map(_.id()).toSet
     val leader = partitionToLeader(partition.partition)
@@ -58,19 +57,18 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, request)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testCurrentEpochValidation(quorum: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
-    val partitionToLeader = createTopic(topic, numPartitions = 1, replicationFactor = 3)
+    val partitionToLeader = createTopic(topic, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(topicPartition.partition)
 
     def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {
       val epochs = offsetForLeaderTopicCollectionFor(topicPartition, 0,
         currentLeaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-      val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
-        ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, epochs, 1).build()
+      val request = OffsetsForLeaderEpochRequest.Builder.forFollower(epochs, 1).build()
       assertResponseError(error, brokerId, request)
     }
 
@@ -79,7 +77,7 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     killBroker(firstLeaderId)
 
     // Check leader error codes
-    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, topicPartition, firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, topicPartition, oldLeaderOpt = Some(firstLeaderId))
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, brokers)
     assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.empty())
     assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.of(secondLeaderEpoch))

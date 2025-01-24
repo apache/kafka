@@ -17,17 +17,19 @@
 package org.apache.kafka.common.record;
 
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.util.Arrays;
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CompressionRatioEstimatorTest {
 
     @Test
     public void testUpdateEstimation() {
         class EstimationsObservedRatios {
-            float currentEstimation;
-            float observedRatio;
+            final float currentEstimation;
+            final float observedRatio;
             EstimationsObservedRatios(float currentEstimation, float observedRatio) {
                 this.currentEstimation = currentEstimation;
                 this.observedRatio = observedRatio;

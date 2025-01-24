@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.common;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -82,8 +83,7 @@ public class ImplicitLinkedHashCollectionBenchmark {
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof TestElement)) return false;
-            TestElement other = (TestElement) o;
+            if (!(o instanceof TestElement other)) return false;
             return value.equals(other.value);
         }
     }

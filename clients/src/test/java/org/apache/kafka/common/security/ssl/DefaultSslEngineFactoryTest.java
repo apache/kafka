@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.ssl;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -33,7 +34,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-@SuppressWarnings("this-escape")
 public class DefaultSslEngineFactoryTest {
 
     /*
@@ -195,7 +195,7 @@ public class DefaultSslEngineFactoryTest {
 
     private static final Password KEY_PASSWORD = new Password("key-password");
 
-    private DefaultSslEngineFactory factory = sslEngineFactory();
+    private DefaultSslEngineFactory factory;
     Map<String, Object> configs = new HashMap<>();
 
     @BeforeEach

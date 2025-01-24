@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.tiered.storage;
 
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
+import org.apache.kafka.storage.internals.log.EpochEntry;
+import org.apache.kafka.tiered.storage.actions.AlterLogDirAction;
 import org.apache.kafka.tiered.storage.actions.BounceBrokerAction;
 import org.apache.kafka.tiered.storage.actions.ConsumeAction;
 import org.apache.kafka.tiered.storage.actions.CreatePartitionsAction;
@@ -46,15 +53,11 @@ import org.apache.kafka.tiered.storage.specs.OffloadableSpec;
 import org.apache.kafka.tiered.storage.specs.OffloadedSegmentSpec;
 import org.apache.kafka.tiered.storage.specs.ProducableSpec;
 import org.apache.kafka.tiered.storage.specs.RemoteDeleteSegmentSpec;
+import org.apache.kafka.tiered.storage.specs.RemoteFetchCount;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchSpec;
 import org.apache.kafka.tiered.storage.specs.TopicSpec;
-import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
-import org.apache.kafka.storage.internals.log.EpochEntry;
 
+import java.io.FilenameFilter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -70,12 +73,12 @@ public final class TieredStorageTestBuilder {
     private final int defaultProducedBatchSize = 1;
     private final long defaultEarliestLocalOffsetExpectedInLogDirectory = 0;
 
+    private final Map<TopicPartition, List<DeletableSpec>> deletables = new HashMap<>();
+    private final List<TieredStorageTestAction> actions = new ArrayList<>();
     private Map<TopicPartition, ProducableSpec> producables = new HashMap<>();
     private Map<TopicPartition, List<OffloadableSpec>> offloadables = new HashMap<>();
     private Map<TopicPartition, ConsumableSpec> consumables = new HashMap<>();
     private Map<TopicPartition, FetchableSpec> fetchables = new HashMap<>();
-    private Map<TopicPartition, List<DeletableSpec>> deletables = new HashMap<>();
-    private List<TieredStorageTestAction> actions = new ArrayList<>();
 
     public TieredStorageTestBuilder() {
     }
@@ -178,7 +181,7 @@ public final class TieredStorageTestBuilder {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         List<ProducerRecord<String, String>> records = new ArrayList<>();
         for (KeyValueSpec kv: keyValues) {
-            records.add(new ProducerRecord<>(topic, partition, kv.getKey(), kv.getValue()));
+            records.add(new ProducerRecord<>(topic, partition, kv.getTimestamp(), kv.getKey(), kv.getValue()));
         }
         offloadables.computeIfAbsent(topicPartition, k -> new ArrayList<>())
                 .add(new OffloadableSpec(fromBroker, baseOffset, records));
@@ -226,10 +229,17 @@ public final class TieredStorageTestBuilder {
     public TieredStorageTestBuilder expectFetchFromTieredStorage(Integer fromBroker,
                                                                  String topic,
                                                                  Integer partition,
-                                                                 Integer remoteFetchRequestCount) {
+                                                                 Integer segmentFetchRequestCount) {
+        return expectFetchFromTieredStorage(fromBroker, topic, partition, new RemoteFetchCount(segmentFetchRequestCount));
+    }
+
+    public TieredStorageTestBuilder expectFetchFromTieredStorage(Integer fromBroker,
+                                                                 String topic,
+                                                                 Integer partition,
+                                                                 RemoteFetchCount remoteFetchRequestCount) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         assertTrue(partition >= 0, "Partition must be >= 0");
-        assertTrue(remoteFetchRequestCount >= 0, "Expected fetch count from tiered storage must be >= 0");
+        assertTrue(remoteFetchRequestCount.getSegmentFetchCountAndOp().getCount() >= 0, "Expected fetch count from tiered storage must be >= 0");
         assertFalse(fetchables.containsKey(topicPartition), "Consume already in progress for " + topicPartition);
         fetchables.put(topicPartition, new FetchableSpec(fromBroker, remoteFetchRequestCount));
         return this;
@@ -290,6 +300,13 @@ public final class TieredStorageTestBuilder {
         return this;
     }
 
+    public TieredStorageTestBuilder eraseBrokerStorage(Integer brokerId,
+                                                       FilenameFilter filenameFilter,
+                                                       boolean isStopped) {
+        actions.add(new EraseBrokerStorageAction(brokerId, filenameFilter, isStopped));
+        return this;
+    }
+
     public TieredStorageTestBuilder expectEmptyRemoteStorage(String topic,
                                                              Integer partition) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
@@ -310,6 +327,14 @@ public final class TieredStorageTestBuilder {
                                                     List<Integer> replicaIds) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new ReassignReplicaAction(topicPartition, replicaIds));
+        return this;
+    }
+
+    public TieredStorageTestBuilder alterLogDir(String topic,
+                                                Integer partition,
+                                                int replicaIds) {
+        TopicPartition topicPartition = new TopicPartition(topic, partition);
+        actions.add(new AlterLogDirAction(topicPartition, replicaIds));
         return this;
     }
 
@@ -354,7 +379,7 @@ public final class TieredStorageTestBuilder {
     private void createConsumeAction() {
         if (!consumables.isEmpty()) {
             consumables.forEach((topicPartition, consumableSpec) -> {
-                FetchableSpec fetchableSpec = fetchables.computeIfAbsent(topicPartition, k -> new FetchableSpec(0, 0));
+                FetchableSpec fetchableSpec = fetchables.computeIfAbsent(topicPartition, k -> new FetchableSpec(0, new RemoteFetchCount(0)));
                 RemoteFetchSpec remoteFetchSpec = new RemoteFetchSpec(fetchableSpec.getSourceBrokerId(), topicPartition,
                         fetchableSpec.getFetchCount());
                 ConsumeAction action = new ConsumeAction(topicPartition, consumableSpec.getFetchOffset(),
@@ -396,4 +421,3 @@ public final class TieredStorageTestBuilder {
         return deleteSegmentSpecList;
     }
 }
-

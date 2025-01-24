@@ -37,32 +37,21 @@ public final class ProcessorContextUtils {
     /**
      * Should be removed as part of KAFKA-10217
      */
-    public static StreamsMetricsImpl getMetricsImpl(final ProcessorContext context) {
+    public static StreamsMetricsImpl metricsImpl(final ProcessorContext context) {
         return (StreamsMetricsImpl) context.metrics();
     }
 
     /**
      * Should be removed as part of KAFKA-10217
      */
-    public static StreamsMetricsImpl getMetricsImpl(final StateStoreContext context) {
+    public static StreamsMetricsImpl metricsImpl(final StateStoreContext context) {
         return (StreamsMetricsImpl) context.metrics();
     }
 
-    public static String changelogFor(final ProcessorContext context, final String storeName, final Boolean newChangelogTopic) {
-        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
-        if (context instanceof InternalProcessorContext && !newChangelogTopic) {
-            final String changelogTopic = ((InternalProcessorContext) context).changelogFor(storeName);
-            if (changelogTopic != null)
-                return changelogTopic;
-
-        }
-        return ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
-    }
-
     public static String changelogFor(final StateStoreContext context, final String storeName, final Boolean newChangelogTopic) {
-        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
+        final String prefix = topicNamePrefix(context.appConfigs(), context.applicationId());
         if (context instanceof InternalProcessorContext && !newChangelogTopic) {
-            final String changelogTopic = ((InternalProcessorContext) context).changelogFor(storeName);
+            final String changelogTopic = ((InternalProcessorContext<?, ?>) context).changelogFor(storeName);
             if (changelogTopic != null)
                 return changelogTopic;
 
@@ -70,7 +59,7 @@ public final class ProcessorContextUtils {
         return ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
     }
 
-    public static String getPrefix(final Map<String, Object> configs, final String applicationId) {
+    public static String topicNamePrefix(final Map<String, Object> configs, final String applicationId) {
         if (configs == null) {
             return applicationId;
         } else {
@@ -92,9 +81,10 @@ public final class ProcessorContextUtils {
         }
     }
 
-    public static InternalProcessorContext asInternalProcessorContext(final StateStoreContext context) {
+    @SuppressWarnings("unchecked")
+    public static <K, V> InternalProcessorContext<K, V> asInternalProcessorContext(final StateStoreContext context) {
         if (context instanceof InternalProcessorContext) {
-            return (InternalProcessorContext) context;
+            return (InternalProcessorContext<K, V>) context;
         } else {
             throw new IllegalArgumentException(
                 "This component requires internal features of Kafka Streams and must be disabled for unit tests."

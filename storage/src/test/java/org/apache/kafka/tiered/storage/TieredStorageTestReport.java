@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.tiered.storage;
 
-import org.apache.kafka.tiered.storage.utils.DumpLocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
+import org.apache.kafka.tiered.storage.utils.DumpLocalTieredStorage;
 
 import java.io.PrintStream;
 import java.util.ArrayList;

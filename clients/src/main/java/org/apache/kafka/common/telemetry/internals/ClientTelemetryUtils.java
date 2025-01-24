@@ -16,21 +16,19 @@
  */
 package org.apache.kafka.common.telemetry.internals;
 
-import io.opentelemetry.proto.metrics.v1.MetricsData;
-
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -43,13 +41,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 
+import io.opentelemetry.proto.metrics.v1.MetricsData;
+
 public class ClientTelemetryUtils {
 
-    private final static Logger log = LoggerFactory.getLogger(ClientTelemetryUtils.class);
+    private static final Logger log = LoggerFactory.getLogger(ClientTelemetryUtils.class);
 
-    public final static Predicate<? super MetricKeyable> SELECTOR_NO_METRICS = k -> false;
+    public static final Predicate<? super MetricKeyable> SELECTOR_NO_METRICS = k -> false;
 
-    public final static Predicate<? super MetricKeyable> SELECTOR_ALL_METRICS = k -> true;
+    public static final Predicate<? super MetricKeyable> SELECTOR_ALL_METRICS = k -> true;
 
     /**
      * Examine the response data and handle different error code accordingly:
@@ -135,7 +135,7 @@ public class ClientTelemetryUtils {
     }
 
     public static Uuid validateClientInstanceId(Uuid clientInstanceId) {
-        if (clientInstanceId == null || clientInstanceId == Uuid.ZERO_UUID) {
+        if (clientInstanceId == null || clientInstanceId.equals(Uuid.ZERO_UUID)) {
             throw new IllegalArgumentException("clientInstanceId is not valid");
         }
 
@@ -190,30 +190,28 @@ public class ClientTelemetryUtils {
         return CompressionType.NONE;
     }
 
-    public static byte[] compress(byte[] raw, CompressionType compressionType) throws IOException {
+    public static ByteBuffer compress(MetricsData metrics, CompressionType compressionType) throws IOException {
         try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(512)) {
-            try (OutputStream out = compressionType.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
-                out.write(raw);
-                out.flush();
+            Compression compression = Compression.of(compressionType).build();
+            try (OutputStream out = compression.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
+                metrics.writeTo(out);
             }
             compressedOut.buffer().flip();
-            return Utils.toArray(compressedOut.buffer());
+            return compressedOut.buffer();
         }
     }
 
-    public static ByteBuffer decompress(byte[] metrics, CompressionType compressionType) {
-        ByteBuffer data = ByteBuffer.wrap(metrics);
-        try (InputStream in = compressionType.wrapForInput(data, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
-            ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-
-            byte[] bytes = new byte[data.capacity() * 2];
+    public static ByteBuffer decompress(ByteBuffer metrics, CompressionType compressionType) {
+        Compression compression = Compression.of(compressionType).build();
+        try (InputStream in = compression.wrapForInput(metrics, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
+            ByteBufferOutputStream out = new ByteBufferOutputStream(512)) {
+            byte[] bytes = new byte[metrics.limit() * 2];
             int nRead;
             while ((nRead = in.read(bytes, 0, bytes.length)) != -1) {
                 out.write(bytes, 0, nRead);
             }
-
-            out.flush();
-            return ByteBuffer.wrap(out.toByteArray());
+            out.buffer().flip();
+            return out.buffer();
         } catch (IOException e) {
             throw new KafkaException("Failed to decompress metrics data", e);
         }

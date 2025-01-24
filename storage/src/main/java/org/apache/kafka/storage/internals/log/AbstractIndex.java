@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.utils.ByteBufferUnmapper;
 import org.apache.kafka.common.utils.OperatingSystem;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -398,8 +399,8 @@ public abstract class AbstractIndex implements Closeable {
     /**
      * Forcefully free the buffer's mmap.
      */
-    // Visible for testing, we can make this protected once OffsetIndexTest is in the same package as this class
-    public void forceUnmap() throws IOException {
+    // Visible for testing
+    protected void forceUnmap() throws IOException {
         try {
             ByteBufferUnmapper.unmap(file.getAbsolutePath(), mmap);
         } finally {

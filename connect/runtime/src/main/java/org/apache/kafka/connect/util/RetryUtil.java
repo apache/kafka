@@ -20,6 +20,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +59,7 @@ public class RetryUtil {
 
     // visible for testing
     static <T> T retryUntilTimeout(Callable<T> callable, Supplier<String> description, Duration timeoutDuration, long retryBackoffMs, Time time) throws Exception {
-        // if null supplier or string is provided, the message will be default to "callabe"
+        // if null supplier or string is provided, the message will be default to "callable"
         final String descriptionStr = Optional.ofNullable(description)
                 .map(Supplier::get)
                 .orElse("callable");

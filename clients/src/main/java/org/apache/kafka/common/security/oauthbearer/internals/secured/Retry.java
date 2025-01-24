@@ -17,10 +17,12 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.ExecutionException;
 
 /**
  * Retry encapsulates the mechanism to perform a retry and then exponential

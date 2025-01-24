@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.tiered.storage.actions;
 
-import org.apache.kafka.tiered.storage.TieredStorageTestAction;
-import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import kafka.log.UnifiedLog;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.test.TestUtils;
-import scala.Option;
+import org.apache.kafka.tiered.storage.TieredStorageTestAction;
+import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import java.io.PrintStream;
 import java.util.Optional;
@@ -54,10 +54,8 @@ public final class ExpectLeaderEpochCheckpointAction implements TieredStorageTes
             EpochEntry earliestEntry = null;
             Optional<UnifiedLog> log = context.log(brokerId, partition);
             if (log.isPresent()) {
-                Option<LeaderEpochFileCache> leaderEpochCache = log.get().leaderEpochCache();
-                if (leaderEpochCache.isDefined()) {
-                    earliestEntry = leaderEpochCache.get().earliestEntry().orElse(null);
-                }
+                LeaderEpochFileCache leaderEpochCache = log.get().leaderEpochCache();
+                earliestEntry = leaderEpochCache.earliestEntry().orElse(null);
             }
             earliestEntryOpt.set(earliestEntry);
             return earliestEntry != null && beginEpoch == earliestEntry.epoch

@@ -18,12 +18,16 @@ package kafka.server
 
 import kafka.network.SocketServer
 import org.apache.kafka.clients.admin.ScramMechanism
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse}
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInfo
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
 import java.util.Properties
@@ -35,16 +39,24 @@ import scala.jdk.CollectionConverters._
 class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
-    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AlterCredentialsTest.TestAuthorizer].getName)
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
+    properties.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
+    properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
+    properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
+  }
+
+  override def kraftControllerConfigs(testInfo: TestInfo): collection.Seq[Properties] = {
+    val controllerConfigs = super.kraftControllerConfigs(testInfo)
+    controllerConfigs.head.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
+    controllerConfigs.head.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
+    controllerConfigs
   }
 
   private val user1 = "user1"
   private val user2 = "user2"
 
-  @Test
-  def testAlterNothingNotAuthorized(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testAlterNothingNotAuthorized(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialDeletion])
@@ -55,8 +67,9 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
     assertEquals(0, results.size)
   }
 
-  @Test
-  def testAlterSomethingNotAuthorized(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testAlterSomethingNotAuthorized(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
@@ -68,7 +81,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
     checkAllErrorsAlteringCredentials(results, Errors.CLUSTER_AUTHORIZATION_FAILED, "when not authorized")
   }
 
-  private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = controllerSocketServer): AlterUserScramCredentialsResponse = {
+  private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = adminSocketServer): AlterUserScramCredentialsResponse = {
     connectAndReceive[AlterUserScramCredentialsResponse](request, destination = socketServer)
   }
 

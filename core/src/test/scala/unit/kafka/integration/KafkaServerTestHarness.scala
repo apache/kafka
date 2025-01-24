@@ -19,8 +19,8 @@ package kafka.integration
 
 import kafka.server._
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils.{createAdminClient, resource}
-import org.apache.kafka.common.acl.AccessControlEntry
+import kafka.utils.TestUtils._
+import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.resource.ResourcePattern
@@ -32,10 +32,12 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import java.io.File
+import java.time.Duration
 import java.util
-import java.util.{Arrays, Collections, Properties}
+import java.util.{Collections, Properties}
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 /**
  * A test harness that brings up some number of broker nodes
@@ -46,18 +48,16 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   private val _brokers = new mutable.ArrayBuffer[KafkaBroker]
 
   /**
-   * Get the list of brokers, which could be either BrokerServer objects or KafkaServer objects.
+   * Get the list of brokers.
    */
   def brokers: mutable.Buffer[KafkaBroker] = _brokers
 
   /**
-   * Get the list of brokers, as instances of KafkaServer.
-   * This method should only be used when dealing with brokers that use ZooKeeper.
+   * Get the list of brokers.
    */
-  def servers: mutable.Buffer[KafkaServer] = {
-    checkIsZKTest()
-    _brokers.asInstanceOf[mutable.Buffer[KafkaServer]]
-  }
+  def servers: mutable.Buffer[KafkaBroker] = brokers
+
+  def brokerServers: mutable.Buffer[BrokerServer] = _brokers.asInstanceOf[mutable.Buffer[BrokerServer]]
 
   var alive: Array[Boolean] = _
 
@@ -92,9 +92,9 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     instanceConfigs
   }
 
-  def serverForId(id: Int): Option[KafkaServer] = servers.find(s => s.config.brokerId == id)
+  def serverForId(id: Int): Option[KafkaBroker] = brokers.find(s => s.config.brokerId == id)
 
-  def boundPort(server: KafkaServer): Int = server.boundPort(listenerName)
+  def boundPort(server: KafkaBroker): Int = server.boundPort(listenerName)
 
   def bootstrapServers(listenerName: ListenerName = listenerName): String = {
     TestUtils.bootstrapServers(_brokers, listenerName)
@@ -140,7 +140,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
 
     TestUtils.shutdownServers(_brokers, deleteLogDirs = false)
     _brokers.clear()
-    Arrays.fill(alive, false)
+    util.Arrays.fill(alive, false)
 
     createBrokers(startup)
   }
@@ -149,12 +149,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     listenerName: ListenerName = listenerName,
     adminClientConfig: Properties = new Properties
   ): Unit = {
-    if (isKRaftTest()) {
-      resource(createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
-        TestUtils.createOffsetsTopicWithAdmin(admin, brokers, controllerServers)
-      }
-    } else {
-      TestUtils.createOffsetsTopic(zkClient, servers)
+    Using.resource(createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
+      TestUtils.createOffsetsTopicWithAdmin(admin, brokers, controllerServers)
     }
   }
 
@@ -171,25 +167,14 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     listenerName: ListenerName = listenerName,
     adminClientConfig: Properties = new Properties
   ): scala.collection.immutable.Map[Int, Int] = {
-    if (isKRaftTest()) {
-      resource(createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
-        TestUtils.createTopicWithAdmin(
-          admin = admin,
-          topic = topic,
-          brokers = brokers,
-          controllers = controllerServers,
-          numPartitions = numPartitions,
-          replicationFactor = replicationFactor,
-          topicConfig = topicConfig
-        )
-      }
-    } else {
-      TestUtils.createTopic(
-        zkClient = zkClient,
+    Using.resource(createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
         topic = topic,
+        brokers = brokers,
+        controllers = controllerServers,
         numPartitions = numPartitions,
         replicationFactor = replicationFactor,
-        servers = servers,
         topicConfig = topicConfig
       )
     }
@@ -204,49 +189,61 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     topic: String,
     partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
     listenerName: ListenerName = listenerName
-  ): scala.collection.immutable.Map[Int, Int] =
-    if (isKRaftTest()) {
-      resource(createAdminClient(brokers, listenerName)) { admin =>
-        TestUtils.createTopicWithAdmin(
-          admin = admin,
-          topic = topic,
-          replicaAssignment = partitionReplicaAssignment,
-          brokers = brokers,
-          controllers = controllerServers
-        )
-      }
-    } else {
-      TestUtils.createTopic(
-        zkClient,
-        topic,
-        partitionReplicaAssignment,
-        servers
+  ): scala.collection.immutable.Map[Int, Int] = {
+    Using.resource(createAdminClient(brokers, listenerName)) { admin =>
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        topic = topic,
+        replicaAssignment = partitionReplicaAssignment,
+        brokers = brokers,
+        controllers = controllerServers
       )
     }
+  }
 
   def deleteTopic(
     topic: String,
     listenerName: ListenerName = listenerName
   ): Unit = {
-    if (isKRaftTest()) {
-      resource(createAdminClient(brokers, listenerName)) { admin =>
-        TestUtils.deleteTopicWithAdmin(
-          admin = admin,
-          topic = topic,
-          brokers = aliveBrokers,
-          controllers = controllerServers)
-      }
-    } else {
-      adminZkClient.deleteTopic(topic)
+    Using.resource(createAdminClient(brokers, listenerName)) { admin =>
+      TestUtils.deleteTopicWithAdmin(
+        admin = admin,
+        topic = topic,
+        brokers = aliveBrokers,
+        controllers = controllerServers)
     }
   }
 
   def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    TestUtils.addAndVerifyAcls(brokers, acls, resource, controllerServers)
+    val authorizerForWrite = pickAuthorizerForWrite(brokers, controllerServers)
+    val aclBindings = acls.map { acl => new AclBinding(resource, acl) }
+    authorizerForWrite.createAcls(anonymousAuthorizableContext, aclBindings.toList.asJava).asScala
+      .map(_.toCompletableFuture.get)
+      .foreach { result =>
+        result.exception.ifPresent { e => throw e }
+      }
+    val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
+    (brokers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach {
+      authorizer => waitAndVerifyAcls(
+        authorizer.acls(aclFilter).asScala.map(_.entry).toSet ++ acls,
+        authorizer, resource)
+    }
   }
 
   def removeAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    TestUtils.removeAndVerifyAcls(brokers, acls, resource, controllerServers)
+    val authorizerForWrite = pickAuthorizerForWrite(brokers, controllerServers)
+    val aclBindingFilters = acls.map { acl => new AclBindingFilter(resource.toFilter, acl.toFilter) }
+    authorizerForWrite.deleteAcls(anonymousAuthorizableContext, aclBindingFilters.toList.asJava).asScala
+      .map(_.toCompletableFuture.get)
+      .foreach { result =>
+        result.exception.ifPresent { e => throw e }
+      }
+    val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
+    (brokers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach {
+      authorizer => waitAndVerifyAcls(
+        authorizer.acls(aclFilter).asScala.map(_.entry).toSet -- acls,
+        authorizer, resource)
+    }
   }
 
   /**
@@ -259,9 +256,21 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     index
   }
 
+  /**
+   * Kill the broker at the specified index.
+   * A controlled shutdown is attempted, with a timeout of 5 minutes.
+   */
   def killBroker(index: Int): Unit = {
-    if (alive(index)) {
-      _brokers(index).shutdown()
+    killBroker(index, Duration.ofMinutes(5))
+  }
+
+  /**
+   * Kill the broker at the specified index.
+   * A controlled shutdown is attempted, with the specified timeout.
+   */
+  def killBroker(index: Int, timeout: Duration): Unit = {
+    if(alive(index)) {
+      _brokers(index).shutdown(timeout)
       _brokers(index).awaitShutdown()
       alive(index) = false
     }
@@ -299,47 +308,26 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     }
   }
 
-  def getController(): KafkaServer = {
-    checkIsZKTest()
-    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
-    servers.filter(s => s.config.brokerId == controllerId).head
-  }
-
   def getTopicIds(names: Seq[String]): Map[String, Uuid] = {
     val result = new util.HashMap[String, Uuid]()
-    if (isKRaftTest()) {
-      val topicIdsMap = controllerServer.controller.findTopicIds(ANONYMOUS_CONTEXT, names.asJava).get()
-      names.foreach { name =>
-        val response = topicIdsMap.get(name)
-        result.put(name, response.result())
-      }
-    } else {
-      val topicIdsMap = getController().kafkaController.controllerContext.topicIds.toMap
-      names.foreach { name =>
-        if (topicIdsMap.contains(name)) result.put(name, topicIdsMap.get(name).get)
-      }
+    val topicIdsMap = controllerServer.controller.findTopicIds(ANONYMOUS_CONTEXT, names.asJava).get()
+    names.foreach { name =>
+      val response = topicIdsMap.get(name)
+      result.put(name, response.result())
     }
     result.asScala.toMap
   }
 
   def getTopicIds(): Map[String, Uuid] = {
-    if (isKRaftTest()) {
-      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
-    } else {
-      getController().kafkaController.controllerContext.topicIds.toMap
-    }
+    controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
   }
 
   def getTopicNames(): Map[Uuid, String] = {
-    if (isKRaftTest()) {
-      val result = new util.HashMap[Uuid, String]()
-      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().entrySet().forEach {
-        e => result.put(e.getValue(), e.getKey())
-      }
-      result.asScala.toMap
-    } else {
-      getController().kafkaController.controllerContext.topicNames.toMap
+    val result = new util.HashMap[Uuid, String]()
+    controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().forEach {
+      (key, value) => result.put(value, key)
     }
+    result.asScala.toMap
   }
 
   private def createBrokers(startup: Boolean): Unit = {
@@ -347,7 +335,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
     val potentiallyRegeneratedConfigs = configs
     alive = new Array[Boolean](potentiallyRegeneratedConfigs.length)
-    Arrays.fill(alive, false)
+    util.Arrays.fill(alive, false)
     for (config <- potentiallyRegeneratedConfigs) {
       val broker = createBrokerFromConfig(config)
       _brokers += broker
@@ -359,17 +347,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   }
 
   private def createBrokerFromConfig(config: KafkaConfig): KafkaBroker = {
-    if (isKRaftTest()) {
-      createBroker(config, brokerTime(config.brokerId), startup = false)
-    } else {
-      TestUtils.createServer(
-        config,
-        time = brokerTime(config.brokerId),
-        threadNamePrefix = None,
-        startup = false,
-        enableZkApiForwarding = isZkMigrationTest() || (config.migrationEnabled && config.interBrokerProtocolVersion.isApiForwardingEnabled)
-      )
-    }
+    createBroker(config, brokerTime(config.brokerId), startup = false)
   }
 
   def aliveBrokers: Seq[KafkaBroker] = {
@@ -377,27 +355,20 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   }
 
   def ensureConsistentKRaftMetadata(): Unit = {
-    if (isKRaftTest()) {
-      TestUtils.ensureConsistentKRaftMetadata(
-        aliveBrokers,
-        controllerServer
-      )
-    }
+    TestUtils.ensureConsistentKRaftMetadata(
+      aliveBrokers,
+      controllerServer
+    )
   }
 
   def changeClientIdConfig(sanitizedClientId: String, configs: Properties): Unit = {
-    if (isKRaftTest()) {
-      resource(createAdminClient(brokers, listenerName)) {
-        admin => {
-          admin.alterClientQuotas(Collections.singleton(
-            new ClientQuotaAlteration(
-              new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> (if (sanitizedClientId == "<default>") null else sanitizedClientId)).asJava),
-              configs.asScala.map { case (key, value) => new ClientQuotaAlteration.Op(key, value.toDouble) }.toList.asJava))).all().get()
-        }
+    Using.resource(createAdminClient(brokers, listenerName)) {
+      admin => {
+        admin.alterClientQuotas(Collections.singleton(
+          new ClientQuotaAlteration(
+            new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> (if (sanitizedClientId == "<default>") null else sanitizedClientId)).asJava),
+            configs.asScala.map { case (key, value) => new ClientQuotaAlteration.Op(key, value.toDouble) }.toList.asJava))).all().get()
       }
-    }
-    else {
-      adminZkClient.changeClientIdConfig(sanitizedClientId, configs)
     }
   }
 }

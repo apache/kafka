@@ -17,10 +17,12 @@
 
 package org.apache.kafka.shell.command;
 
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.shell.InteractiveShell;
 import org.apache.kafka.shell.state.MetadataShellState;
+
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
@@ -31,7 +33,7 @@ import java.util.Optional;
  * Implements the help command.
  */
 public final class HelpCommandHandler implements Commands.Handler {
-    public final static Commands.Type TYPE = new HelpCommandType();
+    public static final Commands.Type TYPE = new HelpCommandType();
 
     public static class HelpCommandType implements Commands.Type {
         private HelpCommandType() {
@@ -89,7 +91,6 @@ public final class HelpCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof HelpCommandHandler)) return false;
-        return true;
+        return other instanceof HelpCommandHandler;
     }
 }

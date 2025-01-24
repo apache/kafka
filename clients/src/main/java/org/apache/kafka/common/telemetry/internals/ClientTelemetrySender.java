@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.telemetry.internals;
 
-import java.time.Duration;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
@@ -25,6 +24,7 @@ import org.apache.kafka.common.requests.AbstractRequest.Builder;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 
+import java.time.Duration;
 import java.util.Optional;
 
 /**
@@ -107,8 +107,6 @@ public interface ClientTelemetrySender extends AutoCloseable {
     /**
      * Initiates shutdown of this client. This method is called when the enclosing client instance
      * is being closed. This method should not throw an exception if the client is already closed.
-     *
-     * @param timeoutMs The maximum time to wait for the client to close.
      */
-    void initiateClose(long timeoutMs);
+    void initiateClose();
 }

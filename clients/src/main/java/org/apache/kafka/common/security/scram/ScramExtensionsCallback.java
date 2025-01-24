@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.common.security.scram;
 
-import javax.security.auth.callback.Callback;
 import java.util.Collections;
 import java.util.Map;
+
+import javax.security.auth.callback.Callback;
 
 
 /**

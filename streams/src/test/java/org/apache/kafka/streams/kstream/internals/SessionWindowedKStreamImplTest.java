@@ -24,6 +24,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.EmitStrategy;
@@ -36,7 +37,6 @@ import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.state.internals.ChangeLoggingSessionBytesStore;
 import org.apache.kafka.streams.state.internals.MeteredSessionStore;
 import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionStore;
@@ -46,14 +46,12 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -63,10 +61,9 @@ import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@RunWith(Parameterized.class)
 public class SessionWindowedKStreamImplTest {
     private static final String TOPIC = "input";
     private final StreamsBuilder builder = new StreamsBuilder();
@@ -75,26 +72,14 @@ public class SessionWindowedKStreamImplTest {
 
     private SessionWindowedKStream<String, String> stream;
 
-    @Parameterized.Parameter
     public EmitStrategy.StrategyType type;
 
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return asList(new Object[][] {
-            {EmitStrategy.StrategyType.ON_WINDOW_UPDATE},
-            {EmitStrategy.StrategyType.ON_WINDOW_CLOSE}
-        });
-    }
-
-    @Before
-    public void before() {
+    public void setup(final EmitStrategy.StrategyType inputType) {
+        type = inputType;
         final EmitStrategy emitStrategy = EmitStrategy.StrategyType.forType(type);
         emitFinal = type.equals(EmitStrategy.StrategyType.ON_WINDOW_CLOSE);
-
-        // Set interval to 0 so that it always tries to emit
-        props.setProperty(StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
 
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         this.stream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
@@ -102,14 +87,18 @@ public class SessionWindowedKStreamImplTest {
             .emitStrategy(emitStrategy);
     }
 
-    @Test
-    public void shouldCountSessionWindowedWithCachingDisabled() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldCountSessionWindowedWithCachingDisabled(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         shouldCountSessionWindowed();
     }
 
-    @Test
-    public void shouldCountSessionWindowedWithCachingEnabled() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldCountSessionWindowedWithCachingEnabled(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         shouldCountSessionWindowed();
     }
 
@@ -149,8 +138,10 @@ public class SessionWindowedKStreamImplTest {
         }
     }
 
-    @Test
-    public void shouldReduceWindowed() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldReduceWindowed(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream.reduce(MockReducer.STRING_ADDER)
             .toStream()
@@ -186,8 +177,10 @@ public class SessionWindowedKStreamImplTest {
         }
     }
 
-    @Test
-    public void shouldAggregateSessionWindowed() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldAggregateSessionWindowed(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream.aggregate(MockInitializer.STRING_INIT,
                          MockAggregator.TOSTRING_ADDER,
@@ -225,14 +218,16 @@ public class SessionWindowedKStreamImplTest {
         }
     }
 
-    @Test
-    public void shouldMaterializeCount() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldMaterializeCount(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         stream.count(Materialized.as("count-store"));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final SessionStore<String, Long> store = driver.getSessionStore("count-store");
-            final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toList(store.fetch("1", "2"));
+            final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toListAndCloseIterator(store.fetch("1", "2"));
             if (!emitFinal) {
                 assertThat(
                         data,
@@ -251,14 +246,16 @@ public class SessionWindowedKStreamImplTest {
         }
     }
 
-    @Test
-    public void shouldMaterializeReduced() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldMaterializeReduced(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         stream.reduce(MockReducer.STRING_ADDER, Materialized.as("reduced"));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final SessionStore<String, String> sessionStore = driver.getSessionStore("reduced");
-            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(sessionStore.fetch("1", "2"));
+            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch("1", "2"));
 
             if (!emitFinal) {
                 assertThat(
@@ -278,8 +275,10 @@ public class SessionWindowedKStreamImplTest {
         }
     }
 
-    @Test
-    public void shouldMaterializeAggregated() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldMaterializeAggregated(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         stream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
@@ -289,7 +288,7 @@ public class SessionWindowedKStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final SessionStore<String, String> sessionStore = driver.getSessionStore("aggregated");
-            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(sessionStore.fetch("1", "2"));
+            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch("1", "2"));
             if (!emitFinal) {
                 assertThat(
                         data,
@@ -308,28 +307,38 @@ public class SessionWindowedKStreamImplTest {
         }
     }
 
-    @Test
-    public void shouldThrowNullPointerOnAggregateIfInitializerIsNull() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldThrowNullPointerOnAggregateIfInitializerIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.aggregate(null, MockAggregator.TOSTRING_ADDER, sessionMerger));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.aggregate(MockInitializer.STRING_INIT, null, sessionMerger));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnAggregateIfMergerIsNull() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldThrowNullPointerOnAggregateIfMergerIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnReduceIfReducerIsNull() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldThrowNullPointerOnReduceIfReducerIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.reduce(null));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.aggregate(
             null,
             MockAggregator.TOSTRING_ADDER,
@@ -337,8 +346,10 @@ public class SessionWindowedKStreamImplTest {
             Materialized.as("store")));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.aggregate(
             MockInitializer.STRING_INIT,
             null,
@@ -346,8 +357,10 @@ public class SessionWindowedKStreamImplTest {
             Materialized.as("store")));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnMaterializedAggregateIfMergerIsNull() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldThrowNullPointerOnMaterializedAggregateIfMergerIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
@@ -356,8 +369,10 @@ public class SessionWindowedKStreamImplTest {
     }
 
     @SuppressWarnings("unchecked")
-    @Test
-    public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
@@ -365,29 +380,39 @@ public class SessionWindowedKStreamImplTest {
             (Materialized) null));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.reduce(null, Materialized.as("store")));
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
     @SuppressWarnings("unchecked")
-    public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
+    public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.reduce(MockReducer.STRING_ADDER, (Materialized) null));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.reduce(MockReducer.STRING_ADDER, (Named) null));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldThrowNullPointerOnCountIfMaterializedIsNull(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         assertThrows(NullPointerException.class, () -> stream.count((Materialized<String, Long, SessionStore<Bytes, byte[]>>) null));
     }
 
-    @Test
-    public void shouldNotEnableCachingWithEmitFinal() {
+    @ParameterizedTest
+    @EnumSource(EmitStrategy.StrategyType.class)
+    public void shouldNotEnableCachingWithEmitFinal(final EmitStrategy.StrategyType inputType) {
+        setup(inputType);
         if (!emitFinal)
             return;
 

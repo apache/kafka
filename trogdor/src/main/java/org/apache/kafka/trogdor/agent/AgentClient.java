@@ -17,12 +17,6 @@
 
 package org.apache.kafka.trogdor.agent;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.Namespace;
-import net.sourceforge.argparse4j.inf.Subparser;
-import net.sourceforge.argparse4j.inf.Subparsers;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.StringFormatter;
@@ -33,13 +27,20 @@ import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 import org.apache.kafka.trogdor.rest.WorkerState;
 import org.apache.kafka.trogdor.task.TaskSpec;
-import org.apache.kafka.trogdor.rest.UptimeResponse;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
+import net.sourceforge.argparse4j.inf.Subparser;
+import net.sourceforge.argparse4j.inf.Subparsers;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.ws.rs.core.UriBuilder;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -47,6 +48,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
+import jakarta.ws.rs.core.UriBuilder;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -57,7 +60,6 @@ import static org.apache.kafka.trogdor.common.StringFormatter.durationString;
  * A client for the Trogdor agent.
  */
 public class AgentClient {
-    private final Logger log;
 
     /**
      * The maximum number of tries to make.
@@ -106,7 +108,6 @@ public class AgentClient {
     }
 
     private AgentClient(Logger log, int maxTries, String target) {
-        this.log = log;
         this.maxTries = maxTries;
         this.target = target;
     }
@@ -125,7 +126,7 @@ public class AgentClient {
 
     public AgentStatusResponse status() throws Exception {
         HttpResponse<AgentStatusResponse> resp =
-            JsonRestServer.<AgentStatusResponse>httpRequest(url("/agent/status"), "GET",
+            JsonRestServer.httpRequest(url("/agent/status"), "GET",
                 null, new TypeReference<AgentStatusResponse>() { }, maxTries);
         return resp.body();
     }
@@ -139,7 +140,7 @@ public class AgentClient {
 
     public void createWorker(CreateWorkerRequest request) throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(
+            JsonRestServer.httpRequest(
                 url("/agent/worker/create"), "POST",
                 request, new TypeReference<Empty>() { }, maxTries);
         resp.body();
@@ -147,7 +148,7 @@ public class AgentClient {
 
     public void stopWorker(StopWorkerRequest request) throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(url(
+            JsonRestServer.httpRequest(url(
                 "/agent/worker/stop"), "PUT",
                 request, new TypeReference<Empty>() { }, maxTries);
         resp.body();
@@ -157,14 +158,14 @@ public class AgentClient {
         UriBuilder uriBuilder = UriBuilder.fromPath(url("/agent/worker"));
         uriBuilder.queryParam("workerId", request.workerId());
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(uriBuilder.build().toString(), "DELETE",
+            JsonRestServer.httpRequest(uriBuilder.build().toString(), "DELETE",
                 null, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
 
     public void invokeShutdown() throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(url(
+            JsonRestServer.httpRequest(url(
                 "/agent/shutdown"), "PUT",
                 null, new TypeReference<Empty>() { }, maxTries);
         resp.body();

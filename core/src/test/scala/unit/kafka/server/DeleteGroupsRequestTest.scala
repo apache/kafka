@@ -16,46 +16,48 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.api.ClusterInstance
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
-import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
-@Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 1)
-@Tag("integration")
+@ClusterTestDefaults(types = Array(Type.KRAFT))
 class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
-    new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
-    new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
   def testDeleteGroupsWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
     testDeleteGroups(true)
   }
 
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
   def testDeleteGroupsWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
     testDeleteGroups(false)
   }
 
-  @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
+  @ClusterTest(
+    types = Array(Type.KRAFT, Type.CO_KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
   def testDeleteGroupsWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
     testDeleteGroups(false)
   }
@@ -121,6 +123,8 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
           List(new DescribedGroup()
             .setGroupId("grp")
             .setGroupState(ClassicGroupState.DEAD.toString)
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code)
+            .setErrorMessage("Group grp not found.")
           ),
           describeGroups(List("grp"))
         )

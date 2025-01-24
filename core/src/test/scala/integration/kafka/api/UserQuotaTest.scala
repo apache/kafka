@@ -14,8 +14,9 @@
 
 package kafka.api
 
+import kafka.security.JaasTestUtils
 import kafka.server.KafkaBroker
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
@@ -30,7 +31,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some("GSSAPI"), KafkaSasl, JaasTestUtils.KafkaServerContextName))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some("GSSAPI"), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
     quotaTestClients.alterClientQuotas(
       quotaTestClients.clientQuotaAlteration(
@@ -40,6 +41,8 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
     )
     quotaTestClients.waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
   }
+
+  // @Flaky("KAFKA-8073") -> testThrottledProducerConsumer (in super class)
 
   @AfterEach
   override def tearDown(): Unit = {
@@ -53,7 +56,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
     val adminClient = createAdminClient()
 
     new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer, adminClient) {
-      override val userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaClientPrincipalUnqualifiedName2)
+      override val userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2)
 
       override def quotaMetricTags(clientId: String): Map[String, String] = {
         Map("user" -> userPrincipal.getName, "client-id" -> "")

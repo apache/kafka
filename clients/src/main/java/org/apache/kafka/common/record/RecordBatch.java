@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.CloseableIterator;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.Optional;
 import java.util.OptionalLong;
 
 /**
@@ -245,4 +246,23 @@ public interface RecordBatch extends Iterable<Record> {
      * @return Whether this is a batch containing control records
      */
     boolean isControlBatch();
+
+    /**
+     * iterate all records to find the offset of max timestamp.
+     * noted:
+     * 1) that the earliest offset will return if there are multi records having same (max) timestamp
+     * 2) it always returns None if the {@link RecordBatch#magic()} is equal to {@link RecordBatch#MAGIC_VALUE_V0}
+     * @return offset of max timestamp
+     */
+    default Optional<Long> offsetOfMaxTimestamp() {
+        if (magic() == RecordBatch.MAGIC_VALUE_V0) return Optional.empty();
+        long maxTimestamp = maxTimestamp();
+        try (CloseableIterator<Record> iter = streamingIterator(BufferSupplier.create())) {
+            while (iter.hasNext()) {
+                Record record = iter.next();
+                if (maxTimestamp == record.timestamp()) return Optional.of(record.offset());
+            }
+        }
+        return Optional.empty();
+    }
 }

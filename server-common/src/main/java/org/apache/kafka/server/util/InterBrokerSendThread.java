@@ -16,16 +16,6 @@
  */
 package org.apache.kafka.server.util;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
@@ -37,18 +27,29 @@ import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
 /**
  * An inter-broker send thread that utilizes a non-blocking network client.
  */
 public abstract class InterBrokerSendThread extends ShutdownableThread {
 
-    protected volatile KafkaClient networkClient;
+    protected final KafkaClient networkClient;
 
     private final int requestTimeoutMs;
     private final Time time;
     private final UnsentRequests unsentRequests;
 
-    public InterBrokerSendThread(
+    protected InterBrokerSendThread(
         String name,
         KafkaClient networkClient,
         int requestTimeoutMs,
@@ -57,7 +58,7 @@ public abstract class InterBrokerSendThread extends ShutdownableThread {
         this(name, networkClient, requestTimeoutMs, time, true);
     }
 
-    public InterBrokerSendThread(
+    protected InterBrokerSendThread(
         String name,
         KafkaClient networkClient,
         int requestTimeoutMs,

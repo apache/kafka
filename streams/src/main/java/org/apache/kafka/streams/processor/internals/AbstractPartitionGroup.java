@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Set;
-import java.util.function.Function;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
 
 abstract class AbstractPartitionGroup {
 
@@ -54,6 +56,8 @@ abstract class AbstractPartitionGroup {
     abstract long streamTime();
 
     abstract Long headRecordOffset(final TopicPartition partition);
+
+    abstract Optional<Integer> headRecordLeaderEpoch(final TopicPartition partition);
 
     abstract int numBuffered();
 

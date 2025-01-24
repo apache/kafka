@@ -17,21 +17,33 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.ShareConsumerImpl;
 import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
 /**
- * This is the abstract definition of the events created by the {@link AsyncKafkaConsumer} on the user's
- * application thread.
+ * This is the abstract definition of the events created by the {@link AsyncKafkaConsumer} and
+ * {@link ShareConsumerImpl} on the user's application thread.
  */
 public abstract class ApplicationEvent {
 
     public enum Type {
         COMMIT_ASYNC, COMMIT_SYNC, POLL, FETCH_COMMITTED_OFFSETS, NEW_TOPICS_METADATA_UPDATE, ASSIGNMENT_CHANGE,
-        LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS, TOPIC_METADATA, ALL_TOPICS_METADATA, SUBSCRIPTION_CHANGE,
-        UNSUBSCRIBE, CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED,
-        COMMIT_ON_CLOSE, LEAVE_ON_CLOSE
+        LIST_OFFSETS, CHECK_AND_UPDATE_POSITIONS, RESET_OFFSET, TOPIC_METADATA, ALL_TOPICS_METADATA,
+        TOPIC_SUBSCRIPTION_CHANGE, TOPIC_PATTERN_SUBSCRIPTION_CHANGE, TOPIC_RE2J_PATTERN_SUBSCRIPTION_CHANGE,
+        UPDATE_SUBSCRIPTION_METADATA, UNSUBSCRIBE,
+        CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED,
+        COMMIT_ON_CLOSE, CREATE_FETCH_REQUESTS, LEAVE_GROUP_ON_CLOSE,
+        PAUSE_PARTITIONS, RESUME_PARTITIONS, CURRENT_LAG,
+        SHARE_FETCH, SHARE_ACKNOWLEDGE_ASYNC, SHARE_ACKNOWLEDGE_SYNC,
+        SHARE_SUBSCRIPTION_CHANGE, SHARE_UNSUBSCRIBE,
+        SHARE_ACKNOWLEDGE_ON_CLOSE,
+        SHARE_ACKNOWLEDGEMENT_COMMIT_CALLBACK_REGISTRATION,
+        SEEK_UNVALIDATED,
+        STREAMS_ON_TASKS_ASSIGNED_CALLBACK_COMPLETED,
+        STREAMS_ON_TASKS_REVOKED_CALLBACK_COMPLETED,
+        STREAMS_ON_ALL_TASKS_LOST_CALLBACK_COMPLETED,
     }
 
     private final Type type;
@@ -41,6 +53,12 @@ public abstract class ApplicationEvent {
      * {@link #equals(Object)} and can be used in log messages when debugging.
      */
     private final Uuid id;
+
+    /**
+     * The time in milliseconds when this event was enqueued.
+     * This field can be changed after the event is created, so it should not be used in hashCode or equals.
+     */
+    private long enqueuedMs;
 
     protected ApplicationEvent(Type type) {
         this.type = Objects.requireNonNull(type);
@@ -53,6 +71,14 @@ public abstract class ApplicationEvent {
 
     public Uuid id() {
         return id;
+    }
+
+    public void setEnqueuedMs(long enqueuedMs) {
+        this.enqueuedMs = enqueuedMs;
+    }
+
+    public long enqueuedMs() {
+        return enqueuedMs;
     }
 
     @Override
@@ -69,13 +95,11 @@ public abstract class ApplicationEvent {
     }
 
     protected String toStringBase() {
-        return "type=" + type + ", id=" + id;
+        return "type=" + type + ", id=" + id + ", enqueuedMs=" + enqueuedMs;
     }
 
     @Override
     public final String toString() {
-        return getClass().getSimpleName() + "{" +
-                toStringBase() +
-                '}';
+        return getClass().getSimpleName() + "{" + toStringBase() + "}";
     }
 }

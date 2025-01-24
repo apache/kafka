@@ -21,20 +21,23 @@ import kafka.log.remote.RemoteLogManager
 
 import java.io.File
 import java.util.Properties
-import kafka.server.BrokerTopicStats
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, FetchIsolation, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex}
+import org.apache.kafka.storage.internals.log.LogConfig.{DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG, DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import scala.jdk.CollectionConverters._
 
@@ -58,15 +61,17 @@ object LogTestUtils {
                       segmentBytes: Int = LogConfig.DEFAULT_SEGMENT_BYTES,
                       retentionMs: Long = LogConfig.DEFAULT_RETENTION_MS,
                       localRetentionMs: Long = LogConfig.DEFAULT_LOCAL_RETENTION_MS,
-                      retentionBytes: Long = LogConfig.DEFAULT_RETENTION_BYTES,
+                      retentionBytes: Long = ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT,
                       localRetentionBytes: Long = LogConfig.DEFAULT_LOCAL_RETENTION_BYTES,
                       segmentJitterMs: Long = LogConfig.DEFAULT_SEGMENT_JITTER_MS,
-                      cleanupPolicy: String = LogConfig.DEFAULT_CLEANUP_POLICY,
+                      cleanupPolicy: String = ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT,
                       maxMessageBytes: Int = LogConfig.DEFAULT_MAX_MESSAGE_BYTES,
-                      indexIntervalBytes: Int = LogConfig.DEFAULT_INDEX_INTERVAL_BYTES,
-                      segmentIndexBytes: Int = LogConfig.DEFAULT_SEGMENT_INDEX_BYTES,
-                      fileDeleteDelayMs: Long = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
-                      remoteLogStorageEnable: Boolean = LogConfig.DEFAULT_REMOTE_STORAGE_ENABLE): LogConfig = {
+                      indexIntervalBytes: Int = ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT,
+                      segmentIndexBytes: Int = ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT,
+                      fileDeleteDelayMs: Long = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
+                      remoteLogStorageEnable: Boolean = LogConfig.DEFAULT_REMOTE_STORAGE_ENABLE,
+                      remoteLogCopyDisable: Boolean = DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG,
+                      remoteLogDeleteOnDisable: Boolean = DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG): LogConfig = {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs: java.lang.Long)
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentBytes: Integer)
@@ -81,6 +86,8 @@ object LogTestUtils {
     logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, segmentIndexBytes: Integer)
     logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, fileDeleteDelayMs: java.lang.Long)
     logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, remoteLogStorageEnable: java.lang.Boolean)
+    logProps.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, remoteLogCopyDisable: java.lang.Boolean)
+    logProps.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, remoteLogDeleteOnDisable: java.lang.Boolean)
     new LogConfig(logProps)
   }
 
@@ -92,12 +99,11 @@ object LogTestUtils {
                 logStartOffset: Long = 0L,
                 recoveryPoint: Long = 0L,
                 maxTransactionTimeoutMs: Int = 5 * 60 * 1000,
-                producerStateManagerConfig: ProducerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, false),
-                producerIdExpirationCheckIntervalMs: Int = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
+                producerStateManagerConfig: ProducerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+                producerIdExpirationCheckIntervalMs: Int = TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
-                keepPartitionMetadataFile: Boolean = true,
-                numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
+                numRemainingSegments: ConcurrentMap[String, Integer] = new ConcurrentHashMap[String, Integer],
                 remoteStorageSystemEnable: Boolean = false,
                 remoteLogManager: Option[RemoteLogManager] = None,
                 logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
@@ -115,7 +121,6 @@ object LogTestUtils {
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
       topicId = topicId,
-      keepPartitionMetadataFile = keepPartitionMetadataFile,
       numRemainingSegments = numRemainingSegments,
       remoteStorageSystemEnable = remoteStorageSystemEnable,
       logOffsetsListener = logOffsetsListener
@@ -155,12 +160,12 @@ object LogTestUtils {
         new SimpleRecord(data, data)
       }
 
-      segment.append(MemoryRecords.withRecords(baseOffset, CompressionType.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset, Compression.NONE, 0,
         record(baseOffset)))
-      segment.append(MemoryRecords.withRecords(baseOffset + 1, CompressionType.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset + 1, Compression.NONE, 0,
         record(baseOffset + 1),
         record(baseOffset + 2)))
-      segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, Compression.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
       // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
       Files.createFile(LogFileUtils.offsetIndexFile(logDir, baseOffset).toPath)
@@ -254,17 +259,11 @@ object LogTestUtils {
   def listProducerSnapshotOffsets(logDir: File): Seq[Long] =
     ProducerStateManager.listSnapshotFiles(logDir).asScala.map(_.offset).sorted.toSeq
 
-  def assertLeaderEpochCacheEmpty(log: UnifiedLog): Unit = {
-    assertEquals(None, log.leaderEpochCache)
-    assertEquals(None, log.latestEpoch)
-    assertFalse(LeaderEpochCheckpointFile.newFile(log.dir).exists())
-  }
-
   def appendNonTransactionalAsLeader(log: UnifiedLog, numRecords: Int): Unit = {
     val simpleRecords = (0 until numRecords).map { seq =>
       new SimpleRecord(s"$seq".getBytes)
     }
-    val records = MemoryRecords.withRecords(CompressionType.NONE, simpleRecords: _*)
+    val records = MemoryRecords.withRecords(Compression.NONE, simpleRecords: _*)
     log.appendAsLeader(records, leaderEpoch = 0)
   }
 
@@ -287,10 +286,10 @@ object LogTestUtils {
       }
 
       val records = if (isTransactional) {
-        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
+        MemoryRecords.withTransactionalRecords(Compression.NONE, producerId,
           producerEpoch, sequence, simpleRecords: _*)
       } else {
-        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
+        MemoryRecords.withIdempotentRecords(Compression.NONE, producerId,
           producerEpoch, sequence, simpleRecords: _*)
       }
 

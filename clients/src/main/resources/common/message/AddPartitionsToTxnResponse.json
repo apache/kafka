@@ -24,7 +24,9 @@
   // Version 3 enables flexible versions.
   //
   // Version 4 adds support to batch multiple transactions and a top level error code.
-  "validVersions": "0-4",
+  //
+  // Version 5 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
+  "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
@@ -46,7 +48,7 @@
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "ResultsByPartition", "type": "[]AddPartitionsToTxnPartitionResult", "versions": "0+",
-        "about": "The results for each partition" }
+        "about": "The results for each partition." }
     ]},
     { "name": "AddPartitionsToTxnPartitionResult", "versions": "0+", "fields": [
       { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,

@@ -32,20 +32,20 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 
 public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> implements CogroupedKStream<K, VOut> {
 
     static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
     static final String MERGE_NAME = "COGROUPKSTREAM-MERGE-";
 
-    final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns;
-    final private CogroupedStreamAggregateBuilder<K, VOut> aggregateBuilder;
+    private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns;
+    private final CogroupedStreamAggregateBuilder<K, VOut> aggregateBuilder;
 
     CogroupedKStreamImpl(final String name,
                          final Set<String> subTopologySourceNodes,

@@ -23,9 +23,10 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -38,7 +39,7 @@ import java.nio.file.Files;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PrintedTest {
 
@@ -46,13 +47,13 @@ public class PrintedTest {
     private final ByteArrayOutputStream sysOut = new ByteArrayOutputStream();
     private Printed<String, Integer> sysOutPrinter;
 
-    @Before
+    @BeforeEach
     public void before() {
         System.setOut(new PrintStream(sysOut));
         sysOutPrinter = Printed.toSysOut();
     }
 
-    @After
+    @AfterEach
     public void after() {
         System.setOut(originalSysOut);
     }
@@ -69,7 +70,7 @@ public class PrintedTest {
         try (final InputStream stream = Files.newInputStream(file.toPath())) {
             final byte[] data = new byte[stream.available()];
             stream.read(data);
-            assertThat(new String(data, StandardCharsets.UTF_8.name()), equalTo("[processor]: hi, 1\n"));
+            assertThat(new String(data, StandardCharsets.UTF_8), equalTo("[processor]: hi, 1\n"));
         }
     }
 

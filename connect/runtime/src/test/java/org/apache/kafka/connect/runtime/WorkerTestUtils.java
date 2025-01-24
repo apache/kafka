@@ -16,10 +16,17 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.connect.storage.ClusterConfigState;
+import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.runtime.distributed.ExtendedAssignment;
-import org.apache.kafka.connect.runtime.distributed.ExtendedWorkerState;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
+import org.apache.kafka.connect.storage.ClusterConfigState;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
+import org.mockito.Mockito;
+import org.mockito.stubbing.OngoingStubbing;
 
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Collections;
@@ -29,69 +36,35 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class WorkerTestUtils {
-
-    public static WorkerLoad emptyWorkerLoad(String worker) {
-        return new WorkerLoad.Builder(worker).build();
-    }
-
-    public WorkerLoad workerLoad(String worker, int connectorStart, int connectorNum,
-                                  int taskStart, int taskNum) {
-        return new WorkerLoad.Builder(worker).with(
-                newConnectors(connectorStart, connectorStart + connectorNum),
-                newTasks(taskStart, taskStart + taskNum)).build();
-    }
-
-    public static List<String> newConnectors(int start, int end) {
-        return IntStream.range(start, end)
-                .mapToObj(i -> "connector" + i)
-                .collect(Collectors.toList());
-    }
-
-    public static List<ConnectorTaskId> newTasks(int start, int end) {
-        return IntStream.range(start, end)
-                .mapToObj(i -> new ConnectorTaskId("task", i))
-                .collect(Collectors.toList());
-    }
 
     public static ClusterConfigState clusterConfigState(long offset,
                                                         int connectorNum,
                                                         int taskNum) {
+        Map<String, Map<String, String>> connectorConfigs = connectorConfigs(1, connectorNum);
+        Map<String, AppliedConnectorConfig> appliedConnectorConfigs = connectorConfigs.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> new AppliedConnectorConfig(e.getValue())
+                ));
         return new ClusterConfigState(
                 offset,
                 null,
                 connectorTaskCounts(1, connectorNum, taskNum),
-                connectorConfigs(1, connectorNum),
+                connectorConfigs,
                 connectorTargetStates(1, connectorNum, TargetState.STARTED),
                 taskConfigs(0, connectorNum, connectorNum * taskNum),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                appliedConnectorConfigs,
                 Collections.emptySet(),
                 Collections.emptySet());
-    }
-
-    public static Map<String, ExtendedWorkerState> memberConfigs(String givenLeader,
-                                                                 long givenOffset,
-                                                                 Map<String, ExtendedAssignment> givenAssignments) {
-        return givenAssignments.entrySet().stream()
-                .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> new ExtendedWorkerState(expectedLeaderUrl(givenLeader), givenOffset, e.getValue())));
-    }
-
-    public static Map<String, ExtendedWorkerState> memberConfigs(String givenLeader,
-                                                                 long givenOffset,
-                                                                 int start,
-                                                                 int connectorNum) {
-        return IntStream.range(start, connectorNum + 1)
-                .mapToObj(i -> new SimpleEntry<>("worker" + i, new ExtendedWorkerState(expectedLeaderUrl(givenLeader), givenOffset, null)))
-                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
     }
 
     public static Map<String, Integer> connectorTaskCounts(int start,
@@ -168,29 +141,57 @@ public class WorkerTestUtils {
                                         int expectedRevokedTaskNum,
                                         int expectedDelay,
                                         ExtendedAssignment assignment) {
-        assertNotNull("Assignment can't be null", assignment);
+        assertNotNull(assignment, "Assignment can't be null");
 
-        assertEquals("Wrong status in " + assignment, expectFailed, assignment.failed());
+        assertEquals(expectFailed, assignment.failed(), "Wrong status in " + assignment);
 
-        assertEquals("Wrong leader in " + assignment, expectedLeader, assignment.leader());
+        assertEquals(expectedLeader, assignment.leader(), "Wrong leader in " + assignment);
 
-        assertEquals("Wrong leaderUrl in " + assignment, expectedLeaderUrl(expectedLeader),
-                assignment.leaderUrl());
+        assertEquals(expectedLeaderUrl(expectedLeader),
+                assignment.leaderUrl(), "Wrong leaderUrl in " + assignment);
 
-        assertEquals("Wrong offset in " + assignment, expectedOffset, assignment.offset());
+        assertEquals(expectedOffset, assignment.offset(), "Wrong offset in " + assignment);
 
-        assertThat("Wrong set of assigned connectors in " + assignment,
-                assignment.connectors(), is(expectedAssignedConnectors));
+        assertEquals(expectedAssignedConnectors, assignment.connectors(), "Wrong set of assigned connectors in " + assignment);
 
-        assertEquals("Wrong number of assigned tasks in " + assignment,
-                expectedAssignedTaskNum, assignment.tasks().size());
+        assertEquals(expectedAssignedTaskNum, assignment.tasks().size(),
+                "Wrong number of assigned tasks in " + assignment);
 
-        assertThat("Wrong set of revoked connectors in " + assignment,
-                assignment.revokedConnectors(), is(expectedRevokedConnectors));
+        assertEquals(expectedRevokedConnectors, assignment.revokedConnectors(), "Wrong set of revoked connectors in " + assignment);
 
-        assertEquals("Wrong number of revoked tasks in " + assignment,
-                expectedRevokedTaskNum, assignment.revokedTasks().size());
+        assertEquals(expectedRevokedTaskNum, assignment.revokedTasks().size(),
+                "Wrong number of revoked tasks in " + assignment);
 
-        assertEquals("Wrong rebalance delay in " + assignment, expectedDelay, assignment.delay());
+        assertEquals(expectedDelay, assignment.delay(),
+                "Wrong rebalance delay in " + assignment);
+    }
+
+    public static <T, R extends ConnectRecord<R>> TransformationChain<T, R> getTransformationChain(
+            RetryWithToleranceOperator<T> toleranceOperator,
+            List<Object> results) {
+        Transformation<R> transformation = mock(Transformation.class);
+        OngoingStubbing<R> stub = when(transformation.apply(any()));
+        for (Object result: results) {
+            if (result instanceof Exception) {
+                stub = stub.thenThrow((Exception) result);
+            } else {
+                stub = stub.thenReturn((R) result);
+            }
+        }
+        return buildTransformationChain(transformation, toleranceOperator);
+    }
+
+    public static <T, R extends ConnectRecord<R>> TransformationChain<T, R> buildTransformationChain(
+            Transformation<R> transformation,
+            RetryWithToleranceOperator<T> toleranceOperator) {
+        Predicate<R> predicate = mock(Predicate.class);
+        when(predicate.test(any())).thenReturn(true);
+        TransformationStage<R> stage = new TransformationStage(
+                predicate,
+                false,
+                transformation);
+        TransformationChain<T, R> realTransformationChainRetriableException = new TransformationChain(List.of(stage), toleranceOperator);
+        TransformationChain<T, R> transformationChainRetriableException = Mockito.spy(realTransformationChainRetriableException);
+        return transformationChainRetriableException;
     }
 }

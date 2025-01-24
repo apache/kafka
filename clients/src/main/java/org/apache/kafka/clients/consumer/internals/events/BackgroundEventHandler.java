@@ -17,11 +17,13 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
-import org.apache.kafka.common.utils.LogContext;
-import org.slf4j.Logger;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
+import org.apache.kafka.common.utils.Time;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
-import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 
 /**
  * An event handler that receives {@link BackgroundEvent background events} from the
@@ -31,12 +33,16 @@ import java.util.Queue;
 
 public class BackgroundEventHandler {
 
-    private final Logger log;
-    private final Queue<BackgroundEvent> backgroundEventQueue;
+    private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
+    private final Time time;
+    private final AsyncConsumerMetrics asyncConsumerMetrics;
 
-    public BackgroundEventHandler(final LogContext logContext, final Queue<BackgroundEvent> backgroundEventQueue) {
-        this.log = logContext.logger(BackgroundEventHandler.class);
+    public BackgroundEventHandler(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                  final Time time,
+                                  final AsyncConsumerMetrics asyncConsumerMetrics) {
         this.backgroundEventQueue = backgroundEventQueue;
+        this.time = time;
+        this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
 
     /**
@@ -46,7 +52,20 @@ public class BackgroundEventHandler {
      */
     public void add(BackgroundEvent event) {
         Objects.requireNonNull(event, "BackgroundEvent provided to add must be non-null");
+        event.setEnqueuedMs(time.milliseconds());
+        asyncConsumerMetrics.recordBackgroundEventQueueSize(backgroundEventQueue.size() + 1);
         backgroundEventQueue.add(event);
-        log.trace("Enqueued event: {}", event);
+    }
+
+    /**
+     * Drain all the {@link BackgroundEvent events} from the handler.
+     *
+     * @return A list of {@link BackgroundEvent events} that were drained
+     */
+    public List<BackgroundEvent> drainEvents() {
+        List<BackgroundEvent> events = new ArrayList<>();
+        backgroundEventQueue.drainTo(events);
+        asyncConsumerMetrics.recordBackgroundEventQueueSize(0);
+        return events;
     }
 }

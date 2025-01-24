@@ -19,22 +19,22 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.FakeForwardingAdmin;
 import org.apache.kafka.clients.admin.ForwardingAdmin;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigData;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metrics.FakeMetricsReporter;
-
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Arrays;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -172,54 +172,6 @@ public class MirrorMakerConfigTest {
     }
 
     @Test
-    public void testConfigBackwardsCompatibility() {
-        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
-            "clusters", "a, b",
-            "groups.blacklist", "group-7",
-            "topics.blacklist", "topic3",
-            "config.properties.blacklist", "property-3",
-            "topic.filter.class", DefaultTopicFilter.class.getName()));
-        SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
-        Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
-                                                                              MirrorSourceConnector.class);
-        MirrorSourceConfig sourceConfig = new MirrorSourceConfig(connectorProps);
-        DefaultTopicFilter.TopicFilterConfig filterConfig =
-            new DefaultTopicFilter.TopicFilterConfig(connectorProps);
-
-        assertEquals(Collections.singletonList("topic3"), filterConfig.getList("topics.exclude"),
-            "Topics exclude should be backwards compatible.");
-
-        assertEquals(Collections.singletonList("property-3"), sourceConfig.getList("config.properties.exclude"),
-            "Config properties exclude should be backwards compatible.");
-
-        MirrorCheckpointConfig checkpointConfig = new MirrorCheckpointConfig(connectorProps);
-        assertEquals(Collections.singletonList("group-7"), checkpointConfig.getList("groups.exclude"),
-            "Groups exclude should be backwards compatible.");
-
-    }
-
-    @Test
-    public void testConfigBackwardsCompatibilitySourceTarget() {
-        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
-            "clusters", "a, b",
-            "source->target.topics.blacklist", "topic3",
-            "source->target.groups.blacklist", "group-7",
-            "topic.filter.class", DefaultTopicFilter.class.getName()));
-        SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
-        Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
-                                                                              MirrorSourceConnector.class);
-        MirrorCheckpointConfig connectorConfig = new MirrorCheckpointConfig(connectorProps);
-        DefaultTopicFilter.TopicFilterConfig filterConfig =
-            new DefaultTopicFilter.TopicFilterConfig(connectorProps);
-
-        assertEquals(Collections.singletonList("topic3"), filterConfig.getList("topics.exclude"),
-            "Topics exclude should be backwards compatible.");
-
-        assertEquals(Collections.singletonList("group-7"), connectorConfig.getList("groups.exclude"),
-            "Groups exclude should be backwards compatible.");
-    }
-
-    @Test
     public void testIncludesTopicFilterProperties() {
         MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
             "clusters", "a, b",
@@ -257,6 +209,7 @@ public class MirrorMakerConfigTest {
         assertEquals("b->a", aProps.get("client.id"));
         assertEquals("123", aProps.get("offset.storage.replication.factor"));
         assertEquals("__", aProps.get("replication.policy.separator"));
+        assertEquals("fake", aProps.get("config.providers"));
         Map<String, String> bProps = mirrorConfig.workerConfig(b);
         assertEquals("a->b", bProps.get("client.id"));
         assertEquals("456", bProps.get("status.storage.replication.factor"));

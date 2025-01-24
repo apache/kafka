@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.AbstractIterator;
@@ -234,7 +235,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         if (isCompressed())
             return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier);
 
-        return new CloseableIterator<Record>() {
+        return new CloseableIterator<>() {
             private boolean hasNext = true;
 
             @Override
@@ -278,7 +279,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     private static final class DataLogInputStream implements LogInputStream<AbstractLegacyRecordBatch> {
         private final InputStream stream;
-        protected final int maxMessageSize;
+        private final int maxMessageSize;
         private final ByteBuffer offsetAndSizeBuffer;
 
         DataLogInputStream(InputStream stream, int maxMessageSize) {
@@ -332,7 +333,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                 throw new InvalidRecordException("Found invalid compressed record set with null value (magic = " +
                         wrapperMagic + ")");
 
-            InputStream stream = compressionType.wrapForInput(wrapperValue, wrapperRecord.magic(), bufferSupplier);
+            InputStream stream = Compression.of(compressionType).build().wrapForInput(wrapperValue, wrapperRecord.magic(), bufferSupplier);
             LogInputStream<AbstractLegacyRecordBatch> logStream = new DataLogInputStream(stream, maxMessageSize);
 
             long lastOffsetFromWrapper = wrapperEntry.lastOffset();

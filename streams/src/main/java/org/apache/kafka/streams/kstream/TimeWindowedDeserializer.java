@@ -37,11 +37,6 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
         this(null, null);
     }
 
-    @Deprecated
-    public TimeWindowedDeserializer(final Deserializer<T> inner) {
-        this(inner, Long.MAX_VALUE);
-    }
-
     public TimeWindowedDeserializer(final Deserializer<T> inner, final Long windowSize) {
         this.inner = inner;
         this.windowSize = windowSize;

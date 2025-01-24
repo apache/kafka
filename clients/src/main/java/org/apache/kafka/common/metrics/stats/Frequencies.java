@@ -18,7 +18,6 @@ package org.apache.kafka.common.metrics.stats;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.stats.Histogram.BinScheme;
 import org.apache.kafka.common.metrics.stats.Histogram.ConstantBinScheme;
@@ -35,7 +34,7 @@ import java.util.List;
  * one metric to capture the percentage of operations that failed another to capture the percentage of operations
  * that succeeded.
  * <p>
- * This can be accomplish by created a {@link org.apache.kafka.common.metrics.Sensor Sensor} to record the values,
+ * This can be accomplished by creating a {@link org.apache.kafka.common.metrics.Sensor Sensor} to record the values,
  * with 0.0 for false and 1.0 for true. Then, create a single {@link Frequencies} object that has two
  * {@link Frequency} metrics: one centered around 0.0 and another centered around 1.0. The {@link Frequencies}
  * object is a {@link CompoundStat}, and so it can be {@link org.apache.kafka.common.metrics.Sensor#add(CompoundStat)
@@ -111,11 +110,7 @@ public class Frequencies extends SampledStat implements CompoundStat {
         List<NamedMeasurable> ms = new ArrayList<>(frequencies.length);
         for (Frequency frequency : frequencies) {
             final double center = frequency.centerValue();
-            ms.add(new NamedMeasurable(frequency.name(), new Measurable() {
-                public double measure(MetricConfig config, long now) {
-                    return frequency(config, now, center);
-                }
-            }));
+            ms.add(new NamedMeasurable(frequency.name(), (config, now) -> frequency(config, now, center)));
         }
         return ms;
     }

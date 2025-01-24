@@ -20,9 +20,13 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.Set;
+
+import static java.util.Collections.singleton;
 
 class KStreamKTableJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K, VOut> {
 
@@ -32,18 +36,29 @@ class KStreamKTableJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K, 
     private final boolean leftJoin;
     private final Optional<Duration> gracePeriod;
     private final Optional<String> storeName;
-
+    private final Set<StoreBuilder<?>> stores;
 
     KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier,
                       final ValueJoinerWithKey<? super K, ? super V1, ? super V2, VOut> joiner,
                       final boolean leftJoin,
                       final Optional<Duration> gracePeriod,
-                      final Optional<String> storeName) {
+                      final Optional<StoreBuilder<?>> bufferStoreBuilder) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
         this.leftJoin = leftJoin;
         this.gracePeriod = gracePeriod;
-        this.storeName = storeName;
+        this.storeName = bufferStoreBuilder.map(StoreBuilder::name);
+
+        if (bufferStoreBuilder.isEmpty()) {
+            this.stores = null;
+        } else {
+            this.stores = singleton(bufferStoreBuilder.get());
+        }
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return stores;
     }
 
     @Override

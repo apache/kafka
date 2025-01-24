@@ -17,11 +17,9 @@ import time
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
-    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3
+from kafkatest.version import LATEST_2_1, LATEST_2_2, LATEST_2_3
 from kafkatest.services.streams import CooperativeRebalanceUpgradeService
 from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running
 
@@ -45,9 +43,7 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
     second_bounce_phase = "second_bounce_phase-"
 
     # !!CAUTION!!: THIS LIST OF VERSIONS IS FIXED, NO VERSIONS MUST BE ADDED
-    streams_eager_rebalance_upgrade_versions = [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0),
-                                                str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2),
-                                                str(LATEST_2_3)]
+    streams_eager_rebalance_upgrade_versions = [str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3)]
 
     def __init__(self, test_context):
         super(StreamsCooperativeRebalanceUpgradeTest, self).__init__(test_context)
@@ -56,9 +52,9 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
             self.sink_topic: {'partitions': 9}
         }
 
-        self.zookeeper = ZookeeperService(self.test_context, num_nodes=1)
         self.kafka = KafkaService(self.test_context, num_nodes=3,
-                                  zk=self.zookeeper, topics=self.topics)
+                                  zk=None, topics=self.topics,
+                                  controller_num_nodes_override=1)
 
         self.producer = VerifiableProducer(self.test_context,
                                            1,
@@ -68,9 +64,8 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
                                            acks=1)
 
     @cluster(num_nodes=8)
-    @matrix(upgrade_from_version=streams_eager_rebalance_upgrade_versions)
-    def test_upgrade_to_cooperative_rebalance(self, upgrade_from_version):
-        self.zookeeper.start()
+    @matrix(upgrade_from_version=streams_eager_rebalance_upgrade_versions, metadata_quorum=[quorum.combined_kraft])
+    def test_upgrade_to_cooperative_rebalance(self, upgrade_from_version, metadata_quorum):
         self.kafka.start()
 
         processor1 = CooperativeRebalanceUpgradeService(self.test_context, self.kafka)
@@ -138,7 +133,6 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
 
         self.producer.stop()
         self.kafka.stop()
-        self.zookeeper.stop()
 
     def maybe_upgrade_rolling_bounce_and_verify(self,
                                                 processors,

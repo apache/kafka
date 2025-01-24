@@ -17,16 +17,18 @@
 
 package org.apache.kafka.metadata.properties;
 
+import org.apache.kafka.common.Uuid;
+
+import org.junit.jupiter.api.Test;
+
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 
-import org.apache.kafka.common.Uuid;
-import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class MetaPropertiesTest {
+public final class MetaPropertiesTest {
     @Test
     public void testV0SerializationWithNothing() {
         testV0Serialization(Optional.empty(),
@@ -98,8 +100,6 @@ final public class MetaPropertiesTest {
         Properties props2 = metaProperties.toProperties();
         assertEquals(props, props2);
         MetaProperties metaProperties2 = new MetaProperties.Builder(props2).build();
-        System.out.println("metaProperties = " + metaProperties.toString());
-        System.out.println("metaProperties2 = " + metaProperties2.toString());
         assertEquals(metaProperties, metaProperties2);
         assertEquals(metaProperties.hashCode(), metaProperties2.hashCode());
         assertEquals(metaProperties.toString(), metaProperties2.toString());

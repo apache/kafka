@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.Collection;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
+
+import java.util.Collection;
 
 public class MockRebalanceListener implements ConsumerRebalanceListener {
     public Collection<TopicPartition> lost;

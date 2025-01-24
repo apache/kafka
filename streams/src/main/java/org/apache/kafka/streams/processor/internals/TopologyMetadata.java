@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownTopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -29,8 +30,10 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
-import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -55,9 +58,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static java.util.Collections.emptySet;
 
@@ -189,7 +189,7 @@ public class TopologyMetadata {
     public void maybeNotifyTopologyVersionListeners() {
         try {
             lock();
-            final long minThreadVersion = getMinimumThreadVersion();
+            final long minThreadVersion = minimumThreadVersion();
             final Iterator<TopologyVersionListener> iterator = version.activeTopologyUpdateListeners.listIterator();
             TopologyVersionListener topologyVersionListener;
             while (iterator.hasNext()) {
@@ -207,7 +207,7 @@ public class TopologyMetadata {
     }
 
     // Return the minimum version across all live threads, or Long.MAX_VALUE if there are no threads running
-    private long getMinimumThreadVersion() {
+    private long minimumThreadVersion() {
         final Optional<Long> minVersion = threadVersions.values().stream().min(Long::compare);
         return minVersion.orElse(Long.MAX_VALUE);
     }
@@ -274,11 +274,7 @@ public class TopologyMetadata {
      * @return A boolean indicating if the topology is paused.
      */
     public boolean isPaused(final String topologyName) {
-        if (topologyName == null) {
-            return pausedTopologies.contains(UNNAMED_TOPOLOGY);
-        } else {
-            return pausedTopologies.contains(topologyName);
-        }
+        return pausedTopologies.contains(getTopologyNameOrElseUnnamed(topologyName));
     }
 
     /**
@@ -312,7 +308,7 @@ public class TopologyMetadata {
         return removeTopologyFuture;
     }
 
-    public TaskConfig getTaskConfigFor(final TaskId taskId) {
+    public TaskConfig taskConfig(final TaskId taskId) {
         final InternalTopologyBuilder builder = lookupBuilderForTask(taskId);
         return builder.topologyConfigs().getTaskConfig();
     }
@@ -360,7 +356,7 @@ public class TopologyMetadata {
         allInputTopics.addAll(newInputTopics);
     }
 
-    public int getNumStreamThreads(final StreamsConfig config) {
+    public int numStreamThreads(final StreamsConfig config) {
         final int configuredNumStreamThreads = config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
 
         // If there are named topologies but some are empty, this indicates a bug in user code
@@ -431,10 +427,10 @@ public class TopologyMetadata {
         return hasNamedTopologies() || evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasOffsetResetOverrides);
     }
 
-    public OffsetResetStrategy offsetResetStrategy(final String topic) {
+    public Optional<AutoOffsetResetStrategy> offsetResetStrategy(final String topic) {
         for (final InternalTopologyBuilder builder : builders.values()) {
             if (builder.containsTopic(topic)) {
-                return builder.offsetResetStrategy(topic);
+                return Optional.ofNullable(builder.offsetResetStrategy(topic));
             }
         }
         log.warn("Unable to look up offset reset strategy for topic {} " +
@@ -443,6 +439,9 @@ public class TopologyMetadata {
                 "persist or appear frequently.",
             topic, namedTopologiesView()
         );
+        // returning `null` for an Optional return type triggers spotbugs
+        // we added an exception for NP_OPTIONAL_RETURN_NULL for this method
+        // when we remove NamedTopologies, we can remove this exception
         return null;
     }
 
@@ -463,7 +462,7 @@ public class TopologyMetadata {
 
         applyToEachBuilder(b -> {
             final String patternString = b.sourceTopicPatternString();
-            if (patternString.length() > 0) {
+            if (!patternString.isEmpty()) {
                 patternBuilder.append(patternString).append("|");
             }
         });
@@ -521,15 +520,19 @@ public class TopologyMetadata {
         return lookupBuilderForNamedTopology(topologyName).stateStoreNameToFullSourceTopicNames();
     }
 
+    public Set<String> stateStoreNamesForSubtopology(final String topologyName, final int subtopologyId) {
+        return lookupBuilderForNamedTopology(topologyName).stateStoreNamesForSubtopology(subtopologyId);
+    }
+
     public Map<String, List<String>> stateStoreNameToSourceTopics() {
         final Map<String, List<String>> stateStoreNameToSourceTopics = new HashMap<>();
         applyToEachBuilder(b -> stateStoreNameToSourceTopics.putAll(b.stateStoreNameToFullSourceTopicNames()));
         return stateStoreNameToSourceTopics;
     }
 
-    public String getStoreForChangelogTopic(final String topicName) {
+    public String storeForChangelogTopic(final String topicName) {
         for (final InternalTopologyBuilder builder : builders.values()) {
-            final String store = builder.getStoreForChangelogTopic(topicName);
+            final String store = builder.storeForChangelogTopic(topicName);
             if (store != null) {
                 return store;
             }
@@ -610,7 +613,8 @@ public class TopologyMetadata {
         }
     }
 
-    public Collection<NamedTopology> getAllNamedTopologies() {
+    @SuppressWarnings("deprecation")
+    public Collection<NamedTopology> allNamedTopologies() {
         return builders.values()
             .stream()
             .map(InternalTopologyBuilder::namedTopology)
@@ -624,11 +628,7 @@ public class TopologyMetadata {
      *         else returns {@code null} if {@code topologyName} is non-null but no such NamedTopology exists
      */
     public InternalTopologyBuilder lookupBuilderForNamedTopology(final String topologyName) {
-        if (topologyName == null) {
-            return builders.get(UNNAMED_TOPOLOGY);
-        } else {
-            return builders.get(topologyName);
-        }
+        return builders.get(getTopologyNameOrElseUnnamed(topologyName));
     }
 
     private boolean evaluateConditionIsTrueForAnyBuilders(final Function<InternalTopologyBuilder, Boolean> condition) {

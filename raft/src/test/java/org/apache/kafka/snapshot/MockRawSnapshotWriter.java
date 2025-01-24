@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.snapshot;
 
-import java.nio.ByteBuffer;
-import java.util.function.Consumer;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.raft.OffsetAndEpoch;
+
+import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 
 public final class MockRawSnapshotWriter implements RawSnapshotWriter {
     private final ByteBufferOutputStream data = new ByteBufferOutputStream(0);

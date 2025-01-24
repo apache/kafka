@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.streams.state.VersionedRecord;
+
+import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import org.apache.kafka.streams.state.VersionedRecord;
-import org.junit.Test;
 
 public class VersionedKeyQueryTest {
     @Test

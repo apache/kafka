@@ -19,10 +19,11 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -98,14 +99,65 @@ public class AdminMetadataManagerTest {
         assertTrue(mgr.isReady());
     }
 
+    @Test
+    public void testAuthorizationFailure() {
+        mgr.transitionToUpdatePending(time.milliseconds());
+        mgr.updateFailed(new AuthorizationException("Authorization failed"));
+        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
+        assertThrows(AuthorizationException.class, mgr::isReady);
+        mgr.update(mockCluster(), time.milliseconds());
+        assertTrue(mgr.isReady());
+    }
+
+    @Test
+    public void testNeedsRebootstrap() {
+        long rebootstrapTriggerMs = 1000;
+        mgr.update(Cluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9999))), time.milliseconds());
+        assertFalse(mgr.needsRebootstrap(time.milliseconds(), rebootstrapTriggerMs));
+        assertFalse(mgr.needsRebootstrap(time.milliseconds() + 2000, rebootstrapTriggerMs));
+
+        mgr.transitionToUpdatePending(time.milliseconds());
+        assertFalse(mgr.needsRebootstrap(time.milliseconds(), rebootstrapTriggerMs));
+        assertTrue(mgr.needsRebootstrap(time.milliseconds() + 1001, rebootstrapTriggerMs));
+
+        time.sleep(100);
+        mgr.updateFailed(new RuntimeException());
+        assertFalse(mgr.needsRebootstrap(time.milliseconds() + 900, rebootstrapTriggerMs));
+        assertTrue(mgr.needsRebootstrap(time.milliseconds() + 901, rebootstrapTriggerMs));
+
+        time.sleep(1000);
+        mgr.update(mockCluster(), time.milliseconds());
+        assertFalse(mgr.needsRebootstrap(time.milliseconds(), rebootstrapTriggerMs));
+        assertFalse(mgr.needsRebootstrap(time.milliseconds() + 2000, rebootstrapTriggerMs));
+
+        time.sleep(1000);
+        mgr.transitionToUpdatePending(time.milliseconds());
+        assertFalse(mgr.needsRebootstrap(time.milliseconds(), rebootstrapTriggerMs));
+        assertTrue(mgr.needsRebootstrap(time.milliseconds() + 1001, rebootstrapTriggerMs));
+
+        time.sleep(1001);
+        assertTrue(mgr.needsRebootstrap(time.milliseconds(), rebootstrapTriggerMs));
+        mgr.rebootstrap(time.milliseconds());
+        assertFalse(mgr.needsRebootstrap(time.milliseconds(), rebootstrapTriggerMs));
+        assertFalse(mgr.needsRebootstrap(time.milliseconds() + 1000, rebootstrapTriggerMs));
+        assertTrue(mgr.needsRebootstrap(time.milliseconds() + 1001, rebootstrapTriggerMs));
+
+        mgr.initiateRebootstrap();
+        assertTrue(mgr.needsRebootstrap(time.milliseconds(), rebootstrapTriggerMs));
+        mgr.rebootstrap(time.milliseconds());
+        assertFalse(mgr.needsRebootstrap(time.milliseconds(), rebootstrapTriggerMs));
+        assertFalse(mgr.needsRebootstrap(time.milliseconds() + 1000, rebootstrapTriggerMs));
+        assertTrue(mgr.needsRebootstrap(time.milliseconds() + 1001, rebootstrapTriggerMs));
+    }
+
     private static Cluster mockCluster() {
         HashMap<Integer, Node> nodes = new HashMap<>();
         nodes.put(0, new Node(0, "localhost", 8121));
         nodes.put(1, new Node(1, "localhost", 8122));
         nodes.put(2, new Node(2, "localhost", 8123));
         return new Cluster("mockClusterId", nodes.values(),
-                Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
-                Collections.<String>emptySet(), nodes.get(0));
+                Collections.emptySet(), Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
     }
 
 }

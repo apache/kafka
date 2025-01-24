@@ -17,10 +17,10 @@
 package org.apache.kafka.common.security.auth;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
+
 import javax.security.auth.Subject;
 
 /**
@@ -50,7 +50,7 @@ public class SaslExtensions {
     private final Map<String, String> extensionsMap;
 
     public SaslExtensions(Map<String, String> extensionsMap) {
-        this.extensionsMap = Collections.unmodifiableMap(new HashMap<>(extensionsMap));
+        this.extensionsMap = Map.copyOf(extensionsMap);
     }
 
     /**

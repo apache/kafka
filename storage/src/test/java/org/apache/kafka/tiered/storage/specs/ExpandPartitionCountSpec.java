@@ -27,11 +27,6 @@ public final class ExpandPartitionCountSpec {
     private final Map<Integer, List<Integer>> assignment;
 
     public ExpandPartitionCountSpec(String topicName,
-                                    int partitionCount) {
-        this(topicName, partitionCount, null);
-    }
-
-    public ExpandPartitionCountSpec(String topicName,
                                     int partitionCount,
                                     Map<Integer, List<Integer>> assignment) {
         this.topicName = topicName;

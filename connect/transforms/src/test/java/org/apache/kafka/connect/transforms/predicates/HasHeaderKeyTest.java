@@ -22,6 +22,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

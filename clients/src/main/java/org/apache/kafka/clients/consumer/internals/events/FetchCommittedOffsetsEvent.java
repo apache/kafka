@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
@@ -31,8 +30,8 @@ public class FetchCommittedOffsetsEvent extends CompletableApplicationEvent<Map<
      */
     private final Set<TopicPartition> partitions;
 
-    public FetchCommittedOffsetsEvent(final Set<TopicPartition> partitions, final Timer timer) {
-        super(Type.FETCH_COMMITTED_OFFSETS, timer);
+    public FetchCommittedOffsetsEvent(final Set<TopicPartition> partitions, final long deadlineMs) {
+        super(Type.FETCH_COMMITTED_OFFSETS, deadlineMs);
         this.partitions = Collections.unmodifiableSet(partitions);
     }
 

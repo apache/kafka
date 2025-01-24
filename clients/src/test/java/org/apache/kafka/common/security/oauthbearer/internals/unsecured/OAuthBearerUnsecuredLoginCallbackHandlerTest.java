@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
+import org.apache.kafka.common.security.authenticator.TestJaasConfig;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
+import org.apache.kafka.common.utils.MockTime;
+
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -31,12 +35,9 @@ import java.util.Map;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 
-import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
-import org.apache.kafka.common.security.authenticator.TestJaasConfig;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
-import org.apache.kafka.common.utils.MockTime;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
 
@@ -105,8 +106,8 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
             options.put("unsecuredLoginListClaim_" + "emptyList1", "");
             options.put("unsecuredLoginListClaim_" + "emptyList2", ",");
             options.put("unsecuredLoginNumberClaim_" + "number", "1");
-            long lifetmeSeconds = 10000;
-            options.put("unsecuredLoginLifetimeSeconds", String.valueOf(lifetmeSeconds));
+            long lifetimeSeconds = 10000;
+            options.put("unsecuredLoginLifetimeSeconds", String.valueOf(lifetimeSeconds));
             options.put("unsecuredLoginPrincipalClaimName", principalClaimName);
             if (scopeClaimNameOptionValue != null)
                 options.put("unsecuredLoginScopeClaimName", scopeClaimNameOptionValue);
@@ -120,7 +121,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
             OAuthBearerUnsecuredJws jws = (OAuthBearerUnsecuredJws) callback.token();
             assertNotNull(jws, "create token failed");
             long startMs = mockTime.milliseconds();
-            confirmCorrectValues(jws, user, startMs, lifetmeSeconds * 1000);
+            confirmCorrectValues(jws, user, startMs, lifetimeSeconds * 1000);
             Map<String, Object> claims = jws.claims();
             assertEquals(new HashSet<>(Arrays.asList(actualScopeClaimName, principalClaimName, "iat", "exp", "number",
                     "list", "emptyList1", "emptyList2")), claims.keySet());
@@ -143,7 +144,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = new OAuthBearerUnsecuredLoginCallbackHandler();
         callbackHandler.time(mockTime);
         callbackHandler.configure(Collections.emptyMap(), OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-                Arrays.asList(config.getAppConfigurationEntry("KafkaClient")[0]));
+                Collections.singletonList(config.getAppConfigurationEntry("KafkaClient")[0]));
         return callbackHandler;
     }
 

@@ -32,6 +32,7 @@ public interface ClientInstanceIds {
      *
      * @throws IllegalStateException If telemetry is disabled on the admin client.
      */
+    @SuppressWarnings("unused")
     Uuid adminInstanceId();
 
     /**
@@ -39,6 +40,7 @@ public interface ClientInstanceIds {
      *
      * @return a map from thread key to {@code client instance id}
      */
+    @SuppressWarnings("unused")
     Map<String, Uuid> consumerInstanceIds();
 
     /**
@@ -46,5 +48,6 @@ public interface ClientInstanceIds {
      *
      * @return a map from thread key to {@code client instance id}
      */
+    @SuppressWarnings("unused")
     Map<String, Uuid> producerInstanceIds();
 }

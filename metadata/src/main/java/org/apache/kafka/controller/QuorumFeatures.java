@@ -17,8 +17,8 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
@@ -39,7 +39,7 @@ public final class QuorumFeatures {
     private final Map<String, VersionRange> localSupportedFeatures;
     private final List<Integer> quorumNodeIds;
 
-    static public Optional<String> reasonNotSupported(
+    public static Optional<String> reasonNotSupported(
         short newVersion,
         String what,
         VersionRange range
@@ -54,13 +54,19 @@ public final class QuorumFeatures {
         return Optional.empty();
     }
 
-    public static Map<String, VersionRange> defaultFeatureMap(boolean enableUnstable) {
+    public static Map<String, VersionRange> defaultSupportedFeatureMap(boolean enableUnstable) {
         Map<String, VersionRange> features = new HashMap<>(1);
         features.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                 MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
                 enableUnstable ?
                     MetadataVersion.latestTesting().featureLevel() :
                     MetadataVersion.latestProduction().featureLevel()));
+        for (Feature feature : Feature.PRODUCTION_FEATURES) {
+            short maxVersion = enableUnstable ? feature.latestTesting() : feature.latestProduction();
+            if (maxVersion > 0) {
+                features.put(feature.featureName(), VersionRange.of(feature.minimumProduction(), maxVersion));
+            }
+        }
         return features;
     }
 
@@ -103,27 +109,6 @@ public final class QuorumFeatures {
             localSupportedFeature(featureName));
     }
 
-    public Optional<String> reasonAllControllersZkMigrationNotReady(
-        MetadataVersion metadataVersion,
-        Map<Integer, ControllerRegistration> controllers
-    ) {
-        if (!metadataVersion.isMigrationSupported()) {
-            return Optional.of("Metadata version too low at " + metadataVersion);
-        } else if (!metadataVersion.isControllerRegistrationSupported()) {
-            return Optional.empty();
-        }
-        for (int quorumNodeId : quorumNodeIds) {
-            ControllerRegistration registration = controllers.get(quorumNodeId);
-            if (registration == null) {
-                return Optional.of("No registration found for controller " + quorumNodeId);
-            } else if (!registration.zkMigrationReady()) {
-                return Optional.of("Controller " + quorumNodeId + " has not enabled " +
-                        "zookeeper.metadata.migration.enable");
-            }
-        }
-        return Optional.empty();
-    }
-
     @Override
     public int hashCode() {
         return Objects.hash(nodeId, localSupportedFeatures, quorumNodeIds);
@@ -141,7 +126,7 @@ public final class QuorumFeatures {
     @Override
     public String toString() {
         List<String> features = new ArrayList<>();
-        localSupportedFeatures.entrySet().forEach(f -> features.add(f.getKey() + ": " + f.getValue()));
+        localSupportedFeatures.forEach((key, value) -> features.add(key + ": " + value));
         features.sort(String::compareTo);
         List<String> nodeIds = new ArrayList<>();
         quorumNodeIds.forEach(id -> nodeIds.add("" + id));

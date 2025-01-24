@@ -17,10 +17,11 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.trogdor.rest.Message;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,8 +34,8 @@ import java.util.Map.Entry;
  * Describes some partitions.
  */
 public class PartitionsSpec extends Message {
-    private final static short DEFAULT_REPLICATION_FACTOR = 3;
-    private final static short DEFAULT_NUM_PARTITIONS = 1;
+    private static final short DEFAULT_REPLICATION_FACTOR = 3;
+    private static final short DEFAULT_NUM_PARTITIONS = 1;
 
     private final int numPartitions;
     private final short replicationFactor;
@@ -65,7 +66,7 @@ public class PartitionsSpec extends Message {
         if (configs == null) {
             this.configs = Collections.emptyMap();
         } else {
-            this.configs = Collections.unmodifiableMap(new HashMap<>(configs));
+            this.configs = Map.copyOf(configs);
         }
     }
 

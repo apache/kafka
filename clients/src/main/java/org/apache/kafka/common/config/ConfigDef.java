@@ -515,7 +515,7 @@ public class ConfigDef {
         // Check all configurations are defined
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
         if (!undefinedConfigKeys.isEmpty()) {
-            String joined = Utils.join(undefinedConfigKeys, ",");
+            String joined = undefinedConfigKeys.stream().map(String::toString).collect(Collectors.joining(","));
             throw new ConfigException("Some configurations in are referred in the dependents, but not defined: " + joined);
         }
         // parse all known keys
@@ -766,14 +766,7 @@ public class ConfigDef {
                     if (value instanceof Class)
                         return value;
                     else if (value instanceof String) {
-                        ClassLoader contextOrKafkaClassLoader = Utils.getContextOrKafkaClassLoader();
-                        // Use loadClass here instead of Class.forName because the name we use here may be an alias
-                        // and not match the name of the class that gets loaded. If that happens, Class.forName can
-                        // throw an exception.
-                        Class<?> klass = contextOrKafkaClassLoader.loadClass(trimmed);
-                        // Invoke forName here with the true name of the requested class to cause class
-                        // initialization to take place.
-                        return Class.forName(klass.getName(), true, contextOrKafkaClassLoader);
+                        return Utils.loadClass(trimmed, Object.class);
                     } else
                         throw new ConfigException(name, value, "Expected a Class instance or class name.");
                 default:
@@ -806,7 +799,7 @@ public class ConfigDef {
                 return parsedValue.toString();
             case LIST:
                 List<?> valueList = (List<?>) parsedValue;
-                return Utils.join(valueList, ",");
+                return valueList.stream().map(Object::toString).collect(Collectors.joining(","));
             case CLASS:
                 Class<?> clazz = (Class<?>) parsedValue;
                 return clazz.getName();
@@ -1051,13 +1044,13 @@ public class ConfigDef {
         public void ensureValid(String name, Object o) {
             String s = (String) o;
             if (!validStrings.contains(s)) {
-                throw new ConfigException(name, o, "String must be one of: " + Utils.join(validStrings, ", "));
+                throw new ConfigException(name, o, "String must be one of: " + String.join(", ", validStrings));
             }
 
         }
 
         public String toString() {
-            return "[" + Utils.join(validStrings, ", ") + "]";
+            return "[" + String.join(", ", validStrings) + "]";
         }
     }
 
@@ -1079,12 +1072,12 @@ public class ConfigDef {
         public void ensureValid(String name, Object o) {
             String s = (String) o;
             if (s == null || !validStrings.contains(s.toUpperCase(Locale.ROOT))) {
-                throw new ConfigException(name, o, "String must be one of (case insensitive): " + Utils.join(validStrings, ", "));
+                throw new ConfigException(name, o, "String must be one of (case insensitive): " + String.join(", ", validStrings));
             }
         }
 
         public String toString() {
-            return "(case insensitive) [" + Utils.join(validStrings, ", ") + "]";
+            return "(case insensitive) [" + String.join(", ", validStrings) + "]";
         }
     }
 
@@ -1205,7 +1198,8 @@ public class ConfigDef {
             }
 
             if (!foundIllegalCharacters.isEmpty()) {
-                throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " + Utils.join(foundIllegalCharacters, ", "));
+                throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " +
+                        foundIllegalCharacters.stream().map(Object::toString).collect(Collectors.joining(", ")));
             }
         }
 
@@ -1256,7 +1250,17 @@ public class ConfigDef {
         public final boolean internalConfig;
         public final String alternativeString;
 
+        // This constructor is present for backward compatibility reasons.
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
+                         Importance importance, String documentation, String group,
+                         int orderInGroup, Width width, String displayName,
+                         List<String> dependents, Recommender recommender,
+                         boolean internalConfig) {
+            this(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName,
+                dependents, recommender, internalConfig, null);
+        }
+
+        private ConfigKey(String name, Type type, Object defaultValue, Validator validator,
                          Importance importance, String documentation, String group,
                          int orderInGroup, Width width, String displayName,
                          List<String> dependents, Recommender recommender,
@@ -1497,7 +1501,7 @@ public class ConfigDef {
         b.append("``").append(key.name).append("``").append("\n");
         if (key.documentation != null) {
             for (String docLine : key.documentation.split("\n")) {
-                if (docLine.length() == 0) {
+                if (docLine.isEmpty()) {
                     continue;
                 }
                 b.append("  ").append(docLine).append("\n\n");
@@ -1528,7 +1532,7 @@ public class ConfigDef {
         }
 
         List<ConfigKey> configs = new ArrayList<>(configKeys.values());
-        Collections.sort(configs, (k1, k2) -> compare(k1, k2, groupOrd));
+        configs.sort((k1, k2) -> compare(k1, k2, groupOrd));
         return configs;
     }
 
@@ -1580,16 +1584,8 @@ public class ConfigDef {
      */
     private static Validator embeddedValidator(final String keyPrefix, final Validator base) {
         if (base == null) return null;
-        return new Validator() {
-            public void ensureValid(String name, Object value) {
-                base.ensureValid(name.substring(keyPrefix.length()), value);
-            }
-
-            @Override
-            public String toString() {
-                return base.toString();
-            }
-        };
+        return ConfigDef.LambdaValidator.with(
+            (name, value) -> base.ensureValid(name.substring(keyPrefix.length()), value), base::toString);
     }
 
     /**

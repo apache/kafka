@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
@@ -54,6 +54,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -227,7 +228,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
 
             // Maybe commit
             if (!committing && (context.isCommitRequested() || now >= nextCommit)) {
-                commitOffsets(now, false);
+                commitOffsets(now);
                 nextCommit = now + offsetCommitIntervalMs;
                 context.clearCommitRequest();
             }
@@ -281,7 +282,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
                 log.error("{} Commit of offsets threw an unexpected exception for sequence number {}: {}",
                         this, seqno, committedOffsets, error);
                 commitFailures++;
-                recordCommitFailure(durationMillis, error);
+                recordCommitFailure(durationMillis);
             } else {
                 log.debug("{} Finished offset commit successfully in {} ms for sequence number {}: {}",
                         this, durationMillis, seqno, committedOffsets);
@@ -311,7 +312,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
             List<String> topics = SinkConnectorConfig.parseTopicsList(taskConfig);
             consumer.subscribe(topics, new HandleRebalance());
-            log.debug("{} Initializing and starting task for topics {}", this, Utils.join(topics, ", "));
+            log.debug("{} Initializing and starting task for topics {}", this, String.join(", ", topics));
         } else {
             String topicsRegexStr = taskConfig.get(SinkTask.TOPICS_REGEX_CONFIG);
             Pattern pattern = Pattern.compile(topicsRegexStr);
@@ -395,8 +396,8 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         }
     }
 
-    private void commitOffsets(long now, boolean closing) {
-        commitOffsets(now, closing, consumer.assignment());
+    private void commitOffsets(long now) {
+        commitOffsets(now, false, consumer.assignment());
     }
 
     private void commitOffsets(long now, boolean closing, Collection<TopicPartition> topicPartitions) {
@@ -794,8 +795,6 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
     }
 
     static class SinkTaskMetricsGroup {
-        private final ConnectorTaskId id;
-        private final ConnectMetrics metrics;
         private final MetricGroup metricGroup;
         private final Sensor sinkRecordRead;
         private final Sensor sinkRecordSend;
@@ -805,13 +804,10 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         private final Sensor offsetCompletionSkip;
         private final Sensor putBatchTime;
         private final Sensor sinkRecordActiveCount;
-        private long activeRecords;
         private Map<TopicPartition, OffsetAndMetadata> consumedOffsets = new HashMap<>();
         private Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
 
         public SinkTaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics) {
-            this.metrics = connectMetrics;
-            this.id = id;
 
             ConnectMetricsRegistry registry = connectMetrics.registry();
             metricGroup = connectMetrics
@@ -855,7 +851,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         void computeSinkRecordLag() {
             Map<TopicPartition, OffsetAndMetadata> consumed = this.consumedOffsets;
             Map<TopicPartition, OffsetAndMetadata> committed = this.committedOffsets;
-            activeRecords = 0L;
+            long activeRecords = 0L;
             for (Map.Entry<TopicPartition, OffsetAndMetadata> committedOffsetEntry : committed.entrySet()) {
                 final TopicPartition partition = committedOffsetEntry.getKey();
                 final OffsetAndMetadata consumedOffsetMeta = consumed.get(partition);

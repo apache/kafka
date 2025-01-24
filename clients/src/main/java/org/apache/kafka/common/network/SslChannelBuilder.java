@@ -28,7 +28,6 @@ import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -43,8 +42,7 @@ import java.util.function.Supplier;
 public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
     private final ListenerName listenerName;
     private final boolean isInterBrokerListener;
-    private final Mode mode;
-    private final Logger log;
+    private final ConnectionMode connectionMode;
     private SslFactory sslFactory;
     private Map<String, ?> configs;
     private SslPrincipalMapper sslPrincipalMapper;
@@ -53,14 +51,13 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
      * Constructs an SSL channel builder. ListenerName is provided only
      * for server channel builder and will be null for client channel builder.
      */
-    public SslChannelBuilder(Mode mode,
+    public SslChannelBuilder(ConnectionMode connectionMode,
                              ListenerName listenerName,
                              boolean isInterBrokerListener,
                              LogContext logContext) {
-        this.mode = mode;
+        this.connectionMode = connectionMode;
         this.listenerName = listenerName;
         this.isInterBrokerListener = isInterBrokerListener;
-        this.log = logContext.logger(getClass());
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
@@ -69,7 +66,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
             String sslPrincipalMappingRules = (String) configs.get(BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG);
             if (sslPrincipalMappingRules != null)
                 sslPrincipalMapper = SslPrincipalMapper.fromRules(sslPrincipalMappingRules);
-            this.sslFactory = new SslFactory(mode, null, isInterBrokerListener);
+            this.sslFactory = new SslFactory(connectionMode, null, isInterBrokerListener);
             this.sslFactory.configure(this.configs);
         } catch (KafkaException e) {
             throw e;
@@ -171,7 +168,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
         }
 
         @Override
-        public void close() throws IOException {
+        public void close() {
             if (principalBuilder instanceof Closeable)
                 Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
         }

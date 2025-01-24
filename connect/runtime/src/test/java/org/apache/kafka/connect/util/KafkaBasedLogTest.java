@@ -20,7 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -38,12 +38,15 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,6 +57,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -62,12 +66,12 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
@@ -76,7 +80,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KafkaBasedLogTest {
 
     private static final String TOPIC = "connect-log";
@@ -134,9 +139,9 @@ public class KafkaBasedLogTest {
         records.add(record);
     };
 
-    @Before
+    @BeforeEach
     public void setUp() {
-        store = new KafkaBasedLog<String, String>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, topicAdminSupplier, consumedCallback, time, initializer) {
+        store = new KafkaBasedLog<>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, topicAdminSupplier, consumedCallback, time, initializer) {
             @Override
             protected KafkaProducer<String, String> createProducer() {
                 return producer;
@@ -147,7 +152,7 @@ public class KafkaBasedLogTest {
                 return consumer;
             }
         };
-        consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
         beginningOffsets.put(TP0, 0L);
@@ -398,6 +403,50 @@ public class KafkaBasedLogTest {
         // Producer flushes when read to log end is called
         verify(producer).flush();
         verifyStartAndStop();
+    }
+
+    @Test
+    public void testOffsetReadFailureWhenWorkThreadFails() throws Exception {
+        RuntimeException exception = new RuntimeException();
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 0L);
+        endOffsets.put(TP1, 0L);
+        admin = mock(TopicAdmin.class);
+        when(admin.endOffsets(eq(tps)))
+            .thenReturn(endOffsets)
+            .thenThrow(exception)
+            .thenReturn(endOffsets);
+
+        store.start();
+
+        AtomicInteger numSuccesses = new AtomicInteger();
+        AtomicInteger numFailures = new AtomicInteger();
+        AtomicReference<FutureCallback<Void>> finalSuccessCallbackRef = new AtomicReference<>();
+        final FutureCallback<Void> successCallback = new FutureCallback<>((error, result) -> numSuccesses.getAndIncrement());
+        store.readToEnd(successCallback);
+        // First log end read should succeed.
+        successCallback.get(1000, TimeUnit.MILLISECONDS);
+
+        // Second log end read fails.
+        final FutureCallback<Void> firstFailedCallback = new FutureCallback<>((error, result) -> {
+            numFailures.getAndIncrement();
+            // We issue another readToEnd call here to simulate the case that more read requests can come in while
+            // the failure is being handled in the WorkThread. This read request should not be impacted by the outcome of
+            // the current read request's failure.
+            final FutureCallback<Void> finalSuccessCallback = new FutureCallback<>((e, r) -> numSuccesses.getAndIncrement());
+            finalSuccessCallbackRef.set(finalSuccessCallback);
+            store.readToEnd(finalSuccessCallback);
+        });
+        store.readToEnd(firstFailedCallback);
+        ExecutionException e1 = assertThrows(ExecutionException.class, () -> firstFailedCallback.get(1000, TimeUnit.MILLISECONDS));
+        assertEquals(exception, e1.getCause());
+
+        // Last log read end should succeed.
+        finalSuccessCallbackRef.get().get(1000, TimeUnit.MILLISECONDS);
+
+        assertEquals(2, numSuccesses.get());
+        assertEquals(1, numFailures.get());
     }
 
     @Test

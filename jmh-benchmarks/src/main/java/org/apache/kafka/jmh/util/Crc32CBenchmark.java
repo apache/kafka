@@ -18,9 +18,6 @@ package org.apache.kafka.jmh.util;
 
 import org.apache.kafka.common.utils.Crc32C;
 
-import java.nio.ByteBuffer;
-import java.util.SplittableRandom;
-import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
@@ -30,6 +27,10 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
+
+import java.nio.ByteBuffer;
+import java.util.SplittableRandom;
+import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)

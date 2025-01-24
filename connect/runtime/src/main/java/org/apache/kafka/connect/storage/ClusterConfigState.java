@@ -18,8 +18,8 @@ package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.runtime.SessionKey;
-import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;
@@ -43,6 +43,7 @@ public class ClusterConfigState {
             Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap(),
+            Collections.emptyMap(),
             Collections.emptySet(),
             Collections.emptySet());
 
@@ -55,6 +56,7 @@ public class ClusterConfigState {
     final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
     final Map<String, Integer> connectorTaskCountRecords;
     final Map<String, Integer> connectorTaskConfigGenerations;
+    final Map<String, AppliedConnectorConfig> appliedConnectorConfigs;
     final Set<String> connectorsPendingFencing;
     final Set<String> inconsistentConnectors;
 
@@ -66,6 +68,7 @@ public class ClusterConfigState {
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
                               Map<String, Integer> connectorTaskCountRecords,
                               Map<String, Integer> connectorTaskConfigGenerations,
+                              Map<String, AppliedConnectorConfig> appliedConnectorConfigs,
                               Set<String> connectorsPendingFencing,
                               Set<String> inconsistentConnectors) {
         this(offset,
@@ -76,6 +79,7 @@ public class ClusterConfigState {
                 taskConfigs,
                 connectorTaskCountRecords,
                 connectorTaskConfigGenerations,
+                appliedConnectorConfigs,
                 connectorsPendingFencing,
                 inconsistentConnectors,
                 null);
@@ -89,6 +93,7 @@ public class ClusterConfigState {
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
                               Map<String, Integer> connectorTaskCountRecords,
                               Map<String, Integer> connectorTaskConfigGenerations,
+                              Map<String, AppliedConnectorConfig> appliedConnectorConfigs,
                               Set<String> connectorsPendingFencing,
                               Set<String> inconsistentConnectors,
                               WorkerConfigTransformer configTransformer) {
@@ -100,6 +105,7 @@ public class ClusterConfigState {
         this.taskConfigs = taskConfigs;
         this.connectorTaskCountRecords = connectorTaskCountRecords;
         this.connectorTaskConfigGenerations = connectorTaskConfigGenerations;
+        this.appliedConnectorConfigs = appliedConnectorConfigs;
         this.connectorsPendingFencing = connectorsPendingFencing;
         this.inconsistentConnectors = inconsistentConnectors;
         this.configTransformer = configTransformer;
@@ -156,6 +162,19 @@ public class ClusterConfigState {
 
     public Map<String, String> rawConnectorConfig(String connector) {
         return connectorConfigs.get(connector);
+    }
+
+    /**
+     * Get the most recent configuration for the connector from which task configs have
+     * been generated. The configuration will have been transformed by
+     * {@link org.apache.kafka.common.config.ConfigTransformer}
+     * @param connector name of the connector
+     * @return the connector config, or null if no config exists from which task configs have
+     * been generated
+     */
+    public Map<String, String> appliedConnectorConfig(String connector) {
+        AppliedConnectorConfig appliedConfig =  appliedConnectorConfigs.get(connector);
+        return appliedConfig != null ? appliedConfig.transformedConfig(configTransformer) : null;
     }
 
     /**
@@ -303,4 +322,5 @@ public class ClusterConfigState {
                 inconsistentConnectors,
                 configTransformer);
     }
+
 }

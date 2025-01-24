@@ -68,6 +68,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final String UNIX_PRECISION_CONFIG = "unix.precision";
     private static final String UNIX_PRECISION_DEFAULT = "milliseconds";
 
+    public static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
+
     private static final String PURPOSE = "converting timestamp formats";
 
     private static final String TYPE_STRING = "string";
@@ -104,7 +106,10 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                     ConfigDef.Importance.LOW,
                     "The desired Unix precision for the timestamp: seconds, milliseconds, microseconds, or nanoseconds. " +
                             "Used to generate the output when type=unix or used to parse the input if the input is a Long." +
-                            "Note: This SMT will cause precision loss during conversions from, and to, values with sub-millisecond components.");
+                            "Note: This SMT will cause precision loss during conversions from, and to, values with sub-millisecond components.")
+            .define(REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+                    "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
+
 
     private interface TimestampTranslator {
         /**
@@ -159,9 +164,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         TRANSLATORS.put(TYPE_UNIX, new TimestampTranslator() {
             @Override
             public Date toRaw(Config config, Object orig) {
-                if (!(orig instanceof Long))
+                if (!(orig instanceof Long unixTime))
                     throw new DataException("Expected Unix timestamp to be a Long, but found " + orig.getClass());
-                Long unixTime = (Long) orig;
                 switch (config.unixPrecision) {
                     case UNIX_PRECISION_SECONDS:
                         return Timestamp.toLogical(Timestamp.SCHEMA, TimeUnit.SECONDS.toMillis(unixTime));
@@ -287,7 +291,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     }
     private Config config;
     private Cache<Schema, Schema> schemaUpdateCache;
-
+    private boolean replaceNullWithDefault;
 
     @Override
     public void configure(Map<String, ?> configs) {
@@ -297,6 +301,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         String formatPattern = simpleConfig.getString(FORMAT_CONFIG);
         final String unixPrecision = simpleConfig.getString(UNIX_PRECISION_CONFIG);
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
+        replaceNullWithDefault = simpleConfig.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
 
         if (type.equals(TYPE_STRING) && Utils.isBlank(formatPattern)) {
             throw new ConfigException("TimestampConverter requires format option to be specified when using string timestamps");
@@ -415,13 +420,20 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         for (Field field : value.schema().fields()) {
             final Object updatedFieldValue;
             if (field.name().equals(config.field)) {
-                updatedFieldValue = convertTimestamp(value.get(field), timestampTypeFromSchema(field.schema()));
+                updatedFieldValue = convertTimestamp(getFieldValue(value, field), timestampTypeFromSchema(field.schema()));
             } else {
-                updatedFieldValue = value.get(field);
+                updatedFieldValue = getFieldValue(value, field);
             }
             updatedValue.put(field.name(), updatedFieldValue);
         }
         return updatedValue;
+    }
+
+    private Object getFieldValue(Struct value, Field field) {
+        if (replaceNullWithDefault) {
+            return value.get(field);
+        }
+        return value.getWithoutDefault(field.name());
     }
 
     private R applySchemaless(R record) {

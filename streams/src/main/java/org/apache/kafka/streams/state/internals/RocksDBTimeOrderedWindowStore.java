@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -30,6 +29,8 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
+
+import java.util.Objects;
 
 
 public class RocksDBTimeOrderedWindowStore
@@ -54,9 +55,9 @@ public class RocksDBTimeOrderedWindowStore
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        stateStoreContext = context;
-        wrapped().init(context, root);
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        wrapped().init(stateStoreContext, root);
+        this.stateStoreContext = stateStoreContext;
     }
 
     @Override

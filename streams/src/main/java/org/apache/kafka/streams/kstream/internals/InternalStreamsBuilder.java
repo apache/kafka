@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.IdentityHashMap;
-import java.util.Properties;
-import java.util.TreeMap;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -30,21 +27,23 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.NodesWithRelaxedNullKeyJoinDownstream;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
-import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
-import org.apache.kafka.streams.kstream.internals.graph.TableSuppressNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
+import org.apache.kafka.streams.kstream.internals.graph.TableSuppressNode;
 import org.apache.kafka.streams.kstream.internals.graph.VersionedSemanticsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +52,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -60,7 +60,9 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.PriorityQueue;
+import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -138,7 +140,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String tableSourceName = named
             .orElseGenerateWithPrefix(this, KTableImpl.SOURCE_NAME);
 
-        final KTableSource<K, V> tableSource = new KTableSource<>(materialized.storeName(), materialized.queryableStoreName());
+        final KTableSource<K, V> tableSource = new KTableSource<>(materialized);
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);
 
         final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder()
@@ -146,7 +148,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             .withSourceName(sourceName)
             .withNodeName(tableSourceName)
             .withConsumedInternal(consumed)
-            .withMaterializedInternal(materialized)
             .withProcessorParameters(processorParameters)
             .build();
         tableSourceNode.setOutputVersioned(materialized.storeSupplier() instanceof VersionedBytesStoreSupplier);
@@ -184,9 +185,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String processorName = named
                 .orElseGenerateWithPrefix(this, KTableImpl.SOURCE_NAME);
 
-        // enforce store name as queryable name to always materialize global table stores
-        final String storeName = materialized.storeName();
-        final KTableSource<K, V> tableSource = new KTableSource<>(storeName, storeName);
+        final KTableSource<K, V> tableSource = new KTableSource<>(materialized);
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(tableSource, processorName);
 
@@ -195,12 +194,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             .isGlobalKTable(true)
             .withSourceName(sourceName)
             .withConsumedInternal(consumed)
-            .withMaterializedInternal(materialized)
             .withProcessorParameters(processorParameters)
             .build();
 
         addGraphNode(root, tableSourceNode);
 
+        final String storeName = materialized.storeName();
         return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<>(storeName), materialized.queryableStoreName());
     }
 
@@ -221,7 +220,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public synchronized <KIn, VIn> void addGlobalStore(final StoreFactory storeFactory,
                                                        final String topic,
                                                        final ConsumedInternal<KIn, VIn> consumed,
-                                                       final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+                                                       final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier,
+                                                       final boolean reprocessOnRestore) {
         // explicitly disable logging for global stores
         storeFactory.withLoggingDisabled();
 
@@ -235,7 +235,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             topic,
             consumed,
             processorName,
-            stateUpdateSupplier
+            stateUpdateSupplier,
+            reprocessOnRestore
         );
 
         addGraphNode(root, globalStoreNode);
@@ -360,10 +361,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private void rewriteRepartitionNodes() {
         final Set<BaseRepartitionNode<?, ?>> nodes = new NodesWithRelaxedNullKeyJoinDownstream(root).find();
         for (final BaseRepartitionNode<?, ?> partitionNode : nodes) {
-            if (partitionNode.getProcessorParameters() != null) {
+            if (partitionNode.processorParameters() != null) {
                 partitionNode.setProcessorParameters(new ProcessorParameters<>(
                     new KStreamFilter<>((k, v) -> k != null, false),
-                    partitionNode.getProcessorParameters().processorName()
+                    partitionNode.processorParameters().processorName()
                 ));
             }
         }
@@ -441,9 +442,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             GraphNode left = null, right = null;
             for (final GraphNode child: parent.children()) {
                 if (child instanceof WindowedStreamProcessorNode && child.buildPriority() < joinNode.buildPriority()) {
-                    if (child.nodeName().equals(joinNode.getThisWindowedStreamProcessorParameters().processorName())) {
+                    if (child.nodeName().equals(joinNode.thisWindowedStreamProcessorName())) {
                         left = child;
-                    } else if (child.nodeName().equals(joinNode.getOtherWindowedStreamProcessorParameters().processorName())) {
+                    } else if (child.nodeName().equals(joinNode.otherWindowedStreamProcessorName())) {
                         right = child;
                     }
                 }

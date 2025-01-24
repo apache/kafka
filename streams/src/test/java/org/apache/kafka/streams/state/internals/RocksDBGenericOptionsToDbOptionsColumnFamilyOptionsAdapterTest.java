@@ -17,15 +17,17 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.invocation.Invocation;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.rocksdb.AbstractCompactionFilter;
 import org.rocksdb.AbstractCompactionFilter.Context;
 import org.rocksdb.AbstractCompactionFilterFactory;
 import org.rocksdb.AbstractWalFilter;
-import org.rocksdb.AccessHint;
 import org.rocksdb.BuiltinComparator;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.CompactionPriority;
@@ -53,14 +55,13 @@ import org.rocksdb.util.BytewiseComparator;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-
-import java.util.Arrays;
-import java.util.Set;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -76,7 +77,8 @@ import static org.mockito.Mockito.mockingDetails;
  * Using reflections, we make sure the {@link RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter} maps all
  * methods from {@link DBOptions} and {@link ColumnFamilyOptions} to/from {@link Options} correctly.
  */
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
     private final List<String> walRelatedMethods = new LinkedList<String>() {
@@ -105,6 +107,12 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             add("notifyAll");
             add("toString");
             add("getOptionStringFromProps");
+            add("maxBackgroundCompactions");
+            add("setMaxBackgroundCompactions");
+            add("maxBackgroundFlushes");
+            add("setMaxBackgroundFlushes");
+            add("tablePropertiesCollectorFactory");
+            add("setTablePropertiesCollectorFactory");
             addAll(walRelatedMethods);
         }
     };
@@ -168,9 +176,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                     break;
                 case "java.util.Collection":
                     parameters[i] = new ArrayList<>();
-                    break;
-                case "org.rocksdb.AccessHint":
-                    parameters[i] = AccessHint.NONE;
                     break;
                 case "org.rocksdb.Cache":
                     parameters[i] = new LRUCache(1L);

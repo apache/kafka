@@ -16,39 +16,36 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ForwardingAdmin;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Importance;
-import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 
-/** Configuration required for MirrorClient to talk to a given target cluster.
- *  <p>
- *  Generally, these properties come from an mm2.properties configuration file
- *  (@see MirrorMakerConfig.clientConfig):
- *  </p>
- *  <pre>
- *    MirrorMakerConfig mmConfig = new MirrorMakerConfig(props);
- *    MirrorClientConfig mmClientConfig = mmConfig.clientConfig("some-cluster");
- *  </pre>
- *  <p>
- *  In addition to the properties defined here, sub-configs are supported for Admin, Consumer, and Producer clients.
- *  For example:
- *  </p>
- *  <pre>
+/**
+ * Configuration required for {@link MirrorClient} to talk to a given target cluster.
+ * <p>
+ *   This needs to contain at least the connection details for the target cluster (<code>bootstrap.servers</code> and
+ *   any required TLS/SASL configuration), as well as {@link #REPLICATION_POLICY_CLASS} when not using the default
+ *   replication policy. It can also include {@link AdminClientConfig} and {@link ConsumerConfig} to customize the
+ *   internal clients this uses. For example:
+ *   <pre>
  *      bootstrap.servers = host1:9092
  *      consumer.client.id = mm2-client
  *      replication.policy.separator = __
- *  </pre>
+ *   </pre>
+ * </p>
  */
 public class MirrorClientConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_CLASS = "replication.policy.class";
@@ -76,7 +73,7 @@ public class MirrorClientConfig extends AbstractConfig {
     public static final String PRODUCER_CLIENT_PREFIX = "producer.";
 
     MirrorClientConfig(Map<?, ?> props) {
-        super(CONFIG_DEF, props, true);
+        super(CONFIG_DEF, props, Utils.castToStringObjectMap(props), true);
     }
 
     public ReplicationPolicy replicationPolicy() {
@@ -110,8 +107,7 @@ public class MirrorClientConfig extends AbstractConfig {
     }
     
     private Map<String, Object> clientConfig(String prefix) {
-        Map<String, Object> props = new HashMap<>();
-        props.putAll(valuesWithPrefixOverride(prefix));
+        Map<String, Object> props = new HashMap<>(valuesWithPrefixOverride(prefix));
         props.keySet().retainAll(CLIENT_CONFIG_DEF.names());
         props.entrySet().removeIf(x -> x.getValue() == null);
         return props;
@@ -159,17 +155,17 @@ public class MirrorClientConfig extends AbstractConfig {
             ConfigDef.Importance.LOW,
             INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC)
         .define(
-                FORWARDING_ADMIN_CLASS,
-                ConfigDef.Type.CLASS,
-                FORWARDING_ADMIN_CLASS_DEFAULT,
-                ConfigDef.Importance.LOW,
-                FORWARDING_ADMIN_CLASS_DOC)
+            FORWARDING_ADMIN_CLASS,
+            ConfigDef.Type.CLASS,
+            FORWARDING_ADMIN_CLASS_DEFAULT,
+            ConfigDef.Importance.LOW,
+            FORWARDING_ADMIN_CLASS_DOC)
         .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-                Type.STRING,
-                CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                in(Utils.enumOptions(SecurityProtocol.class)),
-                Importance.MEDIUM,
-                CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            Type.STRING,
+            CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+            in(Utils.enumOptions(SecurityProtocol.class)),
+            Importance.MEDIUM,
+            CommonClientConfigs.SECURITY_PROTOCOL_DOC)
         .withClientSslSupport()
         .withClientSaslSupport();
 }

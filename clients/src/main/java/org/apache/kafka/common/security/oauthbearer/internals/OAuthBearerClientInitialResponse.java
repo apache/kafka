@@ -19,12 +19,13 @@ package org.apache.kafka.common.security.oauthbearer.internals;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.utils.Utils;
 
-import javax.security.sasl.SaslException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import javax.security.sasl.SaslException;
 
 public class OAuthBearerClientInitialResponse {
     static final String SEPARATOR = "\u0001";
@@ -123,7 +124,7 @@ public class OAuthBearerClientInitialResponse {
     public byte[] toBytes() {
         String authzid = authorizationId.isEmpty() ? "" : "a=" + authorizationId;
         String extensions = extensionsMessage();
-        if (extensions.length() > 0)
+        if (!extensions.isEmpty())
             extensions = SEPARATOR + extensions;
 
         String message = String.format("n,%s,%sauth=Bearer %s%s%s%s", authzid,
@@ -135,7 +136,7 @@ public class OAuthBearerClientInitialResponse {
     /**
      * Return the always non-null token value
      * 
-     * @return the always non-null toklen value
+     * @return the always non-null token value
      */
     public String tokenValue() {
         return tokenValue;

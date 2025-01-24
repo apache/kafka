@@ -70,7 +70,7 @@ public class SubscriptionJoinProcessorSupplier<K, KO, VO>
                 Objects.requireNonNull(valueAndTimestamp, "This processor should never see a null newValue.");
                 final SubscriptionWrapper<K> value = valueAndTimestamp.value();
 
-                if (value.getVersion() > SubscriptionWrapper.CURRENT_VERSION) {
+                if (value.version() > SubscriptionWrapper.CURRENT_VERSION) {
                     //Guard against modifications to SubscriptionWrapper. Need to ensure that there is compatibility
                     //with previous versions to enable rolling upgrades. Must develop a strategy for upgrading
                     //from older SubscriptionWrapper versions to newer versions.
@@ -78,23 +78,23 @@ public class SubscriptionJoinProcessorSupplier<K, KO, VO>
                 }
 
                 final ValueAndTimestamp<VO> foreignValueAndTime =
-                    record.key().getForeignKey() == null ?
+                    record.key().foreignKey() == null ?
                         null :
-                        foreignValues.get(record.key().getForeignKey());
+                        foreignValues.get(record.key().foreignKey());
 
                 final long resultTimestamp =
                     foreignValueAndTime == null ?
                         valueAndTimestamp.timestamp() :
                         Math.max(valueAndTimestamp.timestamp(), foreignValueAndTime.timestamp());
 
-                switch (value.getInstruction()) {
+                switch (value.instruction()) {
                     case DELETE_KEY_AND_PROPAGATE:
                         context().forward(
-                            record.withKey(record.key().getPrimaryKey())
+                            record.withKey(record.key().primaryKey())
                                 .withValue(new SubscriptionResponseWrapper<VO>(
-                                    value.getHash(),
+                                    value.hash(),
                                     null,
-                                    value.getPrimaryPartition()
+                                    value.primaryPartition()
                                 ))
                                 .withTimestamp(resultTimestamp)
                         );
@@ -106,11 +106,11 @@ public class SubscriptionJoinProcessorSupplier<K, KO, VO>
                         final VO valueToSend = foreignValueAndTime == null ? null : foreignValueAndTime.value();
 
                         context().forward(
-                            record.withKey(record.key().getPrimaryKey())
+                            record.withKey(record.key().primaryKey())
                                 .withValue(new SubscriptionResponseWrapper<>(
-                                        value.getHash(),
+                                        value.hash(),
                                         valueToSend,
-                                        value.getPrimaryPartition()
+                                        value.primaryPartition()
                                 ))
                                 .withTimestamp(resultTimestamp)
                         );
@@ -118,11 +118,11 @@ public class SubscriptionJoinProcessorSupplier<K, KO, VO>
                     case PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE:
                         if (foreignValueAndTime != null) {
                             context().forward(
-                                record.withKey(record.key().getPrimaryKey())
+                                record.withKey(record.key().primaryKey())
                                    .withValue(new SubscriptionResponseWrapper<>(
-                                       value.getHash(),
+                                       value.hash(),
                                        foreignValueAndTime.value(),
-                                       value.getPrimaryPartition()
+                                       value.primaryPartition()
                                    ))
                                    .withTimestamp(resultTimestamp)
                             );
@@ -131,7 +131,7 @@ public class SubscriptionJoinProcessorSupplier<K, KO, VO>
                     case DELETE_KEY_NO_PROPAGATE:
                         break;
                     default:
-                        throw new IllegalStateException("Unhandled instruction: " + value.getInstruction());
+                        throw new IllegalStateException("Unhandled instruction: " + value.instruction());
                 }
             }
         };

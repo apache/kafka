@@ -73,13 +73,6 @@ public class CompressionRatioEstimator {
     }
 
     /**
-     * Remove the compression ratio estimation for a topic.
-     */
-    public static void removeEstimation(String topic) {
-        COMPRESSION_RATIO.remove(topic);
-    }
-
-    /**
      * Set the compression estimation for a topic compression type combination. This method is for unit test purpose.
      */
     public static void setEstimation(String topic, CompressionType type, float ratio) {

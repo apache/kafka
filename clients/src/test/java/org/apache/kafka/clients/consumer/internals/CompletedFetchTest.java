@@ -18,14 +18,15 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.RecordDeserializationException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -41,6 +42,8 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -48,15 +51,17 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CompletedFetchTest {
 
-    private final static String TOPIC_NAME = "test";
-    private final static TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
-    private final static long PRODUCER_ID = 1000L;
-    private final static short PRODUCER_EPOCH = 0;
+    private static final String TOPIC_NAME = "test";
+    private static final TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
+    private static final long PRODUCER_ID = 1000L;
+    private static final short PRODUCER_EPOCH = 0;
 
     @Test
     public void testSimple() {
@@ -157,10 +162,14 @@ public class CompletedFetchTest {
     @Test
     public void testCorruptedMessage() {
         // Create one good record and then one "corrupted" record.
-        try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 0);
+        try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE, TimestampType.CREATE_TIME, 0);
              final UUIDSerializer serializer = new UUIDSerializer()) {
             builder.append(new SimpleRecord(serializer.serialize(TOPIC_NAME, UUID.randomUUID())));
             builder.append(0L, "key".getBytes(), "value".getBytes());
+            builder.append(new SimpleRecord(serializer.serialize(TOPIC_NAME, UUID.randomUUID())));
+            Headers headers = new RecordHeaders();
+            headers.add("hkey", "hvalue".getBytes());
+            builder.append(10L, serializer.serialize("key", UUID.randomUUID()), "otherValue".getBytes(), headers.toArray());
             Records records = builder.build();
 
             FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
@@ -176,8 +185,29 @@ public class CompletedFetchTest {
 
                 completedFetch.fetchRecords(fetchConfig, deserializers, 10);
 
-                assertThrows(RecordDeserializationException.class,
+                RecordDeserializationException thrown = assertThrows(RecordDeserializationException.class,
                         () -> completedFetch.fetchRecords(fetchConfig, deserializers, 10));
+                assertEquals(RecordDeserializationException.DeserializationExceptionOrigin.KEY, thrown.origin());
+                assertEquals(1, thrown.offset());
+                assertEquals(TOPIC_NAME, thrown.topicPartition().topic());
+                assertEquals(0, thrown.topicPartition().partition());
+                assertEquals(0, thrown.timestamp());
+                assertArrayEquals("key".getBytes(), Utils.toNullableArray(thrown.keyBuffer()));
+                assertArrayEquals("value".getBytes(), Utils.toNullableArray(thrown.valueBuffer()));
+                assertEquals(0, thrown.headers().toArray().length);
+
+                CompletedFetch completedFetch2 = newCompletedFetch(2, partitionData);
+                completedFetch2.fetchRecords(fetchConfig, deserializers, 10);
+                RecordDeserializationException valueThrown = assertThrows(RecordDeserializationException.class,
+                        () -> completedFetch2.fetchRecords(fetchConfig, deserializers, 10));
+                assertEquals(RecordDeserializationException.DeserializationExceptionOrigin.VALUE, valueThrown.origin());
+                assertEquals(3, valueThrown.offset());
+                assertEquals(TOPIC_NAME, valueThrown.topicPartition().topic());
+                assertEquals(0, valueThrown.topicPartition().partition());
+                assertEquals(10L, valueThrown.timestamp());
+                assertNotNull(valueThrown.keyBuffer());
+                assertArrayEquals("otherValue".getBytes(), Utils.toNullableArray(valueThrown.valueBuffer()));
+                assertEquals(headers, valueThrown.headers());
             }
         }
     }
@@ -185,7 +215,7 @@ public class CompletedFetchTest {
     private CompletedFetch newCompletedFetch(long fetchOffset,
                                              FetchResponseData.PartitionData partitionData) {
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(logContext, AutoOffsetResetStrategy.NONE);
         FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry();
         FetchMetricsManager metrics = new FetchMetricsManager(new Metrics(), metricsRegistry);
         FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metrics, Collections.singleton(TP));
@@ -223,7 +253,7 @@ public class CompletedFetchTest {
     }
 
     private Records newRecords(long baseOffset, int count, long firstMessageId) {
-        try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, baseOffset)) {
+        try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE, TimestampType.CREATE_TIME, baseOffset)) {
             for (int i = 0; i < count; i++)
                 builder.append(0L, "key".getBytes(), ("value-" + (firstMessageId + i)).getBytes());
             return builder.build();
@@ -236,7 +266,7 @@ public class CompletedFetchTest {
 
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
                 RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE,
+                Compression.NONE,
                 TimestampType.CREATE_TIME,
                 0,
                 time.milliseconds(),

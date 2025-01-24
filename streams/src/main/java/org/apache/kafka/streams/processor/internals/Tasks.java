@@ -19,14 +19,15 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.PendingUpdateAction.Action;
 import org.apache.kafka.streams.processor.internals.Task.State;
+
 import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -57,7 +58,7 @@ class Tasks implements TasksRegistry {
     private final Map<TaskId, Set<TopicPartition>> pendingActiveTasksToCreate = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasksToCreate = new HashMap<>();
     private final Set<Task> pendingTasksToInit = new HashSet<>();
-    private final Map<TaskId, PendingUpdateAction> pendingUpdateActions = new HashMap<>();
+    private final Set<TaskId> failedTaskIds = new HashSet<>();
 
     // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
@@ -103,107 +104,29 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public Set<TopicPartition> removePendingTaskToRecycle(final TaskId taskId) {
-        return removePendingUpdateActionWithInputPartitions(taskId, Action.RECYCLE);
-    }
-
-    @Override
-    public void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
-        updatePendingUpdateAction(taskId, PendingUpdateAction.createRecycleTask(inputPartitions));
-    }
-
-    @Override
-    public boolean hasPendingTasksToRecycle() {
-        return pendingUpdateActions.values().stream().anyMatch(action -> action.getAction() == Action.RECYCLE);
-    }
-
-    @Override
-    public Set<TopicPartition> removePendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId) {
-        return removePendingUpdateActionWithInputPartitions(taskId, Action.CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS);
-    }
-
-    @Override
-    public void addPendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
-        updatePendingUpdateAction(taskId, PendingUpdateAction.createCloseReviveAndUpdateInputPartition(inputPartitions));
-    }
-
-    @Override
-    public Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId) {
-        return removePendingUpdateActionWithInputPartitions(taskId, Action.UPDATE_INPUT_PARTITIONS);
-    }
-
-    @Override
-    public void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
-        updatePendingUpdateAction(taskId, PendingUpdateAction.createUpdateInputPartition(inputPartitions));
-    }
-
-    @Override
-    public boolean removePendingTaskToAddBack(final TaskId taskId) {
-        return removePendingUpdateAction(taskId, Action.ADD_BACK);
-    }
-
-    @Override
-    public void addPendingTaskToAddBack(final TaskId taskId) {
-        updatePendingUpdateAction(taskId, PendingUpdateAction.createAddBack());
-    }
-
-    @Override
-    public boolean removePendingTaskToCloseClean(final TaskId taskId) {
-        return removePendingUpdateAction(taskId, Action.CLOSE_CLEAN);
-    }
-
-    @Override
-    public void addPendingTaskToCloseClean(final TaskId taskId) {
-        updatePendingUpdateAction(taskId, PendingUpdateAction.createCloseClean());
-    }
-
-    @Override
-    public boolean removePendingActiveTaskToSuspend(final TaskId taskId) {
-        return removePendingUpdateAction(taskId, Action.SUSPEND);
-    }
-
-    @Override
-    public void addPendingActiveTaskToSuspend(final TaskId taskId) {
-        updatePendingUpdateAction(taskId, PendingUpdateAction.createSuspend());
-    }
-
-    private Set<TopicPartition> removePendingUpdateActionWithInputPartitions(final TaskId taskId, final Action action) {
-        if (containsTaskIdWithAction(taskId, action)) {
-            final PendingUpdateAction pendingUpdateAction = pendingUpdateActions.remove(taskId);
-            log.info("Removing pending update action {} for task {}", taskId, pendingUpdateAction);
-            return pendingUpdateAction.getInputPartitions();
-        }
-        return null;
-    }
-
-    private boolean removePendingUpdateAction(final TaskId taskId, final Action action) {
-        if (containsTaskIdWithAction(taskId, action)) {
-            log.info("Removing pending update action {} for task {}", taskId, pendingUpdateActions.remove(taskId));
-            return true;
-        }
-        return false;
-    }
-
-    private void updatePendingUpdateAction(final TaskId taskId, final PendingUpdateAction newAction) {
-        if (pendingUpdateActions.containsKey(taskId)) {
-            log.info("Adding pending update action {} for task {}, previous action was {}",
-                newAction, taskId, pendingUpdateActions.get(taskId));
-        } else {
-            log.info("Adding pending update action {} for task {}, no previous action", newAction, taskId);
-        }
-        pendingUpdateActions.put(taskId, newAction);
-    }
-
-    private boolean containsTaskIdWithAction(final TaskId taskId, final Action action) {
-        final PendingUpdateAction pendingUpdateAction = pendingUpdateActions.get(taskId);
-        return pendingUpdateAction != null && pendingUpdateAction.getAction() == action;
-    }
-
-    @Override
     public Set<Task> drainPendingTasksToInit() {
         final Set<Task> result = new HashSet<>(pendingTasksToInit);
         pendingTasksToInit.clear();
         return result;
+    }
+
+    @Override
+    public Set<Task> drainPendingActiveTasksToInit() {
+        final Set<Task> result = new HashSet<>();
+        final Iterator<Task> iterator = pendingTasksToInit.iterator();
+        while (iterator.hasNext()) {
+            final Task task = iterator.next();
+            if (task.isActive()) {
+                result.add(task);
+                iterator.remove();
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public Set<Task> pendingTasksToInit() {
+        return Collections.unmodifiableSet(pendingTasksToInit);
     }
 
     @Override
@@ -257,6 +180,12 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
+    public void addFailedTask(final Task task) {
+        failedTaskIds.add(task.id());
+        addTask(task);
+    }
+
+    @Override
     public synchronized void removeTask(final Task taskToRemove) {
         final TaskId taskId = taskToRemove.id();
 
@@ -274,6 +203,7 @@ class Tasks implements TasksRegistry {
                 throw new IllegalArgumentException("Attempted to remove a standby task that is not owned: " + taskId);
             }
         }
+        failedTaskIds.remove(taskToRemove.id());
     }
 
     @Override
@@ -331,6 +261,7 @@ class Tasks implements TasksRegistry {
         activeTasksPerId.clear();
         standbyTasksPerId.clear();
         activeTasksPerPartition.clear();
+        failedTaskIds.clear();
     }
 
     // TODO: change return type to `StreamTask`
@@ -385,6 +316,17 @@ class Tasks implements TasksRegistry {
     @Override
     public synchronized Set<Task> allTasks() {
         return union(HashSet::new, new HashSet<>(activeTasksPerId.values()), new HashSet<>(standbyTasksPerId.values()));
+    }
+
+    @Override
+    public synchronized Set<Task> allNonFailedTasks() {
+        final Set<Task> nonFailedActiveTasks = activeTasksPerId.values().stream()
+            .filter(task -> !failedTaskIds.contains(task.id()))
+            .collect(Collectors.toSet());
+        final Set<Task> nonFailedStandbyTasks = standbyTasksPerId.values().stream()
+            .filter(task -> !failedTaskIds.contains(task.id()))
+            .collect(Collectors.toSet());
+        return union(HashSet::new, nonFailedActiveTasks, nonFailedStandbyTasks);
     }
 
     @Override

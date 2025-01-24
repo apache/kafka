@@ -17,19 +17,16 @@
 package kafka.coordinator.group
 
 import kafka.cluster.PartitionListener
-import kafka.server.{ActionQueue, ReplicaManager, RequestLocal}
+import kafka.server.{AddPartitionsToTxnManager, ReplicaManager}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, TimestampType}
-import org.apache.kafka.common.record.Record.EMPTY_HEADERS
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.{BufferSupplier, Time}
-import org.apache.kafka.coordinator.group.runtime.PartitionWriter
-import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
+import org.apache.kafka.coordinator.common.runtime.PartitionWriter
+import org.apache.kafka.server.ActionQueue
+import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 
-import java.util
 import java.util.concurrent.CompletableFuture
 import scala.collection.Map
 
@@ -61,21 +58,14 @@ private[group] class ListenerAdapter(
   }
 }
 
-class CoordinatorPartitionWriter[T](
-  replicaManager: ReplicaManager,
-  serializer: PartitionWriter.Serializer[T],
-  compressionType: CompressionType,
-  time: Time
-) extends PartitionWriter[T] {
-  private val threadLocalBufferSupplier = ThreadLocal.withInitial(
-    () => new BufferSupplier.GrowableBufferSupplier()
-  )
-
+class CoordinatorPartitionWriter(
+  replicaManager: ReplicaManager
+) extends PartitionWriter {
   // We use an action queue which directly executes actions. This is possible
   // here because we don't hold any conflicting locks.
   private val directActionQueue = new ActionQueue {
-    override def add(action: () => Unit): Unit = {
-      action()
+    override def add(action: Runnable): Unit = {
+      action.run()
     }
 
     override def tryCompleteActions(): Unit = {}
@@ -104,81 +94,10 @@ class CoordinatorPartitionWriter[T](
   /**
    * {@inheritDoc}
    */
-  override def append(
-    tp: TopicPartition,
-    producerId: Long,
-    producerEpoch: Short,
-    verificationGuard: VerificationGuard,
-    records: util.List[T]
-  ): Long = {
-    if (records.isEmpty) throw new IllegalStateException("records must be non-empty.")
-
-    replicaManager.getLogConfig(tp) match {
-      case Some(logConfig) =>
-        val magic = logConfig.recordVersion.value
-        val maxBatchSize = logConfig.maxMessageSize
-        val currentTimeMs = time.milliseconds()
-        val bufferSupplier = threadLocalBufferSupplier.get()
-        val buffer = bufferSupplier.get(math.min(16384, maxBatchSize))
-
-        try {
-          val recordsBuilder = MemoryRecords.builder(
-            buffer,
-            magic,
-            compressionType,
-            TimestampType.CREATE_TIME,
-            0L,
-            time.milliseconds(),
-            producerId,
-            producerEpoch,
-            0,
-            producerId != RecordBatch.NO_PRODUCER_ID,
-            RecordBatch.NO_PARTITION_LEADER_EPOCH
-          )
-
-          records.forEach { record =>
-            val keyBytes = serializer.serializeKey(record)
-            val valueBytes = serializer.serializeValue(record)
-
-            if (recordsBuilder.hasRoomFor(currentTimeMs, keyBytes, valueBytes, EMPTY_HEADERS)) recordsBuilder.append(
-              currentTimeMs,
-              keyBytes,
-              valueBytes,
-              EMPTY_HEADERS
-            ) else throw new RecordTooLargeException(s"Message batch size is ${recordsBuilder.estimatedSizeInBytes()} bytes " +
-              s"in append to partition $tp which exceeds the maximum configured size of $maxBatchSize.")
-          }
-
-          internalAppend(tp, recordsBuilder.build(), verificationGuard)
-        } finally {
-          bufferSupplier.release(buffer)
-        }
-
-      case None =>
-        throw Errors.NOT_LEADER_OR_FOLLOWER.exception()
+  override def config(tp: TopicPartition): LogConfig = {
+    replicaManager.getLogConfig(tp).getOrElse {
+      throw Errors.NOT_LEADER_OR_FOLLOWER.exception()
     }
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  override def appendEndTransactionMarker(
-    tp: TopicPartition,
-    producerId: Long,
-    producerEpoch: Short,
-    coordinatorEpoch: Int,
-    result: TransactionResult
-  ): Long = {
-    val controlRecordType = result match {
-      case TransactionResult.COMMIT => ControlRecordType.COMMIT
-      case TransactionResult.ABORT => ControlRecordType.ABORT
-    }
-
-    internalAppend(tp, MemoryRecords.withEndTransactionMarker(
-      producerId,
-      producerEpoch,
-      new EndTransactionMarker(controlRecordType, coordinatorEpoch)
-    ))
   }
 
   /**
@@ -188,8 +107,10 @@ class CoordinatorPartitionWriter[T](
     tp: TopicPartition,
     transactionalId: String,
     producerId: Long,
-    producerEpoch: Short
+    producerEpoch: Short,
+    apiVersion: Short
   ): CompletableFuture[VerificationGuard] = {
+    val transactionSupportedOperation = AddPartitionsToTxnManager.txnOffsetCommitRequestVersionToTransactionSupportedOperation(apiVersion)
     val future = new CompletableFuture[VerificationGuard]()
     replicaManager.maybeStartTransactionVerificationForPartition(
       topicPartition = tp,
@@ -204,15 +125,19 @@ class CoordinatorPartitionWriter[T](
         } else {
           future.complete(verificationGuard)
         }
-      }
+      },
+      transactionSupportedOperation
     )
     future
   }
 
-  private def internalAppend(
+  /**
+   * {@inheritDoc }
+   */
+  override def append(
     tp: TopicPartition,
-    memoryRecords: MemoryRecords,
-    verificationGuard: VerificationGuard = VerificationGuard.SENTINEL
+    verificationGuard: VerificationGuard,
+    records: MemoryRecords
   ): Long = {
     var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
     replicaManager.appendRecords(
@@ -220,9 +145,9 @@ class CoordinatorPartitionWriter[T](
       requiredAcks = 1,
       internalTopicsAllowed = true,
       origin = AppendOrigin.COORDINATOR,
-      entriesPerPartition = Map(tp -> memoryRecords),
+      entriesPerPartition = Map(tp -> records),
       responseCallback = results => appendResults = results,
-      requestLocal = RequestLocal.NoCaching,
+      requestLocal = RequestLocal.noCaching,
       verificationGuards = Map(tp -> verificationGuard),
       delayedProduceLock = None,
       // We can directly complete the purgatories here because we don't hold
@@ -239,5 +164,26 @@ class CoordinatorPartitionWriter[T](
 
     // Required offset.
     partitionResult.lastOffset + 1
+  }
+
+  override def deleteRecords(tp: TopicPartition, deleteBeforeOffset: Long): CompletableFuture[Void] = {
+    val responseFuture: CompletableFuture[Void] = new CompletableFuture[Void]()
+
+    replicaManager.deleteRecords(
+      timeout = 30000L, // 30 seconds.
+      offsetPerPartition = Map(tp -> deleteBeforeOffset),
+      responseCallback = results => {
+        val result = results.get(tp)
+        if (result.isEmpty) {
+          responseFuture.completeExceptionally(new IllegalStateException(s"Delete status $result should have partition $tp."))
+        } else if (result.get.errorCode != Errors.NONE.code) {
+          responseFuture.completeExceptionally(Errors.forCode(result.get.errorCode).exception)
+        } else {
+          responseFuture.complete(null)
+        }
+      },
+      allowInternalTopicDeletion = true
+    )
+    responseFuture
   }
 }

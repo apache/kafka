@@ -17,8 +17,8 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -73,8 +73,6 @@ public class FetchResponse extends AbstractResponse {
     public static final int INVALID_PREFERRED_REPLICA_ID = -1;
 
     private final FetchResponseData data;
-    // we build responseData when needed.
-    private volatile LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = null;
 
     @Override
     public FetchResponseData data() {
@@ -99,29 +97,19 @@ public class FetchResponse extends AbstractResponse {
     }
 
     public LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames, short version) {
-        if (responseData == null) {
-            synchronized (this) {
-                if (responseData == null) {
-                    // Assigning the lazy-initialized `responseData` in the last step
-                    // to avoid other threads accessing a half-initialized object.
-                    final LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseDataTmp =
-                            new LinkedHashMap<>();
-                    data.responses().forEach(topicResponse -> {
-                        String name;
-                        if (version < 13) {
-                            name = topicResponse.topic();
-                        } else {
-                            name = topicNames.get(topicResponse.topicId());
-                        }
-                        if (name != null) {
-                            topicResponse.partitions().forEach(partition ->
-                                responseDataTmp.put(new TopicPartition(name, partition.partitionIndex()), partition));
-                        }
-                    });
-                    responseData = responseDataTmp;
-                }
+        final LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
+        data.responses().forEach(topicResponse -> {
+            String name;
+            if (version < 13) {
+                name = topicResponse.topic();
+            } else {
+                name = topicNames.get(topicResponse.topicId());
             }
-        }
+            if (name != null) {
+                topicResponse.partitions().forEach(partition ->
+                    responseData.put(new TopicPartition(name, partition.partitionIndex()), partition));
+            }
+        });
         return responseData;
     }
 
@@ -213,10 +201,6 @@ public class FetchResponse extends AbstractResponse {
 
     /**
      * Returns `partition.records` as `Records` (instead of `BaseRecords`). If `records` is `null`, returns `MemoryRecords.EMPTY`.
-     *
-     * If this response was deserialized after a fetch, this method should never fail. An example where this would
-     * fail is a down-converted response (e.g. LazyDownConversionRecords) on the broker (before it's serialized and
-     * sent on the wire).
      *
      * @param partition partition data
      * @return Records or empty record if the records in PartitionData is null.

@@ -1,0 +1,86 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: CI Requested
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types:
+      - requested
+
+run-name: CI Requested for ${{ github.event.workflow_run.display_title}}
+
+jobs:
+  check-pr-labels:
+    # Even though job conditionals are difficult to debug, this will reduce the number of unnecessary runs
+    if: |
+      github.event_name == 'workflow_run' && 
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.status == 'completed' && 
+      github.event.workflow_run.conclusion == 'action_required'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials:
+            false
+      - name: Check PR Labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.owner.login }}
+        # Caution! This is a bit hacky. The GH documentation shows that the workflow_run event should include a list
+        # of referencing pull_requests. I think this might only be the case for pull requests originating from the
+        # base repository. To deal with fork PRs, we need to query the API for PRs for the owner's branch. This
+        # code assumes that the fork repo owner is the same as the organization for the "org:branch" syntax used
+        # in the query. Also, only the first matching PR from that org will be considered.
+        run: |
+          set +e
+          PR_NUMBER=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/$REPO/pulls?head=$HEAD_REPO:$HEAD_BRANCH \
+            --jq '.[0].number')
+          if [ -z "$PR_NUMBER" ]; then
+            echo "Could not find the PR that triggered this workflow request";
+            exit 1;
+          fi
+          gh pr view $PR_NUMBER --json labels -q '.labels[].name' | grep -q 'ci-approved'
+          exitcode="$?"
+          if [ $exitcode -ne 0 ]; then
+            echo "No ci-approved label set on PR #$PR_NUMBER. Will not auto-approve.";
+            exit 0;
+          else
+            echo "Found 'ci-approved' label on PR #$PR_NUMBER. Auto-approving workflow run $RUN_ID.";
+          fi
+          echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+          echo "RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+      - name: Approve Workflow Run
+        if: env.RUN_ID != ''
+        uses: ./.github/actions/gh-api-approve-run
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run_id: ${{ env.RUN_ID }}
+          pr_number: ${{ env.PR_NUMBER }}
+          commit_sha: ${{ github.event.workflow_run.head_sha }}

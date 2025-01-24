@@ -16,18 +16,17 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals;
 
-import java.security.Provider;
-import java.security.Security;
-
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClient.OAuthBearerSaslClientFactory;
 
-public class OAuthBearerSaslClientProvider extends Provider {
+import java.security.Provider;
+import java.security.Security;
+
+public final class OAuthBearerSaslClientProvider extends Provider {
     private static final long serialVersionUID = 1L;
 
-    @SuppressWarnings("this-escape")
-    protected OAuthBearerSaslClientProvider() {
-        super("SASL/OAUTHBEARER Client Provider", 1.0, "SASL/OAUTHBEARER Client Provider for Kafka");
+    private OAuthBearerSaslClientProvider() {
+        super("SASL/OAUTHBEARER Client Provider", "1.0", "SASL/OAUTHBEARER Client Provider for Kafka");
         put("SaslClientFactory." + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
                 OAuthBearerSaslClientFactory.class.getName());
     }

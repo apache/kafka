@@ -21,9 +21,9 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Collection;
 import java.util.concurrent.ExecutionException;
 
 
@@ -51,35 +51,26 @@ public class DescribeReplicaLogDirsResult {
      * Return a future which succeeds if log directory information of all replicas are available
      */
     public KafkaFuture<Map<TopicPartitionReplica, ReplicaLogDirInfo>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.BaseFunction<Void, Map<TopicPartitionReplica, ReplicaLogDirInfo>>() {
-                @Override
-                public Map<TopicPartitionReplica, ReplicaLogDirInfo> apply(Void v) {
-                    Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaLogDirInfos = new HashMap<>();
-                    for (Map.Entry<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> entry : futures.entrySet()) {
-                        try {
-                            replicaLogDirInfos.put(entry.getKey(), entry.getValue().get());
-                        } catch (InterruptedException | ExecutionException e) {
-                            // This should be unreachable, because allOf ensured that all the futures completed successfully.
-                            throw new RuntimeException(e);
-                        }
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
+            .thenApply(v -> {
+                Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaLogDirInfos = new HashMap<>();
+                for (Map.Entry<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> entry : futures.entrySet()) {
+                    try {
+                        replicaLogDirInfos.put(entry.getKey(), entry.getValue().get());
+                    } catch (InterruptedException | ExecutionException e) {
+                        // This should be unreachable, because allOf ensured that all the futures completed successfully.
+                        throw new RuntimeException(e);
                     }
-                    return replicaLogDirInfos;
                 }
+                return replicaLogDirInfos;
             });
     }
 
-    static public class ReplicaLogDirInfo {
-        // The current log directory of the replica of this partition on the given broker.
-        // Null if no replica is not found for this partition on the given broker.
+    public static class ReplicaLogDirInfo {
+        
         private final String currentReplicaLogDir;
-        // Defined as max(HW of partition - LEO of the replica, 0).
         private final long currentReplicaOffsetLag;
-        // The future log directory of the replica of this partition on the given broker.
-        // Null if the replica of this partition is not being moved to another log directory on the given broker.
         private final String futureReplicaLogDir;
-        // The LEO of the replica - LEO of the future log of this replica in the destination log directory.
-        // -1 if either there is not replica for this partition or the replica of this partition is not being moved to another log directory on the given broker.
         private final long futureReplicaOffsetLag;
 
         ReplicaLogDirInfo() {
@@ -96,18 +87,33 @@ public class DescribeReplicaLogDirsResult {
             this.futureReplicaOffsetLag = futureReplicaOffsetLag;
         }
 
+        /**
+         * The current log directory of the replica of this partition on the given broker.
+         * Null if no replica is not found for this partition on the given broker.
+         */
         public String getCurrentReplicaLogDir() {
             return currentReplicaLogDir;
         }
 
+        /**
+         * Defined as max(HW of partition - LEO of the replica, 0).
+         */
         public long getCurrentReplicaOffsetLag() {
             return currentReplicaOffsetLag;
         }
 
+        /**
+         * The future log directory of the replica of this partition on the given broker.
+         * Null if the replica of this partition is not being moved to another log directory on the given broker.
+         */
         public String getFutureReplicaLogDir() {
             return futureReplicaLogDir;
         }
 
+        /**
+         * The LEO of the replica - LEO of the future log of this replica in the destination log directory.
+         * -1 if either there is not replica for this partition or the replica of this partition is not being moved to another log directory on the given broker.
+         */
         public long getFutureReplicaOffsetLag() {
             return futureReplicaOffsetLag;
         }

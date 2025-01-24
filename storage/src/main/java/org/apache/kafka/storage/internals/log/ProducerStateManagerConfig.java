@@ -16,15 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.utils.Utils;
-
-import java.util.Set;
-
 public class ProducerStateManagerConfig {
-    public static final String PRODUCER_ID_EXPIRATION_MS = "producer.id.expiration.ms";
-    public static final String TRANSACTION_VERIFICATION_ENABLED = "transaction.partition.verification.enable";
-    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(PRODUCER_ID_EXPIRATION_MS, TRANSACTION_VERIFICATION_ENABLED);
-
     private volatile int producerIdExpirationMs;
     private volatile boolean transactionVerificationEnabled;
 

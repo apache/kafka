@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
  */
 @InterfaceStability.Evolving
 public class CreateTopicsResult {
-    final static int UNKNOWN = -1;
+    static final int UNKNOWN = -1;
 
     private final Map<String, KafkaFuture<TopicMetadataAndConfig>> futures;
 
@@ -46,7 +46,7 @@ public class CreateTopicsResult {
      */
     public Map<String, KafkaFuture<Void>> values() {
         return futures.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().thenApply(v -> (Void) null)));
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().thenApply(v -> null)));
     }
 
     /**
@@ -64,6 +64,7 @@ public class CreateTopicsResult {
      * If broker returned an error for topic configs, throw appropriate exception. For example,
      * {@link org.apache.kafka.common.errors.TopicAuthorizationException} is thrown if user does not
      * have permission to describe topic configs.
+     * Note that the values for the type and documentation fields will be null.
      */
     public KafkaFuture<Config> config(String topic) {
         return futures.get(topic).thenApply(TopicMetadataAndConfig::config);

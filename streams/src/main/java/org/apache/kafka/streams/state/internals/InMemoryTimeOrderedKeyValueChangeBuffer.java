@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -196,23 +195,10 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         keySerde = keySerde == null ? (Serde<K>) getter.keySerde() : keySerde;
         valueSerde = valueSerde == null ? FullChangeSerde.wrap((Serde<V>) getter.valueSerde()) : valueSerde;
     }
-
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
-        changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
-        init(root);
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
-        changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
-        init(root);
-    }
-
-    private void init(final StateStore root) {
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        this.context = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
+        changelogTopic = ProcessorContextUtils.changelogFor(stateStoreContext, name(), Boolean.TRUE);
         taskId = context.taskId().toString();
         streamsMetrics = context.metrics();
 

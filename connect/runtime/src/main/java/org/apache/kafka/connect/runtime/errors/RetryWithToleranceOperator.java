@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -213,8 +214,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
                     errorHandlingMetrics.recordRetry();
                 } else {
                     log.trace("Can't retry. start={}, attempt={}, deadline={}", startTime, attempt, deadline);
-                    context.error(e);
-                    return null;
+                    throw e;
                 }
                 if (stopping) {
                     log.trace("Shutdown has been scheduled. Marking operation as failed.");

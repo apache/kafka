@@ -17,7 +17,8 @@
   "apiKey": 69,
   "type": "response",
   "name": "ConsumerGroupDescribeResponse",
-  "validVersions": "0",
+  // Version 1 adds MemberType field (KIP-1099).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -69,7 +70,9 @@
             { "name": "Assignment", "type": "Assignment", "versions": "0+",
               "about": "The current assignment." },
             { "name": "TargetAssignment", "type": "Assignment", "versions": "0+",
-              "about": "The target assignment." }
+              "about": "The target assignment." },
+            { "name": "MemberType", "type": "int8", "versions": "1+", "default": "-1", "ignorable": true,
+              "about": "-1 for unknown. 0 for classic member. +1 for consumer member." }
           ]},
         { "name": "AuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
           "about": "32-bit bitfield to represent authorized operations for this group." }

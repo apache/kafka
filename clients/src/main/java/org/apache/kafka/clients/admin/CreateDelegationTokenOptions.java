@@ -17,12 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
-
-import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 /**
  * Options for {@link Admin#createDelegationToken(CreateDelegationTokenOptions)}.
@@ -31,7 +31,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
  */
 @InterfaceStability.Evolving
 public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegationTokenOptions> {
-    private long maxLifeTimeMs = -1;
+    private long maxLifetimeMs = -1;
     private List<KafkaPrincipal> renewers =  new LinkedList<>();
     private KafkaPrincipal owner = null;
 
@@ -53,12 +53,29 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
         return Optional.ofNullable(owner);
     }
 
-    public CreateDelegationTokenOptions maxlifeTimeMs(long maxLifeTimeMs) {
-        this.maxLifeTimeMs = maxLifeTimeMs;
+    /**
+     * @deprecated Since 4.0 and should not be used any longer.
+     */
+    @Deprecated
+    public CreateDelegationTokenOptions maxlifeTimeMs(long maxLifetimeMs) {
+        this.maxLifetimeMs = maxLifetimeMs;
         return this;
     }
 
+    public CreateDelegationTokenOptions maxLifetimeMs(long maxLifetimeMs) {
+        this.maxLifetimeMs = maxLifetimeMs;
+        return this;
+    }
+
+    /**
+     * @deprecated Since 4.0 and should not be used any longer.
+     */
+    @Deprecated
     public long maxlifeTimeMs() {
-        return maxLifeTimeMs;
+        return maxLifetimeMs;
+    }
+
+    public long maxLifetimeMs() {
+        return maxLifetimeMs;
     }
 }

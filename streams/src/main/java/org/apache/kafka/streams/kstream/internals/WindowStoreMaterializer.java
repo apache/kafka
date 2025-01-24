@@ -16,17 +16,17 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.time.Duration;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+
+import java.time.Duration;
 
 public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, WindowStore<Bytes, byte[]>> {
 
@@ -55,7 +55,7 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
     }
 
     @Override
-    public StateStore build() {
+    public StoreBuilder<?> builder() {
         final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().windowStore(new DslWindowParams(
                         materialized.storeName(),
@@ -84,7 +84,7 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
             builder.withCachingEnabled();
         }
 
-        return builder.build();
+        return builder;
     }
 
     @Override

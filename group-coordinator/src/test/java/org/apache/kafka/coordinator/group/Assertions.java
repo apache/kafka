@@ -16,91 +16,73 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.Uuid;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.opentest4j.AssertionFailedError;
 
-import java.util.HashMap;
-import java.util.HashSet;
+import java.nio.ByteBuffer;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class Assertions {
-    public static <T> void assertUnorderedListEquals(
-        List<T> expected,
-        List<T> actual
-    ) {
-        assertEquals(new HashSet<>(expected), new HashSet<>(actual));
-    }
+    private static final BiConsumer<ApiMessage, ApiMessage> API_MESSAGE_DEFAULT_COMPARATOR = org.junit.jupiter.api.Assertions::assertEquals;
+    private static final Map<Class<?>, BiConsumer<ApiMessage, ApiMessage>> API_MESSAGE_COMPARATORS = Map.of(
+        // Register request/response comparators.
+        ConsumerGroupHeartbeatResponseData.class, Assertions::assertConsumerGroupHeartbeatResponse,
+        ShareGroupHeartbeatResponseData.class, Assertions::assertShareGroupHeartbeatResponse,
+        SyncGroupResponseData.class, Assertions::assertSyncGroupResponse,
+
+        // Register record comparators.
+        ConsumerGroupCurrentMemberAssignmentValue.class, Assertions::assertConsumerGroupCurrentMemberAssignmentValue,
+        ConsumerGroupPartitionMetadataValue.class, Assertions::assertConsumerGroupPartitionMetadataValue,
+        GroupMetadataValue.class, Assertions::assertGroupMetadataValue,
+        ConsumerGroupTargetAssignmentMemberValue.class, Assertions::assertConsumerGroupTargetAssignmentMemberValue,
+        ShareGroupPartitionMetadataValue.class, Assertions::assertShareGroupPartitionMetadataValue
+    );
 
     public static void assertResponseEquals(
-        ConsumerGroupHeartbeatResponseData expected,
-        ConsumerGroupHeartbeatResponseData actual
+        ApiMessage expected,
+        ApiMessage actual
     ) {
-        if (!responseEquals(expected, actual)) {
-            assertionFailure()
-                .expected(expected)
-                .actual(actual)
-                .buildAndThrow();
-        }
-    }
-
-    private static boolean responseEquals(
-        ConsumerGroupHeartbeatResponseData expected,
-        ConsumerGroupHeartbeatResponseData actual
-    ) {
-        if (expected.throttleTimeMs() != actual.throttleTimeMs()) return false;
-        if (expected.errorCode() != actual.errorCode()) return false;
-        if (!Objects.equals(expected.errorMessage(), actual.errorMessage())) return false;
-        if (!Objects.equals(expected.memberId(), actual.memberId())) return false;
-        if (expected.memberEpoch() != actual.memberEpoch()) return false;
-        if (expected.heartbeatIntervalMs() != actual.heartbeatIntervalMs()) return false;
-        // Unordered comparison of the assignments.
-        return responseAssignmentEquals(expected.assignment(), actual.assignment());
-    }
-
-    private static boolean responseAssignmentEquals(
-        ConsumerGroupHeartbeatResponseData.Assignment expected,
-        ConsumerGroupHeartbeatResponseData.Assignment actual
-    ) {
-        if (expected == actual) return true;
-        if (expected == null) return false;
-        if (actual == null) return false;
-
-        return Objects.equals(fromAssignment(expected.topicPartitions()), fromAssignment(actual.topicPartitions()));
-    }
-
-    private static Map<Uuid, Set<Integer>> fromAssignment(
-        List<ConsumerGroupHeartbeatResponseData.TopicPartitions> assignment
-    ) {
-        if (assignment == null) return null;
-
-        Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        assignment.forEach(topicPartitions ->
-            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()))
-        );
-        return assignmentMap;
+        BiConsumer<ApiMessage, ApiMessage> asserter = API_MESSAGE_COMPARATORS
+            .getOrDefault(expected.getClass(), API_MESSAGE_DEFAULT_COMPARATOR);
+        asserter.accept(expected, actual);
     }
 
     public static void assertRecordsEquals(
-        List<Record> expectedRecords,
-        List<Record> actualRecords
+        List<CoordinatorRecord> expectedRecords,
+        List<CoordinatorRecord> actualRecords
     ) {
         try {
             assertEquals(expectedRecords.size(), actualRecords.size());
 
             for (int i = 0; i < expectedRecords.size(); i++) {
-                Record expectedRecord = expectedRecords.get(i);
-                Record actualRecord = actualRecords.get(i);
+                CoordinatorRecord expectedRecord = expectedRecords.get(i);
+                CoordinatorRecord actualRecord = actualRecords.get(i);
                 assertRecordEquals(expectedRecord, actualRecord);
             }
         } catch (AssertionFailedError e) {
@@ -111,12 +93,54 @@ public class Assertions {
         }
     }
 
-    public static void assertRecordEquals(
-        Record expected,
-        Record actual
+    /**
+     * Assert that the expected records are equal to the provided records.
+     *
+     * @param expectedRecords   An ordered list of groupings. Each grouping
+     *                          defines a list of records that must be present,
+     *                          but they could be in any order.
+     * @param actualRecords     An ordered list of records.
+     * @throws AssertionFailedError if the expected and the actual records do
+     *                              not match.
+     */
+    public static void assertUnorderedRecordsEquals(
+        List<List<CoordinatorRecord>> expectedRecords,
+        List<CoordinatorRecord> actualRecords
     ) {
         try {
-            assertApiMessageAndVersionEquals(expected.key(), actual.key());
+            int i = 0, j = 0;
+            while (i < expectedRecords.size()) {
+                List<CoordinatorRecord> slice = expectedRecords.get(i);
+                assertRecordsEquals(
+                    slice
+                        .stream()
+                        .sorted(Comparator.comparing(Object::toString))
+                        .collect(Collectors.toList()),
+                    actualRecords
+                        .subList(j, j + slice.size())
+                        .stream()
+                        .sorted(Comparator.comparing(Object::toString))
+                        .collect(Collectors.toList())
+                );
+
+                j += slice.size();
+                i++;
+            }
+            assertEquals(j, actualRecords.size());
+        } catch (AssertionFailedError e) {
+            assertionFailure()
+                .expected(expectedRecords)
+                .actual(actualRecords)
+                .buildAndThrow();
+        }
+    }
+
+    public static void assertRecordEquals(
+        CoordinatorRecord expected,
+        CoordinatorRecord actual
+    ) {
+        try {
+            assertApiMessage(expected.key(), actual.key());
             assertApiMessageAndVersionEquals(expected.value(), actual.value());
         } catch (AssertionFailedError e) {
             assertionFailure()
@@ -126,90 +150,231 @@ public class Assertions {
         }
     }
 
+    private static void assertConsumerGroupHeartbeatResponse(
+        ApiMessage exp,
+        ApiMessage act
+    ) {
+        ConsumerGroupHeartbeatResponseData expected = (ConsumerGroupHeartbeatResponseData) exp.duplicate();
+        ConsumerGroupHeartbeatResponseData actual = (ConsumerGroupHeartbeatResponseData) act.duplicate();
+
+        Consumer<ConsumerGroupHeartbeatResponseData> normalize = message -> {
+            if (message.assignment() != null) {
+                message.assignment().topicPartitions().sort(Comparator.comparing(ConsumerGroupHeartbeatResponseData.TopicPartitions::topicId));
+                message.assignment().topicPartitions().forEach(topic -> topic.partitions().sort(Integer::compareTo));
+            }
+        };
+
+        normalize.accept(expected);
+        normalize.accept(actual);
+
+        assertEquals(expected, actual);
+    }
+
+    private static void assertShareGroupHeartbeatResponse(
+        ApiMessage exp,
+        ApiMessage act
+    ) {
+        ShareGroupHeartbeatResponseData expected = (ShareGroupHeartbeatResponseData) exp.duplicate();
+        ShareGroupHeartbeatResponseData actual = (ShareGroupHeartbeatResponseData) act.duplicate();
+
+        Consumer<ShareGroupHeartbeatResponseData> normalize = message -> {
+            if (message.assignment() != null) {
+                message.assignment().topicPartitions().sort(Comparator.comparing(ShareGroupHeartbeatResponseData.TopicPartitions::topicId));
+                message.assignment().topicPartitions().forEach(topic -> topic.partitions().sort(Integer::compareTo));
+            }
+        };
+
+        normalize.accept(expected);
+        normalize.accept(actual);
+
+        assertEquals(expected, actual);
+    }
+
+    private static void assertApiMessage(
+        ApiMessage expected,
+        ApiMessage actual
+    ) {
+        if (expected == actual) return;
+        assertNotNull(expected);
+        assertNotNull(actual);
+        BiConsumer<ApiMessage, ApiMessage> asserter = API_MESSAGE_COMPARATORS
+            .getOrDefault(expected.getClass(), API_MESSAGE_DEFAULT_COMPARATOR);
+        asserter.accept(expected, actual);
+    }
+
     private static void assertApiMessageAndVersionEquals(
         ApiMessageAndVersion expected,
         ApiMessageAndVersion actual
     ) {
         if (expected == actual) return;
-
+        assertNotNull(expected);
+        assertNotNull(actual);
         assertEquals(expected.version(), actual.version());
-
-        if (actual.message() instanceof ConsumerGroupCurrentMemberAssignmentValue) {
-            // The order of the topics stored in ConsumerGroupCurrentMemberAssignmentValue is not
-            // always guaranteed. Therefore, we need a special comparator.
-            ConsumerGroupCurrentMemberAssignmentValue expectedValue =
-                (ConsumerGroupCurrentMemberAssignmentValue) expected.message();
-            ConsumerGroupCurrentMemberAssignmentValue actualValue =
-                (ConsumerGroupCurrentMemberAssignmentValue) actual.message();
-
-            assertEquals(expectedValue.memberEpoch(), actualValue.memberEpoch());
-            assertEquals(expectedValue.previousMemberEpoch(), actualValue.previousMemberEpoch());
-
-            // We transform those to Maps before comparing them.
-            assertEquals(fromTopicPartitions(expectedValue.assignedPartitions()),
-                fromTopicPartitions(actualValue.assignedPartitions()));
-            assertEquals(fromTopicPartitions(expectedValue.partitionsPendingRevocation()),
-                fromTopicPartitions(actualValue.partitionsPendingRevocation()));
-        } else if (actual.message() instanceof ConsumerGroupPartitionMetadataValue) {
-            // The order of the racks stored in the PartitionMetadata of the ConsumerGroupPartitionMetadataValue
-            // is not always guaranteed. Therefore, we need a special comparator.
-            ConsumerGroupPartitionMetadataValue expectedValue =
-                (ConsumerGroupPartitionMetadataValue) expected.message();
-            ConsumerGroupPartitionMetadataValue actualValue =
-                (ConsumerGroupPartitionMetadataValue) actual.message();
-
-            List<ConsumerGroupPartitionMetadataValue.TopicMetadata> expectedTopicMetadataList =
-                expectedValue.topics();
-            List<ConsumerGroupPartitionMetadataValue.TopicMetadata> actualTopicMetadataList =
-                actualValue.topics();
-
-            if (expectedTopicMetadataList.size() != actualTopicMetadataList.size()) {
-                fail("Topic metadata lists have different sizes");
-            }
-
-            for (int i = 0; i < expectedTopicMetadataList.size(); i++) {
-                ConsumerGroupPartitionMetadataValue.TopicMetadata expectedTopicMetadata =
-                    expectedTopicMetadataList.get(i);
-                ConsumerGroupPartitionMetadataValue.TopicMetadata actualTopicMetadata =
-                    actualTopicMetadataList.get(i);
-
-                assertEquals(expectedTopicMetadata.topicId(), actualTopicMetadata.topicId());
-                assertEquals(expectedTopicMetadata.topicName(), actualTopicMetadata.topicName());
-                assertEquals(expectedTopicMetadata.numPartitions(), actualTopicMetadata.numPartitions());
-
-                List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> expectedPartitionMetadataList =
-                    expectedTopicMetadata.partitionMetadata();
-                List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> actualPartitionMetadataList =
-                    actualTopicMetadata.partitionMetadata();
-
-                // If the list is empty, rack information wasn't available for any replica of
-                // the partition and hence, the entry wasn't added to the record.
-                if (expectedPartitionMetadataList.size() != actualPartitionMetadataList.size()) {
-                    fail("Partition metadata lists have different sizes");
-                } else if (!expectedPartitionMetadataList.isEmpty() && !actualPartitionMetadataList.isEmpty()) {
-                    for (int j = 0; j < expectedTopicMetadataList.size(); j++) {
-                        ConsumerGroupPartitionMetadataValue.PartitionMetadata expectedPartitionMetadata =
-                            expectedPartitionMetadataList.get(j);
-                        ConsumerGroupPartitionMetadataValue.PartitionMetadata actualPartitionMetadata =
-                            actualPartitionMetadataList.get(j);
-
-                        assertEquals(expectedPartitionMetadata.partition(), actualPartitionMetadata.partition());
-                        assertUnorderedListEquals(expectedPartitionMetadata.racks(), actualPartitionMetadata.racks());
-                    }
-                }
-            }
-        } else {
-            assertEquals(expected.message(), actual.message());
-        }
+        BiConsumer<ApiMessage, ApiMessage> asserter = API_MESSAGE_COMPARATORS
+            .getOrDefault(expected.message().getClass(), API_MESSAGE_DEFAULT_COMPARATOR);
+        asserter.accept(expected.message(), actual.message());
     }
 
-    private static Map<Uuid, Set<Integer>> fromTopicPartitions(
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> assignment
+    private static void assertConsumerGroupCurrentMemberAssignmentValue(
+        ApiMessage exp,
+        ApiMessage act
     ) {
-        Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        assignment.forEach(topicPartitions ->
-            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()))
-        );
-        return assignmentMap;
+        // The order of the topics stored in ConsumerGroupCurrentMemberAssignmentValue is not
+        // always guaranteed. Therefore, we need a special comparator.
+        ConsumerGroupCurrentMemberAssignmentValue expected = (ConsumerGroupCurrentMemberAssignmentValue) exp.duplicate();
+        ConsumerGroupCurrentMemberAssignmentValue actual = (ConsumerGroupCurrentMemberAssignmentValue) act.duplicate();
+
+        Consumer<List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions>> sortTopicsAndPartitions = topicPartitions -> {
+            topicPartitions.sort(Comparator.comparing(ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId));
+            topicPartitions.forEach(topic -> topic.partitions().sort(Integer::compareTo));
+        };
+
+        Consumer<ConsumerGroupCurrentMemberAssignmentValue> normalize = message -> {
+            sortTopicsAndPartitions.accept(message.assignedPartitions());
+            sortTopicsAndPartitions.accept(message.partitionsPendingRevocation());
+        };
+
+        normalize.accept(expected);
+        normalize.accept(actual);
+
+        assertEquals(expected, actual);
+    }
+
+    private static void assertConsumerGroupPartitionMetadataValue(
+        ApiMessage exp,
+        ApiMessage act
+    ) {
+        // The order of the racks stored in the PartitionMetadata of the ConsumerGroupPartitionMetadataValue
+        // is not always guaranteed. Therefore, we need a special comparator.
+        ConsumerGroupPartitionMetadataValue expected = (ConsumerGroupPartitionMetadataValue) exp.duplicate();
+        ConsumerGroupPartitionMetadataValue actual = (ConsumerGroupPartitionMetadataValue) act.duplicate();
+
+        Consumer<ConsumerGroupPartitionMetadataValue> normalize = message -> {
+            message.topics().sort(Comparator.comparing(ConsumerGroupPartitionMetadataValue.TopicMetadata::topicId));
+            message.topics().forEach(topic -> {
+                topic.partitionMetadata().sort(Comparator.comparing(ConsumerGroupPartitionMetadataValue.PartitionMetadata::partition));
+                topic.partitionMetadata().forEach(partition -> partition.racks().sort(String::compareTo));
+            });
+        };
+
+        normalize.accept(expected);
+        normalize.accept(actual);
+
+        assertEquals(expected, actual);
+    }
+
+    private static void assertShareGroupPartitionMetadataValue(
+        ApiMessage exp,
+        ApiMessage act
+    ) {
+        // The order of the racks stored in the PartitionMetadata of the ShareGroupPartitionMetadataValue
+        // is not always guaranteed. Therefore, we need a special comparator.
+        ShareGroupPartitionMetadataValue expected = (ShareGroupPartitionMetadataValue) exp.duplicate();
+        ShareGroupPartitionMetadataValue actual = (ShareGroupPartitionMetadataValue) act.duplicate();
+
+        Consumer<ShareGroupPartitionMetadataValue> normalize = message -> {
+            message.topics().sort(Comparator.comparing(ShareGroupPartitionMetadataValue.TopicMetadata::topicId));
+            message.topics().forEach(topic -> {
+                topic.partitionMetadata().sort(Comparator.comparing(ShareGroupPartitionMetadataValue.PartitionMetadata::partition));
+                topic.partitionMetadata().forEach(partition -> partition.racks().sort(String::compareTo));
+            });
+        };
+
+        normalize.accept(expected);
+        normalize.accept(actual);
+
+        assertEquals(expected, actual);
+    }
+
+    private static void assertGroupMetadataValue(
+        ApiMessage exp,
+        ApiMessage act
+    ) {
+        GroupMetadataValue expected = (GroupMetadataValue) exp.duplicate();
+        GroupMetadataValue actual = (GroupMetadataValue) act.duplicate();
+
+        Consumer<GroupMetadataValue> normalize = message -> {
+            message.members().sort(Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId));
+            try {
+                message.members().forEach(memberMetadata -> {
+                    // Sort topics and ownedPartitions in Subscription.
+                    ConsumerPartitionAssignor.Subscription subscription =
+                        ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberMetadata.subscription()));
+                    subscription.topics().sort(String::compareTo);
+                    subscription.ownedPartitions().sort(
+                        Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
+                    );
+                    memberMetadata.setSubscription(Utils.toArray(ConsumerProtocol.serializeSubscription(
+                        subscription,
+                        ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(memberMetadata.subscription()))
+                    )));
+
+                    // Sort partitions in Assignment.
+                    ConsumerPartitionAssignor.Assignment assignment =
+                        ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(memberMetadata.assignment()));
+                    assignment.partitions().sort(
+                        Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
+                    );
+                    memberMetadata.setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
+                        assignment,
+                        ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(memberMetadata.assignment()))
+                    )));
+                });
+            } catch (SchemaException ex) {
+                fail("Failed deserialization: " + ex.getMessage());
+            }
+        };
+
+        normalize.accept(expected);
+        normalize.accept(actual);
+
+        assertEquals(expected, actual);
+    }
+
+    private static void assertConsumerGroupTargetAssignmentMemberValue(
+        ApiMessage exp,
+        ApiMessage act
+    ) {
+        ConsumerGroupTargetAssignmentMemberValue expected = (ConsumerGroupTargetAssignmentMemberValue) exp.duplicate();
+        ConsumerGroupTargetAssignmentMemberValue actual = (ConsumerGroupTargetAssignmentMemberValue) act.duplicate();
+
+        Consumer<ConsumerGroupTargetAssignmentMemberValue> normalize = message -> {
+            message.topicPartitions().sort(Comparator.comparing(ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId));
+            message.topicPartitions().forEach(topic -> topic.partitions().sort(Integer::compareTo));
+        };
+
+        normalize.accept(expected);
+        normalize.accept(actual);
+
+        assertEquals(expected, actual);
+    }
+
+    private static void assertSyncGroupResponse(
+        ApiMessage exp,
+        ApiMessage act
+    ) {
+        SyncGroupResponseData expected = (SyncGroupResponseData) exp.duplicate();
+        SyncGroupResponseData actual = (SyncGroupResponseData) act.duplicate();
+
+        Consumer<SyncGroupResponseData> normalize = message -> {
+            try {
+                ConsumerPartitionAssignor.Assignment assignment =
+                    ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(message.assignment()));
+                assignment.partitions().sort(
+                    Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
+                );
+                message.setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
+                    assignment,
+                    ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(message.assignment()))
+                )));
+            } catch (SchemaException ex) {
+                fail("Failed deserialization: " + ex.getMessage());
+            }
+        };
+
+        normalize.accept(expected);
+        normalize.accept(actual);
+
+        assertEquals(expected, actual);
     }
 }

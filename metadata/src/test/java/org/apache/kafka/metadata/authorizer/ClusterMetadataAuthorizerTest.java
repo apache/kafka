@@ -34,6 +34,7 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -165,7 +166,7 @@ public class ClusterMetadataAuthorizerTest {
     );
 
     static final List<AclBindingFilter> TEST_FILTERS = TEST_BINDINGS.stream().
-        map(b -> b.toFilter()).collect(Collectors.toList());
+        map(AclBinding::toFilter).collect(Collectors.toList());
 
     @Test
     public void testCreateAcls() throws Exception {

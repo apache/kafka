@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -24,15 +25,16 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.crypto.KeyGenerator;
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
 import java.security.Security;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -41,10 +43,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
+import javax.crypto.KeyGenerator;
+
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
-import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 import static org.apache.kafka.common.utils.Utils.enumOptions;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_VALIDATOR;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_VALIDATOR;
@@ -52,7 +57,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 /**
  * Provides configuration for Kafka Connect workers running in distributed mode.
  */
-public class DistributedConfig extends WorkerConfig {
+public final class DistributedConfig extends WorkerConfig {
 
     private static final Logger log = LoggerFactory.getLogger(DistributedConfig.class);
 
@@ -93,6 +98,14 @@ public class DistributedConfig extends WorkerConfig {
      */
     public static final String REBALANCE_TIMEOUT_MS_CONFIG = CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG;
     private static final String REBALANCE_TIMEOUT_MS_DOC = CommonClientConfigs.REBALANCE_TIMEOUT_MS_DOC;
+
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
+    private static final String METADATA_RECOVERY_STRATEGY_DOC = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC;
+    public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY;
+
+    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
+    private static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC;
+    public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS;
 
     /**
      * <code>worker.sync.timeout.ms</code>
@@ -466,7 +479,8 @@ public class DistributedConfig extends WorkerConfig {
                                         + "compatibility");
                             }
                         },
-                        () -> "[" + Utils.join(ConnectProtocolCompatibility.values(), ", ") + "]"),
+                        () -> Arrays.stream(ConnectProtocolCompatibility.values()).map(ConnectProtocolCompatibility::toString)
+                                .collect(Collectors.joining(", ", "[", "]"))),
                     ConfigDef.Importance.LOW,
                     CONNECT_PROTOCOL_DOC)
             .define(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG,
@@ -509,7 +523,21 @@ public class DistributedConfig extends WorkerConfig {
                             (name, value) -> validateVerificationAlgorithms(crypto, name, (List<String>) value),
                             () -> "A list of one or more MAC algorithms, each supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
-                    INTER_WORKER_VERIFICATION_ALGORITHMS_DOC);
+                    INTER_WORKER_VERIFICATION_ALGORITHMS_DOC)
+            .define(METADATA_RECOVERY_STRATEGY_CONFIG,
+                    ConfigDef.Type.STRING,
+                    DEFAULT_METADATA_RECOVERY_STRATEGY,
+                    ConfigDef.CaseInsensitiveValidString
+                            .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
+                    ConfigDef.Importance.LOW,
+                    METADATA_RECOVERY_STRATEGY_DOC)
+            .define(METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
+                    atLeast(0),
+                    ConfigDef.Importance.LOW,
+                    METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
+
     }
 
     private final ExactlyOnceSourceSupport exactlyOnceSourceSupport;
@@ -571,7 +599,6 @@ public class DistributedConfig extends WorkerConfig {
     }
 
     // Visible for testing
-    @SuppressWarnings("this-escape")
     DistributedConfig(Crypto crypto, Map<String, String> props) {
         super(config(crypto), props);
         this.crypto = crypto;

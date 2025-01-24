@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -84,27 +83,15 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
         return this.name;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-
-        // register the store
-        context.register(root, (key, value) -> {
-            restoring = true;
-            put(Bytes.wrap(key), value);
-            restoring = false;
-        });
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-            context.appConfigs(),
+            stateStoreContext.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
             false
         );
         // register the store
-        context.register(
+        stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) records -> {
                 restoring = true;
@@ -121,7 +108,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
                 restoring = false;
             }
         );
-        this.context = context;
+        this.context = stateStoreContext;
     }
 
     @Override

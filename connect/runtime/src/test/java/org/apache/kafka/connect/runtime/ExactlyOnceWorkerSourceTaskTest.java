@@ -51,24 +51,22 @@ import org.apache.kafka.connect.test.util.ConcurrencyUtils;
 import org.apache.kafka.connect.test.util.MockitoUtils;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.ParameterizedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.OngoingStubbing;
 import org.mockito.verification.VerificationMode;
 
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -80,7 +78,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -100,11 +97,11 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
@@ -116,7 +113,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@RunWith(Parameterized.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.WARN)
 public class ExactlyOnceWorkerSourceTaskTest {
     private static final String TOPIC = "topic";
     private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
@@ -158,8 +156,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
     @Mock private Runnable preProducerCheck;
     @Mock private Runnable postProducerCheck;
 
-    @Rule public MockitoRule rule = MockitoJUnit.rule();
-
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
     static {
         TASK_PROPS.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
@@ -175,23 +171,15 @@ public class ExactlyOnceWorkerSourceTaskTest {
     private final AtomicReference<CountDownLatch> pollLatch = new AtomicReference<>(new CountDownLatch(0));
     private final AtomicReference<List<SourceRecord>> pollRecords = new AtomicReference<>(RECORDS);
 
-    private final boolean enableTopicCreation;
+    private boolean enableTopicCreation;
 
     private boolean taskStarted;
     private Future<?> workerTaskFuture;
 
-    @ParameterizedTest.Parameters
-    public static Collection<Boolean> parameters() {
-        return Arrays.asList(false, true);
-    }
 
-    public ExactlyOnceWorkerSourceTaskTest(boolean enableTopicCreation) {
+    public void setup(boolean enableTopicCreation) throws Exception {
         this.enableTopicCreation = enableTopicCreation;
         this.taskStarted = false;
-    }
-
-    @Before
-    public void setup() throws Exception {
         Map<String, String> workerProps = workerProps();
         plugins = new Plugins(workerProps);
         config = new StandaloneConfig(workerProps);
@@ -210,7 +198,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         });
     }
 
-    @After
+    @AfterEach
     public void teardown() throws Exception {
         // In most tests, we don't really care about how many times the task got polled,
         // how many times we prepared to write offsets, etc.
@@ -290,12 +278,14 @@ public class ExactlyOnceWorkerSourceTaskTest {
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
         workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
-                config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.noopOperator(), statusBackingStore,
+                config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.noneOperator(), statusBackingStore,
                 sourceConfig, Runnable::run, preProducerCheck, postProducerCheck, Collections::emptyList);
     }
 
-    @Test
-    public void testRemoveMetrics() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testRemoveMetrics(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         workerTask.removeMetrics();
@@ -311,8 +301,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
                 .collect(Collectors.toSet());
     }
 
-    @Test
-    public void testStartPaused() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testStartPaused(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask(TargetState.PAUSED);
 
         final CountDownLatch pauseLatch = new CountDownLatch(1);
@@ -334,8 +326,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         assertPollMetrics(0);
     }
 
-    @Test
-    public void testPause() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPause(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         expectSuccessfulSends();
@@ -373,8 +367,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyCleanShutdown();
     }
 
-    @Test
-    public void testFailureInPreProducerCheck() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFailureInPreProducerCheck(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         Exception exception = new ConnectException("Failed to perform zombie fencing");
@@ -387,8 +383,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyShutdown(true, false);
     }
 
-    @Test
-    public void testFailureInProducerInitialization() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFailureInProducerInitialization(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         Exception exception = new ConnectException("You can't do that!");
@@ -402,8 +400,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyShutdown(true, false);
     }
 
-    @Test
-    public void testFailureInPostProducerCheck() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFailureInPostProducerCheck(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         Exception exception = new ConnectException("New task configs for the connector have already been generated");
@@ -418,8 +418,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyShutdown(true, false);
     }
 
-    @Test
-    public void testFailureInOffsetStoreStart() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFailureInOffsetStoreStart(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         Exception exception = new ConnectException("No soup for you!");
@@ -435,8 +437,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyShutdown(true, false);
     }
 
-    @Test
-    public void testPollsInBackground() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPollsInBackground(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         expectSuccessfulSends();
@@ -460,8 +464,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         assertTransactionMetrics(RECORDS.size());
     }
 
-    @Test
-    public void testFailureInPoll() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFailureInPoll(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         final CountDownLatch pollLatch = new CountDownLatch(1);
@@ -483,8 +489,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         assertPollMetrics(0);
     }
 
-    @Test
-    public void testFailureInPollAfterCancel() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFailureInPollAfterCancel(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         final CountDownLatch pollLatch = new CountDownLatch(1);
@@ -509,8 +517,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         assertPollMetrics(0);
     }
 
-    @Test
-    public void testFailureInPollAfterStop() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFailureInPollAfterStop(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         final CountDownLatch pollLatch = new CountDownLatch(1);
@@ -538,8 +548,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         assertPollMetrics(0);
     }
 
-    @Test
-    public void testPollReturnsNoRecords() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPollReturnsNoRecords(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         // Test that the task handles an empty list of records
         createWorkerTask();
 
@@ -563,8 +575,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         assertPollMetrics(0);
     }
 
-    @Test
-    public void testPollBasedCommit() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPollBasedCommit(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.POLL);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
 
@@ -591,8 +605,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         assertTransactionMetrics(RECORDS.size());
     }
 
-    @Test
-    public void testIntervalBasedCommit() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testIntervalBasedCommit(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         long commitInterval = 618;
         Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.INTERVAL);
         connectorProps.put(TRANSACTION_BOUNDARY_INTERVAL_CONFIG, Long.toString(commitInterval));
@@ -608,15 +624,16 @@ public class ExactlyOnceWorkerSourceTaskTest {
         startTaskThread();
 
         awaitPolls(2);
-        assertEquals("No flushes should have taken place before offset commit interval has elapsed", 0, flushCount());
+        assertEquals(0, flushCount(), "No flushes should have taken place before offset commit interval has elapsed");
         time.sleep(commitInterval);
 
         awaitPolls(2);
-        assertEquals("One flush should have taken place after offset commit interval has elapsed", 1, flushCount());
+        assertEquals(1, flushCount(), "One flush should have taken place after offset commit interval has elapsed");
         time.sleep(commitInterval * 2);
 
         awaitPolls(2);
-        assertEquals("Two flushes should have taken place after offset commit interval has elapsed again", 2, flushCount());
+        assertEquals(2, flushCount(), 
+                "Two flushes should have taken place after offset commit interval has elapsed again");
 
         awaitShutdown();
 
@@ -632,27 +649,36 @@ public class ExactlyOnceWorkerSourceTaskTest {
         assertTransactionMetrics(RECORDS.size() * 2);
     }
 
-    @Test
-    public void testConnectorCommitOnBatch() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testConnectorCommitOnBatch(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         testConnectorBasedCommit(TransactionContext::commitTransaction, false);
     }
 
-    @Test
-    public void testConnectorCommitOnRecord() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testConnectorCommitOnRecord(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         testConnectorBasedCommit(ctx -> ctx.commitTransaction(SOURCE_RECORD_2), false);
     }
 
-    @Test
-    public void testConnectorAbortOnBatch() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testConnectorAbortOnBatch(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         testConnectorBasedCommit(TransactionContext::abortTransaction, true);
     }
 
-    @Test
-    public void testConnectorAbortOnRecord() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testConnectorAbortOnRecord(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         testConnectorBasedCommit(ctx -> ctx.abortTransaction(SOURCE_RECORD_2), true);
     }
 
     private void testConnectorBasedCommit(Consumer<TransactionContext> requestCommit, boolean abort) throws Exception {
+        setup(enableTopicCreation);
         Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.CONNECTOR);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         createWorkerTask();
@@ -665,22 +691,22 @@ public class ExactlyOnceWorkerSourceTaskTest {
         startTaskThread();
 
         awaitPolls(3);
-        assertEquals("No flushes should have taken place without connector requesting transaction commit",
-                0, flushCount());
+        assertEquals(0, flushCount(),
+                "No flushes should have taken place without connector requesting transaction commit");
 
         requestCommit.accept(transactionContext);
         awaitPolls(3);
-        assertEquals("One flush should have taken place after transaction commit/abort was requested",
-                1, flushCount());
+        assertEquals(1, flushCount(),
+                "One flush should have taken place after transaction commit/abort was requested");
 
         awaitPolls(3);
-        assertEquals("Only one flush should still have taken place without connector re-requesting commit/abort, even on identical records",
-                1, flushCount());
+        assertEquals(1, flushCount(),
+                "Only one flush should still have taken place without connector re-requesting commit/abort, even on identical records");
 
         awaitShutdown();
 
-        assertEquals("Task should have flushed offsets once based on connector-defined boundaries, and skipped final end-of-life offset commit",
-                1, flushCount());
+        assertEquals(1, flushCount(),
+                "Task should have flushed offsets once based on connector-defined boundaries, and skipped final end-of-life offset commit");
         // We begin a new transaction after connector-requested aborts so that we can still write offsets for the source records that were aborted
         verify(producer, times(abort ? 3 : 2)).beginTransaction();
         verifySends();
@@ -697,8 +723,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         assertTransactionMetrics(abort ? 0 : (3 * RECORDS.size()));
     }
 
-    @Test
-    public void testConnectorAbortsEmptyTransaction() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testConnectorAbortsEmptyTransaction(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.CONNECTOR);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         createWorkerTask();
@@ -742,8 +770,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyPossibleTopicCreation();
     }
 
-    @Test
-    public void testMixedConnectorTransactionBoundaryCommitLastRecordAbortBatch() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMixedConnectorTransactionBoundaryCommitLastRecordAbortBatch(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         // We fail tasks that try to abort and commit a transaction for the same record or same batch
         // But we don't fail if they try to commit the last record of a batch and abort the entire batch
         // Instead, we give precedence to the record-based operation
@@ -780,8 +810,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyPossibleTopicCreation();
     }
 
-    @Test
-    public void testMixedConnectorTransactionBoundaryAbortLastRecordCommitBatch() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMixedConnectorTransactionBoundaryAbortLastRecordCommitBatch(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         // We fail tasks that try to abort and commit a transaction for the same record or same batch
         // But we don't fail if they try to abort the last record of a batch and commit the entire batch
         // Instead, we give precedence to the record-based operation
@@ -823,8 +855,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyPossibleTopicCreation();
     }
 
-    @Test
-    public void testCommitFlushSyncCallbackFailure() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testCommitFlushSyncCallbackFailure(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.beginFlush()).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
@@ -835,8 +869,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         testCommitFailure(failure, false);
     }
 
-    @Test
-    public void testCommitFlushAsyncCallbackFailure() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testCommitFlushAsyncCallbackFailure(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.beginFlush()).thenReturn(true);
         // doFlush delegates its callback to the producer,
@@ -853,8 +889,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         testCommitFailure(failure, true);
     }
 
-    @Test
-    public void testCommitTransactionFailure() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testCommitTransactionFailure(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.beginFlush()).thenReturn(true);
         doThrow(failure).when(producer).commitTransaction();
@@ -895,8 +933,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyShutdown(true, false);
     }
 
-    @Test
-    public void testSendRecordsRetries() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testSendRecordsRetries(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         // Differentiate only by Kafka partition so we can reuse conversion expectations
@@ -939,8 +979,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verify(offsetWriter).offset(PARTITION, offset(3));
     }
 
-    @Test
-    public void testSendRecordsProducerSendFailsImmediately() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testSendRecordsProducerSendFailsImmediately(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, VALUE_1);
@@ -962,8 +1004,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyPossibleTopicCreation();
     }
 
-    @Test
-    public void testSlowTaskStart() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testSlowTaskStart(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch finishStartupLatch = new CountDownLatch(1);
 
@@ -996,8 +1040,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyCleanShutdown();
     }
 
-    @Test
-    public void testCancel() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testCancel(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
         createWorkerTask();
 
         // workerTask said something dumb on twitter
@@ -1027,11 +1073,11 @@ public class ExactlyOnceWorkerSourceTaskTest {
         ConcurrencyUtils.awaitLatch(pollLatch.get(), "task was not polled " + minimum + " time(s) quickly enough");
     }
 
-    private void awaitEmptyPolls(int minimum) throws InterruptedException {
+    private void awaitEmptyPolls(int minimum) {
         awaitPolls(minimum, Collections.emptyList());
     }
 
-    private void awaitPolls(int minimum) throws InterruptedException {
+    private void awaitPolls(int minimum) {
         awaitPolls(minimum, RECORDS);
     }
 
@@ -1051,7 +1097,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         workerTaskFuture = executor.submit(workerTask);
     }
 
-    private void expectSuccessfulFlushes() throws InterruptedException, TimeoutException {
+    private void expectSuccessfulFlushes() {
         when(offsetWriter.beginFlush()).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             Callback<Void> cb = invocation.getArgument(0);
@@ -1206,8 +1252,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
         if (actualMax - actualMin <= 0.000001d) {
             assertEquals(actualMax, actualAvg, 0.000002d);
         } else {
-            assertTrue("Average transaction size should be greater than minimum transaction size", actualAvg > actualMin);
-            assertTrue("Average transaction size should be less than maximum transaction size", actualAvg < actualMax);
+            assertTrue(actualAvg > actualMin, "Average transaction size should be greater than minimum transaction size");
+            assertTrue(actualAvg < actualMax, "Average transaction size should be less than maximum transaction size");
         }
     }
 

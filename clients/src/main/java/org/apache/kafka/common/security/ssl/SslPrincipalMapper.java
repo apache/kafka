@@ -17,8 +17,8 @@
 package org.apache.kafka.common.security.ssl;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -178,7 +178,7 @@ public class SslPrincipalMapper {
                     final StringBuilder sb = new StringBuilder(value.length() + 1);
                     final int groupStart = backRefMatcher.start(1);
 
-                    sb.append(value.substring(0, groupStart - 1));
+                    sb.append(value, 0, groupStart - 1);
                     sb.append("\\");
                     sb.append(value.substring(groupStart - 1));
                     value = sb.toString();

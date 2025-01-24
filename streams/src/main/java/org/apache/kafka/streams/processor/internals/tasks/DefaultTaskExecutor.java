@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
-
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -30,13 +28,14 @@ import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
+
 import org.slf4j.Logger;
 
 import java.time.Duration;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 
 public class DefaultTaskExecutor implements TaskExecutor {
 
@@ -72,8 +71,6 @@ public class DefaultTaskExecutor implements TaskExecutor {
                     log.debug("Releasing task {} due to shutdown.", currentTask.id());
                     unassignCurrentTask();
                 }
-
-                shutdownGate.countDown();
 
                 final KafkaFutureImpl<StreamTask> taskReleaseFuture;
                 if ((taskReleaseFuture = taskReleaseRequested.getAndSet(null)) != null) {
@@ -119,7 +116,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
             if (currentTask == null) {
                 try {
-                    taskManager.awaitProcessableTasks();
+                    taskManager.awaitProcessableTasks(shutdownRequested::get);
                 } catch (final InterruptedException ignored) {
                     // Can be ignored, the cause of the interrupted will be handled in the event loop
                 }
@@ -222,7 +219,6 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
     private StreamTask currentTask = null;
     private TaskExecutorThread taskExecutorThread = null;
-    private CountDownLatch shutdownGate;
 
     public DefaultTaskExecutor(final TaskManager taskManager,
                                final String name,
@@ -246,13 +242,12 @@ public class DefaultTaskExecutor implements TaskExecutor {
         if (taskExecutorThread == null) {
             taskExecutorThread = new TaskExecutorThread(name);
             taskExecutorThread.start();
-            shutdownGate = new CountDownLatch(1);
         }
     }
 
     @Override
     public boolean isRunning() {
-        return taskExecutorThread != null && taskExecutorThread.isAlive() && shutdownGate.getCount() != 0;
+        return taskExecutorThread != null && taskExecutorThread.isAlive();
     }
 
     @Override
@@ -266,7 +261,8 @@ public class DefaultTaskExecutor implements TaskExecutor {
     public void awaitShutdown(final Duration timeout) {
         if (taskExecutorThread != null) {
             try {
-                if (!shutdownGate.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                taskExecutorThread.join(timeout.toMillis());
+                if (taskExecutorThread.isAlive()) {
                     throw new StreamsException("State updater thread did not shutdown within the timeout");
                 }
                 taskExecutorThread = null;
@@ -289,7 +285,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
             if (!taskExecutorThread.taskReleaseRequested.compareAndSet(null, future)) {
                 throw new IllegalStateException("There was already a task release request registered");
             }
-            if (shutdownGate.getCount() == 0) {
+            if (!taskExecutorThread.isAlive()) {
                 log.debug("Completing future, because task executor was just shut down");
                 future.complete(null);
             } else {

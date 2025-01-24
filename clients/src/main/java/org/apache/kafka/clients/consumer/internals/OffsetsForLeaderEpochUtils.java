@@ -28,6 +28,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +44,7 @@ public final class OffsetsForLeaderEpochUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(OffsetsForLeaderEpochUtils.class);
 
-    private OffsetsForLeaderEpochUtils(){}
+    private OffsetsForLeaderEpochUtils() {}
 
     static AbstractRequest.Builder<OffsetsForLeaderEpochRequest> prepareRequest(
             Map<TopicPartition, SubscriptionState.FetchPosition> requestData) {

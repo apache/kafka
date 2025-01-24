@@ -18,12 +18,13 @@
 package org.apache.kafka.metadata.properties;
 
 import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final public class MetaPropertiesVersionTest {
+public final class MetaPropertiesVersionTest {
     @Test
     public void testV0ToNumber() {
         assertEquals(0, MetaPropertiesVersion.V0.number());

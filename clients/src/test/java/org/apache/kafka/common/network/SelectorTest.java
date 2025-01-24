@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,7 +58,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -262,7 +262,7 @@ public class SelectorTest {
         } else {
             waitForCondition(() -> cipherMetrics(metrics).size() == 1,
                 "Waiting for cipher metrics to be created.");
-            assertEquals(Integer.valueOf(5), cipherMetrics(metrics).get(0).metricValue());
+            assertEquals(5, cipherMetrics(metrics).get(0).metricValue());
         }
     }
 
@@ -270,7 +270,7 @@ public class SelectorTest {
         return metrics.metrics().entrySet().stream().
             filter(e -> e.getKey().description().
                 contains("The number of connections with this SSL cipher and protocol.")).
-            map(e -> e.getValue()).
+            map(Map.Entry::getValue).
             collect(Collectors.toList());
     }
 
@@ -637,7 +637,7 @@ public class SelectorTest {
             // Poll until one or more receives complete and then close the server-side connection
             waitForCondition(() -> {
                 selector.poll(1000);
-                return selector.completedReceives().size() > 0;
+                return !selector.completedReceives().isEmpty();
             }, 5000, "Receive not completed");
             server.closeConnections();
             while (selector.disconnected().isEmpty()) {
@@ -783,7 +783,7 @@ public class SelectorTest {
         when(selectionKey.readyOps()).thenReturn(SelectionKey.OP_CONNECT);
         when(selectionKey.attachment()).thenReturn(kafkaChannel);
 
-        Set<SelectionKey> selectionKeys = Utils.mkSet(selectionKey);
+        Set<SelectionKey> selectionKeys = Set.of(selectionKey);
         selector.pollSelectionKeys(selectionKeys, false, System.nanoTime());
 
         assertFalse(selector.connected().contains(kafkaChannel.id()));
@@ -828,10 +828,12 @@ public class SelectorTest {
             for (int i = 0; i < conns; i++) {
                 Thread sender = createSender(serverAddress, randomPayload(1));
                 sender.start();
-                SocketChannel channel = ss.accept();
-                channel.configureBlocking(false);
-
-                selector.register(Integer.toString(i), channel);
+                try (SocketChannel channel = ss.accept()) {
+                    channel.configureBlocking(false);
+                    selector.register(Integer.toString(i), channel);
+                } finally {
+                    sender.join();
+                }
             }
         }
 
@@ -889,7 +891,7 @@ public class SelectorTest {
             .filter(entry ->
                 entry.getKey().name().equals(name) && entry.getKey().tags().equals(tags))
             .findFirst();
-        if (!metric.isPresent())
+        if (metric.isEmpty())
             throw new Exception(String.format("Could not find metric called %s with tags %s", name, tags.toString()));
 
         return metric.get().getValue();
@@ -905,8 +907,8 @@ public class SelectorTest {
         }
         assertNotNull(selector.lowestPriorityChannel());
         for (int i = conns - 1; i >= 0; i--) {
-            if (i != 2)
-              assertEquals("", blockingRequest(String.valueOf(i), ""));
+            if (i != 2) 
+                assertEquals("", blockingRequest(String.valueOf(i), ""));
             time.sleep(10);
         }
         assertEquals("2", selector.lowestPriorityChannel().id());
@@ -953,7 +955,7 @@ public class SelectorTest {
         NetworkSend send = new NetworkSend("destination", new ByteBufferSend(ByteBuffer.allocate(0)));
         when(channel.maybeCompleteSend()).thenReturn(send);
         selector.write(channel);
-        assertEquals(asList(send), selector.completedSends());
+        assertEquals(Collections.singletonList(send), selector.completedSends());
     }
 
     /**
@@ -1011,7 +1013,6 @@ public class SelectorTest {
         selector.poll(0);
         assertEquals(0, selector.completedReceives().size());
     }
-
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
@@ -1111,7 +1112,7 @@ public class SelectorTest {
         Optional<Map.Entry<MetricName, KafkaMetric>> metric = metrics.metrics().entrySet().stream()
                 .filter(entry -> entry.getKey().name().equals(name))
                 .findFirst();
-        if (!metric.isPresent())
+        if (metric.isEmpty())
             throw new Exception(String.format("Could not find metric called %s", name));
 
         return metric.get().getValue();

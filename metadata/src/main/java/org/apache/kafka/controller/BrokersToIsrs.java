@@ -18,8 +18,8 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
@@ -50,9 +50,9 @@ import static org.apache.kafka.metadata.Replicas.NONE;
  * works because partition IDs cannot be negative.
  */
 public class BrokersToIsrs {
-    private final static int LEADER_FLAG = 0x8000_0000;
+    private static final int LEADER_FLAG = 0x8000_0000;
 
-    private final static int REPLICA_MASK = 0x7fff_ffff;
+    private static final int REPLICA_MASK = 0x7fff_ffff;
 
     static class PartitionsOnReplicaIterator implements Iterator<TopicIdPartition> {
         private final Iterator<Entry<Uuid, int[]>> iterator;
@@ -257,11 +257,10 @@ public class BrokersToIsrs {
             }
         } else {
             int[] newPartitions = new int[partitions.length - 1];
-            int j = 0;
-            for (int i = 0; i < partitions.length; i++) {
-                int partition = partitions[i];
+            int i = 0;
+            for (int partition : partitions) {
                 if (partition != removedPartition) {
-                    newPartitions[j++] = partition;
+                    newPartitions[i++] = partition;
                 }
             }
             topicMap.put(topicId, newPartitions);

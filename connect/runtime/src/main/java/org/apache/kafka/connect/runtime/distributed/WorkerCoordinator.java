@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -267,6 +268,12 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         return JoinGroupRequest.UNKNOWN_MEMBER_ID;
     }
 
+    @Override
+    protected void handlePollTimeoutExpiry() {
+        listener.onPollTimeoutExpiry();
+        maybeLeaveGroup("worker poll timeout has expired.");
+    }
+
     /**
      * Return the current generation. The generation refers to this worker's knowledge with
      * respect to which generation is the latest one and, therefore, this information is local.
@@ -433,8 +440,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof LeaderState)) return false;
-            LeaderState that = (LeaderState) o;
+            if (!(o instanceof LeaderState that)) return false;
             return Objects.equals(allMembers, that.allMembers)
                     && Objects.equals(connectorOwners, that.connectorOwners)
                     && Objects.equals(taskOwners, that.taskOwners);
@@ -637,10 +643,9 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             if (this == o) {
                 return true;
             }
-            if (!(o instanceof WorkerLoad)) {
+            if (!(o instanceof WorkerLoad that)) {
                 return false;
             }
-            WorkerLoad that = (WorkerLoad) o;
             return worker.equals(that.worker) &&
                     connectors.equals(that.connectors) &&
                     tasks.equals(that.tasks);

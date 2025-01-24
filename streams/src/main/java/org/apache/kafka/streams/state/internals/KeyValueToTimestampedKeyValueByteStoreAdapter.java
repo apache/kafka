@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.KeyQuery;
@@ -95,16 +94,9 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
         return store.name();
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        store.init(context, root);
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        store.init(context, root);
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        store.init(stateStoreContext, root);
     }
 
     @Override

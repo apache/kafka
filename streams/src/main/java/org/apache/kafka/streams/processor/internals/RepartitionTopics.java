@@ -29,16 +29,16 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.Topi
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 
-import java.util.LinkedList;
-import java.util.Queue;
 import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -108,6 +108,13 @@ public class RepartitionTopics {
             .stream()
             .map(s -> getTopologyNameOrElseUnnamed(s.namedTopology))
             .collect(Collectors.toSet());
+    }
+
+    public Set<String> missingSourceTopics() {
+        return missingInputTopicsBySubtopology.entrySet().stream()
+                .map(entry -> entry.getValue())
+                .flatMap(missingTopicSet -> missingTopicSet.stream())
+                .collect(Collectors.toSet());
     }
 
     public Queue<StreamsException> missingSourceTopicExceptions() {
@@ -210,7 +217,7 @@ public class RepartitionTopics {
                     final Optional<Integer> repartitionSourceTopicPartitionCount =
                         repartitionTopicMetadata.get(repartitionSourceTopic).numberOfPartitions();
 
-                    if (!repartitionSourceTopicPartitionCount.isPresent()) {
+                    if (repartitionSourceTopicPartitionCount.isEmpty()) {
                         final Integer numPartitions = computePartitionCount(
                             repartitionTopicMetadata,
                             topicGroups,

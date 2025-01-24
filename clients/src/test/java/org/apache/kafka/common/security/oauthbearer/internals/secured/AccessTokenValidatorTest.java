@@ -17,13 +17,13 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.jwx.HeaderParameterNames;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @TestInstance(Lifecycle.PER_CLASS)
 public abstract class AccessTokenValidatorTest extends OAuthBearerTest {
@@ -38,25 +38,25 @@ public abstract class AccessTokenValidatorTest extends OAuthBearerTest {
     @Test
     public void testNull() throws Exception {
         AccessTokenValidator validator = createAccessTokenValidator();
-        assertThrowsWithMessage(ValidateException.class, () -> validator.validate(null), "Empty JWT provided");
+        assertThrowsWithMessage(ValidateException.class, () -> validator.validate(null), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test
     public void testEmptyString() throws Exception {
         AccessTokenValidator validator = createAccessTokenValidator();
-        assertThrowsWithMessage(ValidateException.class, () -> validator.validate(""), "Empty JWT provided");
+        assertThrowsWithMessage(ValidateException.class, () -> validator.validate(""), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test
     public void testWhitespace() throws Exception {
         AccessTokenValidator validator = createAccessTokenValidator();
-        assertThrowsWithMessage(ValidateException.class, () -> validator.validate("    "), "Empty JWT provided");
+        assertThrowsWithMessage(ValidateException.class, () -> validator.validate("    "), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test
     public void testEmptySections() throws Exception {
         AccessTokenValidator validator = createAccessTokenValidator();
-        assertThrowsWithMessage(ValidateException.class, () -> validator.validate(".."), "Malformed JWT provided");
+        assertThrowsWithMessage(ValidateException.class, () -> validator.validate(".."), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test

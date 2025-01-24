@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
+import org.apache.kafka.connect.runtime.TargetState;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.connect.runtime.TargetState;
 
 import java.util.Locale;
 import java.util.Map;
@@ -47,7 +48,7 @@ public class CreateConnectorRequest {
         return config;
     }
 
-    @JsonProperty
+    @JsonProperty("initial_state")
     public InitialState initialState() {
         return initialState;
     }

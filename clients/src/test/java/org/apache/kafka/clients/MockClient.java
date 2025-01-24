@@ -71,6 +71,7 @@ public class MockClient implements KafkaClient {
 
     private int correlation;
     private Runnable wakeupHook;
+    private boolean advanceTimeDuringPoll;
     private final Time time;
     private final MockMetadataUpdater metadataUpdater;
     private final Map<String, ConnectionState> connections = new HashMap<>();
@@ -138,7 +139,11 @@ public class MockClient implements KafkaClient {
 
     @Override
     public long pollDelayMs(Node node, long now) {
-        return connectionDelay(node, now);
+        return connectionState(node.idString()).pollDelayMs(now);
+    }
+
+    public void advanceTimeDuringPoll(boolean advanceTimeDuringPoll) {
+        this.advanceTimeDuringPoll = advanceTimeDuringPoll;
     }
 
     public void backoff(Node node, long durationMs) {
@@ -250,15 +255,16 @@ public class MockClient implements KafkaClient {
                 short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
                         builder.latestAllowedVersion());
 
+
+                AbstractRequest abstractRequest = request.requestBuilder().build(version);
+                if (!futureResp.requestMatcher.matches(abstractRequest))
+                    throw new IllegalStateException("Request matcher did not match next-in-line request "
+                            + abstractRequest + " with prepared response " + futureResp.responseBody);
+
                 UnsupportedVersionException unsupportedVersionException = null;
                 if (futureResp.isUnsupportedRequest) {
                     unsupportedVersionException = new UnsupportedVersionException(
                             "Api " + request.apiKey() + " with version " + version);
-                } else {
-                    AbstractRequest abstractRequest = request.requestBuilder().build(version);
-                    if (!futureResp.requestMatcher.matches(abstractRequest))
-                        throw new IllegalStateException("Request matcher did not match next-in-line request "
-                                + abstractRequest + " with prepared response " + futureResp.responseBody);
                 }
 
                 ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
@@ -319,7 +325,7 @@ public class MockClient implements KafkaClient {
         checkTimeoutOfPendingRequests(now);
 
         // We skip metadata updates if all nodes are currently blacked out
-        if (metadataUpdater.isUpdateNeeded() && leastLoadedNode(now) != null) {
+        if (metadataUpdater.isUpdateNeeded() && leastLoadedNode(now).node() != null) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
             if (metadataUpdate != null) {
                 metadataUpdater.update(time, metadataUpdate);
@@ -333,6 +339,12 @@ public class MockClient implements KafkaClient {
         while ((response = this.responses.poll()) != null) {
             response.onComplete();
             copy.add(response);
+        }
+
+        // In real life, if poll() is called and we get to the end with no responses,
+        // time equal to timeoutMs would have passed.
+        if (advanceTimeDuringPoll) {
+            time.sleep(timeoutMs);
         }
 
         return copy;
@@ -588,13 +600,13 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public Node leastLoadedNode(long now) {
+    public LeastLoadedNode leastLoadedNode(long now) {
         // Consistent with NetworkClient, we do not return nodes awaiting reconnect backoff
         for (Node node : metadataUpdater.fetchNodes()) {
             if (!connectionState(node.idString()).isBackingOff(now))
-                return node;
+                return new LeastLoadedNode(node, true);
         }
-        return null;
+        return new LeastLoadedNode(null, false);
     }
 
     public void setWakeupHook(Runnable wakeupHook) {
@@ -792,6 +804,13 @@ public class MockClient implements KafkaClient {
                 return backingOffUntilMs - now;
 
             return 0;
+        }
+
+        long pollDelayMs(long now) {
+            if (notThrottled(now))
+                return connectionDelay(now);
+
+            return throttledUntilMs - now;
         }
 
         boolean ready(long now) {

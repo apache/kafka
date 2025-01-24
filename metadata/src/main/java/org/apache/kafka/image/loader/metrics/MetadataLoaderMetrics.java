@@ -17,12 +17,13 @@
 
 package org.apache.kafka.image.loader.metrics;
 
-import com.yammer.metrics.core.Gauge;
-import com.yammer.metrics.core.MetricName;
-import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
+import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -35,11 +36,11 @@ import java.util.function.Consumer;
  * These are the metrics which are managed by the MetadataLoader class.
  */
 public final class MetadataLoaderMetrics implements AutoCloseable {
-    private final static MetricName CURRENT_METADATA_VERSION = getMetricName(
+    private static final MetricName CURRENT_METADATA_VERSION = getMetricName(
         "MetadataLoader", "CurrentMetadataVersion");
-    private final static MetricName HANDLE_LOAD_SNAPSHOT_COUNT = getMetricName(
+    private static final MetricName HANDLE_LOAD_SNAPSHOT_COUNT = getMetricName(
         "MetadataLoader", "HandleLoadSnapshotCount");
-    public final static MetricName CURRENT_CONTROLLER_ID = getMetricName(
+    public static final MetricName CURRENT_CONTROLLER_ID = getMetricName(
         "MetadataLoader", "CurrentControllerId");
 
     private final Optional<MetricsRegistry> registry;
@@ -72,7 +73,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         registry.ifPresent(r -> r.newGauge(CURRENT_METADATA_VERSION, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return Integer.valueOf(currentMetadataVersion().featureLevel());
+                return (int) currentMetadataVersion().featureLevel();
             }
         }));
         registry.ifPresent(r -> r.newGauge(CURRENT_CONTROLLER_ID, new Gauge<Integer>() {

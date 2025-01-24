@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -23,7 +25,6 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import org.apache.kafka.common.utils.Utils;
 
 /**
  * A wrapper over an `AbstractIndex` instance that provides a mechanism to defer loading
@@ -174,8 +175,7 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
             try {
                 if (indexWrapper instanceof IndexValue<?>)
                     return ((IndexValue<T>) indexWrapper).index;
-                else if (indexWrapper instanceof IndexFile) {
-                    IndexFile indexFile = (IndexFile) indexWrapper;
+                else if (indexWrapper instanceof IndexFile indexFile) {
                     IndexValue<T> indexValue = new IndexValue<>(loadIndex(indexFile.file));
                     indexWrapper = indexValue;
                     return indexValue.index;

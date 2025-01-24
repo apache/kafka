@@ -23,7 +23,7 @@ fi
 # WINDOWS_OS_FORMAT == 1 if Cygwin or MinGW is detected, else 0.
 if [[ $(uname -a) =~ "CYGWIN" || $(uname -a) =~ "MINGW" || $(uname -a) =~ "MSYS" ]]; then
   WINDOWS_OS_FORMAT=1
-  export MSYS2_ARG_CONV_EXCL="-Xlog:gc*:file=;-Dlog4j.configuration=;$MSYS2_ARG_CONV_EXCL"
+  export MSYS2_ARG_CONV_EXCL="-Xlog:gc*:file=;-Dlog4j2.configurationFile=;$MSYS2_ARG_CONV_EXCL"
 else
   WINDOWS_OS_FORMAT=0
 fi
@@ -49,7 +49,7 @@ should_include_file() {
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-  SCALA_VERSION=2.13.12
+  SCALA_VERSION=2.13.15
   if [[ -f "$base_dir/gradle.properties" ]]; then
     SCALA_VERSION=`grep "^scalaVersion=" "$base_dir/gradle.properties" | cut -d= -f 2`
   fi
@@ -116,14 +116,6 @@ else
       CLASSPATH="$file":"$CLASSPATH"
     fi
   done
-  if [ "$SHORT_VERSION_NO_DOTS" = "0100" ]; then
-    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.8.jar":"$CLASSPATH"
-    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.6.jar":"$CLASSPATH"
-  fi
-  if [ "$SHORT_VERSION_NO_DOTS" = "0101" ]; then
-    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.9.jar":"$CLASSPATH"
-    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.8.jar":"$CLASSPATH"
-  fi
 fi
 
 for file in "$streams_dependant_clients_lib_dir"/rocksdb*.jar;
@@ -208,7 +200,7 @@ fi
 
 # JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then
-  KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
+  KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
 fi
 
 # JMX port to use
@@ -228,11 +220,18 @@ fi
 # Log4j settings
 if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
-  LOG4J_DIR="$base_dir/config/tools-log4j.properties"
+  LOG4J_DIR="$base_dir/config/tools-log4j2.yaml"
   # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
   (( WINDOWS_OS_FORMAT )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
-  KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
+  KAFKA_LOG4J_OPTS="-Dlog4j2.configurationFile=${LOG4J_DIR}"
 else
+  if echo "$KAFKA_LOG4J_OPTS" | grep -E "log4j\.[^[:space:]]+(\.properties|\.xml)$"; then
+      # Enable Log4j 1.x configuration compatibility mode for Log4j 2
+      export LOG4J_COMPATIBILITY=true
+      echo DEPRECATED: A Log4j 1.x configuration file has been detected, which is no longer recommended. >&2
+      echo To use a Log4j 2.x configuration, please see https://logging.apache.org/log4j/2.x/migrate-from-log4j1.html#Log4j2ConfigurationFormat for details about Log4j configuration file migration. >&2
+      echo You can also use the \$KAFKA_HOME/config/tools-log4j2.yaml file as a starting point. Make sure to remove the Log4j 1.x configuration after completing the migration. >&2
+  fi
   # create logs directory
   if [ ! -d "$LOG_DIR" ]; then
     mkdir -p "$LOG_DIR"
@@ -340,9 +339,16 @@ CLASSPATH=${CLASSPATH#:}
 # If Cygwin is detected, classpath is converted to Windows format.
 (( WINDOWS_OS_FORMAT )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
 
-# Launch mode
-if [ "x$DAEMON_MODE" = "xtrue" ]; then
-  nohup "$JAVA" $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_CMD_OPTS -cp "$CLASSPATH" $KAFKA_OPTS "$@" > "$CONSOLE_OUTPUT_FILE" 2>&1 < /dev/null &
+# If KAFKA_MODE=native, it will bring up Kafka in the native mode.
+# It expects the Kafka executable binary to be present at $base_dir/kafka.Kafka.
+# This is specifically used to run system tests on native Kafka - by bringing up Kafka in the native mode.
+if [[ "x$KAFKA_MODE" == "xnative" ]] && [[ "$*" == *"kafka.Kafka"* ]]; then
+  exec $base_dir/kafka.Kafka start --config "$2"  $KAFKA_LOG4J_CMD_OPTS $KAFKA_JMX_OPTS $KAFKA_OPTS
 else
-  exec "$JAVA" $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_CMD_OPTS -cp "$CLASSPATH" $KAFKA_OPTS "$@"
+  # Launch mode
+  if [ "x$DAEMON_MODE" = "xtrue" ]; then
+    nohup "$JAVA" $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_CMD_OPTS -cp "$CLASSPATH" $KAFKA_OPTS "$@" > "$CONSOLE_OUTPUT_FILE" 2>&1 < /dev/null &
+  else
+    exec "$JAVA" $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_CMD_OPTS -cp "$CLASSPATH" $KAFKA_OPTS "$@"
+  fi
 fi

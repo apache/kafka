@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

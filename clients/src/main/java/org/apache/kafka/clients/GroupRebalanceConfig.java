@@ -29,7 +29,8 @@ public class GroupRebalanceConfig {
 
     public enum ProtocolType {
         CONSUMER,
-        CONNECT;
+        CONNECT,
+        SHARE;
 
         @Override
         public String toString() {
@@ -50,7 +51,7 @@ public class GroupRebalanceConfig {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
 
         // Consumer and Connect use different config names for defining rebalance timeout
-        if (protocolType == ProtocolType.CONSUMER) {
+        if ((protocolType == ProtocolType.CONSUMER) || (protocolType == ProtocolType.SHARE)) {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         } else {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG);

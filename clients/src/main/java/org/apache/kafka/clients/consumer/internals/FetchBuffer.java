@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 
 import java.util.Collection;
@@ -173,15 +174,23 @@ public class FetchBuffer implements AutoCloseable {
                 // Update the timer before we head into the loop in case it took a while to get the lock.
                 timer.update();
 
-                if (timer.isExpired())
+                if (timer.isExpired()) {
+                    // If the thread was interrupted before we start waiting, it still counts as
+                    // interrupted from the point of view of the KafkaConsumer.poll(Duration) contract.
+                    // We only need to check this when we are not going to wait because waiting
+                    // already checks whether the thread is interrupted.
+                    if (Thread.interrupted())
+                        throw new InterruptException("Interrupted waiting for results from fetching records");
+
                     break;
+                }
 
                 if (!notEmptyCondition.await(timer.remainingMs(), TimeUnit.MILLISECONDS)) {
                     break;
                 }
             }
         } catch (InterruptedException e) {
-            throw new InterruptException("Timeout waiting for results from fetching records", e);
+            throw new InterruptException("Interrupted waiting for results from fetching records", e);
         } finally {
             lock.unlock();
             timer.update();

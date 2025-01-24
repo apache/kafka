@@ -28,13 +28,12 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.Timeout;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,20 +61,19 @@ import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ER
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_EXCEPTION_MESSAGE;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_ORIG_TOPIC;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Integration test for the different error handling policies in Connect (namely, retry policies, skipping bad records,
  * and dead letter queues).
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
+@Timeout(value = 600)
 public class ErrorHandlingIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
+    
     private static final Logger log = LoggerFactory.getLogger(ErrorHandlingIntegrationTest.class);
-    private static final int NUM_WORKERS = 1;
     private static final String DLQ_TOPIC = "my-connector-errors";
     private static final String CONNECTOR_NAME = "error-conn";
     private static final String TASK_ID = "error-conn-0";
@@ -87,21 +85,19 @@ public class ErrorHandlingIntegrationTest {
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
 
-    @Before
+    @BeforeEach
     public void setup() throws InterruptedException {
         // setup Connect cluster with defaults
         connect = new EmbeddedConnectCluster.Builder().build();
 
         // start Connect cluster
         connect.start();
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Initial group of workers did not start in time.");
 
         // get connector handles before starting test.
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
     }
 
-    @After
+    @AfterEach
     public void close() {
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
         connect.stop();
@@ -160,8 +156,8 @@ public class ErrorHandlingIntegrationTest {
             String k = new String(rec.key());
             String v = new String(rec.value());
             log.debug("Consumed record (key='{}', value='{}') from topic {}", k, v, rec.topic());
-            assertEquals("Unexpected key", k, "key-" + i);
-            assertEquals("Unexpected value", v, "value-" + i);
+            assertEquals(k, "key-" + i, "Unexpected key");
+            assertEquals(v, "value-" + i, "Unexpected value");
             i++;
         }
 
@@ -239,8 +235,8 @@ public class ErrorHandlingIntegrationTest {
             String k = new String(rec.key());
             String v = new String(rec.value());
             log.debug("Consumed record (key='{}', value='{}') from topic {}", k, v, rec.topic());
-            assertEquals("Unexpected key", k, "key-" + i);
-            assertEquals("Unexpected value", v, "value-" + i);
+            assertEquals(k, "key-" + i, "Unexpected key");
+            assertEquals(v, "value-" + i, "Unexpected value");
             i++;
         }
 

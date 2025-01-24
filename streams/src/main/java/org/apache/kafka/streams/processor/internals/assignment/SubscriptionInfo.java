@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
@@ -31,6 +25,7 @@ import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.ClientT
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.PartitionToOffsetSum;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.TaskOffsetSum;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.Task;
 
 import org.slf4j.Logger;
@@ -38,7 +33,12 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -84,7 +84,7 @@ public class SubscriptionInfo {
 
     public SubscriptionInfo(final int version,
                             final int latestSupportedVersion,
-                            final UUID processId,
+                            final ProcessId processId,
                             final String userEndPoint,
                             final Map<TaskId, Long> taskOffsetSums,
                             final byte uniqueField,
@@ -93,8 +93,8 @@ public class SubscriptionInfo {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
-        data.setProcessId(new Uuid(processId.getMostSignificantBits(),
-                processId.getLeastSignificantBits()));
+        data.setProcessId(new Uuid(processId.id().getMostSignificantBits(),
+                processId.id().getLeastSignificantBits()));
 
         if (version >= 2) {
             data.setUserEndPoint(userEndPoint == null
@@ -228,8 +228,8 @@ public class SubscriptionInfo {
         return data.latestSupportedVersion();
     }
 
-    public UUID processId() {
-        return new UUID(data.processId().getMostSignificantBits(), data.processId().getLeastSignificantBits());
+    public ProcessId processId() {
+        return new ProcessId(new UUID(data.processId().getMostSignificantBits(), data.processId().getLeastSignificantBits()));
     }
 
     public Set<TaskId> prevTasks() {

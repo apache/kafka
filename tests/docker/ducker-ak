@@ -31,21 +31,27 @@ ducker_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # The absolute path to the root Kafka directory
 kafka_dir="$( cd "${ducker_dir}/../.." && pwd )"
 
+# The absolute path to the directory to hold the necessary files to construct a ducker image for executing Kafka in native mode.
+tmp_native_dir=${ducker_dir}/native
+
 # The memory consumption to allow during the docker build.
 # This does not include swap.
 docker_build_memory_limit="3200m"
 
-# The maximum mmemory consumption to allow in containers.
+# The maximum memory consumption to allow in containers.
 docker_run_memory_limit="2000m"
 
 # The default number of cluster nodes to bring up if a number is not specified.
 default_num_nodes=14
 
 # The default OpenJDK base image.
-default_jdk="openjdk:8"
+default_jdk="openjdk:17-buster"
 
 # The default ducker-ak image name.
 default_image_name="ducker-ak"
+
+# The default kafka server mode.
+default_kafka_mode="jvm"
 
 # Port to listen on when debugging
 debugpy_port=5678
@@ -247,6 +253,7 @@ ducker_build() {
         --build-arg "ducker_creator=${user_name}" \
         --build-arg "jdk_version=${jdk_version}" \
         --build-arg "UID=${UID}" \
+        --build-arg "KAFKA_MODE=${kafka_mode}" \
         -t "${image_name}" \
         -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
     docker_status=$?
@@ -257,6 +264,7 @@ ducker_build() {
 $((${duration} % 60))s."
         echo "If this error is unexpected, consider running 'docker system prune -a' \
 to clear old images from your local cache."
+        cleanup_native_dir
         exit 1
     fi
     echo "Successfully built ${what} image in $((${duration} / 60))m \
@@ -305,6 +313,32 @@ setup_custom_ducktape() {
     must_do -v docker rm ducker01
 }
 
+cleanup_native_dir() {
+    if [ -d "${tmp_native_dir}" ]; then
+        echo "Deleting temporary native dir: ${tmp_native_dir}"
+        rm -rf "${tmp_native_dir}"
+    fi
+}
+
+prepare_native_dir() {
+    echo "Mode provided for system tests run: $kafka_mode"
+    must_pushd "${kafka_dir}"
+    cleanup_native_dir && mkdir "${tmp_native_dir}"
+
+    if [ "$kafka_mode" == "native" ]; then
+        kafka_tarball_filename=(core/build/distributions/kafka*SNAPSHOT.tgz)
+        if [ ! -e "${kafka_tarball_filename[0]}" ]; then
+            echo "Kafka tarball not present. Building Kafka tarball for native image."
+            ./gradlew clean releaseTarGz
+        fi
+
+        cp core/build/distributions/kafka*SNAPSHOT.tgz "${tmp_native_dir}"/kafka.tgz
+        cp -r docker/native/native-image-configs "${tmp_native_dir}"
+        cp docker/native/native_command.sh "${tmp_native_dir}"
+    fi
+    must_popd
+}
+
 ducker_up() {
     require_commands docker
     while [[ $# -ge 1 ]]; do
@@ -314,11 +348,13 @@ ducker_up() {
             -n|--num-nodes) set_once num_nodes "${2}" "number of nodes"; shift 2;;
             -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
             -e|--expose-ports) set_once expose_ports "${2}" "the ports to expose"; shift 2;;
+            -m|--kafka_mode) set_once kafka_mode "${2}" "the mode in which kafka will run"; shift 2;;
             *) set_once image_name "${1}" "docker image name"; shift;;
         esac
     done
     [[ -n "${num_nodes}" ]] || num_nodes="${default_num_nodes}"
     [[ -n "${jdk_version}" ]] || jdk_version="${default_jdk}"
+    [[ -n "${kafka_mode}" ]] || kafka_mode="${default_kafka_mode}"
     [[ -n "${image_name}" ]] || image_name="${default_image_name}-${jdk_version/:/-}"
     [[ "${num_nodes}" =~ ^-?[0-9]+$ ]] || \
         die "ducker_up: the number of nodes must be an integer."
@@ -334,7 +370,9 @@ use only ${num_nodes}."
 
     docker ps >/dev/null || die "ducker_up: failed to run docker.  Please check that the daemon is started."
 
+    prepare_native_dir
     ducker_build "${image_name}"
+    cleanup_native_dir
 
     docker inspect --format='{{.Config.Labels}}' --type=image "${image_name}" | grep -q 'ducker.type'
     local docker_status=${PIPESTATUS[0]}
@@ -384,6 +422,10 @@ attempting to start new ones."
             bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
         [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
     done
+
+    if [ "$kafka_mode" == "native" ]; then
+      docker exec --user=root ducker01 bash -c 'cp /opt/kafka-binary/kafka.Kafka /opt/kafka-dev/kafka.Kafka'
+    fi
 
     echo "ducker_up: added the latest entries to /etc/hosts on each node."
     generate_cluster_json_file "${num_nodes}" "${ducker_dir}/build/cluster.json"
@@ -447,6 +489,18 @@ EOF
     exec 3>&-
 }
 
+correct_latest_link() {
+    local result_dir="${kafka_dir}/results"
+    local latest_link="${result_dir}/latest"
+
+    # Correct the link if it's a symbolic link and broken.
+    if [[ -L "${latest_link}" ]] && [[ ! -e "${latest_link}" ]]; then
+        local latest_test_dirname=$(basename "$(readlink "${latest_link}")")
+        unlink "${latest_link}"
+        ln -s "${result_dir}/${latest_test_dirname}" "${latest_link}"
+    fi
+}
+
 ducker_test() {
     require_commands docker
     docker inspect ducker01 &>/dev/null || \
@@ -487,7 +541,10 @@ ducker_test() {
 
     cmd="cd /opt/kafka-dev && ${ducktape_cmd} --cluster-file /opt/kafka-dev/tests/docker/build/cluster.json $test_names $ducktape_args"
     echo "docker exec ducker01 bash -c \"${cmd}\""
-    exec docker exec --user=ducker ducker01 bash -c "${cmd}"
+    docker exec --user=ducker ducker01 bash -c "${cmd}"
+    docker_status=$?
+    correct_latest_link
+    exit "${docker_status}"
 }
 
 ducker_ssh() {

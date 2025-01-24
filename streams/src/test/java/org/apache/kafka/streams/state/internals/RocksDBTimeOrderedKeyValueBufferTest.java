@@ -19,32 +19,36 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RocksDBTimeOrderedKeyValueBufferTest {
     public RocksDBTimeOrderedKeyValueBuffer<String, String> buffer;
     @Mock
@@ -55,22 +59,20 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     public Sensor sensor;
     public long offset;
 
-    @Before
+    @BeforeEach
     public void setUp() {
-        when(serdeGetter.keySerde()).thenReturn(new Serdes.StringSerde());
-        when(serdeGetter.valueSerde()).thenReturn(new Serdes.StringSerde());
         final Metrics metrics = new Metrics();
         offset = 0;
-        streamsMetrics = new StreamsMetricsImpl(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
-        context = new MockInternalNewProcessorContext<>(StreamsTestUtils.getStreamsConfig(), new TaskId(0, 0), TestUtils.tempDirectory());
+        streamsMetrics = new StreamsMetricsImpl(metrics, "test-client", "processId", new MockTime());
+        context = new MockInternalProcessorContext<>(StreamsTestUtils.getStreamsConfig(), new TaskId(0, 0), TestUtils.tempDirectory());
     }
 
-    private void createBuffer(final Duration grace) {
+    private void createBuffer(final Duration grace, final Serde<String> serde) {
         final RocksDBTimeOrderedKeyValueBytesStore store = new RocksDBTimeOrderedKeyValueBytesStoreSupplier("testing").get();
 
-        buffer = new RocksDBTimeOrderedKeyValueBuffer<>(store, grace, "testing", false);
+        buffer = new RocksDBTimeOrderedKeyValueBuffer<>(store, serde, serde, grace, "testing", false);
         buffer.setSerdesIfNull(serdeGetter);
-        buffer.init((StateStoreContext) context, store);
+        buffer.init(context, store);
     }
 
     private boolean pipeRecord(final String key, final String value, final long time) {
@@ -79,16 +81,19 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         return buffer.put(time, record, context.recordContext());
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldReturnIfRecordWasAdded() {
-        createBuffer(Duration.ofMillis(1));
+        when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
+        when(serdeGetter.valueSerde()).thenReturn((Serde) new Serdes.StringSerde());
+        createBuffer(Duration.ofMillis(1), null);
         assertThat(pipeRecord("K", "V", 2L), equalTo(true));
         assertThat(pipeRecord("K", "V", 0L), equalTo(false));
     }
 
     @Test
     public void shouldPutInBufferAndUpdateFields() {
-        createBuffer(Duration.ofMinutes(1));
+        createBuffer(Duration.ofMinutes(1), Serdes.String());
         assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
         pipeRecord("1", "0", 0L);
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
@@ -98,7 +103,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
 
     @Test
     public void shouldAddAndEvictRecord() {
-        createBuffer(Duration.ZERO);
+        createBuffer(Duration.ZERO, Serdes.String());
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
@@ -107,9 +112,12 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertThat(count.get(), equalTo(1));
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldAddAndEvictRecordTwice() {
-        createBuffer(Duration.ZERO);
+        when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
+        when(serdeGetter.valueSerde()).thenReturn((Serde) new Serdes.StringSerde());
+        createBuffer(Duration.ZERO, null);
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
@@ -125,7 +133,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
 
     @Test
     public void shouldAddAndEvictRecordTwiceWithNonZeroGrace() {
-        createBuffer(Duration.ofMillis(1));
+        createBuffer(Duration.ofMillis(1), Serdes.String());
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
@@ -137,9 +145,12 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertThat(count.get(), equalTo(1));
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldAddRecordsTwiceAndEvictRecordsOnce() {
-        createBuffer(Duration.ZERO);
+        when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
+        when(serdeGetter.valueSerde()).thenReturn((Serde) new Serdes.StringSerde());
+        createBuffer(Duration.ZERO, null);
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 1, r -> count.getAndIncrement());
@@ -149,9 +160,12 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertThat(count.get(), equalTo(2));
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldDropLateRecords() {
-        createBuffer(Duration.ZERO);
+        when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
+        when(serdeGetter.valueSerde()).thenReturn((Serde) new Serdes.StringSerde());
+        createBuffer(Duration.ZERO, null);
         pipeRecord("1", "0", 1L);
         assertNumSizeAndTimestamp(buffer, 1, 1, 42);
         pipeRecord("2", "0", 0L);
@@ -160,7 +174,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
 
     @Test
     public void shouldDropLateRecordsWithNonZeroGrace() {
-        createBuffer(Duration.ofMillis(1));
+        createBuffer(Duration.ofMillis(1), Serdes.String());
         pipeRecord("1", "0", 2L);
         assertNumSizeAndTimestamp(buffer, 1, 2, 42);
         pipeRecord("2", "0", 1L);
@@ -169,9 +183,12 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertNumSizeAndTimestamp(buffer, 2, 1, 84);
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldHandleCollidingKeys() {
-        createBuffer(Duration.ofMillis(1));
+        when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
+        when(serdeGetter.valueSerde()).thenReturn((Serde) new Serdes.StringSerde());
+        createBuffer(Duration.ofMillis(1), null);
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("2", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());

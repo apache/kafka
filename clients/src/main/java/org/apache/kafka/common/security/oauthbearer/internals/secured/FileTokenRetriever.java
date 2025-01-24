@@ -17,9 +17,10 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.io.IOException;
 import java.nio.file.Path;
-import org.apache.kafka.common.utils.Utils;
 
 /**
  * <code>FileTokenRetriever</code> is an {@link AccessTokenRetriever} that will load the contents,

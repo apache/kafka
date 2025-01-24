@@ -16,24 +16,50 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Map;
-import java.util.Set;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 
 public class RackAwareGraphConstructorFactory {
 
-    static RackAwareGraphConstructor create(final AssignmentConfigs assignmentConfigs, final Map<Subtopology, Set<TaskId>> tasksForTopicGroup) {
-        switch (assignmentConfigs.rackAwareAssignmentStrategy) {
+    static <T> RackAwareGraphConstructor<T> create(final AssignmentConfigs assignmentConfigs,
+                                                   final Map<Subtopology, Set<TaskId>> tasksForTopicGroup) {
+        return create(assignmentConfigs.rackAwareAssignmentStrategy(), new ArrayList<>(new TreeMap<>(tasksForTopicGroup).values()));
+    }
+
+    public static <T> RackAwareGraphConstructor<T> create(final String rackAwareAssignmentStrategy,
+                                                          final Collection<TaskId> allTasks) {
+        final Map<Integer, Set<TaskId>> tasksForTopologyId = new TreeMap<>();
+        allTasks.forEach(taskId -> {
+            tasksForTopologyId.computeIfAbsent(taskId.subtopology(), k -> new HashSet<>());
+            tasksForTopologyId.get(taskId.subtopology()).add(taskId);
+        });
+
+        final List<Set<TaskId>> tasksForTopicGroup = new ArrayList<>();
+        tasksForTopologyId.forEach((subtopology, taskIds) -> {
+            tasksForTopicGroup.add(taskIds);
+        });
+        return create(rackAwareAssignmentStrategy, tasksForTopicGroup);
+    }
+
+    public static <T> RackAwareGraphConstructor<T> create(final String rackAwareAssignmentStrategy,
+                                                          final List<Set<TaskId>> taskSetsPerTopicGroup) {
+        switch (rackAwareAssignmentStrategy) {
             case StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC:
-                return new MinTrafficGraphConstructor();
+                return new MinTrafficGraphConstructor<T>();
             case StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY:
-                return new BalanceSubtopologyGraphConstructor(tasksForTopicGroup);
+                return new BalanceSubtopologyGraphConstructor<T>(taskSetsPerTopicGroup);
             default:
                 throw new IllegalArgumentException("Rack aware assignment is disabled");
         }
     }
-
 }

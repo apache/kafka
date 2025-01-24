@@ -20,18 +20,19 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Filter;
 import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -56,7 +57,7 @@ import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREAT
 /**
  * Integration test for preflight connector config validation
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class ConnectorValidationIntegrationTest {
 
     private static final String WORKER_GROUP_ID = "connect-worker-group-id";
@@ -64,12 +65,21 @@ public class ConnectorValidationIntegrationTest {
     // Use a single embedded cluster for all test cases in order to cut down on runtime
     private static EmbeddedConnectCluster connect;
 
-    @BeforeClass
+    @BeforeAll
     public static void setup() {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(GROUP_ID_CONFIG, WORKER_GROUP_ID);
 
-        // build a Connect cluster backed by Kafka and Zk
+        TestPlugins.TestPlugin[] testPlugins = new TestPlugins.TestPlugin[] {
+            TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER,
+            TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER,
+            TestPlugins.TestPlugin.BAD_PACKAGING_INNOCUOUS_CONNECTOR
+        };
+        workerProps.put(
+                WorkerConfig.PLUGIN_PATH_CONFIG,
+                TestPlugins.pluginPathJoined(testPlugins)
+        );
+
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connector-validation-connect-cluster")
                 .workerProps(workerProps)
@@ -79,10 +89,9 @@ public class ConnectorValidationIntegrationTest {
         connect.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void close() {
         if (connect != null) {
-            // stop all Connect, Kafka and Zk threads.
             Utils.closeQuietly(connect::stop, "Embedded Connect cluster");
         }
     }
@@ -324,31 +333,67 @@ public class ConnectorValidationIntegrationTest {
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
                 1,
-                "Connector config should fail preflight validation when an abstract converter class is specified"
+                "Connector config should fail preflight validation when an abstract converter class is specified",
+                0
         );
     }
 
     @Test
     public void testConnectorHasConverterWithNoSuitableConstructor() throws InterruptedException {
-        Map<String, String> config = defaultSinkConnectorProps();
-        config.put(KEY_CONVERTER_CLASS_CONFIG, TestConverterWithPrivateConstructor.class.getName());
+        Map<String, String> config = innocuousSinkConnectorProps();
+        config.put(
+                KEY_CONVERTER_CLASS_CONFIG,
+                TestPlugins.TestPlugin.BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONVERTER.className()
+        );
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
                 1,
-                "Connector config should fail preflight validation when a converter class with no suitable constructor is specified"
+                "Connector config should fail preflight validation when a converter class with no suitable constructor is specified",
+                0
         );
     }
 
     @Test
     public void testConnectorHasConverterThatThrowsExceptionOnInstantiation() throws InterruptedException {
-        Map<String, String> config = defaultSinkConnectorProps();
-        config.put(KEY_CONVERTER_CLASS_CONFIG, TestConverterWithConstructorThatThrowsException.class.getName());
+        Map<String, String> config = innocuousSinkConnectorProps();
+        config.put(
+                KEY_CONVERTER_CLASS_CONFIG,
+                TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER.className()
+        );
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
                 1,
-                "Connector config should fail preflight validation when a converter class that throws an exception on instantiation is specified"
+                "Connector config should fail preflight validation when a converter class that throws an exception on instantiation is specified",
+                0
+        );
+    }
+
+    @Test
+    public void testConnectorHasMisconfiguredConverter() throws InterruptedException {
+        Map<String, String> config = defaultSinkConnectorProps();
+        config.put(KEY_CONVERTER_CLASS_CONFIG, TestConverterWithSinglePropertyConfigDef.class.getName());
+        config.put(KEY_CONVERTER_CLASS_CONFIG + "." + TestConverterWithSinglePropertyConfigDef.BOOLEAN_PROPERTY_NAME, "notaboolean");
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+                config.get(CONNECTOR_CLASS_CONFIG),
+                config,
+                1,
+                "Connector config should fail preflight validation when a converter fails custom validation",
+                0
+        );
+    }
+
+    @Test
+    public void testConnectorHasConverterWithNoConfigDef() throws InterruptedException {
+        Map<String, String> config = defaultSinkConnectorProps();
+        config.put(KEY_CONVERTER_CLASS_CONFIG, TestConverterWithNoConfigDef.class.getName());
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+                config.get(CONNECTOR_CLASS_CONFIG),
+                config,
+                0,
+                "Connector config should not fail preflight validation even when a converter provides a null ConfigDef",
+                0
         );
     }
 
@@ -373,7 +418,8 @@ public class ConnectorValidationIntegrationTest {
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
                 1,
-                "Connector config should fail preflight validation when a header converter with a class of the wrong type is specified"
+                "Connector config should fail preflight validation when a header converter with a class of the wrong type is specified",
+                0
         );
     }
 
@@ -385,35 +431,71 @@ public class ConnectorValidationIntegrationTest {
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
                 1,
-                "Connector config should fail preflight validation when an abstract header converter class is specified"
+                "Connector config should fail preflight validation when an abstract header converter class is specified",
+                0
         );
     }
 
     @Test
     public void testConnectorHasHeaderConverterWithNoSuitableConstructor() throws InterruptedException {
-        Map<String, String> config = defaultSinkConnectorProps();
-        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestConverterWithPrivateConstructor.class.getName());
+        Map<String, String> config = innocuousSinkConnectorProps();
+        config.put(
+                HEADER_CONVERTER_CLASS_CONFIG,
+                TestPlugins.TestPlugin.BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONVERTER.className()
+        );
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
                 1,
-                "Connector config should fail preflight validation when a header converter class with no suitable constructor is specified"
+                "Connector config should fail preflight validation when a header converter class with no suitable constructor is specified",
+                0
         );
     }
 
     @Test
     public void testConnectorHasHeaderConverterThatThrowsExceptionOnInstantiation() throws InterruptedException {
-        Map<String, String> config = defaultSinkConnectorProps();
-        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestConverterWithConstructorThatThrowsException.class.getName());
+        Map<String, String> config = innocuousSinkConnectorProps();
+        config.put(
+                HEADER_CONVERTER_CLASS_CONFIG,
+                TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER.className()
+        );
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
                 1,
-                "Connector config should fail preflight validation when a header converter class that throws an exception on instantiation is specified"
+                "Connector config should fail preflight validation when a header converter class that throws an exception on instantiation is specified",
+                0
         );
     }
 
-    public static abstract class TestConverter implements Converter, HeaderConverter {
+    @Test
+    public void testConnectorHasMisconfiguredHeaderConverter() throws InterruptedException {
+        Map<String, String> config = defaultSinkConnectorProps();
+        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestConverterWithSinglePropertyConfigDef.class.getName());
+        config.put(HEADER_CONVERTER_CLASS_CONFIG + "." + TestConverterWithSinglePropertyConfigDef.BOOLEAN_PROPERTY_NAME, "notaboolean");
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+                config.get(CONNECTOR_CLASS_CONFIG),
+                config,
+                1,
+                "Connector config should fail preflight validation when a header converter fails custom validation",
+                0
+        );
+    }
+
+    @Test
+    public void testConnectorHasHeaderConverterWithNoConfigDef() throws InterruptedException {
+        Map<String, String> config = defaultSinkConnectorProps();
+        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestConverterWithNoConfigDef.class.getName());
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+                config.get(CONNECTOR_CLASS_CONFIG),
+                config,
+                0,
+                "Connector config should not fail preflight validation even when a header converter provides a null ConfigDef",
+                0
+        );
+    }
+
+    public abstract static class TestConverter implements Converter, HeaderConverter {
 
         // Defined by both Converter and HeaderConverter interfaces
         @Override
@@ -456,17 +538,21 @@ public class ConnectorValidationIntegrationTest {
         }
     }
 
-    public static abstract class AbstractTestConverter extends TestConverter {
+    public abstract static class AbstractTestConverter extends TestConverter {
     }
 
-    public static class TestConverterWithPrivateConstructor extends TestConverter {
-        private TestConverterWithPrivateConstructor() {
+    public static class TestConverterWithSinglePropertyConfigDef extends TestConverter {
+        public static final String BOOLEAN_PROPERTY_NAME = "prop";
+        @Override
+        public ConfigDef config() {
+            return new ConfigDef().define(BOOLEAN_PROPERTY_NAME, ConfigDef.Type.BOOLEAN, ConfigDef.Importance.HIGH, "");
         }
     }
 
-    public static class TestConverterWithConstructorThatThrowsException extends TestConverter {
-        public TestConverterWithConstructorThatThrowsException() {
-            throw new ConnectException("whoops");
+    public static class TestConverterWithNoConfigDef extends TestConverter {
+        @Override
+        public ConfigDef config() {
+            return null;
         }
     }
 
@@ -487,6 +573,17 @@ public class ConnectorValidationIntegrationTest {
         Map<String, String> props = new HashMap<>();
         props.put(NAME_CONFIG, "sink-connector");
         props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(TASKS_MAX_CONFIG, "1");
+        props.put(TOPICS_CONFIG, "t1");
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        return props;
+    }
+
+    private Map<String, String> innocuousSinkConnectorProps() {
+        Map<String, String> props = new HashMap<>();
+        props.put(NAME_CONFIG, "innocuous-sink-connector");
+        props.put(CONNECTOR_CLASS_CONFIG, TestPlugins.TestPlugin.BAD_PACKAGING_INNOCUOUS_CONNECTOR.className());
         props.put(TASKS_MAX_CONFIG, "1");
         props.put(TOPICS_CONFIG, "t1");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

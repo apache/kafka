@@ -16,25 +16,27 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.ForwardingAdmin;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
-import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
-import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 
-import java.util.Map;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
-import java.time.Duration;
+import java.util.Map;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 
 /** Shared config properties used by {@link MirrorSourceConnector}, {@link MirrorCheckpointConnector}, and {@link MirrorHeartbeatConnector}.
  *  <p>
@@ -109,9 +111,19 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     public static final String TOPIC_FILTER_CLASS_DOC = "TopicFilter to use. Selects topics to replicate.";
     public static final Class<?> TOPIC_FILTER_CLASS_DEFAULT = DefaultTopicFilter.class;
 
-    public static final String OFFSET_SYNCS_TOPIC_LOCATION = "offset-syncs.topic.location";
+    public static final String OFFSET_SYNCS_TOPIC_CONFIG_PREFIX = "offset-syncs.topic.";
+    public static final String OFFSET_SYNCS_TOPIC_LOCATION = OFFSET_SYNCS_TOPIC_CONFIG_PREFIX + "location";
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
+
+    public static final String EMIT_OFFSET_SYNCS_ENABLED = "emit.offset-syncs" + ENABLED_SUFFIX;
+    public static final String EMIT_OFFSET_SYNCS_ENABLED_DOC = "Whether to store the new offset of the replicated records in offset-syncs topic or not. " +
+            "MirrorCheckpointConnector will not be able to sync group offsets or emit checkpoints if emit.checkpoints.enabled and/or sync.group.offsets.enabled are enabled while " +
+            EMIT_OFFSET_SYNCS_ENABLED + " is disabled.";
+    public static final boolean EMIT_OFFSET_SYNCS_ENABLED_DEFAULT = true;
+
+    public static final String OFFSET_SYNCS_CLIENT_ROLE_PREFIX = "offset-syncs-";
+
     public static final String TASK_INDEX = "task.index";
 
     private final ReplicationPolicy replicationPolicy;
@@ -247,7 +259,6 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         return sourceClusterAlias() + "->" + targetClusterAlias() + "|" + connectorName();
     }
 
-    @SuppressWarnings("deprecation")
     protected static final ConfigDef BASE_CONNECTOR_CONFIG_DEF = new ConfigDef(ConnectorConfig.configDef())
             .define(
                     ENABLED,
@@ -285,11 +296,11 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Importance.LOW,
                     REPLICATION_POLICY_SEPARATOR_DOC)
             .define(
-                INTERNAL_TOPIC_SEPARATOR_ENABLED,
-                ConfigDef.Type.BOOLEAN,
-                INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT,
-                ConfigDef.Importance.LOW,
-                INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC)
+                    INTERNAL_TOPIC_SEPARATOR_ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC)
             .define(
                     FORWARDING_ADMIN_CLASS,
                     ConfigDef.Type.CLASS,
@@ -299,7 +310,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             .define(
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                     ConfigDef.Type.LIST,
-                    null,
+                    JmxReporter.class.getName(),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(
@@ -309,13 +320,6 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     in(Utils.enumOptions(SecurityProtocol.class)),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-            .define(
-                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG,
-                    ConfigDef.Type.BOOLEAN,
-                    true,
-                    ConfigDef.Importance.LOW,
-                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC
-            )
             .withClientSslSupport()
             .withClientSaslSupport();
 

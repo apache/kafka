@@ -33,7 +33,7 @@ public class SupportedVersionRange extends BaseVersionRange {
     }
 
     public SupportedVersionRange(short maxVersion) {
-        this((short) 1, maxVersion);
+        this((short) 0, maxVersion);
     }
 
     public static SupportedVersionRange fromMap(Map<String, Short> versionRangeMap) {

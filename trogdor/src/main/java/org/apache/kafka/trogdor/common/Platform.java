@@ -17,13 +17,13 @@
 
 package org.apache.kafka.trogdor.common;
 
+import org.apache.kafka.common.utils.Scheduler;
+import org.apache.kafka.common.utils.Utils;
+
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.File;
 import java.io.IOException;
-
-import org.apache.kafka.common.utils.Scheduler;
-import org.apache.kafka.common.utils.Utils;
 
 /**
  * Defines a cluster topology

@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -119,7 +120,7 @@ public class TimestampedWindowStoreBuilder<K, V>
     }
 
 
-    private final static class InMemoryTimestampedWindowStoreMarker
+    private static final class InMemoryTimestampedWindowStoreMarker
         extends WrappedStateStore<WindowStore<Bytes, byte[]>, Bytes, byte[]>
         implements WindowStore<Bytes, byte[]>, TimestampedBytesStore {
 

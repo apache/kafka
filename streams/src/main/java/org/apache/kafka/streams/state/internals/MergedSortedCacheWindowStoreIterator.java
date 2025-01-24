@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.function.Function;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+
+import java.util.function.Function;
 
 import static org.apache.kafka.streams.state.internals.SegmentedCacheFunction.bytesFromCacheKey;
 

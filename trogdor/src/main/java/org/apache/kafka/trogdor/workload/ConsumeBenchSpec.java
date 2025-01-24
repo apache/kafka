@@ -17,9 +17,6 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.trogdor.common.StringExpander;
@@ -27,15 +24,18 @@ import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
-import java.util.Set;
-import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The specification for a benchmark that consumer messages from a set of topic/partitions.
@@ -89,7 +89,7 @@ import java.util.Optional;
  *    }
  * }
  */
-public class ConsumeBenchSpec extends TaskSpec {
+public final class ConsumeBenchSpec extends TaskSpec {
 
     private static final String VALID_EXPANDED_TOPIC_NAME_PATTERN = "^[^:]+(:[\\d]+|[^:]*)$";
     private final String consumerNode;
@@ -104,7 +104,6 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final int threadsPerWorker;
     private final Optional<RecordProcessor> recordProcessor;
 
-    @SuppressWarnings("this-escape")
     @JsonCreator
     public ConsumeBenchSpec(@JsonProperty("startMs") long startMs,
                             @JsonProperty("durationMs") long durationMs,

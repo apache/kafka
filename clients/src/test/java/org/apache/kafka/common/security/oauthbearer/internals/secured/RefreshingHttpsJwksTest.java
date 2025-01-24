@@ -17,20 +17,20 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_MAX_KEY_LENGTH;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.MockTime;
 
-import java.util.Collections;
-import java.util.Collection;
-import java.util.List;
+import org.jose4j.http.SimpleResponse;
+import org.jose4j.jwk.HttpsJwks;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.AbstractMap;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
@@ -38,13 +38,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.MockTime;
-import org.jose4j.http.SimpleResponse;
-import org.jose4j.jwk.HttpsJwks;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_MAX_KEY_LENGTH;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class RefreshingHttpsJwksTest extends OAuthBearerTest {
 
@@ -236,7 +236,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
      * A mock ScheduledExecutorService just for the test. Note that this is not a generally reusable mock as it does not
      * implement some interfaces like scheduleWithFixedDelay, etc. And it does not return ScheduledFuture correctly.
      */
-    private class MockExecutorService implements MockTime.Listener {
+    private static class MockExecutorService implements MockTime.Listener {
         private final MockTime time;
 
         private final TreeMap<Long, List<AbstractMap.SimpleEntry<Long, KafkaFutureImpl<Long>>>> waiters = new TreeMap<>();
@@ -297,7 +297,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         public <T> ScheduledFuture<T> schedule(final Callable<T> callable, long delayMs, Long period) {
 
             KafkaFutureImpl<Long> waiter = new KafkaFutureImpl<>();
-            waiter.thenApply((KafkaFuture.BaseFunction<Long, Void>) now -> {
+            waiter.thenApply(now -> {
                 try {
                     callable.call();
                 } catch (Throwable e) {

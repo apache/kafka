@@ -17,9 +17,6 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -36,6 +33,11 @@ import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.node.TextNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -265,7 +267,7 @@ public class ConfigurableProducerWorker implements TaskWorker {
          * The percentiles to use when calculating the histogram data.
          * These should match up with the p50LatencyMs, p95LatencyMs, etc. fields.
          */
-        final static float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
+        static final float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
 
         @JsonCreator
         StatusData(@JsonProperty("totalSent") long totalSent,

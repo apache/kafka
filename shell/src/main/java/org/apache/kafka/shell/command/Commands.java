@@ -17,6 +17,9 @@
 
 package org.apache.kafka.shell.command;
 
+import org.apache.kafka.shell.InteractiveShell;
+import org.apache.kafka.shell.state.MetadataShellState;
+
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
@@ -24,8 +27,7 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
 import net.sourceforge.argparse4j.internal.HelpScreenException;
-import org.apache.kafka.shell.InteractiveShell;
-import org.apache.kafka.shell.state.MetadataShellState;
+
 import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;

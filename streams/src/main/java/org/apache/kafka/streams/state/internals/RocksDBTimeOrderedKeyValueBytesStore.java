@@ -16,18 +16,20 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
+
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
+
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * A RocksDB backed time-ordered segmented bytes store for window key schema.
@@ -55,7 +57,7 @@ public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrd
             observedStreamTime = Math.max(observedStreamTime, timestamp);
             minTimestamp = Math.min(minTimestamp, timestamp);
             final long segmentId = segments.segmentId(timestamp);
-            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
             if (segment != null) {
                 //null segment is if it has expired, so  we don't want those records
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(

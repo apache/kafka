@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+
 import org.eclipse.jetty.util.StringUtil;
 
 import java.util.Arrays;
@@ -101,9 +102,7 @@ public abstract class RestServerConfig extends AbstractConfig {
     static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
     // Visible for testing
     static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
-    private static final Collection<String> HEADER_ACTIONS = Collections.unmodifiableList(
-            Arrays.asList("set", "add", "setDate", "addDate")
-    );
+    private static final Collection<String> HEADER_ACTIONS = List.of("set", "add", "setDate", "addDate");
 
 
     /**
@@ -207,7 +206,7 @@ public abstract class RestServerConfig extends AbstractConfig {
                 ).define(
                         BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
                         ConfigDef.Type.STRING,
-                        SslClientAuth.NONE.toString(),
+                        BrokerSecurityConfigs.SSL_CLIENT_AUTH_DEFAULT,
                         in(Utils.enumOptions(SslClientAuth.class)),
                         ConfigDef.Importance.LOW,
                         BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC);
@@ -258,7 +257,7 @@ public abstract class RestServerConfig extends AbstractConfig {
     }
 
     protected RestServerConfig(ConfigDef configDef, Map<?, ?> props) {
-        super(configDef, props);
+        super(configDef, props, Utils.castToStringObjectMap(props), true);
     }
 
     // Visible for testing
@@ -306,11 +305,10 @@ public abstract class RestServerConfig extends AbstractConfig {
     private static class ListenersValidator implements ConfigDef.Validator {
         @Override
         public void ensureValid(String name, Object value) {
-            if (!(value instanceof List)) {
+            if (!(value instanceof List<?> items)) {
                 throw new ConfigException("Invalid value type for listeners (expected list of URLs , ex: http://localhost:8080,https://localhost:8443).");
             }
 
-            List<?> items = (List<?>) value;
             if (items.isEmpty()) {
                 throw new ConfigException("Invalid value for listeners, at least one URL is expected, ex: http://localhost:8080,https://localhost:8443.");
             }
@@ -338,11 +336,10 @@ public abstract class RestServerConfig extends AbstractConfig {
                 return;
             }
 
-            if (!(value instanceof List)) {
+            if (!(value instanceof List<?> items)) {
                 throw new ConfigException("Invalid value type for admin.listeners (expected list).");
             }
 
-            List<?> items = (List<?>) value;
             if (items.isEmpty()) {
                 return;
             }

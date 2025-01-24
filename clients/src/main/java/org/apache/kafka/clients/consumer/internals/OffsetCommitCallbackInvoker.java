@@ -25,7 +25,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * Utility class that helps the application thread to invoke user registered {@link OffsetCommitCallback} amd
+ * Utility class that helps the application thread to invoke user registered {@link OffsetCommitCallback} and
  * {@link org.apache.kafka.clients.consumer.ConsumerInterceptor}s. This is
  * achieved by having the background thread register a {@link OffsetCommitCallbackTask} to the invoker upon the
  * future completion, and execute the callbacks when user polls/commits/closes the consumer.

@@ -17,29 +17,37 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.api.AbstractAuthorizerIntegrationTest;
-import kafka.security.authorizer.AclEntry;
+
 import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import scala.collection.JavaConverters;
 
 import java.util.Collections;
+import java.util.concurrent.ExecutionException;
+
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
-import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
-    @SuppressWarnings({"deprecation"})
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
-    @ValueSource(strings = {"zk", "kraft"})
+    @ParameterizedTest
+    @ValueSource(strings = {"kraft"})
     public void testDescribeGroupCliWithGroupDescribe(String quorum) throws Exception {
-        addAndVerifyAcls(JavaConverters.asScalaSet(Collections.singleton(new AccessControlEntry(ClientPrincipal().toString(), AclEntry.WildcardHost(), DESCRIBE, ALLOW))).toSet(), groupResource());
+        addAndVerifyAcls(CollectionConverters.asScala(Collections.singleton(new AccessControlEntry(ClientPrincipal().toString(), "*", DESCRIBE, ALLOW))).toSet(), groupResource());
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group()};
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(cgcArgs);
-        ConsumerGroupCommand.ConsumerGroupService consumerGroupService = new ConsumerGroupCommand.ConsumerGroupService(opts, Collections.emptyMap());
-        consumerGroupService.describeGroups();
-        consumerGroupService.close();
+        try (ConsumerGroupCommand.ConsumerGroupService consumerGroupService = new ConsumerGroupCommand.ConsumerGroupService(opts, Collections.emptyMap())) {
+            consumerGroupService.describeGroups();
+            fail("Non-existent group should throw an exception");
+        } catch (ExecutionException e) {
+            assertInstanceOf(GroupIdNotFoundException.class, e.getCause(),
+                "Non-existent group should throw GroupIdNotFoundException");
+        }
     }
 }

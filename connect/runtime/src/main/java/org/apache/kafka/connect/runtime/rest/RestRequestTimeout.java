@@ -23,4 +23,23 @@ public interface RestRequestTimeout {
      */
     long timeoutMs();
 
+    /**
+     * @return the current timeout that should be used for health check REST requests, in milliseconds
+     */
+    long healthCheckTimeoutMs();
+
+    static RestRequestTimeout constant(long timeoutMs, long healthCheckTimeoutMs) {
+        return new RestRequestTimeout() {
+            @Override
+            public long timeoutMs() {
+                return timeoutMs;
+            }
+
+            @Override
+            public long healthCheckTimeoutMs() {
+                return healthCheckTimeoutMs;
+            }
+        };
+    }
+
 }

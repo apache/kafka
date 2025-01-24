@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.server.config.ConfigSynonym;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -100,6 +101,8 @@ public class KafkaConfigSchemaTest {
             DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG);
         testTranslateConfigSource(ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG,
             DescribeConfigsResponse.ConfigSource.CLIENT_METRICS_CONFIG);
+        testTranslateConfigSource(ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG,
+            DescribeConfigsResponse.ConfigSource.GROUP_CONFIG);
         testTranslateConfigSource(ConfigEntry.ConfigSource.DEFAULT_CONFIG,
             DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG);
     }

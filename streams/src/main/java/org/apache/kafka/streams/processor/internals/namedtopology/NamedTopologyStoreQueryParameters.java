@@ -21,6 +21,7 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 
 import java.util.Objects;
 
+@Deprecated
 public class NamedTopologyStoreQueryParameters<T> extends StoreQueryParameters<T> {
 
     final String topologyName;

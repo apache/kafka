@@ -22,8 +22,8 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.StringWriter;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(120)
 public class VersionConditionalTest {
@@ -71,7 +71,7 @@ public class VersionConditionalTest {
     }
 
     @Test
-    public void testAllowMembershipCheckAlwaysFalseFails() throws Exception {
+    public void testAllowMembershipCheckAlwaysFalseFails() {
         try {
             CodeBuffer buffer = new CodeBuffer();
             VersionConditional.

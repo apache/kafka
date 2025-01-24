@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
@@ -36,6 +37,7 @@ import org.apache.kafka.common.utils.Time;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -71,6 +73,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean producerFenced;
     private boolean sentOffsets;
     private long commitCount = 0L;
+    private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
     public RuntimeException initTransactionException = null;
     public RuntimeException beginTransactionException = null;
@@ -117,34 +120,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Create a new mock producer with invented metadata the given autoComplete setting and key\value serializers.
-     *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
-     */
-    @SuppressWarnings("deprecation")
-    public MockProducer(final boolean autoComplete,
-                        final Serializer<K> keySerializer,
-                        final Serializer<V> valueSerializer) {
-        this(Cluster.empty(), autoComplete, new org.apache.kafka.clients.producer.internals.DefaultPartitioner(), keySerializer, valueSerializer);
-    }
-
-    /**
-     * Create a new mock producer with invented metadata the given autoComplete setting and key\value serializers.
-     *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(cluster, autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
-     */
-    @SuppressWarnings("deprecation")
-    public MockProducer(final Cluster cluster,
-                        final boolean autoComplete,
-                        final Serializer<K> keySerializer,
-                        final Serializer<V> valueSerializer) {
-        this(cluster, autoComplete, new org.apache.kafka.clients.producer.internals.DefaultPartitioner(), keySerializer, valueSerializer);
-    }
-
-    /**
      * Create a new mock producer with invented metadata the given autoComplete setting, partitioner and key\value serializers.
      *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer)}
+     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer)}
      */
     public MockProducer(final boolean autoComplete,
                         final Partitioner partitioner,
@@ -156,7 +134,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     /**
      * Create a new mock producer with invented metadata.
      *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), false, null, null, null)}
+     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(Cluster.empty(), false, null, null, null)}
      */
     public MockProducer() {
         this(Cluster.empty(), false, null, null, null);
@@ -199,14 +177,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.sentOffsets = false;
     }
 
-    @Deprecated
-    @Override
-    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                         String consumerGroupId) throws ProducerFencedException {
-        Objects.requireNonNull(consumerGroupId);
-        sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
-    }
-
     @Override
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
@@ -220,7 +190,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
             throw this.sendOffsetsToTransactionException;
         }
 
-        if (offsets.size() == 0) {
+        if (offsets.isEmpty()) {
             return;
         }
         Map<TopicPartition, OffsetAndMetadata> uncommittedOffsets =
@@ -334,7 +304,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
             keySerializer.serialize(record.topic(), record.key());
             valueSerializer.serialize(record.topic(), record.value());
         }
-            
+
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
         ProduceRequestResult result = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(result, 0, RecordBatch.NO_TIMESTAMP,
@@ -568,6 +538,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
         byte[] keyBytes = keySerializer.serialize(topic, record.headers(), record.key());
         byte[] valueBytes = valueSerializer.serialize(topic, record.headers(), record.value());
+        if (partitioner == null) {
+            return this.cluster.partitionsForTopic(record.topic()).get(0).partition();
+        }
         return this.partitioner.partition(topic, record.key(), keyBytes, record.value(), valueBytes, cluster);
     }
 
@@ -607,4 +580,17 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
     }
 
+    public List<KafkaMetric> addedMetrics() {
+        return Collections.unmodifiableList(addedMetrics);
+    }
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        addedMetrics.add(metric);
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        addedMetrics.remove(metric);
+    }
 }

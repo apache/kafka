@@ -17,9 +17,6 @@
 
 package org.apache.kafka.tools;
 
-import joptsimple.ArgumentAcceptingOptionSpec;
-import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -28,6 +25,7 @@ import org.apache.kafka.clients.admin.CreatePartitionsOptions;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewPartitions;
@@ -52,8 +50,9 @@ import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.server.util.TopicFilter.IncludeList;
 import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.tools.filter.TopicFilter.IncludeList;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,6 +73,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+
+import joptsimple.ArgumentAcceptingOptionSpec;
+import joptsimple.OptionSpec;
+import joptsimple.OptionSpecBuilder;
 
 public abstract class TopicCommand {
     private static final Logger LOG = LoggerFactory.getLogger(TopicCommand.class);
@@ -171,11 +174,6 @@ public abstract class TopicCommand {
         configsToBeAdded.stream()
             .forEach(pair -> props.setProperty(pair.get(0).trim(), pair.get(1).trim()));
         LogConfig.validate(props);
-        if (props.containsKey(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)) {
-            System.out.println("WARNING: The configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG}=${props.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)} is specified. " +
-                "This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker or " +
-                "if the inter.broker.protocol.version is 3.0 or newer. This configuration is deprecated and it will be removed in Apache Kafka 4.0.");
-        }
         return props;
     }
 
@@ -296,7 +294,7 @@ public abstract class TopicCommand {
                 .map(ce -> ce.name() + "=" + ce.value())
                 .collect(Collectors.joining(","));
             System.out.print("Topic: " +  topic);
-            if (topicId != Uuid.ZERO_UUID)
+            if (!topicId.equals(Uuid.ZERO_UUID))
                 System.out.print("\tTopicId: " + topicId);
             System.out.print("\tPartitionCount: " + numPartitions);
             System.out.print("\tReplicationFactor: " + replicationFactor);
@@ -366,6 +364,22 @@ public abstract class TopicCommand {
                 System.out.print("\tRemoving Replicas: " + reassignment.removingReplicas().stream()
                     .map(node -> node.toString())
                     .collect(Collectors.joining(",")));
+            }
+
+            if (info.elr() != null) {
+                System.out.print("\tElr: " + info.elr().stream()
+                    .map(node -> Integer.toString(node.id()))
+                    .collect(Collectors.joining(",")));
+            } else {
+                System.out.print("\tElr: N/A");
+            }
+
+            if (info.lastKnownElr() != null) {
+                System.out.print("\tLastKnownElr: " + info.lastKnownElr().stream()
+                    .map(node -> Integer.toString(node.id()))
+                    .collect(Collectors.joining(",")));
+            } else {
+                System.out.print("\tLastKnownElr: N/A");
             }
             System.out.print(markedForDeletion ? "\tMarkedForDeletion: true" : "");
             System.out.println();
@@ -539,7 +553,7 @@ public abstract class TopicCommand {
         public void describeTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
             // If topicId is provided and not zero, will use topicId regardless of topic name
             Optional<Uuid> inputTopicId = opts.topicId()
-                .map(Uuid::fromString).filter(uuid -> uuid != Uuid.ZERO_UUID);
+                .map(Uuid::fromString).filter(uuid -> !uuid.equals(Uuid.ZERO_UUID));
             Boolean useTopicId = inputTopicId.isPresent();
 
             List<Uuid> topicIds;
@@ -568,7 +582,9 @@ public abstract class TopicCommand {
 
             if (!topics.isEmpty()) {
                 Map<String, org.apache.kafka.clients.admin.TopicDescription> descTopics =
-                    adminClient.describeTopics(TopicCollection.ofTopicNames(topics)).allTopicNames().get();
+                    adminClient.describeTopics(TopicCollection.ofTopicNames(topics),
+                        new DescribeTopicsOptions()
+                            .partitionSizeLimitPerResponse(opts.partitionSizeLimitPerResponse().orElse(2000))).allTopicNames().get();
                 topicDescriptions = new ArrayList<>(descTopics.values());
             }
 
@@ -666,7 +682,7 @@ public abstract class TopicCommand {
         }
     }
 
-    public final static class TopicCommandOptions extends CommandDefaultOptions {
+    public static final class TopicCommandOptions extends CommandDefaultOptions {
         private final ArgumentAcceptingOptionSpec<String> bootstrapServerOpt;
 
         private final ArgumentAcceptingOptionSpec<String> commandConfigOpt;
@@ -687,11 +703,15 @@ public abstract class TopicCommand {
 
         private final String nl;
 
-        private static final String KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS_WITH_A_BOOTSTRAP_SERVER =
-                " (the kafka-configs CLI supports altering topic configs with a --bootstrap-server option)";
+        private static final String KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS =
+                " (To alter topic configurations, the kafka-configs tool can be used.)";
 
         private final ArgumentAcceptingOptionSpec<String> configOpt;
 
+        /**
+         * @deprecated Since 4.0 and should not be used any longer.
+         */
+        @Deprecated
         private final ArgumentAcceptingOptionSpec<String> deleteConfigOpt;
 
         private final ArgumentAcceptingOptionSpec<Integer> partitionsOpt;
@@ -716,6 +736,8 @@ public abstract class TopicCommand {
 
         private final OptionSpecBuilder excludeInternalTopicOpt;
 
+        private final ArgumentAcceptingOptionSpec<Integer> partitionSizeLimitPerResponseOpt;
+
         private final Set<OptionSpec<?>> allTopicLevelOpts;
 
         private final Set<OptionSpecBuilder> allReplicationReportOpts;
@@ -726,20 +748,16 @@ public abstract class TopicCommand {
                 .withRequiredArg()
                 .describedAs("server to connect to")
                 .ofType(String.class);
-            commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client. " +
-                            "This is used only with --bootstrap-server option for describing and altering broker configs.")
+            commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
                 .withRequiredArg()
                 .describedAs("command config property file")
                 .ofType(String.class);
 
-            String kafkaConfigsCanAlterTopicConfigsViaBootstrapServer =
-                    " (the kafka-configs CLI supports altering topic configs with a --bootstrap-server option)";
             listOpt = parser.accepts("list", "List all available topics.");
             createOpt = parser.accepts("create", "Create a new topic.");
-            deleteOpt = parser.accepts("delete", "Delete a topic");
-            alterOpt = parser.accepts("alter", "Alter the number of partitions and replica assignment. " +
-                    "Update the configuration of an existing topic via --alter is no longer supported here" +
-                    kafkaConfigsCanAlterTopicConfigsViaBootstrapServer + ".");
+            deleteOpt = parser.accepts("delete", "Delete a topic.");
+            alterOpt = parser.accepts("alter", "Alter the number of partitions and replica assignment." +
+                    KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS);
             describeOpt = parser.accepts("describe", "List details for the given topics.");
             topicOpt = parser.accepts("topic", "The topic to create, alter, describe or delete. It also accepts a regular " +
                             "expression, except for --create option. Put topic name in double quotes and use the '\\' prefix " +
@@ -747,34 +765,32 @@ public abstract class TopicCommand {
                 .withRequiredArg()
                 .describedAs("topic")
                 .ofType(String.class);
-            topicIdOpt = parser.accepts("topic-id", "The topic-id to describe." +
-                            "This is used only with --bootstrap-server option for describing topics.")
+            topicIdOpt = parser.accepts("topic-id", "The topic-id to describe.")
                 .withRequiredArg()
                 .describedAs("topic-id")
                 .ofType(String.class);
-            nl = System.getProperty("line.separator");
+            nl = System.lineSeparator();
 
             String logConfigNames = LogConfig.configNames().stream().map(config -> "\t" + config).collect(Collectors.joining(nl));
             configOpt = parser.accepts("config",  "A topic configuration override for the topic being created." +
                             " The following is a list of valid configurations: " + nl + logConfigNames + nl +
                             "See the Kafka documentation for full details on the topic configs." +
-                            " It is supported only in combination with --create if --bootstrap-server option is used" +
-                            kafkaConfigsCanAlterTopicConfigsViaBootstrapServer + ".")
+                            " It is supported only in combination with --create." +
+                            KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS)
                 .withRequiredArg()
                 .describedAs("name=value")
                 .ofType(String.class);
 
-            deleteConfigOpt = parser.accepts("delete-config", "A topic configuration override to be removed for an existing topic (see the list of configurations under the --config option). " +
-                            "Not supported with the --bootstrap-server option.")
+            deleteConfigOpt = parser.accepts("delete-config", "This option is no longer supported and has been deprecated since 4.0")
                 .withRequiredArg()
                 .describedAs("name")
                 .ofType(String.class);
             partitionsOpt = parser.accepts("partitions", "The number of partitions for the topic being created or " +
-                    "altered (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected). If not supplied for create, defaults to the cluster default.")
+                    "altered. If not supplied with --create, the topic uses the cluster default. (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected).")
                 .withRequiredArg()
                 .describedAs("# of partitions")
                 .ofType(java.lang.Integer.class);
-            replicationFactorOpt = parser.accepts("replication-factor", "The replication factor for each partition in the topic being created. If not supplied, defaults to the cluster default.")
+            replicationFactorOpt = parser.accepts("replication-factor", "The replication factor for each partition in the topic being created. If not supplied, the topic uses the cluster default.")
                 .withRequiredArg()
                 .describedAs("replication factor")
                 .ofType(java.lang.Integer.class);
@@ -784,21 +800,26 @@ public abstract class TopicCommand {
                             "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
                 .ofType(String.class);
             reportUnderReplicatedPartitionsOpt = parser.accepts("under-replicated-partitions",
-                "if set when describing topics, only show under replicated partitions");
+                "If set when describing topics, only show under-replicated partitions.");
             reportUnavailablePartitionsOpt = parser.accepts("unavailable-partitions",
-                "if set when describing topics, only show partitions whose leader is not available");
+                "If set when describing topics, only show partitions whose leader is not available.");
             reportUnderMinIsrPartitionsOpt = parser.accepts("under-min-isr-partitions",
-                "if set when describing topics, only show partitions whose isr count is less than the configured minimum.");
+                "If set when describing topics, only show partitions whose isr count is less than the configured minimum.");
             reportAtMinIsrPartitionsOpt = parser.accepts("at-min-isr-partitions",
-                "if set when describing topics, only show partitions whose isr count is equal to the configured minimum.");
+                "If set when describing topics, only show partitions whose isr count is equal to the configured minimum.");
             topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
-                "if set when describing topics, only show topics that have overridden configs");
+                "If set when describing topics, only show topics that have overridden configs.");
             ifExistsOpt = parser.accepts("if-exists",
-                "if set when altering or deleting or describing topics, the action will only execute if the topic exists.");
+                "If set when altering or deleting or describing topics, the action will only execute if the topic exists.");
             ifNotExistsOpt = parser.accepts("if-not-exists",
-                "if set when creating topics, the action will only execute if the topic does not already exist.");
+                "If set when creating topics, the action will only execute if the topic does not already exist.");
             excludeInternalTopicOpt = parser.accepts("exclude-internal",
-                "exclude internal topics when running list or describe command. The internal topics will be listed by default");
+                "Exclude internal topics when listing or describing topics. By default, the internal topics are included.");
+            partitionSizeLimitPerResponseOpt = parser.accepts("partition-size-limit-per-response",
+                "The maximum partition size to be included in one DescribeTopicPartitions response.")
+                    .withRequiredArg()
+                    .describedAs("maximum number of partitions per response")
+                    .ofType(java.lang.Integer.class);
             options = parser.parse(args);
 
             allTopicLevelOpts = new HashSet<>(Arrays.asList(alterOpt, createOpt, describeOpt, listOpt, deleteOpt));
@@ -918,6 +939,10 @@ public abstract class TopicCommand {
             return has(excludeInternalTopicOpt);
         }
 
+        public Optional<Integer> partitionSizeLimitPerResponse() {
+            return valueAsOption(partitionSizeLimitPerResponseOpt);
+        }
+
         public Optional<List<String>> topicConfig() {
             return valuesAsOption(configOpt);
         }
@@ -935,6 +960,10 @@ public abstract class TopicCommand {
                     .count();
             if (actions != 1)
                 CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete");
+
+            if (has(deleteConfigOpt)) {
+                System.err.println("delete-config option is no longer supported and deprecated since version 4.0. The config will be fully removed in future releases.");
+            }
 
             checkRequiredArgs();
             checkInvalidArgs();
@@ -955,7 +984,7 @@ public abstract class TopicCommand {
             if (has(alterOpt)) {
                 Set<OptionSpec<?>> usedOptions = new HashSet<>(Arrays.asList(bootstrapServerOpt, configOpt));
                 Set<OptionSpec<?>> invalidOptions = new HashSet<>(Arrays.asList(alterOpt));
-                CommandLineUtils.checkInvalidArgsSet(parser, options, usedOptions, invalidOptions, Optional.of(KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS_WITH_A_BOOTSTRAP_SERVER));
+                CommandLineUtils.checkInvalidArgsSet(parser, options, usedOptions, invalidOptions, Optional.of(KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS));
                 CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt);
             }
         }
@@ -963,8 +992,6 @@ public abstract class TopicCommand {
         private void checkInvalidArgs() {
             // check invalid args
             CommandLineUtils.checkInvalidArgs(parser, options, configOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, deleteConfigOpt,
-                invalidOptions(new HashSet<>(Arrays.asList(bootstrapServerOpt)), Arrays.asList(alterOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, partitionsOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, invalidOptions(Arrays.asList(createOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));

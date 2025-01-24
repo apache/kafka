@@ -27,7 +27,7 @@ import java.util.Objects;
  * A response header in the kafka protocol.
  */
 public class ResponseHeader implements AbstractRequestResponse {
-    private final static int SIZE_NOT_INITIALIZED = -1;
+    private static final int SIZE_NOT_INITIALIZED = -1;
     private final ResponseHeaderData data;
     private final short headerVersion;
     private int size = SIZE_NOT_INITIALIZED;

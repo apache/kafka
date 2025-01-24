@@ -17,9 +17,10 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+
 import java.util.Set;
 import java.util.StringJoiner;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
 /**
  * An implementation of the {@link OAuthBearerToken} that fairly straightforwardly stores the values

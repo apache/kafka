@@ -22,15 +22,18 @@ import kafka.cluster.{Partition, PartitionTest}
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils._
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.KRaftVersion
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, FetchParams, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
@@ -40,7 +43,7 @@ import org.mockito.{AdditionalMatchers, ArgumentMatchers}
 import scala.jdk.CollectionConverters._
 
 class ReplicaManagerQuotasTest {
-  val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, new Properties()))
+  val configs = TestUtils.createBrokerConfigs(2).map(KafkaConfig.fromProps(_, new Properties()))
   val time = new MockTime
   val metrics = new Metrics
   val record = new SimpleRecord("some-data-in-a-message".getBytes())
@@ -270,7 +273,7 @@ class ReplicaManagerQuotasTest {
       minOneMessage = anyBoolean)).thenReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
-        MemoryRecords.withRecords(CompressionType.NONE, record)
+        MemoryRecords.withRecords(Compression.NONE, record)
       ))
 
     //if we ask for len = 0, return 0 messages
@@ -305,7 +308,7 @@ class ReplicaManagerQuotasTest {
       scheduler = scheduler,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(leaderBrokerId, configs.head.interBrokerProtocolVersion),
+      metadataCache = MetadataCache.kRaftMetadataCache(leaderBrokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
       alterPartitionManager = alterIsrManager)
 

@@ -1,0 +1,45 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 85,
+  "type": "response",
+  "name": "WriteShareGroupStateResponse",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  // - NOT_COORDINATOR (version 0+)
+  // - COORDINATOR_NOT_AVAILABLE (version 0+)
+  // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
+  // - GROUP_ID_NOT_FOUND (version 0+)
+  // - UNKNOWN_TOPIC_OR_PARTITION (version 0+)
+  // - FENCED_STATE_EPOCH (version 0+)
+  // - INVALID_REQUEST (version 0+)
+  "fields": [
+    { "name": "Results", "type": "[]WriteStateResult", "versions": "0+",
+      "about": "The write results.", "fields": [
+      { "name": "TopicId", "type": "uuid", "versions": "0+",
+        "about": "The topic identifier." },
+      { "name": "Partitions", "type": "[]PartitionResult", "versions": "0+",
+        "about" : "The results for the partitions.", "fields": [
+        { "name": "Partition", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "ErrorCode", "type": "int16", "versions": "0+",
+          "about": "The error code, or 0 if there was no error." },
+        { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+          "about": "The error message, or null if there was no error." }
+      ]}
+    ]}
+  ]
+}

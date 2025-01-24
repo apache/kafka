@@ -17,23 +17,25 @@
 
 package org.apache.kafka.timeline;
 
+import org.apache.kafka.common.utils.LogContext;
+
+import org.slf4j.Logger;
+
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.apache.kafka.common.utils.LogContext;
-import org.slf4j.Logger;
-
-
 /**
- * A registry containing snapshots of timeline data structures.
- * We generally expect a small number of snapshots-- perhaps 1 or 2 at a time.
- * Therefore, we use ArrayLists here rather than a data structure with higher overhead.
+ * A registry containing snapshots of timeline data structures. All timeline data structures must
+ * be registered here, so that they can be reverted to the expected state when desired.
+ * Because the registry only keeps a weak reference to each timeline data structure, it does not
+ * prevent them from being garbage collected.
  */
 public class SnapshotRegistry {
-    public final static long LATEST_EPOCH = Long.MAX_VALUE;
+    public static final long LATEST_EPOCH = Long.MAX_VALUE;
 
     /**
      * Iterate through the list of snapshots in order of creation, such that older
@@ -106,19 +108,46 @@ public class SnapshotRegistry {
     private final Snapshot head = new Snapshot(Long.MIN_VALUE);
 
     /**
-     * Collection of all Revertable registered with this registry
+     * A collection of all Revertable objects registered here. Since we store only weak
+     * references, every time we access a revertable through this list, we must check to
+     * see if it has been garbage collected. If so, WeakReference.get will return null.
+     *
+     * Although the garbage collector handles freeing the underlying Revertables, over
+     * time slots in the ArrayList will fill up with expired references. Therefore, after
+     * enough registrations, we scrub the ArrayList of the expired references by creating
+     * a new arraylist.
      */
-    private final List<Revertable> revertables = new ArrayList<>();
+    private List<WeakReference<Revertable>> revertables = new ArrayList<>();
+
+    /**
+     * The maximum number of registrations to allow before we compact the revertable list.
+     */
+    private final int maxRegistrationsSinceScrub;
+
+    /**
+     * The number of registrations we have done since removing all expired weak references.
+     */
+    private int numRegistrationsSinceScrub = 0;
+
+    /**
+     * The number of scrubs that we have done.
+     */
+    private long numScrubs = 0;
 
     public SnapshotRegistry(LogContext logContext) {
+        this(logContext, 10_000);
+    }
+
+    public SnapshotRegistry(LogContext logContext, int maxRegistrationsSinceScrub) {
         this.log = logContext.logger(SnapshotRegistry.class);
+        this.maxRegistrationsSinceScrub = maxRegistrationsSinceScrub;
     }
 
     /**
      * Returns a snapshot iterator that iterates from the snapshots with the
      * lowest epoch to those with the highest.
      */
-    public Iterator<Snapshot> iterator() {
+    Iterator<Snapshot> iterator() {
         return new SnapshotIterator(head.next());
     }
 
@@ -127,7 +156,7 @@ public class SnapshotRegistry {
      * lowest epoch to those with the highest, starting at the snapshot with the
      * given epoch.
      */
-    public Iterator<Snapshot> iterator(long epoch) {
+    Iterator<Snapshot> iterator(long epoch) {
         return iterator(getSnapshot(epoch));
     }
 
@@ -135,7 +164,7 @@ public class SnapshotRegistry {
      * Returns a snapshot iterator that iterates from the snapshots with the
      * lowest epoch to those with the highest, starting at the given snapshot.
      */
-    public Iterator<Snapshot> iterator(Snapshot snapshot) {
+    Iterator<Snapshot> iterator(Snapshot snapshot) {
         return new SnapshotIterator(snapshot);
     }
 
@@ -143,7 +172,7 @@ public class SnapshotRegistry {
      * Returns a reverse snapshot iterator that iterates from the snapshots with the
      * highest epoch to those with the lowest.
      */
-    public Iterator<Snapshot> reverseIterator() {
+    Iterator<Snapshot> reverseIterator() {
         return new ReverseSnapshotIterator();
     }
 
@@ -171,7 +200,7 @@ public class SnapshotRegistry {
     /**
      * Gets the snapshot for a specific epoch.
      */
-    public Snapshot getSnapshot(long epoch) {
+    Snapshot getSnapshot(long epoch) {
         Snapshot snapshot = snapshots.get(epoch);
         if (snapshot == null) {
             throw new RuntimeException("No in-memory snapshot for epoch " + epoch + ". Snapshot " +
@@ -182,13 +211,13 @@ public class SnapshotRegistry {
 
     /**
      * Creates a new snapshot at the given epoch.
-     * <br>
-     * If {@code epoch} already exists and it is the last snapshot then just return that snapshot.
+     * <p>
+     * If {@code epoch} already exists, and it is the last snapshot then just return that snapshot.
      *
-     * @param epoch             The epoch to create the snapshot at.  The current epoch
+     * @param epoch             The epoch to create the snapshot at. The current epoch
      *                          will be advanced to one past this epoch.
      */
-    public Snapshot getOrCreateSnapshot(long epoch) {
+    Snapshot getOrCreateSnapshot(long epoch) {
         Snapshot last = head.prev();
         if (last.epoch() > epoch) {
             throw new RuntimeException("Can't create a new in-memory snapshot at epoch " + epoch +
@@ -202,6 +231,18 @@ public class SnapshotRegistry {
         snapshots.put(epoch, snapshot);
         log.debug("Creating in-memory snapshot {}", epoch);
         return snapshot;
+    }
+
+    /**
+     * Creates a new snapshot at the given epoch.
+     * <p>
+     * If {@code epoch} already exists, and it is the last snapshot then this operation will do nothing.
+     *
+     * @param epoch             The epoch to create the snapshot at. The current epoch
+     *                          will be advanced to one past this epoch.
+     */
+    public void idempotentCreateSnapshot(long epoch) {
+        getOrCreateSnapshot(epoch);
     }
 
     /**
@@ -237,7 +278,7 @@ public class SnapshotRegistry {
      *
      * @param snapshot          The snapshot to delete.
      */
-    public void deleteSnapshot(Snapshot snapshot) {
+    void deleteSnapshot(Snapshot snapshot) {
         Snapshot prev = snapshot.prev();
         if (prev != head) {
             prev.mergeFrom(snapshot);
@@ -271,20 +312,59 @@ public class SnapshotRegistry {
     }
 
     /**
-     * Associate a revertable with this registry.
+     * Return the number of scrub operations that we have done.
      */
-    public void register(Revertable revertable) {
-        revertables.add(revertable);
+    public long numScrubs() {
+        return numScrubs;
     }
 
     /**
-     * Delete all snapshots and resets all of the Revertable object registered.
+     * Associate a revertable with this registry.
+     */
+    void register(Revertable revertable) {
+        numRegistrationsSinceScrub++;
+        if (numRegistrationsSinceScrub > maxRegistrationsSinceScrub) {
+            scrub();
+        }
+        revertables.add(new WeakReference<>(revertable));
+    }
+
+    /**
+     * Remove all expired weak references from the revertable list.
+     */
+    void scrub() {
+        ArrayList<WeakReference<Revertable>> newRevertables =
+            new ArrayList<>(revertables.size() / 2);
+        for (WeakReference<Revertable> ref : revertables) {
+            if (ref.get() != null) {
+                newRevertables.add(ref);
+            }
+        }
+        numScrubs++;
+        this.revertables = newRevertables;
+        numRegistrationsSinceScrub = 0;
+    }
+
+    /**
+     * Delete all snapshots and reset all of the Revertable objects.
      */
     public void reset() {
         deleteSnapshotsUpTo(LATEST_EPOCH);
 
-        for (Revertable revertable : revertables) {
-            revertable.reset();
+        ArrayList<WeakReference<Revertable>> newRevertables = new ArrayList<>();
+        for (WeakReference<Revertable> ref : revertables) {
+            Revertable revertable = ref.get();
+            if (revertable != null) {
+                try {
+                    revertable.reset();
+                } catch (Exception e) {
+                    log.error("Error reverting {}", revertable, e);
+                }
+                newRevertables.add(ref);
+            }
         }
+        numScrubs++;
+        this.revertables = newRevertables;
+        numRegistrationsSinceScrub = 0;
     }
 }

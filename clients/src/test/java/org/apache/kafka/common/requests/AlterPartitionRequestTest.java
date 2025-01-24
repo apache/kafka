@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.message.AlterPartitionRequestData.PartitionData;
 import org.apache.kafka.common.message.AlterPartitionRequestData.TopicData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
-import org.apache.kafka.common.Uuid;
+
 import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.Arrays;
@@ -60,7 +61,7 @@ class AlterPartitionRequestTest {
 
         request.topics().add(topicData);
 
-        AlterPartitionRequest.Builder builder = new AlterPartitionRequest.Builder(request, version > 1);
+        AlterPartitionRequest.Builder builder = new AlterPartitionRequest.Builder(request);
         AlterPartitionRequest alterPartitionRequest = builder.build(version);
         assertEquals(1, alterPartitionRequest.data().topics().size());
         assertEquals(1, alterPartitionRequest.data().topics().get(0).partitions().size());

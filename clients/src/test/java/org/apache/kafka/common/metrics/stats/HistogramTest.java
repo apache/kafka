@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.apache.kafka.common.metrics.stats.Histogram.BinScheme;
+import org.apache.kafka.common.metrics.stats.Histogram.ConstantBinScheme;
+import org.apache.kafka.common.metrics.stats.Histogram.LinearBinScheme;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Random;
 
-
-import org.apache.kafka.common.metrics.stats.Histogram.BinScheme;
-import org.apache.kafka.common.metrics.stats.Histogram.ConstantBinScheme;
-import org.apache.kafka.common.metrics.stats.Histogram.LinearBinScheme;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class HistogramTest {
 

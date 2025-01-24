@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.server.AddPartitionsToTxnManager.{VerificationFailureRateMetricName, VerificationTimeMsMetricName}
-import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.internals.Topic
@@ -40,7 +39,38 @@ object AddPartitionsToTxnManager {
 
   val VerificationFailureRateMetricName = "VerificationFailureRate"
   val VerificationTimeMsMetricName = "VerificationTimeMs"
+
+  def produceRequestVersionToTransactionSupportedOperation(version: Short): TransactionSupportedOperation = {
+    if (version > 11) {
+      addPartition
+    } else if (version > 10) {
+      genericErrorSupported
+    } else {
+      defaultError
+    }
+  }
+
+  def txnOffsetCommitRequestVersionToTransactionSupportedOperation(version: Short): TransactionSupportedOperation = {
+    if (version > 4) {
+      addPartition
+    } else if (version > 3) {
+      genericErrorSupported
+    } else {
+      defaultError
+    }
+  }
 }
+
+/**
+ * This is an enum which handles the Partition Response based on the Request Version and the exact operation
+ *    defaultError:          This is the default workflow which maps to cases when the Produce Request Version or the Txn_offset_commit request was lower than the first version supporting the new Error Class
+ *    genericErrorSupported: This maps to the case when the clients are updated to handle the TransactionAbortableException
+ *    addPartition:          This allows the partition to be added to the transactions inflight with the Produce and TxnOffsetCommit requests. Plus the behaviors in genericErrorSupported.
+ */
+sealed trait TransactionSupportedOperation
+case object defaultError extends TransactionSupportedOperation
+case object genericErrorSupported extends TransactionSupportedOperation
+case object addPartition extends TransactionSupportedOperation
 
 /*
  * Data structure to hold the transactional data to send to a node. Note -- at most one request per transactional ID
@@ -49,7 +79,8 @@ object AddPartitionsToTxnManager {
  */
 class TransactionDataAndCallbacks(val transactionData: AddPartitionsToTxnTransactionCollection,
                                   val callbacks: mutable.Map[String, AddPartitionsToTxnManager.AppendCallback],
-                                  val startTimeMs: mutable.Map[String, Long])
+                                  val startTimeMs: mutable.Map[String, Long],
+                                  val transactionSupportedOperation: TransactionSupportedOperation)
 
 class AddPartitionsToTxnManager(
   config: KafkaConfig,
@@ -74,19 +105,20 @@ class AddPartitionsToTxnManager(
   private val verificationFailureRate = metricsGroup.newMeter(VerificationFailureRateMetricName, "failures", TimeUnit.SECONDS)
   private val verificationTimeMs = metricsGroup.newHistogram(VerificationTimeMsMetricName)
 
-  def verifyTransaction(
+  def addOrVerifyTransaction(
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short,
     topicPartitions: Seq[TopicPartition],
-    callback: AddPartitionsToTxnManager.AppendCallback
+    callback: AddPartitionsToTxnManager.AppendCallback,
+    transactionSupportedOperation: TransactionSupportedOperation
   ): Unit = {
     val coordinatorNode = getTransactionCoordinator(partitionFor(transactionalId))
     if (coordinatorNode.isEmpty) {
       callback(topicPartitions.map(tp => tp -> Errors.COORDINATOR_NOT_AVAILABLE).toMap)
     } else {
       val topicCollection = new AddPartitionsToTxnTopicCollection()
-      topicPartitions.groupBy(_.topic).forKeyValue { (topic, tps) =>
+      topicPartitions.groupBy(_.topic).foreachEntry { (topic, tps) =>
         topicCollection.add(new AddPartitionsToTxnTopic()
           .setName(topic)
           .setPartitions(tps.map(tp => Int.box(tp.partition)).toList.asJava))
@@ -96,17 +128,19 @@ class AddPartitionsToTxnManager(
         .setTransactionalId(transactionalId)
         .setProducerId(producerId)
         .setProducerEpoch(producerEpoch)
-        .setVerifyOnly(true)
+        .setVerifyOnly(transactionSupportedOperation != addPartition)
         .setTopics(topicCollection)
 
-      addTxnData(coordinatorNode.get, transactionData, callback)
+      addTxnData(coordinatorNode.get, transactionData, callback, transactionSupportedOperation)
+
     }
   }
 
   private def addTxnData(
     node: Node,
     transactionData: AddPartitionsToTxnTransaction,
-    callback: AddPartitionsToTxnManager.AppendCallback
+    callback: AddPartitionsToTxnManager.AppendCallback,
+    transactionSupportedOperation: TransactionSupportedOperation
   ): Unit = {
     nodesToTransactions.synchronized {
       val curTime = time.milliseconds()
@@ -115,7 +149,8 @@ class AddPartitionsToTxnManager(
         new TransactionDataAndCallbacks(
           new AddPartitionsToTxnTransactionCollection(1),
           mutable.Map[String, AddPartitionsToTxnManager.AppendCallback](),
-          mutable.Map[String, Long]()))
+          mutable.Map[String, Long](),
+          transactionSupportedOperation))
 
       val existingTransactionData = existingNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
 
@@ -147,7 +182,7 @@ class AddPartitionsToTxnManager(
   }
 
   private def getTransactionCoordinator(partition: Int): Option[Node] = {
-   metadataCache.getPartitionInfo(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
+   metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
       .filter(_.leader != MetadataResponse.NO_LEADER_ID)
       .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leader, interBrokerListenerName))
   }
@@ -210,6 +245,9 @@ class AddPartitionsToTxnManager(
                   val code =
                     if (partitionResult.partitionErrorCode == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
+                    else if (partitionResult.partitionErrorCode() == Errors.TRANSACTION_ABORTABLE.code
+                      && transactionDataAndCallbacks.transactionSupportedOperation == defaultError) // For backward compatibility with clients.
+                      Errors.INVALID_TXN_STATE.code
                     else
                       partitionResult.partitionErrorCode
                   unverified.put(tp, Errors.forCode(code))

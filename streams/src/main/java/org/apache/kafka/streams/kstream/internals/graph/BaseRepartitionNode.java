@@ -76,7 +76,7 @@ public abstract class BaseRepartitionNode<K, V> extends GraphNode {
         this.processorParameters = processorParameters;
     }
 
-    public ProcessorParameters<K, V, ?, ?> getProcessorParameters() {
+    public ProcessorParameters<K, V, ?, ?> processorParameters() {
         return processorParameters;
     }
 

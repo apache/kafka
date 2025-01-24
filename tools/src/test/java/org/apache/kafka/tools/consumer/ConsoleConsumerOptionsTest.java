@@ -21,6 +21,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.MockDeserializer;
 import org.apache.kafka.tools.ToolsTestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -67,35 +68,6 @@ public class ConsoleConsumerOptionsTest {
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
-        assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("includeTest*", config.includedTopicsArg().orElse(""));
-        assertTrue(config.fromBeginning());
-    }
-
-    @Test
-    public void shouldParseWhitelistArgument() throws IOException {
-        String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--whitelist", "whitelistTest*",
-            "--from-beginning"
-        };
-
-        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
-
-        assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("whitelistTest*", config.includedTopicsArg().orElse(""));
-        assertTrue(config.fromBeginning());
-    }
-
-    @Test
-    public void shouldIgnoreWhitelistArgumentIfIncludeSpecified() throws IOException {
-        String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--include", "includeTest*",
-            "--whitelist", "whitelistTest*",
-            "--from-beginning"
-        };
-        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
         assertEquals("localhost:9092", config.bootstrapServer());
         assertEquals("includeTest*", config.includedTopicsArg().orElse(""));
         assertTrue(config.fromBeginning());
@@ -537,25 +509,6 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void shouldExitIfTopicAndWhitelistSpecified() {
-        Exit.setExitProcedure((code, message) -> {
-            throw new IllegalArgumentException(message);
-        });
-
-        String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--whitelist", "whitelistTest*"
-        };
-
-        try {
-            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
-        } finally {
-            Exit.resetExitProcedure();
-        }
-    }
-
-    @Test
     public void testClientIdOverride() throws IOException {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
@@ -644,5 +597,26 @@ public class ConsoleConsumerOptionsTest {
             "--timeout-ms", "100"
         };
         assertEquals(100, new ConsoleConsumerOptions(validTimeoutMs).timeoutMs());
+    }
+
+    @Test
+    public void testParseFormatter() throws Exception {
+        String[] defaultMessageFormatter = generateArgsForFormatter("org.apache.kafka.tools.consumer.DefaultMessageFormatter");
+        assertInstanceOf(DefaultMessageFormatter.class, new ConsoleConsumerOptions(defaultMessageFormatter).formatter());
+
+        String[] loggingMessageFormatter = generateArgsForFormatter("org.apache.kafka.tools.consumer.LoggingMessageFormatter");
+        assertInstanceOf(LoggingMessageFormatter.class, new ConsoleConsumerOptions(loggingMessageFormatter).formatter());
+
+        String[] noOpMessageFormatter = generateArgsForFormatter("org.apache.kafka.tools.consumer.NoOpMessageFormatter");
+        assertInstanceOf(NoOpMessageFormatter.class, new ConsoleConsumerOptions(noOpMessageFormatter).formatter());
+    }
+    
+    private String[] generateArgsForFormatter(String formatter) {
+        return new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", formatter,
+        };
     }
 }

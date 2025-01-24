@@ -37,6 +37,7 @@ import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
+
 import org.slf4j.Logger;
 
 import java.util.Iterator;
@@ -72,7 +73,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         private String threadNamePrefix = "";
         private Time time = Time.SYSTEM;
         private LogContext logContext = null;
-        private FaultHandler faultHandler = (m, e) -> new FaultHandlerException(m, e);
+        private FaultHandler faultHandler = FaultHandlerException::new;
         private MetadataLoaderMetrics metrics = null;
         private Supplier<OptionalLong> highWaterMarkAccessor = null;
 
@@ -230,7 +231,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return false;
         }
         OptionalLong highWaterMark = highWaterMarkAccessor.get();
-        if (!highWaterMark.isPresent()) {
+        if (highWaterMark.isEmpty()) {
             log.info("{}: the loader is still catching up because we still don't know the high " +
                     "water mark yet.", where);
             return true;
@@ -355,21 +356,19 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     @Override
     public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
         eventQueue.append(() -> {
-            try {
+            try (reader) {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
                     long elapsedNs = batchLoader.loadBatch(batch, currentLeaderAndEpoch);
                     metrics.updateBatchSize(batch.records().size());
                     metrics.updateBatchProcessingTimeNs(elapsedNs);
                 }
-                batchLoader.maybeFlushBatches(currentLeaderAndEpoch);
+                batchLoader.maybeFlushBatches(currentLeaderAndEpoch, true);
             } catch (Throwable e) {
                 // This is a general catch-all block where we don't expect to end up;
                 // failure-prone operations should have individual try/catch blocks around them.
                 faultHandler.handleFault("Unhandled fault in MetadataLoader#handleCommit. " +
-                    "Last image offset was " + image.offset(), e);
-            } finally {
-                reader.close();
+                        "Last image offset was " + image.offset(), e);
             }
         });
     }
@@ -433,7 +432,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         }
         delta.finishSnapshot();
         MetadataProvenance provenance = new MetadataProvenance(reader.lastContainedLogOffset(),
-                reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp());
+                reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp(), true);
         return new SnapshotManifest(provenance,
                 time.nanoseconds() - startNs);
     }
@@ -451,7 +450,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                         publisher.name(), e);
                 }
             }
-            metrics.setCurrentControllerId(leaderAndEpoch.leaderId().orElseGet(() -> -1));
+            metrics.setCurrentControllerId(leaderAndEpoch.leaderId().orElse(-1));
         });
     }
 

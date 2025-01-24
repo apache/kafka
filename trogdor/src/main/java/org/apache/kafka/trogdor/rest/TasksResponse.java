@@ -32,8 +32,7 @@ public class TasksResponse extends Message {
 
     @JsonCreator
     public TasksResponse(@JsonProperty("tasks") TreeMap<String, TaskState> tasks) {
-        this.tasks = Collections.unmodifiableMap((tasks == null) ?
-            new TreeMap<String, TaskState>() : tasks);
+        this.tasks = Collections.unmodifiableMap((tasks == null) ? new TreeMap<>() : tasks);
     }
 
     @JsonProperty

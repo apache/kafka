@@ -22,5 +22,4 @@ public interface RaftMessage {
     int correlationId();
 
     ApiMessage data();
-
 }

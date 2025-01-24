@@ -69,7 +69,7 @@ class ControllerResult<T> {
     public String toString() {
         return String.format(
             "ControllerResult(records=%s, response=%s, isAtomic=%s)",
-            String.join(",", records.stream().map(ApiMessageAndVersion::toString).collect(Collectors.toList())),
+            records.stream().map(ApiMessageAndVersion::toString).collect(Collectors.joining(",")),
             response,
             isAtomic
         );

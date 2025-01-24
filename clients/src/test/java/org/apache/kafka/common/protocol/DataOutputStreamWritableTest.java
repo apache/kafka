@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.common.protocol;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
+
+import org.junit.jupiter.api.Test;
 
 import java.io.DataOutputStream;
 import java.nio.ByteBuffer;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class DataOutputStreamWritableTest {
     @Test

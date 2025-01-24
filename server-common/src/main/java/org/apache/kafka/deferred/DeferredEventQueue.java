@@ -18,6 +18,7 @@
 package org.apache.kafka.deferred;
 
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -102,11 +103,7 @@ public class DeferredEventQueue {
                     offset + " which is lower than that.");
             }
         }
-        List<DeferredEvent> events = pending.get(offset);
-        if (events == null) {
-            events = new ArrayList<>();
-            pending.put(offset, events);
-        }
+        List<DeferredEvent> events = pending.computeIfAbsent(offset, k -> new ArrayList<>());
         events.add(event);
         if (log.isTraceEnabled()) {
             log.trace("Adding deferred event {} at offset {}", event, offset);

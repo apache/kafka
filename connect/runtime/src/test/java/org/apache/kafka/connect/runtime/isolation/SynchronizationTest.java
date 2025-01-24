@@ -17,15 +17,31 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import static org.junit.Assert.fail;
+
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.internals.SecurityManagerCompatibility;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.storage.Converter;
+
+import org.apache.maven.artifact.versioning.VersionRange;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.management.LockInfo;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MonitorInfo;
 import java.lang.management.ThreadInfo;
 import java.net.URL;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -40,26 +56,12 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Importance;
-import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TestName;
-import org.mockito.Mockito;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class SynchronizationTest {
 
     public static final Logger log = LoggerFactory.getLogger(SynchronizationTest.class);
-
-    @Rule
-    public final TestName testName = new TestName();
 
     private String threadPrefix;
     private Plugins plugins;
@@ -67,14 +69,14 @@ public class SynchronizationTest {
     private Breakpoint<String> dclBreakpoint;
     private Breakpoint<String> pclBreakpoint;
 
-    @Before
-    public void setup() {
+    @BeforeEach
+    public void setup(TestInfo testInfo) {
         Map<String, String> pluginProps = Collections.singletonMap(
             WorkerConfig.PLUGIN_PATH_CONFIG,
             TestPlugins.pluginPathJoined()
         );
         threadPrefix = SynchronizationTest.class.getSimpleName()
-            + "." + testName.getMethodName() + "-";
+            + "." + testInfo.getDisplayName() + "-";
         dclBreakpoint = new Breakpoint<>();
         pclBreakpoint = new Breakpoint<>();
         plugins = new Plugins(pluginProps, Plugins.class.getClassLoader(), new SynchronizedClassLoaderFactory());
@@ -89,7 +91,7 @@ public class SynchronizationTest {
 
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws InterruptedException {
         dclBreakpoint.clear();
         pclBreakpoint.clear();
@@ -113,7 +115,6 @@ public class SynchronizationTest {
         public synchronized void set(Predicate<T> predicate) {
             clear();
             this.predicate = predicate;
-            // As soon as the barrier is tripped, the barrier will be reset for the next round.
             barrier = new CyclicBarrier(2);
         }
 
@@ -125,7 +126,7 @@ public class SynchronizationTest {
             Predicate<T> predicate;
             CyclicBarrier barrier;
             synchronized (this) {
-                predicate  = this.predicate;
+                predicate = this.predicate;
                 barrier = this.barrier;
             }
             if (predicate != null && !predicate.test(obj)) {
@@ -160,9 +161,8 @@ public class SynchronizationTest {
     private class SynchronizedClassLoaderFactory extends ClassLoaderFactory {
         @Override
         public DelegatingClassLoader newDelegatingClassLoader(ClassLoader parent) {
-            return AccessController.doPrivileged(
-                    (PrivilegedAction<DelegatingClassLoader>) () ->
-                            new SynchronizedDelegatingClassLoader(parent, dclBreakpoint)
+            return SecurityManagerCompatibility.get().doPrivileged(
+                    () -> new SynchronizedDelegatingClassLoader(parent, dclBreakpoint)
             );
         }
 
@@ -172,9 +172,8 @@ public class SynchronizationTest {
                 URL[] urls,
                 ClassLoader parent
         ) {
-            return AccessController.doPrivileged(
-                    (PrivilegedAction<PluginClassLoader>) () ->
-                            new SynchronizedPluginClassLoader(pluginLocation, urls, parent, pclBreakpoint)
+            return SecurityManagerCompatibility.get().doPrivileged(
+                    () -> new SynchronizedPluginClassLoader(pluginLocation, urls, parent, pclBreakpoint)
             );
         }
     }
@@ -192,10 +191,10 @@ public class SynchronizationTest {
         }
 
         @Override
-        public PluginClassLoader pluginClassLoader(String name) {
+        public PluginClassLoader pluginClassLoader(String name, VersionRange range) {
             dclBreakpoint.await(name);
             dclBreakpoint.await(name);
-            return super.pluginClassLoader(name);
+            return super.pluginClassLoader(name, range);
         }
     }
 
@@ -205,7 +204,6 @@ public class SynchronizationTest {
         }
 
         private final Breakpoint<String> pclBreakpoint;
-
 
         public SynchronizedPluginClassLoader(
                 URL pluginLocation, URL[] urls, ClassLoader parent, Breakpoint<String> pclBreakpoint
@@ -221,8 +219,9 @@ public class SynchronizationTest {
         }
     }
 
+    @Test
+    @Timeout(15)
     // If the test times out, then there's a deadlock in the test but not necessarily the code
-    @Test(timeout = 15000L)
     public void testSimultaneousUpwardAndDownwardDelegating() throws Exception {
         String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.className();
         // Grab a reference to the target PluginClassLoader before activating breakpoints
@@ -300,8 +299,9 @@ public class SynchronizationTest {
     }
 
     // If the test times out, then there's a deadlock in the test but not necessarily the code
-    @Test(timeout = 15000L)
+    @Test
     // Ensure the PluginClassLoader is parallel capable and not synchronized on its monitor lock
+    @Timeout(15)
     public void testPluginClassLoaderDoesntHoldMonitorLock()
         throws InterruptedException, TimeoutException, BrokenBarrierException {
         String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.className();
@@ -328,7 +328,7 @@ public class SynchronizationTest {
             synchronized (externalTestLock) {
                 try {
                     progress.await(null);
-                    Class.forName(TestPlugins.TestPlugin.SAMPLING_CONVERTER.className(), true, connectorLoader);
+                    Utils.loadClass(TestPlugins.TestPlugin.SAMPLING_CONVERTER.className(), Converter.class);
                 } catch (ClassNotFoundException e) {
                     throw new RuntimeException("Failed to load test plugin", e);
                 }
@@ -457,14 +457,13 @@ public class SynchronizationTest {
         }
     }
 
+    @SuppressWarnings("removal")
     private static ThreadFactory threadFactoryWithNamedThreads(String threadPrefix) {
         AtomicInteger threadNumber = new AtomicInteger(1);
         return r -> {
             // This is essentially Executors.defaultThreadFactory except with
             // custom thread names so in order to filter by thread names when debugging
-            SecurityManager s = System.getSecurityManager();
-            Thread t = new Thread((s != null) ? s.getThreadGroup() :
-                Thread.currentThread().getThreadGroup(), r,
+            Thread t = new Thread(Thread.currentThread().getThreadGroup(), r,
                 threadPrefix + threadNumber.getAndIncrement(),
                 0);
             if (t.isDaemon()) {

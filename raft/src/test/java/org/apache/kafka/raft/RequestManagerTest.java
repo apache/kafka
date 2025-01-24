@@ -16,13 +16,20 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.Random;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RequestManagerTest {
@@ -33,105 +40,247 @@ public class RequestManagerTest {
 
     @Test
     public void testResetAllConnections() {
+        Node node1 = new Node(1, "mock-host-1", 4321);
+        Node node2 = new Node(2, "mock-host-2", 4321);
+
         RequestManager cache = new RequestManager(
-            Utils.mkSet(1, 2, 3),
+            makeBootstrapList(3),
             retryBackoffMs,
             requestTimeoutMs,
-            random);
+            random
+        );
 
         // One host has an inflight request
-        RequestManager.ConnectionState connectionState1 = cache.getOrCreate(1);
-        connectionState1.onRequestSent(1, time.milliseconds());
-        assertFalse(connectionState1.isReady(time.milliseconds()));
+        cache.onRequestSent(node1, 1, time.milliseconds());
+        assertFalse(cache.isReady(node1, time.milliseconds()));
 
         // Another is backing off
-        RequestManager.ConnectionState connectionState2 = cache.getOrCreate(2);
-        connectionState2.onRequestSent(2, time.milliseconds());
-        connectionState2.onResponseError(2, time.milliseconds());
-        assertFalse(connectionState2.isReady(time.milliseconds()));
+        cache.onRequestSent(node2, 2, time.milliseconds());
+        cache.onResponseResult(node2, 2, false, time.milliseconds());
+        assertFalse(cache.isReady(node2, time.milliseconds()));
 
         cache.resetAll();
 
         // Now both should be ready
-        assertTrue(connectionState1.isReady(time.milliseconds()));
-        assertTrue(connectionState2.isReady(time.milliseconds()));
+        assertTrue(cache.isReady(node1, time.milliseconds()));
+        assertTrue(cache.isReady(node2, time.milliseconds()));
     }
 
     @Test
     public void testBackoffAfterFailure() {
+        Node node = new Node(1, "mock-host-1", 4321);
+
         RequestManager cache = new RequestManager(
-            Utils.mkSet(1, 2, 3),
+            makeBootstrapList(3),
             retryBackoffMs,
             requestTimeoutMs,
-            random);
+            random
+        );
 
-        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
-        assertTrue(connectionState.isReady(time.milliseconds()));
+        assertTrue(cache.isReady(node, time.milliseconds()));
 
         long correlationId = 1;
-        connectionState.onRequestSent(correlationId, time.milliseconds());
-        assertFalse(connectionState.isReady(time.milliseconds()));
+        cache.onRequestSent(node, correlationId, time.milliseconds());
+        assertFalse(cache.isReady(node, time.milliseconds()));
 
-        connectionState.onResponseError(correlationId, time.milliseconds());
-        assertFalse(connectionState.isReady(time.milliseconds()));
+        cache.onResponseResult(node, correlationId, false, time.milliseconds());
+        assertFalse(cache.isReady(node, time.milliseconds()));
 
         time.sleep(retryBackoffMs);
-        assertTrue(connectionState.isReady(time.milliseconds()));
+        assertTrue(cache.isReady(node, time.milliseconds()));
     }
 
     @Test
     public void testSuccessfulResponse() {
+        Node node = new Node(1, "mock-host-1", 4321);
+
         RequestManager cache = new RequestManager(
-            Utils.mkSet(1, 2, 3),
+            makeBootstrapList(3),
             retryBackoffMs,
             requestTimeoutMs,
-            random);
-
-        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
+            random
+        );
 
         long correlationId = 1;
-        connectionState.onRequestSent(correlationId, time.milliseconds());
-        assertFalse(connectionState.isReady(time.milliseconds()));
-        connectionState.onResponseReceived(correlationId);
-        assertTrue(connectionState.isReady(time.milliseconds()));
+        cache.onRequestSent(node, correlationId, time.milliseconds());
+        assertFalse(cache.isReady(node, time.milliseconds()));
+        cache.onResponseResult(node, correlationId, true, time.milliseconds());
+        assertTrue(cache.isReady(node, time.milliseconds()));
     }
 
     @Test
     public void testIgnoreUnexpectedResponse() {
+        Node node = new Node(1, "mock-host-1", 4321);
+
         RequestManager cache = new RequestManager(
-            Utils.mkSet(1, 2, 3),
+            makeBootstrapList(3),
             retryBackoffMs,
             requestTimeoutMs,
-            random);
-
-        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
+            random
+        );
 
         long correlationId = 1;
-        connectionState.onRequestSent(correlationId, time.milliseconds());
-        assertFalse(connectionState.isReady(time.milliseconds()));
-        connectionState.onResponseReceived(correlationId + 1);
-        assertFalse(connectionState.isReady(time.milliseconds()));
+        cache.onRequestSent(node, correlationId, time.milliseconds());
+        assertFalse(cache.isReady(node, time.milliseconds()));
+        cache.onResponseResult(node, correlationId + 1, true, time.milliseconds());
+        assertFalse(cache.isReady(node, time.milliseconds()));
     }
 
     @Test
     public void testRequestTimeout() {
+        Node node = new Node(1, "mock-host-1", 4321);
+
         RequestManager cache = new RequestManager(
-            Utils.mkSet(1, 2, 3),
+            makeBootstrapList(3),
             retryBackoffMs,
             requestTimeoutMs,
-            random);
-
-        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
+            random
+        );
 
         long correlationId = 1;
-        connectionState.onRequestSent(correlationId, time.milliseconds());
-        assertFalse(connectionState.isReady(time.milliseconds()));
+        cache.onRequestSent(node, correlationId, time.milliseconds());
+        assertFalse(cache.isReady(node, time.milliseconds()));
 
         time.sleep(requestTimeoutMs - 1);
-        assertFalse(connectionState.isReady(time.milliseconds()));
+        assertFalse(cache.isReady(node, time.milliseconds()));
 
         time.sleep(1);
-        assertTrue(connectionState.isReady(time.milliseconds()));
+        assertTrue(cache.isReady(node, time.milliseconds()));
     }
 
+    @Test
+    public void testRequestToBootstrapList() {
+        List<Node> bootstrapList = makeBootstrapList(2);
+        RequestManager cache = new RequestManager(
+            bootstrapList,
+            retryBackoffMs,
+            requestTimeoutMs,
+            random
+        );
+
+        // Find a ready node with the starting state
+        Node bootstrapNode1 = cache.findReadyBootstrapServer(time.milliseconds()).get();
+        assertTrue(
+            bootstrapList.contains(bootstrapNode1),
+            String.format("%s is not in %s", bootstrapNode1, bootstrapList)
+        );
+        assertEquals(0, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+
+        // Send a request and check the cache state
+        cache.onRequestSent(bootstrapNode1, 1, time.milliseconds());
+        assertEquals(
+            Optional.empty(),
+            cache.findReadyBootstrapServer(time.milliseconds())
+        );
+        assertEquals(requestTimeoutMs, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+
+        // Fail the request
+        time.sleep(100);
+        cache.onResponseResult(bootstrapNode1, 1, false, time.milliseconds());
+        Node bootstrapNode2 = cache.findReadyBootstrapServer(time.milliseconds()).get();
+        assertNotEquals(bootstrapNode1, bootstrapNode2);
+        assertEquals(0, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+
+        // Send a request to the second node and check the state
+        cache.onRequestSent(bootstrapNode2, 2, time.milliseconds());
+        assertEquals(
+            Optional.empty(),
+            cache.findReadyBootstrapServer(time.milliseconds())
+        );
+        assertEquals(requestTimeoutMs, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+
+
+        // Fail the second request before the request timeout
+        time.sleep(retryBackoffMs - 1);
+        cache.onResponseResult(bootstrapNode2, 2, false, time.milliseconds());
+        assertEquals(
+            Optional.empty(),
+            cache.findReadyBootstrapServer(time.milliseconds())
+        );
+        assertEquals(1, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+
+        // Timeout the first backoff and show that that node is ready
+        time.sleep(1);
+        Node bootstrapNode3 = cache.findReadyBootstrapServer(time.milliseconds()).get();
+        assertEquals(bootstrapNode1, bootstrapNode3);
+        assertEquals(0, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+    }
+
+    @Test
+    public void testFindReadyWithInflightRequest() {
+        Node otherNode = new Node(1, "other-node", 1234);
+        List<Node> bootstrapList = makeBootstrapList(3);
+        RequestManager cache = new RequestManager(
+            bootstrapList,
+            retryBackoffMs,
+            requestTimeoutMs,
+            random
+        );
+
+        // Send request to a node that is not in the bootstrap list
+        cache.onRequestSent(otherNode, 1, time.milliseconds());
+        assertEquals(Optional.empty(), cache.findReadyBootstrapServer(time.milliseconds()));
+    }
+
+    @Test
+    public void testFindReadyWithRequestTimedout() {
+        Node otherNode = new Node(1, "other-node", 1234);
+        List<Node> bootstrapList = makeBootstrapList(3);
+        RequestManager cache = new RequestManager(
+            bootstrapList,
+            retryBackoffMs,
+            requestTimeoutMs,
+            random
+        );
+
+        // Send request to a node that is not in the bootstrap list
+        cache.onRequestSent(otherNode, 1, time.milliseconds());
+        assertTrue(cache.isResponseExpected(otherNode, 1));
+        assertEquals(Optional.empty(), cache.findReadyBootstrapServer(time.milliseconds()));
+
+        // Timeout the request
+        time.sleep(requestTimeoutMs);
+        Node bootstrapNode = cache.findReadyBootstrapServer(time.milliseconds()).get();
+        assertTrue(bootstrapList.contains(bootstrapNode));
+        assertFalse(cache.isResponseExpected(otherNode, 1));
+    }
+
+    @Test
+    public void testAnyInflightRequestWithAnyRequest() {
+        Node otherNode = new Node(1, "other-node", 1234);
+        List<Node> bootstrapList = makeBootstrapList(3);
+        RequestManager cache = new RequestManager(
+            bootstrapList,
+            retryBackoffMs,
+            requestTimeoutMs,
+            random
+        );
+
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds()));
+
+        // Send a request and check state
+        cache.onRequestSent(otherNode, 11, time.milliseconds());
+        assertTrue(cache.hasAnyInflightRequest(time.milliseconds()));
+
+        // Wait until the request times out
+        time.sleep(requestTimeoutMs);
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds()));
+
+        // Send another request and fail it
+        cache.onRequestSent(otherNode, 12, time.milliseconds());
+        cache.onResponseResult(otherNode, 12, false, time.milliseconds());
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds()));
+
+        // Send another request and mark it successful
+        cache.onRequestSent(otherNode, 12, time.milliseconds());
+        cache.onResponseResult(otherNode, 12, true, time.milliseconds());
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds()));
+    }
+
+    private List<Node> makeBootstrapList(int numberOfNodes) {
+        return IntStream.iterate(-2, id -> id - 1)
+            .limit(numberOfNodes)
+            .mapToObj(id -> new Node(id, String.format("mock-boot-host%d", id), 1234))
+            .collect(Collectors.toList());
+    }
 }

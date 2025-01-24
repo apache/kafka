@@ -16,8 +16,17 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
+
+import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
+import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
+import static org.apache.kafka.common.config.ConfigDef.Type.DOUBLE;
+import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 
 /**
  * Configuration parameters for the log cleaner.
@@ -63,6 +72,19 @@ public class CleanerConfig {
             "tombstones messages may be collected before a consumer completes their scan).";
     public static final String LOG_CLEANER_MIN_COMPACTION_LAG_MS_DOC = "The minimum time a message will remain uncompacted in the log. Only applicable for logs that are being compacted.";
     public static final String LOG_CLEANER_MAX_COMPACTION_LAG_MS_DOC = "The maximum time a message will remain ineligible for compaction in the log. Only applicable for logs that are being compacted.";
+
+    public static final ConfigDef CONFIG_DEF =  new ConfigDef()
+            .define(LOG_CLEANER_THREADS_PROP, INT, LOG_CLEANER_THREADS, atLeast(0), MEDIUM, LOG_CLEANER_THREADS_DOC)
+            .define(LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, DOUBLE, LOG_CLEANER_IO_MAX_BYTES_PER_SECOND, MEDIUM, LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_DOC)
+            .define(LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, LONG, LOG_CLEANER_DEDUPE_BUFFER_SIZE, MEDIUM, LOG_CLEANER_DEDUPE_BUFFER_SIZE_DOC)
+            .define(LOG_CLEANER_IO_BUFFER_SIZE_PROP, INT, LOG_CLEANER_IO_BUFFER_SIZE, atLeast(0), MEDIUM, LOG_CLEANER_IO_BUFFER_SIZE_DOC)
+            .define(LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP, DOUBLE, LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR, MEDIUM, LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_DOC)
+            .define(LOG_CLEANER_BACKOFF_MS_PROP, LONG, LOG_CLEANER_BACKOFF_MS, atLeast(0), MEDIUM, LOG_CLEANER_BACKOFF_MS_DOC)
+            .define(LOG_CLEANER_MIN_CLEAN_RATIO_PROP, DOUBLE, LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO, between(0, 1), MEDIUM, LOG_CLEANER_MIN_CLEAN_RATIO_DOC)
+            .define(LOG_CLEANER_ENABLE_PROP, BOOLEAN, LOG_CLEANER_ENABLE, MEDIUM, LOG_CLEANER_ENABLE_DOC)
+            .define(LOG_CLEANER_DELETE_RETENTION_MS_PROP, LONG, LogConfig.DEFAULT_DELETE_RETENTION_MS, atLeast(0), MEDIUM, LOG_CLEANER_DELETE_RETENTION_MS_DOC)
+            .define(LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP, LONG, LogConfig.DEFAULT_MIN_COMPACTION_LAG_MS, atLeast(0), MEDIUM, LOG_CLEANER_MIN_COMPACTION_LAG_MS_DOC)
+            .define(LOG_CLEANER_MAX_COMPACTION_LAG_MS_PROP, LONG, LogConfig.DEFAULT_MAX_COMPACTION_LAG_MS, atLeast(1), MEDIUM, LOG_CLEANER_MAX_COMPACTION_LAG_MS_DOC);
 
     public final int numThreads;
     public final long dedupeBufferSize;

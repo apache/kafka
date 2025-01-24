@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import static java.util.Collections.emptyList;
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -35,7 +28,15 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
+
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class DeleteConsumerGroupsHandlerTest {
 
@@ -75,13 +76,12 @@ public class DeleteConsumerGroupsHandlerTest {
     }
 
     private DeleteGroupsResponse buildResponse(Errors error) {
-        DeleteGroupsResponse response = new DeleteGroupsResponse(
+        return new DeleteGroupsResponse(
                 new DeleteGroupsResponseData()
                     .setResults(new DeletableGroupResultCollection(singletonList(
                             new DeletableGroupResult()
                                 .setErrorCode(error.code())
                                 .setGroupId(groupId1)).iterator())));
-        return response;
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Void> handleWithError(

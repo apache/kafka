@@ -17,8 +17,10 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.AbstractLegacyRecordBatch.ByteBufferLegacyRecordBatch;
 import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -40,7 +42,7 @@ public class AbstractLegacyRecordBatchTest {
         };
 
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
-                CompressionType.GZIP, TimestampType.CREATE_TIME, simpleRecords);
+                Compression.gzip().build(), TimestampType.CREATE_TIME, simpleRecords);
 
         long lastOffset = 500L;
         long firstOffset = lastOffset - simpleRecords.length + 1;
@@ -75,7 +77,7 @@ public class AbstractLegacyRecordBatchTest {
             };
 
             MemoryRecords records = MemoryRecords.withRecords(magic, 0L,
-                    CompressionType.GZIP, TimestampType.CREATE_TIME, simpleRecords);
+                    Compression.gzip().build(), TimestampType.CREATE_TIME, simpleRecords);
 
             ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
             batch.setLastOffset(0L);
@@ -95,7 +97,7 @@ public class AbstractLegacyRecordBatchTest {
         };
 
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
-                CompressionType.GZIP, TimestampType.CREATE_TIME, simpleRecords);
+                Compression.gzip().build(), TimestampType.CREATE_TIME, simpleRecords);
 
         ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
         batch.setLastOffset(1L);
@@ -106,7 +108,7 @@ public class AbstractLegacyRecordBatchTest {
     @Test
     public void testSetNoTimestampTypeNotAllowed() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
-                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                Compression.gzip().build(), TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -117,7 +119,7 @@ public class AbstractLegacyRecordBatchTest {
     @Test
     public void testSetLogAppendTimeNotAllowedV0() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V0, 0L,
-                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                Compression.gzip().build(), TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -129,7 +131,7 @@ public class AbstractLegacyRecordBatchTest {
     @Test
     public void testSetCreateTimeNotAllowedV0() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V0, 0L,
-                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                Compression.gzip().build(), TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -141,7 +143,7 @@ public class AbstractLegacyRecordBatchTest {
     @Test
     public void testSetPartitionLeaderEpochNotAllowedV0() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V0, 0L,
-                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                Compression.gzip().build(), TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -152,7 +154,7 @@ public class AbstractLegacyRecordBatchTest {
     @Test
     public void testSetPartitionLeaderEpochNotAllowedV1() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
-                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                Compression.gzip().build(), TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -163,7 +165,7 @@ public class AbstractLegacyRecordBatchTest {
     @Test
     public void testSetLogAppendTimeV1() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
-                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                Compression.gzip().build(), TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -188,7 +190,7 @@ public class AbstractLegacyRecordBatchTest {
     @Test
     public void testSetCreateTimeV1() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
-                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                Compression.gzip().build(), TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -222,7 +224,7 @@ public class AbstractLegacyRecordBatchTest {
         // Check V0
         try {
             MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V0, 0L,
-                CompressionType.ZSTD, TimestampType.CREATE_TIME, simpleRecords);
+                Compression.zstd().build(), TimestampType.CREATE_TIME, simpleRecords);
 
             ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
             batch.setLastOffset(1L);
@@ -236,7 +238,7 @@ public class AbstractLegacyRecordBatchTest {
         // Check V1
         try {
             MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
-                CompressionType.ZSTD, TimestampType.CREATE_TIME, simpleRecords);
+                Compression.zstd().build(), TimestampType.CREATE_TIME, simpleRecords);
 
             ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
             batch.setLastOffset(1L);

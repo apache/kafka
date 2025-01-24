@@ -24,8 +24,8 @@ import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
 
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 
 
@@ -74,8 +74,7 @@ public final class TopicImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof TopicImage)) return false;
-        TopicImage other = (TopicImage) o;
+        if (!(o instanceof TopicImage other)) return false;
         return name.equals(other.name) &&
             id.equals(other.id) &&
             partitions.equals(other.partitions);

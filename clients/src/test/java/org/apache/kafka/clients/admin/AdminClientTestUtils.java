@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
@@ -32,6 +26,12 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class AdminClientTestUtils {
 
@@ -140,6 +140,16 @@ public class AdminClientTestUtils {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> KafkaFuture.completedFuture(e.getValue()))));
     }
 
+    public static ListGroupsResult listGroupsResult(GroupListing... groups) {
+        return new ListGroupsResult(
+            KafkaFuture.completedFuture(Arrays.stream(groups)
+                .collect(Collectors.toList())));
+    }
+
+    public static ListGroupsResult listGroupsResult(KafkaException exception) {
+        return new ListGroupsResult(KafkaFuture.completedFuture(Collections.singleton(exception)));
+    }
+
     public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(Map<String, Map<TopicPartition, OffsetAndMetadata>> offsets) {
         Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> resultMap = offsets.entrySet().stream()
             .collect(Collectors.toMap(e -> CoordinatorKey.byGroupId(e.getKey()),
@@ -156,7 +166,7 @@ public class AdminClientTestUtils {
     public static ListClientMetricsResourcesResult listClientMetricsResourcesResult(String... names) {
         return new ListClientMetricsResourcesResult(
                 KafkaFuture.completedFuture(Arrays.stream(names)
-                        .map(name -> new ClientMetricsResourceListing(name))
+                        .map(ClientMetricsResourceListing::new)
                         .collect(Collectors.toList())));
     }
 

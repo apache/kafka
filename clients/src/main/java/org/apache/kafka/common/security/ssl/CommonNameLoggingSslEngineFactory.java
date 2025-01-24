@@ -18,8 +18,8 @@ package org.apache.kafka.common.security.ssl;
 
 
 import java.security.KeyStore;
-import java.security.NoSuchAlgorithmException;
 import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 
 import javax.net.ssl.TrustManager;
 

@@ -79,4 +79,3 @@ public class SaslAuthenticateRequest extends AbstractRequest {
             version);
     }
 }
-

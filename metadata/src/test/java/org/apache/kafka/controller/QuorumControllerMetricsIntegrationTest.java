@@ -26,6 +26,7 @@ import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -56,7 +57,7 @@ public class QuorumControllerMetricsIntegrationTest {
         final AtomicBoolean closed = new AtomicBoolean(false);
 
         MockControllerMetrics() {
-            super(Optional.empty(), Time.SYSTEM, true);
+            super(Optional.empty(), Time.SYSTEM);
         }
 
         @Override
@@ -76,9 +77,9 @@ public class QuorumControllerMetricsIntegrationTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder -> {
-                    controllerBuilder.setMetrics(metrics);
-                }).
+                setControllerBuilderInitializer(controllerBuilder ->
+                    controllerBuilder.setMetrics(metrics)
+                ).
                 build()
         ) {
             assertEquals(1, controlEnv.activeController().controllerMetrics().newActiveControllers());
@@ -108,11 +109,11 @@ public class QuorumControllerMetricsIntegrationTest {
                 }
             });
             if (forceFailoverUsingLogLayer) {
-                controlEnv.activeController().setNewNextWriteOffset(123L);
+                logEnv.activeLogManager().get().throwOnNextAppend();
 
-                TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                    createTopics(controlEnv.activeController(), "test_", 1, 1);
-                });
+                TestUtils.retryOnExceptionWithTimeout(30_000, () ->
+                    createTopics(controlEnv.activeController(), "test_", 1, 1)
+                );
             } else {
                 // Directly call QuorumController.renounce.
                 forceRenounce(controlEnv.activeController());
@@ -158,7 +159,7 @@ public class QuorumControllerMetricsIntegrationTest {
                         .setCurrentMetadataOffset(100000));
             latch.countDown(); // Unpause the controller.
             assertEquals(TimeoutException.class,
-                assertThrows(ExecutionException.class, () -> replyFuture.get()).
+                assertThrows(ExecutionException.class, replyFuture::get).
                     getCause().getClass());
             assertEquals(1L, active.controllerMetrics().timedOutHeartbeats());
             assertEquals(1L, active.controllerMetrics().operationsTimedOut());
@@ -205,9 +206,9 @@ public class QuorumControllerMetricsIntegrationTest {
             TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
                 long expectedOperationsStarted = active.controllerMetrics().operationsStarted() + 1;
                 CompletableFuture<Long> actualOperationsStarted = new CompletableFuture<>();
-                active.appendControlEvent("checkOperationsStarted", () -> {
-                    actualOperationsStarted.complete(active.controllerMetrics().operationsStarted());
-                });
+                active.appendControlEvent("checkOperationsStarted", () ->
+                    actualOperationsStarted.complete(active.controllerMetrics().operationsStarted())
+                );
                 assertEquals(expectedOperationsStarted, actualOperationsStarted.get());
             });
         }

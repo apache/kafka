@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Calendar;

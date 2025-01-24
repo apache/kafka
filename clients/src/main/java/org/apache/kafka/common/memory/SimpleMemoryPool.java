@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.common.memory;
 
-import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicLong;
-
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicLong;
 
 
 /**

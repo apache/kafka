@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+import org.apache.kafka.streams.state.VersionedRecord;
+
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
-import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
-import org.apache.kafka.streams.state.VersionedRecord;
 
 /**
  * Interactive query for retrieving a single record from a versioned state store based on its key and timestamp.

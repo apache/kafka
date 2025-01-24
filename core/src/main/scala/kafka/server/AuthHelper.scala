@@ -20,8 +20,6 @@ package kafka.server
 import java.lang.{Byte => JByte}
 import java.util.Collections
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AclEntry
-import kafka.utils.CoreUtils
 import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.acl.AclOperation.DESCRIBE
@@ -34,6 +32,7 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 
 import scala.collection.Seq
@@ -56,11 +55,11 @@ class AuthHelper(authorizer: Option[Authorizer]) {
 
   def authorizeClusterOperation(request: RequestChannel.Request, operation: AclOperation): Unit = {
     if (!authorize(request.context, operation, CLUSTER, CLUSTER_NAME))
-      throw new ClusterAuthorizationException(s"Request $request is not authorized.")
+      throw new ClusterAuthorizationException(s"Request $request needs $operation permission.")
   }
 
   def authorizedOperations(request: RequestChannel.Request, resource: Resource): Int = {
-    val supportedOps = AclEntry.supportedOperations(resource.resourceType).toList
+    val supportedOps = AclEntry.supportedOperations(resource.resourceType).asScala.toList
     val authorizedOps = authorizer match {
       case Some(authZ) =>
         val resourcePattern = new ResourcePattern(resource.resourceType, resource.name, PatternType.LITERAL)
@@ -105,7 +104,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
                             logIfDenied: Boolean = true)(resourceName: T => String): Set[String] = {
     authorizer match {
       case Some(authZ) =>
-        val resourceNameToCount = CoreUtils.groupMapReduce(resources)(resourceName)(_ => 1)(_ + _)
+        val resourceNameToCount = resources.groupMapReduce(resourceName)(_ => 1)(_ + _)
         val actions = resourceNameToCount.iterator.map { case (resourceName, count) =>
           val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
           new Action(operation, resource, count, logIfAllowed, logIfDenied)

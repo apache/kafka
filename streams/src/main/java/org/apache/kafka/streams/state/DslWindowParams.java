@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.kstream.EmitStrategy;
+
 import java.time.Duration;
 import java.util.Objects;
-import org.apache.kafka.streams.kstream.EmitStrategy;
 
 /**
  * {@code DslWindowParams} is a wrapper class for all parameters that function

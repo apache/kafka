@@ -17,13 +17,9 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Scheduler;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.CapturingCommandRunner;
@@ -49,20 +45,25 @@ import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
 import org.apache.kafka.trogdor.task.SampleTaskSpec;
+
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.NotFoundException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import jakarta.ws.rs.NotFoundException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -70,7 +71,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
-@Timeout(value = 240000, unit = MILLISECONDS)
+@Timeout(value = 240)
 public class CoordinatorTest {
 
     private static final Logger log = LoggerFactory.getLogger(CoordinatorTest.class);
@@ -362,7 +363,7 @@ public class CoordinatorTest {
 
         @Override
         public String toString() {
-            return Utils.join(expectedLines, ", ");
+            return String.join(", ", expectedLines);
         }
     }
 
@@ -420,7 +421,7 @@ public class CoordinatorTest {
     }
 
     @Test
-    public void testTasksRequestMatches() throws Exception {
+    public void testTasksRequestMatches() {
         TasksRequest req1 = new TasksRequest(null, 0, 0, 0, 0, Optional.empty());
         assertTrue(req1.matches("foo1", -1, -1, TaskStateType.PENDING));
         assertTrue(req1.matches("bar1", 100, 200, TaskStateType.DONE));

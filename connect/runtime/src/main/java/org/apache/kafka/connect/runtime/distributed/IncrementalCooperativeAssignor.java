@@ -16,21 +16,20 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
-import java.util.Arrays;
-import java.util.Map.Entry;
-
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.storage.ClusterConfigState;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -39,6 +38,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;

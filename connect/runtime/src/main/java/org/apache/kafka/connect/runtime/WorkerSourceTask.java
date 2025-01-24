@@ -21,16 +21,16 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
-import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
-import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -39,6 +39,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -261,11 +262,11 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
             shouldFlush = offsetWriter.beginFlush(timeout - time.milliseconds(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             log.warn("{} Interrupted while waiting for previous offset flush to complete, cancelling", this);
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         } catch (TimeoutException e) {
             log.warn("{} Timed out while waiting for previous offset flush to complete, cancelling", this);
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         }
         if (!shouldFlush) {
@@ -291,7 +292,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         // any data
         if (flushFuture == null) {
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         }
         try {
@@ -303,17 +304,17 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         } catch (InterruptedException e) {
             log.warn("{} Flush of offsets interrupted, cancelling", this);
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         } catch (ExecutionException e) {
             log.error("{} Flush of offsets threw an unexpected exception: ", this, e);
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         } catch (TimeoutException e) {
             log.error("{} Timed out waiting to flush offsets to storage; will try again on next flush interval with latest offsets", this);
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         }
 

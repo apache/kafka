@@ -22,7 +22,8 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.FinalizedFeatures;
+
 import org.slf4j.Logger;
 
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSION;
@@ -30,7 +31,7 @@ import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSI
 
 public class FeaturesPublisher implements MetadataPublisher {
     private final Logger log;
-    private volatile Features features = Features.fromKRaftVersion(MINIMUM_KRAFT_VERSION);
+    private volatile FinalizedFeatures finalizedFeatures = FinalizedFeatures.fromKRaftVersion(MINIMUM_KRAFT_VERSION);
 
     public FeaturesPublisher(
         LogContext logContext
@@ -38,8 +39,8 @@ public class FeaturesPublisher implements MetadataPublisher {
         log = logContext.logger(FeaturesPublisher.class);
     }
 
-    public Features features() {
-        return features;
+    public FinalizedFeatures features() {
+        return finalizedFeatures;
     }
 
     @Override
@@ -54,13 +55,13 @@ public class FeaturesPublisher implements MetadataPublisher {
         LoaderManifest manifest
     ) {
         if (delta.featuresDelta() != null) {
-            Features newFeatures = new Features(newImage.features().metadataVersion(),
+            FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(newImage.features().metadataVersion(),
                     newImage.features().finalizedVersions(),
-                    newImage.provenance().lastContainedOffset(),
-                    true);
-            if (!newFeatures.equals(features)) {
-                log.info("Loaded new metadata {}.", newFeatures);
-                features = newFeatures;
+                    newImage.provenance().lastContainedOffset()
+            );
+            if (!newFinalizedFeatures.equals(finalizedFeatures)) {
+                log.info("Loaded new metadata {}.", newFinalizedFeatures);
+                finalizedFeatures = newFinalizedFeatures;
             }
         }
     }

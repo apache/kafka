@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
+import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 
 import java.util.HashMap;
 import java.util.List;
@@ -76,15 +77,19 @@ public class ConnectorOffsets {
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof ConnectorOffsets)) {
+        if (!(obj instanceof ConnectorOffsets that)) {
             return false;
         }
-        ConnectorOffsets that = (ConnectorOffsets) obj;
         return Objects.equals(this.offsets, that.offsets);
     }
 
     @Override
     public int hashCode() {
         return Objects.hashCode(offsets);
+    }
+
+    @Override
+    public String toString() {
+        return Objects.toString(offsets);
     }
 }

@@ -19,12 +19,16 @@ Define Kafka configuration property names here.
 
 BROKER_ID = "broker.id"
 NODE_ID = "node.id"
+PROCESS_ROLES = "process.roles"
 FIRST_BROKER_PORT = 9092
 FIRST_CONTROLLER_PORT = FIRST_BROKER_PORT + 500
 FIRST_CONTROLLER_ID = 3001
 CLUSTER_ID = "I2eXt9rvSnyhct8BYmW6-w"
 PORT = "port"
 ADVERTISED_HOSTNAME = "advertised.host.name"
+ADVERTISED_LISTENERS = "advertised.listeners"
+LISTENERS = "listeners"
+CONTROLLER_LISTENER_NAMES = "controller.listener.names"
 
 NUM_NETWORK_THREADS = "num.network.threads"
 NUM_IO_THREADS = "num.io.threads"
@@ -70,6 +74,8 @@ DELEGATION_TOKEN_SECRET_KEY="delegation.token.secret.key"
 SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 
 NEW_GROUP_COORDINATOR_ENABLE="group.coordinator.new.enable"
+GROUP_COORDINATOR_REBALANCE_PROTOCOLS="group.coordinator.rebalance.protocols"
+CONSUMER_GROUP_MIGRATION_POLICY = "group.consumer.migration.policy"
 
 """
 From KafkaConfig.scala
@@ -151,8 +157,6 @@ From KafkaConfig.scala
   val InterBrokerSecurityProtocolProp = "security.inter.broker.protocol"
   val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
   /** ********* Controlled shutdown configuration ***********/
-  val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
-  val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
   val ControlledShutdownEnableProp = "controlled.shutdown.enable"
   /** ********* Consumer coordinator configuration ***********/
   val ConsumerMinSessionTimeoutMsProp = "consumer.min.session.timeout.ms"
@@ -167,7 +171,6 @@ From KafkaConfig.scala
   val OffsetsRetentionMinutesProp = "offsets.retention.minutes"
   val OffsetsRetentionCheckIntervalMsProp = "offsets.retention.check.interval.ms"
   val OffsetCommitTimeoutMsProp = "offsets.commit.timeout.ms"
-  val OffsetCommitRequiredAcksProp = "offsets.commit.required.acks"
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefaultProp = "quota.producer.default"
   val ConsumerQuotaBytesPerSecondDefaultProp = "quota.consumer.default"

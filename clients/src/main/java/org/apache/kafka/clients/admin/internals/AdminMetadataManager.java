@@ -23,12 +23,12 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
-import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -83,6 +83,15 @@ public class AdminMetadataManager {
     private long lastMetadataFetchAttemptMs = 0;
 
     /**
+     * The time in wall-clock milliseconds when we started attempts to fetch metadata. If empty,
+     * metadata has not been requested. This is the start time based on which rebootstrap is
+     * triggered if metadata is not obtained for the configured rebootstrap trigger interval.
+     * Set to Optional.of(0L) to force rebootstrap immediately.
+     */
+    private Optional<Long> metadataAttemptStartMs = Optional.empty();
+
+
+    /**
      * The current cluster information.
      */
     private Cluster cluster = Cluster.empty();
@@ -91,6 +100,11 @@ public class AdminMetadataManager {
      * If this is non-null, it is a fatal exception that will terminate all attempts at communication.
      */
     private ApiException fatalException = null;
+
+    /**
+     * The cluster with which the metadata was bootstrapped.
+     */
+    private Cluster bootstrapCluster;
 
     public class AdminMetadataUpdater implements MetadataUpdater {
         @Override
@@ -122,6 +136,16 @@ public class AdminMetadataManager {
         @Override
         public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse) {
             // Do nothing
+        }
+
+        @Override
+        public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
+            return AdminMetadataManager.this.needsRebootstrap(now, rebootstrapTriggerMs);
+        }
+
+        @Override
+        public void rebootstrap(long now) {
+            AdminMetadataManager.this.rebootstrap(now);
         }
 
         @Override
@@ -234,35 +258,39 @@ public class AdminMetadataManager {
         return Math.max(0, refreshBackoffMs - timeSinceAttempt);
     }
 
+    public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
+        return metadataAttemptStartMs.filter(startMs -> now - startMs > rebootstrapTriggerMs).isPresent();
+    }
+
     /**
      * Transition into the UPDATE_PENDING state.  Updates lastMetadataFetchAttemptMs.
      */
     public void transitionToUpdatePending(long now) {
         this.state = State.UPDATE_PENDING;
         this.lastMetadataFetchAttemptMs = now;
+        if (metadataAttemptStartMs.isEmpty())
+            metadataAttemptStartMs = Optional.of(now);
     }
 
     public void updateFailed(Throwable exception) {
         // We depend on pending calls to request another metadata update
         this.state = State.QUIESCENT;
 
-        if (exception instanceof AuthenticationException) {
-            log.warn("Metadata update failed due to authentication error", exception);
-            this.fatalException = (ApiException) exception;
-        } else if (exception instanceof MismatchedEndpointTypeException) {
-            log.warn("Metadata update failed due to mismatched endpoint type error", exception);
-            this.fatalException = (ApiException) exception;
-        } else if (exception instanceof UnsupportedEndpointTypeException) {
-            log.warn("Metadata update failed due to unsupported endpoint type error", exception);
-            this.fatalException = (ApiException) exception;
-        } else if (exception instanceof UnsupportedVersionException) {
-            if (usingBootstrapControllers) {
-                log.warn("The remote node is not a CONTROLLER that supports the KIP-919 " +
-                    "DESCRIBE_CLUSTER api.", exception);
-            } else {
-                log.warn("The remote node is not a BROKER that supports the METADATA api.", exception);
+        if (RequestUtils.isFatalException(exception)) {
+            log.warn("Fatal error during metadata update", exception);
+            // avoid unchecked/unconfirmed cast to ApiException
+            if (exception instanceof  ApiException) {
+                this.fatalException = (ApiException) exception;
             }
-            this.fatalException = (ApiException) exception;
+
+            if (exception instanceof UnsupportedVersionException) {
+                if (usingBootstrapControllers) {
+                    log.warn("The remote node is not a CONTROLLER that supports the KIP-919 " +
+                        "DESCRIBE_CLUSTER api.", exception);
+                } else {
+                    log.warn("The remote node is not a BROKER that supports the METADATA api.", exception);
+                }
+            }
         } else {
             log.info("Metadata update failed", exception);
         }
@@ -275,6 +303,7 @@ public class AdminMetadataManager {
     public void update(Cluster cluster, long now) {
         if (cluster.isBootstrapConfigured()) {
             log.debug("Setting bootstrap cluster metadata {}.", cluster);
+            bootstrapCluster = cluster;
         } else {
             log.debug("Updating cluster metadata to {}", cluster);
             this.lastMetadataUpdateMs = now;
@@ -282,9 +311,23 @@ public class AdminMetadataManager {
 
         this.state = State.QUIESCENT;
         this.fatalException = null;
+        this.metadataAttemptStartMs = Optional.empty();
 
         if (!cluster.nodes().isEmpty()) {
             this.cluster = cluster;
         }
+    }
+
+    public void initiateRebootstrap() {
+        this.metadataAttemptStartMs = Optional.of(0L);
+    }
+
+    /**
+     * Rebootstrap metadata with the cluster previously used for bootstrapping.
+     */
+    public void rebootstrap(long now) {
+        log.info("Rebootstrapping with {}", this.bootstrapCluster);
+        update(bootstrapCluster, now);
+        this.metadataAttemptStartMs = Optional.of(now);
     }
 }

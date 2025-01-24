@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
+import org.apache.kafka.common.internals.SecurityManagerCompatibility;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -51,19 +52,14 @@ import org.apache.kafka.common.security.kerberos.KerberosError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
-import javax.security.auth.Subject;
-import javax.security.sasl.Sasl;
-import javax.security.sasl.SaslClient;
-import javax.security.sasl.SaslException;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.Principal;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -73,6 +69,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CompletionException;
+
+import javax.security.auth.Subject;
+import javax.security.sasl.Sasl;
+import javax.security.sasl.SaslClient;
+import javax.security.sasl.SaslException;
 
 public class SaslClientAuthenticator implements Authenticator {
     /**
@@ -175,7 +177,6 @@ public class SaslClientAuthenticator implements Authenticator {
                                    String servicePrincipal,
                                    String host,
                                    String mechanism,
-                                   boolean handshakeRequestEnable,
                                    TransportLayer transportLayer,
                                    Time time,
                                    LogContext logContext) {
@@ -194,7 +195,7 @@ public class SaslClientAuthenticator implements Authenticator {
         this.reauthInfo = new ReauthInfo();
 
         try {
-            setSaslState(handshakeRequestEnable ? SaslState.SEND_APIVERSIONS_REQUEST : SaslState.INITIAL);
+            setSaslState(SaslState.SEND_APIVERSIONS_REQUEST);
 
             // determine client principal from subject for Kerberos to use as authorization id for the SaslClient.
             // For other mechanisms, the authenticated principal (username for PLAIN and SCRAM) is used as
@@ -213,7 +214,7 @@ public class SaslClientAuthenticator implements Authenticator {
     // visible for testing
     SaslClient createSaslClient() {
         try {
-            return Subject.doAs(subject, (PrivilegedExceptionAction<SaslClient>) () -> {
+            return SecurityManagerCompatibility.get().callAs(subject, () -> {
                 String[] mechs = {mechanism};
                 log.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
                     clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
@@ -223,7 +224,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 }
                 return retvalSaslClient;
             });
-        } catch (PrivilegedActionException e) {
+        } catch (CompletionException e) {
             throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism, e.getCause());
         }
     }
@@ -342,8 +343,7 @@ public class SaslClientAuthenticator implements Authenticator {
         previousSaslClientAuthenticator.close();
         reauthInfo.reauthenticating(apiVersionsResponseFromOriginalAuthentication,
                 reauthenticationContext.reauthenticationBeginNanos());
-        NetworkReceive netInBufferFromChannel = reauthenticationContext.networkReceive();
-        netInBuffer = netInBufferFromChannel;
+        netInBuffer = reauthenticationContext.networkReceive();
         setSaslState(SaslState.REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE); // Will set immediately
         authenticate();
     }
@@ -532,8 +532,8 @@ public class SaslClientAuthenticator implements Authenticator {
             if (isInitial && !saslClient.hasInitialResponse())
                 return saslToken;
             else
-                return Subject.doAs(subject, (PrivilegedExceptionAction<byte[]>) () -> saslClient.evaluateChallenge(saslToken));
-        } catch (PrivilegedActionException e) {
+                return SecurityManagerCompatibility.get().callAs(subject, () -> saslClient.evaluateChallenge(saslToken));
+        } catch (CompletionException e) {
             String error = "An error: (" + e + ") occurred when evaluating SASL token received from the Kafka Broker.";
             KerberosError kerberosError = KerberosError.fromException(e);
             // Try to provide hints to use about what went wrong so they can fix their configuration.
@@ -544,7 +544,7 @@ public class SaslClientAuthenticator implements Authenticator {
                     " Users must configure FQDN of kafka brokers when authenticating using SASL and" +
                     " `socketChannel.socket().getInetAddress().getHostName()` must match the hostname in `principal/hostname@realm`";
             }
-            //Unwrap the SaslException inside `PrivilegedActionException`
+            //Unwrap the SaslException
             Throwable cause = e.getCause();
             // Treat transient Kerberos errors as non-fatal SaslExceptions that are processed as I/O exceptions
             // and all other failures as fatal SaslAuthenticationException.
@@ -682,7 +682,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
         public void setAuthenticationEndAndSessionReauthenticationTimes(long nowNanos) {
             authenticationEndNanos = nowNanos;
-            long sessionLifetimeMsToUse = 0;
+            long sessionLifetimeMsToUse;
             if (positiveSessionLifetimeMs != null) {
                 // pick a random percentage between 85% and 95% for session re-authentication
                 double pctWindowFactorToTakeNetworkLatencyAndClockDriftIntoAccount = 0.85;

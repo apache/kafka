@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.NetworkClient;
@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -191,7 +192,7 @@ public class Fetcher<K, V> extends AbstractFetch {
             final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
             final RequestFuture<ClientResponse> responseFuture = client.send(fetchTarget, request);
 
-            responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
+            responseFuture.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(ClientResponse resp) {
                     successHandler.handle(fetchTarget, data, resp);

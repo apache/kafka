@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import joptsimple.OptionException;
-import joptsimple.OptionSpec;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -41,12 +39,14 @@ import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import joptsimple.OptionException;
+import joptsimple.OptionSpec;
+
 public final class ConsoleConsumerOptions extends CommandDefaultOptions {
 
     private static final Random RANDOM = new Random();
 
     private final OptionSpec<String> topicOpt;
-    private final OptionSpec<String> whitelistOpt;
     private final OptionSpec<String> includeOpt;
     private final OptionSpec<Integer> partitionIdOpt;
     private final OptionSpec<String> offsetOpt;
@@ -74,11 +74,6 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         topicOpt = parser.accepts("topic", "The topic to consume on.")
                 .withRequiredArg()
                 .describedAs("topic")
-                .ofType(String.class);
-        whitelistOpt = parser.accepts("whitelist",
-                        "DEPRECATED, use --include instead; ignored if --include specified. Regular expression specifying list of topics to include for consumption.")
-                .withRequiredArg()
-                .describedAs("Java regex (String)")
                 .ofType(String.class);
         includeOpt = parser.accepts("include",
                         "Regular expression specifying list of topics to include for consumption.")
@@ -113,6 +108,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                             " print.timestamp=true|false\n" +
                             " print.key=true|false\n" +
                             " print.offset=true|false\n" +
+                            " print.epoch=true|false\n" +
                             " print.partition=true|false\n" +
                             " print.headers=true|false\n" +
                             " print.value=true|false\n" +
@@ -191,11 +187,10 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
 
     private void checkRequiredArgs() {
         List<Optional<String>> topicOrFilterArgs = new ArrayList<>(Arrays.asList(topicArg(), includedTopicsArg()));
-        topicOrFilterArgs.removeIf(arg -> !arg.isPresent());
-        // user need to specify value for either --topic or one of the include filters options (--include or --whitelist)
+        topicOrFilterArgs.removeIf(arg -> arg.isEmpty());
+        // user need to specify value for either --topic or --include options)
         if (topicOrFilterArgs.size() != 1) {
-            CommandLineUtils.printUsageAndExit(parser, "Exactly one of --include/--topic is required. " +
-                    (options.has(whitelistOpt) ? "--whitelist is DEPRECATED use --include instead; ignored if --include specified." : ""));
+            CommandLineUtils.printUsageAndExit(parser, "Exactly one of --include/--topic is required. ");
         }
 
         if (partitionArg().isPresent()) {
@@ -395,7 +390,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     Optional<String> includedTopicsArg() {
         return options.has(includeOpt)
                 ? Optional.of(options.valueOf(includeOpt))
-                : Optional.ofNullable(options.valueOf(whitelistOpt));
+                : Optional.empty();
     }
 
     Properties formatterArgs() throws IOException {

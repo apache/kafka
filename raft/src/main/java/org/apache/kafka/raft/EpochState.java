@@ -26,15 +26,17 @@ public interface EpochState extends Closeable {
     }
 
     /**
-     * Decide whether to grant a vote to a candidate, it is the responsibility of the caller to invoke
-     * {@link QuorumState#transitionToVoted(int, int)} if vote is granted.
+     * Decide whether to grant a vote to a replica.
      *
-     * @param candidateId The ID of the voter who attempt to become leader
-     * @param isLogUpToDate Whether the candidate’s log is at least as up-to-date as receiver’s log, it
-     *                      is the responsibility of the caller to compare the log in advance
-     * @return true If grant vote.
+     * It is the responsibility of the caller to invoke
+     * {@link QuorumState#unattachedAddVotedState(int, ReplicaKey)} if a standard vote is granted.
+     *
+     * @param replicaKey the id and directory of the replica requesting the vote
+     * @param isLogUpToDate whether the replica's log is at least as up-to-date as receiver’s log
+     * @param isPreVote whether the vote request is a PreVote (non-binding) or standard vote
+     * @return true if it can grant the vote, false otherwise
      */
-    boolean canGrantVote(int candidateId, boolean isLogUpToDate);
+    boolean canGrantVote(ReplicaKey replicaKey, boolean isLogUpToDate, boolean isPreVote);
 
     /**
      * Get the current election state, which is guaranteed to be immutable.
@@ -47,8 +49,14 @@ public interface EpochState extends Closeable {
     int epoch();
 
     /**
+     * Returns the known endpoints for the leader.
+     *
+     * If the leader is not known then {@code Endpoints.empty()} is returned.
+     */
+    Endpoints leaderEndpoints();
+
+    /**
      * User-friendly description of the state
      */
     String name();
-
 }

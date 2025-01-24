@@ -22,6 +22,9 @@ import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,6 +38,8 @@ import java.util.concurrent.TimeUnit;
  * aren't persisted and will be wiped if the worker is restarted).
  */
 public class MemoryConfigBackingStore implements ConfigBackingStore {
+
+    private static final Logger log = LoggerFactory.getLogger(MemoryConfigBackingStore.class);
 
     private final Map<String, ConnectorState> connectors = new HashMap<>();
     private UpdateListener updateListener;
@@ -61,6 +66,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
         Map<String, TargetState> connectorTargetStates = new HashMap<>();
         Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+        Map<String, AppliedConnectorConfig> appliedConnectorConfigs = new HashMap<>();
 
         for (Map.Entry<String, ConnectorState> connectorStateEntry : connectors.entrySet()) {
             String connector = connectorStateEntry.getKey();
@@ -69,6 +75,9 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
             connectorConfigs.put(connector, connectorState.connConfig);
             connectorTargetStates.put(connector, connectorState.targetState);
             taskConfigs.putAll(connectorState.taskConfigs);
+            if (connectorState.appliedConnConfig != null) {
+                appliedConnectorConfigs.put(connector, connectorState.appliedConnConfig);
+            }
         }
 
         return new ClusterConfigState(
@@ -80,6 +89,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
                 taskConfigs,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                appliedConnectorConfigs,
                 Collections.emptySet(),
                 Collections.emptySet(),
                 configTransformer
@@ -123,6 +133,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
 
         HashSet<ConnectorTaskId> taskIds = new HashSet<>(state.taskConfigs.keySet());
         state.taskConfigs.clear();
+        state.appliedConnConfig = null;
 
         if (updateListener != null)
             updateListener.onTaskConfigUpdate(taskIds);
@@ -136,6 +147,8 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
 
         Map<ConnectorTaskId, Map<String, String>> taskConfigsMap = taskConfigListAsMap(connector, configs);
         state.taskConfigs = taskConfigsMap;
+
+        state.applyConfig();
 
         if (updateListener != null)
             updateListener.onTaskConfigUpdate(taskConfigsMap.keySet());
@@ -187,6 +200,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         private TargetState targetState;
         private Map<String, String> connConfig;
         private Map<ConnectorTaskId, Map<String, String>> taskConfigs;
+        private AppliedConnectorConfig appliedConnConfig;
 
         /**
          * @param connConfig the connector's configuration
@@ -197,6 +211,11 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
             this.targetState = targetState == null ? TargetState.STARTED : targetState;
             this.connConfig = connConfig;
             this.taskConfigs = new HashMap<>();
+            this.appliedConnConfig = null;
+        }
+
+        public void applyConfig() {
+            this.appliedConnConfig = new AppliedConnectorConfig(connConfig);
         }
     }
 

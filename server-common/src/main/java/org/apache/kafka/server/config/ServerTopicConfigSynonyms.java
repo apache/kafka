@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.server.config;
 
-import static java.util.Arrays.asList;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,11 +26,11 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.utils.Utils;
+
+import static java.util.Arrays.asList;
 
 public final class ServerTopicConfigSynonyms {
-    private static final String LOG_PREFIX = "log.";
+    public static final String LOG_PREFIX = "log.";
     public static final String LOG_CLEANER_PREFIX = LOG_PREFIX + "cleaner.";
 
     /**
@@ -49,7 +50,6 @@ public final class ServerTopicConfigSynonyms {
      * the first synonym and ignore the second.
      */
     // Topic configs with no mapping to a server config can be found in `LogConfig.CONFIGS_WITH_NO_SERVER_DEFAULTS`
-    @SuppressWarnings("deprecation")
     public static final Map<String, List<ConfigSynonym>> ALL_TOPIC_CONFIG_SYNONYMS = Collections.unmodifiableMap(Utils.mkMap(
         sameNameWithLogPrefix(TopicConfig.SEGMENT_BYTES_CONFIG),
         listWithLogPrefix(TopicConfig.SEGMENT_MS_CONFIG,
@@ -79,13 +79,13 @@ public final class ServerTopicConfigSynonyms {
         sameName(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG),
         sameName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG),
         sameName(TopicConfig.COMPRESSION_TYPE_CONFIG),
+        sameName(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG),
+        sameName(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG),
+        sameName(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG),
         sameNameWithLogPrefix(TopicConfig.PREALLOCATE_CONFIG),
-        sameNameWithLogPrefix(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG),
-        sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG),
-        sameNameWithLogPrefix(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG),
         sameNameWithLogPrefix(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG)
     ));

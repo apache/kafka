@@ -19,6 +19,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.DataException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,7 +109,7 @@ public class OffsetUtils {
             return;
         }
 
-        if (!(keyList.get(0) instanceof String)) {
+        if (!(keyList.get(0) instanceof String connectorName)) {
             log.warn("Ignoring offset partition key with an unexpected format for the first element in the partition key list. " +
                     "Expected type: {}, actual type: {}", String.class.getName(), className(keyList.get(0)));
             return;
@@ -122,7 +123,6 @@ public class OffsetUtils {
             return;
         }
 
-        String connectorName = (String) keyList.get(0);
         Map<String, Object> partition = (Map<String, Object>) keyList.get(1);
         connectorPartitions.computeIfAbsent(connectorName, ignored -> new HashSet<>());
         if (offsetValue == null) {

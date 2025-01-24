@@ -19,6 +19,7 @@ package org.apache.kafka.metadata.properties;
 
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +44,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 /**
@@ -101,14 +101,7 @@ public final class MetaPropertiesEnsemble {
         private Optional<String> metadataLogDir = Optional.empty();
 
         public Loader addLogDirs(Collection<String> logDirs) {
-            for (String logDir : logDirs) {
-                this.logDirs.add(logDir);
-            }
-            return this;
-        }
-
-        public Loader addLogDir(String logDir) {
-            this.logDirs.add(logDir);
+            this.logDirs.addAll(logDirs);
             return this;
         }
 
@@ -165,12 +158,6 @@ public final class MetaPropertiesEnsemble {
      * Utility class for copying a MetaPropertiesEnsemble object, possibly with changes.
      */
     public static class Copier {
-        public static final BiConsumer<String, IOException> LOGGING_ERROR_HANDLER = new BiConsumer<String, IOException>() {
-            @Override
-            public void accept(String logDir, IOException e) {
-                MetaPropertiesEnsemble.LOG.error("Error while writing meta.properties to {}", logDir, e);
-            }
-        };
 
         private final MetaPropertiesEnsemble prev;
         private final Set<String> emptyLogDirs;
@@ -258,7 +245,7 @@ public final class MetaPropertiesEnsemble {
         }
 
         /**
-         * Set the the current metadata log directory.
+         * Set the current metadata log directory.
          *
          * @param metaLogDir    The metadata log directory, or Optional.empty if there is none.
          *
@@ -431,7 +418,7 @@ public final class MetaPropertiesEnsemble {
      * @return An iterator that returns (logDir, metaProps) for all non-failed directories.
      */
     public Iterator<Entry<String, Optional<MetaProperties>>> nonFailedDirectoryProps() {
-        return new Iterator<Entry<String, Optional<MetaProperties>>>() {
+        return new Iterator<>() {
             private final Iterator<String> emptyLogDirsIterator = emptyLogDirs.iterator();
             private final Iterator<Entry<String, MetaProperties>> logDirsIterator =
                     logDirProps.entrySet().iterator();
@@ -504,22 +491,22 @@ public final class MetaPropertiesEnsemble {
                         "(which is implicit when the `version` field is missing).");
                 }
             }
-            if (!metaProps.clusterId().isPresent()) {
+            if (metaProps.clusterId().isEmpty()) {
                 if (metaProps.version().alwaysHasClusterId()) {
                     throw new RuntimeException("cluster.id was not specified in the v1 file: " +
                         path);
                 }
-            } else if (!expectedClusterId.isPresent()) {
+            } else if (expectedClusterId.isEmpty()) {
                 expectedClusterId = metaProps.clusterId();
             } else if (!metaProps.clusterId().get().equals(expectedClusterId.get())) {
                 throw new RuntimeException("Invalid cluster.id in: " + path + ". Expected " +
                     expectedClusterId.get() + ", but read " + metaProps.clusterId().get());
             }
-            if (!metaProps.nodeId().isPresent()) {
+            if (metaProps.nodeId().isEmpty()) {
                 if (metaProps.version().alwaysHasNodeId()) {
                     throw new RuntimeException("node.id was not specified in " + path);
                 }
-            } else if (!expectedNodeId.isPresent()) {
+            } else if (expectedNodeId.isEmpty()) {
                 expectedNodeId = metaProps.nodeId();
             } else if (metaProps.nodeId().getAsInt() != expectedNodeId.getAsInt()) {
                 throw new RuntimeException("Stored node id " + metaProps.nodeId().getAsInt() +
@@ -542,7 +529,7 @@ public final class MetaPropertiesEnsemble {
             }
         }
         if (verificationFlags.contains(VerificationFlag.REQUIRE_METADATA_LOG_DIR)) {
-            if (!metadataLogDir.isPresent()) {
+            if (metadataLogDir.isEmpty()) {
                 throw new RuntimeException("No metadata log directory was specified.");
             }
         }
@@ -607,8 +594,7 @@ public final class MetaPropertiesEnsemble {
         TreeMap<String, String> outputMap = new TreeMap<>();
         emptyLogDirs.forEach(e -> outputMap.put(e, "EMPTY"));
         errorLogDirs.forEach(e -> outputMap.put(e, "ERROR"));
-        logDirProps.entrySet().forEach(
-            e -> outputMap.put(e.getKey(), e.getValue().toString()));
+        logDirProps.forEach((key, value) -> outputMap.put(key, value.toString()));
         return "MetaPropertiesEnsemble" +
             "(metadataLogDir=" + metadataLogDir +
             ", dirs={" + outputMap.entrySet().stream().

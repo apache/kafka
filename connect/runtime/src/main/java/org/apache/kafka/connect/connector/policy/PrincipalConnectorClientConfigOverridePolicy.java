@@ -20,6 +20,7 @@ package org.apache.kafka.connect.connector.policy;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.SaslConfigs;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

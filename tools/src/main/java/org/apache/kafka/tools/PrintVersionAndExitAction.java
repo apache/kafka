@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.Exit;
+
 import net.sourceforge.argparse4j.inf.Argument;
 import net.sourceforge.argparse4j.inf.ArgumentAction;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.Exit;
 
 import java.util.Map;
 

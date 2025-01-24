@@ -20,32 +20,38 @@ package org.apache.kafka.connect.runtime.rest;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
-import org.eclipse.jetty.client.api.Request;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.junit.MockitoJUnitRunner;
+
+import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.client.Request;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.net.URI;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-import javax.ws.rs.core.HttpHeaders;
 
-import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
+import jakarta.ws.rs.core.HttpHeaders;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class InternalRequestSignatureTest {
 
     private static final byte[] REQUEST_BODY =
@@ -109,30 +115,17 @@ public class InternalRequestSignatureTest {
 
     @Test
     public void addToRequestShouldAddHeadersOnValidSignatureAlgorithm() {
-        Request request = mock(Request.class);
-        ArgumentCaptor<String> signatureCapture = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> signatureAlgorithmCapture = ArgumentCaptor.forClass(String.class);
-        when(request.header(
-                eq(InternalRequestSignature.SIGNATURE_HEADER),
-                signatureCapture.capture()
-            )).thenReturn(request);
-        when(request.header(
-                eq(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER),
-                signatureAlgorithmCapture.capture()
-            )).thenReturn(request);
+        HttpClient httpClient = new HttpClient();
+        Request request = httpClient.newRequest(URI.create("http://localhost"));
 
         InternalRequestSignature.addToRequest(crypto, KEY, REQUEST_BODY, SIGNATURE_ALGORITHM, request);
 
-        assertEquals(
-            "Request should have valid base 64-encoded signature added as header",
-            ENCODED_SIGNATURE,
-            signatureCapture.getValue()
-        );
-        assertEquals(
-            "Request should have provided signature algorithm added as header",
-            SIGNATURE_ALGORITHM,
-            signatureAlgorithmCapture.getValue()
-        );
+        assertEquals(ENCODED_SIGNATURE,
+            request.getHeaders().get(InternalRequestSignature.SIGNATURE_HEADER),
+            "Request should have valid base 64-encoded signature added as header");
+        assertEquals(SIGNATURE_ALGORITHM,
+            request.getHeaders().get(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER),
+            "Request should have provided signature algorithm added as header");
     }
 
     @Test

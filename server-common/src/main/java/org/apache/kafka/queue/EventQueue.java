@@ -97,7 +97,7 @@ public interface EventQueue extends AutoCloseable {
 
         @Override
         public OptionalLong apply(OptionalLong prevDeadlineNs) {
-            if (!prevDeadlineNs.isPresent()) {
+            if (prevDeadlineNs.isEmpty()) {
                 return OptionalLong.of(newDeadlineNs);
             } else if (prevDeadlineNs.getAsLong() < newDeadlineNs) {
                 return prevDeadlineNs;
@@ -116,7 +116,7 @@ public interface EventQueue extends AutoCloseable {
 
         @Override
         public OptionalLong apply(OptionalLong prevDeadlineNs) {
-            if (!prevDeadlineNs.isPresent()) {
+            if (prevDeadlineNs.isEmpty()) {
                 return OptionalLong.of(newDeadlineNs);
             } else if (prevDeadlineNs.getAsLong() > newDeadlineNs) {
                 return prevDeadlineNs;
@@ -127,7 +127,7 @@ public interface EventQueue extends AutoCloseable {
     }
 
     class VoidEvent implements Event {
-        public final static VoidEvent INSTANCE = new VoidEvent();
+        public static final VoidEvent INSTANCE = new VoidEvent();
 
         @Override
         public void run() throws Exception {

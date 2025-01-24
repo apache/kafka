@@ -27,4 +27,3 @@ public class DefaultLogin extends AbstractLogin {
     public void close() {
     }
 }
-

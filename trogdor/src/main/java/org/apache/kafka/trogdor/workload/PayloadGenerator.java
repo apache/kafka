@@ -27,9 +27,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  * times generate() is invoked.  PayloadGenerator instances should be immutable
  * and thread-safe.
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "type")
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes(value = {
     @JsonSubTypes.Type(value = ConstantPayloadGenerator.class, name = "constant"),
     @JsonSubTypes.Type(value = SequentialPayloadGenerator.class, name = "sequential"),

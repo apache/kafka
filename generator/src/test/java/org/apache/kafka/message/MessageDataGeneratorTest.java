@@ -208,7 +208,7 @@ public class MessageDataGeneratorTest {
     }
 
     @Test
-    public void testInvalidTaggedVersionsNotASubetOfVersions() {
+    public void testInvalidTaggedVersionsNotASubsetOfVersions() {
         assertStringContains("taggedVersions must be a subset of versions",
             assertThrows(Throwable.class, () -> {
                 MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(

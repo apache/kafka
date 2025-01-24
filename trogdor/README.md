@@ -2,62 +2,67 @@ Trogdor
 ========================================
 Trogdor is a test framework for Apache Kafka.
 
-Trogdor can run benchmarks and other workloads.  Trogdor can also inject faults in order to stress test the system.
+Trogdor can run benchmarks and other workloads. Trogdor can also inject faults in order to stress test the system.
 
 Quickstart
 =========================================================
-First, we want to start a single-node Kafka cluster with a ZooKeeper and a broker.
+First, we want to [start a single-node Kafka cluster in KRaft mode](https://github.com/apache/kafka/blob/trunk/README.md#running-a-kafka-broker-in-kraft-mode)
 
-Running ZooKeeper:
+Running Kafka in Kraft mode:
 
-    > ./bin/zookeeper-server-start.sh ./config/zookeeper.properties &> /tmp/zookeeper.log &
-
-Running Kafka:
-
-    > ./bin/kafka-server-start.sh ./config/server.properties &> /tmp/kafka.log &
-
+```
+KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
+./bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/server.properties
+./bin/kafka-server-start.sh config/server.properties  &> /tmp/kafka.log &
+```
 Then, we want to run a Trogdor Agent, plus a Trogdor Coordinator.
 
 To run the Trogdor Agent:
 
-    > ./bin/trogdor.sh agent -c ./config/trogdor.conf -n node0 &> /tmp/trogdor-agent.log &
-
+```
+./bin/trogdor.sh agent -c ./config/trogdor.conf -n node0 &> /tmp/trogdor-agent.log &
+```
 To run the Trogdor Coordinator:
 
-    > ./bin/trogdor.sh coordinator -c ./config/trogdor.conf -n node0 &> /tmp/trogdor-coordinator.log &
-
+```
+./bin/trogdor.sh coordinator -c ./config/trogdor.conf -n node0 &> /tmp/trogdor-coordinator.log &
+```
 Let's confirm that all of the daemons are running:
 
-    > jps
-    116212 Coordinator
-    115188 QuorumPeerMain
-    116571 Jps
-    115420 Kafka
-    115694 Agent
-
+```
+jps
+116212 Coordinator
+115188 QuorumPeerMain
+116571 Jps
+115420 Kafka
+115694 Agent
+```
 Now, we can submit a test job to Trogdor.
 
-    > ./bin/trogdor.sh client createTask -t localhost:8889 -i produce0 --spec ./tests/spec/simple_produce_bench.json
-    Sent CreateTaskRequest for task produce0.
-
+```
+./bin/trogdor.sh client createTask -t localhost:8889 -i produce0 --spec ./tests/spec/simple_produce_bench.json
+Sent CreateTaskRequest for task produce0.
+```
 We can run showTask to see what the task's status is:
 
-    > ./bin/trogdor.sh client showTask -t localhost:8889 -i produce0
-    Task bar of type org.apache.kafka.trogdor.workload.ProduceBenchSpec is DONE. FINISHED at 2019-01-09T20:38:22.039-08:00 after 6s
-
+```
+./bin/trogdor.sh client showTask -t localhost:8889 -i produce0
+Task bar of type org.apache.kafka.trogdor.workload.ProduceBenchSpec is DONE. FINISHED at 2019-01-09T20:38:22.039-08:00 after 6s
+```
 To see the results, we use showTask with --show-status:
 
-    > ./bin/trogdor.sh client showTask -t localhost:8889 -i produce0 --show-status
-    Task bar of type org.apache.kafka.trogdor.workload.ProduceBenchSpec is DONE. FINISHED at 2019-01-09T20:38:22.039-08:00 after 6s
-    Status: {
-      "totalSent" : 50000,
-      "averageLatencyMs" : 17.83388,
-      "p50LatencyMs" : 12,
-      "p95LatencyMs" : 75,
-      "p99LatencyMs" : 96,
-      "transactionsCommitted" : 0
-    }
-
+```
+./bin/trogdor.sh client showTask -t localhost:8889 -i produce0 --show-status
+Task bar of type org.apache.kafka.trogdor.workload.ProduceBenchSpec is DONE. FINISHED at 2019-01-09T20:38:22.039-08:00 after 6s
+Status: {
+  "totalSent" : 50000,
+  "averageLatencyMs" : 17.83388,
+  "p50LatencyMs" : 12,
+  "p95LatencyMs" : 75,
+  "p99LatencyMs" : 96,
+  "transactionsCommitted" : 0
+}
+```
 Trogdor Architecture
 ========================================
 Trogdor has a single coordinator process which manages multiple agent processes.  Each agent process is responsible for a single cluster node.
@@ -184,6 +189,7 @@ When using exec mode, you must pass in a Task specification to use.  The Agent w
 
 For example:
 
-    > ./bin/trogdor.sh agent -n node0 -c ./config/trogdor.conf --exec ./tests/spec/simple_produce_bench.json
-
+```
+./bin/trogdor.sh agent -n node0 -c ./config/trogdor.conf --exec ./tests/spec/simple_produce_bench.json
+```
 When using exec mode, the Agent will exit once the task is complete.

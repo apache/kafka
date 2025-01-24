@@ -17,17 +17,18 @@
 
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.DefaultRecordBatch;
+import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.utils.PrimitiveRef;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+
 import java.util.Comparator;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.function.Consumer;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.DefaultRecordBatch;
-import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.utils.PrimitiveRef;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 
 class TxnPartitionEntry {
     static final int NO_LAST_ACKED_SEQUENCE_NUMBER = -1;

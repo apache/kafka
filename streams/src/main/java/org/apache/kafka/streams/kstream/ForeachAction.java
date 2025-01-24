@@ -42,5 +42,3 @@ public interface ForeachAction<K, V> {
      */
     void apply(final K key, final V value);
 }
-
-

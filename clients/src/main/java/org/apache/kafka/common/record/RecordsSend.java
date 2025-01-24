@@ -72,7 +72,7 @@ public abstract class RecordsSend<T extends BaseRecords> implements Send {
     /**
      * Write records up to `remaining` bytes to `channel`. The implementation is allowed to be stateful. The contract
      * from the caller is that the first invocation will be with `previouslyWritten` equal to 0, and `remaining` equal to
-     * the to maximum bytes we want to write the to `channel`. `previouslyWritten` and `remaining` will be adjusted
+     * the maximum bytes we want to write the to `channel`. `previouslyWritten` and `remaining` will be adjusted
      * appropriately for every subsequent invocation. See {@link #writeTo} for example expected usage.
      * @param channel The channel to write to
      * @param previouslyWritten Bytes written in previous calls to {@link #writeTo(TransferableChannel, int, int)}; 0 if being called for the first time

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.KafkaException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +62,6 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
     /**
      * Create a wrapped trust manager factory
      * @param kmfAlgorithm the algorithm
-     * @return A wrapped trust manager factory
      * @throws NoSuchAlgorithmException
      */
     protected CommonNameLoggingTrustManagerFactoryWrapper(String kmfAlgorithm) throws NoSuchAlgorithmException {
@@ -113,15 +113,15 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
      */
     static class CommonNameLoggingTrustManager implements X509TrustManager {
 
-        final private X509TrustManager origTm;
+        private final X509TrustManager origTm;
         final int nrOfRememberedBadCerts;
-        final private LinkedHashMap<ByteBuffer, String> previouslyRejectedClientCertChains;
+        private final LinkedHashMap<ByteBuffer, String> previouslyRejectedClientCertChains;
 
         public CommonNameLoggingTrustManager(X509TrustManager originalTrustManager, int nrOfRememberedBadCerts) {
             this.origTm = originalTrustManager;
             this.nrOfRememberedBadCerts = nrOfRememberedBadCerts;
             // Restrict maximal size of the LinkedHashMap to avoid security attacks causing OOM
-            this.previouslyRejectedClientCertChains = new LinkedHashMap<ByteBuffer, String>() {
+            this.previouslyRejectedClientCertChains = new LinkedHashMap<>() {
                 @Override
                 protected boolean removeEldestEntry(final Map.Entry<ByteBuffer, String> eldest) {
                     return size() > nrOfRememberedBadCerts;
@@ -213,7 +213,6 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
          * @param origChain The original (unsorted) certificate chain
          * @return The sorted and wrapped certificate chain
          * @throws CertificateException
-         * @throws NoSuchAlgorithmException
          */
         public static X509Certificate[] sortChainAnWrapEndCertificate(X509Certificate[] origChain) throws CertificateException {
             if (origChain == null || origChain.length < 1) {
@@ -239,7 +238,7 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
                 principalToCertMap.put(principal, cert);
             }
             // Thus, expect certificate chain to be broken, e.g. containing multiple enbd certificates
-            HashSet<X509Certificate> endCertificates = new HashSet<>();
+            Set<X509Certificate> endCertificates = new HashSet<>();
             for (X509Certificate cert: origChain) {
                 X500Principal subjectPrincipal = cert.getSubjectX500Principal();
                 if (!issuedbyPrincipalToCertificatesMap.containsKey(subjectPrincipal)) {
@@ -312,10 +311,8 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
         }
 
         @Override
-        public void checkValidity(Date date)
-                throws CertificateExpiredException, CertificateNotYetValidException {
-            // We do not check validity at all. 
-            return;
+        public void checkValidity(Date date) {
+            // We do not check validity at all.
         }
 
         @Override

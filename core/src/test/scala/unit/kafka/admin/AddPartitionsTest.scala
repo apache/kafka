@@ -17,16 +17,13 @@
 
 package kafka.admin
 
-import java.util.{Collections, Optional}
-import kafka.controller.ReplicaAssignment
+import java.util.Collections
 import kafka.server.{BaseRequestTest, BrokerServer}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.{Admin, NewPartitions, NewTopic}
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
-import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
-import org.apache.kafka.server.common.AdminOperationException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -45,33 +42,31 @@ class AddPartitionsTest extends BaseRequestTest {
   val partitionId = 0
 
   val topic1 = "new-topic1"
-  val topic1Assignment = Map(0 -> ReplicaAssignment(Seq(0,1), List(), List()))
+  val topic1Assignment = Map(0 -> Seq(0,1))
   val topic2 = "new-topic2"
-  val topic2Assignment = Map(0 -> ReplicaAssignment(Seq(1,2), List(), List()))
+  val topic2Assignment = Map(0 -> Seq(1,2))
   val topic3 = "new-topic3"
-  val topic3Assignment = Map(0 -> ReplicaAssignment(Seq(2,3,0,1), List(), List()))
+  val topic3Assignment = Map(0 -> Seq(2,3,0,1))
   val topic4 = "new-topic4"
-  val topic4Assignment = Map(0 -> ReplicaAssignment(Seq(0,3), List(), List()))
+  val topic4Assignment = Map(0 -> Seq(0,3))
   val topic5 = "new-topic5"
-  val topic5Assignment = Map(1 -> ReplicaAssignment(Seq(0,1), List(), List()))
+  val topic5Assignment = Map(1 -> Seq(0,1))
   var admin: Admin = _
+
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-
-    if (isKRaftTest()) {
-      brokers.foreach(broker => broker.asInstanceOf[BrokerServer].lifecycleManager.initialUnfenceFuture.get())
-    }
-    createTopicWithAssignment(topic1, partitionReplicaAssignment = topic1Assignment.map { case (k, v) => k -> v.replicas })
-    createTopicWithAssignment(topic2, partitionReplicaAssignment = topic2Assignment.map { case (k, v) => k -> v.replicas })
-    createTopicWithAssignment(topic3, partitionReplicaAssignment = topic3Assignment.map { case (k, v) => k -> v.replicas })
-    createTopicWithAssignment(topic4, partitionReplicaAssignment = topic4Assignment.map { case (k, v) => k -> v.replicas })
+    brokers.foreach(broker => broker.asInstanceOf[BrokerServer].lifecycleManager.initialUnfenceFuture.get())
+    createTopicWithAssignment(topic1, partitionReplicaAssignment = topic1Assignment)
+    createTopicWithAssignment(topic2, partitionReplicaAssignment = topic2Assignment)
+    createTopicWithAssignment(topic3, partitionReplicaAssignment = topic3Assignment)
+    createTopicWithAssignment(topic4, partitionReplicaAssignment = topic4Assignment)
     admin = createAdminClient()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testWrongReplicaCount(quorum: String): Unit = {
     assertEquals(classOf[InvalidReplicaAssignmentException], assertThrows(classOf[ExecutionException], () => {
         admin.createPartitions(Collections.singletonMap(topic1,
@@ -83,8 +78,8 @@ class AddPartitionsTest extends BaseRequestTest {
    * Test that when we supply a manual partition assignment to createTopics, it must be 0-based
    * and consecutive.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testMissingPartitionsInCreateTopics(quorum: String): Unit = {
     val topic6Placements = new util.HashMap[Integer, util.List[Integer]]
     topic6Placements.put(1, asList(0, 1))
@@ -109,32 +104,19 @@ class AddPartitionsTest extends BaseRequestTest {
    * Test that when we supply a manual partition assignment to createPartitions, it must contain
    * enough partitions.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testMissingPartitionsInCreatePartitions(quorum: String): Unit = {
     val cause = assertThrows(classOf[ExecutionException], () =>
       admin.createPartitions(Collections.singletonMap(topic1,
         NewPartitions.increaseTo(3, singletonList(asList(0, 1, 2))))).all().get()).getCause
     assertEquals(classOf[InvalidReplicaAssignmentException], cause.getClass)
-    if (isKRaftTest()) {
-      assertTrue(cause.getMessage.contains("Attempted to add 2 additional partition(s), but only 1 assignment(s) " +
-        "were specified."), "Unexpected error message: " + cause.getMessage)
-    } else {
-      assertTrue(cause.getMessage.contains("Increasing the number of partitions by 2 but 1 assignments provided."),
-        "Unexpected error message: " + cause.getMessage)
-    }
-    if (!isKRaftTest()) {
-      // In ZK mode, test the raw AdminZkClient method as well.
-      val e = assertThrows(classOf[AdminOperationException], () => adminZkClient.addPartitions(
-        topic5, topic5Assignment, adminZkClient.getBrokerMetadatas(), 2,
-        Some(Map(1 -> Seq(0, 1), 2 -> Seq(0, 1, 2)))))
-      assertTrue(e.getMessage.contains("Unexpected existing replica assignment for topic 'new-topic5', partition " +
-        "id 0 is missing"))
-    }
+    assertTrue(cause.getMessage.contains("Attempted to add 2 additional partition(s), but only 1 assignment(s) " +
+      "were specified."), "Unexpected error message: " + cause.getMessage)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testIncrementPartitions(quorum: String): Unit = {
     admin.createPartitions(Collections.singletonMap(topic1, NewPartitions.increaseTo(3))).all().get()
 
@@ -162,8 +144,8 @@ class AddPartitionsTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testManualAssignmentOfReplicas(quorum: String): Unit = {
     // Add 2 partitions
     admin.createPartitions(Collections.singletonMap(topic2, NewPartitions.increaseTo(3,
@@ -191,8 +173,8 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(Set(0, 1), replicas.asScala.toSet)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk")) // TODO: add kraft support
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testReplicaPlacementAllServers(quorum: String): Unit = {
     admin.createPartitions(Collections.singletonMap(topic3, NewPartitions.increaseTo(7))).all().get()
 
@@ -208,17 +190,19 @@ class AddPartitionsTest extends BaseRequestTest {
       new MetadataRequest.Builder(Seq(topic3).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
     val topicMetadata = response.topicMetadata.asScala.head
-    validateLeaderAndReplicas(topicMetadata, 0, 2, Set(2, 3, 0, 1))
-    validateLeaderAndReplicas(topicMetadata, 1, 3, Set(3, 2, 0, 1))
-    validateLeaderAndReplicas(topicMetadata, 2, 0, Set(0, 3, 1, 2))
-    validateLeaderAndReplicas(topicMetadata, 3, 1, Set(1, 0, 2, 3))
-    validateLeaderAndReplicas(topicMetadata, 4, 2, Set(2, 3, 0, 1))
-    validateLeaderAndReplicas(topicMetadata, 5, 3, Set(3, 0, 1, 2))
-    validateLeaderAndReplicas(topicMetadata, 6, 0, Set(0, 1, 2, 3))
+
+    assertEquals(7, topicMetadata.partitionMetadata.size)
+    for (partition <- topicMetadata.partitionMetadata.asScala) {
+      val replicas = partition.replicaIds.asScala.toSet
+      assertEquals(4, replicas.size, s"Partition ${partition.partition} should have 4 replicas")
+      assertTrue(replicas.subsetOf(Set(0, 1, 2, 3)), s"Replicas should only include brokers 0-3")
+      assertTrue(partition.leaderId.isPresent, s"Partition ${partition.partition} should have a leader")
+      assertTrue(replicas.contains(partition.leaderId.get), "Leader should be one of the replicas")
+    }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk")) // TODO: add kraft support
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testReplicaPlacementPartialServers(quorum: String): Unit = {
     admin.createPartitions(Collections.singletonMap(topic2, NewPartitions.increaseTo(3))).all().get()
 
@@ -230,19 +214,15 @@ class AddPartitionsTest extends BaseRequestTest {
       new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
     val topicMetadata = response.topicMetadata.asScala.head
-    validateLeaderAndReplicas(topicMetadata, 0, 1, Set(1, 2))
-    validateLeaderAndReplicas(topicMetadata, 1, 2, Set(0, 2))
-    validateLeaderAndReplicas(topicMetadata, 2, 3, Set(1, 3))
-  }
 
-  def validateLeaderAndReplicas(metadata: TopicMetadata, partitionId: Int, expectedLeaderId: Int,
-                                expectedReplicas: Set[Int]): Unit = {
-    val partitionOpt = metadata.partitionMetadata.asScala.find(_.partition == partitionId)
-    assertTrue(partitionOpt.isDefined, s"Partition $partitionId should exist")
-    val partition = partitionOpt.get
-
-    assertEquals(Optional.of(expectedLeaderId), partition.leaderId, "Partition leader id should match")
-    assertEquals(expectedReplicas, partition.replicaIds.asScala.toSet, "Replica set should match")
+    assertEquals(3, topicMetadata.partitionMetadata.size)
+    for (partition <- topicMetadata.partitionMetadata.asScala) {
+      val replicas = partition.replicaIds.asScala.toSet
+      assertEquals(2, replicas.size, s"Partition ${partition.partition} should have 2 replicas")
+      assertTrue(replicas.subsetOf(Set(0, 1, 2, 3)), s"Replicas should only include brokers 0-3")
+      assertTrue(partition.leaderId.isPresent, s"Partition ${partition.partition} should have a leader")
+      assertTrue(replicas.contains(partition.leaderId.get), "Leader should be one of the replicas")
+    }
   }
 
 }

@@ -24,7 +24,7 @@ import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteL
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.COPY_SEGMENT_STARTED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RemoteLogMetadataFormatterTest {
@@ -51,12 +52,12 @@ public class RemoteLogMetadataFormatterTest {
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, SEGMENT_ID);
         Optional<CustomMetadata> customMetadata = Optional.of(new CustomMetadata(new byte[10]));
         RemoteLogSegmentMetadata remoteLogMetadata = new RemoteLogSegmentMetadata(
-                remoteLogSegmentId, 0L, 100L, -1L, 1,
-                123L, 1024, customMetadata,
-                RemoteLogSegmentState.COPY_SEGMENT_STARTED, segLeaderEpochs);
+                remoteLogSegmentId, 0L, 100L, -1L, 1, 123L, 1024, customMetadata, COPY_SEGMENT_STARTED,
+                segLeaderEpochs, true);
 
         byte[] metadataBytes = new RemoteLogMetadataSerde().serialize(remoteLogMetadata);
-        ConsumerRecord<byte[], byte[]> metadataRecord = new ConsumerRecord<>("__remote_log_metadata", 0, 0, null, metadataBytes);
+        ConsumerRecord<byte[], byte[]> metadataRecord = new ConsumerRecord<>(
+                "__remote_log_metadata", 0, 0, null, metadataBytes);
 
         String expected = String.format(
                 "partition: 0, offset: 0, value: " +
@@ -64,13 +65,15 @@ public class RemoteLogMetadataFormatterTest {
                         "startOffset=0, endOffset=100, brokerId=1, maxTimestampMs=-1, " +
                         "eventTimestampMs=123, segmentLeaderEpochs={0=0, 1=20, 2=80}, segmentSizeInBytes=1024, " +
                         "customMetadata=Optional[CustomMetadata{10 bytes}], " +
-                        "state=COPY_SEGMENT_STARTED}\n",
+                        "state=COPY_SEGMENT_STARTED, txnIdxEmpty=true}\n",
                 TOPIC_ID, SEGMENT_ID);
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              PrintStream ps = new PrintStream(baos)) {
-            RemoteLogMetadataSerde.RemoteLogMetadataFormatter formatter = new RemoteLogMetadataSerde.RemoteLogMetadataFormatter();
-            formatter.writeTo(metadataRecord, ps);
-            assertEquals(expected, baos.toString());
+            try (RemoteLogMetadataSerde.RemoteLogMetadataFormatter formatter =
+                         new RemoteLogMetadataSerde.RemoteLogMetadataFormatter()) {
+                formatter.writeTo(metadataRecord, ps);
+                assertEquals(expected, baos.toString());
+            }
         }
     }
 }

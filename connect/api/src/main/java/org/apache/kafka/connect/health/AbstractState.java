@@ -17,9 +17,9 @@
 
 package org.apache.kafka.connect.health;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.utils.Utils;
+
+import java.util.Objects;
 
 /**
  * Provides the current status for a connector or a task, along with an identifier for its Connect worker

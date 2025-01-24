@@ -19,12 +19,14 @@ package org.apache.kafka.common.security.kerberos;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.utils.Java;
+
 import org.ietf.jgss.GSSException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.security.sasl.SaslClient;
 import java.lang.reflect.Method;
+
+import javax.security.sasl.SaslClient;
 
 /**
  * Kerberos exceptions that may require special handling. The standard Kerberos error codes

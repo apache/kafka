@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -74,6 +75,7 @@ public class TopicMetadataRequestManagerTest {
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(
             new LogContext(),
+            time,
             new ConsumerConfig(props)));
     }
 

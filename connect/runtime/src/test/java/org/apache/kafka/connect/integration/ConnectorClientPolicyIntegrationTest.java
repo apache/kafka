@@ -24,10 +24,9 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,29 +38,25 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class ConnectorClientPolicyIntegrationTest {
 
     private static final int NUM_TASKS = 1;
     private static final int NUM_WORKERS = 1;
     private static final String CONNECTOR_NAME = "simple-conn";
 
-    @After
-    public void close() {
-    }
-
     @Test
-    public void testCreateWithOverridesForNonePolicy() throws Exception {
+    public void testCreateWithOverridesForNonePolicy() {
         Map<String, String> props = basicConnectorConfig();
         props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + SaslConfigs.SASL_JAAS_CONFIG, "sasl");
         assertFailCreateConnector("None", props);
     }
 
     @Test
-    public void testCreateWithNotAllowedOverridesForPrincipalPolicy() throws Exception {
+    public void testCreateWithNotAllowedOverridesForPrincipalPolicy() {
         Map<String, String> props = basicConnectorConfig();
         props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + SaslConfigs.SASL_JAAS_CONFIG, "sasl");
         props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
@@ -98,7 +93,7 @@ public class ConnectorClientPolicyIntegrationTest {
         assertPassCreateConnector(null, props);
     }
 
-    private EmbeddedConnectCluster connectClusterWithPolicy(String policy) throws InterruptedException {
+    private EmbeddedConnectCluster connectClusterWithPolicy(String policy) {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(5_000));
@@ -110,7 +105,7 @@ public class ConnectorClientPolicyIntegrationTest {
         Properties exampleBrokerProps = new Properties();
         exampleBrokerProps.put("auto.create.topics.enable", "false");
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         EmbeddedConnectCluster connect = new EmbeddedConnectCluster.Builder()
             .name("connect-cluster")
             .numWorkers(NUM_WORKERS)
@@ -121,19 +116,17 @@ public class ConnectorClientPolicyIntegrationTest {
 
         // start the clusters
         connect.start();
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Initial group of workers did not start in time.");
 
         return connect;
     }
 
-    private void assertFailCreateConnector(String policy, Map<String, String> props) throws InterruptedException {
+    private void assertFailCreateConnector(String policy, Map<String, String> props) {
         EmbeddedConnectCluster connect = connectClusterWithPolicy(policy);
         try {
             connect.configureConnector(CONNECTOR_NAME, props);
             fail("Shouldn't be able to create connector");
         } catch (ConnectRestException e) {
-            assertEquals(e.statusCode(), 400);
+            assertEquals(400, e.statusCode());
         } finally {
             connect.stop();
         }

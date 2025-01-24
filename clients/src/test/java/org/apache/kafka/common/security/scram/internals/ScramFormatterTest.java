@@ -78,9 +78,8 @@ public class ScramFormatterTest {
      * Tests encoding of username
      */
     @Test
-    public void saslName() throws Exception {
+    public void saslName() {
         String[] usernames = {"user1", "123", "1,2", "user=A", "user==B", "user,1", "user 1", ",", "=", ",=", "=="};
-        ScramFormatter formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
         for (String username : usernames) {
             String saslName = ScramFormatter.saslName(username);
             // There should be no commas in saslName (comma is used as field separator in SASL messages)

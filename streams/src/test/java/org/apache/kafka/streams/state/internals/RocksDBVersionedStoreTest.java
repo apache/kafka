@@ -16,21 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
-import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -43,16 +28,32 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.ResultOrder;
-import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RocksDBVersionedStoreTest {
 
@@ -67,12 +68,12 @@ public class RocksDBVersionedStoreTest {
     private static final String DROPPED_RECORDS_METRIC = "dropped-records-total";
     private static final String TASK_LEVEL_GROUP = "stream-task-metrics";
 
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<String, String> context;
     private Map<String, String> expectedMetricsTags;
 
     private RocksDBVersionedStore store;
 
-    @Before
+    @BeforeEach
     public void before() {
         context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
@@ -88,10 +89,10 @@ public class RocksDBVersionedStoreTest {
         );
 
         store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, HISTORY_RETENTION, SEGMENT_INTERVAL);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
-    @After
+    @AfterEach
     public void after() {
         store.close();
     }
@@ -799,7 +800,7 @@ public class RocksDBVersionedStoreTest {
         // recreate store with zero history retention
         store.close();
         store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, 0L, SEGMENT_INTERVAL);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         // put and get
         putToStore("k", "v", BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);

@@ -19,7 +19,6 @@ from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.streams import StreamsNamedRepartitionTopicService
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running
 
 class StreamsNamedRepartitionTopicTest(Test):
@@ -41,13 +40,8 @@ class StreamsNamedRepartitionTopicTest(Test):
             self.aggregation_topic: {'partitions': 6}
         }
 
-        self.zookeeper = (
-            ZookeeperService(self.test_context, 1)
-            if quorum.for_test(self.test_context) == quorum.zk
-            else None
-        )
         self.kafka = KafkaService(self.test_context, num_nodes=3,
-                                  zk=self.zookeeper, topics=self.topics, controller_num_nodes_override=1)
+                                  zk=None, topics=self.topics, controller_num_nodes_override=1)
 
         self.producer = VerifiableProducer(self.test_context,
                                            1,
@@ -57,10 +51,8 @@ class StreamsNamedRepartitionTopicTest(Test):
                                            acks=1)
 
     @cluster(num_nodes=8)
-    @matrix(metadata_quorum=[quorum.isolated_kraft])
+    @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_upgrade_topology_with_named_repartition_topic(self, metadata_quorum):
-        if self.zookeeper:
-            self.zookeeper.start()
         self.kafka.start()
 
         processor1 = StreamsNamedRepartitionTopicService(self.test_context, self.kafka)
@@ -91,8 +83,6 @@ class StreamsNamedRepartitionTopicTest(Test):
 
         self.producer.stop()
         self.kafka.stop()
-        if self.zookeeper:
-            self.zookeeper.stop()
 
     def verify_processing(self, processors):
         for processor in processors:

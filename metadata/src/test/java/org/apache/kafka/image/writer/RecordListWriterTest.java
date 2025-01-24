@@ -19,6 +19,7 @@ package org.apache.kafka.image.writer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.TopicRecord;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

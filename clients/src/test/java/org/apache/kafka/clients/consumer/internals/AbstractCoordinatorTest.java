@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -58,7 +57,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -131,7 +132,7 @@ public class AbstractCoordinatorTest {
         LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
         ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, retryBackoffMaxMs, 60 * 60 * 1000L,
-                false, false, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST),
+                false, false, new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST),
                 logContext, new ClusterResourceListeners());
 
         this.mockClient = new MockClient(mockTime, metadata);
@@ -155,7 +156,7 @@ public class AbstractCoordinatorTest {
                                                                         groupInstanceId,
                                                                         retryBackoffMs,
                                                                         retryBackoffMaxMs,
-                                                                        !groupInstanceId.isPresent());
+                                                                        groupInstanceId.isEmpty());
         this.coordinator = new DummyCoordinator(rebalanceConfig,
                                                 consumerClient,
                                                 metrics,
@@ -299,9 +300,9 @@ public class AbstractCoordinatorTest {
         coordinator.ensureCoordinatorReadyAsync();
 
         // But should wakeup in sync variation even if timer is 0.
-        assertThrows(WakeupException.class, () -> {
-            coordinator.ensureCoordinatorReady(mockTime.timer(0));
-        });
+        assertThrows(WakeupException.class, () ->
+            coordinator.ensureCoordinatorReady(mockTime.timer(0))
+        );
     }
 
     @Test
@@ -1018,7 +1019,7 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testHeartbeatRequestWithFencedInstanceIdException() throws InterruptedException {
+    public void testHeartbeatRequestWithFencedInstanceIdException() {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
 
@@ -1418,11 +1419,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
-        try {
-            coordinator.ensureActiveGroup();
-            fail("Should have woken up from ensureActiveGroup()");
-        } catch (WakeupException e) {
-        }
+        assertThrows(WakeupException.class, () -> coordinator.ensureActiveGroup(), "Should have woken up from ensureActiveGroup()");
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(0, coordinator.onJoinCompleteInvokes);
@@ -1438,6 +1435,7 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
+    @Tag("flaky") // "KAFKA-18310"
     @Test
     public void testWakeupAfterSyncGroupSentExternalCompletion() throws Exception {
         setupCoordinator();
@@ -1458,11 +1456,7 @@ public class AbstractCoordinatorTest {
         }, syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
-        try {
-            coordinator.ensureActiveGroup();
-            fail("Should have woken up from ensureActiveGroup()");
-        } catch (WakeupException e) {
-        }
+        assertThrows(WakeupException.class, () -> coordinator.ensureActiveGroup(), "Should have woken up from ensureActiveGroup()");
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(0, coordinator.onJoinCompleteInvokes);
@@ -1478,6 +1472,7 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
+    @Tag("flaky") // "KAFKA-18310"
     @Test
     public void testWakeupAfterSyncGroupReceived() throws Exception {
         setupCoordinator();
@@ -1511,6 +1506,7 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
+    @Tag("flaky") // KAFKA-15474 and KAFKA-18310
     @Test
     public void testWakeupAfterSyncGroupReceivedExternalCompletion() throws Exception {
         setupCoordinator();
@@ -1526,11 +1522,7 @@ public class AbstractCoordinatorTest {
         }, syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
-        try {
-            coordinator.ensureActiveGroup();
-            fail("Should have woken up from ensureActiveGroup()");
-        } catch (WakeupException e) {
-        }
+        assertThrows(WakeupException.class, () -> coordinator.ensureActiveGroup(), "Should have woken up from ensureActiveGroup()");
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(0, coordinator.onJoinCompleteInvokes);

@@ -18,33 +18,34 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class StateConsumerTest {
 
     private final TopicPartition topicOne = new TopicPartition("topic-one", 1);
     private final TopicPartition topicTwo = new TopicPartition("topic-two", 1);
-    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
     private final Map<TopicPartition, Long> partitionOffsets = new HashMap<>();
     private final LogContext logContext = new LogContext("test ");
     private GlobalStreamThread.StateConsumer stateConsumer;
     private TaskStub stateMaintainer;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         partitionOffsets.put(topicOne, 20L);
         partitionOffsets.put(topicTwo, 30L);
@@ -55,7 +56,7 @@ public class StateConsumerTest {
     @Test
     public void shouldAssignPartitionsToConsumer() {
         stateConsumer.initialize();
-        assertEquals(Utils.mkSet(topicOne, topicTwo), consumer.assignment());
+        assertEquals(Set.of(topicOne, topicTwo), consumer.assignment());
     }
 
     @Test

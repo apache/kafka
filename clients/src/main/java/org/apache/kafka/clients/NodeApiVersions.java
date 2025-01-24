@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -48,7 +49,9 @@ public class NodeApiVersions {
 
     private final Map<String, SupportedVersionRange> supportedFeatures;
 
-    private final boolean zkMigrationEnabled;
+    private final Map<String, Short> finalizedFeatures;
+
+    private final long finalizedFeaturesEpoch;
 
     /**
      * Create a NodeApiVersions object with the current ApiVersions.
@@ -78,7 +81,7 @@ public class NodeApiVersions {
             }
             if (!exists) apiVersions.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
-        return new NodeApiVersions(apiVersions, Collections.emptyList(), false);
+        return new NodeApiVersions(apiVersions, Collections.emptyList(), Collections.emptyList(), -1);
     }
 
 
@@ -97,7 +100,19 @@ public class NodeApiVersions {
                 .setMaxVersion(maxVersion)));
     }
 
-    public NodeApiVersions(Collection<ApiVersion> nodeApiVersions, Collection<SupportedFeatureKey> nodeSupportedFeatures, boolean zkMigrationEnabled) {
+    public NodeApiVersions(
+            Collection<ApiVersion> nodeApiVersions,
+            Collection<SupportedFeatureKey> nodeSupportedFeatures
+    ) {
+        this(nodeApiVersions, nodeSupportedFeatures, Collections.emptyList(), -1);
+    }
+
+    public NodeApiVersions(
+            Collection<ApiVersion> nodeApiVersions,
+            Collection<SupportedFeatureKey> nodeSupportedFeatures,
+            Collection<ApiVersionsResponseData.FinalizedFeatureKey> nodeFinalizedFeatures,
+            long finalizedFeaturesEpoch
+    ) {
         for (ApiVersion nodeApiVersion : nodeApiVersions) {
             if (ApiKeys.hasId(nodeApiVersion.apiKey())) {
                 ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey());
@@ -114,7 +129,11 @@ public class NodeApiVersions {
                     new SupportedVersionRange(supportedFeature.minVersion(), supportedFeature.maxVersion()));
         }
         this.supportedFeatures = Collections.unmodifiableMap(supportedFeaturesBuilder);
-        this.zkMigrationEnabled = zkMigrationEnabled;
+        this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
+        this.finalizedFeatures = new HashMap<>();
+        for (ApiVersionsResponseData.FinalizedFeatureKey finalizedFeature : nodeFinalizedFeatures) {
+            this.finalizedFeatures.put(finalizedFeature.name(), finalizedFeature.maxVersionLevel());
+        }
     }
 
     /**
@@ -174,10 +193,9 @@ public class NodeApiVersions {
         // which may happen when the remote is too old.
         for (ApiKeys apiKey : ApiKeys.clientApis()) {
             if (!apiKeysText.containsKey(apiKey.id)) {
-                StringBuilder bld = new StringBuilder();
-                bld.append(apiKey.name).append("(").
-                        append(apiKey.id).append("): ").append("UNSUPPORTED");
-                apiKeysText.put(apiKey.id, bld.toString());
+                String bld = apiKey.name + "(" +
+                        apiKey.id + "): " + "UNSUPPORTED";
+                apiKeysText.put(apiKey.id, bld);
             }
         }
         String separator = lineBreaks ? ",\n\t" : ", ";
@@ -185,7 +203,7 @@ public class NodeApiVersions {
         bld.append("(");
         if (lineBreaks)
             bld.append("\n\t");
-        bld.append(Utils.join(apiKeysText.values(), separator));
+        bld.append(String.join(separator, apiKeysText.values()));
         if (lineBreaks)
             bld.append("\n");
         bld.append(")");
@@ -240,7 +258,11 @@ public class NodeApiVersions {
         return supportedFeatures;
     }
 
-    public boolean zkMigrationEnabled() {
-        return zkMigrationEnabled;
+    public Map<String, Short> finalizedFeatures() {
+        return finalizedFeatures;
+    }
+
+    public long finalizedFeaturesEpoch() {
+        return finalizedFeaturesEpoch;
     }
 }

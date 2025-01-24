@@ -23,8 +23,9 @@ on:
         description: Docker image type to be built and pushed
         options: 
           - "jvm"
+          - "native"
       rc_docker_image:
-        description: RC docker image that needs to be built and pushed to Dockerhub (Example:- apache/kafka:3.6.0-rc0)
+        description: RC docker image that needs to be built and pushed to Dockerhub (Example:- apache/kafka:3.8.0-rc0 (OR) apache/kafka-native:3.8.0-rc0)
         required: true
       kafka_url:
         description: Kafka url to be used to build the docker image
@@ -38,7 +39,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
     - name: Set up Python 3.10
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: "3.10"
     - name: Install dependencies
@@ -46,14 +47,18 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r docker/requirements.txt
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3.2.0
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db # v3.6.1
     - name: Login to Docker Hub
-      uses: docker/login-action@v3
+      uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
       with:
         username: ${{ secrets.DOCKERHUB_USER }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Release the RC docker image
+      env:
+        RC_DOCKER_IMAGE: ${{ github.event.inputs.rc_docker_image }}
+        KAFKA_URL: ${{ github.event.inputs.kafka_url }}
+        IMAGE_TYPE: ${{ github.event.inputs.image_type }}
       run: |
-        python docker/docker_release.py ${{ github.event.inputs.rc_docker_image }} --kafka-url ${{ github.event.inputs.kafka_url }} --image-type ${{ github.event.inputs.image_type }}
+        python docker/docker_release.py $RC_DOCKER_IMAGE --kafka-url $KAFKA_URL --image-type $IMAGE_TYPE

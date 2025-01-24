@@ -43,11 +43,11 @@ class ControllerMetricsChanges {
 
     private int fencedBrokersChange = 0;
     private int activeBrokersChange = 0;
-    private int migratingZkBrokersChange = 0;
     private int globalTopicsChange = 0;
     private int globalPartitionsChange = 0;
     private int offlinePartitionsChange = 0;
     private int partitionsWithoutPreferredLeaderChange = 0;
+    private int uncleanLeaderElection = 0;
 
     public int fencedBrokersChange() {
         return fencedBrokersChange;
@@ -55,10 +55,6 @@ class ControllerMetricsChanges {
 
     public int activeBrokersChange() {
         return activeBrokersChange;
-    }
-
-    public int migratingZkBrokersChange() {
-        return migratingZkBrokersChange;
     }
 
     public int globalTopicsChange() {
@@ -80,23 +76,18 @@ class ControllerMetricsChanges {
     void handleBrokerChange(BrokerRegistration prev, BrokerRegistration next) {
         boolean wasFenced = false;
         boolean wasActive = false;
-        boolean wasZk = false;
         if (prev != null) {
             wasFenced = prev.fenced();
             wasActive = !prev.fenced();
-            wasZk = prev.isMigratingZkBroker();
         }
         boolean isFenced = false;
         boolean isActive = false;
-        boolean isZk = false;
         if (next != null) {
             isFenced = next.fenced();
             isActive = !next.fenced();
-            isZk = next.isMigratingZkBroker();
         }
         fencedBrokersChange += delta(wasFenced, isFenced);
         activeBrokersChange += delta(wasActive, isActive);
-        migratingZkBrokersChange += delta(wasZk, isZk);
     }
 
     void handleDeletedTopic(TopicImage deletedTopic) {
@@ -135,6 +126,11 @@ class ControllerMetricsChanges {
             isPresent = true;
             isOffline = !next.hasLeader();
             isWithoutPreferredLeader = !next.hasPreferredLeader();
+            // take current all replicas as ISR if prev is null (new created partition), so we won't treat it as unclean election.
+            int[] prevIsr = prev != null ? prev.isr : next.replicas;
+            if (!PartitionRegistration.electionWasClean(next.leader, prevIsr)) {
+                uncleanLeaderElection++;
+            }
         }
         globalPartitionsChange += delta(wasPresent, isPresent);
         offlinePartitionsChange += delta(wasOffline, isOffline);
@@ -151,9 +147,6 @@ class ControllerMetricsChanges {
         if (activeBrokersChange != 0) {
             metrics.addToActiveBrokerCount(activeBrokersChange);
         }
-        if (migratingZkBrokersChange != 0) {
-            metrics.addToMigratingZkBrokerCount(migratingZkBrokersChange);
-        }
         if (globalTopicsChange != 0) {
             metrics.addToGlobalTopicCount(globalTopicsChange);
         }
@@ -165,6 +158,10 @@ class ControllerMetricsChanges {
         }
         if (partitionsWithoutPreferredLeaderChange != 0) {
             metrics.addToPreferredReplicaImbalanceCount(partitionsWithoutPreferredLeaderChange);
+        }
+        if (uncleanLeaderElection > 0) {
+            metrics.updateUncleanLeaderElection(uncleanLeaderElection);
+            uncleanLeaderElection = 0;
         }
     }
 }

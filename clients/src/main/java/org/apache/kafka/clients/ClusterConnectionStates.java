@@ -16,31 +16,31 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.HashSet;
-import java.util.Set;
-
-import java.util.stream.Collectors;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * The state of our connection to each node in the cluster.
  *
  */
 final class ClusterConnectionStates {
-    final static int RECONNECT_BACKOFF_EXP_BASE = 2;
-    final static double RECONNECT_BACKOFF_JITTER = 0.2;
-    final static int CONNECTION_SETUP_TIMEOUT_EXP_BASE = 2;
-    final static double CONNECTION_SETUP_TIMEOUT_JITTER = 0.2;
+    static final int RECONNECT_BACKOFF_EXP_BASE = 2;
+    static final double RECONNECT_BACKOFF_JITTER = 0.2;
+    static final int CONNECTION_SETUP_TIMEOUT_EXP_BASE = 2;
+    static final double CONNECTION_SETUP_TIMEOUT_JITTER = 0.2;
     private final Map<String, NodeConnectionState> nodeState;
     private final Logger log;
     private final HostResolver hostResolver;

@@ -67,13 +67,17 @@ public class TopicConfig {
         "(which consists of log segments) can grow to before we will discard old log segments to free up space if we " +
         "are using the \"delete\" retention policy. By default there is no size limit only a time limit. " +
         "Since this limit is enforced at the partition level, multiply it by the number of partitions to compute " +
-        "the topic retention in bytes.";
+        "the topic retention in bytes. Additionally, retention.bytes configuration " +
+        "operates independently of \"segment.ms\" and \"segment.bytes\" configurations. " +
+        "Moreover, it triggers the rolling of new segment if the retention.bytes is configured to zero.";
 
     public static final String RETENTION_MS_CONFIG = "retention.ms";
     public static final String RETENTION_MS_DOC = "This configuration controls the maximum time we will retain a " +
         "log before we will discard old log segments to free up space if we are using the " +
         "\"delete\" retention policy. This represents an SLA on how soon consumers must read " +
-        "their data. If set to -1, no time limit is applied.";
+        "their data. If set to -1, no time limit is applied. Additionally, retention.ms configuration " +
+        "operates independently of \"segment.ms\" and \"segment.bytes\" configurations. " +
+        "Moreover, it triggers the rolling of new segment if the retention.ms condition is satisfied.";
 
     public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.storage.enable";
     public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tiered storage for a topic, set this configuration as true. " +
@@ -88,6 +92,17 @@ public class TopicConfig {
     public static final String LOCAL_LOG_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it " +
             "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
             "less than or equal to `retention.bytes` value.";
+
+    public static final String REMOTE_LOG_COPY_DISABLE_CONFIG = "remote.log.copy.disable";
+    public static final String REMOTE_LOG_COPY_DISABLE_DOC = "Determines whether tiered data for a topic should become read only," +
+            " and no more data uploading on a topic. Once this config is set to true, the local retention configuration " +
+            "(i.e. local.retention.ms/bytes) becomes irrelevant, and all data expiration follows the topic-wide retention configuration" +
+            "(i.e. retention.ms/bytes).";
+
+    public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
+    public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
+            "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +
+            "set `remote.storage.enable` from true to false";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
@@ -150,7 +165,9 @@ public class TopicConfig {
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "unclean.leader.election.enable";
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas " +
         "not in the ISR set to be elected as leader as a last resort, even though doing so may result in data " +
-        "loss.";
+        "loss.<p>Note: In KRaft mode, when enabling this config dynamically, it needs to wait for the unclean leader election" +
+        "thread to trigger election periodically (default is 5 minutes). Please run `kafka-leader-election.sh` with `unclean` option " +
+         "to trigger the unclean leader election immediately if needed.</p>";
 
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
     public static final String MIN_IN_SYNC_REPLICAS_DOC = "When a producer sets acks to \"all\" (or \"-1\"), " +
@@ -169,50 +186,21 @@ public class TopicConfig {
         "accepts 'uncompressed' which is equivalent to no compression; and 'producer' which means retain the " +
         "original compression codec set by the producer.";
 
+
+    public static final String COMPRESSION_GZIP_LEVEL_CONFIG = "compression.gzip.level";
+    public static final String COMPRESSION_GZIP_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>gzip</code>.";
+    public static final String COMPRESSION_LZ4_LEVEL_CONFIG = "compression.lz4.level";
+    public static final String COMPRESSION_LZ4_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>lz4</code>.";
+    public static final String COMPRESSION_ZSTD_LEVEL_CONFIG = "compression.zstd.level";
+    public static final String COMPRESSION_ZSTD_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>zstd</code>.";
+
     public static final String PREALLOCATE_CONFIG = "preallocate";
     public static final String PREALLOCATE_DOC = "True if we should preallocate the file on disk when " +
         "creating a new log segment.";
 
-    /**
-     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
-     * for most situations.
-     */
-    @Deprecated
-    public static final String MESSAGE_FORMAT_VERSION_CONFIG = "message.format.version";
-
-    /**
-     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
-     * for most situations.
-     */
-    @Deprecated
-    public static final String MESSAGE_FORMAT_VERSION_DOC = "[DEPRECATED] Specify the message format version the broker " +
-        "will use to append messages to the logs. The value of this config is always assumed to be `3.0` if " +
-        "`inter.broker.protocol.version` is 3.0 or higher (the actual config value is ignored). Otherwise, the value should " +
-        "be a valid ApiVersion. Some examples are: 0.10.0, 1.1, 2.8, 3.0. By setting a particular message format version, the " +
-        "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting " +
-        "this value incorrectly will cause consumers with older versions to break as they will receive messages with a format " +
-        "that they don't understand.";
-
     public static final String MESSAGE_TIMESTAMP_TYPE_CONFIG = "message.timestamp.type";
     public static final String MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is " +
-        "message create time or log append time. The value should be either `CreateTime` or `LogAppendTime`";
-
-    /**
-     * @deprecated since 3.6, removal planned in 4.0.
-     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
-     */
-    @Deprecated
-    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG = "message.timestamp.difference.max.ms";
-
-    /**
-     * @deprecated since 3.6, removal planned in 4.0.
-     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
-     */
-    @Deprecated
-    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC = "[DEPRECATED] The maximum difference allowed between " +
-        "the timestamp when a broker receives a message and the timestamp specified in the message. If " +
-        "message.timestamp.type=CreateTime, a message will be rejected if the difference in timestamp " +
-        "exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+        "message create time or log append time.";
 
     public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG = "message.timestamp.before.max.ms";
     public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC = "This configuration sets the allowable timestamp " +
@@ -226,10 +214,18 @@ public class TopicConfig {
         "or equal to the broker's timestamp, with the maximum allowable difference determined by the value set in this " +
         "configuration. If message.timestamp.type=CreateTime, the message will be rejected if the difference in " +
         "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+
+    /**
+     * @deprecated down-conversion is not possible in Apache Kafka 4.0 and newer, hence this configuration is a no-op,
+     *             and it is deprecated for removal in Apache Kafka 5.0.
+     */
+    @Deprecated
     public static final String MESSAGE_DOWNCONVERSION_ENABLE_CONFIG = "message.downconversion.enable";
-    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "This configuration controls whether " +
-        "down-conversion of message formats is enabled to satisfy consume requests. When set to <code>false</code>, " +
-        "broker will not perform down-conversion for consumers expecting an older message format. The broker responds " +
-        "with <code>UNSUPPORTED_VERSION</code> error for consume requests from such older clients. This configuration" +
-        "does not apply to any message format conversion that might be required for replication to followers.";
+
+    /**
+     * @deprecated see {@link #MESSAGE_DOWNCONVERSION_ENABLE_CONFIG}.
+     */
+    @Deprecated
+    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "Down-conversion is not possible in Apache Kafka 4.0 and newer, " +
+        "hence this configuration is no-op and it is deprecated for removal in Apache Kafka 5.0.";
 }

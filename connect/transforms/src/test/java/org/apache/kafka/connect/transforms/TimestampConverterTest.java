@@ -26,8 +26,12 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Calendar;
 import java.util.Collections;
@@ -35,12 +39,13 @@ import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class TimestampConverterTest {
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
@@ -86,6 +91,12 @@ public class TimestampConverterTest {
         DATE_PLUS_TIME_STRING = "1970 01 02 00 00 01 234 UTC";
     }
 
+    public static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(false, null),
+                Arguments.of(true, EPOCH.getTime())
+        );
+    }
 
     // Configuration
 
@@ -97,7 +108,7 @@ public class TimestampConverterTest {
 
     @Test
     public void testConfigNoTargetType() {
-        assertThrows(ConfigException.class, () -> xformValue.configure(Collections.<String, String>emptyMap()));
+        assertThrows(ConfigException.class, () -> xformValue.configure(Collections.emptyMap()));
     }
 
     @Test
@@ -550,6 +561,36 @@ public class TimestampConverterTest {
                 .build();
         assertEquals(expectedSchema, transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME.getTime(), ((Struct) transformed.value()).get("ts"));
+        assertEquals("test", ((Struct) transformed.value()).get("other"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testWithSchemaNullFieldWithDefaultConversion(boolean replaceNullWithDefault, Object expectedValue) {
+        Map<String, Object> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
+        config.put(TimestampConverter.FIELD_CONFIG, "ts");
+        config.put(TimestampConverter.REPLACE_NULL_WITH_DEFAULT_CONFIG, false);
+        xformValue.configure(config);
+
+        // ts field is a unix timestamp
+        Schema structWithTimestampFieldSchema = SchemaBuilder.struct()
+                .field("ts", SchemaBuilder.int64().optional().defaultValue(0L).build())
+                .field("other", Schema.STRING_SCHEMA)
+                .build();
+        Struct original = new Struct(structWithTimestampFieldSchema);
+        original.put("ts", null);
+        original.put("other", "test");
+
+        SourceRecord transformed = xformValue.apply(createRecordWithSchema(structWithTimestampFieldSchema, original));
+
+        Schema expectedSchema = SchemaBuilder.struct()
+                .field("ts", Timestamp.builder().optional().build())
+                .field("other", Schema.STRING_SCHEMA)
+                .build();
+
+        assertEquals(expectedSchema, transformed.valueSchema());
+        assertEquals(null, ((Struct) transformed.value()).get("ts"));
         assertEquals("test", ((Struct) transformed.value()).get("other"));
     }
 

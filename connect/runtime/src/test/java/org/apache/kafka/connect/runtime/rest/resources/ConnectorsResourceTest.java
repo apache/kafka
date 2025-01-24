@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.AbstractStatus;
@@ -29,7 +28,6 @@ import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
-import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -43,23 +41,18 @@ import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Stubber;
 
-import javax.ws.rs.BadRequestException;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriInfo;
-import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -71,9 +64,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriInfo;
+
+import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS;
+import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
@@ -85,7 +87,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 @SuppressWarnings("unchecked")
 public class ConnectorsResourceTest {
     // Note trailing / and that we do *not* use LEADER_URL to construct our reference values. This checks that we handle
@@ -109,6 +112,17 @@ public class ConnectorsResourceTest {
     static {
         CONNECTOR_CONFIG.put("name", CONNECTOR_NAME);
         CONNECTOR_CONFIG.put("sample_config", "test_config");
+    }
+
+    private static final Map<String, String> CONNECTOR_CONFIG_PATCH = new HashMap<>();
+    static {
+        CONNECTOR_CONFIG_PATCH.put("sample_config", "test_config_new");
+        CONNECTOR_CONFIG_PATCH.put("sample_config_2", "test_config_2");
+    }
+
+    private static final Map<String, String> CONNECTOR_CONFIG_PATCHED = new HashMap<>(CONNECTOR_CONFIG);
+    static {
+        CONNECTOR_CONFIG_PATCHED.putAll(CONNECTOR_CONFIG_PATCH);
     }
 
     private static final Map<String, String> CONNECTOR_CONFIG_CONTROL_SEQUENCES = new HashMap<>();
@@ -145,10 +159,11 @@ public class ConnectorsResourceTest {
 
     private static final Set<String> CONNECTOR_ACTIVE_TOPICS = new HashSet<>(
             Arrays.asList("foo_topic", "bar_topic"));
-    private static final Set<String> CONNECTOR2_ACTIVE_TOPICS = new HashSet<>(
-            Arrays.asList("foo_topic", "baz_topic"));
 
-    private static final RestRequestTimeout REQUEST_TIMEOUT = () -> RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
+    private static final RestRequestTimeout REQUEST_TIMEOUT = RestRequestTimeout.constant(
+        DEFAULT_REST_REQUEST_TIMEOUT_MS,
+        DEFAULT_HEALTH_CHECK_TIMEOUT_MS
+    );
 
     @Mock
     private Herder herder;
@@ -159,29 +174,28 @@ public class ConnectorsResourceTest {
     @Mock
     private RestServerConfig serverConfig;
 
-    @Before
+    @BeforeEach
     public void setUp() throws NoSuchMethodException {
         when(serverConfig.topicTrackingEnabled()).thenReturn(true);
         when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
         connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
         forward = mock(UriInfo.class);
-        MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
-        queryParams.putSingle("forward", "true");
-        when(forward.getQueryParameters()).thenReturn(queryParams);
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         verifyNoMoreInteractions(herder);
     }
 
     private static Map<String, String> getConnectorConfig(Map<String, String> mapToClone) {
-        Map<String, String> result = new HashMap<>(mapToClone);
-        return result;
+        return new HashMap<>(mapToClone);
     }
 
     @Test
     public void testListConnectors() {
+        MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
+        queryParams.putSingle("forward", "true");
+        when(forward.getQueryParameters()).thenReturn(queryParams);
         when(herder.connectors()).thenReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
 
         Collection<String> connectors = (Collection<String>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
@@ -258,7 +272,6 @@ public class ConnectorsResourceTest {
     @Test
     public void testExpandConnectorsWithConnectorNotFound() {
         when(herder.connectors()).thenReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
-        ConnectorStateInfo connector = mock(ConnectorStateInfo.class);
         ConnectorStateInfo connector2 = mock(ConnectorStateInfo.class);
         when(herder.connectorStatus(CONNECTOR2_NAME)).thenReturn(connector2);
         doThrow(mock(NotFoundException.class)).when(herder).connectorStatus(CONNECTOR_NAME);
@@ -473,7 +486,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testGetTasksConfig() throws Throwable {
+    public void testGetTaskConfigs() throws Throwable {
         final ConnectorTaskId connectorTask0 = new ConnectorTaskId(CONNECTOR_NAME, 0);
         final Map<String, String> connectorTask0Configs = new HashMap<>();
         connectorTask0Configs.put("connector-task0-config0", "123");
@@ -485,31 +498,22 @@ public class ConnectorsResourceTest {
         final ConnectorTaskId connector2Task0 = new ConnectorTaskId(CONNECTOR2_NAME, 0);
         final Map<String, String> connector2Task0Configs = Collections.singletonMap("connector2-task0-config0", "789");
 
-        final Map<ConnectorTaskId, Map<String, String>> expectedTasksConnector = new HashMap<>();
-        expectedTasksConnector.put(connectorTask0, connectorTask0Configs);
-        expectedTasksConnector.put(connectorTask1, connectorTask1Configs);
-        final Map<ConnectorTaskId, Map<String, String>> expectedTasksConnector2 = new HashMap<>();
-        expectedTasksConnector2.put(connector2Task0, connector2Task0Configs);
+        final List<TaskInfo> expectedTasksConnector = new ArrayList<>();
+        expectedTasksConnector.add(new TaskInfo(connectorTask0, connectorTask0Configs));
+        expectedTasksConnector.add(new TaskInfo(connectorTask1, connectorTask1Configs));
 
-        final ArgumentCaptor<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb1 = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackResult(cb1, expectedTasksConnector).when(herder).tasksConfig(eq(CONNECTOR_NAME), cb1.capture());
-        final ArgumentCaptor<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb2 = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackResult(cb2, expectedTasksConnector2).when(herder).tasksConfig(eq(CONNECTOR2_NAME), cb2.capture());
+        final List<TaskInfo> expectedTasksConnector2 = new ArrayList<>();
+        expectedTasksConnector2.add(new TaskInfo(connector2Task0, connector2Task0Configs));
 
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig = connectorsResource.getTasksConfig(CONNECTOR_NAME);
-        assertEquals(expectedTasksConnector, tasksConfig);
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig2 = connectorsResource.getTasksConfig(CONNECTOR2_NAME);
-        assertEquals(expectedTasksConnector2, tasksConfig2);
-    }
+        final ArgumentCaptor<Callback<List<TaskInfo>>> cb1 = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackResult(cb1, expectedTasksConnector).when(herder).taskConfigs(eq(CONNECTOR_NAME), cb1.capture());
+        final ArgumentCaptor<Callback<List<TaskInfo>>> cb2 = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackResult(cb2, expectedTasksConnector2).when(herder).taskConfigs(eq(CONNECTOR2_NAME), cb2.capture());
 
-    @Test
-    public void testGetTasksConfigConnectorNotFound() throws Throwable {
-        final ArgumentCaptor<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackException(cb, new NotFoundException("not found"))
-            .when(herder).tasksConfig(eq(CONNECTOR_NAME), cb.capture());
-
-        assertThrows(NotFoundException.class, () ->
-            connectorsResource.getTasksConfig(CONNECTOR_NAME));
+        List<TaskInfo> taskConfigs = connectorsResource.getTaskConfigs(CONNECTOR_NAME);
+        assertEquals(expectedTasksConnector, taskConfigs);
+        List<TaskInfo> taskConfigs2 = connectorsResource.getTaskConfigs(CONNECTOR2_NAME);
+        assertEquals(expectedTasksConnector2, taskConfigs2);
     }
 
     @Test
@@ -534,7 +538,7 @@ public class ConnectorsResourceTest {
 
         String rspLocation = connectorsResource.createConnector(FORWARD, NULL_HEADERS, body).getLocation().toString();
         String decoded = new URI(rspLocation).getPath();
-        Assert.assertEquals("/connectors/" + CONNECTOR_NAME_SPECIAL_CHARS, decoded);
+        assertEquals("/connectors/" + CONNECTOR_NAME_SPECIAL_CHARS, decoded);
     }
 
     @Test
@@ -549,7 +553,7 @@ public class ConnectorsResourceTest {
 
         String rspLocation = connectorsResource.createConnector(FORWARD, NULL_HEADERS, body).getLocation().toString();
         String decoded = new URI(rspLocation).getPath();
-        Assert.assertEquals("/connectors/" + CONNECTOR_NAME_CONTROL_SEQUENCES1, decoded);
+        assertEquals("/connectors/" + CONNECTOR_NAME_CONTROL_SEQUENCES1, decoded);
     }
 
     @Test
@@ -562,7 +566,7 @@ public class ConnectorsResourceTest {
 
         String rspLocation = connectorsResource.putConnectorConfig(CONNECTOR_NAME_SPECIAL_CHARS, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_SPECIAL_CHARS).getLocation().toString();
         String decoded = new URI(rspLocation).getPath();
-        Assert.assertEquals("/connectors/" + CONNECTOR_NAME_SPECIAL_CHARS, decoded);
+        assertEquals("/connectors/" + CONNECTOR_NAME_SPECIAL_CHARS, decoded);
     }
 
     @Test
@@ -575,7 +579,7 @@ public class ConnectorsResourceTest {
 
         String rspLocation = connectorsResource.putConnectorConfig(CONNECTOR_NAME_CONTROL_SEQUENCES1, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_CONTROL_SEQUENCES).getLocation().toString();
         String decoded = new URI(rspLocation).getPath();
-        Assert.assertEquals("/connectors/" + CONNECTOR_NAME_CONTROL_SEQUENCES1, decoded);
+        assertEquals("/connectors/" + CONNECTOR_NAME_CONTROL_SEQUENCES1, decoded);
     }
 
     @Test
@@ -592,6 +596,37 @@ public class ConnectorsResourceTest {
         connConfig.put(ConnectorConfig.NAME_CONFIG, "mismatched-name");
         CreateConnectorRequest request = new CreateConnectorRequest(CONNECTOR_NAME, connConfig, null);
         assertThrows(BadRequestException.class, () -> connectorsResource.createConnector(FORWARD, NULL_HEADERS, request));
+    }
+
+    @Test
+    public void testPatchConnectorConfig() throws Throwable {
+        final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG_PATCHED, CONNECTOR_TASK_NAMES,
+                ConnectorType.SINK))
+        ).when(herder).patchConnectorConfig(eq(CONNECTOR_NAME), eq(CONNECTOR_CONFIG_PATCH), cb.capture());
+
+        connectorsResource.patchConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_PATCH);
+    }
+
+    @Test
+    public void testPatchConnectorConfigLeaderRedirect() throws Throwable {
+        final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackNotLeaderException(cb)
+                .when(herder).patchConnectorConfig(eq(CONNECTOR_NAME), eq(CONNECTOR_CONFIG_PATCH), cb.capture());
+        when(restClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/config?forward=false"), eq("PATCH"), isNull(), eq(CONNECTOR_CONFIG_PATCH), any()))
+                .thenReturn(new RestClient.HttpResponse<>(200, new HashMap<>(CONNECTOR_CONFIG_PATCHED), null));
+
+        connectorsResource.patchConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_PATCH);
+    }
+
+    @Test
+    public void testPatchConnectorConfigNotFound() {
+        final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackException(cb, new NotFoundException("Connector " + CONNECTOR_NAME + " not found"))
+                .when(herder).patchConnectorConfig(eq(CONNECTOR_NAME), eq(CONNECTOR_CONFIG_PATCH), cb.capture());
+
+        assertThrows(NotFoundException.class, () -> connectorsResource.patchConnectorConfig(
+                CONNECTOR_NAME, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_PATCH));
     }
 
     @Test
@@ -806,8 +841,7 @@ public class ConnectorsResourceTest {
     @Test
     public void testCompleteOrForwardWithErrorAndNoForwardUrl() {
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
-        String leaderUrl = null;
-        expectAndCallbackException(cb, new NotLeaderException("not leader", leaderUrl))
+        expectAndCallbackException(cb, new NotLeaderException("not leader", null))
             .when(herder).deleteConnectorConfig(eq(CONNECTOR_NAME), cb.capture());
 
         ConnectRestException e = assertThrows(ConnectRestException.class, () ->
@@ -920,10 +954,6 @@ public class ConnectorsResourceTest {
         assertEquals(msg, response.getEntity());
     }
 
-    private <T> byte[] serializeAsBytes(final T value) throws IOException {
-        return new ObjectMapper().writeValueAsBytes(value);
-    }
-
     private <T> Stubber expectAndCallbackResult(final ArgumentCaptor<Callback<T>> cb, final T value) {
         return doAnswer(invocation -> {
             cb.getValue().onCompletion(null, value);
@@ -940,11 +970,6 @@ public class ConnectorsResourceTest {
 
     private <T> Stubber expectAndCallbackNotLeaderException(final ArgumentCaptor<Callback<T>> cb) {
         return expectAndCallbackException(cb, new NotLeaderException("not leader test", LEADER_URL));
-    }
-
-    @FunctionalInterface
-    public interface RunnableWithThrowable<T> {
-        T run() throws Throwable;
     }
 
 }

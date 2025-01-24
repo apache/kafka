@@ -17,12 +17,12 @@
  */
 package kafka.network
 
-import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.server.BaseRequestTest
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -40,10 +40,10 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
   var admin: Admin = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.ListenersProp, s"$internal://localhost:0, $external://localhost:0")
-    properties.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$internal:PLAINTEXT, $external:PLAINTEXT")
-    properties.put(s"listener.name.${internal.toLowerCase}.${KafkaConfig.NumNetworkThreadsProp}", "2")
-    properties.put(KafkaConfig.NumNetworkThreadsProp, Defaults.NUM_NETWORK_THREADS.toString)
+    properties.put(SocketServerConfigs.LISTENERS_CONFIG, s"$internal://localhost:0, $external://localhost:0")
+    properties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"$internal:PLAINTEXT, $external:PLAINTEXT")
+    properties.put(s"listener.name.${internal.toLowerCase}.${SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG}", "2")
+    properties.put(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, SocketServerConfigs.NUM_NETWORK_THREADS_DEFAULT.toString)
   }
 
   @BeforeEach
@@ -52,7 +52,7 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
     admin = TestUtils.createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     assertEquals(2, getNumNetworkThreads(internal))
     TestUtils.createTopicWithAdmin(admin, "test", brokers, controllerServers)
-    assertEquals(Defaults.NUM_NETWORK_THREADS, getNumNetworkThreads(external))
+    assertEquals(SocketServerConfigs.NUM_NETWORK_THREADS_DEFAULT, getNumNetworkThreads(external))
   }
   @AfterEach
   override def tearDown(): Unit = {
@@ -66,14 +66,14 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
       .count(listener == _.tags().get("listener"))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testDynamicNumNetworkThreads(quorum: String): Unit = {
     // Increase the base network thread count
-    val newBaseNetworkThreadsCount = Defaults.NUM_NETWORK_THREADS + 1
+    val newBaseNetworkThreadsCount = SocketServerConfigs.NUM_NETWORK_THREADS_DEFAULT + 1
     var props = new Properties
-    props.put(KafkaConfig.NumNetworkThreadsProp, newBaseNetworkThreadsCount.toString)
-    reconfigureServers(props, (KafkaConfig.NumNetworkThreadsProp, newBaseNetworkThreadsCount.toString))
+    props.put(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, newBaseNetworkThreadsCount.toString)
+    reconfigureServers(props, (SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, newBaseNetworkThreadsCount.toString))
 
     // Only the external listener is changed
     assertEquals(2, getNumNetworkThreads(internal))
@@ -82,8 +82,8 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
     // Increase the network thread count for internal
     val newInternalNetworkThreadsCount = 3
     props = new Properties
-    props.put(s"listener.name.${internal.toLowerCase}.${KafkaConfig.NumNetworkThreadsProp}", newInternalNetworkThreadsCount.toString)
-    reconfigureServers(props, (s"listener.name.${internal.toLowerCase}.${KafkaConfig.NumNetworkThreadsProp}", newInternalNetworkThreadsCount.toString))
+    props.put(s"listener.name.${internal.toLowerCase}.${SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG}", newInternalNetworkThreadsCount.toString)
+    reconfigureServers(props, (s"listener.name.${internal.toLowerCase}.${SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG}", newInternalNetworkThreadsCount.toString))
 
     // The internal listener is changed
     assertEquals(newInternalNetworkThreadsCount, getNumNetworkThreads(internal))

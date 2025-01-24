@@ -18,6 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
@@ -34,7 +35,7 @@ import java.util.stream.Collectors;
  * This class encapsulates a thread-safe navigable map of LogSegment instances and provides the
  * required read and write behavior on the map.
  */
-public class LogSegments {
+public class LogSegments implements Closeable {
 
     private final TopicPartition topicPartition;
     /* the segments of the log with key being LogSegment base offset and value being a LogSegment */
@@ -102,6 +103,7 @@ public class LogSegments {
     /**
      * Close all segments.
      */
+    @Override
     public void close() throws IOException {
         for (LogSegment s : values())
             s.close();
@@ -141,7 +143,7 @@ public class LogSegments {
      * @return the base offsets of all segments
      */
     public Collection<Long> baseOffsets() {
-        return values().stream().map(s -> s.baseOffset()).collect(Collectors.toList());
+        return values().stream().map(LogSegment::baseOffset).collect(Collectors.toList());
     }
 
     /**
@@ -162,7 +164,7 @@ public class LogSegments {
      *
      * @param offset the segment to be retrieved
      *
-     * @return the segment if it exists, otherwise None.
+     * @return the segment if it exists, otherwise Empty.
      */
     public Optional<LogSegment> get(long offset) {
         return Optional.ofNullable(segments.get(offset));
@@ -219,7 +221,7 @@ public class LogSegments {
      * This method is thread-safe.
      */
     public Optional<LogSegment> floorSegment(long offset) {
-        return floorEntry(offset).map(e -> e.getValue());
+        return floorEntry(offset).map(Map.Entry::getValue);
     }
 
     /**
@@ -239,7 +241,7 @@ public class LogSegments {
      * This method is thread-safe.
      */
     public Optional<LogSegment> lowerSegment(long offset) {
-        return lowerEntry(offset).map(e -> e.getValue());
+        return lowerEntry(offset).map(Map.Entry::getValue);
     }
 
     /**
@@ -259,7 +261,7 @@ public class LogSegments {
      * This method is thread-safe.
      */
     public Optional<LogSegment> higherSegment(long offset) {
-        return higherEntry(offset).map(e -> e.getValue());
+        return higherEntry(offset).map(Map.Entry::getValue);
     }
 
     /**
@@ -277,17 +279,15 @@ public class LogSegments {
      * This method is thread-safe.
      */
     public Optional<LogSegment> firstSegment() {
-        return firstEntry().map(s -> s.getValue());
+        return firstEntry().map(Map.Entry::getValue);
     }
 
     /**
      * @return the base offset of the log segment associated with the smallest offset, if it exists
      */
     public OptionalLong firstSegmentBaseOffset() {
-        Optional<LogSegment> first = firstSegment();
-        if (first.isPresent())
-            return OptionalLong.of(first.get().baseOffset());
-        return OptionalLong.empty();
+        return firstSegment().map(logSegment -> OptionalLong.of(logSegment.baseOffset()))
+                .orElseGet(OptionalLong::empty);
     }
 
     /**
@@ -305,7 +305,7 @@ public class LogSegments {
      * This method is thread-safe.
      */
     public Optional<LogSegment> lastSegment() {
-        return lastEntry().map(e -> e.getValue());
+        return lastEntry().map(Map.Entry::getValue);
     }
 
     /**
@@ -346,10 +346,6 @@ public class LogSegments {
      * @return Sum of the log segments' sizes (in bytes)
      */
     public static long sizeInBytes(Collection<LogSegment> segments) {
-        return segments.stream().mapToLong(s -> s.size()).sum();
-    }
-
-    public static Collection<Long> getFirstBatchTimestampForSegments(Collection<LogSegment> segments) {
-        return segments.stream().map(s -> s.getFirstBatchTimestamp()).collect(Collectors.toList());
+        return segments.stream().mapToLong(LogSegment::size).sum();
     }
 }

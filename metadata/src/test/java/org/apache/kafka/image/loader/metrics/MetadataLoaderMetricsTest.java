@@ -17,9 +17,14 @@
 
 package org.apache.kafka.image.loader.metrics;
 
+import org.apache.kafka.controller.metrics.ControllerMetricsTestUtils;
+import org.apache.kafka.image.MetadataProvenance;
+
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,10 +33,6 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-
-import org.apache.kafka.controller.metrics.ControllerMetricsTestUtils;
-import org.apache.kafka.image.MetadataProvenance;
-import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,8 +53,8 @@ public class MetadataLoaderMetricsTest {
         FakeMetadataLoaderMetrics(Optional<MetricsRegistry> registry) {
             metrics = new MetadataLoaderMetrics(
                 registry,
-                n -> batchProcessingTimeNs.set(n),
-                n -> batchSize.set(n),
+                batchProcessingTimeNs::set,
+                batchSize::set,
                 provenance);
         }
 
@@ -104,7 +105,7 @@ public class MetadataLoaderMetricsTest {
     public void testUpdateLastAppliedImageProvenance() {
         MetricsRegistry registry = new MetricsRegistry();
         try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
-            MetadataProvenance provenance = new MetadataProvenance(1L, 2, 3L);
+            MetadataProvenance provenance = new MetadataProvenance(1L, 2, 3L, true);
             fakeMetrics.metrics.updateLastAppliedImageProvenance(provenance);
             assertEquals(provenance, fakeMetrics.provenance.get());
         }

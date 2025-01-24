@@ -35,43 +35,23 @@ public interface TasksRegistry {
 
     void clearPendingTasksToCreate();
 
-    Set<TopicPartition> removePendingTaskToRecycle(final TaskId taskId);
-
-    boolean hasPendingTasksToRecycle();
-
-    void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions);
-
-    Set<TopicPartition> removePendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId);
-
-    void addPendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions);
-
-    Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId);
-
-    void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions);
-
-    boolean removePendingTaskToAddBack(final TaskId taskId);
-
-    void addPendingTaskToAddBack(final TaskId taskId);
-
-    boolean removePendingTaskToCloseClean(final TaskId taskId);
-
-    void addPendingTaskToCloseClean(final TaskId taskId);
-
     Set<Task> drainPendingTasksToInit();
+
+    Set<Task> drainPendingActiveTasksToInit();
+
+    Set<Task> pendingTasksToInit();
 
     void addPendingTasksToInit(final Collection<Task> tasks);
 
     boolean hasPendingTasksToInit();
-
-    boolean removePendingActiveTaskToSuspend(final TaskId taskId);
-
-    void addPendingActiveTaskToSuspend(final TaskId taskId);
 
     void addActiveTasks(final Collection<Task> tasks);
 
     void addStandbyTasks(final Collection<Task> tasks);
 
     void addTask(final Task task);
+
+    void addFailedTask(final Task task);
 
     void removeTask(final Task taskToRemove);
 
@@ -94,6 +74,8 @@ public interface TasksRegistry {
     Collection<Task> activeTasks();
 
     Set<Task> allTasks();
+
+    Set<Task> allNonFailedTasks();
 
     Map<TaskId, Task> allTasksPerId();
 

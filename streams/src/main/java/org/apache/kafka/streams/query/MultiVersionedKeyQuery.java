@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
+
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
-import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
-import org.apache.kafka.streams.state.VersionedRecordIterator;
 
 /**
  * Interactive query for retrieving a set of records with the same specified key and different timestamps within the specified time range.
