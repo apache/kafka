@@ -308,8 +308,6 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
   // Only the classic group protocol supports client-side assignors
   @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.assignmentStrategy={2}")
   @CsvSource(Array(
-    "zk,    classic, org.apache.kafka.clients.consumer.CooperativeStickyAssignor",
-    "zk,    classic, org.apache.kafka.clients.consumer.RangeAssignor",
     "kraft, classic, org.apache.kafka.clients.consumer.CooperativeStickyAssignor",
     "kraft, classic, org.apache.kafka.clients.consumer.RangeAssignor"
   ))
