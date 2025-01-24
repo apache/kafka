@@ -59,14 +59,14 @@ class BrokerLifecycleManagerTest {
   @Test
   def testCreateAndClose(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(context.config, context.time, "create-and-close-", isZkBroker = false, Set(Uuid.fromString("oFoTeS9QT0aAyCyH41v45A")))
+    manager = new BrokerLifecycleManager(context.config, context.time, "create-and-close-", Set(Uuid.fromString("oFoTeS9QT0aAyCyH41v45A")))
     manager.close()
   }
 
   @Test
   def testCreateStartAndClose(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(context.config, context.time, "create-start-and-close-", isZkBroker = false, Set(Uuid.fromString("uiUADXZWTPixVvp6UWFWnw")))
+    manager = new BrokerLifecycleManager(context.config, context.time, "create-start-and-close-", Set(Uuid.fromString("uiUADXZWTPixVvp6UWFWnw")))
     assertEquals(BrokerState.NOT_RUNNING, manager.state)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
@@ -81,7 +81,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testSuccessfulRegistration(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", isZkBroker = false, Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
+    manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
@@ -103,7 +103,7 @@ class BrokerLifecycleManagerTest {
   def testRegistrationTimeout(): Unit = {
     val context = new RegistrationTestContext(configProperties)
     val controllerNode = new Node(3000, "localhost", 8021)
-    manager = new BrokerLifecycleManager(context.config, context.time, "registration-timeout-", isZkBroker = false, Set(Uuid.fromString("9XBOAtr4T0Wbx2sbiWh6xg")))
+    manager = new BrokerLifecycleManager(context.config, context.time, "registration-timeout-", Set(Uuid.fromString("9XBOAtr4T0Wbx2sbiWh6xg")))
     context.controllerNodeProvider.node.set(controllerNode)
     def newDuplicateRegistrationResponse(): Unit = {
       context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
@@ -143,7 +143,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testControlledShutdown(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(context.config, context.time, "controlled-shutdown-", isZkBroker = false, Set(Uuid.fromString("B4RtUz1ySGip3A7ZFYB2dg")))
+    manager = new BrokerLifecycleManager(context.config, context.time, "controlled-shutdown-", Set(Uuid.fromString("B4RtUz1ySGip3A7ZFYB2dg")))
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
@@ -224,7 +224,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testAlwaysSendsAccumulatedOfflineDirs(): Unit = {
     val ctx = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "offline-dirs-sent-in-heartbeat-", isZkBroker = false, Set(Uuid.fromString("0IbF1sjhSGG6FNvnrPbqQg")))
+    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "offline-dirs-sent-in-heartbeat-", Set(Uuid.fromString("0IbF1sjhSGG6FNvnrPbqQg")))
     val controllerNode = new Node(3000, "localhost", 8021)
     ctx.controllerNodeProvider.node.set(controllerNode)
 
@@ -250,8 +250,7 @@ class BrokerLifecycleManagerTest {
   def testRegistrationIncludesDirs(): Unit = {
     val logDirs = Set("ad5FLIeCTnaQdai5vOjeng", "ybdzUKmYSLK6oiIpI6CPlw").map(Uuid.fromString)
     val ctx = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "registration-includes-dirs-",
-      isZkBroker = false, logDirs)
+    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "registration-includes-dirs-", logDirs)
     val controllerNode = new Node(3000, "localhost", 8021)
     ctx.controllerNodeProvider.node.set(controllerNode)
 
@@ -268,7 +267,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testKraftJBODMetadataVersionUpdateEvent(): Unit = {
     val ctx = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "jbod-metadata-version-update", isZkBroker = false, Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
+    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "jbod-metadata-version-update", Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
 
     val controllerNode = new Node(3000, "localhost", 8021)
     ctx.controllerNodeProvider.node.set(controllerNode)
@@ -289,7 +288,7 @@ class BrokerLifecycleManagerTest {
     assertEquals(1000L, manager.brokerEpoch)
 
     // Trigger JBOD MV update
-    manager.resendBrokerRegistrationUnlessZkMode()
+    manager.resendBrokerRegistration()
 
     // Accept new registration, response sets epoch to 1200
     nextRegistrationRequest(1200L)

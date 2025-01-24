@@ -14,7 +14,8 @@
 // limitations under the License.
 
 {
-  "type": "data",
+  "apiKey": 0,
+  "type": "coordinator-value",
   "name": "TransactionLogValue",
   // Version 1 is the first flexible version.
   // KIP-915: bumping the version will no longer make this record backward compatible.
@@ -30,6 +31,8 @@
       "about": "Latest producer ID sent to the producer for the given transactional id."},
     { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
       "about": "Epoch associated with the producer id."},
+    { "name": "NextProducerEpoch", "type": "int16", "default": -1, "taggedVersions": "1+", "tag": 3,
+      "about": "Producer epoch associated with the NextProducerId"},
     { "name": "TransactionTimeoutMs", "type": "int32", "versions": "0+",
       "about": "Transaction timeout in milliseconds."},
     { "name": "TransactionStatus", "type": "int8", "versions": "0+",

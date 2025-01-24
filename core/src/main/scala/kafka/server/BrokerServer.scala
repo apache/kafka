@@ -223,7 +223,6 @@ class BrokerServer(
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
         s"broker-${config.nodeId}-",
-        isZkBroker = false,
         logDirs = logManager.directoryIdsSet,
         () => new Thread(() => shutdown(), "kafka-shutdown-thread").start())
 
@@ -254,7 +253,7 @@ class BrokerServer(
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,
         config,
-        Some(forwardingManager),
+        forwardingManager,
         brokerFeatures,
         metadataCache,
         Some(clientMetricsManager)
@@ -535,7 +534,7 @@ class BrokerServer(
       })
       metadataPublishers.add(brokerMetadataPublisher)
       brokerRegistrationTracker = new BrokerRegistrationTracker(config.brokerId,
-        () => lifecycleManager.resendBrokerRegistrationUnlessZkMode())
+        () => lifecycleManager.resendBrokerRegistration())
       metadataPublishers.add(brokerRegistrationTracker)
 
 

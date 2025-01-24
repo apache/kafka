@@ -60,18 +60,6 @@ public class ControllerMetricsChangesTest {
             setInControlledShutdown(false).build();
     }
 
-    private static BrokerRegistration zkBrokerRegistration(
-        int brokerId
-    ) {
-        return new BrokerRegistration.Builder().
-            setId(brokerId).
-            setEpoch(100L).
-            setIncarnationId(Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ")).
-            setFenced(false).
-            setInControlledShutdown(false).
-            setIsMigratingZkBroker(true).build();
-    }
-
     @Test
     public void testInitialValues() {
         ControllerMetricsChanges changes = new ControllerMetricsChanges();
@@ -113,20 +101,6 @@ public class ControllerMetricsChangesTest {
         changes.handleBrokerChange(brokerRegistration(1, true), brokerRegistration(1, false));
         assertEquals(-1, changes.fencedBrokersChange());
         assertEquals(1, changes.activeBrokersChange());
-    }
-
-    @Test
-    public void testHandleZkBroker() {
-        ControllerMetricsChanges changes = new ControllerMetricsChanges();
-        changes.handleBrokerChange(null, zkBrokerRegistration(1));
-        assertEquals(1, changes.migratingZkBrokersChange());
-        changes.handleBrokerChange(null, zkBrokerRegistration(2));
-        changes.handleBrokerChange(null, zkBrokerRegistration(3));
-        assertEquals(3, changes.migratingZkBrokersChange());
-
-        changes.handleBrokerChange(zkBrokerRegistration(3), brokerRegistration(3, true));
-        changes.handleBrokerChange(brokerRegistration(3, true), brokerRegistration(3, false));
-        assertEquals(2, changes.migratingZkBrokersChange());
     }
 
     @Test

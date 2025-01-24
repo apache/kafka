@@ -1104,8 +1104,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata.awaitUpdate(version, remainingWaitMs);
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                final String errorMessage = String.format("Topic %s not present in metadata after %d ms.",
-                        topic, maxWaitMs);
+                final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
                 if (metadata.getError(topic) != null) {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
@@ -1114,11 +1113,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;
             if (elapsed >= maxWaitMs) {
-                final String errorMessage = partitionsCount == null ?
-                        String.format("Topic %s not present in metadata after %d ms.",
-                                topic, maxWaitMs) :
-                        String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
-                                partition, topic, partitionsCount, maxWaitMs);
+                final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
                 if (metadata.getError(topic) != null && metadata.getError(topic).exception() instanceof RetriableException) {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
@@ -1134,6 +1129,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return new ClusterAndWaitTime(cluster, elapsed);
     }
 
+    private String getErrorMessage(Integer partitionsCount, String topic, Integer partition, long maxWaitMs) {
+        return partitionsCount == null ?
+            String.format("Topic %s not present in metadata after %d ms.",
+                topic, maxWaitMs) :
+            String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
+                partition, topic, partitionsCount, maxWaitMs);
+    }
     /**
      * Validate that the record size isn't too large
      */
@@ -1152,7 +1154,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Invoking this method makes all buffered records immediately available to send (even if <code>linger.ms</code> is
      * greater than 0) and blocks on the completion of the requests associated with these records. The post-condition
-     * of <code>flush()</code> is that any previously sent record will have completed (e.g. <code>Future.isDone() == true</code>).
+     * of <code>flush()</code> is that any previously sent record will have completed (e.g. <code>Future.isDone() == true</code>
+     * and callbacks passed to {@link #send(ProducerRecord,Callback)} have been called).
      * A request is considered completed when it is successfully acknowledged
      * according to the <code>acks</code> configuration you have specified or else it results in an error.
      * <p>

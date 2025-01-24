@@ -27,7 +27,10 @@
   // Version 4 adds the support for new error code PRODUCER_FENCED.
   //
   // Verison 5 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
-  "validVersions": "0-5",
+  //
+  // Version 6 adds support for 2PC (KIP-939).
+  "latestVersionUnstable": true,
+  "validVersions": "0-6",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "nullableVersions": "0+", "entityType": "transactionalId",
@@ -37,6 +40,11 @@
     { "name": "ProducerId", "type": "int64", "versions": "3+", "default": "-1", "entityType": "producerId",
       "about": "The producer id. This is used to disambiguate requests if a transactional id is reused following its expiration." },
     { "name": "ProducerEpoch", "type": "int16", "versions": "3+", "default": "-1",
-      "about": "The producer's current epoch. This will be checked against the producer epoch on the broker, and the request will return an error if they do not match." }
+      "about": "The producer's current epoch. This will be checked against the producer epoch on the broker, and the request will return an error if they do not match." },
+    { "name": "Enable2Pc", "type": "bool", "versions": "6+", "default": "false",
+      "about": "True if the client wants to enable two-phase commit (2PC) protocol for transactions." },
+    { "name": "KeepPreparedTxn", "type": "bool", "versions": "6+", "default": "false",
+      "about": "True if the client wants to keep the currently ongoing transaction instead of aborting it." }
+
   ]
 }

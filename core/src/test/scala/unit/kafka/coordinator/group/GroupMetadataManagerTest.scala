@@ -44,7 +44,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.{GroupCoordinatorConfig, OffsetAndMetadata, OffsetConfig}
 import org.apache.kafka.coordinator.group.generated.{CoordinatorRecordType, GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
-import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
@@ -99,8 +99,7 @@ class GroupMetadataManagerTest {
     metrics = new kMetrics()
     time = new MockTime
     replicaManager = mock(classOf[ReplicaManager])
-    groupMetadataManager = new GroupMetadataManager(0, MetadataVersion.latestTesting, offsetConfig, replicaManager,
-      time, metrics)
+    groupMetadataManager = new GroupMetadataManager(0, offsetConfig, replicaManager, time, metrics)
     groupMetadataManager.startup(() => numOffsetsPartitions, enableMetadataExpiration = false)
     partition = mock(classOf[Partition])
   }
@@ -114,7 +113,7 @@ class GroupMetadataManagerTest {
   def testLogInfoFromCleanupGroupMetadata(): Unit = {
     var expiredOffsets: Int = 0
     var infoCount = 0
-    val gmm = new GroupMetadataManager(0, MetadataVersion.latestTesting, offsetConfig, replicaManager, time, metrics) {
+    val gmm = new GroupMetadataManager(0, offsetConfig, replicaManager, time, metrics) {
       override def cleanupGroupMetadata(groups: Iterable[GroupMetadata], requestLocal: RequestLocal,
                                         selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int = expiredOffsets
 

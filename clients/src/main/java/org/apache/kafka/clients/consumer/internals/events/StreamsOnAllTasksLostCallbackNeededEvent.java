@@ -14,12 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server
+package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.server.purgatory.DelayedOperationKey
+public class StreamsOnAllTasksLostCallbackNeededEvent extends CompletableBackgroundEvent<Void> {
 
-/* used by delayed-topic operations */
-case class TopicKey(topic: String) extends DelayedOperationKey {
+    public StreamsOnAllTasksLostCallbackNeededEvent() {
+        super(Type.STREAMS_ON_ALL_TASKS_LOST_CALLBACK_NEEDED, Long.MAX_VALUE);
+    }
 
-  override def keyLabel: String = topic
+    @Override
+    protected String toStringBase() {
+        return super.toStringBase();
+    }
 }
