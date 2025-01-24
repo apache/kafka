@@ -1331,51 +1331,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, startOffset).toScala)
   }
 
-  def legacyFetchOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
-    // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val allSegments = logSegments.asScala.toBuffer
-    val lastSegmentHasSize = allSegments.last.size > 0
-
-    val offsetTimeArray =
-      if (lastSegmentHasSize)
-        new Array[(Long, Long)](allSegments.length + 1)
-      else
-        new Array[(Long, Long)](allSegments.length)
-
-    for (i <- allSegments.indices)
-      offsetTimeArray(i) = (math.max(allSegments(i).baseOffset, logStartOffset), allSegments(i).lastModified)
-    if (lastSegmentHasSize)
-      offsetTimeArray(allSegments.length) = (logEndOffset, time.milliseconds)
-
-    var startIndex = -1
-    timestamp match {
-      case ListOffsetsRequest.LATEST_TIMESTAMP =>
-        startIndex = offsetTimeArray.length - 1
-      case ListOffsetsRequest.EARLIEST_TIMESTAMP =>
-        startIndex = 0
-      case _ =>
-        var isFound = false
-        debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
-        startIndex = offsetTimeArray.length - 1
-        while (startIndex >= 0 && !isFound) {
-          if (offsetTimeArray(startIndex)._2 <= timestamp)
-            isFound = true
-          else
-            startIndex -= 1
-        }
-    }
-
-    val retSize = maxNumOffsets.min(startIndex + 1)
-    val ret = new Array[Long](retSize)
-    for (j <- 0 until retSize) {
-      ret(j) = offsetTimeArray(startIndex)._1
-      startIndex -= 1
-    }
-    // ensure that the returned seq is in descending order of offsets
-    ret.toSeq.sortBy(-_)
-  }
-
   /**
     * Given a message offset, find its corresponding offset metadata in the log.
     * 1. If the message offset is less than the log-start-offset (or) local-log-start-offset, then it returns the
