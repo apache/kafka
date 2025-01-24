@@ -17,11 +17,13 @@
 package kafka.test.api;
 
 import kafka.api.BaseConsumerTest;
+import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
@@ -62,6 +64,7 @@ import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.TestUtils;
 
@@ -91,6 +94,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -1826,11 +1830,8 @@ public class ShareConsumerTest {
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
-            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
             @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
             @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
-            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
-            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "3"),
             @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
         }
     )
@@ -1838,13 +1839,11 @@ public class ShareConsumerTest {
         setup();
         String topicName = "multipart";
         String groupId = "multipartGrp";
-        createTopic(topicName, 3, 3);
+        Uuid topicId = createTopic(topicName, 3, 3);
+        alterShareAutoOffsetReset(groupId, "earliest");
 
         try (Admin admin = createAdminClient()) {
             TopicPartition tpMulti = new TopicPartition(topicName, 0);
-
-            // get topic id
-            Uuid topicId = admin.describeTopics(List.of(topicName)).topicNameValues().get(topicName).get().topicId();
 
             // produce some messages
             try (Producer<byte[], byte[]> producer = createProducer()) {
@@ -1862,7 +1861,6 @@ public class ShareConsumerTest {
             // consume messages
             try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
                 shareConsumer.subscribe(List.of(topicName));
-                alterShareAutoOffsetReset(groupId, "earliest");
                 ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
                 assertEquals(10, records.count());
             }
@@ -1870,7 +1868,7 @@ public class ShareConsumerTest {
             // get current share coordinator node
             SharePartitionKey key = SharePartitionKey.getInstance(groupId, new TopicIdPartition(topicId, tpMulti));
             int shareGroupStateTp = Utils.abs(key.asCoordinatorKey().hashCode()) % 3;
-            List<Integer> curShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).topicNameValues().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME).get()
+            List<Integer> curShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
                 .partitions().stream()
                 .filter(info -> info.partition() == shareGroupStateTp)
                 .map(info -> info.leader().id())
@@ -1879,12 +1877,13 @@ public class ShareConsumerTest {
             assertEquals(1, curShareCoordNodeId.size());
 
             // shutdown the coordinator
+            KafkaBroker broker = cluster.brokers().get(curShareCoordNodeId.get(0));
             cluster.shutdownBroker(curShareCoordNodeId.get(0));
 
             // give some breathing time
-            TimeUnit.SECONDS.sleep(2L);
+            broker.awaitShutdown();
 
-            List<Integer> newShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).topicNameValues().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME).get()
+            List<Integer> newShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
                 .partitions().stream()
                 .filter(info -> info.partition() == shareGroupStateTp)
                 .map(info -> info.leader().id())
@@ -1910,7 +1909,6 @@ public class ShareConsumerTest {
             // from shutdown broker since we are only producing to partition 0 of topic.
             try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
                 shareConsumer.subscribe(List.of(topicName));
-                alterShareAutoOffsetReset(groupId, "earliest");
                 ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
                 assertEquals(20, records.count());
             }
@@ -1929,11 +1927,8 @@ public class ShareConsumerTest {
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
-            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
             @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
             @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
-            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
-            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "3"),
             @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
         }
     )
@@ -1951,8 +1946,8 @@ public class ShareConsumerTest {
 
         // produce messages until we want
         executer.execute(() -> {
-            while (!prodDone.get()) {
-                try (Producer<byte[], byte[]> producer = createProducer()) {
+            try (Producer<byte[], byte[]> producer = createProducer()) {
+                while (!prodDone.get()) {
                     ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(multiTp.topic(), multiTp.partition(), null, "key".getBytes(), "value".getBytes());
                     producer.send(record);
                     producer.flush();
@@ -2089,16 +2084,21 @@ public class ShareConsumerTest {
         return accumulatedRecords;
     }
 
-    private void createTopic(String topicName) {
-        createTopic(topicName, 1, 1);
+    private Uuid createTopic(String topicName) {
+        return createTopic(topicName, 1, 1);
     }
 
-    private void createTopic(String topicName, int numPartitions, int replicationFactor) {
+    private Uuid createTopic(String topicName, int numPartitions, int replicationFactor) {
+        AtomicReference<Uuid> topicId = new AtomicReference<>(null);
         assertDoesNotThrow(() -> {
             try (Admin admin = createAdminClient()) {
-                admin.createTopics(Collections.singleton(new NewTopic(topicName, numPartitions, (short) replicationFactor))).all().get();
+                CreateTopicsResult result = admin.createTopics(Collections.singleton(new NewTopic(topicName, numPartitions, (short) replicationFactor)));
+                result.all().get();
+                topicId.set(result.topicId(topicName).get());
             }
         }, "Failed to create topic");
+
+        return topicId.get();
     }
 
     private void deleteTopic(String topicName) {
@@ -2205,9 +2205,18 @@ public class ShareConsumerTest {
         }
     }
 
+    /**
+     * Test utility which encapsulates a {@link ShareConsumer} whose record processing
+     * behavior can be supplied as a function argument.
+     * <p></p>
+     * This can be used to create different consume patterns on the broker and study
+     * the status of broker side share group abstractions.
+     * @param <K> - key type of the records consumed
+     * @param <V> - value type of the records consumed
+     */
     private static class ComplexShareConsumer<K, V> implements Runnable {
         public static final int POLL_TIMEOUT_MS = 15000;
-        public static final int MAX_DELIVERY_COUNT = 5;
+        public static final int MAX_DELIVERY_COUNT = ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT;
 
         private final String topicName;
         private final Map<String, Object> configs = new HashMap<>();
