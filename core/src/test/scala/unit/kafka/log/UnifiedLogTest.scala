@@ -4021,6 +4021,42 @@ class UnifiedLogTest {
   }
 
   @Test
+  def testPreviousTransactionOngoing(): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch)
+    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
+
+    val transactionalRecords = MemoryRecords.withTransactionalRecords(
+      Compression.NONE,
+      producerId,
+      producerEpoch,
+      0,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+    log.appendAsLeader(transactionalRecords, origin = AppendOrigin.CLIENT, leaderEpoch = 0, verificationGuard = verificationGuard)
+
+    assertThrows(classOf[ConcurrentTransactionsException], () => log.maybeStartTransactionVerification(producerId, 0, (producerEpoch + 1).toShort))
+    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
+
+    val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
+      producerId,
+      producerEpoch,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+    )
+
+    log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
+    val verificationGuard2 = log.maybeStartTransactionVerification(producerId, 0, (producerEpoch + 1).toShort)
+    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard2)
+  }
+
+  @Test
   def testRecoveryPointNotIncrementedOnProducerStateSnapshotFlushFailure(): Unit = {
     val logConfig = LogTestUtils.createLogConfig()
     val log = spy(createLog(logDir, logConfig))
