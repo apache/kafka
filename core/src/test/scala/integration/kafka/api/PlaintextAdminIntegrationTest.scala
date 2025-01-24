@@ -1847,7 +1847,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // contains two static members and one dynamic member
       val groupInstanceSet = Set(testInstanceId1, testInstanceId2, "")
       val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
-      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, testClientId, groupInstanceSet, topicSet)
+      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, testClientId, new Properties(consumerConfig))
+
+      // We need to disable the auto commit because after the members got removed from group, the offset commit
+      // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
+      val configOverrides = new Properties()
+      configOverrides.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+      groupInstanceSet.zip(topicSet).foreach(zipped => backgroundConsumerSet.addConsumer(zipped._1, zipped._2, configOverrides))
 
       try {
         val groupType = if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name)) GroupType.CONSUMER else GroupType.CLASSIC
@@ -2166,7 +2172,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // contains two static members and one dynamic member
       val groupInstanceSet = Set(testInstanceId1, testInstanceId2, "")
       val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
-      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, testClientId, groupInstanceSet, topicSet)
+      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, testClientId, new Properties(consumerConfig))
+
+      // We need to disable the auto commit because after the members got removed from group, the offset commit
+      // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
+      val configOverrides = new Properties()
+      configOverrides.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+      groupInstanceSet.zip(topicSet).foreach(zipped => backgroundConsumerSet.addConsumer(zipped._1, zipped._2, configOverrides))
 
       try {
         val groupType = if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name)) GroupType.CONSUMER else GroupType.CLASSIC
@@ -3910,16 +3922,34 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       topicConfigs.get(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG))
   }
 
-  class BackgroundConsumerSet(testGroupId: String, testClientId: String, groupInstanceSet: Set[String], topicSet: Set[String]){
-    private val consumerSet: Set[Consumer[Array[Byte], Array[Byte]]] = groupInstanceSet.map { groupInstanceId =>
-      createConsumer(configOverrides = createProperties(groupInstanceId))
+  class BackgroundConsumerSet(testGroupId: String, testClientId: String, defaultConsumerConfig: Properties) {
+    private val consumerSet: scala.collection.mutable.Set[Consumer[Array[Byte], Array[Byte]]] = scala.collection.mutable.Set.empty
+    private val consumerThreads: scala.collection.mutable.Set[Thread] = scala.collection.mutable.Set.empty
+    private var startLatch: CountDownLatch = new CountDownLatch(0)
+    private var stopLatch: CountDownLatch = new CountDownLatch(0)
+    private var consumerThreadRunning = new AtomicBoolean(false)
+
+    defaultConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+    defaultConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+
+    def addConsumer(groupInstanceId: String, topic: String, configOverrides: Properties = new Properties()): Unit = {
+      val newConsumerConfig = defaultConsumerConfig.clone().asInstanceOf[Properties]
+      if (groupInstanceId != "") {
+        // static member
+        newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
+      }
+      newConsumerConfig.putAll(configOverrides)
+
+      val consumer = createConsumer(configOverrides = newConsumerConfig)
+      val consumerThread = createConsumerThread(consumer, topic)
+      consumerSet.add(consumer)
+      consumerThreads.add(consumerThread)
     }
-    private val consumerThreads = consumerSet.zip(topicSet).map(zipped => createConsumerThread(zipped._1, zipped._2))
-    private val startLatch: CountDownLatch = new CountDownLatch(consumerSet.size)
-    private val stopLatch: CountDownLatch = new CountDownLatch(consumerSet.size)
-    private val consumerThreadRunning = new AtomicBoolean(true)
 
     def start(): Unit = {
+      startLatch = new CountDownLatch(consumerSet.size)
+      stopLatch = new CountDownLatch(consumerSet.size)
+      consumerThreadRunning = new AtomicBoolean(true)
       consumerThreads.foreach(_.start())
       assertTrue(startLatch.await(30000, TimeUnit.MILLISECONDS), "Failed to start consumer threads in time")
     }
@@ -3938,23 +3968,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         }
       }
       finally{
-        consumerSet.zip(groupInstanceSet).foreach(zipped => Utils.closeQuietly(zipped._1, zipped._2))
+        consumerSet.foreach(consumer => Utils.closeQuietly(consumer, "consumer"))
       }
-    }
-
-    private def createProperties(groupInstanceId: String): Properties = {
-      val newConsumerConfig = new Properties(consumerConfig)
-      // We need to disable the auto commit because after the members got removed from group, the offset commit
-      // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
-      newConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-      newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
-      newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-
-      // static member
-      if (groupInstanceId != "") {
-        newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
-      }
-      newConsumerConfig
     }
 
     private def createConsumerThread[K,V](consumer: Consumer[K,V], topic: String): Thread = {
