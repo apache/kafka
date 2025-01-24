@@ -1010,9 +1010,6 @@ public class Values {
             return parseAsTemporal(token);
         }
 
-        private static boolean isWholeNumber(BigDecimal bd) {
-            return bd.signum() == 0 || bd.scale() <= 0 || bd.stripTrailingZeros().scale() <= 0;
-        }
 
         private static SchemaAndValue parseAsNumber(String token) {
             // Try to parse as a number ...
@@ -1032,6 +1029,10 @@ public class Values {
                 Schema schema = Decimal.schema(decimal.scale());
                 return new SchemaAndValue(schema, decimal);
             }
+        }
+
+        private static boolean isWholeNumber(BigDecimal bd) {
+            return bd.signum() == 0 || bd.scale() <= 0 || bd.stripTrailingZeros().scale() <= 0;
         }
 
         private static final BigDecimal BIGGER_THAN_LONG = new BigDecimal("1e19");
