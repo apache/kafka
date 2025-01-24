@@ -288,6 +288,12 @@ public class SharePartition {
     private long endOffset;
 
     /**
+     * The initial read gap offset tracks if there are any gaps in the in-flight batch during intial
+     * read of the share partition state from the persister.
+     */
+    private InitialReadGapOffset initialReadGapOffset;
+
+    /**
      * We maintain the latest fetch offset and its metadata to estimate the minBytes requirement more efficiently.
      */
     private final OffsetMetadata fetchOffsetMetadata;
@@ -462,6 +468,10 @@ public class SharePartition {
                     // in the cached state are not missed
                     findNextFetchOffset.set(true);
                     endOffset = cachedState.lastEntry().getValue().lastOffset();
+                    // initialReadGapOffset is not required, if there are no gaps in the read state response
+                    if (isGapPresentInCachedState()) {
+                        initialReadGapOffset = new InitialReadGapOffset(endOffset, startOffset);
+                    }
                     // In case the persister read state RPC result contains no AVAILABLE records, we can update cached state
                     // and start/end offsets.
                     maybeUpdateCachedStateAndOffsets();
@@ -538,8 +548,20 @@ public class SharePartition {
             }
 
             long nextFetchOffset = -1;
-
+            long gapStartOffset = initialReadGapOffset != null ? initialReadGapOffset.gapStartOffset() : -1;
             for (Map.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
+                // Check if there exists any gap in the in-flight batch which needs to be fetched. If
+                // initialReadGapOffset's endOffset is equal to the share partition's endOffset, then
+                // only the initial gaps should be considered. Once share partition's endOffset is past
+                // initial read end offset then all gaps are anyway fetched.
+                if (initialReadGapOffset != null && initialReadGapOffset.endOffset() == endOffset) {
+                    if (entry.getKey() > gapStartOffset) {
+                        nextFetchOffset = gapStartOffset;
+                        break;
+                    }
+                    gapStartOffset = entry.getValue().lastOffset() + 1;
+                }
+
                 // Check if the state is maintained per offset or batch. If the offsetState
                 // is not maintained then the batch state is used to determine the offsets state.
                 if (entry.getValue().offsetState() == null) {
@@ -629,15 +651,42 @@ public class SharePartition {
             if (subMap.isEmpty()) {
                 log.trace("No cached data exists for the share partition for requested fetch batch: {}-{}",
                     groupId, topicIdPartition);
-                return acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                ShareAcquiredRecords acquiredRecords =  acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
                     firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
+                // Since new records have been acquired, the window tracking the gap in cachedState might need to be reduced
+                maybeUpdateReadGapFetchOffset(lastBatch.lastOffset() + 1);
+                return acquiredRecords;
+            }
+
+            // The acquired count is used to track the number of records acquired for the request.
+            int acquiredCount = 0;
+            List<AcquiredRecords> result = new ArrayList<>();
+
+            // If baseOffset is less than the first key of submap, this means the fetch happened for a gap in the cachedState.
+            // Thus a new batch needs to be acquired for the gap.
+            if (baseOffset < subMap.firstKey()) {
+                // This is to check whether the fetched records are all part of the gap, or they overlap with the next
+                // inFlight batch in the cachedState
+                if (lastBatch.lastOffset() < (subMap.firstKey())) {
+                    // The entire request batch is part of the gap
+                    ShareAcquiredRecords recs = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                        firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
+                    maybeUpdateReadGapFetchOffset(lastBatch.lastOffset() + 1);
+                    return recs;
+                } else {
+                    result.add(new AcquiredRecords()
+                        .setFirstOffset(firstBatch.baseOffset())
+                        .setLastOffset(subMap.firstKey() - 1)
+                        .setDeliveryCount((short) 1));
+                    acquiredCount += (int) (subMap.firstKey() - firstBatch.baseOffset());
+                    acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                        firstBatch.baseOffset(), subMap.firstKey() - 1, batchSize, maxFetchRecords);
+                }
             }
 
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
                 + " the share partition: {}-{}", groupId, topicIdPartition);
-            List<AcquiredRecords> result = new ArrayList<>();
-            // The acquired count is used to track the number of records acquired for the request.
-            int acquiredCount = 0;
+
             // The fetched records are already part of the in-flight records. The records might
             // be available for re-delivery hence try acquiring same. The request batches could
             // be an exact match, subset or span over multiple already fetched batches.
@@ -714,6 +763,9 @@ public class SharePartition {
                     lastBatch.lastOffset(), batchSize, maxFetchRecords - acquiredCount);
                 result.addAll(shareAcquiredRecords.acquiredRecords());
                 acquiredCount += shareAcquiredRecords.count();
+            }
+            if (!result.isEmpty()) {
+                maybeUpdateReadGapFetchOffset(result.get(result.size() - 1).lastOffset() + 1);
             }
             return new ShareAcquiredRecords(result, acquiredCount);
         } finally {
@@ -1177,6 +1229,24 @@ public class SharePartition {
         };
     }
 
+    // Method to reduce the window that tracks gaps in the cachedState
+    private void maybeUpdateReadGapFetchOffset(long offset) {
+        lock.writeLock().lock();
+        try {
+            if (initialReadGapOffset != null) {
+                if (initialReadGapOffset.endOffset() == endOffset) {
+                    initialReadGapOffset.gapStartOffset(offset);
+                } else {
+                    // The initial read gap offset is not valid anymore as the end offset has moved
+                    // beyond the initial read gap offset. Hence, reset the initial read gap offset.
+                    initialReadGapOffset = null;
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
     private ShareAcquiredRecords acquireNewBatchRecords(
         String memberId,
         Iterable<? extends RecordBatch> batches,
@@ -1212,7 +1282,11 @@ public class SharePartition {
             if (cachedState.firstKey() == firstAcquiredOffset)  {
                 startOffset = firstAcquiredOffset;
             }
-            endOffset = lastAcquiredOffset;
+
+            if (lastAcquiredOffset > endOffset) {
+                endOffset = lastAcquiredOffset;
+            }
+            maybeUpdateReadGapFetchOffset(lastAcquiredOffset + 1);
             return new ShareAcquiredRecords(acquiredRecords, (int) (lastAcquiredOffset - firstAcquiredOffset + 1));
         } finally {
             lock.writeLock().unlock();
@@ -1758,6 +1832,11 @@ public class SharePartition {
                 return;
             }
 
+            // if there is an acquirable gap initially, then we should not move the startOffset
+            if (initialReadGapOffset != null && initialReadGapOffset.gapStartOffset() == startOffset) {
+                return;
+            }
+
             // This will help to find the next position for the startOffset.
             // The new position of startOffset will be lastOffsetAcknowledged + 1
             long lastOffsetAcknowledged = findLastOffsetAcknowledged();
@@ -1792,10 +1871,18 @@ public class SharePartition {
             long lastKeyToRemove;
             NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(lastOffsetAcknowledged);
             if (lastOffsetAcknowledged == entry.getValue().lastOffset()) {
-                startOffset = cachedState.higherKey(lastOffsetAcknowledged);
+                if (initialReadGapOffset != null) {
+                    startOffset = Math.min(initialReadGapOffset.gapStartOffset(), cachedState.higherKey(lastOffsetAcknowledged));
+                } else {
+                    startOffset = cachedState.higherKey(lastOffsetAcknowledged);
+                }
                 lastKeyToRemove = entry.getKey();
             } else {
-                startOffset = lastOffsetAcknowledged + 1;
+                if (initialReadGapOffset != null) {
+                    startOffset = Math.min(initialReadGapOffset.gapStartOffset(), lastOffsetAcknowledged + 1);
+                } else {
+                    startOffset = lastOffsetAcknowledged + 1;
+                }
                 if (entry.getKey().equals(cachedState.firstKey())) {
                     // If the first batch in cachedState has some records yet to be acknowledged,
                     // then nothing should be removed from cachedState
@@ -1852,14 +1939,22 @@ public class SharePartition {
         long lastOffsetAcknowledged = -1;
         try {
             for (NavigableMap.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
+                if (initialReadGapOffset != null && entry.getKey() >= initialReadGapOffset.gapStartOffset()) {
+                    break;
+                }
                 InFlightBatch inFlightBatch = entry.getValue();
                 if (inFlightBatch.offsetState() == null) {
                     if (!isRecordStateAcknowledged(inFlightBatch.batchState())) {
                         return lastOffsetAcknowledged;
                     }
-                    lastOffsetAcknowledged = inFlightBatch.lastOffset();
+                    if (initialReadGapOffset == null || inFlightBatch.lastOffset() < initialReadGapOffset.gapStartOffset()) {
+                        lastOffsetAcknowledged = inFlightBatch.lastOffset();
+                    }
                 } else {
                     for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
+                        if (initialReadGapOffset != null && offsetState.getKey() >= initialReadGapOffset.gapStartOffset()) {
+                            break;
+                        }
                         if (!isRecordStateAcknowledged(offsetState.getValue().state())) {
                             return lastOffsetAcknowledged;
                         }
@@ -1898,6 +1993,23 @@ public class SharePartition {
         if (previousBatch != null && offset <= previousBatch.lastOffset())
             return previousBatch.lastOffset();
         return offset;
+    }
+
+    /**
+     * Method to find if there are any gaps in the cachedState. Ex. if startOffset is 10 and there is an inflight batch (15, 20)
+     * then there is a gap (10-14)
+     *
+     * @return true is gas are present in the cachedState, false otherwise
+     */
+    private boolean isGapPresentInCachedState() {
+        long previousOffset = startOffset;
+        for (Map.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
+            if (entry.getKey() > previousOffset) {
+                return true;
+            }
+            previousOffset = entry.getValue().lastOffset() + 1;
+        }
+        return false;
     }
 
     // Visible for testing
@@ -2538,6 +2650,34 @@ public class SharePartition {
         void updateOffsetMetadata(long offset, LogOffsetMetadata offsetMetadata) {
             this.offset = offset;
             this.offsetMetadata = offsetMetadata;
+        }
+    }
+
+    /**
+     * The InitialReadGapOffset class is used to record the gap start and end offset of the probable gaps
+     * of available records which are neither known to Persister nor to SharePartition. Share Partition
+     * will use this information to determine the next fetch offset and should try to fetch the records
+     * in the gap.
+     */
+    private static class InitialReadGapOffset {
+        private final long endOffset;
+        private long gapStartOffset;
+
+        InitialReadGapOffset(long endOffset, long gapStartOffset) {
+            this.endOffset = endOffset;
+            this.gapStartOffset = gapStartOffset;
+        }
+
+        long endOffset() {
+            return endOffset;
+        }
+
+        long gapStartOffset() {
+            return gapStartOffset;
+        }
+
+        void gapStartOffset(long gapStartOffset) {
+            this.gapStartOffset = gapStartOffset;
         }
     }
 }

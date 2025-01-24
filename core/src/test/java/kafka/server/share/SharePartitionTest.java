@@ -5752,13 +5752,13 @@ public class SharePartitionTest {
         for (int i = 0; i < 500; i++) {
             stateBatches.add(new PersisterStateBatch(234L + i, 234L + i, RecordState.ACKNOWLEDGED.id, (short) 1));
         }
-        stateBatches.add(new PersisterStateBatch(232L, 232L, RecordState.ARCHIVED.id, (short) 1));
+        stateBatches.add(new PersisterStateBatch(233L, 233L, RecordState.ARCHIVED.id, (short) 1));
 
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
         Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
-                        PartitionFactory.newPartitionAllData(0, 3, 232L, Errors.NONE.code(), Errors.NONE.message(),
+                        PartitionFactory.newPartitionAllData(0, 3, 233L, Errors.NONE.code(), Errors.NONE.message(),
                                 stateBatches)))));
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
