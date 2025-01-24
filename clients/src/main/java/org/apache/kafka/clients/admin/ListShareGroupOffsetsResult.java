@@ -67,7 +67,7 @@ public class ListShareGroupOffsetsResult {
     /**
      * Return a future which yields a map of topic partitions to offsets for the specified group.
      *
-     * @param groupId - The groupId for which the Map<TopicPartition, Long> is needed
+     * @param groupId The group ID.
      * @return Future which yields a map of topic partitions to offsets for the specified group.
      */
     public KafkaFuture<Map<TopicPartition, Long>> partitionsToOffset(String groupId) {
