@@ -32,6 +32,8 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.KafkaShareConsumer;
+import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -186,6 +188,20 @@ public interface ClusterInstance {
 
     default <K, V> Consumer<K, V> consumer() {
         return consumer(Map.of());
+    }
+
+    default <K, V> ShareConsumer<K, V> shareConsumer() {
+        return shareConsumer(Map.of());
+    }
+
+    default <K, V> ShareConsumer<K, V> shareConsumer(Map<String, Object> configs) {
+        Map<String, Object> props = new HashMap<>(configs);
+        props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
+        props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        return new KafkaShareConsumer<>(setClientSaslConfig(props));
     }
 
     default Admin admin(Map<String, Object> configs, boolean usingBootstrapControllers) {

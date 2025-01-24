@@ -270,7 +270,6 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:0,$listeners")
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, s"CONTROLLER,$listenerNames")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:0")
-    // Setting the configuration to the same value set on the brokers via TestUtils to keep KRaft based and Zk based controller configs are consistent.
     props.setProperty(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
     val config = new KafkaConfig(props)
 
@@ -369,7 +368,7 @@ object QuorumTestHarness {
 
   /**
    * Verify that a previous test that doesn't use QuorumTestHarness hasn't left behind an unexpected thread.
-   * This assumes that brokers, ZooKeeper clients, producers and consumers are not created in another @BeforeClass,
+   * This assumes that brokers, admin clients, producers and consumers are not created in another @BeforeClass,
    * which is true for core tests where this harness is used.
    */
   @BeforeAll
@@ -436,9 +435,6 @@ object QuorumTestHarness {
       Arguments.of("kraft", GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
     )
   }
-
-  // The following is for tests that only work with the classic group protocol because of relying on Zookeeper
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit: java.util.stream.Stream[Arguments] = stream.Stream.of(Arguments.of("zk", GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)))
 
   // The following parameter groups are to *temporarily* avoid bugs with the CONSUMER group protocol Consumer
   // implementation that would otherwise cause tests to fail.

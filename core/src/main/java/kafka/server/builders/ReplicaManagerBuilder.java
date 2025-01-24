@@ -22,7 +22,6 @@ import kafka.log.remote.RemoteLogManager;
 import kafka.server.AddPartitionsToTxnManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.DelayedDeleteRecords;
-import kafka.server.DelayedElectLeader;
 import kafka.server.DelayedFetch;
 import kafka.server.DelayedProduce;
 import kafka.server.DelayedRemoteFetch;
@@ -66,7 +65,6 @@ public class ReplicaManagerBuilder {
     private Optional<DelayedOperationPurgatory<DelayedProduce>> delayedProducePurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedFetch>> delayedFetchPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedDeleteRecords>> delayedDeleteRecordsPurgatory = Optional.empty();
-    private Optional<DelayedOperationPurgatory<DelayedElectLeader>> delayedElectLeaderPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedRemoteFetch>> delayedRemoteFetchPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedRemoteListOffsets>> delayedRemoteListOffsetsPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedShareFetch>> delayedShareFetchPurgatory = Optional.empty();
@@ -130,33 +128,8 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
-    public ReplicaManagerBuilder setIsShuttingDown(AtomicBoolean isShuttingDown) {
-        this.isShuttingDown = isShuttingDown;
-        return this;
-    }
-
-    public ReplicaManagerBuilder setDelayedProducePurgatory(DelayedOperationPurgatory<DelayedProduce> delayedProducePurgatory) {
-        this.delayedProducePurgatory = Optional.of(delayedProducePurgatory);
-        return this;
-    }
-
     public ReplicaManagerBuilder setDelayedFetchPurgatory(DelayedOperationPurgatory<DelayedFetch> delayedFetchPurgatory) {
         this.delayedFetchPurgatory = Optional.of(delayedFetchPurgatory);
-        return this;
-    }
-
-    public ReplicaManagerBuilder setDelayedRemoteFetchPurgatory(DelayedOperationPurgatory<DelayedRemoteFetch> delayedRemoteFetchPurgatory) {
-        this.delayedRemoteFetchPurgatory = Optional.of(delayedRemoteFetchPurgatory);
-        return this;
-    }
-
-    public ReplicaManagerBuilder setDelayedDeleteRecordsPurgatory(DelayedOperationPurgatory<DelayedDeleteRecords> delayedDeleteRecordsPurgatory) {
-        this.delayedDeleteRecordsPurgatory = Optional.of(delayedDeleteRecordsPurgatory);
-        return this;
-    }
-
-    public ReplicaManagerBuilder setDelayedElectLeaderPurgatoryParam(DelayedOperationPurgatory<DelayedElectLeader> delayedElectLeaderPurgatory) {
-        this.delayedElectLeaderPurgatory = Optional.of(delayedElectLeaderPurgatory);
         return this;
     }
 
@@ -167,11 +140,6 @@ public class ReplicaManagerBuilder {
 
     public ReplicaManagerBuilder setBrokerEpoch(long brokerEpoch) {
         this.brokerEpoch = brokerEpoch;
-        return this;
-    }
-
-    public ReplicaManagerBuilder setAddPartitionsToTransactionManager(AddPartitionsToTxnManager addPartitionsToTxnManager) {
-        this.addPartitionsToTxnManager = Optional.of(addPartitionsToTxnManager);
         return this;
     }
 
@@ -206,7 +174,6 @@ public class ReplicaManagerBuilder {
                              OptionConverters.toScala(delayedProducePurgatory),
                              OptionConverters.toScala(delayedFetchPurgatory),
                              OptionConverters.toScala(delayedDeleteRecordsPurgatory),
-                             OptionConverters.toScala(delayedElectLeaderPurgatory),
                              OptionConverters.toScala(delayedRemoteFetchPurgatory),
                              OptionConverters.toScala(delayedRemoteListOffsetsPurgatory),
                              OptionConverters.toScala(delayedShareFetchPurgatory),

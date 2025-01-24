@@ -82,6 +82,9 @@
                         </li>
                         <li>The function <code>onNewBatch</code> in <code>org.apache.kafka.clients.producer.Partitioner</code> class was removed.
                         </li>
+                        <li>The default properties files for KRaft mode are no longer stored in the separate <code>config/kraft</code> directory since Zookeeper has been removed. These files have been consolidated with other configuration files.
+                            Now all configuration files are in <code>config</code> directory.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Broker</b>

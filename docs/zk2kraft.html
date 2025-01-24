@@ -176,5 +176,26 @@
                 Kafka remove all zookeeper dependencies, so the metrics is removed.
             </p>
         </li>
+        <li>
+            <p>
+                Remove the metrics which is monitoring requests waiting in the topic purgatory
+            </p>
+            <ul>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=topic</code></li>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,name=NumDelayedOperations,delayedOperation=topic</code></li>
+            </ul>
+            <p>
+                In Kraft mode, Zookeeper is not used, so the metrics is removed.
+            </p>
+        </li>
+        <li>
+            <p>
+                Remove the metrics for leader election purgatory.
+            </p>
+            <ul>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,delayedOperation=ElectLeader,name=PurgatorySize</code></li>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,delayedOperation=ElectLeader,name=NumDelayedOperations</code></li>
+            </ul>
+        </li>
     </ul>
 </div>
