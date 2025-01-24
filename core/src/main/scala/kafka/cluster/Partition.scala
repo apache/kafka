@@ -23,7 +23,6 @@ import kafka.controller.StateChangeLogger
 import kafka.log._
 import kafka.log.remote.RemoteLogManager
 import kafka.server._
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.DelayedShareFetch
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
@@ -1806,9 +1805,7 @@ class Partition(val topicPartition: TopicPartition,
   private def addBrokerEpochToIsr(isr: List[Int]): List[BrokerState] = {
     isr.map { brokerId =>
       val brokerState = new BrokerState().setBrokerId(brokerId)
-      if (!metadataCache.isInstanceOf[KRaftMetadataCache]) {
-        brokerState.setBrokerEpoch(-1)
-      } else if (brokerId == localBrokerId) {
+      if (brokerId == localBrokerId) {
         brokerState.setBrokerEpoch(localBrokerEpochSupplier())
       } else {
         val replica = remoteReplicasMap.get(brokerId)

@@ -1504,8 +1504,8 @@ class PartitionTest extends AbstractPartitionTest {
     val isrItem = alterPartitionManager.isrUpdates.head
     assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId).map(Int.box).asJava)
     isrItem.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
-      // the broker epochs in the leaderAndIsr should be -1.
-      assertEquals(-1, brokerState.brokerEpoch())
+      // the broker epochs should be equal to broker epoch of the leader
+      assertEquals(defaultBrokerEpoch(brokerState.brokerId()), brokerState.brokerEpoch())
     }
     assertEquals(Set(brokerId), partition.partitionState.isr)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
