@@ -28,13 +28,12 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.config.ServerLogConfigs;
@@ -42,8 +41,6 @@ import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMe
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.test.TestUtils;
-
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -65,7 +62,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(value = ClusterTestExtensions.class)
 @ClusterTestDefaults(serverProperties = {
     @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
     @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),

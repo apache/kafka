@@ -21,7 +21,6 @@ import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
-import org.apache.kafka.common.test.MockController
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
@@ -47,6 +46,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.test.MockController
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT

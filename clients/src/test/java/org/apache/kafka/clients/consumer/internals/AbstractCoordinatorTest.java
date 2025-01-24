@@ -51,6 +51,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -1435,6 +1436,7 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
+    @Flaky("KAFKA-18310")
     @Test
     public void testWakeupAfterSyncGroupSentExternalCompletion() throws Exception {
         setupCoordinator();
@@ -1471,6 +1473,7 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
+    @Flaky("KAFKA-18310")
     @Test
     public void testWakeupAfterSyncGroupReceived() throws Exception {
         setupCoordinator();

@@ -47,6 +47,7 @@
   <allow pkg="org.apache.kafka.common.memory" />
   <allow pkg="org.apache.kafka.common.network" />
   <allow pkg="org.apache.kafka.server.config"/>
+  <allow pkg="org.apache.kafka.common.test.api" />
 
 
   <!-- protocol, records and request/response utilities -->

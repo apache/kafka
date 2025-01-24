@@ -110,8 +110,8 @@ include 'clients',
     'tools:tools-api',
     'transaction-coordinator',
     'trogdor',
-    'test-common',
-    'test-common:test-common-api',
+    'test-common:test-common-internal-api',
+    'test-common:test-common-util',
     'test-common:test-common-runtime'
 
 project(":storage:api").name = "storage-api"

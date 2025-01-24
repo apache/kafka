@@ -17,15 +17,15 @@
 package kafka.server
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterInstance, ClusterTest, ClusterTestDefaults, ClusterTestExtensions, ClusterTests, Type}
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords
 import org.apache.kafka.common.message.{ShareAcknowledgeRequestData, ShareAcknowledgeResponseData, ShareFetchRequestData, ShareFetchResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.requests.{ShareAcknowledgeRequest, ShareAcknowledgeResponse, ShareFetchRequest, ShareFetchResponse, ShareRequestMetadata}
+import org.apache.kafka.common.test.ClusterInstance
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Tag, Timeout}
-import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util
 import java.util.Collections
@@ -33,7 +33,6 @@ import scala.collection.convert.ImplicitConversions.`list asScalaBuffer`
 import scala.jdk.CollectionConverters._
 
 @Timeout(1200)
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
   new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
 ))

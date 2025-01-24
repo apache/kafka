@@ -46,6 +46,9 @@
   <allow pkg="org.apache.kafka.common.utils" />
   <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
   <allow pkg="org.apache.kafka.common.memory" />
+ 
+  <!-- anyone can use internal test apis -->
+  <allow pkg="org.apache.kafka.common.test.api" />
 
   <subpackage name="common">
     <allow class="org.apache.kafka.clients.consumer.ConsumerRecord" exact-match="true" />

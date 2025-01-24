@@ -16,24 +16,21 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
-import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.Collections
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT))
 class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
