@@ -256,22 +256,6 @@ class KRaftMetadataCache(
     }
   }
 
-  /**
-   * Get the topic metadata for the given topics.
-   *
-   * The quota is used to limit the number of partitions to return. The NextTopicPartition field points to the first
-   * partition can't be returned due the limit.
-   * If a topic can't return any partition due to quota limit reached, this topic will not be included in the response.
-   *
-   * Note, the topics should be sorted in alphabetical order. The topics in the DescribeTopicPartitionsResponseData
-   * will also be sorted in alphabetical order.
-   *
-   * @param topics                        The iterator of topics and their corresponding first partition id to fetch.
-   * @param listenerName                  The listener name.
-   * @param topicPartitionStartIndex      The start partition index for the first topic
-   * @param maximumNumberOfPartitions     The max number of partitions to return.
-   * @param ignoreTopicsWithExceptions    Whether ignore the topics with exception.
-   */
   override def describeTopicResponse(
     topics: Iterator[String],
     listenerName: ListenerName,
