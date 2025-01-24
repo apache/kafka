@@ -14,20 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Map;
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
+
 import java.util.Objects;
 
-/**
- * The task assignment for a streams group.
- *
- * @param members The member assignments keyed by member ID.
- */
-public record GroupAssignment(Map<String, MemberAssignment> members) {
+public class StreamsOnTasksAssignedCallbackNeededEvent extends CompletableBackgroundEvent<Void> {
 
-    public GroupAssignment {
-        Objects.requireNonNull(members);
+    private final StreamsRebalanceData.Assignment assignment;
+
+    public StreamsOnTasksAssignedCallbackNeededEvent(StreamsRebalanceData.Assignment assignment) {
+        super(Type.STREAMS_ON_TASKS_ASSIGNED_CALLBACK_NEEDED, Long.MAX_VALUE);
+        this.assignment = Objects.requireNonNull(assignment);
     }
 
+    public StreamsRebalanceData.Assignment assignment() {
+        return assignment;
+    }
+
+    @Override
+    protected String toStringBase() {
+        return super.toStringBase() +
+            ", assignment=" + assignment;
+    }
 }
