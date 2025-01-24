@@ -30,19 +30,21 @@ import java.util.Set;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class AssignmentTest {
+public class TasksTupleTest {
 
-    static final String SUBTOPOLOGY_1 = "subtopology1";
-    static final String SUBTOPOLOGY_2 = "subtopology2";
-    static final String SUBTOPOLOGY_3 = "subtopology3";
+    private static final String SUBTOPOLOGY_1 = "subtopology1";
+    private static final String SUBTOPOLOGY_2 = "subtopology2";
+    private static final String SUBTOPOLOGY_3 = "subtopology3";
 
     @Test
     public void testTasksCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new Assignment(null, Collections.emptyMap(), Collections.emptyMap()));
-        assertThrows(NullPointerException.class, () -> new Assignment(Collections.emptyMap(), null, Collections.emptyMap()));
-        assertThrows(NullPointerException.class, () -> new Assignment(Collections.emptyMap(), Collections.emptyMap(), null));
+        assertThrows(NullPointerException.class, () -> new TasksTuple(null, Collections.emptyMap(), Collections.emptyMap()));
+        assertThrows(NullPointerException.class, () -> new TasksTuple(Collections.emptyMap(), null, Collections.emptyMap()));
+        assertThrows(NullPointerException.class, () -> new TasksTuple(Collections.emptyMap(), Collections.emptyMap(), null));
     }
 
     @Test
@@ -56,14 +58,14 @@ public class AssignmentTest {
         Map<String, Set<Integer>> warmupTasks = mkTasksPerSubtopology(
             mkTasks(SUBTOPOLOGY_3, 4, 5, 6)
         );
-        Assignment assignment = new Assignment(activeTasks, standbyTasks, warmupTasks);
+        TasksTuple tuple = new TasksTuple(activeTasks, standbyTasks, warmupTasks);
 
-        assertEquals(activeTasks, assignment.activeTasks());
-        assertThrows(UnsupportedOperationException.class, () -> assignment.activeTasks().put("not allowed", Collections.emptySet()));
-        assertEquals(standbyTasks, assignment.standbyTasks());
-        assertThrows(UnsupportedOperationException.class, () -> assignment.standbyTasks().put("not allowed", Collections.emptySet()));
-        assertEquals(warmupTasks, assignment.warmupTasks());
-        assertThrows(UnsupportedOperationException.class, () -> assignment.warmupTasks().put("not allowed", Collections.emptySet()));
+        assertEquals(activeTasks, tuple.activeTasks());
+        assertThrows(UnsupportedOperationException.class, () -> tuple.activeTasks().put("not allowed", Collections.emptySet()));
+        assertEquals(standbyTasks, tuple.standbyTasks());
+        assertThrows(UnsupportedOperationException.class, () -> tuple.standbyTasks().put("not allowed", Collections.emptySet()));
+        assertEquals(warmupTasks, tuple.warmupTasks());
+        assertThrows(UnsupportedOperationException.class, () -> tuple.warmupTasks().put("not allowed", Collections.emptySet()));
     }
 
     @Test
@@ -95,28 +97,83 @@ public class AssignmentTest {
             .setStandbyTasks(standbyTasks)
             .setWarmupTasks(warmupTasks);
 
-        Assignment assignment = Assignment.fromRecord(record);
+        TasksTuple tuple = TasksTuple.fromTargetAssignmentRecord(record);
 
         assertEquals(
             mkTasksPerSubtopology(
                 mkTasks(SUBTOPOLOGY_1, 1, 2, 3),
                 mkTasks(SUBTOPOLOGY_2, 4, 5, 6)
             ),
-            assignment.activeTasks()
+            tuple.activeTasks()
         );
         assertEquals(
             mkTasksPerSubtopology(
                 mkTasks(SUBTOPOLOGY_1, 7, 8, 9),
                 mkTasks(SUBTOPOLOGY_2, 1, 2, 3)
             ),
-            assignment.standbyTasks()
+            tuple.standbyTasks()
         );
         assertEquals(
             mkTasksPerSubtopology(
                 mkTasks(SUBTOPOLOGY_1, 4, 5, 6),
                 mkTasks(SUBTOPOLOGY_2, 7, 8, 9)
             ),
-            assignment.warmupTasks()
+            tuple.warmupTasks()
         );
+    }
+
+    @Test
+    public void testMerge() {
+        TasksTuple tuple1 = new TasksTuple(
+            Map.of(SUBTOPOLOGY_1, Set.of(1, 2, 3)),
+            Map.of(SUBTOPOLOGY_2, Set.of(4, 5, 6)),
+            Map.of(SUBTOPOLOGY_3, Set.of(7, 8, 9))
+        );
+
+        TasksTuple tuple2 = new TasksTuple(
+            Map.of(SUBTOPOLOGY_1, Set.of(10, 11)),
+            Map.of(SUBTOPOLOGY_2, Set.of(12, 13)),
+            Map.of(SUBTOPOLOGY_3, Set.of(14, 15))
+        );
+
+        TasksTuple mergedTuple = tuple1.merge(tuple2);
+
+        assertEquals(Map.of(SUBTOPOLOGY_1, Set.of(1, 2, 3, 10, 11)), mergedTuple.activeTasks());
+        assertEquals(Map.of(SUBTOPOLOGY_2, Set.of(4, 5, 6, 12, 13)), mergedTuple.standbyTasks());
+        assertEquals(Map.of(SUBTOPOLOGY_3, Set.of(7, 8, 9, 14, 15)), mergedTuple.warmupTasks());
+    }
+
+    @Test
+    public void testContainsAny() {
+        TasksTuple tuple1 = new TasksTuple(
+            Map.of(SUBTOPOLOGY_1, Set.of(1, 2, 3)),
+            Map.of(SUBTOPOLOGY_2, Set.of(4, 5, 6)),
+            Map.of(SUBTOPOLOGY_3, Set.of(7, 8, 9))
+        );
+
+        TasksTuple tuple2 = new TasksTuple(
+            Map.of(SUBTOPOLOGY_1, Set.of(3, 10, 11)),
+            Map.of(SUBTOPOLOGY_2, Set.of(12, 13)),
+            Map.of(SUBTOPOLOGY_3, Set.of(14, 15))
+        );
+
+        assertTrue(tuple1.containsAny(tuple2));
+
+        TasksTuple tuple3 = new TasksTuple(
+            Map.of(SUBTOPOLOGY_1, Set.of(10, 11)),
+            Map.of(SUBTOPOLOGY_2, Set.of(12, 13)),
+            Map.of(SUBTOPOLOGY_3, Set.of(14, 15))
+        );
+
+        assertFalse(tuple1.containsAny(tuple3));
+    }
+
+    @Test
+    public void testIsEmpty() {
+        TasksTuple emptyTuple = new TasksTuple(Map.of(), Map.of(), Map.of());
+        assertTrue(emptyTuple.isEmpty());
+
+        TasksTuple nonEmptyTuple = new TasksTuple(Map.of(SUBTOPOLOGY_1, Set.of(1)), Map.of(), Map.of());
+        assertFalse(nonEmptyTuple.isEmpty());
     }
 }

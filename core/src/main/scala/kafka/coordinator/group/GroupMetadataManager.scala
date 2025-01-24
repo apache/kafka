@@ -1060,11 +1060,10 @@ object GroupMetadataManager {
    * @return key for offset commit message
    */
   def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] = {
-    MessageUtil.toCoordinatorTypePrefixedBytes(CoordinatorRecordType.OFFSET_COMMIT.id(),
-      new OffsetCommitKey()
-        .setGroup(groupId)
-        .setTopic(topicPartition.topic)
-        .setPartition(topicPartition.partition))
+    MessageUtil.toCoordinatorTypePrefixedBytes(new OffsetCommitKey()
+      .setGroup(groupId)
+      .setTopic(topicPartition.topic)
+      .setPartition(topicPartition.partition))
   }
 
   /**
@@ -1074,9 +1073,8 @@ object GroupMetadataManager {
    * @return key bytes for group metadata message
    */
   def groupMetadataKey(groupId: String): Array[Byte] = {
-    MessageUtil.toCoordinatorTypePrefixedBytes(CoordinatorRecordType.GROUP_METADATA.id(),
-      new GroupMetadataKeyData()
-        .setGroup(groupId))
+    MessageUtil.toCoordinatorTypePrefixedBytes(new GroupMetadataKeyData()
+      .setGroup(groupId))
   }
 
   /**

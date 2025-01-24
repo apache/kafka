@@ -65,6 +65,8 @@ public class ChangelogTopics {
     /**
      * Determines the number of partitions for each non-source changelog topic in the requested topology.
      *
+     * @throws IllegalStateException If a source topic does not have a partition count defined through topicPartitionCountProvider.
+     *
      * @return the map of all non-source changelog topics for the requested topology to their required number of partitions.
      */
     public Map<String, Integer> setup() {
@@ -94,7 +96,7 @@ public class ChangelogTopics {
     private int getPartitionCountOrFail(String topic) {
         final OptionalInt topicPartitionCount = topicPartitionCountProvider.apply(topic);
         if (topicPartitionCount.isEmpty()) {
-            throw TopicConfigurationException.missingSourceTopics("No partition count for source topic " + topic);
+            throw new IllegalStateException("No partition count for source topic " + topic);
         }
         return topicPartitionCount.getAsInt();
     }
