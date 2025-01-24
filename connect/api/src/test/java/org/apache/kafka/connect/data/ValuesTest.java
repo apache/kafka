@@ -1178,6 +1178,7 @@ public class ValuesTest {
         assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 66000), Values.parseString("66000.0"));
         assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 66000.0008f), Values.parseString("66000.0008"));
     }
+
     @Test
     public void avoidCpuAndMemoryIssuesConvertingExtremeBigDecimals() {
         String parsingBig = "1e+100000000"; // new BigDecimal().setScale(0, RoundingMode.FLOOR) takes around two minutes and uses 3GB;
