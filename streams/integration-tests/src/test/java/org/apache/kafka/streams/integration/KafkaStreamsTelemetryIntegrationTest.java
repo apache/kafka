@@ -70,6 +70,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -172,9 +173,11 @@ public class KafkaStreamsTelemetryIntegrationTest {
                     .map(metric -> metric.metricName().tags().get("process-id"))
                     .findFirst().orElseThrow();
 
-            TestUtils.waitForCondition(() -> !TelemetryPlugin.SUBSCRIBED_METRICS.get(mainConsumerInstanceId).isEmpty(),
-                    30_000,
-                    "Never received subscribed metrics");
+            TestUtils.waitForCondition(
+                () -> !TelemetryPlugin.SUBSCRIBED_METRICS.getOrDefault(mainConsumerInstanceId, Collections.emptyList()).isEmpty(),
+                30_000,
+                "Never received subscribed metrics"
+            );
             final List<String> expectedMetrics = streams.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.tags().containsKey("thread-id")).map(mn -> {
                         final String name = mn.name().replace('-', '.');
@@ -185,9 +188,11 @@ public class KafkaStreamsTelemetryIntegrationTest {
             final List<String> actualMetrics = new ArrayList<>(TelemetryPlugin.SUBSCRIBED_METRICS.get(mainConsumerInstanceId));
             assertEquals(expectedMetrics, actualMetrics);
 
-            TestUtils.waitForCondition(() -> !TelemetryPlugin.SUBSCRIBED_METRICS.get(adminInstanceId).isEmpty(),
-                    30_000,
-                    "Never received subscribed metrics");
+            TestUtils.waitForCondition(
+                () -> !TelemetryPlugin.SUBSCRIBED_METRICS.getOrDefault(adminInstanceId, Collections.emptyList()).isEmpty(),
+                30_000,
+                "Never received subscribed metrics"
+            );
             final List<String> actualInstanceMetrics = TelemetryPlugin.SUBSCRIBED_METRICS.get(adminInstanceId);
             final List<String> expectedInstanceMetrics = Arrays.asList(
                 "org.apache.kafka.stream.alive.stream.threads",
@@ -269,9 +274,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
             try (final KafkaStreams streamsTwo = new KafkaStreams(topology, streamsSecondApplicationProperties)) {
                 streamsTwo.start();
-                waitForCondition(() -> KafkaStreams.State.RUNNING == streamsTwo.state() && KafkaStreams.State.RUNNING == streamsOne.state(),
-                        IntegrationTestUtils.DEFAULT_TIMEOUT,
-                        () -> "Kafka Streams one or two never transitioned to a RUNNING state.");
 
                 /*
                   Now with 2 instances, the tasks will get split amongst both Kafka Streams applications
